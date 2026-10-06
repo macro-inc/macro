@@ -167,6 +167,10 @@ fn test_split_suffix_match_office_files() {
         ("Ledger.xls", Some(("Ledger", "xls"))),
         ("notes.mdoc", Some(("notes", "mdoc"))),
     ] {
-        assert_eq!(FileType::split_suffix_match(file_name), expected, "{file_name}");
+        assert_eq!(
+            FileType::split_suffix_match(file_name),
+            expected,
+            "{file_name}"
+        );
     }
 }

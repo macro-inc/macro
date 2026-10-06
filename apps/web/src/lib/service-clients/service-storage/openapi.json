@@ -25720,7 +25720,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -36718,6 +36720,13 @@
               "$ref": "#/components/schemas/FolderItem"
             },
             "description": "The content of the folder"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Relative paths of folders to create even when they hold no files.\n\nUses the same shape as [FolderItem::relative_path], root folder included."
           },
           "parentId": {
             "type": ["string", "null"],

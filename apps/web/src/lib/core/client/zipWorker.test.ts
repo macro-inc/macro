@@ -9,7 +9,9 @@ beforeAll(async () => {
   vi.stubGlobal('self', {
     postMessage: (message: WorkerMessage) => posted.push(message),
   });
-  await import('../../workers/folder-upload/zip-worker.js');
+  // The worker is plain JS with no types; importing it installs `onmessage`.
+  const workerModule = '../../workers/folder-upload/zip-worker.js';
+  await import(/* @vite-ignore */ workerModule);
 });
 
 afterEach(() => {
@@ -33,9 +35,9 @@ async function runZip(
     },
   });
   await vi.waitFor(() => {
-    expect(posted.some((m) => m.type === 'complete' || m.type === 'error')).toBe(
-      true
-    );
+    expect(
+      posted.some((m) => m.type === 'complete' || m.type === 'error')
+    ).toBe(true);
   });
   const done = posted.find((m) => m.type === 'complete');
   if (!done?.data.zipBlob) throw new Error(JSON.stringify(posted.at(-1)));
@@ -53,9 +55,9 @@ describe('zip worker', () => {
       ['Pack', 'Pack/Finance', 'Pack/Finance/Forecasts', 'Pack/Decks']
     );
 
-    expect(await zip.file('Pack/Finance/Forecasts/Q4.xlsx')?.async('string')).toBe(
-      'xlsx'
-    );
+    expect(
+      await zip.file('Pack/Finance/Forecasts/Q4.xlsx')?.async('string')
+    ).toBe('xlsx');
     expect(await zip.file('Pack/Decks/Old.PPTX')?.async('string')).toBe('pptx');
   });
 

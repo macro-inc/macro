@@ -47,9 +47,7 @@ describe('groupPickedFolderFiles', () => {
       { name: 'loose.docx', webkitRelativePath: '' },
     ]);
 
-    expect(groups.get('loose.docx')?.details).toEqual([
-      { path: 'loose.docx' },
-    ]);
+    expect(groups.get('loose.docx')?.details).toEqual([{ path: 'loose.docx' }]);
   });
 });
 

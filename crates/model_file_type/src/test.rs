@@ -31,7 +31,11 @@ fn office_extensions_parse_case_insensitively() {
         ("xlsm", FileType::Xlsm),
         ("XLSM", FileType::Xlsm),
     ] {
-        assert_eq!(FileType::from_str(extension).unwrap(), expected, "{extension}");
+        assert_eq!(
+            FileType::from_str(extension).unwrap(),
+            expected,
+            "{extension}"
+        );
     }
 }
 
@@ -49,6 +53,9 @@ fn legacy_office_types_round_trip() {
         assert_eq!(file_type.mime_type(), mime);
         assert_eq!(file_type.macro_app_path().to_string(), "document");
         assert_eq!(FileType::from_str(extension).unwrap(), file_type);
-        assert_eq!(serde_json::to_string(&file_type).unwrap(), format!("\"{extension}\""));
+        assert_eq!(
+            serde_json::to_string(&file_type).unwrap(),
+            format!("\"{extension}\"")
+        );
     }
 }

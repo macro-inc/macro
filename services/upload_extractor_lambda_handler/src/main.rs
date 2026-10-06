@@ -985,7 +985,10 @@ mod tests {
         zip.finish().unwrap();
     }
 
-    async fn extract_tree(entries: &[(&str, Option<&[u8]>)], zip_name: &str) -> (String, ExtractedTree, PathBuf, tempfile::TempDir) {
+    async fn extract_tree(
+        entries: &[(&str, Option<&[u8]>)],
+        zip_name: &str,
+    ) -> (String, ExtractedTree, PathBuf, tempfile::TempDir) {
         let temp_dir = tempdir().unwrap();
         let zip_path = temp_dir.path().join("upload.zip");
         write_browser_zip(&zip_path, entries);
@@ -1015,7 +1018,10 @@ mod tests {
             ("Board Pack/Finance/Budget.xlsx", Some(b"xlsx")),
             ("Board Pack/Finance/Forecasts/", None),
             ("Board Pack/Finance/Forecasts/Scenarios/", None),
-            ("Board Pack/Finance/Forecasts/Scenarios/Downside.xlsx", Some(b"xlsx2")),
+            (
+                "Board Pack/Finance/Forecasts/Scenarios/Downside.xlsx",
+                Some(b"xlsx2"),
+            ),
             ("Board Pack/Finance/Forecasts/Scenarios/Empty Leaf/", None),
             ("Board Pack/Decks/", None),
             ("Board Pack/Decks/Archive/", None),
@@ -1082,11 +1088,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_folder_with_only_empty_subfolders() {
-        let entries: &[(&str, Option<&[u8]>)] = &[
-            ("Shell/", None),
-            ("Shell/A/", None),
-            ("Shell/A/B/", None),
-        ];
+        let entries: &[(&str, Option<&[u8]>)] =
+            &[("Shell/", None), ("Shell/A/", None), ("Shell/A/B/", None)];
         let (root, tree, _extract_dir, _guard) = extract_tree(entries, "Shell").await;
         assert_eq!(root, "Shell");
         assert!(tree.items.is_empty());

@@ -128,11 +128,20 @@ mod tests {
         .unwrap();
 
         let root = folder(&root);
-        assert!(matches!(root.get("Summary.docx"), Some(FileSystemNode::File(_))));
+        assert!(matches!(
+            root.get("Summary.docx"),
+            Some(FileSystemNode::File(_))
+        ));
         let forecasts = folder(folder(&root["Finance"]).get("Forecasts").unwrap());
-        assert!(matches!(forecasts.get("Q4.xlsx"), Some(FileSystemNode::File(_))));
+        assert!(matches!(
+            forecasts.get("Q4.xlsx"),
+            Some(FileSystemNode::File(_))
+        ));
         let archive = folder(folder(&root["Decks"]).get("Archive").unwrap());
-        assert!(matches!(archive.get("Old.pptx"), Some(FileSystemNode::File(_))));
+        assert!(matches!(
+            archive.get("Old.pptx"),
+            Some(FileSystemNode::File(_))
+        ));
     }
 
     #[test]
@@ -152,7 +161,10 @@ mod tests {
         let root = folder(&root);
         assert!(folder(&root["Empty"]).is_empty());
         let finance = folder(&root["Finance"]);
-        assert!(matches!(finance.get("Budget.xlsx"), Some(FileSystemNode::File(_))));
+        assert!(matches!(
+            finance.get("Budget.xlsx"),
+            Some(FileSystemNode::File(_))
+        ));
         assert!(folder(&finance["Empty Leaf"]).is_empty());
     }
 

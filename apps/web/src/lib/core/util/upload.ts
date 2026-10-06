@@ -8,13 +8,13 @@
  */
 
 import { analytics } from '@app/lib/analytics';
+import { groupPickedFolderFiles } from '@core/client/folderUploadPaths';
 import {
   DirectoryFileCountExceededError,
   DirectoryFileSizeExceededError,
   handleFoldersInput,
   zipFiles,
 } from '@core/client/zipWorkerClient';
-import { groupPickedFolderFiles } from '@core/client/folderUploadPaths';
 import { toast } from '@core/component/Toast/Toast';
 import {
   blockAcceptedMimetypeToFileExtension,

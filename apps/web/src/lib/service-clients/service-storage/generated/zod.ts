@@ -11719,7 +11719,9 @@ export const editDocumentBody = zod
                     'azw3',
                     'djvu',
                     'xls',
+                    'xlsm',
                     'ppt',
+                    'doc',
                     'pptx',
                     'xlsx',
                     'db',
@@ -40150,7 +40152,9 @@ export const uploadFolderHandlerBody = zod.object({
                 'azw3',
                 'djvu',
                 'xls',
+                'xlsm',
                 'ppt',
+                'doc',
                 'pptx',
                 'xlsx',
                 'db',
@@ -40210,6 +40214,12 @@ export const uploadFolderHandlerBody = zod.object({
       })
     )
     .describe('The content of the folder'),
+  folders: zod
+    .array(zod.string())
+    .optional()
+    .describe(
+      'Relative paths of folders to create even when they hold no files.\n\nUses the same shape as [FolderItem::relative_path], root folder included.'
+    ),
   parentId: zod
     .string()
     .nullish()
@@ -40646,7 +40656,9 @@ export const uploadFolderHandlerResponse = zod.object({
                     'azw3',
                     'djvu',
                     'xls',
+                    'xlsm',
                     'ppt',
+                    'doc',
                     'pptx',
                     'xlsx',
                     'db',
