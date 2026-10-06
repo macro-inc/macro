@@ -49,7 +49,7 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
 
 /**
  * Consume once, only for the owner and exact default-agent configuration.
- * Active warming surfaces prepare one replacement; otherwise the next mount does.
+ * Keep the empty cache fresh until creation finishes and releases server capacity.
  */
 export function takeWarmAgentSession(
   options: {
@@ -72,10 +72,6 @@ export function takeWarmAgentSession(
   if (!entry) return;
   if (entry.expires <= Date.now()) {
     client.setQueryData(key, null);
-    void client.invalidateQueries(
-      { queryKey: key, exact: true },
-      { cancelRefetch: false }
-    );
     return;
   }
   if (options.modelOverride && options.modelOverride !== entry.model) return;
@@ -84,9 +80,20 @@ export function takeWarmAgentSession(
   )
     return;
   client.setQueryData(key, null);
+  return entry.id;
+}
+
+/** Prepare one replacement after creation succeeds, joining any existing request. */
+export function replenishWarmAgentSession(
+  userId: string,
+  client: QueryClient = queryClient
+): void {
+  const key = agentSessionWarmKeys.owner(userId).queryKey;
+  // A different configuration may have left a usable reservation in the cache.
+  // No query means this owner has not mounted a warming surface.
+  if (client.getQueryData<WarmSession | null>(key) !== null) return;
   void client.invalidateQueries(
     { queryKey: key, exact: true },
     { cancelRefetch: false }
   );
-  return entry.id;
 }

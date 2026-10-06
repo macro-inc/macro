@@ -23,7 +23,10 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { PromptTrace } from '@core/agent-session/prompt-telemetry';
-import { takeWarmAgentSession } from '@queries/agent-session/warm';
+import {
+  replenishWarmAgentSession,
+  takeWarmAgentSession,
+} from '@queries/agent-session/warm';
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
@@ -151,6 +154,8 @@ export function startPendingSession(
         trace?.stage('created');
         // Normally the id this tab minted; an older service may mint its own.
         const created = result.value.session.id;
+        // A warm claim releases its server reservation before creation answers.
+        replenishWarmAgentSession(result.value.session.ownerId);
         void refetchSoupEntity(created, 'agentSession', { created: true });
         // Hold the block in preflight while selected settings are confirmed,
         // then adopt the session before issuing the first prompt so that prompt

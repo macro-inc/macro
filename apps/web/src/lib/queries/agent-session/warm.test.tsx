@@ -6,7 +6,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { takeWarmAgentSession, useWarmAgentSessionQuery } from './warm';
+import {
+  replenishWarmAgentSession,
+  takeWarmAgentSession,
+  useWarmAgentSessionQuery,
+} from './warm';
 
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: { warm: vi.fn() },
@@ -54,6 +58,7 @@ function setup() {
   clients.push(client);
   const take = (options: Parameters<typeof takeWarmAgentSession>[0] = {}) =>
     takeWarmAgentSession({ userId: OWNER, ...options }, client);
+  const replenish = () => replenishWarmAgentSession(OWNER, client);
   const settled = () => vi.waitFor(() => expect(client.isFetching()).toBe(0));
   const mount = () => {
     const Hook = () => {
@@ -75,12 +80,18 @@ function setup() {
     disposers.add(unmount);
     return unmount;
   };
-  return { take, settled, mount };
+  return { take, replenish, settled, mount };
 }
+
+it('does not warm for an owner who has no existing warming query', () => {
+  const { replenish } = setup();
+  replenish();
+  expect(warm).not.toHaveBeenCalled();
+});
 
 it('deduplicates page mounts and preserves a reservation for the matching owner and settings', async () => {
   warm.mockResolvedValueOnce(prepared('warm-id'));
-  const { mount, settled, take } = setup();
+  const { mount, settled, take, replenish } = setup();
   mount();
   mount();
   await settled();
@@ -91,6 +102,8 @@ it('deduplicates page mounts and preserves a reservation for the matching owner 
   expect(take({ repoUrl: 'https://github.com/example/repo' })).toBeUndefined();
   expect(take({ modelOverride: 'different' })).toBeUndefined();
   expect(take({ instructions: 'different' })).toBeUndefined();
+  replenish();
+  await settled();
   expect(warm).toHaveBeenCalledTimes(1);
   expect(take({ botId: MACRO_NEW_BOT_ID, modelOverride: 'model-a' })).toBe(
     'warm-id'
@@ -99,16 +112,26 @@ it('deduplicates page mounts and preserves a reservation for the matching owner 
   await settled();
 });
 
-it('prepares one shared replacement for a second conversation while a warming surface stays mounted', async () => {
+it('waits for the claim to release capacity before preparing one shared replacement', async () => {
   const replacement = Promise.withResolvers<ReturnType<typeof prepared>>();
+  let claimComplete = false;
   warm.mockResolvedValueOnce(prepared('first'));
-  warm.mockReturnValueOnce(replacement.promise);
-  const { mount, settled, take } = setup();
+  // The owner already has two reservations. Only a completed claim frees a slot.
+  warm.mockImplementationOnce(async () =>
+    claimComplete ? replacement.promise : ok({ session: null })
+  );
+  const { mount, settled, take, replenish } = setup();
   mount();
   mount();
   await settled();
   expect(take()).toBe('first');
   expect(take()).toBeUndefined();
+  // The destination can mount while POST /agent-sessions is still pending.
+  mount();
+  await settled();
+  expect(warm).toHaveBeenCalledTimes(1);
+  claimComplete = true;
+  replenish();
   await vi.waitFor(() => expect(warm).toHaveBeenCalledTimes(2));
   mount();
   expect(warm).toHaveBeenCalledTimes(2);
@@ -116,6 +139,7 @@ it('prepares one shared replacement for a second conversation while a warming su
   await settled();
   expect(take()).toBe('second');
   expect(take()).toBeUndefined();
+  replenish();
   await settled();
   expect(warm).toHaveBeenCalledTimes(3);
 });
@@ -124,10 +148,11 @@ it('keeps the same in-flight replacement across navigation to another warming su
   const replacement = Promise.withResolvers<ReturnType<typeof prepared>>();
   warm.mockResolvedValueOnce(prepared('first'));
   warm.mockReturnValueOnce(replacement.promise);
-  const { mount, settled, take } = setup();
+  const { mount, settled, take, replenish } = setup();
   const leaveHome = mount();
   await settled();
   expect(take()).toBe('first');
+  replenish();
   await vi.waitFor(() => expect(warm).toHaveBeenCalledTimes(2));
   leaveHome();
   mount();
@@ -143,7 +168,7 @@ it.each(['consumed', 'expired'] as const)(
   async (reason) => {
     warm.mockResolvedValueOnce(prepared('first'));
     warm.mockResolvedValueOnce(prepared('second'));
-    const { mount, settled, take } = setup();
+    const { mount, settled, take, replenish } = setup();
     const unmount = mount();
     await settled();
     unmount();
@@ -156,6 +181,7 @@ it.each(['consumed', 'expired'] as const)(
     } else {
       expect(take()).toBe('first');
     }
+    replenish();
     await settled();
     expect(warm).toHaveBeenCalledTimes(1);
     expect(take()).toBeUndefined();
@@ -173,10 +199,11 @@ it.each(['empty', 'failed'] as const)(
   async (result) => {
     warm.mockResolvedValueOnce(prepared('first'));
     if (result === 'failed') warm.mockRejectedValueOnce(new Error('offline'));
-    const { mount, settled, take } = setup();
+    const { mount, settled, take, replenish } = setup();
     mount();
     await settled();
     expect(take()).toBe('first');
+    replenish();
     await settled();
     expect(warm).toHaveBeenCalledTimes(2);
     expect(take()).toBeUndefined();
@@ -190,7 +217,7 @@ it('joins an in-flight refresh when an expired reservation is discarded', async 
   const replacement = Promise.withResolvers<ReturnType<typeof prepared>>();
   warm.mockResolvedValueOnce(prepared('first'));
   warm.mockReturnValueOnce(replacement.promise);
-  const { mount, settled, take } = setup();
+  const { mount, settled, take, replenish } = setup();
   const unmount = mount();
   await settled();
   unmount();
@@ -199,6 +226,7 @@ it('joins an in-flight refresh when an expired reservation is discarded', async 
   await vi.waitFor(() => expect(warm).toHaveBeenCalledTimes(2));
   expect(take()).toBeUndefined();
   now.mockRestore();
+  replenish();
   expect(warm).toHaveBeenCalledTimes(2);
   replacement.resolve(prepared('second'));
   await settled();
