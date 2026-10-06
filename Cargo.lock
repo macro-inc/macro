@@ -459,6 +459,7 @@ dependencies = [
  "macro_uuid",
  "mcp_client",
  "messages",
+ "model_owner",
  "notification",
  "pipedream_mcp",
  "properties",
