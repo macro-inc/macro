@@ -49,7 +49,7 @@ import { PaintSwatch } from './paint-swatch';
 
 type Icon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 
-export const BLEND_LABELS: Record<string, string> = {
+const BLEND_LABELS: Record<string, string> = {
   normal: 'Normal',
   multiply: 'Multiply',
   screen: 'Screen',
@@ -80,7 +80,7 @@ export interface PanelPaint {
   mixed: boolean;
 }
 
-export interface PanelText {
+interface PanelText {
   family: string;
   style: string;
   styles: string[];

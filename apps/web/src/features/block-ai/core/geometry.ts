@@ -28,8 +28,6 @@ export interface EdgeRect {
 /** `[a, b, c, d, e, f]`: `(x, y)` to `(a·x + c·y + e, b·x + d·y + f)`. */
 export type Matrix = [number, number, number, number, number, number];
 
-export const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
-
 export const toRect = (r: EdgeRect): Rect => ({
   x: r.x0,
   y: r.y0,
@@ -89,12 +87,6 @@ export function unionOf(rects: readonly Rect[]): Rect | undefined {
 
 export function contains(r: Rect, p: Point): boolean {
   return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
-}
-
-export function intersects(a: Rect, b: Rect): boolean {
-  return (
-    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-  );
 }
 
 export const center = (r: Rect): Point => ({

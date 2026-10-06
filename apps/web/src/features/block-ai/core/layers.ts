@@ -145,7 +145,7 @@ export function rangeIds(
 }
 
 /** The direct children of a container, bottom first (stacking order). */
-export function stackOf(rows: readonly LayerRow[], parent: number | null) {
+function stackOf(rows: readonly LayerRow[], parent: number | null) {
   return rows
     .filter((r) => r.parent === parent)
     .map((r) => r.id)

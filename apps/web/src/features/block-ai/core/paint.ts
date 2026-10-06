@@ -18,13 +18,13 @@ export type Color =
       rgb: [number, number, number];
     };
 
-export interface GradientStop {
+interface GradientStop {
   offset: number;
   color: Color;
   opacity: number;
 }
 
-export interface Gradient {
+interface Gradient {
   transform: Matrix;
   radial: boolean;
   start: Point;
@@ -55,7 +55,7 @@ export interface Stroke {
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /** A color as straight sRGB, `0..=1`. */
-export function toRgb(c: Color): [number, number, number] {
+function toRgb(c: Color): [number, number, number] {
   switch (c.space) {
     case 'gray':
       return [c.g, c.g, c.g];
@@ -141,7 +141,7 @@ export function paintKind(p: Paint | null | undefined): string {
 }
 
 export const BLACK: Paint = { type: 'solid', color: { space: 'gray', g: 0 } };
-export const WHITE: Paint = { type: 'solid', color: { space: 'gray', g: 1 } };
+const WHITE: Paint = { type: 'solid', color: { space: 'gray', g: 1 } };
 
 /** A solid stroke of `paint`, Illustrator's defaults otherwise. */
 export function strokeOf(paint: Paint, width = 1): Stroke {

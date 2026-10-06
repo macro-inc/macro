@@ -26,7 +26,7 @@ export interface OverlayShape {
   color: string;
 }
 
-export interface OverlayArtboard {
+interface OverlayArtboard {
   id: number;
   name: string;
   rect: Rect;

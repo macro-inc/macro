@@ -137,7 +137,7 @@ async function settled(work: Promise<unknown>): Promise<void> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** The first shared snapshot: the format version and nothing changed yet. */
-export function buildDocumentSeed(): Uint8Array {
+function buildDocumentSeed(): Uint8Array {
   const doc = new LoroDoc();
   seedDocument(doc);
   return doc.export({ mode: 'snapshot' });

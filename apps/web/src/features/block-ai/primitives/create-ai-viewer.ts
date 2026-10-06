@@ -7,7 +7,6 @@
 
 import {
   type Camera,
-  centerOn,
   panBy,
   type Size,
   screenToPage,
@@ -16,10 +15,9 @@ import {
 } from '@app/features/block-fig/core/camera';
 import type { AiEngine } from '@core/ai-engine/client';
 import type { EditResult, Info, Row, Summary } from '@core/ai-engine/types';
-import { batch, createSignal, onCleanup } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import {
   contains,
-  type EdgeRect,
   geometricRect,
   type Point,
   type Rect,
@@ -35,9 +33,6 @@ export interface AiViewerOptions {
   engine: AiEngine;
   notifyError: (message: string) => void;
 }
-
-/** Pause between edits that ends a stream of them (see `editsSettled`). */
-const EDITS_QUIET_MS = 250;
 
 /** Margin around the artwork that tiles cover (points). */
 const CONTENT_MARGIN = 64;
@@ -66,32 +61,8 @@ export function createAiViewer(options: AiViewerOptions) {
   const [artboard, setArtboardSignal] = createSignal<number>();
   /** Bumped after every edit (properties and geometry reload). */
   const [editVersion, setEditVersion] = createSignal(0);
-  /**
-   * Bumped after edits too, but once per pause in a stream of them (a
-   * drag's steps): for what need not follow every step (the layers list).
-   */
-  const [editsSettled, setEditsSettled] = createSignal(0);
   /** Bumped when the layers panel should reveal the selection. */
   const [revealSignal, setRevealSignal] = createSignal(0);
-  /** Bumped to start renaming the selection's first row. */
-  const [renameSignal, setRenameSignal] = createSignal(0);
-
-  let lastEditAt = Number.NEGATIVE_INFINITY;
-  let settleTimer: ReturnType<typeof setTimeout> | undefined;
-  const noteEdit = () => {
-    const now = performance.now();
-    const quiet = now - lastEditAt > EDITS_QUIET_MS;
-    lastEditAt = now;
-    clearTimeout(settleTimer);
-    settleTimer = undefined;
-    if (quiet) setEditsSettled((n) => n + 1);
-    else
-      settleTimer = setTimeout(() => {
-        settleTimer = undefined;
-        setEditsSettled((n) => n + 1);
-      }, EDITS_QUIET_MS);
-  };
-  onCleanup(() => clearTimeout(settleTimer));
 
   const artboards = () => summary().artboards.filter((a) => !a.removed);
   const rowById = () => new Map(rows().map((r) => [r.id, r]));
@@ -198,17 +169,6 @@ export function createAiViewer(options: AiViewerOptions) {
     if (first && ready()) fitAll();
   };
 
-  /** Brings a canvas rectangle into view when it is out of it. */
-  const reveal = (rect: Rect) => {
-    const v = visibleRect();
-    const inside =
-      rect.x >= v.x &&
-      rect.y >= v.y &&
-      rect.x + rect.w <= v.x + v.w &&
-      rect.y + rect.h <= v.y + v.h;
-    if (!inside) setCamera(centerOn(camera(), rect, viewport()));
-  };
-
   // ---- selection ----------------------------------------------------------
 
   let infoRequest = 0;
@@ -253,21 +213,6 @@ export function createAiViewer(options: AiViewerOptions) {
   const hitAt = async (screen: Point, deep: boolean) => {
     const p = canvasPoint(screen);
     return engine.hitTest(p.x, p.y, camera().zoom, deep);
-  };
-
-  /** A click: selects what is under the pointer (⇧ adds or removes). */
-  const clickAt = async (
-    screen: Point,
-    mods: { deep: boolean; additive: boolean }
-  ) => {
-    const id = await hitAt(screen, mods.deep);
-    if (id === null) {
-      if (!mods.additive) select([]);
-      return undefined;
-    }
-    if (mods.additive) toggle([id]);
-    else select([id]);
-    return id;
   };
 
   /**
@@ -368,7 +313,6 @@ export function createAiViewer(options: AiViewerOptions) {
       }
       batch(() => {
         setEditVersion((n) => n + 1);
-        noteEdit();
         // The chosen artboard may be gone (deleted, or someone else's undo).
         if (
           artboard() !== undefined &&
@@ -406,7 +350,6 @@ export function createAiViewer(options: AiViewerOptions) {
     ready,
     load,
     camera,
-    setCamera,
     viewport,
     resize,
     visibleRect,
@@ -418,15 +361,11 @@ export function createAiViewer(options: AiViewerOptions) {
     infos,
     selectionBounds,
     hover,
-    setHover,
     artboard,
     setArtboard,
     activeArtboard,
     editVersion,
-    editsSettled,
     revealSignal,
-    renameSignal,
-    requestRename: () => setRenameSignal((n) => n + 1),
     zoomTo,
     zoomBy,
     zoomStep,
@@ -434,19 +373,15 @@ export function createAiViewer(options: AiViewerOptions) {
     zoomToRect,
     fitArtboard,
     fitAll,
-    reveal,
-    canvasPoint,
     select,
     toggle,
     hitAt,
-    clickAt,
     pressAt,
     hoverAt,
     hoverNode,
     marqueeSelect,
     selectAll,
     selectCreated,
-    refreshInfos,
     afterEdit,
     pruneSelection,
     layerColor,
@@ -454,6 +389,3 @@ export function createAiViewer(options: AiViewerOptions) {
 }
 
 export type AiViewer = ReturnType<typeof createAiViewer>;
-
-/** The engine's rectangle type, as the views pass it on. */
-export type { EdgeRect };

@@ -72,7 +72,7 @@ export const SAVED_KEY = 'saved';
 const fileKey = (fingerprint: string) => `file:${fingerprint}`;
 
 /** Commit origin of changes to the stored files' record. */
-export const STORED_FILE_ORIGIN = 'ai-stored-file';
+const STORED_FILE_ORIGIN = 'ai-stored-file';
 
 /** The fingerprint of the file the shared entries began on, if recorded. */
 export function documentBase(doc: LoroDoc): string | undefined {

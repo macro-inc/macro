@@ -321,7 +321,6 @@ export function createEditSteps(options: EditStepsOptions) {
     canUndo,
     canRedo,
     saveState,
-    saveNow,
     step,
     apply,
     applyAndSelect,
@@ -331,5 +330,3 @@ export function createEditSteps(options: EditStepsOptions) {
     settled: () => after(queue),
   };
 }
-
-export type EditSteps = ReturnType<typeof createEditSteps>;

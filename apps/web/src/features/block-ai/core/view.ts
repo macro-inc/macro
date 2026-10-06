@@ -20,7 +20,7 @@ export interface Insets {
 }
 
 /** The toolbar (left), artboard names (top), and status bar (bottom). */
-export const CONTROL_INSETS: Insets = {
+const CONTROL_INSETS: Insets = {
   left: 64,
   right: 0,
   top: 16,

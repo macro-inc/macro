@@ -80,7 +80,7 @@ export interface AiEditorOptions {
 }
 
 /** How far each paste and duplicate lands from what it copies (points). */
-export const PASTE_OFFSET = 10;
+const PASTE_OFFSET = 10;
 /** A new text object's font, as Illustrator starts one. */
 export const TEXT_DEFAULTS = { family: 'Inter', style: 'Regular', size: 24 };
 
@@ -684,13 +684,10 @@ export function createAiEditor(options: AiEditorOptions) {
 
   return {
     enabled,
-    engine,
     canUndo: steps.canUndo,
     canRedo: steps.canRedo,
     saveState: steps.saveState,
-    saveNow: steps.saveNow,
     appearance,
-    setAppearance,
     editingText,
     setEditingText,
     penPoints,
@@ -698,10 +695,8 @@ export function createAiEditor(options: AiEditorOptions) {
     penHandle,
     penFinish,
     apply,
-    step,
     undo: steps.undo,
     redo: steps.redo,
-    activeLayer,
     deleteSelection,
     duplicate,
     group,
@@ -731,7 +726,6 @@ export function createAiEditor(options: AiEditorOptions) {
     copy,
     cut,
     paste,
-    canPaste: () => clipboard !== undefined,
     placeImages,
     newLayer,
     newArtboard,

@@ -69,7 +69,7 @@ const ROTATE_RING = 18;
 /** Distance (CSS px) within which an anchor or handle takes a press. */
 const POINT_REACH = 6;
 /** Distance (CSS px) from the first point within which the pen closes. */
-export const PEN_CLOSE = 8;
+const PEN_CLOSE = 8;
 /** Pen drags shorter than this (CSS px) place a corner. */
 const PEN_DRAG = 3;
 /** Shapes drawn with a click (no drag) are this big (points). */
@@ -928,5 +928,3 @@ export function createCanvasGestures(options: CanvasGestureOptions) {
     transformable,
   };
 }
-
-export type CanvasGestures = ReturnType<typeof createCanvasGestures>;

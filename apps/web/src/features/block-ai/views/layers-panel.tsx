@@ -126,16 +126,6 @@ export function LayersPanel(props: { viewer: AiViewer; editor: AiEditor }) {
   // ---- editing -------------------------------------------------------------
 
   const [renaming, setRenaming] = createSignal<number>();
-  createEffect(
-    on(
-      viewer.renameSignal,
-      () => {
-        const first = viewer.selected()[0];
-        if (first !== undefined && editor.enabled()) setRenaming(first);
-      },
-      { defer: true }
-    )
-  );
 
   const rename = (id: number, name: string | undefined) => {
     setRenaming(undefined);
