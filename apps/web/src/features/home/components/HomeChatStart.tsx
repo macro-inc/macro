@@ -4,10 +4,11 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { rememberBootShell } from '@components/app/boot-shell';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
-import { Show } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 import { HomeChatInput } from '../home-chat-input';
 import { HomeGettingStartedLink } from '../home-getting-started-link';
 import { useHomePreferences } from '../home-prefs';
@@ -20,6 +21,11 @@ export function HomeChatStart() {
   const preferences = useHomePreferences();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
+  // The next load's boot shell draws this greeting and composer layout.
+  createEffect(() => {
+    if (agents().loading) return;
+    rememberBootShell({ homeComposer: agents().enabled ? 'agents' : 'legacy' });
+  });
   return (
     <ChatInputProvider>
       <Show when={showHomeTopBar()}>

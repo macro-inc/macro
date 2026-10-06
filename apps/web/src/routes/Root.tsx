@@ -33,6 +33,7 @@ import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import {
   UserContextProvider,
+  useIsAuthenticated,
   useUserId,
   useUserInfo,
 } from '@core/context/user';
@@ -364,18 +365,37 @@ function InitialInteractiveOnboardingModal() {
   );
 }
 
+/** Longest the boot shell waits for auth before showing whatever the app has. */
+const BOOT_SHELL_MAX_WAIT_MS = 8000;
+
+/**
+ * Hands off from index.html's boot shell once the app frame can draw: when
+ * auth is known (the rail or the login page renders), at once for public
+ * links, and after a cap so an outage never hides the app's own error states.
+ */
+function useBootShellHandoff(isPublicPath: () => boolean) {
+  const isAuthenticated = useIsAuthenticated();
+  onMount(() => {
+    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    onCleanup(() => clearTimeout(cap));
+  });
+  createEffect(() => {
+    if (isPublicPath() || isAuthenticated() !== undefined) dismissBootShell();
+  });
+}
+
 /** Meeting and booking links have a focused shell and skip app onboarding. */
 function AppRouteLayout(props: RouteSectionProps) {
   const location = useLocation();
-  onMount(dismissBootShell);
+  const isBookingPath = () =>
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`);
+  useBootShellHandoff(
+    () => isBookingPath() || isMeetingPath(location.pathname)
+  );
   return (
     <Show
-      when={
-        !(
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`)
-        )
-      }
+      when={!isBookingPath()}
       fallback={
         <div class="h-dvh overflow-y-auto bg-page text-ink">
           {props.children}

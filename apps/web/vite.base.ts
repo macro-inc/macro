@@ -96,6 +96,40 @@ function pureGeneratedZodSchemas(): Plugin {
   };
 }
 
+/**
+ * CloudFront compresses responses of at most 10,000,000 bytes and serves
+ * anything larger raw. The entry chunk once crossed that limit and every
+ * visitor downloaded 11.9 MB uncompressed instead of ~3 MB, so fail the build
+ * rather than ship that again. (Cache WASM is precompressed at deploy.)
+ */
+function cloudFrontCompressionLimit(): Plugin {
+  const limitBytes = 10_000_000;
+  return {
+    name: 'cloudfront-compression-limit',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const oversized = Object.values(bundle)
+        .filter((file) => /\.(js|css|html|json|svg)$/.test(file.fileName))
+        .map((file) => ({
+          name: file.fileName,
+          bytes:
+            file.type === 'chunk'
+              ? Buffer.byteLength(file.code)
+              : typeof file.source === 'string'
+                ? Buffer.byteLength(file.source)
+                : file.source.byteLength,
+        }))
+        .filter((file) => file.bytes > limitBytes);
+      if (oversized.length === 0) return;
+      this.error(
+        `These files exceed CloudFront's ${limitBytes}-byte compression limit and would be served uncompressed: ${oversized
+          .map((file) => `${file.name} (${file.bytes} bytes)`)
+          .join(', ')}. Split them behind lazy() boundaries.`
+      );
+    },
+  };
+}
+
 export const createAppViteConfig = (): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
@@ -124,6 +158,7 @@ export const createAppViteConfig = (): UserConfigFn => {
           root: './',
         }),
         gitBranchHmrPlugin(),
+        cloudFrontCompressionLimit(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,

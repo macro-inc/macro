@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
+import { rememberBootShell } from '@components/app/boot-shell';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
@@ -11,7 +12,7 @@ import GearIcon from '@phosphor/gear.svg';
 import GearFillIcon from '@phosphor-fill/gear-fill.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
-import { createMemo, Show } from 'solid-js';
+import { createEffect, createMemo, Show } from 'solid-js';
 import { NavGlyph } from './nav-glyph';
 
 /**
@@ -42,6 +43,10 @@ const MobileAppButton = () => {
   const isTabAvailable = useSettingsTabAvailable();
 
   const isActive = () => isSettingsActive() && activeTabId() === 'Mobile App';
+
+  createEffect(() =>
+    rememberBootShell({ mobileApp: isTabAvailable('Mobile App') })
+  );
 
   const open = (event: MouseEvent) => {
     event.preventDefault();
