@@ -1,3 +1,4 @@
+import { toShareItem } from '@app/features/sharing/share-delivery/share-delivery';
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { err, ok } from 'neverthrow';
@@ -68,7 +69,6 @@ vi.mock('@core/block', () => ({
     { refetch: vi.fn() },
   ],
   useBlockName: () => 'md',
-  useMaybeBlockName: () => 'md',
   useMaybeBlockAliasedName: () => 'md',
   useMaybeBlockId: () => 'launcher-placeholder',
 }));
@@ -113,7 +113,9 @@ vi.mock('@service-storage/client', () => ({
   },
   blockNameToItemType: (name: string) =>
     name === 'agent' ? 'agent_session' : 'document',
-  itemTypeToReferenceEntityType: (type: string) => type,
+}));
+vi.mock('@queries/messages/mutations', () => ({
+  newMessageId: () => 'new-message',
 }));
 vi.mock('@queries/agent-session/share-permissions', () => ({
   fetchAgentSessionSharePermissions: (...args: unknown[]) =>
@@ -617,6 +619,7 @@ describe('agent session sharing', () => {
       content: '',
       channelId: 'channel-1',
       mentions: [],
+      messageId: 'new-message',
     });
     await vi.waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(mocks.updateAgentPermissions).toHaveBeenCalledWith(
@@ -666,26 +669,16 @@ describe('agent session sharing', () => {
     share();
     expect(mocks.sendToChannel).toHaveBeenCalledOnce();
   });
-  it('keeps context identity for existing forwarding callers without overrides', () => {
-    render(() => <ForwardToChannel name="Document" hideAccessLevelSelector />);
-    selectChannel();
-    share();
-    expect(mocks.sendToChannel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        attachments: [
-          { entity_type: 'document', entity_id: 'launcher-placeholder' },
-        ],
-      })
-    );
-  });
   it('uses the current explicit identity if it changes while mounted', () => {
     const [id, setId] = createSignal('old-session');
     render(() => (
       <ForwardToChannel
-        name="Session"
-        blockName="agent"
-        blockId={id()}
-        hideAccessLevelSelector
+        item={toShareItem({
+          id: id(),
+          kind: 'agent_session',
+          name: 'Session',
+          canGrant: true,
+        })}
       />
     ));
     setId('new-session');
