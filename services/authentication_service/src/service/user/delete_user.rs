@@ -31,6 +31,12 @@ pub trait UserDeletionGateway: Send + Sync {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Delete the profile's onboarding-flow row. It is keyed by the profile id
+    /// with no foreign key to the profile, so it would otherwise outlive it.
+    fn delete_onboarding(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
     /// Delete the profile only after all owning services have succeeded.
     fn delete_profile(
         &self,
@@ -62,6 +68,7 @@ pub async fn delete_user_data(
         gateway.delete_agent_sessions(user).await?;
         gateway.leave_teams(user).await?;
         gateway.delete_items(user).await?;
+        gateway.delete_onboarding(user).await?;
         gateway.delete_profile(user, account).await?;
     }
     gateway.delete_billing_customer(account).await?;

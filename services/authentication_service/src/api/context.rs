@@ -156,8 +156,12 @@ pub(crate) struct ApiContext {
     >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
-    pub user_deletion:
-        Arc<authentication_service::outbound::user_deletion::UserDeletionAdapter<TeamsServiceType>>,
+    pub user_deletion: Arc<
+        authentication_service::outbound::user_deletion::UserDeletionAdapter<
+            TeamsServiceType,
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+        >,
+    >,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
