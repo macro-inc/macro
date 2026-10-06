@@ -109,7 +109,11 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
 }
 
 /// Models advertised by shared test engines.
-pub(crate) const TEST_MODELS: &[&str] = &["anthropic/claude-sonnet-5-5", "other-model"];
+pub(crate) const TEST_MODELS: &[&str] = &[
+    "anthropic/claude-sonnet-5-5",
+    "other-model",
+    chat::domain::models::FREE_MODEL,
+];
 
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
@@ -210,5 +214,43 @@ impl TurnEngine for HangingEngine {
             drop(parts);
         });
         receiver
+    }
+}
+
+/// Mutable plan lookup used to exercise upgrades, downgrades, and lookup errors.
+pub(crate) struct TestModelAccess {
+    pub(crate) result: Mutex<
+        Result<
+            crate::domain::model_access::ModelAccess,
+            crate::domain::model_access::ModelAccessError,
+        >,
+    >,
+    pub(crate) owners: Mutex<Vec<model_owner::Owner>>,
+}
+
+impl TestModelAccess {
+    pub(crate) fn new(access: crate::domain::model_access::ModelAccess) -> Self {
+        Self {
+            result: Mutex::new(Ok(access)),
+            owners: Mutex::new(Vec::new()),
+        }
+    }
+
+    pub(crate) fn paid() -> Self {
+        Self::new(crate::domain::model_access::ModelAccess::Paid)
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::domain::model_access::InMemModelAccess for TestModelAccess {
+    async fn access(
+        &self,
+        owner: &model_owner::Owner,
+    ) -> Result<
+        crate::domain::model_access::ModelAccess,
+        crate::domain::model_access::ModelAccessError,
+    > {
+        self.owners.lock().unwrap().push(owner.clone());
+        *self.result.lock().unwrap()
     }
 }

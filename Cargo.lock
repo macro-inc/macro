@@ -526,6 +526,7 @@ dependencies = [
  "prompt",
  "rig-agent",
  "rmcp",
+ "roles_and_permissions",
  "schemars 1.2.1",
  "serde",
  "serde_json",

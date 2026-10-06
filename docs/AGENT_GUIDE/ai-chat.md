@@ -1465,3 +1465,19 @@ navigation, so mounting the next surface joins that request instead of warming
 another server session.
 Empty or failed warm responses do not trigger a refill loop, and mismatched
 agent settings leave a usable reservation available for the default agent.
+
+
+### Free-plan models in the new Macro agent
+
+The in-memory Macro runtime uses the session owner's current permissions.
+Free users see only Gemini 3.8 Flash in model discovery and the live session
+picker. New and resumed sessions replace an inaccessible saved model with Gemini.
+A direct request to select a paid model is rejected, and each prompt rechecks
+permissions before inference, including after a plan downgrade. Permission
+lookup failures prevent inference. Paid users retain the full supported catalog.
+Cursor, Claude Cloud, and paired external runtimes keep their own model rules.
+
+To verify, start a Macro conversation as a free user with a previously saved
+paid-model preference: the composer should show Gemini and send that model.
+In a live session, confirm the model options contain only Gemini. Backend tests
+also exercise direct ACP model-change requests, downgrade, and resume.

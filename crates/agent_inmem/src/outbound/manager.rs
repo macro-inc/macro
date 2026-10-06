@@ -69,6 +69,7 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
     enable_dev_commands: bool,
@@ -91,9 +92,11 @@ impl InMemAgentManager {
         engine: Arc<dyn TurnEngine>,
         frames: Arc<dyn FrameSource>,
         mcp: Arc<dyn DynMcpToolConnector>,
+        model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     ) -> Self {
         Self {
             engine,
+            model_access,
             admission: Arc::new(DisabledAiAdmissionService),
             frames,
             mcp,
@@ -176,6 +179,7 @@ impl InMemAgentManager {
             owner: facts.owner,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
+            model_access: Arc::clone(&self.model_access),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),
             turn_lock: tokio::sync::Mutex::new(()),
