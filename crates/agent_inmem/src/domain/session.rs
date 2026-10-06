@@ -112,12 +112,20 @@ const IMAGE_EXTENSIONS: &[&str] = &[
     "webp",
 ];
 
+/// The media type browsers give `.psd` and `.psb` files.
+const PHOTOSHOP_MIME: &str = "image/vnd.adobe.photoshop";
+
 /// Whether this file is an image, by media type and then by name.
 ///
 /// A browser can report no media type at all for a `.png`, and the composer
 /// still shows it as a thumbnail, so the name decides when the type cannot.
 fn is_image(attachment: &PromptAttachment) -> bool {
     let mime = attachment.mime_type.as_deref().unwrap_or_default();
+    // Photoshop documents carry an image media type, but they are layered
+    // design files no image pipeline decodes: they are named in text.
+    if mime == PHOTOSHOP_MIME {
+        return false;
+    }
     if mime.starts_with("image/") {
         return true;
     }
