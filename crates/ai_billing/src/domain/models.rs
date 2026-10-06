@@ -465,9 +465,15 @@ impl AutoReloadThresholds {
                 "target balance exceeds the largest offered reload",
             ));
         }
-        if self.monthly_limit_cents.is_some_and(|limit| limit <= 0) {
+        // The monthly limit doubles as the per-period overage cap, which is
+        // clamped into the offered range: a smaller limit would be raised to
+        // the cap minimum and the payer billed more than they set.
+        if self
+            .monthly_limit_cents
+            .is_some_and(|limit| limit < OVERAGE_LIMIT_MIN_CENTS)
+        {
             return Err(BillingError::InvalidAutoReload(
-                "monthly spend limit must be positive",
+                "monthly spend limit must be at least $5",
             ));
         }
         Ok(())

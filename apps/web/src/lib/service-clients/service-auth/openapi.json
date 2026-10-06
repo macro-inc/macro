@@ -6902,7 +6902,7 @@
           "monthlySpendLimitCents": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "Most to reload per calendar month, cents. Omit or `null` for no limit.\nAlso serves as the per-period overage cap, within the catalog's\noverage bounds."
+            "description": "Most to reload per calendar month, cents. Omit or `null` for no limit.\nAlso serves as the per-period overage cap, so it must be at least the\ncatalog's `overage_limit_min_cents`; larger values are capped at\n`overage_limit_max_cents`."
           },
           "targetBalanceCents": {
             "type": "integer",

@@ -117,21 +117,26 @@ reload-suspended, settlement compares the credit balance net of the period's
 uncovered usage with the payer's minimum balance and, below it, reloads up to the
 target balance. The minimum, target, and optional monthly spend limit are stored
 per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
-monthly limit counts pending and paid reloads within the UTC calendar month,
-independent of the Stripe period anchor; a remainder under the Stripe minimum
-charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
+monthly limit counts reloads Stripe may still collect (pending, paid, or failed
+with an invoice) within the UTC calendar month, independent of the Stripe period
+anchor; a remainder under the Stripe minimum charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
 payer lock and collected as a one-off Stripe invoice stamped
 `macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
 purchase, idempotent on the invoice id. A declined invoice stays pending, which
 blocks further reloads, until the Stripe webhook reports it paid (credits are
 booked) or failed (reloads are suspended). A provider failure marks the reload
 failed and sets `auto_reload_suspended_at`; overage remains the fallback until
-the payer saves their settings again. `PATCH /ai-billing/auto-reload` (payer on
-a paid plan only) is how overage is turned on: enabling validates and stores the
-thresholds, sets `overage_enabled`, derives the per-period overage cap from the
-monthly limit (clamped to the offered overage range; the maximum when there is
-no limit), clears both suspensions, and settles at once; disabling behaves like
-turning overage off and keeps the stored thresholds. `GET /ai-billing/summary`
+the payer saves their settings again. A failed reload whose invoice reached
+Stripe keeps that invoice, and the next reservation after reloads are re-enabled
+retries it rather than opening a second one. `PATCH /ai-billing/auto-reload`
+(payer on a paid plan only) is how overage is turned on: enabling validates and
+stores the thresholds, sets `overage_enabled`, uses the monthly limit as the
+per-period overage cap (the offered maximum when there is no limit), clears both
+suspensions, and settles at once; disabling behaves like turning overage off and
+keeps the stored thresholds. A monthly limit must be at least the overage cap
+minimum (`$5`) so the cap is never raised above what the payer entered. The
+monthly limit bounds reload purchases per calendar month and the overage
+fallback per Stripe period separately; it is not a combined budget. `GET /ai-billing/summary`
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit

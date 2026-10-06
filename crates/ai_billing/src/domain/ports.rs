@@ -304,14 +304,16 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// lock, read the balance and the period ledger, run
     /// [`plan_reload`](super::ledger::plan_reload) with the stored thresholds
     /// against the usage `chargeable_customer_cents` that credits or charges
-    /// have not yet covered, and reserve a pending reload. Reloads already
-    /// reserved or paid in the UTC calendar month containing `now` count
-    /// against the monthly limit.
+    /// have not yet covered, and reserve a pending reload. Reloads in the UTC
+    /// calendar month containing `now` that Stripe may still collect (pending,
+    /// paid, or failed with an invoice) count against the monthly limit.
     ///
     /// `None` unless [`BillingSettings::auto_reload_active`] holds. A reload
-    /// reserved earlier whose collection never finished (pending, no invoice,
-    /// stale) is handed back so the retry reuses its id and Stripe idempotency
-    /// keys; any other pending reload blocks a new one until Stripe resolves it.
+    /// reserved earlier whose collection never finished is handed back so the
+    /// retry reuses its id, Stripe idempotency keys, and invoice: a pending
+    /// reload with no invoice that went stale, or a failed reload whose
+    /// invoice is still open (returned as pending again). Any other pending
+    /// reload blocks a new one until Stripe resolves it.
     fn reserve_credit_reload(
         &self,
         payer: &MacroUserIdStr<'_>,

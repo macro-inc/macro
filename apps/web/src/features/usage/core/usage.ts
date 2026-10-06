@@ -29,6 +29,13 @@ export const MIN_RELOAD_CENTS = 50;
 
 export const MAX_TARGET_BALANCE_CENTS = 500_000;
 
+/**
+ * The monthly spend limit also caps usage billing, which the backend clamps to
+ * at least this much (`OVERAGE_LIMIT_MIN_CENTS`), so a smaller limit would be
+ * silently raised.
+ */
+export const MIN_MONTHLY_SPEND_LIMIT_CENTS = 500;
+
 /** Development remains interactive; production follows the UI rollout flag. */
 export function isUsageAvailable(
   production: boolean,
@@ -75,8 +82,8 @@ export function validateAutoReload(
   }
   if (
     settings.monthlySpendLimitCents !== null &&
-    settings.monthlySpendLimitCents <= 0
+    settings.monthlySpendLimitCents < MIN_MONTHLY_SPEND_LIMIT_CENTS
   ) {
-    return 'Enter a monthly spend limit greater than $0, or leave it blank.';
+    return `Monthly spend limit must be at least ${formatCreditBalance(MIN_MONTHLY_SPEND_LIMIT_CENTS)}, or leave it blank.`;
   }
 }

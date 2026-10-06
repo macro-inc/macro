@@ -794,17 +794,25 @@ impl BillingRepo for PgBillingRepo {
             return Ok(None);
         }
 
-        // A reload reserved earlier whose collector died before opening an
-        // invoice is handed back so the retry reuses its id and Stripe
-        // idempotency keys. Any other pending reload is still with Stripe and
-        // blocks a new one until the webhook resolves it.
-        let pending = sqlx::query!(
+        // A reload still owed from an earlier pass comes first, so the retry
+        // reuses its id (and with it its Stripe idempotency keys and invoice)
+        // instead of reserving a second reload while the first can still
+        // collect. A pending reload whose collector died before opening an
+        // invoice is handed back as is. A failed reload that reached Stripe
+        // keeps its invoice open (`auto_advance`) and is retried on that same
+        // invoice now that the payer has re-enabled reloads. Any other
+        // pending reload is still with Stripe and blocks a new one until the
+        // webhook resolves it.
+        let open = sqlx::query!(
             r#"
-            SELECT id, amount_cents, stripe_invoice_id,
-                   (stripe_invoice_id IS NULL
+            SELECT id, amount_cents, stripe_invoice_id, status::text AS "status!",
+                   (status = 'pending'
+                    AND stripe_invoice_id IS NULL
                     AND updated_at < NOW() - INTERVAL '10 minutes') AS "orphaned!"
             FROM ai_credit_reload
-            WHERE user_id = $1 AND status = 'pending'
+            WHERE user_id = $1
+              AND (status = 'pending'
+                   OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))
             ORDER BY created_at
             FOR UPDATE
             "#,
@@ -813,7 +821,7 @@ impl BillingRepo for PgBillingRepo {
         .fetch_all(&mut *tx)
         .await
         .map_err(storage)?;
-        if let Some(row) = pending.iter().find(|row| row.orphaned) {
+        if let Some(row) = open.iter().find(|row| row.orphaned) {
             tx.commit().await.map_err(storage)?;
             return Ok(Some(PendingReload {
                 id: row.id,
@@ -821,7 +829,26 @@ impl BillingRepo for PgBillingRepo {
                 stripe_invoice_id: row.stripe_invoice_id.clone(),
             }));
         }
-        if !pending.is_empty() {
+        if let Some(row) = open.iter().find(|row| row.status == "failed") {
+            sqlx::query!(
+                r#"
+                UPDATE ai_credit_reload
+                SET status = 'pending', updated_at = NOW()
+                WHERE id = $1
+                "#,
+                row.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            return Ok(Some(PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            }));
+        }
+        if !open.is_empty() {
             tx.rollback().await.map_err(storage)?;
             return Ok(None);
         }
@@ -847,13 +874,15 @@ impl BillingRepo for PgBillingRepo {
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
         let covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
         let uncovered_cents = (chargeable_customer_cents - covered).max(0);
+        // A failed reload that reached Stripe may still be collected by its
+        // retries, so it counts against the limit like a pending one.
         let month = BillingPeriod::calendar_month(now);
         let spent_this_month_cents = sqlx::query_scalar!(
             r#"
             SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
             FROM ai_credit_reload
             WHERE user_id = $1
-              AND status IN ('pending', 'paid')
+              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
               AND created_at >= $2
               AND created_at < $3
             "#,

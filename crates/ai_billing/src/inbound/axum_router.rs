@@ -99,8 +99,9 @@ pub struct UpdateAutoReloadRequest {
     /// minimum and no more than the catalog's `auto_reload_target_max_cents`.
     pub target_balance_cents: i64,
     /// Most to reload per calendar month, cents. Omit or `null` for no limit.
-    /// Also serves as the per-period overage cap, within the catalog's
-    /// overage bounds.
+    /// Also serves as the per-period overage cap, so it must be at least the
+    /// catalog's `overage_limit_min_cents`; larger values are capped at
+    /// `overage_limit_max_cents`.
     #[serde(default)]
     pub monthly_spend_limit_cents: Option<i64>,
 }

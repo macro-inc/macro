@@ -893,7 +893,8 @@ where
         }
         thresholds.validate()?;
         // The dialog has no overage cap of its own: the monthly spend limit
-        // doubles as the per-period cap, within the offered range.
+        // doubles as the per-period cap. Validation keeps it at or above the
+        // cap minimum, so the clamp only ever lowers it.
         let overage_limit_cents = thresholds
             .monthly_limit_cents
             .unwrap_or(OVERAGE_LIMIT_MAX_CENTS)

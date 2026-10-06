@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AUTO_RELOAD_TARGET_MAX_CENTS, BillingError, OVERAGE_CHARGE_THRESHOLD_CENTS, PayerScope,
+    AUTO_RELOAD_TARGET_MAX_CENTS, BillingError, OVERAGE_CHARGE_THRESHOLD_CENTS,
+    OVERAGE_LIMIT_MIN_CENTS, PayerScope,
 };
 use crate::domain::pricing::AiPricing;
 use chrono::{TimeZone, Utc};
@@ -244,6 +245,7 @@ fn thresholds_reject_each_invalid_setting() {
         thresholds(1_000, AUTO_RELOAD_TARGET_MAX_CENTS + 1, None),
         thresholds(1_000, 10_000, Some(0)),
         thresholds(1_000, 10_000, Some(-1)),
+        thresholds(1_000, 10_000, Some(OVERAGE_LIMIT_MIN_CENTS - 1)),
     ];
     for t in invalid {
         assert!(
@@ -254,9 +256,13 @@ fn thresholds_reject_each_invalid_setting() {
 
     assert!(thresholds(1_000, 1_050, None).validate().is_ok());
     assert!(
-        thresholds(1_000, AUTO_RELOAD_TARGET_MAX_CENTS, Some(1))
-            .validate()
-            .is_ok()
+        thresholds(
+            1_000,
+            AUTO_RELOAD_TARGET_MAX_CENTS,
+            Some(OVERAGE_LIMIT_MIN_CENTS)
+        )
+        .validate()
+        .is_ok()
     );
 }
 

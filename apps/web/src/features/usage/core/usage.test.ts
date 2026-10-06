@@ -69,6 +69,27 @@ describe('Auto-Reload validation', () => {
       })
     ).toBeUndefined();
   });
+
+  it('requires a monthly spend limit of at least $5 when one is set', () => {
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        monthlySpendLimitCents: 499,
+      })
+    ).toBe('Monthly spend limit must be at least $5, or leave it blank.');
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        monthlySpendLimitCents: 500,
+      })
+    ).toBeUndefined();
+    expect(
+      validateAutoReload({
+        ...DEFAULT_AUTO_RELOAD,
+        monthlySpendLimitCents: null,
+      })
+    ).toBeUndefined();
+  });
 });
 
 describe('Usage rollout', () => {

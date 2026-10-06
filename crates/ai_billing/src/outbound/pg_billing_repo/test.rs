@@ -879,6 +879,71 @@ async fn reserve_credit_reload_waits_for_a_pending_reload_but_recovers_an_orphan
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reserve_credit_reload_retries_a_failed_reload_on_its_open_invoice(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let period_start = now - chrono::Duration::days(10);
+    enable_auto_reload(&repo, &thresholds(Some(12_000))).await;
+
+    let reserved = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    // The invoice reached Stripe, then collection failed and reloads were
+    // suspended. Stripe keeps retrying that invoice.
+    repo.finish_credit_reload(reserved.id, Some("in_1"), CreditReloadStatus::Failed)
+        .await
+        .unwrap();
+    repo.suspend_auto_reload(&payer()).await.unwrap();
+    assert!(
+        repo.reserve_credit_reload(&payer(), period_start, 0, now)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Re-enabling hands back the same reload and invoice instead of opening a
+    // second one Stripe could also collect.
+    enable_auto_reload(&repo, &thresholds(Some(12_000))).await;
+    let retried = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("failed reload handed back");
+    assert_eq!(retried.id, reserved.id);
+    assert_eq!(retried.amount_cents, 10_000);
+    assert_eq!(retried.stripe_invoice_id.as_deref(), Some("in_1"));
+    assert_eq!(reload_rows(&pool).await, 1);
+    let status = sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_credit_reload WHERE id = $1"#,
+        reserved.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "pending");
+
+    // While it is pending again it blocks new reloads, and once paid it
+    // still counts against the month, leaving 2_000 of room.
+    assert!(
+        repo.reserve_credit_reload(&payer(), period_start, 0, now)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    repo.finish_credit_reload(retried.id, Some("in_1"), CreditReloadStatus::Paid)
+        .await
+        .unwrap();
+    let next = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    assert_eq!(next.amount_cents, 2_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn credit_reloads_are_idempotent_on_the_invoice(pool: PgPool) {
     let repo = PgBillingRepo::new(pool, AiPricing::testing());
     assert!(

@@ -7,7 +7,8 @@
 
 /**
  * Most to reload per calendar month, cents. Omit or `null` for no limit.
-Also serves as the per-period overage cap, within the catalog's
-overage bounds.
+Also serves as the per-period overage cap, so it must be at least the
+catalog's `overage_limit_min_cents`; larger values are capped at
+`overage_limit_max_cents`.
  */
 export type UpdateAutoReloadRequestMonthlySpendLimitCents = number | null;

@@ -1891,9 +1891,15 @@ async fn enabling_auto_reload_turns_overage_on_clears_suspensions_and_settles() 
     assert_eq!(repo.reloads()[0].amount_cents, 19_500);
     assert_eq!(snap.credit_balance_cents, 20_000);
 
-    // A monthly limit becomes the overage cap, within the offered range.
+    // A monthly limit becomes the overage cap, within the offered range; one
+    // under the cap minimum is rejected rather than raised.
+    assert!(matches!(
+        svc.update_auto_reload(&payer, true, thresholds(2_000, 20_000, Some(100)))
+            .await,
+        Err(BillingError::InvalidAutoReload(_))
+    ));
     for (monthly_limit, overage_limit) in [
-        (100, OVERAGE_LIMIT_MIN_CENTS),
+        (OVERAGE_LIMIT_MIN_CENTS, OVERAGE_LIMIT_MIN_CENTS),
         (25_000, 25_000),
         (1_000_000, OVERAGE_LIMIT_MAX_CENTS),
     ] {
