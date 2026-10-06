@@ -1060,6 +1060,7 @@ export function FigViewer() {
                 comments={c()}
                 camera={viewer.camera()}
                 viewport={viewer.viewport()}
+                onDismiss={() => root.focus({ preventScroll: true })}
               />
             )}
           </Show>

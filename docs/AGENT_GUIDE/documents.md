@@ -1365,23 +1365,29 @@ Layout and test hooks:
   (`fig-present-button`, ⌥⌘↵ / Ctrl+Alt+Enter) are in the inspector header,
   or float at the canvas's top right while that panel is hidden. The
   shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?) is also in the main menu.
-- **Comments** (the comment tool, C): pins (`fig-comment-pin`,
-  `data-thread`, `data-unread`) at a constant size over the canvas; a click
-  places a comment on the top-level frame there (it moves with the frame)
-  or on the canvas, composed in `fig-comment-input` (Enter posts, ⇧Enter a
-  new line, `@` offers people: `fig-mention-menu`, `fig-mention-option`).
-  A pin opens its thread (`fig-comment-popover`: comments
-  `fig-comment-item`, mentions `fig-comment-mention`, `fig-comment-reply`
-  with `fig-comment-reply-post`, `fig-comment-resolve` /
-  `fig-comment-reopen`, and the author's `fig-comment-delete`). The right
-  panel becomes the comments list (`fig-comments-panel`), with Present and
-  Zoom in its header. Search (`fig-comments-search`) matches comment text,
-  replies, and author names. Open `fig-comments-filter` for
+- **Comments** (the comment tool, C): Macro comments, the same threads as
+  markdown, PDF, and spreadsheet comments. Pins (`fig-comment-pin`,
+  `data-thread`, `data-unread`) sit at a constant size over the canvas; a
+  click places a comment on the top-level frame there (it moves with the
+  frame) or on the canvas, written in `fig-comment-draft` with the app's
+  message composer (Enter posts; `@` mentions people and documents;
+  attachments; Escape cancels). A pin opens its thread beside it
+  (`fig-comment-popover`, `data-thread`, `data-resolved`): the shared
+  message thread (replies, reactions, edit, delete, copy link) under a
+  header with `fig-comment-resolve` / `fig-comment-reopen` and
+  `fig-comment-close`. The right panel becomes the comments list
+  (`fig-comments-panel`), with Present and Zoom in its header. Search
+  (`fig-comments-search`) matches the first comment, the latest replies,
+  and author names. Open `fig-comments-filter` for
   `fig-comments-filter-<open|resolved|all>`. Rows `fig-comment-row` have
-  `data-unread`; a row opens the thread on its page. Escape closes the
-  thread, then the tool. In the app, comments are document discussions
-  with a `fig` thread anchor, on wherever the viewer is; the fixture keeps
-  them in memory.
+  `data-unread`; a row opens the thread on its page. Below the rows,
+  `fig-comments-discussion` holds comments on the whole design. A copied
+  comment link (`?comment_id=`) or a comment notification opens the tool
+  at its thread (or at the discussion). Escape closes the thread, then the
+  tool. In the app, a pinned thread's root carries a `fig` thread anchor;
+  the browser fixture keeps comments in memory, with plain stand-ins for
+  the thread (`fig-comment-item`, `fig-comment-reply`) and composer
+  (`fig-comment-input`).
 - **Present** (`fig-present`): the selection's top-level frame (or the
   first flow's start, or the first frame) scaled to fit
   (`fig-present-screen`, `data-frame`), with the prototype playing: clicks

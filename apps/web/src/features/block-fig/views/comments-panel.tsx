@@ -1,12 +1,31 @@
-/** The comment tool's searchable thread list, alongside the canvas. */
+/**
+ * The comment tool's searchable list of pinned threads, alongside the
+ * canvas, with the design's discussion (comments pinned nowhere) below.
+ */
 import FunnelSimple from '@phosphor/funnel-simple.svg';
 import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import X from '@phosphor/x.svg';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
-import { CommentAvatar, CommentText } from '../components/comment-thread';
+import { Dynamic } from 'solid-js/web';
 import { EditorMenu } from '../components/editor-menu';
-import { type CommentFilter, relativeTime } from '../core/comments';
+import {
+  type CommentFilter,
+  type FigPerson,
+  initialsOf,
+  relativeTime,
+} from '../core/comments';
 import type { FigComments } from '../primitives/create-fig-comments';
+
+function Avatar(props: { person: FigPerson }) {
+  return (
+    <span
+      class="flex size-6 shrink-0 items-center justify-center rounded-full bg-accent-bg font-medium text-[10px] text-accent"
+      title={props.person.name}
+    >
+      {initialsOf(props.person.name)}
+    </span>
+  );
+}
 
 const FILTERS: { value: CommentFilter; label: string }[] = [
   { value: 'open', label: 'Open comments' },
@@ -99,15 +118,15 @@ export function CommentsPanel(props: {
                 : c.filter() === 'resolved'
                   ? 'No resolved comments.'
                   : c.store.canComment()
-                    ? 'No comments yet. Click the canvas to add one.'
-                    : 'No comments yet.'}
+                    ? 'No comments on the canvas yet. Click it to add one.'
+                    : 'No comments on the canvas yet.'}
             </p>
           }
         >
           <For each={threads()}>
             {(thread) => {
               const first = () => thread.comments[0];
-              const replies = () => thread.comments.length - 1;
+              const replies = () => thread.replyCount;
               const people = () =>
                 [
                   ...new Map(
@@ -117,10 +136,7 @@ export function CommentsPanel(props: {
                     ])
                   ).values(),
                 ].slice(0, 4);
-              const page = () =>
-                thread.anchor
-                  ? props.pageName(thread.anchor.pageId)
-                  : undefined;
+              const page = () => props.pageName(thread.anchor.pageId);
               return (
                 <button
                   type="button"
@@ -133,7 +149,7 @@ export function CommentsPanel(props: {
                 >
                   <div class="mb-0.5 flex w-full items-center gap-1">
                     <For each={people()}>
-                      {(person) => <CommentAvatar person={person} />}
+                      {(person) => <Avatar person={person} />}
                     </For>
                     <Show when={c.isUnread(thread)}>
                       <span
@@ -156,11 +172,11 @@ export function CommentsPanel(props: {
                       )}
                     </span>
                   </div>
-                  <Show when={first()}>
-                    {(comment) => (
-                      <div class="line-clamp-3">
-                        <CommentText comment={comment()} />
-                      </div>
+                  <Show when={first()?.text}>
+                    {(text) => (
+                      <p class="line-clamp-3 whitespace-pre-wrap break-words text-ink">
+                        {text()}
+                      </p>
                     )}
                   </Show>
                   <div class="flex gap-2 text-[11px]">
@@ -177,6 +193,16 @@ export function CommentsPanel(props: {
               );
             }}
           </For>
+        </Show>
+        <Show when={c.store.Discussion}>
+          {(discussion) => (
+            <div
+              class="border-edge-frame border-t px-3 py-2"
+              data-testid="fig-comments-discussion"
+            >
+              <Dynamic component={discussion()} />
+            </div>
+          )}
         </Show>
       </div>
     </div>

@@ -241,7 +241,7 @@ test('edits interactions and flows in the Prototype tab and saves them', async (
   await presented(page, '1:40');
 });
 
-test('comments: pins, replies, mentions, unread, resolve, and moving with the frame', async ({
+test('comments: pins, replies, unread, resolve, and moving with the frame', async ({
   page,
 }) => {
   await open(page, '&edit');
@@ -268,31 +268,29 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
   await page.mouse.click(box.x + box.width * 0.12, box.y + box.height * 0.3);
   const input = page.getByTestId('fig-comment-input');
   await expect(input).toBeFocused();
-  await input.pressSequentially('Please check @Bl');
-  await expect(page.getByTestId('fig-mention-option')).toHaveText([
-    'Blair Chen',
-  ]);
-  await page.keyboard.press('Enter');
-  await input.pressSequentially('thanks');
+  // Typing in the comment box never reaches the canvas's shortcuts.
+  await input.pressSequentially('Please check this');
+  await expect(page.getByTestId('fig-tool-comment')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
   await page.keyboard.press('Enter');
 
   const pin = page.getByTestId('fig-comment-pin');
   await expect(pin).toHaveCount(1);
   const popover = page.getByTestId('fig-comment-popover');
-  await expect(popover.getByTestId('fig-comment-mention')).toHaveText(
-    '@Blair Chen'
-  );
+  await expect(popover.getByTestId('fig-comment-item')).toHaveText([
+    'Alex Morgan Please check this',
+  ]);
   const thread = await page.evaluate(
     () =>
       window.figFixture.comments.threads()[0] as {
         id: string;
-        anchor: { nodeId: string };
+        anchor: { pageId: string; nodeId: string; x: number; y: number };
       }
   );
   expect(thread.anchor.nodeId).toBe('1:10');
-  expect(
-    await page.evaluate(() => window.figFixture.comments.notified())
-  ).toEqual([{ to: 'user-blair', threadId: thread.id }]);
+  await expect(popover).toHaveAttribute('data-thread', thread.id);
 
   // A reply.
   await popover.getByTestId('fig-comment-reply').fill('One more thing');
@@ -345,4 +343,24 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
     .toBeGreaterThan(20);
   const after = await pin.boundingBox();
   expect(Math.abs((before?.y ?? 0) - (after?.y ?? 0))).toBeLessThan(2);
+
+  // A comment link turns the tool on at its thread.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('fig-comments-panel')).toHaveCount(0);
+  const linked = await page.evaluate((anchor) => {
+    const f = window.figFixture.comments;
+    const id = f.arrive(f.people[2], 'Linked', {
+      anchor: { ...anchor, x: 40, y: 40 },
+    });
+    f.follow(id);
+    return id;
+  }, thread.anchor);
+  await expect(page.getByTestId('fig-tool-comment')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(popover).toHaveAttribute('data-thread', linked);
+  await expect(popover.getByTestId('fig-comment-item')).toHaveText([
+    'Casey Diaz Linked',
+  ]);
 });
