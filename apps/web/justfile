@@ -373,7 +373,7 @@ ensure-fig-engine-wasm:
 # compositing, hosted in workers by the psd block) into
 # src/lib/core/psd-engine/wasm (gitignored).
 build-psd-engine-wasm:
-    CARGO_TARGET_DIR="{{psd_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/psd_engine --target web --profile psd-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/psd-engine/wasm
+    scripts/cached-wasm-build.sh psd_engine {{justfile_directory()}}/src/lib/core/psd-engine/wasm -- env CARGO_TARGET_DIR="{{psd_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/psd_engine --target web --profile psd-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/psd-engine/wasm
 
 # Dev fast path: build the psd-engine wasm pkg only when it is missing or any
 # engine source (or the fig engine it draws text with) is newer than it.
@@ -391,7 +391,7 @@ ensure-psd-engine-wasm:
 # rendering, hosted in workers by the ai block) into
 # src/lib/core/ai-engine/wasm (gitignored).
 build-ai-engine-wasm:
-    CARGO_TARGET_DIR="{{ai_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/ai_engine --target web --profile ai-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/ai-engine/wasm
+    scripts/cached-wasm-build.sh ai_engine {{justfile_directory()}}/src/lib/core/ai-engine/wasm -- env CARGO_TARGET_DIR="{{ai_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/ai_engine --target web --profile ai-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/ai-engine/wasm
 
 # Dev fast path: build the ai-engine wasm pkg only when it is missing or any
 # engine source (or the fig engine it draws text with) is newer than it.
