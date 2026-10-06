@@ -11,7 +11,7 @@ import type {
   ShareKind,
 } from '../core/share-item';
 import { createShareForm } from '../primitives/create-share-form';
-import { BulkShareView } from './bulk-share-view';
+import { type BulkShareHandle, BulkShareView } from './bulk-share-view';
 
 const mocks = vi.hoisted(() => ({ toastSuccess: vi.fn() }));
 
@@ -95,7 +95,7 @@ function setup(
   } satisfies ShareDeliveryContext;
   const onFinish = vi.fn();
   const onCancel = vi.fn();
-  const onDelivered = vi.fn();
+  let handle: BulkShareHandle | undefined;
   render(() => {
     let minted = 0;
     const form = createShareForm<PickedRecipient>(
@@ -117,7 +117,9 @@ function setup(
         recipientName={(recipient) => NAMES[recipient.id] ?? recipient.id}
         onFinish={onFinish}
         onCancel={onCancel}
-        onDelivered={onDelivered}
+        ref={(registered) => {
+          handle = registered;
+        }}
       />
     );
   });
@@ -128,7 +130,7 @@ function setup(
     opened,
     onFinish,
     onCancel,
-    onDelivered,
+    dismiss: () => handle?.dismiss(),
   };
 }
 
@@ -157,7 +159,7 @@ describe('BulkShareView', () => {
   });
 
   it('reports a partial failure, locks the share, and retries only what failed', async () => {
-    const { context, failingChannels, onFinish, onDelivered } = setup(
+    const { context, failingChannels, onFinish } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general'), channel('design')]
     );
@@ -171,11 +173,11 @@ describe('BulkShareView', () => {
       )
     ).toBeTruthy();
     expect(button('Permission')).toHaveProperty('disabled', true);
-    expect(onDelivered).toHaveBeenCalledOnce();
     expect(onFinish).not.toHaveBeenCalled();
 
     failingChannels.delete('design');
     fireEvent.click(button('Retry'));
+    expect(screen.getByText('Design did not get Spec and Notes.')).toBeTruthy();
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
 
     expect(
@@ -212,7 +214,7 @@ describe('BulkShareView', () => {
   });
 
   it('cancels when closed with nothing delivered', async () => {
-    const { failingChannels, onFinish, onCancel, onDelivered } = setup(
+    const { failingChannels, onFinish, onCancel } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general')]
     );
@@ -224,11 +226,10 @@ describe('BulkShareView', () => {
 
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onFinish).not.toHaveBeenCalled();
-    expect(onDelivered).not.toHaveBeenCalled();
   });
 
-  it('finishes when closed after someone got a message', async () => {
-    const { failingChannels, onFinish, onCancel } = setup(
+  it('finishes when dismissed after someone got a message', async () => {
+    const { failingChannels, onFinish, onCancel, dismiss } = setup(
       [item('document', 'Spec'), item('chat', 'Notes')],
       [channel('general'), channel('design')]
     );
@@ -236,7 +237,7 @@ describe('BulkShareView', () => {
 
     fireEvent.click(button('Share'));
     await screen.findByText('Design did not get Spec and Notes.');
-    fireEvent.click(button('Close'));
+    dismiss();
 
     expect(onFinish).toHaveBeenCalledOnce();
     expect(onCancel).not.toHaveBeenCalled();

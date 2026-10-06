@@ -3,16 +3,16 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { ActionDialogShell, Button, Hotkey } from '@ui';
-import { createSignal, type JSX, onMount, Show } from 'solid-js';
+import { type JSX, onMount, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ShareNotices, ShareReport } from '../components/share-status';
-import type {
-  PickedRecipient,
-  ShareOutcome,
-  ShareTarget,
-} from '../core/delivery-plan';
+import type { PickedRecipient, ShareTarget } from '../core/delivery-plan';
 import { parseChannelAccessLevel } from '../core/share-item';
 import type { ShareForm } from '../primitives/create-share-form';
+
+export type BulkShareHandle = {
+  readonly dismiss: () => void;
+};
 
 export function BulkShareView<Recipient extends PickedRecipient>(props: {
   form: ShareForm<Recipient>;
@@ -23,14 +23,19 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
   recipientName: (recipient: Recipient) => string;
   onFinish: () => void;
   onCancel: () => void;
-  onDelivered: () => void;
+  ref?: (handle: BulkShareHandle) => void;
 }) {
   let root!: HTMLDivElement;
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('bulk-share', true);
-  const [report, setReport] = createSignal<ShareOutcome>();
+  const report = () =>
+    match(props.form.status())
+      .with({ t: 'editing' }, () => undefined)
+      .with({ t: 'sending' }, ({ previousOutcome }) => previousOutcome)
+      .with({ t: 'incomplete' }, { t: 'complete' }, ({ outcome }) => outcome)
+      .exhaustive();
   const sending = () => props.form.status().t === 'sending';
   const settled = () => report()?.retryable === false;
-  const close = () =>
+  const dismiss = () =>
     report()?.anyDelivered ? props.onFinish() : props.onCancel();
 
   const targetName = (target: ShareTarget) => {
@@ -48,13 +53,8 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
 
   async function share() {
     const result = await props.form.submit();
-    if (!result) return;
+    if (!result?.outcome.complete) return;
     const { outcome, open } = result;
-    if (!outcome.complete) {
-      setReport(outcome);
-      if (outcome.anyDelivered) props.onDelivered();
-      return;
-    }
     const [only, ...others] = outcome.recipients;
     toast.success(
       only && others.length === 0
@@ -78,7 +78,10 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
     },
   });
 
-  onMount(() => attachHotkeys(root));
+  onMount(() => {
+    attachHotkeys(root);
+    props.ref?.({ dismiss });
+  });
 
   return (
     <div ref={root} class="flex min-h-0 flex-col">
@@ -141,7 +144,7 @@ export function BulkShareView<Recipient extends PickedRecipient>(props: {
             </Button>
           }
         >
-          <Button variant="ghost" onClick={close}>
+          <Button variant="ghost" onClick={dismiss}>
             {report() ? 'Close' : 'Cancel'}
           </Button>
           <Button

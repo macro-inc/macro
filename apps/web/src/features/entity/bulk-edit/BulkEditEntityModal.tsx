@@ -1,14 +1,11 @@
-import { BulkShare } from '@app/features/sharing/share-delivery/bulk-share';
+import {
+  BulkShare,
+  type BulkShareHandle,
+} from '@app/features/sharing/share-delivery/bulk-share';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
 import { ActionDialogShell, Dialog } from '@ui';
-import {
-  type Accessor,
-  createSignal,
-  type ParentComponent,
-  type Setter,
-  Show,
-} from 'solid-js';
+import { type Accessor, createSignal, Show } from 'solid-js';
 import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
@@ -17,26 +14,14 @@ export type BulkEditView = 'rename' | 'moveToProject' | 'delete' | 'share';
 
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
-  setIsOpen: Setter<boolean>;
-  view: BulkEditView | null;
+  view: BulkEditView;
   entities: EntityData[];
-  onFinish?: () => void;
-  onCancel?: () => void;
+  onFinish: () => void;
+  onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
 }) => {
-  const [dismissFinishes, setDismissFinishes] = createSignal(false);
-  const handleFinish = () => {
-    props.setIsOpen(false);
-    props.onFinish?.();
-  };
-  const handleCancel = () => {
-    props.setIsOpen(false);
-    props.onCancel?.();
-  };
-  const handleError = (error: unknown) => {
-    props.onError?.(error);
-  };
+  let share: BulkShareHandle | undefined;
 
   return (
     <Dialog
@@ -48,45 +33,43 @@ const BulkEditEntityModalContent = (props: {
           : 'w-110'
       }
       onOpenChange={(open) => {
-        if (!open) {
-          if (dismissFinishes()) handleFinish();
-          else handleCancel();
-        }
-        props.setIsOpen(open);
+        if (!open) (share?.dismiss ?? props.onCancel)();
       }}
     >
       <ActionDialogShell>
         <Show when={props.view === 'rename'}>
           <BulkRenameEntitiesView
             entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
+            onFinish={props.onFinish}
+            onCancel={props.onCancel}
+            onError={props.onError}
           />
         </Show>
         <Show when={props.view === 'moveToProject'}>
           <BulkMoveToProjectView
             entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
+            onFinish={props.onFinish}
+            onCancel={props.onCancel}
+            onError={props.onError}
           />
         </Show>
         <Show when={props.view === 'delete'}>
           <BulkDeleteView
             onPartialDelete={props.onPartialDelete}
             entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
+            onFinish={props.onFinish}
+            onCancel={props.onCancel}
+            onError={props.onError}
           />
         </Show>
         <Show when={props.view === 'share'}>
           <BulkShare
             entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onDelivered={() => setDismissFinishes(true)}
+            onFinish={props.onFinish}
+            onCancel={props.onCancel}
+            ref={(handle) => {
+              share = handle;
+            }}
           />
         </Show>
       </ActionDialogShell>
@@ -94,89 +77,45 @@ const BulkEditEntityModalContent = (props: {
   );
 };
 
-type BulkEditEntityModalProps = {
-  isOpen: Accessor<boolean>;
-  setIsOpen: Setter<boolean>;
-  view: BulkEditView;
-  entities: Accessor<EntityData[]>;
-};
-
-const _BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
-  props
-) => {
-  return (
-    <Show when={props.isOpen()}>
-      <BulkEditEntityModalContent
-        isOpen={props.isOpen}
-        setIsOpen={props.setIsOpen}
-        view={props.view}
-        entities={props.entities()}
-      />
-    </Show>
-  );
-};
-
-const [globalModalProps, setGlobalModalProps] = createSignal<{
+type BulkEditSession = {
   view: BulkEditView;
   entities: EntityData[];
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
-} | null>(null);
+};
+
+const [globalSession, setGlobalSession] = createSignal<BulkEditSession>();
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'entity-edit',
 });
 
-export const openBulkEditModal = (props: {
-  view: BulkEditView;
-  entities: EntityData[];
-  onFinish?: () => void;
-  onCancel?: () => void;
-  onError?: (error: unknown) => void;
-  onPartialDelete?: PartialDeleteHandler;
-}) => {
+export const openBulkEditModal = (session: BulkEditSession) => {
   setModalOpen(true);
-  setGlobalModalProps(props);
+  setGlobalSession(session);
 };
 
-export const GlobalBulkEditEntityModal = () => {
-  const modalProps = () => globalModalProps();
-
-  const handleFinish = () => {
-    const props = globalModalProps();
-    setGlobalModalProps(null);
-    if (props?.onFinish) {
-      props.onFinish();
-    }
-  };
-
-  const handleCancel = () => {
-    const props = globalModalProps();
-    setGlobalModalProps(null);
-    if (props?.onCancel) {
-      props.onCancel();
-    }
-  };
-
-  const handleError = (error: unknown) => {
-    globalModalProps()?.onError?.(error);
-  };
-
-  return (
-    <Show when={modalProps()}>
-      {(props) => (
+export const GlobalBulkEditEntityModal = () => (
+  <Show when={globalSession()} keyed>
+    {(session) => {
+      const close = (then?: () => void) => {
+        if (globalSession() !== session) return;
+        setModalOpen(false);
+        setGlobalSession(undefined);
+        then?.();
+      };
+      return (
         <BulkEditEntityModalContent
           isOpen={modalOpen}
-          setIsOpen={setModalOpen}
-          view={props().view}
-          entities={props().entities}
-          onFinish={handleFinish}
-          onCancel={handleCancel}
-          onError={handleError}
-          onPartialDelete={props().onPartialDelete}
+          view={session.view}
+          entities={session.entities}
+          onFinish={() => close(session.onFinish)}
+          onCancel={() => close(session.onCancel)}
+          onError={session.onError}
+          onPartialDelete={session.onPartialDelete}
         />
-      )}
-    </Show>
-  );
-};
+      );
+    }}
+  </Show>
+);

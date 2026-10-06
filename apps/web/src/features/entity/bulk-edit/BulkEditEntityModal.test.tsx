@@ -27,14 +27,20 @@ vi.mock('@ui', () => ({
   ),
   ActionDialogShell: (props: ParentProps) => <div>{props.children}</div>,
 }));
+const share = vi.hoisted(() => ({
+  dismiss: vi.fn(),
+  views: [] as { onFinish: () => void; onCancel: () => void }[],
+}));
 vi.mock('@app/features/sharing/share-delivery/bulk-share', () => ({
-  BulkShare: (props: { onDelivered: () => void }) => (
-    <div data-testid="share-view">
-      <button type="button" onClick={props.onDelivered}>
-        Deliver
-      </button>
-    </div>
-  ),
+  BulkShare: (props: {
+    onFinish: () => void;
+    onCancel: () => void;
+    ref: (handle: { dismiss: () => void }) => void;
+  }) => {
+    share.views.push(props);
+    props.ref({ dismiss: share.dismiss });
+    return <div data-testid="share-view" />;
+  },
 }));
 vi.mock('./BulkMoveToProjectView', () => ({
   BulkMoveToProjectView: () => null,
@@ -110,28 +116,42 @@ describe('bulk-share modal dismissal', () => {
     { id: 'doc-2', type: 'document' },
   ] as EntityData[];
 
-  it('cancels when dismissed before anyone got a message', () => {
-    const onFinish = vi.fn();
-    const onCancel = vi.fn();
-    openBulkEditModal({ view: 'share', entities: rows, onFinish, onCancel });
-    render(() => <GlobalBulkEditEntityModal />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(onCancel).toHaveBeenCalledOnce();
-    expect(onFinish).not.toHaveBeenCalled();
-    expect(screen.queryByTestId('share-view')).toBeNull();
+  afterEach(() => {
+    share.dismiss.mockReset();
+    share.views = [];
   });
 
-  it('finishes when dismissed after someone got a message', () => {
+  it('lets the share view decide what a dismissal means', () => {
     const onFinish = vi.fn();
     const onCancel = vi.fn();
     openBulkEditModal({ view: 'share', entities: rows, onFinish, onCancel });
     render(() => <GlobalBulkEditEntityModal />);
+    share.dismiss.mockImplementation(() => share.views[0].onFinish());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Deliver' }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(share.dismiss).toHaveBeenCalledOnce();
     expect(onFinish).toHaveBeenCalledOnce();
     expect(onCancel).not.toHaveBeenCalled();
     expect(screen.queryByTestId('share-view')).toBeNull();
+  });
+
+  it('ignores a finish from a dialog that already closed', () => {
+    const first = { onFinish: vi.fn(), onCancel: vi.fn() };
+    const second = { onFinish: vi.fn(), onCancel: vi.fn() };
+    openBulkEditModal({ view: 'share', entities: rows, ...first });
+    render(() => <GlobalBulkEditEntityModal />);
+    const [stale] = share.views;
+    stale.onCancel();
+    openBulkEditModal({ view: 'share', entities: rows, ...second });
+
+    stale.onFinish();
+    stale.onCancel();
+
+    expect(first.onCancel).toHaveBeenCalledOnce();
+    expect(first.onFinish).not.toHaveBeenCalled();
+    expect(second.onFinish).not.toHaveBeenCalled();
+    expect(second.onCancel).not.toHaveBeenCalled();
+    expect(screen.getByTestId('share-view')).toBeTruthy();
   });
 });

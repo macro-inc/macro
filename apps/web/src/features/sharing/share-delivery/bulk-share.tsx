@@ -15,13 +15,15 @@ import {
   toShareItem,
   useShareForm,
 } from './share-delivery';
-import { BulkShareView } from './views/bulk-share-view';
+import { type BulkShareHandle, BulkShareView } from './views/bulk-share-view';
+
+export type { BulkShareHandle } from './views/bulk-share-view';
 
 export function BulkShare(props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
-  onDelivered: () => void;
+  ref?: (handle: BulkShareHandle) => void;
 }) {
   const viewerId = useUserId();
   const items = createMemo(() =>
@@ -79,7 +81,7 @@ export function BulkShare(props: {
       recipientName={recipientName}
       onFinish={props.onFinish}
       onCancel={props.onCancel}
-      onDelivered={props.onDelivered}
+      ref={props.ref}
     />
   );
 }
