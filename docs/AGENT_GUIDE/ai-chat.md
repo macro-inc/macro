@@ -1420,3 +1420,13 @@ prepared session only when the user, model, and instructions match. Other
 personas and changed settings use normal creation. Warm failures must not block
 sending. Unclaimed sessions expire after ten minutes; a claimed conversation
 must remain visible and usable after that deadline.
+
+After consuming or discovering an expired reservation, the shared query is
+invalidated. An active Home or Agents surface prepares one replacement; if no
+warming surface remains mounted, preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.

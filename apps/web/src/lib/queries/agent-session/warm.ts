@@ -26,10 +26,12 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
       gcTime: CLIENT_WARM_TTL_MS,
       retry: false,
       refetchOnWindowFocus: false,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      queryFn: async () => {
         if (!owner) return null;
+        // Keep one reservation in flight across Home -> Agents navigation.
+        // Aborting on unmount would abandon its server ID and warm another.
         const result = await throwOnErr(() =>
-          agentHarnessServiceClient.warm(uuidv7(), signal)
+          agentHarnessServiceClient.warm(uuidv7())
         );
         if (result.session) {
           return {
@@ -45,7 +47,10 @@ export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
   });
 }
 
-/** Consume once, only for the owner and exact default-agent configuration. */
+/**
+ * Consume once, only for the owner and exact default-agent configuration.
+ * Active warming surfaces prepare one replacement; otherwise the next mount does.
+ */
 export function takeWarmAgentSession(
   options: {
     userId?: string;
@@ -67,6 +72,10 @@ export function takeWarmAgentSession(
   if (!entry) return;
   if (entry.expires <= Date.now()) {
     client.setQueryData(key, null);
+    void client.invalidateQueries(
+      { queryKey: key, exact: true },
+      { cancelRefetch: false }
+    );
     return;
   }
   if (options.modelOverride && options.modelOverride !== entry.model) return;
@@ -75,5 +84,9 @@ export function takeWarmAgentSession(
   )
     return;
   client.setQueryData(key, null);
+  void client.invalidateQueries(
+    { queryKey: key, exact: true },
+    { cancelRefetch: false }
+  );
   return entry.id;
 }
