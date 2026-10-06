@@ -8,10 +8,10 @@ import { confirmSessionControl } from './confirm-session-control';
 /** Validate against the model's confirmed runtime snapshot before setting effort. */
 export async function configureSessionModel(
   session: Pick<AgentSession, 'issue' | 'snapshot' | 'subscribe'>,
-  model: string,
+  model: string | undefined,
   effort?: EffortSelection
 ) {
-  if ((await session.snapshot()).metadata.model !== model) {
+  if (model && (await session.snapshot()).metadata.model !== model) {
     await confirmSessionControl(session, { type: 'setModel', model });
   }
   if (!effort) return;

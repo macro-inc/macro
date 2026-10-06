@@ -22,6 +22,7 @@ const create = vi.hoisted(() => ({
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
   attribution: vi.fn(),
+  confirmedModel: undefined as string | undefined,
 }));
 
 vi.mock('@service-agent-harness/client', () => ({
@@ -84,6 +85,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
               ]
             : [],
           metadata: {
+            model: create.confirmedModel,
             configOptions: [
               {
                 id: 'effort',
@@ -127,6 +129,7 @@ beforeEach(() => {
   create.release.mockReset();
   create.autoConfirm = true;
   create.confirm = undefined;
+  create.confirmedModel = undefined;
 });
 
 describe('a block id that is already a session', () => {
@@ -142,6 +145,25 @@ describe('a block id that is already a session', () => {
 });
 
 describe('an id whose create is in flight', () => {
+  it('sends immediately when the runtime already confirms the requested model and effort', async () => {
+    create.confirmedModel = 'model-2';
+    create.control.mockResolvedValue({
+      isErr: () => false,
+      value: { actionId: 'prompt', status: 'sent' },
+    });
+    const placeholder = startPendingSession({
+      prompt: 'Hello',
+      modelOverride: 'model-2',
+      effortOverride: { configId: 'effort', value: 'low' },
+    });
+    create.resolve?.();
+    await flush();
+    expect(create.control.mock.calls).toEqual([
+      [placeholder, { type: 'prompt', prompt: 'Hello' }],
+    ]);
+    expect(create.release).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps initial context as a draft after startup without issuing a prompt', async () => {
     const placeholder = startPendingSession({
       initialInput: 'Document context ',

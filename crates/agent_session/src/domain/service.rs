@@ -23,8 +23,11 @@
 //! happens has to be published from there. The push cannot fail the durable
 //! append - see [`AgentSessionRealtime`].
 
+mod first_output;
 #[cfg(test)]
 mod test;
+
+use first_output::FirstOutput;
 
 use std::sync::Arc;
 
@@ -1254,6 +1257,9 @@ fn owner_access_session_id(
 /// append order, so a lost suffix never punches a hole in the middle - and
 /// the latency a viewer sees on streamed output.
 const LOG_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1500);
+/// Coalesce the start of an answer just enough to include words after a
+/// Markdown prefix, instead of publishing only `**` or a heading marker.
+const FIRST_OUTPUT_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
 /// How many frames may accumulate before a flush happens regardless of age,
 /// bounding memory, the size of one insert and one publish, and what a crash
 /// could lose.
@@ -1267,7 +1273,9 @@ const MAX_PENDING_LOG_FRAMES: usize = 256;
 /// buffered under a claim and, [`MAX_PENDING_LOG_FRAMES`] at a time or every
 /// [`LOG_FLUSH_INTERVAL`], written as one fenced insert and pushed to viewers
 /// as one publish, instead of costing a transaction, an audience lookup and
-/// a gateway round trip each. Only plain to-server notifications take that
+/// a gateway round trip each. The first visible output and initial prose of a
+/// live turn use [`FIRST_OUTPUT_FLUSH_INTERVAL`] to avoid delaying the answer's start.
+/// Only plain to-server notifications take that
 /// path: anything the store projects (system events, a load boundary, a
 /// Cursor checkpoint) or the runtime will act on writes the buffer out
 /// first and then lands at once through the single-frame path, exactly as
@@ -1312,6 +1320,8 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// Last turn state stored atomically with its frame. Stream publication
     /// uses this durable value, never a state from buffered frames.
     projected_turn: Option<TurnState>,
+    /// Publish the start of each live answer without waiting for the batch.
+    first_output: FirstOutput,
 }
 
 /// One frame waiting for the next write.
@@ -1335,11 +1345,16 @@ fn batches(content: &Message) -> bool {
 
 /// Frames viewers must see as soon as they are stored rather than with the
 /// next batch: anything the runtime will act on, and anything that projects
-/// onto the session's status.
+/// onto the session's status. Replies also unblock clients waiting for the
+/// handshake or a selected model/effort before sending their first prompt.
 fn flushes_through(content: &Message) -> bool {
     matches!(
         content,
-        Message::ToRuntime(_) | Message::ToServer(ToServerMessage::Event { .. })
+        Message::ToRuntime(_)
+            | Message::ToServer(ToServerMessage::Event { .. })
+            | Message::ToServer(ToServerMessage::Acp(AcpMessage(
+                RawJsonRpcMessage::Response(_)
+            )))
     )
 }
 
@@ -1363,6 +1378,7 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             flush_due: None,
             projected_model: None,
             projected_turn: None,
+            first_output: FirstOutput::default(),
         }
     }
 
@@ -1381,6 +1397,7 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             flush_due: None,
             projected_model: None,
             projected_turn: None,
+            first_output: FirstOutput::default(),
         }
     }
 
@@ -1433,11 +1450,12 @@ where
                 }
             }
         }
-        let signals = self
+        let pushed = self
             .fold
             .as_mut()
-            .map(|fold| fold.push(log.clone()).signals)
+            .map(|fold| fold.push(log.clone()))
             .unwrap_or_default();
+        let first_output = self.first_output.observe(&pushed.events);
 
         let turn_state = self
             .fold
@@ -1501,6 +1519,10 @@ where
             }
         };
 
+        if first_output && let Some(deadline) = &mut self.flush_due {
+            *deadline = (*deadline).min(tokio::time::Instant::now() + FIRST_OUTPUT_FLUSH_INTERVAL);
+        }
+
         if turn_state.is_some()
             && let Err(error) = self.realtime.publish_updated(session).await
         {
@@ -1555,7 +1577,10 @@ where
             }
         }
 
-        Ok(Appended { log_id, signals })
+        Ok(Appended {
+            log_id,
+            signals: pushed.signals,
+        })
     }
 
     async fn flush(&mut self) -> Result<()> {

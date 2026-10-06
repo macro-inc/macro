@@ -32,8 +32,7 @@ import type {
 import { type Accessor, createSignal } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import { issueSessionAction } from '../queries/issue-session-action';
-import { effortConfigOption } from '../state/session-config';
-import { confirmSessionControl } from './confirm-session-control';
+import { configureSessionModel } from './configure-session-model';
 
 export type PendingSession = {
   /** The session's id, once the create has made it real. */
@@ -157,32 +156,11 @@ export function startPendingSession(
             if (options.modelOverride || options.effortOverride) {
               await session.load();
               trace?.stage('loaded');
-              if (options.modelOverride) {
-                await confirmSessionControl(session, {
-                  type: 'setModel',
-                  model: options.modelOverride,
-                });
-              }
-              if (options.effortOverride) {
-                const snapshot = await session.snapshot();
-                const effort = effortConfigOption(
-                  snapshot.metadata.configOptions
-                );
-                if (
-                  effort?.id !== options.effortOverride.configId ||
-                  !effort.options.some(
-                    (option) => option.value === options.effortOverride?.value
-                  )
-                ) {
-                  throw new Error(
-                    'The selected effort is no longer available for this model.'
-                  );
-                }
-                await confirmSessionControl(session, {
-                  type: 'setConfigOption',
-                  ...options.effortOverride,
-                });
-              }
+              await configureSessionModel(
+                session,
+                options.modelOverride,
+                options.effortOverride
+              );
               trace?.stage('configured');
             }
             setSessionId(created);

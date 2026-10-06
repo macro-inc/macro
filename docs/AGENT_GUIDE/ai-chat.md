@@ -5,6 +5,16 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Checking first-response latency
+
+From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
+Repeat with the default model and with an explicit model/effort selection.
+The first visible output and the first answer text should appear as they arrive;
+later chunks can arrive in batches. Reasoning or a tool row should not delay the
+first prose. Verify a second prompt and a reload preserve the complete answer.
+Selected model and effort must be confirmed before the first prompt; settings
+already confirmed by the runtime do not need another control request.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
