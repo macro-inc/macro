@@ -16,10 +16,10 @@ Unknown versions and invalid scenes fail closed. With the flag off, version 2
 files show a Canvas Next requirement instead of opening in the legacy editor.
 
 Migration preserves IDs, groups, stacking order, positions, shape labels,
-Markdown text, connector bindings/styles, media references and flips, and document
-references. Pencil samples are retained and use the new brush. Unsupported links,
-non-document entity cards, subpath references, connector labels, invalid records,
-and interleaved group layers offer **Open in legacy editor** without writing data.
+Markdown text, connector bindings/styles, media references and flips, and all
+legacy entity references. Pencil samples are retained and use the new brush.
+Unsupported links, connector labels, invalid records, and interleaved group layers
+offer **Open in legacy editor** without writing data.
 There is no version 2-to-legacy downgrade. Document-level read-only mode mounts a
 navigation-only surface without editing, paste/drop, or embedded editing handlers.
 Saves are debounced and serialized; failures keep edits dirty. Save state is not

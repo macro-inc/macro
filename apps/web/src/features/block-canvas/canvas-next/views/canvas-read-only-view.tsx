@@ -59,7 +59,6 @@ export function CanvasReadOnlyView(props: {
             <DocumentPreviewContent
               documentInfo={{
                 id: p.item.geometry.documentId,
-                name: p.item.geometry.name,
                 type: fileTypeToBlockName(p.item.geometry.fileType),
                 params: {},
                 isOpenable: true,

@@ -14,6 +14,10 @@ export type DocumentGeometry = BoxGeometry &
     documentId: string;
     name: string;
     fileType: string;
+    /** Host-owned entity kind for references that are not stored documents. */
+    entityType?: string;
+    /** Opaque host navigation state retained from imported references. */
+    subpath?: string;
     display?: 'preview' | 'embed';
   }>;
 const record = (v: unknown): v is Record<string, unknown> =>
@@ -85,6 +89,12 @@ export const documentDefinition = definition(
     'fileType' in v &&
     typeof v.fileType === 'string' &&
     !!v.fileType.trim() &&
+    (!('entityType' in v) ||
+      v.entityType === undefined ||
+      (typeof v.entityType === 'string' && !!v.entityType.trim())) &&
+    (!('subpath' in v) ||
+      v.subpath === undefined ||
+      typeof v.subpath === 'string') &&
     (!('display' in v) ||
       v.display === undefined ||
       v.display === 'preview' ||

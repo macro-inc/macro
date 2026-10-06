@@ -156,9 +156,41 @@ describe('versioned canvas migration', () => {
     expect(source.nodes[0].type).toBe('file');
     expect(file.document.items.reference).toMatchObject({
       type: 'document',
-      geometry: { documentId: 'doc-id' },
+      geometry: {
+        documentId: 'doc-id',
+        entityType: 'document',
+        fileType: 'unknown',
+      },
     });
   });
+
+  it.each(['document', 'chat', 'project', 'channel', 'email', 'call'] as const)(
+    'migrates %s entity references',
+    (entityType) => {
+      const file = migrateLegacyCanvas(
+        {
+          nodes: [
+            shape('reference', {
+              type: 'entitymention',
+              entityType,
+              file: `${entityType}-id`,
+              subpath: 'retained-location',
+            }),
+          ],
+        },
+        plainRichText
+      );
+      expect(file.document.items.reference).toMatchObject({
+        type: 'document',
+        geometry: {
+          documentId: `${entityType}-id`,
+          entityType,
+          fileType: entityType === 'document' ? 'unknown' : entityType,
+          subpath: 'retained-location',
+        },
+      });
+    }
+  );
 
   it('uses the supplied Markdown importer and preserves pencil coordinates', () => {
     const text = vi.fn(() => plainRichText('Rich text'));
@@ -244,15 +276,6 @@ describe('versioned canvas migration', () => {
           from: { type: 'connected', node: 'missing', side: 'top' },
           to: { type: 'free', x: 0, y: 0 },
         },
-      ],
-    },
-    {
-      nodes: [
-        shape('chat', {
-          type: 'entitymention',
-          entityType: 'chat',
-          file: 'chat-id',
-        }),
       ],
     },
   ])(

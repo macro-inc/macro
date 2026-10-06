@@ -10,7 +10,7 @@ older JSON at the host boundary, and writes the current versioned format.
 | --- | --- |
 | Scene and transforms | Tree structure, grouping, ordering, rotation, resize, alignment, and distribution are implemented |
 | Everyday editing | Selection, marquee, move, duplicate, clipboard, nudge, undo/redo, and context actions are implemented |
-| Content | Shapes, pencil, rich text and labels, connectors, images, video, document cards, and embeds are implemented |
+| Content | Shapes, pencil, rich text and labels, connectors, images, video, Macro entity cards, and document embeds are implemented |
 | Presentation | Solid rendering, overlays, fit/pan/zoom, inspectors, and shared controls are implemented |
 | Persistence | Versioned JSON loading, migration, and saving are connected at the Canvas host boundary |
 | Collaboration | Loro mapping and two-peer tests exist; production transport, recovery, and rollout are not complete |

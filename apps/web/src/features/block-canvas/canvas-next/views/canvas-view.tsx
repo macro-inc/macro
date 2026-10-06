@@ -389,7 +389,14 @@ export function CanvasView(props: {
                           props.onOpenDocument(item.geometry);
                       }}
                     >
-                      Open document
+                      {(() => {
+                        const item = selectedItem();
+                        return item?.type === 'document' &&
+                          item.geometry.entityType !== undefined &&
+                          item.geometry.entityType !== 'document'
+                          ? 'Open item'
+                          : 'Open document';
+                      })()}
                     </button>
                     <Show
                       when={(() => {

@@ -15,7 +15,7 @@ Macro entities, and product rollout policy.
 - Keep the original payload available until compatibility is established.
 
 The first supported slice should cover common shapes, groups, free connectors,
-bound connectors, text, images, videos, and Macro document references. Rich-text
+bound connectors, text, images, videos, and Macro entity references. Rich-text
 details, unusual transforms, unknown node kinds, and legacy-only behaviors require
 fixtures and an explicit fallback policy.
 

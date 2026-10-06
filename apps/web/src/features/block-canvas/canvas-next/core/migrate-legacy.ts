@@ -161,10 +161,6 @@ function migrateNode(
       }
     )
     .with({ type: 'entitymention' }, (node): ShapeItem<'document'> => {
-      if (node.entityType !== 'document' || node.subpath)
-        throw new Error(
-          `Reference ${node.id} requires the legacy editor (${node.entityType}${node.subpath ? ', subpath' : ''})`
-        );
       // Metadata is resolved by the host's document preview, not persisted guesses.
       return {
         ...base,
@@ -172,8 +168,11 @@ function migrateNode(
         geometry: {
           ...box,
           documentId: node.file,
-          name: 'Document',
-          fileType: 'unknown',
+          name: node.entityType[0]!.toUpperCase() + node.entityType.slice(1),
+          fileType:
+            node.entityType === 'document' ? 'unknown' : node.entityType,
+          entityType: node.entityType,
+          ...(node.subpath ? { subpath: node.subpath } : {}),
         },
       };
     })

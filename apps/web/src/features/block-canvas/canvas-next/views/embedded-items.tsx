@@ -161,7 +161,6 @@ export function CanvasDocumentView(
                 <DocumentPreviewContent
                   documentInfo={{
                     id: props.item.geometry.documentId,
-                    name: props.item.geometry.name,
                     type: fileTypeToBlockName(props.item.geometry.fileType),
                     params: {},
                     isOpenable: true,
