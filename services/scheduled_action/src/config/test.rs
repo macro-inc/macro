@@ -89,3 +89,13 @@ fn event_routines_require_an_explicit_boolean() {
     values["EVENT_ROUTINES_ENABLED"] = json!("enabled");
     assert!(serde_json::from_value::<Config>(values).is_err());
 }
+
+#[test]
+fn the_typesafe_key_is_optional() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(config.typesafe_api_key.value(), None);
+    let mut values = config_values();
+    values["TYPESAFE_API_KEY"] = json!("ts-key");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert_eq!(config.typesafe_api_key.value(), Some("ts-key"));
+}

@@ -723,6 +723,15 @@ export const enableCodexAgents = defineFlag({
   env: 'ENABLE_CODEX_AGENTS',
 });
 
+// Yes/no conditions on routine event triggers, checked by the Jev classifier
+// before a run starts. The scheduled-action service rejects conditions until
+// its TYPESAFE_API_KEY is set. Override with VITE_ENABLE_ROUTINE_CONDITIONS.
+export const enableRoutineConditions = defineFlag({
+  key: 'enable-routine-conditions',
+  env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

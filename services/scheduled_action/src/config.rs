@@ -51,6 +51,9 @@ pub struct Config {
     pub routine_agents_enabled: bool,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
+    /// TypeSafe credential for the Jev classifier behind trigger conditions.
+    /// Optional: routines cannot save conditions while it is unset.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
 }
 
 impl Config {

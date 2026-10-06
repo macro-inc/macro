@@ -4700,6 +4700,10 @@ type GraphqlScheduledActionEventFilter {
 	Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
 	"""
 	entityIds: [ID!]
+	"""
+	Yes/no question the triggering content must answer with yes before the routine runs.
+	"""
+	condition: String
 }
 
 """

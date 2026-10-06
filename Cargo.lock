@@ -10267,6 +10267,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "jev"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "macro_env_var",
+ "macro_user_id",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16294,6 +16311,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "connection_gateway_client",
+ "crm",
  "cron",
  "database_env_vars",
  "document_sub_type",
@@ -16302,10 +16320,14 @@ dependencies = [
  "email",
  "entity_access",
  "entity_access_db_utils",
+ "entity_access_management",
  "entity_registry",
  "entity_registry_db_utils",
+ "frecency",
  "futures",
+ "jev",
  "kafka_util",
+ "lexical_client",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -16321,6 +16343,7 @@ dependencies = [
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "model",
  "model-entity",

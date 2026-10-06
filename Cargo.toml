@@ -34,6 +34,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/jev",
   "crates/claude_cloud_agents",
   "crates/database_sql",
   "crates/databases",
