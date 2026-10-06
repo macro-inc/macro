@@ -149,12 +149,14 @@ html[data-palette='cream'] .homepage-demo-slide-dot[aria-pressed=true] span { ba
 /* ---- Chat bubbles ------------------------------------------------------
    Glass draws a white top highlight and white rim, which on cream reads as a
    ragged pale edge. Give the top a faint ink edge that mirrors the bottom one,
-   and run the rim from ink at the top to ink at the bottom. */
+   and an even ink rim, a touch stronger at the top and bottom. */
 html[data-palette='cream'] [data-user-message-bubble] {
   box-shadow: inset 0 1px 0 #1d1c1a0f, inset 0 -1px 0 #1d1c1a14, 0 14px 32px -22px #1d1c1a47;
 }
+/* An even base edge all the way round, so the sides match the top and bottom. */
 html[data-palette='cream'] [data-user-message-bubble]::after {
-  background: linear-gradient(to bottom, #1d1c1a12 0%, transparent 35%, transparent 65%, #1d1c1a14 100%);
+  background: linear-gradient(to bottom, #1d1c1a0a 0%, transparent 35%, transparent 65%, #1d1c1a0c 100%);
+  background-color: #1d1c1a12;
 }
 
 /* ---- Public feature pages (/tour?theme=cream) ---------------------------
