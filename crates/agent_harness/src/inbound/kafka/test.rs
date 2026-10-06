@@ -183,7 +183,7 @@ fn an_unresolved_existing_session_is_treated_as_external() {
 }
 
 #[test]
-fn a_bot_authored_mention_is_skipped() {
+fn an_unattributed_bot_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
@@ -191,7 +191,7 @@ fn a_bot_authored_mention_is_skipped() {
             &links(),
         )
         .unwrap_err(),
-        Skipped::NotFromUser
+        Skipped::MissingInvokingUser
     );
 }
 
@@ -265,7 +265,7 @@ fn an_external_channel_message_announces_only() {
 }
 
 #[test]
-fn a_bot_authored_external_channel_message_is_skipped() {
+fn an_unattributed_bot_external_channel_message_is_skipped() {
     let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
         ChannelEventMetadata {
             bot_id: BotId::TEST_A,
@@ -277,7 +277,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
     ));
     assert_eq!(
         route_agent_trigger(event, runtime(AgentKind::External), &links()).unwrap_err(),
-        Skipped::NotFromUser
+        Skipped::MissingInvokingUser
     );
 }
 
@@ -857,4 +857,51 @@ fn a_conversation_message_without_files_still_carries_the_thread_root_image() {
                 .mime_type("image/*")
         ]
     );
+}
+
+#[test]
+fn attributed_bot_mentions_keep_the_user_for_open_and_follow_up() {
+    for (source, target, kind) in [
+        (
+            bot_id::MACRO_NEW_BOT_ID,
+            bot_id::CURSOR_BOT_ID,
+            AgentKind::Cursor,
+        ),
+        (
+            bot_id::CURSOR_BOT_ID,
+            bot_id::MACRO_NEW_BOT_ID,
+            AgentKind::InMemory,
+        ),
+    ] {
+        let mut posted = message(ChannelSender::new_from_bot(source));
+        posted.triggered_by = Some(user().to_string());
+        let open = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+            AgentBotMentionedEvent {
+                bot_id: target,
+                message: posted.clone(),
+            },
+        ));
+        let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+            route_agent_trigger(open, runtime(kind), &links()).unwrap()
+        else {
+            panic!("expected an open");
+        };
+        assert_eq!(open.bot_id, target);
+        assert_eq!(mention_origin(&open).sender, user());
+        let follow_up = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+            ChannelEventMetadata {
+                bot_id: target,
+                session_id: AgentSessionId::TEST_A,
+                kind: ThreadMessageKind::MentionThread,
+                message: posted,
+            },
+        ));
+        let RoutedTrigger::Command(id, HarnessCommand::Deliver(deliver)) =
+            route_agent_trigger(follow_up, runtime(kind), &links()).unwrap()
+        else {
+            panic!("expected a follow-up");
+        };
+        assert_eq!(id, AgentSessionId::TEST_A);
+        assert_eq!(deliver.actor, Some(user()));
+    }
 }

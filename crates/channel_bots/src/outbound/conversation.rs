@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     events::MessagePostedMetadata,
     models::MessageParent,
-    ports::{MessageChange, MessageEvent, MessageEventPublisher},
+    ports::{MessageEvent, MessageEventPublisher},
     service::MessageWrite,
 };
 use std::sync::Arc;
@@ -55,9 +55,8 @@ impl<A: EntityAccessService> ConversationAccess for EntityAccessConversation<A> 
 /// Feeds the built-in responder from the same committed message stream hosted
 /// and external agents consume, for channel and document posts alike.
 ///
-/// Only human posts enter the queue: a bot's own reply, including Macro AI's,
-/// never triggers another bot, which is what keeps bots from relaying each
-/// other forever.
+/// Trusted bot posts and completed replies enter the same mention path as
+/// human posts. The detector keeps implicit triggering exclusive to humans.
 #[derive(Clone)]
 pub struct LocalBotPublisher {
     triggers: tokio::sync::mpsc::UnboundedSender<MessagePostedMetadata>,
@@ -72,16 +71,11 @@ impl LocalBotPublisher {
 
 impl MessageEventPublisher for LocalBotPublisher {
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
-        if let MessageChange::Posted {
-            message, mentions, ..
-        } = &event.change
-            && message.sender_id.as_user().is_some()
+        if let Some(candidate) = event.agent_trigger()
+            && candidate.invoking_user().is_some()
         {
             self.triggers
-                .send(MessagePostedMetadata::from_message(
-                    message,
-                    mentions.clone(),
-                ))
+                .send(candidate)
                 .map_err(|error| rootcause::report!(error).into())
         } else {
             Ok(())
