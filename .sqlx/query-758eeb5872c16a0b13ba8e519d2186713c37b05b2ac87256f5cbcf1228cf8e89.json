@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE property_definitions SET data_type = 'NUMBER' WHERE id = (SELECT property_definition_id FROM database_columns WHERE id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "758eeb5872c16a0b13ba8e519d2186713c37b05b2ac87256f5cbcf1228cf8e89"
+}

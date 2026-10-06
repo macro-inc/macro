@@ -47,7 +47,7 @@ async function createFormOverTable(
 
 /**
  * The "+ view" dialog's Form choice: offered to the database's owner while
- * no form writes to the table (with forms, the chip's menu makes more).
+ * no form writes to the table. Each table has at most one form.
  */
 export function useTableFormCreation(props: {
   databaseId: Accessor<string>;
@@ -163,7 +163,7 @@ function DatabaseFormsMenu(props: {
       ? forms.data.filter((form) => form.tableId === props.tableId)
       : [];
   async function createFromTable() {
-    if (creating()) return;
+    if (creating() || !forms.isSuccess || onTable().length > 0) return;
     setCreating(true);
     const refusal = await createFormOverTable(
       {
@@ -180,7 +180,7 @@ function DatabaseFormsMenu(props: {
     <Show
       when={onTable().length > 0}
       fallback={
-        <Show when={props.canCreate}>
+        <Show when={props.canCreate && forms.isSuccess}>
           <button
             type="button"
             disabled={creating()}
@@ -226,13 +226,6 @@ function DatabaseFormsMenu(props: {
               )}
             </For>
           </Dropdown.Group>
-          <Show when={props.canCreate}>
-            <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-            <Dropdown.Item onSelect={() => void createFromTable()}>
-              <Plus class="size-4" />
-              <span class="flex-1">New form from this table</span>
-            </Dropdown.Item>
-          </Show>
         </Dropdown.Content>
       </Dropdown>
     </Show>

@@ -135,6 +135,7 @@ fn column_detail(
     };
     ColumnDetail {
         column: Column {
+            protections: vec![],
             id: column.id,
             table_id: table.id,
             property_definition_id: definition_id,

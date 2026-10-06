@@ -22,6 +22,7 @@ impl From<FormError> for EntityMutationErrorCode {
             error @ FormError::NotFound => Self::not_found(rootcause::report!(error)),
             error @ FormError::OwnerOnly => Self::forbidden(rootcause::report!(error)),
             error @ (FormError::Conflict
+            | FormError::TableAlreadyHasForm
             | FormError::AlreadyResponded
             | FormError::Closed
             | FormError::TableGone) => Self::conflict(rootcause::report!(error)),

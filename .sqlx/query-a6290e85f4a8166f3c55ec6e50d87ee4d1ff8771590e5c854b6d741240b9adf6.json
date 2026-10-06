@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE property_definitions SET is_multi_select = true WHERE id = (SELECT property_definition_id FROM database_columns WHERE id = $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a6290e85f4a8166f3c55ec6e50d87ee4d1ff8771590e5c854b6d741240b9adf6"
+}

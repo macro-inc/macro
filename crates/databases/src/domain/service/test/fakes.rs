@@ -116,6 +116,7 @@ impl DatabasesRepo for FakeRepo {
         let mut world = self.0.lock().unwrap();
         world.databases.push(database.clone());
         world.columns.push(Column {
+            protections: vec![],
             id: ColumnId::new(),
             table_id: table.id,
             property_definition_id: title.definition.id,

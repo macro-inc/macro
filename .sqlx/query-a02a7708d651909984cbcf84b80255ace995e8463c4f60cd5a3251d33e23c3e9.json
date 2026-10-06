@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_columns SET display_name = 'When', position = '90' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a02a7708d651909984cbcf84b80255ace995e8463c4f60cd5a3251d33e23c3e9"
+}

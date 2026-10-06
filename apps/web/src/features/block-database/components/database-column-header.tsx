@@ -252,7 +252,9 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
             label: 'Delete column',
             icon: TrashIcon,
             group: 'delete',
+            disabled: props.column.protections?.includes('delete') ?? false,
             run: () => {
+              if (props.column.protections?.includes('delete')) return;
               setError('');
               columnUsage?.prepare();
               setDeleteOpen(true);
@@ -376,6 +378,16 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                           }
                         >
                           <Dropdown.Group>
+                            <Show
+                              when={
+                                group === 'delete' &&
+                                props.column.protections?.includes('delete')
+                              }
+                            >
+                              <Dropdown.Item disabled>
+                                Protected column — required by its feature
+                              </Dropdown.Item>
+                            </Show>
                             <For
                               each={actions().filter(
                                 (action) => action.group === group

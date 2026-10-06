@@ -225,8 +225,9 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
     repo.create_form(&first, &first_layout, false)
         .await
         .unwrap();
-    let second = form_over(&table);
-    let second_layout = layout_over(&table);
+    let other_table = insert_response_table(&repo.pool, table.database, "Guests", "a1").await;
+    let second = form_over(&other_table);
+    let second_layout = layout_over(&other_table);
     repo.create_form(&second, &second_layout, false)
         .await
         .unwrap();
@@ -260,7 +261,7 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
             description: "".into(),
             questions: vec![QuestionLayout {
                 id: taken_questions[0].id,
-                column: table.second,
+                column: other_table.second,
                 help_text: "".into(),
                 required: false,
                 widget: None,
@@ -296,8 +297,9 @@ async fn two_forms_putting_one_new_id_at_once_leave_it_with_exactly_one(pool: Pg
     repo.create_form(&first, &layout_over(&table), false)
         .await
         .unwrap();
-    let second = form_over(&table);
-    repo.create_form(&second, &layout_over(&table), false)
+    let other_table = insert_response_table(&repo.pool, table.database, "Guests", "a1").await;
+    let second = form_over(&other_table);
+    repo.create_form(&second, &layout_over(&other_table), false)
         .await
         .unwrap();
     let shared = FormSectionId::new();

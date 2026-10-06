@@ -14,6 +14,7 @@ use super::*;
 mod booking;
 mod drafts;
 mod names;
+mod protections;
 mod races;
 use crate::domain::models::{
     FormQuestionId, FormResponse, FormSection, FormSectionId, QuestionLayout, RecordedResponse,
@@ -96,7 +97,6 @@ async fn insert_table(pool: &PgPool) -> Table {
     insert_user(pool, OWNER).await;
     insert_user(pool, RESPONDENT).await;
     let database = Uuid::now_v7();
-    let table = Uuid::now_v7();
     sqlx::query!(
         r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
            INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'RSVP', $2 FROM storage"#,
@@ -106,19 +106,37 @@ async fn insert_table(pool: &PgPool) -> Table {
     .execute(pool)
     .await
     .unwrap();
+    insert_response_table(pool, DatabaseId::from_uuid(database), "Responses", "a0").await
+}
+
+async fn insert_response_table(
+    pool: &PgPool,
+    database: DatabaseId,
+    name: &str,
+    position: &str,
+) -> Table {
+    let database = database.into_uuid();
+    let table = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Responses', 'a0')"#,
+        r#"INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, $3, $4)"#,
         table,
         database,
+        name,
+        position,
     )
     .execute(pool)
     .await
     .unwrap();
+    let submitted = insert_column(pool, database, table, "a2").await;
+    sqlx::query!(
+        "UPDATE property_definitions SET data_type = 'DATE' WHERE id = (SELECT property_definition_id FROM database_columns WHERE id = $1)",
+        submitted.into_uuid()
+    ).execute(pool).await.unwrap();
     Table {
         database: DatabaseId::from_uuid(database),
         table: TableId::from_uuid(table),
         first: insert_column(pool, database, table, "a1").await,
-        second: insert_column(pool, database, table, "a2").await,
+        second: submitted,
     }
 }
 

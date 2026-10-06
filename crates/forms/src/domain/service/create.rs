@@ -19,8 +19,8 @@ use super::{
 };
 use crate::domain::events::{Attribution, FormCreatedMetadata, FormTopicEvent};
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, Form, FormAccess, FormDetail, FormError, FormId, FormLayout,
-    FormQuestionId, FormSection, FormSectionId, FormStatus, QuestionLayout, TableId,
+    Audience, ColumnId, DatabaseId, Form, FormAccess, FormCreation, FormDetail, FormError, FormId,
+    FormLayout, FormQuestionId, FormSection, FormSectionId, FormStatus, QuestionLayout, TableId,
 };
 use crate::domain::ports::{
     Clock, CreateFormCommand, CreateSource, FormAccessDirectory, FormEventPublisher, FormsRepo,
@@ -49,9 +49,8 @@ impl ManagedColumn {
 }
 
 /// Find the table's column named `base` (or `base 2`, `base 3`, … when an
-/// earlier name is taken by a column of another type) of `kind`, so forms
-/// over one table share their managed columns; otherwise the first free
-/// such name for a new one.
+/// earlier name is taken by a column of another type) of `kind`; otherwise use
+/// the first free name for a new column.
 fn managed_column(table: &TableDetail, base: &str, kind: ColumnKind) -> ManagedColumn {
     let columns = question_columns(table);
     let named = |name: &str| {
@@ -134,7 +133,7 @@ where
 
     /// A new database for the creator, its first table renamed "Responses"
     /// and holding only the managed columns, and a form with one empty
-    /// section over it. Nothing is left behind if any step fails.
+    /// section over it. A failed attachment attempts to remove the new database.
     async fn create_over_new_database(
         &self,
         creator: Viewer,
@@ -274,6 +273,14 @@ where
             .into_iter()
             .find(|table| table.table.id == table_id)
             .ok_or(FormError::NotFound)?;
+        if self
+            .repository
+            .table_has_form(table_id)
+            .await
+            .map_err(repository_error)?
+        {
+            return Err(FormError::TableAlreadyHasForm);
+        }
         let submitted = managed_column(&table, SUBMITTED_COLUMN, submitted_kind());
         let respondent = managed_column(&table, RESPONDENT_COLUMN, respondent_kind());
         let ops: Vec<DatabaseOp> = [
@@ -359,10 +366,18 @@ where
             created_at: now,
             updated_at: now,
         };
-        self.repository
+        match self
+            .repository
             .create_form(&form, &layout, name_follows_database)
             .await
-            .map_err(repository_error)?;
+            .map_err(repository_error)?
+        {
+            FormCreation::Created => {}
+            FormCreation::TableOccupied => {
+                return Err(FormError::TableAlreadyHasForm);
+            }
+            FormCreation::SchemaChanged => return Err(FormError::Conflict),
+        }
         self.emit(FormTopicEvent::Created(FormCreatedMetadata {
             form_id: form.id,
             database_id,

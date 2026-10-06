@@ -410,6 +410,7 @@ export * from './columnKindOneOfSevenType';
 export * from './columnKindOneOfThree';
 export * from './columnKindOneOfThreeType';
 export * from './columnKindOneOfType';
+export * from './columnProtection';
 export * from './columnResult';
 export * from './columnResultOneOf';
 export * from './columnResultOneOfFive';

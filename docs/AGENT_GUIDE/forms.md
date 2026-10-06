@@ -19,8 +19,9 @@ decides who may respond.
 - On a database page you own, **+ view** offers **Form** beside Table and
   Board while no form writes to the current table, and the control after the
   table tabs is **+ Form**; both make a form with a question per existing
-  column. When forms exist that control reads **N forms**: a menu of them
-  plus **New form from this table**. Creating over an existing table needs
+  column. Each table has at most one form; the control opens that form once created.
+  A trashed form reserves its table until restored or permanently deleted.
+  Creating over an existing table needs
   database Owner: editors and viewers see the existing forms only.
 - In a channel composer, `/form` creates a form and opens the builder beside
   the channel; its card joins the draft once the builder saves a question.
@@ -197,4 +198,7 @@ content-sized layout.
 
 Use the Responses tab grid, or open the database (`/app/database/<uuid>`) linked
 in the form's banner. Each submission is a row; the `Submitted` and
-`Respondent` columns are written by the form.
+`Respondent` columns are written by the form. They can be renamed and moved,
+but their types cannot change and they cannot be deleted while the form exists
+(including while it is in the trash). Permanently deleting the form releases
+those protections and preserves its database, columns, and answer rows.

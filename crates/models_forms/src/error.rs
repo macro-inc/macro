@@ -30,6 +30,8 @@ pub struct FormErrorResponse {
 )]
 #[serde(rename_all = "camelCase")]
 pub enum FormErrorCode {
+    /// The table already belongs to a form, including one in trash.
+    TableAlreadyHasForm,
     /// The form, or something it names, does not exist or is not the
     /// caller's to see.
     NotFound,

@@ -56,6 +56,9 @@ describe('DatabaseFormsEntry', () => {
     expect(
       screen.getByRole('group', { name: 'Forms writing to Guests' })
     ).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: 'New form from this table' })
+    ).toBeNull();
     form.focus();
     fireEvent.keyDown(form, { key: 'Enter' });
     expect(replaceOrInsertSplit).toHaveBeenCalledWith({

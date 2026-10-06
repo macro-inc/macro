@@ -85,6 +85,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('signInRequired', () => 'sign-in-required')
     .with('closed', () => 'closed')
     .with('tableGone', () => 'table-gone')
+    .with('tableAlreadyHasForm', () => 'table-already-has-form')
     .with('alreadyResponded', () => 'already-responded')
     .with('noResponse', () => 'no-response')
     .with('unknownQuestion', () => 'unknown-question')

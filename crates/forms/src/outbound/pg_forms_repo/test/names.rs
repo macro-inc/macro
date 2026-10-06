@@ -12,10 +12,11 @@ async fn whether_a_form_goes_by_its_databases_name_is_read_back_as_created(pool:
     repo.create_form(&standalone, &layout_over(&table), true)
         .await
         .unwrap();
+    let other_table = insert_response_table(&pool, table.database, "Guests", "a1").await;
     let attached = Form {
         id: FormId::new(),
         name: "Party RSVP".into(),
-        ..form_over(&table)
+        ..form_over(&other_table)
     };
     repo.create_form(&attached, &FormLayout { sections: vec![] }, false)
         .await

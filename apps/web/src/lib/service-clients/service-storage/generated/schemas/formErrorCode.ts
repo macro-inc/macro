@@ -12,6 +12,7 @@ export type FormErrorCode = (typeof FormErrorCode)[keyof typeof FormErrorCode];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FormErrorCode = {
+  tableAlreadyHasForm: 'tableAlreadyHasForm',
   notFound: 'notFound',
   forbidden: 'forbidden',
   ownerOnly: 'ownerOnly',

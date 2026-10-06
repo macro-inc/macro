@@ -39,6 +39,7 @@ export type FormRefusal =
   | 'sign-in-required'
   | 'closed'
   | 'table-gone'
+  | 'table-already-has-form'
   | 'already-responded'
   | 'no-response'
   | 'unknown-question'

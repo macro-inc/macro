@@ -23,7 +23,7 @@ import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { channelParticipantsQueryOptions } from '../channel/channel-participants';
 import { queryClient } from '../client';
-import { formsKeys, myResponseKeyOf } from './keys';
+import { databasesKeys, formsKeys, myResponseKeyOf } from './keys';
 
 const FORM_STALE_TIME = 30 * 1000;
 
@@ -159,6 +159,9 @@ export function createForm(
     });
     setFormDetail(detail);
     invalidateFormLists(detail.form.databaseId);
+    void queryClient.invalidateQueries({
+      queryKey: databasesKeys.detail(detail.form.databaseId).queryKey,
+    });
     return detail;
   });
 }

@@ -314,8 +314,15 @@ impl FormsRepo for FakeRepo {
         form: &Form,
         layout: &FormLayout,
         name_follows_database: bool,
-    ) -> Result<(), FakeError> {
+    ) -> Result<crate::domain::models::FormCreation, FakeError> {
         let mut world = self.0.lock().unwrap();
+        if world
+            .forms
+            .iter()
+            .any(|stored| stored.form.table_id == form.table_id)
+        {
+            return Ok(crate::domain::models::FormCreation::TableOccupied);
+        }
         world.forms.push(StoredForm {
             form: form.clone(),
             trashed_at: None,
@@ -323,7 +330,20 @@ impl FormsRepo for FakeRepo {
         });
         world.layouts.insert(form.id, layout.clone());
         world.owner_grants.push((form.id, form.owner_id.clone()));
-        Ok(())
+        Ok(crate::domain::models::FormCreation::Created)
+    }
+
+    async fn table_has_form(
+        &self,
+        table: crate::domain::models::TableId,
+    ) -> Result<bool, FakeError> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .forms
+            .iter()
+            .any(|stored| stored.form.table_id == table))
     }
 
     async fn form(&self, id: FormId) -> Result<Option<StoredForm>, FakeError> {

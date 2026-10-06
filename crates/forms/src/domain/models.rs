@@ -129,6 +129,11 @@ pub enum SharingRefusal {
 /// Errors of the forms domain.
 #[derive(Debug, thiserror::Error)]
 pub enum FormError {
+    /// Each table can belong to only one form, including forms in trash.
+    #[error(
+        "This table already has a form. Open or restore it, or permanently delete it before creating another."
+    )]
+    TableAlreadyHasForm,
     /// The form, or something it names, does not exist or is not the
     /// caller's to see.
     #[error("not found")]
@@ -229,4 +234,15 @@ impl From<SharingRefusal> for FormError {
     fn from(refusal: SharingRefusal) -> Self {
         FormError::InvalidSharing(refusal)
     }
+}
+
+/// Whether creating a form reserved its table and managed schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormCreation {
+    /// The form and its protections were committed.
+    Created,
+    /// Another form already reserves the table.
+    TableOccupied,
+    /// A managed column disappeared, moved, or changed type before registration.
+    SchemaChanged,
 }

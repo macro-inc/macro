@@ -18,9 +18,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormId, FormLayout, FormResponse,
-    FormResponseId, FormSectionId, FormStatus, FormUpdate, LayoutReplacement, RecordedResponse,
-    ResponseCounts, RowId, StoredForm, TableId, UpdateForm,
+    Audience, ColumnId, DatabaseId, ForbiddenWidget, Form, FormCreation, FormId, FormLayout,
+    FormResponse, FormResponseId, FormSectionId, FormStatus, FormUpdate, LayoutReplacement,
+    RecordedResponse, ResponseCounts, RowId, StoredForm, TableId, UpdateForm,
 };
 
 /// Errors from the Postgres repository.
@@ -155,9 +155,9 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         form: &Form,
         layout: &FormLayout,
         name_follows_database: bool,
-    ) -> Result<(), Self::Error> {
+    ) -> Result<FormCreation, Self::Error> {
         let mut transaction = self.pool.begin().await?;
-        sqlx::query!(
+        let inserted = sqlx::query!(
             r#"
             INSERT INTO forms (
                 id, name, description, owner_id, database_id, table_id,
@@ -166,6 +166,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 name_follows_database
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            ON CONFLICT (table_id) DO NOTHING
             "#,
             form.id.into_uuid(),
             form.name,
@@ -185,7 +186,19 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             name_follows_database,
         )
         .execute(&mut *transaction)
-        .await?;
+        .await;
+        let inserted = match inserted {
+            Ok(inserted) => inserted,
+            Err(sqlx::Error::Database(error))
+                if error.constraint() == Some("form_managed_column_schema") =>
+            {
+                return Ok(FormCreation::SchemaChanged);
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if inserted.rows_affected() == 0 {
+            return Ok(FormCreation::TableOccupied);
+        }
         layout::insert(&mut transaction, form.id, layout).await?;
         entity_access_db_utils::insert_entity_access_row(
             &mut transaction,
@@ -197,7 +210,16 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         )
         .await?;
         transaction.commit().await?;
-        Ok(())
+        Ok(FormCreation::Created)
+    }
+
+    async fn table_has_form(&self, table: TableId) -> Result<bool, Self::Error> {
+        Ok(sqlx::query_scalar!(
+            "SELECT EXISTS(SELECT 1 FROM forms WHERE table_id = $1) AS \"exists!\"",
+            table.into_uuid()
+        )
+        .fetch_one(&self.pool)
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]

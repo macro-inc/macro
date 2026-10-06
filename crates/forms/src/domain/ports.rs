@@ -77,7 +77,8 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Error: std::error::Error + Send + Sync + 'static;
 
-    /// Store a new form with its layout, granting its owner owner access,
+    /// Store a new form with its layout, returning any table or schema conflict.
+    /// Grant its owner owner access,
     /// all or nothing. `name_follows_database` records, for good, that the
     /// form created its own database and goes by that database's name; the
     /// stored name is then only what it was called at creation.
@@ -86,7 +87,13 @@ pub trait FormsRepo: Send + Sync + 'static {
         form: &Form,
         layout: &FormLayout,
         name_follows_database: bool,
-    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
+    ) -> impl Future<Output = Result<super::models::FormCreation, Self::Error>> + Send;
+
+    /// Whether a form (including one in trash) already reserves this table.
+    fn table_has_form(
+        &self,
+        table: TableId,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
     /// A form, trashed or not, if it exists.
     fn form(

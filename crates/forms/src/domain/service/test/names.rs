@@ -262,7 +262,24 @@ async fn renaming_takes_a_receipt_for_the_form_itself() {
 async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
     let world = world();
     let (form, database) = create_standalone(&world).await;
-    let table = world.lock().unwrap().database(database).tables[0].id;
+    let table = TableId::new();
+    world
+        .lock()
+        .unwrap()
+        .database_mut(database)
+        .tables
+        .push(FakeTable {
+            id: table,
+            name: "Guests".into(),
+            version: 1,
+            columns: vec![FakeColumn {
+                id: ColumnId::new(),
+                name: "Name".into(),
+                kind: ColumnKind::Text,
+                options: vec![],
+            }],
+            rows: vec![],
+        });
     let attached = create_attached(&world, database, table).await;
     {
         let mut world = world.lock().unwrap();

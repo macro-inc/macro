@@ -111,6 +111,10 @@ impl IntoResponse for FormsApiError {
                 StatusCode::UNAUTHORIZED,
                 body(FormErrorCode::SignInRequired, message),
             ),
+            FormError::TableAlreadyHasForm => (
+                StatusCode::CONFLICT,
+                body(FormErrorCode::TableAlreadyHasForm, message),
+            ),
             FormError::Closed => (StatusCode::CONFLICT, body(FormErrorCode::Closed, message)),
             FormError::TableGone => (
                 StatusCode::CONFLICT,

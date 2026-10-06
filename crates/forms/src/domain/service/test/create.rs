@@ -214,7 +214,7 @@ async fn managed_columns_are_reused_by_name_and_type_and_renamed_around_a_misfit
 }
 
 #[tokio::test]
-async fn a_second_form_over_a_table_shares_the_first_ones_managed_columns() {
+async fn a_second_form_over_a_table_is_refused_without_schema_writes() {
     let world = world();
     seed_guests(&world, guest_columns());
     let forms = service(&world);
@@ -235,16 +235,12 @@ async fn a_second_form_over_a_table_shares_the_first_ones_managed_columns() {
         )
     };
     let first = create().await.unwrap();
-    let second = create().await.unwrap();
-    assert_eq!(
-        first.form.submitted_column_id,
-        second.form.submitted_column_id
-    );
-    assert_eq!(
-        first.form.respondent_column_id,
-        second.form.respondent_column_id
-    );
-    assert_eq!(world.lock().unwrap().batches.len(), 1);
+    let batches = world.lock().unwrap().batches.len();
+    assert!(create().await.is_err());
+    let held = world.lock().unwrap();
+    assert_eq!(held.forms.len(), 1);
+    assert_eq!(held.forms[0].form.id, first.form.id);
+    assert_eq!(held.batches.len(), batches);
 }
 
 #[tokio::test]
