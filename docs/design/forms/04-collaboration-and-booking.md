@@ -19,7 +19,10 @@ two-column buttons with icons to the left of their labels, grouped consistently
 with the Add question and type menus: Text & files, Choices, Numbers & dates,
 and Linked items. From database reuses existing fields. Section, Screener and
 Booking sit separately under Form flow. Medium splits retain the palette beside
-the canvas; narrow splits put it below.
+the canvas; mobile and narrow splits replace it with an **Add question**
+dropdown containing the same question types, existing fields and form-flow
+actions. Section cards have modest spacing, and palette groups use subtle
+dividers.
 
 Required state belongs in the builder question's footer: a quiet badge while
 collapsed, and the native switch at the bottom right while selected. The

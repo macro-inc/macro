@@ -49,7 +49,9 @@ the right. The outline marks the selected section or question. Question types
 use two columns of buttons, grouped as **Text & files**, **Choices**,
 **Numbers & dates**, and **Linked items**. **From database** reuses existing
 fields; **Form flow** separately holds Section, Screener, and Booking. Medium
-splits keep the palette beside the canvas; narrow splits put it below.
+splits keep the palette beside the canvas. On mobile and narrow splits, a compact
+**Add question** dropdown below the canvas includes question types, existing
+database fields, and the Section, Screener, and Booking actions.
 
 - Click a question type in the right panel to add it after the selected
   question, or drag the button to an insertion line in the canvas. A drop creates

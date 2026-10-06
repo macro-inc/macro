@@ -49,62 +49,83 @@ export function BookingLinkMenu(props: {
       >
         {props.trigger}
       </Dropdown.Trigger>
-      <Dropdown.Content class="w-72 max-w-[calc(100vw-1rem)]">
-        <Switch>
-          <Match when={props.failed}>
-            <p role="alert" class="px-2 py-1.5 text-xs text-failure-ink">
-              Your booking links couldn’t be loaded.
-            </p>
-          </Match>
-          <Match when={!props.links}>
-            <p role="status" class="px-2 py-1.5 text-xs text-ink-muted">
-              Loading booking links…
-            </p>
-          </Match>
-          <Match when={props.links?.length === 0}>
-            <p class="px-2 py-1.5 text-xs text-ink-muted">
-              You have no booking links yet. Create one in Booking links, then
-              come back to add it.
-            </p>
-          </Match>
-          <Match when={props.links}>
-            {(links) => (
-              <For each={byOwner(links())}>
-                {(group) => (
-                  <Dropdown.Group>
-                    <Dropdown.GroupLabel>{group.owner}</Dropdown.GroupLabel>
-                    <For each={group.links}>
-                      {(link) => (
-                        <Dropdown.Item
-                          onSelect={() => props.onChoose(link.target)}
-                        >
-                          <span class="flex min-w-0 flex-1 flex-col">
-                            <Dropdown.ItemLabel class="truncate">
-                              {link.title}
-                            </Dropdown.ItemLabel>
-                            <Dropdown.ItemDescription class="text-xs text-ink-muted">
-                              {link.durationMinutes} min
-                            </Dropdown.ItemDescription>
-                          </span>
-                          <Show when={sameTarget(props.selected, link.target)}>
-                            <Check class="size-4" aria-label="Current" />
-                          </Show>
-                        </Dropdown.Item>
-                      )}
-                    </For>
-                  </Dropdown.Group>
-                )}
-              </For>
-            )}
-          </Match>
-        </Switch>
-        <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-        <Dropdown.Item onSelect={props.onCreate}>
-          <ArrowSquareOut class="size-4" />
-          <span class="flex-1">Create a booking link</span>
-        </Dropdown.Item>
+      <Dropdown.Content class="max-h-[min(32rem,75vh)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto">
+        <BookingLinkItems
+          links={props.links}
+          failed={props.failed}
+          selected={props.selected}
+          onChoose={props.onChoose}
+          onCreate={props.onCreate}
+        />
       </Dropdown.Content>
     </Dropdown>
+  );
+}
+
+/** Booking choices shared by the standalone picker and compact add menu. */
+export function BookingLinkItems(props: {
+  links: readonly FormBookingLink[] | undefined;
+  failed: boolean;
+  selected?: FormBookingTarget;
+  onChoose: (target: FormBookingTarget) => void;
+  onCreate: () => void;
+}) {
+  return (
+    <>
+      <Switch>
+        <Match when={props.failed}>
+          <p role="alert" class="px-2 py-1.5 text-xs text-failure-ink">
+            Your booking links couldn’t be loaded.
+          </p>
+        </Match>
+        <Match when={!props.links}>
+          <p role="status" class="px-2 py-1.5 text-xs text-ink-muted">
+            Loading booking links…
+          </p>
+        </Match>
+        <Match when={props.links?.length === 0}>
+          <p class="px-2 py-1.5 text-xs text-ink-muted">
+            You have no booking links yet. Create one in Booking links, then
+            come back to add it.
+          </p>
+        </Match>
+        <Match when={props.links}>
+          {(links) => (
+            <For each={byOwner(links())}>
+              {(group) => (
+                <Dropdown.Group>
+                  <Dropdown.GroupLabel>{group.owner}</Dropdown.GroupLabel>
+                  <For each={group.links}>
+                    {(link) => (
+                      <Dropdown.Item
+                        onSelect={() => props.onChoose(link.target)}
+                      >
+                        <span class="flex min-w-0 flex-1 flex-col">
+                          <Dropdown.ItemLabel class="truncate">
+                            {link.title}
+                          </Dropdown.ItemLabel>
+                          <Dropdown.ItemDescription class="text-xs text-ink-muted">
+                            {link.durationMinutes} min
+                          </Dropdown.ItemDescription>
+                        </span>
+                        <Show when={sameTarget(props.selected, link.target)}>
+                          <Check class="size-4" aria-label="Current" />
+                        </Show>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              )}
+            </For>
+          )}
+        </Match>
+      </Switch>
+      <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
+      <Dropdown.Item onSelect={props.onCreate}>
+        <ArrowSquareOut class="size-4" />
+        <span class="flex-1">Create a booking link</span>
+      </Dropdown.Item>
+    </>
   );
 }
 

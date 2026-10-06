@@ -3,12 +3,68 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@solidjs/testing-library';
+import { Dropdown } from '@ui';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AddQuestionMenu, TypeMenu } from './type-menu';
 
 afterEach(cleanup);
+
+it('includes form flow actions in the compact add menu and closes after choosing one', async () => {
+  const addSection = vi.fn();
+  render(() => (
+    <AddQuestionMenu
+      trigger="Add question"
+      tables={[]}
+      hiddenColumns={[]}
+      onChoose={vi.fn()}
+      onAddColumn={vi.fn()}
+    >
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>Form flow</Dropdown.GroupLabel>
+        <Dropdown.Item onSelect={addSection}>Section</Dropdown.Item>
+      </Dropdown.Group>
+    </AddQuestionMenu>
+  ));
+  const trigger = screen.getByRole('button', { name: 'Add question' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  const section = await screen.findByRole('menuitem', { name: 'Section' });
+  section.focus();
+  fireEvent.keyDown(section, { key: 'Enter' });
+  expect(addSection).toHaveBeenCalledOnce();
+  await waitFor(() =>
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  );
+});
+
+it('reuses all available database columns from the compact menu', async () => {
+  const addAll = vi.fn();
+  render(() => (
+    <AddQuestionMenu
+      trigger="Add question"
+      tables={[]}
+      hiddenColumns={[
+        { id: 'name', name: 'Name', type: 'short' },
+        { id: 'notes', name: 'Notes', type: 'paragraph' },
+      ]}
+      onChoose={vi.fn()}
+      onAddColumn={vi.fn()}
+      onAddAllColumns={addAll}
+    />
+  ));
+  const trigger = screen.getByRole('button', { name: 'Add question' });
+  trigger.focus();
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  const action = await screen.findByRole('menuitem', {
+    name: 'Add all 2 columns',
+  });
+  action.focus();
+  fireEvent.keyDown(action, { key: 'Enter' });
+  expect(addAll).toHaveBeenCalledOnce();
+});
 
 it('groups new questions by purpose and keeps existing database fields separate', async () => {
   const choose = vi.fn();

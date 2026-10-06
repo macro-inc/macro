@@ -1,5 +1,6 @@
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import CalendarCheck from '@phosphor/calendar-check.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
 import Rows from '@phosphor/rows.svg';
@@ -25,6 +26,7 @@ import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   BookingCard,
+  BookingLinkItems,
   BookingLinkMenu,
   type BookingLinkState,
 } from '../components/builder/booking-card';
@@ -694,7 +696,7 @@ function BuilderCanvas(
               />
             )}
           </Show>
-          <div ref={column} class="relative flex min-h-60 flex-col gap-4">
+          <div ref={column} class="relative flex min-h-60 flex-col gap-6">
             <Show when={layout().sections.length === 0}>
               <div class="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-edge bg-surface p-6 text-sm text-ink-muted">
                 Click a question type or drag it here.
@@ -950,6 +952,68 @@ function BuilderCanvas(
             columns={hiddenColumnRows()}
             onAdd={(columnId) => builder.addExistingColumn(columnId)}
           />
+          <div class="@3xl/builder:hidden">
+            <AddQuestionMenu
+              trigger={
+                <>
+                  <Plus class="size-4" />
+                  Add question
+                </>
+              }
+              disabled={props.detail.tableGone}
+              tables={relationTables()}
+              hiddenColumns={hiddenColumnRows()}
+              onChoose={(choice, table) =>
+                void insertQuestion(choice, undefined, table)
+              }
+              onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
+              onAddAllColumns={addAllHidden}
+            >
+              <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
+              <Dropdown.Group>
+                <Dropdown.GroupLabel>Form flow</Dropdown.GroupLabel>
+                <Dropdown.Item onSelect={() => addSection('questions')}>
+                  <Rows class="size-4" />
+                  Section
+                </Dropdown.Item>
+                <Dropdown.Item onSelect={() => addSection('gate')}>
+                  <ShieldCheck class="size-4" />
+                  Screener
+                </Dropdown.Item>
+                <Show
+                  when={booking()}
+                  fallback={
+                    <Show when={context.booking.available()}>
+                      <Dropdown.Sub>
+                        <Dropdown.SubTrigger>
+                          <CalendarCheck class="size-4" />
+                          <span class="flex-1">Booking</span>
+                          <CaretRight class="size-3.5" aria-hidden="true" />
+                        </Dropdown.SubTrigger>
+                        <Dropdown.SubContent class="max-h-[min(32rem,75vh)] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto">
+                          <BookingLinkItems
+                            links={bookingLinks.value()}
+                            failed={!!bookingLinks.failure()}
+                            onChoose={addBooking}
+                            onCreate={context.booking.openSettings}
+                          />
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    </Show>
+                  }
+                >
+                  {(existing) => (
+                    <Dropdown.Item
+                      onSelect={() => revealBooking(existing().id)}
+                    >
+                      <CalendarCheck class="size-4" />
+                      Booking
+                    </Dropdown.Item>
+                  )}
+                </Show>
+              </Dropdown.Group>
+            </AddQuestionMenu>
+          </div>
         </div>
         <BuilderPalette
           question={(choice) => <AddQuestionButton choice={choice} />}
@@ -1121,6 +1185,13 @@ function BuilderCanvas(
     );
   }
 
+  function addSection(kind: NewSectionKind) {
+    const id = builder.addSection(kind);
+    if (!id) return;
+    if (kind === 'gate') setEditingRules(id);
+    drag.refocus({ kind: 'section', id });
+  }
+
   function AddSectionButton(buttonProps: {
     kind: NewSectionKind;
     children: JSX.Element;
@@ -1144,10 +1215,7 @@ function BuilderCanvas(
         onClick={(event) => {
           handle.onClick(event);
           if (event.defaultPrevented) return;
-          const id = builder.addSection(buttonProps.kind);
-          if (!id) return;
-          if (buttonProps.kind === 'gate') setEditingRules(id);
-          drag.refocus({ kind: 'section', id });
+          addSection(buttonProps.kind);
         }}
       >
         {buttonProps.children}

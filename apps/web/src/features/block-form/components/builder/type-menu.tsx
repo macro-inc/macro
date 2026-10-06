@@ -1,6 +1,7 @@
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
+import Plus from '@phosphor/plus.svg';
 import { Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import {
@@ -114,10 +115,13 @@ export function TypeMenu(props: {
 /** Add a new question or reuse a field from the associated database. */
 export function AddQuestionMenu(props: {
   trigger: JSX.Element;
+  disabled?: boolean;
+  children?: JSX.Element;
   tables: readonly RelationTable[];
   hiddenColumns: readonly { id: string; name: string; type: QuestionTypeId }[];
   onChoose: (choice: QuestionTypeChoice, table?: RelationTable) => void;
   onAddColumn: (columnId: string) => void;
+  onAddAllColumns?: () => void;
 }) {
   return (
     <Dropdown>
@@ -125,6 +129,7 @@ export function AddQuestionMenu(props: {
         variant="outline"
         size="md"
         class="w-full justify-start gap-2"
+        disabled={props.disabled}
       >
         {props.trigger}
         <CaretDown class="ml-auto size-3.5" aria-hidden="true" />
@@ -135,6 +140,14 @@ export function AddQuestionMenu(props: {
           <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
           <Dropdown.Group>
             <Dropdown.GroupLabel>From database</Dropdown.GroupLabel>
+            <Show when={props.onAddAllColumns}>
+              {(addAll) => (
+                <Dropdown.Item onSelect={() => addAll()()}>
+                  <Plus class="size-4" />
+                  Add all {props.hiddenColumns.length} columns
+                </Dropdown.Item>
+              )}
+            </Show>
             <For each={props.hiddenColumns}>
               {(column) => (
                 <Dropdown.Item onSelect={() => props.onAddColumn(column.id)}>
@@ -145,6 +158,7 @@ export function AddQuestionMenu(props: {
             </For>
           </Dropdown.Group>
         </Show>
+        {props.children}
       </Dropdown.Content>
     </Dropdown>
   );

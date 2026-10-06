@@ -237,7 +237,7 @@ export function BuilderPalette(props: {
   return (
     <aside
       aria-label="Add to form"
-      class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col rounded-xl border border-edge-muted bg-surface @3xl/builder:sticky @3xl/builder:top-4 @3xl/builder:max-h-[calc(100dvh-8rem)] @3xl/builder:overflow-y-auto"
+      class="mx-auto hidden w-full max-w-[680px] min-w-0 flex-col rounded-xl border border-edge-muted bg-surface @3xl/builder:sticky @3xl/builder:top-4 @3xl/builder:flex @3xl/builder:max-h-[calc(100dvh-8rem)] @3xl/builder:overflow-y-auto"
     >
       <div class="border-b border-edge-divider px-3.5 py-2.5">
         <h3 class="text-sm font-semibold text-ink">Add question</h3>
@@ -245,7 +245,11 @@ export function BuilderPalette(props: {
       <div class="flex flex-col gap-2 p-2.5">
         <For each={QUESTION_TYPE_GROUPS}>
           {(group) => (
-            <div role="group" aria-label={group.label}>
+            <div
+              role="group"
+              aria-label={group.label}
+              class="border-t border-edge-divider pt-2 first:border-t-0 first:pt-0"
+            >
               <h4 class="mb-1 px-1 text-[11px] font-medium text-ink-muted">
                 {group.label}
               </h4>
