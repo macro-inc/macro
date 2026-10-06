@@ -1433,7 +1433,9 @@ keys). Edits save automatically 1.5 s after the last change, when the tab
 is hidden, and on close, as a new document version through
 `PUT /documents/{id}/simple_save`. Saving writes a standard PDF-based `.ai`
 that Illustrator and PDF readers open; an unedited file is written back
-byte for byte. For files Illustrator saved, a dismissible note
+byte for byte. Names given in the Layers and Artboards panels are saved
+with it (`/MacroName` marked content and a `/MacroArtboard` page key, which
+other readers ignore). For files Illustrator saved, a dismissible note
 (`ai-illustrator-note`) says that Illustrator-only editing data (live
 effects and the like) is not kept, and what the engine could not read
 faithfully is listed in `ai-warnings`.

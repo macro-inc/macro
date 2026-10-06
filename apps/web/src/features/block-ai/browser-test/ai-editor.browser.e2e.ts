@@ -50,8 +50,8 @@ test('renders the artwork and selects with the selection tool', async ({
     'Notes',
     'Layer 1',
     'Hello',
-    '<Path>',
-    '<Path>',
+    'Blue circle',
+    'Red box',
   ]);
 
   // A click selects the rectangle: its row and its bounds.
@@ -59,14 +59,16 @@ test('renders the artwork and selects with the selection tool', async ({
   await page.mouse.click(red.x, red.y);
   await expect(page.getByTestId('ai-field-w')).toHaveValue('200');
   await expect(page.getByTestId('ai-field-h')).toHaveValue('150');
-  await expect.poll(() => selectedRows(page)).toEqual(['<Path>']);
+  await expect.poll(() => selectedRows(page)).toEqual(['Red box']);
 
   // ⇧-click adds the circle; a click on empty canvas clears both.
   const blue = view.at(BLUE_CIRCLE);
   await page.keyboard.down('Shift');
   await page.mouse.click(blue.x, blue.y);
   await page.keyboard.up('Shift');
-  await expect.poll(() => selectedRows(page)).toEqual(['<Path>', '<Path>']);
+  await expect
+    .poll(() => selectedRows(page))
+    .toEqual(['Blue circle', 'Red box']);
   await expect(page.getByTestId('ai-field-w')).toHaveValue('500');
   const empty = view.at(EMPTY);
   await page.mouse.click(empty.x, empty.y);
@@ -74,7 +76,7 @@ test('renders the artwork and selects with the selection tool', async ({
 
   // A marquee selects what it touches.
   await dragOn(page, view.at({ x: 50, y: 50 }), view.at({ x: 350, y: 120 }));
-  await expect.poll(() => selectedRows(page)).toEqual(['<Path>']);
+  await expect.poll(() => selectedRows(page)).toEqual(['Red box']);
 });
 
 test('draws shapes with their tools and their defaults', async ({ page }) => {
@@ -252,7 +254,7 @@ test('the layers panel hides, locks, renames, adds, and reorders', async ({
     });
   await expect
     .poll(async () => (await engineRows(page)).map((r) => r.name))
-    .toEqual(['Layer 3', 'Notes', 'Layer 1', 'Logo', 'Hello', '<Path>']);
+    .toEqual(['Layer 3', 'Notes', 'Layer 1', 'Logo', 'Hello', 'Blue circle']);
 });
 
 test('groups, arranges, copies, pastes, and deletes', async ({ page }) => {
@@ -403,7 +405,7 @@ test('outline view, zoom shortcuts, and exports', async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.aiFixture.downloads()))
     .toEqual([
-      { name: 'Artboard 1.png', size: expect.any(Number) },
+      { name: 'Poster.png', size: expect.any(Number) },
       { name: 'Illustration.ai', size: expect.any(Number) },
     ]);
 });
@@ -423,13 +425,30 @@ test('saves edits, and the saved file opens with them', async ({ page }) => {
     'data-state',
     'saved'
   );
+  // A rename in the layers panel is in the next saved file too.
+  await page
+    .getByTestId('ai-layer-row')
+    .filter({ hasText: 'Blue circle' })
+    .dblclick();
+  await page.getByTestId('ai-layer-rename').fill('Sun');
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(() => page.evaluate(() => window.aiFixture.saves().length))
+    .toBe(2);
   const saved = await page.evaluate(async () => {
     const saves = window.aiFixture.saves();
     const last = saves[saves.length - 1];
     if (!last) return null;
-    return (await window.aiFixture.rowsOf(last)).map((r) => r.kind);
+    return (await window.aiFixture.rowsOf(last)).map(
+      (r) => `${r.kind} ${r.name}`
+    );
   });
-  expect(saved).toEqual(['layer', 'layer', 'text', 'path']);
+  expect(saved).toEqual([
+    'layer Notes',
+    'layer Layer 1',
+    'text Hello',
+    'path Sun',
+  ]);
 });
 
 test('a viewer sees the document but cannot change it', async ({ page }) => {
@@ -439,7 +458,7 @@ test('a viewer sees the document but cannot change it', async ({ page }) => {
   await expect(page.getByTestId('ai-tool-rectangle')).toHaveCount(0);
   const red = view.at(RED_BOX);
   await page.mouse.click(red.x, red.y);
-  await expect.poll(() => selectedRows(page)).toEqual(['<Path>']);
+  await expect.poll(() => selectedRows(page)).toEqual(['Red box']);
   await page.keyboard.press('Delete');
   await page.keyboard.press('ArrowRight');
   await expect.poll(async () => (await engineRows(page)).length).toBe(5);

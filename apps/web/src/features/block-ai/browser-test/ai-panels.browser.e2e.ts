@@ -239,7 +239,7 @@ test('drags an object into another layer', async ({ page }) => {
     .poll(async () =>
       (await engineRows(page)).map((r) => `${r.depth}:${r.name}`)
     )
-    .toEqual(['0:Notes', '1:<Path>', '0:Layer 1', '1:Hello', '1:<Path>']);
+    .toEqual(['0:Notes', '1:Red box', '0:Layer 1', '1:Hello', '1:Blue circle']);
 });
 
 test('pastes an image from the clipboard', async ({ page }) => {
