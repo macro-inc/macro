@@ -57,6 +57,8 @@ export function NewChatPage(props: {
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
+  /** Offer only this kind; the Agents workspace passes its Work or Code mode. */
+  kind?: AgentKind;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -69,7 +71,12 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const options = () => props.roster;
+  const options = () => {
+    const kind = props.kind;
+    return kind
+      ? props.roster.filter((agent) => agent.kind === kind)
+      : props.roster;
+  };
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
@@ -84,17 +91,23 @@ export function NewChatPage(props: {
       : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
   const recentAgentId = () => {
-    const ids = recentAgents.ids();
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
-    if (props.rosterLoading || props.availabilityLoading) return ids[0];
-    return ids.find((id) =>
-      options().some((agent) => agent.id === id && !agent.unavailableReason)
-    );
+    const settling = props.rosterLoading || props.availabilityLoading;
+    return recentAgents
+      .ids()
+      .find((id) =>
+        options().some(
+          (agent) => agent.id === id && (settling || !agent.unavailableReason)
+        )
+      );
   };
   const selected = createMemo(() => {
-    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
-    return options().find((agent) => agent.id === wanted) ?? options()[0];
+    for (const wanted of [agentId(), recentAgentId(), MACRO_PERSONA_ID]) {
+      const agent = options().find((option) => option.id === wanted);
+      if (agent) return agent;
+    }
+    return options().find((agent) => !agent.unavailableReason) ?? options()[0];
   });
   const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
   const macroCatalog = createComposerModels(macro);
@@ -153,7 +166,7 @@ export function NewChatPage(props: {
       ? { configId: selection.configId, value: selection.value }
       : undefined;
   };
-  const coding = () => selected()?.kind === 'coder';
+  const coding = () => (props.kind ?? selected()?.kind) === 'coder';
   const localRuntime = () => selected()?.harness === 'macrod';
   const canSelectRepository = () =>
     selected()?.harness === 'cursor' || localRuntime();

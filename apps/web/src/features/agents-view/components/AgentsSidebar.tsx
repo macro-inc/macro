@@ -18,11 +18,14 @@ import {
 } from '@app/features/soup';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
+import { TabsInset } from '@core/component/TabsInset';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
+import BriefcaseIcon from '@phosphor/briefcase.svg';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import RoutineIcon from '@phosphor/clock-clockwise.svg';
+import CodeIcon from '@phosphor/code.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
@@ -30,9 +33,9 @@ import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
-import type { AgentsMode } from '../core/mode';
+import { type AgentsMode, agentsModeLabel } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
@@ -42,12 +45,18 @@ import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
+/** Rows a mode should fill before paging stops waiting for a scroll. */
+const MODE_PAGE_FILL = 20;
+
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
   senderBucket: undefined,
 };
 
 export type AgentsSidebarProps = {
+  /** Only conversations of this mode are listed. */
+  mode: AgentsMode;
+  onModeChange: (mode: AgentsMode) => void;
   activePage: AgentsPage | undefined;
   onOpenPage: (page: AgentsPage) => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
@@ -159,8 +168,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
+  const inMode = (conversations: AgentConversationEntity[]) =>
+    conversations.filter(
+      (conversation) => props.modeForConversation(conversation) === props.mode
+    );
+  const conversations = () => inMode(props.conversations);
+  const archived = () => inMode(props.archived);
   const actionController = createListController({
-    items: () => [...props.conversations, ...props.archived],
+    items: () => [...conversations(), ...archived()],
     getKey: (conversation) => conversation.id,
     isSelectable: () => false,
   });
@@ -168,7 +183,19 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     controller: actionController,
     getEntity: (conversation) => conversation,
   });
-  const total = () => props.conversations.length + props.archived.length;
+  const total = () => conversations().length + archived().length;
+  // Both modes page through one mixed query, so a short filtered list never
+  // scrolls far enough to ask for more; keep paging until it fills.
+  createEffect(() => {
+    if (
+      total() < MODE_PAGE_FILL &&
+      props.hasNextPage &&
+      !props.loading &&
+      !props.loadingNextPage &&
+      !props.error
+    )
+      props.onLoadMore();
+  });
   // Both lists page through one query, so either reaching its end loads more.
   const loadMoreNearEnd = (event: Event & { currentTarget: HTMLElement }) => {
     const list = event.currentTarget;
@@ -229,6 +256,34 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </div>
           </ViewSidebar.Header>
         </Show>
+
+        <div
+          ref={tourTarget(AGENTS_TOUR.modeSwitch)}
+          class="px-(--sidebar-gutter) pt-1 touch:pt-0"
+        >
+          <TabsInset
+            aria-label="Agents mode"
+            fullWidth
+            value={props.mode}
+            list={(['chat', 'code'] as const).map((mode) => ({
+              value: mode,
+              label: (
+                <span class="flex items-center gap-1.5">
+                  {mode === 'code' ? (
+                    <CodeIcon class="size-3.5" />
+                  ) : (
+                    <BriefcaseIcon class="size-3.5" />
+                  )}
+                  {agentsModeLabel(mode)}
+                </span>
+              ),
+            }))}
+            onChange={(value) =>
+              props.onModeChange(value === 'code' ? 'code' : 'chat')
+            }
+            labelClass="h-7 justify-center text-sm"
+          />
+        </div>
 
         <Show when={!isTouchDevice()}>
           <div class="px-(--sidebar-gutter) pt-2">
@@ -315,7 +370,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 aria-busy={props.loading || props.loadingNextPage}
                 onScroll={loadMoreNearEnd}
               >
-                {rows(() => props.conversations)}
+                {rows(conversations)}
                 <Show when={props.loading && total() === 0}>
                   <AgentSessionListSkeleton />
                 </Show>
@@ -329,7 +384,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
                     {props.search.trim()
                       ? `No results for "${props.search.trim()}"`
-                      : 'No conversations yet.'}
+                      : props.mode === 'code'
+                        ? 'No coding conversations yet.'
+                        : 'No conversations yet.'}
                   </p>
                 </Show>
                 <Show when={props.loadingNextPage}>
@@ -338,7 +395,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
-          <Show when={props.archived.length}>
+          <Show when={archived().length}>
             <section
               aria-label="Archived conversations"
               class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
@@ -346,14 +403,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <ViewSidebar.Toolbar class="shrink-0">
                 <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
                 <span class="text-xs text-ink-extra-muted tabular-nums">
-                  {props.archived.length}
+                  {archived().length}
                 </span>
               </ViewSidebar.Toolbar>
               <ViewSidebar.Nav
                 class="min-h-0 flex-1 shrink overflow-auto"
                 onScroll={loadMoreNearEnd}
               >
-                {rows(() => props.archived)}
+                {rows(archived)}
               </ViewSidebar.Nav>
             </section>
           </Show>
