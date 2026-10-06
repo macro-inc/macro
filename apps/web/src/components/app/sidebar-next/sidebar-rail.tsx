@@ -5,6 +5,7 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { rememberBootShell } from '@components/app/boot-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import { isPlatform } from '@core/util/platform';
 import { cn } from '@ui';
 import { createEffect, For, Show, Suspense } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
@@ -68,7 +69,9 @@ const SidebarRailContent = () => {
       data-ui="sidebar-rail"
       class={cn(
         'relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden border-edge-frame bg-panel px-2 pb-3 pt-2',
-        (globalSplitManager()?.splits().length ?? 1) <= 1 && 'border-r'
+        !isPlatform('desktop') &&
+          (globalSplitManager()?.splits().length ?? 1) <= 1 &&
+          'border-r'
       )}
     >
       <SidebarRailCreateButton />

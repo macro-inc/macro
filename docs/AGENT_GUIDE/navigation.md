@@ -1,5 +1,17 @@
 # Navigation and App Structure
 
+The native macOS app reserves 40 px above the app layout for the inset overlay
+title bar's traffic-light controls. Drag this top strip to move the window, or
+double-click it to toggle zoom. The loading shell uses the same inset; browser,
+Windows, Linux, and mobile layouts do not add this space.
+
+Native desktop content keeps its rounded split frame even with only one split,
+and the app icon rail has no right divider. On macOS, the sidebar icon beside the
+traffic lights toggles navigation for the active split; it replaces the controls
+inside the workspace. The top-right split icon opens another Home split, even
+when Home is already open, and is disabled when there is no room for a new split.
+Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and
