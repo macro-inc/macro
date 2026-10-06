@@ -89,6 +89,25 @@ it('does not warm for an owner who has no existing warming query', () => {
   expect(warm).not.toHaveBeenCalled();
 });
 
+it('retries a failed initial preparation only after successful creation', async () => {
+  warm.mockRejectedValueOnce(new Error('offline'));
+  warm.mockResolvedValueOnce(prepared('recovered'));
+  const { mount, settled, take, replenish } = setup();
+  mount();
+  await settled();
+  expect(warm).toHaveBeenCalledTimes(1);
+  expect(take()).toBeUndefined();
+  await settled();
+  expect(warm).toHaveBeenCalledTimes(1);
+
+  replenish();
+  await settled();
+  expect(warm).toHaveBeenCalledTimes(2);
+  expect(take()).toBe('recovered');
+  await settled();
+  expect(warm).toHaveBeenCalledTimes(2);
+});
+
 it('deduplicates page mounts and preserves a reservation for the matching owner and settings', async () => {
   warm.mockResolvedValueOnce(prepared('warm-id'));
   const { mount, settled, take, replenish } = setup();

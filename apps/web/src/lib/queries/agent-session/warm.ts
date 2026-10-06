@@ -89,9 +89,10 @@ export function replenishWarmAgentSession(
   client: QueryClient = queryClient
 ): void {
   const key = agentSessionWarmKeys.owner(userId).queryKey;
+  const query = client.getQueryState<WarmSession | null>(key);
   // A different configuration may have left a usable reservation in the cache.
   // No query means this owner has not mounted a warming surface.
-  if (client.getQueryData<WarmSession | null>(key) !== null) return;
+  if (!query || query.data) return;
   void client.invalidateQueries(
     { queryKey: key, exact: true },
     { cancelRefetch: false }
