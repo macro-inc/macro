@@ -293,7 +293,10 @@ export type ResponsesGridProps = {
  */
 export type FormContext = {
   viewer: { userId: Accessor<string | undefined> };
-  createFormSource: (formId: Accessor<string>) => FormDetailSource;
+  createFormSource: (
+    formId: Accessor<string>,
+    isEditorView?: Accessor<boolean>
+  ) => FormDetailSource;
   createTableSource: (
     databaseId: Accessor<string | undefined>,
     tableId: Accessor<string | undefined>

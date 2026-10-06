@@ -18,9 +18,9 @@ const FORM_CHANGED_MESSAGE_TYPE = 'form_changed';
 const formChangedSchema = z.object({ formId: z.string() });
 
 /**
- * Keep a form fresh for anyone who can see it, respondents included: the
- * ping carries only the form id, and everything is read again under the
- * viewer's own access. Never subscribes to the form's database.
+ * Subscribe only while viewing an editable form in its editor. Gateway
+ * subscriptions also announce presence, so respondent surfaces refresh through
+ * their query instead. Never subscribes to the form's database.
  */
 export function useFormChangedSync(formId: Accessor<string | undefined>) {
   useEntitySubscription(() => {

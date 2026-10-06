@@ -116,9 +116,10 @@ export function writeFailureOf(errors: FormsError[]): FormWriteFailure {
 }
 
 export function createFormDetailSource(
-  formId: Accessor<string>
+  formId: Accessor<string>,
+  isEditorView: Accessor<boolean> = () => false
 ): FormDetailSource {
-  const query = useFormDetailQuery(formId);
+  const query = useFormDetailQuery(formId, () => !isEditorView());
   const failure = createMemo(() =>
     query.isError ? loadFailureOf(query.error) : undefined
   );
@@ -127,14 +128,14 @@ export function createFormDetailSource(
     if (problem && problem.kind !== 'failed') return undefined;
     return queryReadyGate(query) ? toFormDetail(query.data) : undefined;
   });
-  // Once per mounted form: everyone hears form pings; only editors track the
-  // database, whose events carry other viewers' positions.
+  // Presence is reserved for the editor. Filling out a form (even as its
+  // owner) must not announce the respondent to other viewers.
   const databaseId = () => detail()?.form.databaseId;
   const isEditor = () => {
     const access = detail()?.access;
-    return access === 'edit' || access === 'owner';
+    return isEditorView() && (access === 'edit' || access === 'owner');
   };
-  useFormChangedSync(formId);
+  useFormChangedSync(() => (isEditor() ? formId() : undefined));
   useFormDatabaseSync(databaseId, isEditor, formId);
   useFormResponsesSync(formId, databaseId);
   // A form named after its database is renamed with it: read it again when

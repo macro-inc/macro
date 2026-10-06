@@ -62,7 +62,10 @@ function FormBlockContent(props: {
     openChannel: (channelId) => insertSplit({ type: 'channel', id: channelId }),
     openCalendarSettings: () => settings.openSettingsInSplit('Booking links'),
   });
-  const source = context.createFormSource(() => formId);
+  const source = context.createFormSource(
+    () => formId,
+    () => !props.respondOnly
+  );
   const summary = context.responses.createSummary(
     () => formId,
     () => {
@@ -140,7 +143,15 @@ function FormBlockContent(props: {
         <BlockItemSplitLabel name={name} />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <Show
+          when={
+            !props.respondOnly &&
+            (source.detail()?.access === 'edit' ||
+              source.detail()?.access === 'owner')
+          }
+        >
+          <BlockLiveIndicators />
+        </Show>
         <HeaderIsland>
           <div class="order-[1000] flex items-center gap-1.5">
             <Show

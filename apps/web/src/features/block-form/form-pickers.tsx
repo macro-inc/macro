@@ -12,7 +12,7 @@ import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
 import Plus from '@phosphor/plus.svg';
 import X from '@phosphor/x.svg';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
-import { cn } from '@ui';
+import { Checkbox, cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type {
@@ -207,17 +207,16 @@ export function FormRelationPicker(props: RelationPickerProps) {
             >
               {(row) => (
                 <li>
-                  <label class="flex min-h-8 items-center gap-2.5 rounded-md px-1.5 text-sm text-ink hover:bg-hover">
-                    <input
-                      type="checkbox"
-                      checked={chosen().includes(row.id)}
-                      class="size-4 accent-accent"
-                      onChange={(event) =>
-                        toggle(row.id, event.currentTarget.checked)
-                      }
-                    />
-                    <span class="truncate">{row.name || 'Untitled'}</span>
-                  </label>
+                  <Checkbox
+                    checked={chosen().includes(row.id)}
+                    onChange={(checked) => toggle(row.id, checked)}
+                    class="flex min-h-8 gap-2.5 rounded-md px-1.5 text-sm text-ink hover:bg-hover"
+                  >
+                    <Checkbox.Control class="border-ink-extra-muted" />
+                    <Checkbox.Label class="flex min-h-8 min-w-0 flex-1 items-center">
+                      <span class="truncate">{row.name || 'Untitled'}</span>
+                    </Checkbox.Label>
+                  </Checkbox>
                 </li>
               )}
             </For>

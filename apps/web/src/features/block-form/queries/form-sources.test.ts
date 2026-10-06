@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFormDetailSource } from './form-sources';
 
 const sync = vi.hoisted(() => ({
+  formFollowed: [] as (() => string | undefined)[],
   databaseFollowed: [] as (string | undefined)[],
   responsesFollowed: [] as (string | undefined)[],
   databasesRead: [] as (string | undefined)[],
@@ -65,7 +66,9 @@ vi.mock('@queries/storage/databases', () => ({
   },
 }));
 vi.mock('@queries/storage/forms-sync', () => ({
-  useFormChangedSync: () => {},
+  useFormChangedSync: (id: () => string | undefined) => {
+    sync.formFollowed.push(id);
+  },
   useFormDatabaseSync: (
     databaseId: () => string | undefined,
     isEditor: () => boolean
@@ -81,6 +84,7 @@ vi.mock('@queries/storage/forms-sync', () => ({
 }));
 
 beforeEach(() => {
+  sync.formFollowed = [];
   sync.databaseFollowed = [];
   sync.responsesFollowed = [];
   sync.databasesRead = [];
@@ -89,12 +93,38 @@ beforeEach(() => {
 });
 
 describe('createFormDetailSource', () => {
+  it('never announces respondent presence, even for a form owner', () => {
+    sync.access = 'owner';
+    createRoot((dispose) => {
+      createFormDetailSource(() => 'form-1');
+      expect(sync.formFollowed.map((id) => id())).toEqual([undefined]);
+      expect(sync.databaseFollowed).toEqual([undefined]);
+      expect(sync.databasesRead).toEqual([undefined]);
+      dispose();
+    });
+  });
+
+  it('withdraws editor presence when switching to the fill-out view', () => {
+    sync.access = 'owner';
+    const [editing, setEditing] = createSignal(true);
+    createRoot((dispose) => {
+      createFormDetailSource(() => 'form-1', editing);
+      expect(sync.formFollowed.map((id) => id())).toEqual(['form-1']);
+      setEditing(false);
+      expect(sync.formFollowed.map((id) => id())).toEqual([undefined]);
+      dispose();
+    });
+  });
+
   it('keeps cached detail through a temporary refresh failure and recovery', () => {
     const [failure, setFailure] = createSignal<unknown>();
     sync.queryError = failure;
     sync.access = 'owner';
     createRoot((dispose) => {
-      const source = createFormDetailSource(() => 'form-1');
+      const source = createFormDetailSource(
+        () => 'form-1',
+        () => true
+      );
       expect(source.detail()?.form.name).toBe('Lunch?');
       setFailure(new Error('Connection lost'));
       expect(source.detail()?.form.name).toBe('Lunch?');
@@ -113,7 +143,10 @@ describe('createFormDetailSource', () => {
       sync.queryError = failure;
       sync.access = 'owner';
       createRoot((dispose) => {
-        const source = createFormDetailSource(() => 'form-1');
+        const source = createFormDetailSource(
+          () => 'form-1',
+          () => true
+        );
         expect(source.detail()).toBeDefined();
         const error: FormsError = {
           code,
@@ -129,13 +162,19 @@ describe('createFormDetailSource', () => {
   it('follows the form’s database once, for editors only; respondents never track it', () => {
     sync.access = 'view';
     createRoot((dispose) => {
-      createFormDetailSource(() => 'form-1');
+      createFormDetailSource(
+        () => 'form-1',
+        () => true
+      );
       dispose();
     });
     expect(sync.databaseFollowed).toEqual([undefined]);
     sync.access = 'edit';
     createRoot((dispose) => {
-      createFormDetailSource(() => 'form-1');
+      createFormDetailSource(
+        () => 'form-1',
+        () => true
+      );
       dispose();
     });
     expect(sync.databaseFollowed).toEqual([undefined, 'database-1']);
@@ -147,7 +186,10 @@ describe('createFormDetailSource', () => {
     const [name, rename] = createSignal('Offsite');
     sync.databaseName = name;
     const dispose = createRoot((dispose) => {
-      createFormDetailSource(() => 'form-1');
+      createFormDetailSource(
+        () => 'form-1',
+        () => true
+      );
       return dispose;
     });
     expect(sync.databasesRead).toEqual(['database-1']);
@@ -158,7 +200,10 @@ describe('createFormDetailSource', () => {
     dispose();
     sync.access = 'view';
     createRoot((dispose) => {
-      createFormDetailSource(() => 'form-1');
+      createFormDetailSource(
+        () => 'form-1',
+        () => true
+      );
       dispose();
     });
     expect(sync.databasesRead).toEqual(['database-1', undefined]);

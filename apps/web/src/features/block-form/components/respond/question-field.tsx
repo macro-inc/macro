@@ -2,7 +2,7 @@ import Paperclip from '@phosphor/paperclip.svg';
 import Spinner from '@phosphor/spinner.svg';
 import UploadSimple from '@phosphor/upload-simple.svg';
 import X from '@phosphor/x.svg';
-import { cn } from '@ui';
+import { Button, Checkbox, cn, RadioGroup } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
   dateInputFromInstant,
@@ -60,39 +60,73 @@ function ChoiceList(props: {
     );
   };
   return (
-    <div
-      role={props.multi ? 'group' : 'radiogroup'}
-      aria-labelledby={`${props.name}-label`}
-      aria-describedby={props.describedBy}
-      aria-invalid={props.invalid}
-      class="flex flex-col gap-1"
-    >
-      <For each={props.column.options}>
-        {(option) => (
-          <label class="flex min-h-9 items-center gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-edge-focus">
-            <input
-              type={props.multi ? 'checkbox' : 'radio'}
-              name={props.name}
-              value={option.id}
-              checked={selected().includes(option.id)}
-              disabled={props.disabled}
-              class="size-4 shrink-0 accent-accent"
-              onChange={(event) =>
-                toggle(option.id, event.currentTarget.checked)
-              }
-            />
-            <span class="wrap-anywhere">{option.label}</span>
-          </label>
-        )}
-      </For>
-      <Show when={!props.multi && selected().length > 0 && !props.disabled}>
-        <button
-          type="button"
-          class="self-start rounded px-2 text-xs text-ink-muted outline-none hover:text-ink hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
+    <div class="flex flex-col gap-1">
+      <Show
+        when={!props.multi}
+        fallback={
+          <div
+            role="group"
+            aria-labelledby={`${props.name}-label`}
+            aria-describedby={props.describedBy}
+            aria-invalid={props.invalid}
+            class="flex flex-col gap-1"
+          >
+            <For each={props.column.options}>
+              {(option) => (
+                <Checkbox
+                  name={props.name}
+                  value={option.id}
+                  checked={selected().includes(option.id)}
+                  disabled={props.disabled}
+                  validationState={props.invalid ? 'invalid' : 'valid'}
+                  onChange={(checked) => toggle(option.id, checked)}
+                  class="flex min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
+                >
+                  <Checkbox.Control class="border-ink-extra-muted" />
+                  <Checkbox.Label class="flex min-h-9 flex-1 items-center wrap-anywhere">
+                    {option.label}
+                  </Checkbox.Label>
+                </Checkbox>
+              )}
+            </For>
+          </div>
+        }
+      >
+        <RadioGroup
+          name={props.name}
+          value={selected()[0] ?? ''}
+          onChange={(optionId) => toggle(optionId, true)}
+          disabled={props.disabled}
+          validationState={props.invalid ? 'invalid' : 'valid'}
+          aria-labelledby={`${props.name}-label`}
+          aria-describedby={props.describedBy}
+          class="gap-1"
+        >
+          <For each={props.column.options}>
+            {(option) => (
+              <RadioGroup.Item
+                value={option.id}
+                class="min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
+              >
+                <RadioGroup.ItemControl class="border-ink-extra-muted" />
+                <RadioGroup.ItemLabel class="flex min-h-9 flex-1 items-center wrap-anywhere">
+                  {option.label}
+                </RadioGroup.ItemLabel>
+              </RadioGroup.Item>
+            )}
+          </For>
+        </RadioGroup>
+      </Show>
+      <Show when={!props.multi && selected().length > 0}>
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={props.disabled}
+          class="self-start"
           onClick={() => props.onChange(undefined)}
         >
           Clear selection
-        </button>
+        </Button>
       </Show>
     </div>
   );
@@ -261,7 +295,7 @@ export function QuestionField(props: {
       <div class="flex flex-col gap-0.5">
         <label
           id={`${id()}-label`}
-          for={id()}
+          for={kind().type === 'boolean' ? `${id()}-input` : id()}
           class="text-sm font-medium text-ink wrap-anywhere"
         >
           {props.column.name}
@@ -365,26 +399,26 @@ export function QuestionField(props: {
           />
         </Match>
         <Match when={kind().type === 'boolean'}>
-          <label class="flex min-h-9 items-center gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover">
-            <input
-              id={id()}
-              type="checkbox"
-              checked={props.value?.type === 'boolean' && props.value.value}
-              disabled={props.disabled}
-              aria-describedby={describedBy()}
-              aria-invalid={invalid()}
-              class="size-4 accent-accent"
-              // Untouched stays unanswered; once touched, unchecked is an
-              // explicit false, as the server and gates read it.
-              onChange={(event) =>
-                props.onChange({
-                  type: 'boolean',
-                  value: event.currentTarget.checked,
-                })
-              }
-            />
-            Yes
-          </label>
+          <Checkbox
+            id={id()}
+            checked={props.value?.type === 'boolean' && props.value.value}
+            disabled={props.disabled}
+            validationState={invalid() ? 'invalid' : 'valid'}
+            class="flex min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
+            // Untouched stays unanswered; once touched, unchecked is an
+            // explicit false, as the server and gates read it.
+            onChange={(checked) =>
+              props.onChange({ type: 'boolean', value: checked })
+            }
+          >
+            <Checkbox.Control class="border-ink-extra-muted" />
+            <Checkbox.Label class="flex min-h-9 flex-1 items-center">
+              Yes
+            </Checkbox.Label>
+            <Checkbox.Description class="sr-only">
+              {props.column.name}. {props.question.helpText} {props.problem}
+            </Checkbox.Description>
+          </Checkbox>
         </Match>
         <Match when={kind().type === 'date' && props.widget === 'date'}>
           <input

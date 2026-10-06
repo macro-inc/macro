@@ -26,6 +26,7 @@ import { queryClient } from '../client';
 import { databasesKeys, formsKeys, myResponseKeyOf } from './keys';
 
 const FORM_STALE_TIME = 30 * 1000;
+const RESPONDENT_REFRESH_INTERVAL = 30 * 1000;
 
 /** Every form the viewer can open, for Drive and Quick Access. */
 export function useFormsQuery() {
@@ -70,12 +71,20 @@ export function formDetailQueryOptions(formId: string) {
   };
 }
 
-export function useFormDetailQuery(formId: Accessor<string | undefined>) {
+export function useFormDetailQuery(
+  formId: Accessor<string | undefined>,
+  refreshWithoutPresence: Accessor<boolean> = () => false
+) {
   return useQuery(() => {
     const id = formId();
     return {
       ...formDetailQueryOptions(id ?? ''),
       enabled: !!id,
+      // Respondents stay fresh without joining the gateway's presence roster.
+      refetchInterval: (query) =>
+        refreshWithoutPresence() || query.state.data?.access === 'view'
+          ? RESPONDENT_REFRESH_INTERVAL
+          : false,
       // A form you cannot open stays unopened; retrying a 404 changes nothing.
       retry: false,
     };
@@ -285,6 +294,8 @@ export function useTallyQuery(
           storageServiceClient.forms.getTally({ id: id ?? '' })
         ),
       enabled: !!id && enabled(),
+      // Poll cards and respondents do not join the editor presence roster.
+      refetchInterval: RESPONDENT_REFRESH_INTERVAL,
       retry: false,
     };
   });

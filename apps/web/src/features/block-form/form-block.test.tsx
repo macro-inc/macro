@@ -41,7 +41,7 @@ vi.mock('@core/component/DocumentBlockContainer', () => ({
   DocumentBlockContainer: (props: ParentProps) => props.children,
 }));
 vi.mock('@core/component/LiveIndicators', () => ({
-  BlockLiveIndicators: () => null,
+  BlockLiveIndicators: () => <span>Live editors</span>,
 }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
   ShareTrigger: () => null,
@@ -116,9 +116,11 @@ describe('Forms authoring rollout', () => {
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
     expect(state.editorMounted).not.toHaveBeenCalled();
     expect(screen.getByText('Fill out the form')).toBeTruthy();
+    expect(screen.queryByText('Live editors')).toBeNull();
 
     setFlag({ enabled: true, loading: false });
     expect(screen.getByText('Form editor')).toBeTruthy();
+    expect(screen.getByText('Live editors')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
     expect(state.editorMounted).toHaveBeenCalledOnce();
 
@@ -126,6 +128,7 @@ describe('Forms authoring rollout', () => {
     expect(screen.queryByText('Form editor')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
     expect(screen.getByText('Fill out the form')).toBeTruthy();
+    expect(screen.queryByText('Live editors')).toBeNull();
   });
 
   it('keeps an explicitly disabled owner on the respondent view', () => {
@@ -135,6 +138,7 @@ describe('Forms authoring rollout', () => {
     expect(screen.queryByText('Form editor')).toBeNull();
     expect(state.editorMounted).not.toHaveBeenCalled();
     expect(screen.getByText('Fill out the form')).toBeTruthy();
+    expect(screen.queryByText('Live editors')).toBeNull();
   });
 
   it('keeps a respondent link in respondent mode when authoring is enabled', () => {
@@ -144,5 +148,6 @@ describe('Forms authoring rollout', () => {
     expect(screen.queryByText('Form editor')).toBeNull();
     expect(state.editorMounted).not.toHaveBeenCalled();
     expect(screen.getByText('Fill out the form')).toBeTruthy();
+    expect(screen.queryByText('Live editors')).toBeNull();
   });
 });

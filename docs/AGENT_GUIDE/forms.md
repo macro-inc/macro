@@ -164,6 +164,15 @@ confirmation with a receipt; signed-in respondents (either audience) get
 return. A closed form says "This form is closed"; a returning respondent
 sees their saved answers with that reason.
 
+Presence avatars appear only in the editor. Respondent pages (including an
+owner’s Preview) do not announce presence or show other viewers; their form
+metadata refreshes periodically without a presence subscription.
+
+Choice answers use the app’s themed radio and checkbox controls in both Preview
+and the live form. Verify light and dark themes: radio arrow keys select one
+answer, **Clear selection** removes it, and Space toggles checkboxes independently.
+While submitting, **Clear selection** stays visible but disabled to keep the layout stable.
+
 Temporary background refresh failures keep unsent answers on screen. If Submit
 discovers an existing response but cannot load its receipt, **Try again** reloads
 that response without submitting another one.
