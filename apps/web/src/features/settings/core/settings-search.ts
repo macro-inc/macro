@@ -115,6 +115,18 @@ const SETTINGS: Setting[] = [
     keywords: 'analytics statistics',
   },
   {
+    tab: 'Calls',
+    title: 'Record by default',
+    target: 'Record by default',
+    keywords: 'recording automatic huddles internal external meetings',
+  },
+  {
+    tab: 'Calls',
+    title: 'Team recording policy',
+    target: 'Team recording policy',
+    keywords: 'block recording admin huddles internal external meetings',
+  },
+  {
     tab: 'Agents',
     title: 'Team agents',
     target: 'Team agents',

@@ -6,6 +6,7 @@ import type { ActiveCallsResponse } from '@service-storage/generated/schemas/act
 import type { ActiveMeeting as ApiActiveMeeting } from '@service-storage/generated/schemas/activeMeeting';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecordingSettings } from '@service-storage/generated/schemas/callRecordingSettings';
 import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
 import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
@@ -14,9 +15,18 @@ import type { LeaveCallResponse } from '@service-storage/generated/schemas/leave
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
+import type { UpdateRecordingDefaultsRequest } from '@service-storage/generated/schemas/updateRecordingDefaultsRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
+import type { UpdateTeamRecordingPolicyRequest } from '@service-storage/generated/schemas/updateTeamRecordingPolicyRequest';
 
-export type { CallRecord, CreateMeetingRequest, UpdateMeetingRequest };
+export type {
+  CallRecord,
+  CallRecordingSettings,
+  CreateMeetingRequest,
+  UpdateMeetingRequest,
+  UpdateRecordingDefaultsRequest,
+  UpdateTeamRecordingPolicyRequest,
+};
 
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
@@ -111,6 +121,29 @@ export const callServiceClient = {
     return fetchWithToken<Record<string, never>>(
       `${host}/call/meetings/${encodeURIComponent(meetingId)}`,
       { method: 'DELETE' }
+    );
+  },
+
+  /** The caller's recording defaults and their team's recording blocks. */
+  getRecordingSettings() {
+    return fetchWithToken<CallRecordingSettings>(
+      `${host}/call/settings/recording`
+    );
+  },
+
+  /** Change which kinds of the caller's own calls record by default. */
+  updateRecordingDefaults(body: UpdateRecordingDefaultsRequest) {
+    return fetchWithToken<CallRecordingSettings>(
+      `${host}/call/settings/recording`,
+      { method: 'PATCH', body: JSON.stringify(body) }
+    );
+  },
+
+  /** Change which kinds of call no one on the team may record (admins only). */
+  updateTeamRecordingPolicy(body: UpdateTeamRecordingPolicyRequest) {
+    return fetchWithToken<CallRecordingSettings>(
+      `${host}/call/settings/recording/team`,
+      { method: 'PATCH', body: JSON.stringify(body) }
     );
   },
 

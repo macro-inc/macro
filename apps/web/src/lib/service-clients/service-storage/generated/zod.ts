@@ -2490,6 +2490,217 @@ export const getRingStatusResponse = zod
   .describe('Response body for `GET \/call\/ring-status\/{call_id}`.');
 
 /**
+ * @summary Read the caller's recording defaults and their team's recording blocks.
+ */
+export const getCallRecordingSettingsResponse = zod
+  .object({
+    recordByDefault: zod
+      .object({
+        externalMeetings: zod
+          .boolean()
+          .describe(
+            "Standalone calls that someone outside the host's team joined."
+          ),
+        huddles: zod.boolean().describe('Calls started from a channel.'),
+        internalMeetings: zod
+          .boolean()
+          .describe("Standalone calls attended only by the host's teammates."),
+      })
+      .describe('One flag per [`CallKind`].'),
+    team: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            blocked: zod
+              .object({
+                externalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls that someone outside the host's team joined."
+                  ),
+                huddles: zod
+                  .boolean()
+                  .describe('Calls started from a channel.'),
+                internalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls attended only by the host's teammates."
+                  ),
+              })
+              .describe('One flag per [`CallKind`].'),
+            canEdit: zod
+              .boolean()
+              .describe(
+                'Whether the caller may change the blocks (team admins and owners).'
+              ),
+          })
+          .describe('Kinds of call no one on a team may record.'),
+      ])
+      .optional(),
+  })
+  .describe("The caller's recording settings.");
+
+/**
+ * @summary Change which kinds of the caller's own calls record by default.
+ */
+export const updateCallRecordingDefaultsBody = zod
+  .object({
+    recordByDefault: zod
+      .object({
+        externalMeetings: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'New value for standalone calls with people from outside the team.'
+          ),
+        huddles: zod
+          .boolean()
+          .nullish()
+          .describe('New value for calls started from a channel.'),
+        internalMeetings: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'New value for standalone calls attended only by teammates.'
+          ),
+      })
+      .describe(
+        'A partial update to [`CallKinds`]. Omitted kinds keep their current value,\nso two people changing different kinds at once do not undo each other.'
+      ),
+  })
+  .describe('Body of `PATCH \/call\/settings\/recording`.');
+
+export const updateCallRecordingDefaultsResponse = zod
+  .object({
+    recordByDefault: zod
+      .object({
+        externalMeetings: zod
+          .boolean()
+          .describe(
+            "Standalone calls that someone outside the host's team joined."
+          ),
+        huddles: zod.boolean().describe('Calls started from a channel.'),
+        internalMeetings: zod
+          .boolean()
+          .describe("Standalone calls attended only by the host's teammates."),
+      })
+      .describe('One flag per [`CallKind`].'),
+    team: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            blocked: zod
+              .object({
+                externalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls that someone outside the host's team joined."
+                  ),
+                huddles: zod
+                  .boolean()
+                  .describe('Calls started from a channel.'),
+                internalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls attended only by the host's teammates."
+                  ),
+              })
+              .describe('One flag per [`CallKind`].'),
+            canEdit: zod
+              .boolean()
+              .describe(
+                'Whether the caller may change the blocks (team admins and owners).'
+              ),
+          })
+          .describe('Kinds of call no one on a team may record.'),
+      ])
+      .optional(),
+  })
+  .describe("The caller's recording settings.");
+
+/**
+ * @summary Change which kinds of call no one on the caller's team may record. Team
+admins and owners only.
+ */
+export const updateTeamCallRecordingPolicyBody = zod
+  .object({
+    blocked: zod
+      .object({
+        externalMeetings: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'New value for standalone calls with people from outside the team.'
+          ),
+        huddles: zod
+          .boolean()
+          .nullish()
+          .describe('New value for calls started from a channel.'),
+        internalMeetings: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'New value for standalone calls attended only by teammates.'
+          ),
+      })
+      .describe(
+        'A partial update to [`CallKinds`]. Omitted kinds keep their current value,\nso two people changing different kinds at once do not undo each other.'
+      ),
+  })
+  .describe('Body of `PATCH \/call\/settings\/recording\/team`.');
+
+export const updateTeamCallRecordingPolicyResponse = zod
+  .object({
+    recordByDefault: zod
+      .object({
+        externalMeetings: zod
+          .boolean()
+          .describe(
+            "Standalone calls that someone outside the host's team joined."
+          ),
+        huddles: zod.boolean().describe('Calls started from a channel.'),
+        internalMeetings: zod
+          .boolean()
+          .describe("Standalone calls attended only by the host's teammates."),
+      })
+      .describe('One flag per [`CallKind`].'),
+    team: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            blocked: zod
+              .object({
+                externalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls that someone outside the host's team joined."
+                  ),
+                huddles: zod
+                  .boolean()
+                  .describe('Calls started from a channel.'),
+                internalMeetings: zod
+                  .boolean()
+                  .describe(
+                    "Standalone calls attended only by the host's teammates."
+                  ),
+              })
+              .describe('One flag per [`CallKind`].'),
+            canEdit: zod
+              .boolean()
+              .describe(
+                'Whether the caller may change the blocks (team admins and owners).'
+              ),
+          })
+          .describe('Kinds of call no one on a team may record.'),
+      ])
+      .optional(),
+  })
+  .describe("The caller's recording settings.");
+
+/**
  * Gets or creates a call for the channel. If a call already exists, joins it;
 otherwise creates a new one. Always returns a join token.
  * @summary Handler for `GET /call/{channel_id}`.

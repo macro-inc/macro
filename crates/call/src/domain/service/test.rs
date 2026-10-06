@@ -26,6 +26,7 @@ mod active_meetings;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
+mod recording_rules;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -37,6 +38,7 @@ use crate::domain::ports::{
     CallRtcClient, CallService, CallSummarizer, MockCallRepository, MockCallRtcClient,
     NoOpVoiceRepository,
 };
+use crate::domain::recording::RecordingRules;
 
 use super::{
     CallServiceImpl, NoopCallSummarizer, derive_preview_key_from_recording_key,
@@ -477,6 +479,12 @@ fn mock_get_or_create_repo(
                 .times(1)
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
         }
+    }
+
+    if recording_enabled && matches!(scenario, GetOrCreateScenario::CreatorWins) {
+        repo.expect_get_recording_rules()
+            .times(1)
+            .returning(|_, _| Box::pin(async { Ok(RecordingRules::default()) }));
     }
 
     if recording_enabled {

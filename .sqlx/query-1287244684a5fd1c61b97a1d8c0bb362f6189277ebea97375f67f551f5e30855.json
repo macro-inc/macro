@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_recording_preferences\n                (user_id, record_huddles, record_internal_meetings, record_external_meetings)\n            VALUES ($1, COALESCE($2, TRUE), COALESCE($3, TRUE), COALESCE($4, TRUE))\n            ON CONFLICT (user_id) DO UPDATE SET\n                record_huddles = COALESCE($2, call_recording_preferences.record_huddles),\n                record_internal_meetings =\n                    COALESCE($3, call_recording_preferences.record_internal_meetings),\n                record_external_meetings =\n                    COALESCE($4, call_recording_preferences.record_external_meetings),\n                updated_at = now()\n            RETURNING record_huddles, record_internal_meetings, record_external_meetings\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record_huddles",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "record_internal_meetings",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "record_external_meetings",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "1287244684a5fd1c61b97a1d8c0bb362f6189277ebea97375f67f551f5e30855"
+}

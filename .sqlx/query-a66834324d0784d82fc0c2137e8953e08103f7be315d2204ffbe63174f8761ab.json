@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE calls SET has_external_participants = TRUE\n            WHERE id = $1 AND NOT has_external_participants\n            RETURNING egress_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "egress_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "a66834324d0784d82fc0c2137e8953e08103f7be315d2204ffbe63174f8761ab"
+}

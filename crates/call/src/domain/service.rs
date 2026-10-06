@@ -6,11 +6,12 @@ mod test;
 mod meeting_invites;
 mod meetings;
 mod reconcile;
+mod recording;
 
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-    ViewAccessLevel,
+    AdminTeamRole, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    EntityType, ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
@@ -60,6 +61,10 @@ use super::models::{
 use super::ports::{
     CallRecordQueryService, CallRepository, CallRtcClient, CallService, CallSummarizer,
     NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+};
+use super::recording::{
+    CallKind, CallRecordingSettings, UpdateRecordingDefaultsRequest,
+    UpdateTeamRecordingPolicyRequest,
 };
 
 /// The concrete call service implementation.
@@ -792,8 +797,16 @@ impl<
                             })
                             .ok();
 
-                        // Start recording if configured.
-                        if let Some(s3_config) = &self.egress_s3_config {
+                        // Start recording if configured and the starter's rules allow it.
+                        let recording = match &self.egress_s3_config {
+                            Some(config)
+                                if self.host_records(user_id.as_ref(), CallKind::Huddle).await =>
+                            {
+                                Some(config)
+                            }
+                            _ => None,
+                        };
+                        if let Some(s3_config) = recording {
                             match self
                                 .rtc_client
                                 .start_room_composite_egress(&room_name, s3_config)
@@ -819,7 +832,7 @@ impl<
                                         channel_id: call.channel_id,
                                         created_by: created_by.into_owned(),
                                         created_at: call.created_at,
-                                        recording_enabled: self.egress_s3_config.is_some(),
+                                        recording_enabled: recording.is_some(),
                                     },
                                 ));
                             }
@@ -1910,6 +1923,32 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
         Ok(voice_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_recording_settings(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<CallRecordingSettings, CallError> {
+        self.recording_settings(actor).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn update_recording_defaults(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        request: UpdateRecordingDefaultsRequest,
+    ) -> Result<CallRecordingSettings, CallError> {
+        self.change_recording_defaults(actor, request).await
+    }
+
+    #[tracing::instrument(err, skip(self, receipt))]
+    async fn update_team_recording_policy(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        request: UpdateTeamRecordingPolicyRequest,
+    ) -> Result<CallRecordingSettings, CallError> {
+        self.change_team_recording_policy(receipt, request).await
     }
 }
 

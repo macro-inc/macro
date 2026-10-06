@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::recording::RecordingRules;
+use crate::domain::service::recording::MeetingJoiner;
 
 fn service(
     repo: MockCallRepository,
@@ -118,7 +120,10 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
     rtc.expect_delete_room().never();
     assert_eq!(
         service(repo, rtc)
-            .prepare_meeting_call(&meeting)
+            .prepare_meeting_call(
+                &meeting,
+                MeetingJoiner::Account(user(ARCHIVED_EVENT_CREATOR)),
+            )
             .await
             .unwrap()
             .id,
@@ -211,6 +216,9 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     repo.expect_get_or_create_meeting_call()
         .times(1)
         .return_once(move |_, _| Box::pin(async move { Ok((call, true)) }));
+    repo.expect_get_recording_rules()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(RecordingRules::default()) }));
     let (release_agent, agent_wait) = tokio::sync::oneshot::channel();
     let (release_recorder, recorder_wait) = tokio::sync::oneshot::channel();
     let (attached, attachment) = tokio::sync::oneshot::channel();
@@ -267,7 +275,10 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     configure_repository_clone(&service.repo, background_repo);
     let prepared = tokio::time::timeout(
         Duration::from_millis(200),
-        service.prepare_meeting_call(&meeting),
+        service.prepare_meeting_call(
+            &meeting,
+            MeetingJoiner::Account(user(ARCHIVED_EVENT_CREATOR)),
+        ),
     )
     .await
     .expect("room allocation must not wait for media services")
@@ -316,6 +327,7 @@ async fn late_meeting_recording_is_attached_before_it_is_stopped() {
             Uuid::now_v7(),
             "room",
             Some(&test_egress_config()),
+            false,
         )
         .await;
     }
@@ -343,6 +355,7 @@ async fn meeting_recording_stops_if_call_ends_just_after_attachment() {
         Uuid::now_v7(),
         "room",
         Some(&test_egress_config()),
+        false,
     )
     .await;
 }

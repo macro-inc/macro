@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::meetings::{InviteMeetingUsersRequest, Meeting};
 
-mod access;
+pub(super) mod access;
 use access::TeamAccessService;
 
 const OWNER_EMAIL: &str = "owner@example.com";
@@ -28,7 +28,7 @@ fn same_team() -> TeamAccessService {
             .into_iter()
             .map(|email| (user(email).to_string(), team_id))
             .collect(),
-        fail_lookup: false,
+        ..TeamAccessService::default()
     }
 }
 

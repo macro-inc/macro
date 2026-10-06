@@ -12,6 +12,7 @@ import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import LinkIcon from '@phosphor/link.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
 import BotIcon from '@phosphor/robot.svg';
@@ -29,6 +30,7 @@ import {
   botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_CALLS,
   ENABLE_EMAIL,
   enableCalendarScheduling,
   enableChatV3Agents,
@@ -87,6 +89,12 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         label: 'Booking links',
         icon: LinkIcon,
         keywords: ['scheduling', 'bookings', 'availability', 'meetings'],
+      },
+      {
+        tab: 'Calls',
+        label: 'Calls',
+        icon: PhoneIcon,
+        keywords: ['recording', 'record', 'huddles', 'meetings', 'video'],
       },
       {
         tab: 'Agents',
@@ -240,6 +248,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Team: 'team',
   Calendar: 'calendar',
   'Booking links': 'booking-links',
+  Calls: 'calls',
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
@@ -295,6 +304,8 @@ export const useSettingsTabAvailable = () => {
       case 'Calendar':
       case 'Booking links':
         return calendarSchedulingFlag().enabled;
+      case 'Calls':
+        return ENABLE_CALLS;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.
       case 'API Keys':

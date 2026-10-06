@@ -8,7 +8,9 @@ use std::future::Future;
 
 use chrono::{DateTime, Utc};
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    AdminTeamRole, EditAccessLevel, EntityAccessReceipt, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -26,6 +28,11 @@ use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestId, GuestJoinRequest, InviteMeetingUsersRequest,
     Meeting, MeetingInvitePermissions, MeetingParticipants, MeetingPreparation,
     MeetingRtcParticipant, MeetingToken, UpdateMeetingRequest,
+};
+
+use super::recording::{
+    CallKinds, CallKindsPatch, CallRecordingSettings, CallTurnedExternal, RecordingRules,
+    UpdateRecordingDefaultsRequest, UpdateTeamRecordingPolicyRequest,
 };
 
 use super::models::{
@@ -538,6 +545,44 @@ pub trait CallRepository: Send + Sync + 'static {
         call_id: &Uuid,
         name: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Load a host's recording defaults and, when `team_id` is set, that
+    /// team's blocks. Missing rows read as [`RecordingRules::default`].
+    fn get_recording_rules<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<RecordingRules, CallError>> + Send;
+
+    /// Apply `patch` to a user's recording defaults and return the result.
+    fn update_recording_defaults<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        patch: CallKindsPatch,
+    ) -> impl Future<Output = Result<CallKinds, CallError>> + Send;
+
+    /// Apply `patch` to a team's recording blocks and return the result.
+    fn update_team_recording_blocks(
+        &self,
+        team_id: &Uuid,
+        patch: CallKindsPatch,
+    ) -> impl Future<Output = Result<CallKinds, CallError>> + Send;
+
+    /// Flag a live call as having had someone from outside the host's team.
+    /// Returns `Some` only for the call that flips the flag, carrying the
+    /// recorder attached at that moment; `None` when the call was already
+    /// flagged or is no longer live.
+    fn mark_call_external(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<CallTurnedExternal>, CallError>> + Send;
+
+    /// Whether a live call has been flagged by [`Self::mark_call_external`].
+    /// `false` once the call is no longer live.
+    fn is_call_external(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
 }
 
 /// Storage port for generating signed recording GET URLs and deleting objects.
@@ -1006,6 +1051,26 @@ pub trait CallService: Send + Sync + 'static {
         macro_user_id: &Uuid,
         embedding: &[f32],
     ) -> impl Future<Output = Result<Uuid, CallError>> + Send;
+
+    /// The actor's recording defaults and their team's recording blocks.
+    fn get_recording_settings<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<CallRecordingSettings, CallError>> + Send;
+
+    /// Change which kinds of the actor's own calls record by default.
+    fn update_recording_defaults<'a>(
+        &self,
+        actor: MacroUserIdStr<'a>,
+        request: UpdateRecordingDefaultsRequest,
+    ) -> impl Future<Output = Result<CallRecordingSettings, CallError>> + Send;
+
+    /// Change which kinds of call no one on the receipt's team may record.
+    fn update_team_recording_policy(
+        &self,
+        receipt: EntityAccessReceipt<AdminTeamRole>,
+        request: UpdateTeamRecordingPolicyRequest,
+    ) -> impl Future<Output = Result<CallRecordingSettings, CallError>> + Send;
 }
 
 /// Lightweight read-only port for querying call records in Soup.

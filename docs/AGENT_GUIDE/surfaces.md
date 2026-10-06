@@ -1911,6 +1911,31 @@ open through websocket disconnect/reconnect to verify polling remains usable.
 The [runbook](../SLACK_ARCHIVE_IMPORT_RUNBOOK.md) distinguishes fixture tests from
 live-backend release gates and documents staging retention and recovery.
 
+### Call recording
+
+**Settings → Calls** (`/app/settings/calls`, just below Booking links) decides
+which calls start recording on their own. **Record by default** has one checkbox
+each for **Huddles** (calls started from a channel), **Internal meetings**
+(standalone calls with only teammates) and **External meetings** (a guest or
+someone from another team joined). Checking all three records every call;
+clearing all three keeps recording off. Each change saves immediately. Untouched
+accounts record everything, matching behavior before the setting existed.
+
+**Team recording policy** appears for people on a team. Admins and owners check
+**Block huddles**, **Block internal meetings** or **Block external meetings** to
+stop anyone on the team from recording that kind of call; a block overrides
+every personal default. Members see the same checkboxes dimmed with a
+not-allowed cursor, an **Admins only** label and an explanation, and cannot
+change them. A blocked kind also shows unchecked and disabled under Record by
+default.
+
+The host's rules apply: the person who started a huddle, or the owner of a
+meeting link. A meeting that starts internal becomes external when the first
+guest or other-team user joins; if the host does not record external meetings,
+recording stops before that person receives call credentials. Exercising
+recording itself needs a local backend with egress configured; against hosted
+dev, verify the settings round-trip and the member/admin states.
+
 ### Email signatures
 
 Open **Settings → Email → Signatures**. Each owned inbox has a visible editor;

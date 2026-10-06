@@ -6,6 +6,12 @@ import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { CallSettingsProvider } from '../../call-settings/context/call-settings-context';
+import {
+  type RecordingSettings,
+  withKind,
+} from '../../call-settings/core/recording-kinds';
+import { CallSettingsView } from '../../call-settings/views/call-settings-view';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { themeCssVars } from '../../theme/utils/themeColorTokens';
@@ -35,6 +41,7 @@ function Fixture() {
   const [narrow, setNarrow] = createSignal(false);
   const [mobile, setMobile] = createSignal(false);
   const [mobilePage, setMobilePage] = createSignal<SettingsTab>();
+  const [teamAdmin, setTeamAdmin] = createSignal(true);
   const applyTheme = (value: boolean) => {
     setDark(value);
     for (const [key, token] of Object.entries(
@@ -138,7 +145,12 @@ function Fixture() {
   const content = (page: SettingsTab) => (
     <Show when={page !== 'Appearance'} fallback={<Appearance />}>
       <Show when={page !== 'Shortcuts'} fallback={<Shortcuts />}>
-        {sampleContent(page)}
+        <Show
+          when={page !== 'Calls'}
+          fallback={<FixtureCalls admin={teamAdmin()} />}
+        >
+          {sampleContent(page)}
+        </Show>
       </Show>
     </Show>
   );
@@ -157,6 +169,9 @@ function Fixture() {
         </Button>
         <Button size="sm" onClick={() => setMobile(true)}>
           Mobile settings
+        </Button>
+        <Button size="sm" onClick={() => setTeamAdmin(!teamAdmin())}>
+          {teamAdmin() ? 'Calls: team admin' : 'Calls: team member'}
         </Button>
       </div>
       <div class="min-h-0 flex-1">
@@ -259,6 +274,59 @@ function FixtureSignature(props: { email: string }) {
         </p>
       </Show>
     </>
+  );
+}
+/** Calls settings over in-memory state; `admin` decides who may edit team blocks. */
+function FixtureCalls(props: { admin: boolean }) {
+  const [settings, setSettings] = createSignal<RecordingSettings>({
+    recordByDefault: {
+      huddles: true,
+      internalMeetings: true,
+      externalMeetings: true,
+    },
+    team: {
+      blocked: {
+        huddles: false,
+        internalMeetings: false,
+        externalMeetings: true,
+      },
+      canEdit: true,
+    },
+  });
+  return (
+    <CallSettingsProvider
+      value={{
+        createSource: () => ({
+          settings: () => {
+            const current = settings();
+            return {
+              ...current,
+              team: current.team && { ...current.team, canEdit: props.admin },
+            };
+          },
+          error: () => false,
+        }),
+        setRecordByDefault: (kind, value) =>
+          setSettings((current) => ({
+            ...current,
+            recordByDefault: withKind(current.recordByDefault, kind, value),
+          })),
+        setTeamBlock: (kind, blocked) =>
+          setSettings((current) =>
+            current.team
+              ? {
+                  ...current,
+                  team: {
+                    ...current.team,
+                    blocked: withKind(current.team.blocked, kind, blocked),
+                  },
+                }
+              : current
+          ),
+      }}
+    >
+      <CallSettingsView />
+    </CallSettingsProvider>
   );
 }
 const root = document.getElementById('root');

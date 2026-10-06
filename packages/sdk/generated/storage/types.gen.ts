@@ -1772,6 +1772,43 @@ export type CallFilters = {
 };
 
 /**
+ * One flag per [`CallKind`].
+ */
+export type CallKinds = {
+    /**
+     * Standalone calls that someone outside the host's team joined.
+     */
+    externalMeetings: boolean;
+    /**
+     * Calls started from a channel.
+     */
+    huddles: boolean;
+    /**
+     * Standalone calls attended only by the host's teammates.
+     */
+    internalMeetings: boolean;
+};
+
+/**
+ * A partial update to [`CallKinds`]. Omitted kinds keep their current value,
+ * so two people changing different kinds at once do not undo each other.
+ */
+export type CallKindsPatch = {
+    /**
+     * New value for standalone calls with people from outside the team.
+     */
+    externalMeetings?: boolean | null;
+    /**
+     * New value for calls started from a channel.
+     */
+    huddles?: boolean | null;
+    /**
+     * New value for standalone calls attended only by teammates.
+     */
+    internalMeetings?: boolean | null;
+};
+
+/**
  * Full record of a call, unifying rows from `calls` (active) and
  * `call_records` (archived) into a single response shape.
  */
@@ -1987,6 +2024,17 @@ export type CallRecordTranscriptSegment = {
      * Stable DB-row id for the segment.
      */
     transcriptId: string;
+};
+
+/**
+ * The caller's recording settings.
+ */
+export type CallRecordingSettings = {
+    /**
+     * Kinds of call the caller's own calls record by default.
+     */
+    recordByDefault: CallKinds;
+    team?: null | TeamRecordingPolicy;
 };
 
 /**
@@ -12382,6 +12430,20 @@ export type TeamOutOfOfficeResponse = {
 };
 
 /**
+ * Kinds of call no one on a team may record.
+ */
+export type TeamRecordingPolicy = {
+    /**
+     * Kinds of call blocked for everyone on the team.
+     */
+    blocked: CallKinds;
+    /**
+     * Whether the caller may change the blocks (team admins and owners).
+     */
+    canEdit: boolean;
+};
+
+/**
  * The role a user has within a team.
  *
  * Ordered least to most privileged so comparisons reflect access strength.
@@ -12953,6 +13015,16 @@ export type UpdateMeetingRequest = {
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
 /**
+ * Body of `PATCH /call/settings/recording`.
+ */
+export type UpdateRecordingDefaultsRequest = {
+    /**
+     * Changes to the kinds of call the caller records by default.
+     */
+    recordByDefault: CallKindsPatch;
+};
+
+/**
  * Request body for modifying a reminder. Omitted fields are left unchanged;
  * the entity association is not modifiable.
  *
@@ -12991,6 +13063,16 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Body of `PATCH /call/settings/recording/team`.
+ */
+export type UpdateTeamRecordingPolicyRequest = {
+    /**
+     * Changes to the kinds of call blocked for everyone on the team.
+     */
+    blocked: CallKindsPatch;
 };
 
 /**
@@ -14594,6 +14676,69 @@ export type GetRingStatusResponses = {
 };
 
 export type GetRingStatusResponse = GetRingStatusResponses[keyof GetRingStatusResponses];
+
+export type GetCallRecordingSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/settings/recording';
+};
+
+export type GetCallRecordingSettingsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCallRecordingSettingsError = GetCallRecordingSettingsErrors[keyof GetCallRecordingSettingsErrors];
+
+export type GetCallRecordingSettingsResponses = {
+    200: CallRecordingSettings;
+};
+
+export type GetCallRecordingSettingsResponse = GetCallRecordingSettingsResponses[keyof GetCallRecordingSettingsResponses];
+
+export type UpdateCallRecordingDefaultsData = {
+    body: UpdateRecordingDefaultsRequest;
+    path?: never;
+    query?: never;
+    url: '/call/settings/recording';
+};
+
+export type UpdateCallRecordingDefaultsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateCallRecordingDefaultsError = UpdateCallRecordingDefaultsErrors[keyof UpdateCallRecordingDefaultsErrors];
+
+export type UpdateCallRecordingDefaultsResponses = {
+    200: CallRecordingSettings;
+};
+
+export type UpdateCallRecordingDefaultsResponse = UpdateCallRecordingDefaultsResponses[keyof UpdateCallRecordingDefaultsResponses];
+
+export type UpdateTeamCallRecordingPolicyData = {
+    body: UpdateTeamRecordingPolicyRequest;
+    path?: never;
+    query?: never;
+    url: '/call/settings/recording/team';
+};
+
+export type UpdateTeamCallRecordingPolicyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateTeamCallRecordingPolicyError = UpdateTeamCallRecordingPolicyErrors[keyof UpdateTeamCallRecordingPolicyErrors];
+
+export type UpdateTeamCallRecordingPolicyResponses = {
+    200: CallRecordingSettings;
+};
+
+export type UpdateTeamCallRecordingPolicyResponse = UpdateTeamCallRecordingPolicyResponses[keyof UpdateTeamCallRecordingPolicyResponses];
 
 export type CallWebhookData = {
     body?: never;

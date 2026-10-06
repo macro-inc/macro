@@ -14,6 +14,7 @@ import { settingsTabToSlug } from './settingsTabsConfig';
 export type SettingsTab =
   | 'Calendar'
   | 'Booking links'
+  | 'Calls'
   | 'Account'
   | 'API Keys'
   | 'Notifications'

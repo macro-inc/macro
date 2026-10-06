@@ -22,6 +22,16 @@ describe('individual settings search', () => {
       target: 'bookings',
     });
   });
+  it('finds call recording controls on the Calls page', () => {
+    expect(search('block recording')[0]).toMatchObject({
+      tab: 'Calls',
+      target: 'team-recording-policy',
+    });
+    expect(search('record huddles')[0]).toMatchObject({
+      tab: 'Calls',
+      target: 'record-by-default',
+    });
+  });
   it('finds and targets a signature without knowing its page', () => {
     expect(search('signatre')[0]).toMatchObject({
       tab: 'Email',

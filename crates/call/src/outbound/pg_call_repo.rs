@@ -5,6 +5,7 @@ mod lifecycle;
 mod meetings;
 mod preparations;
 mod property_clauses;
+mod recording;
 mod team_share;
 
 #[cfg(test)]
@@ -2187,5 +2188,40 @@ impl CallRepository for PgCallRepo {
         let persisted = edit::set_custom_name_if_null(&mut tx, call_id, name).await?;
         tx.commit().await?;
         Ok(persisted)
+    }
+
+    async fn get_recording_rules(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        team_id: Option<Uuid>,
+    ) -> Result<crate::domain::recording::RecordingRules, CallError> {
+        self.load_recording_rules(user_id.as_ref(), team_id).await
+    }
+
+    async fn update_recording_defaults(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        patch: crate::domain::recording::CallKindsPatch,
+    ) -> Result<crate::domain::recording::CallKinds, CallError> {
+        self.patch_recording_defaults(user_id.as_ref(), patch).await
+    }
+
+    async fn update_team_recording_blocks(
+        &self,
+        team_id: &Uuid,
+        patch: crate::domain::recording::CallKindsPatch,
+    ) -> Result<crate::domain::recording::CallKinds, CallError> {
+        self.patch_team_recording_blocks(team_id, patch).await
+    }
+
+    async fn mark_call_external(
+        &self,
+        call_id: &Uuid,
+    ) -> Result<Option<crate::domain::recording::CallTurnedExternal>, CallError> {
+        self.flag_call_external(call_id).await
+    }
+
+    async fn is_call_external(&self, call_id: &Uuid) -> Result<bool, CallError> {
+        self.call_has_external_participants(call_id).await
     }
 }

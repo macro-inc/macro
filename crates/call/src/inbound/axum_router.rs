@@ -13,6 +13,9 @@ mod test;
 /// Meeting invitation HTTP endpoints.
 pub mod meetings;
 
+/// Recording settings HTTP endpoints.
+pub mod recording;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -108,6 +111,9 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `DELETE /record/{call_id}` — delete a call record
 /// - `POST /record/{call_id}/share-with-team/toggle` — flip the live call's share-with-team toggle
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
+/// - `GET /settings/recording` — the caller's recording defaults and team blocks
+/// - `PATCH /settings/recording` — change the caller's recording defaults
+/// - `PATCH /settings/recording/team` — change the team's recording blocks (admins)
 pub fn call_router<S, Svc, Auth, T>(state: CallRouterState<S, Svc, Auth>) -> Router<T>
 where
     S: CallService,
@@ -154,6 +160,14 @@ where
         .route(
             "/record/{call_id}/link",
             post(meetings::share::<S, Svc, Auth>),
+        )
+        .route(
+            "/settings/recording",
+            get(recording::get::<S, Svc, Auth>).patch(recording::update_defaults::<S, Svc, Auth>),
+        )
+        .route(
+            "/settings/recording/team",
+            patch(recording::update_team::<S, Svc, Auth>),
         )
         .route(
             "/{channel_id}",
