@@ -29,6 +29,7 @@ vi.mock(
   '@app/features/block-spreadsheet/queries/create-spreadsheet',
   () => ({})
 );
+vi.mock('@app/features/block-ai/queries/create-ai', () => ({}));
 vi.mock('@app/features/block-psd/queries/create-psd', () => ({}));
 vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
 vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({

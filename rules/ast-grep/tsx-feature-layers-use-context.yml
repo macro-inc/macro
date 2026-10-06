@@ -54,6 +54,11 @@ files:
   - apps/web/src/features/block-agent/primitives/**
   - apps/web/src/features/block-agent/ui/**
   - apps/web/src/features/block-agent/component/**
+  - apps/web/src/features/block-ai/queries/**
+  - apps/web/src/features/block-ai/primitives/**
+  - apps/web/src/features/block-ai/components/**
+  - apps/web/src/features/block-ai/views/**
+  - apps/web/src/features/block-ai/context/**
   - apps/web/src/features/meetings/queries/**
   - apps/web/src/features/meetings/primitives/**
   - apps/web/src/features/meetings/components/**

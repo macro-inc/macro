@@ -155,6 +155,9 @@ pub struct Info {
     pub blend: BlendMode,
     /// Canvas bounds.
     pub bounds: Option<Rect>,
+    /// Canvas bounds of the outlines alone, strokes left out (the geometric
+    /// bounds Illustrator's Transform panel measures).
+    pub shape_bounds: Option<Rect>,
     /// Object space to canvas.
     pub transform: Affine,
     /// Fill (paths and text).
@@ -201,6 +204,7 @@ pub fn info(doc: &Document, id: u32) -> Option<Info> {
         opacity: n.opacity,
         blend: n.blend,
         bounds: node_bounds(doc, i),
+        shape_bounds: shape_bounds(doc, i),
         transform: n.transform,
         fill,
         stroke,
@@ -346,6 +350,35 @@ pub fn in_rect(doc: &Document, r: Rect, deep: bool) -> Vec<u32> {
         walk(doc, &layer.children, r, deep, &mut out);
     }
     out
+}
+
+/// A node's canvas bounds without strokes: paths by their outlines,
+/// groups and layers by their contents' (a clipping group by its clip),
+/// text and images as drawn.
+pub fn shape_bounds(doc: &Document, i: NodeIdx) -> Option<Rect> {
+    let n = doc.node(i);
+    if n.removed {
+        return None;
+    }
+    match &n.kind {
+        NodeKind::Path(p) => p.data.transform(&n.transform).bounds(),
+        NodeKind::Layer { .. } | NodeKind::Group { .. } => {
+            let inner = n
+                .children
+                .iter()
+                .filter_map(|&c| shape_bounds(doc, c))
+                .reduce(|a, b| a.union(&b));
+            match &n.kind {
+                NodeKind::Group { clip: Some(c), .. } => {
+                    let clip = c.path.bounds()?;
+                    let r = inner.map_or(clip, |r| clip.intersect(&r));
+                    (!r.is_empty()).then_some(r)
+                }
+                _ => inner,
+            }
+        }
+        _ => node_bounds(doc, i),
+    }
 }
 
 /// The canvas bounds of nodes together.

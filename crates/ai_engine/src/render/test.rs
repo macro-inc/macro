@@ -223,3 +223,59 @@ fn gradients_stop_at_their_ends_unless_extended() {
     let mid = pixel(&img, 50, 50);
     assert!(mid[0] > 100 && mid[2] > 100, "{mid:?}");
 }
+
+#[test]
+fn shadings_stay_in_the_area_they_fill() {
+    use crate::pdf::Object;
+    use crate::testing::{PdfBuilder, dict, name, nums};
+    // A shading filling the page, as Illustrator writes a background: the
+    // page's clip is dropped on reading, so artwork past the artboard
+    // shows, but the shading still stops at the page.
+    let mut b = PdfBuilder::new();
+    let red = Object::Dict(dict(vec![
+        ("FunctionType", Object::Int(2)),
+        ("Domain", nums(&[0.0, 1.0])),
+        ("C0", nums(&[1.0, 0.0, 0.0])),
+        ("C1", nums(&[1.0, 0.0, 0.0])),
+        ("N", Object::Int(1)),
+    ]));
+    let shading = Object::Dict(dict(vec![
+        ("ShadingType", Object::Int(2)),
+        ("ColorSpace", name("DeviceRGB")),
+        ("Coords", nums(&[0.0, 0.0, 100.0, 0.0])),
+        ("Function", red),
+        (
+            "Extend",
+            Object::Array(vec![Object::Bool(true), Object::Bool(true)]),
+        ),
+    ]));
+    let resources = dict(vec![(
+        "Shading",
+        Object::Dict(dict(vec![("Sh0", shading)])),
+    )]);
+    b.page(100.0, 100.0, "q 0 0 100 100 re W n /Sh0 sh Q", resources);
+    let doc = crate::build::open(&b.finish()).expect("opens").document;
+    // From 50 left of the page to 50 past it.
+    let view = View {
+        x: -50.0,
+        y: 0.0,
+        scale: 1.0,
+        width: 200,
+        height: 100,
+    };
+    let rgba = Renderer::new().render(
+        &doc,
+        &view,
+        &Options {
+            artboards: false,
+            outline: false,
+        },
+    );
+    let at = |x: usize, y: usize| {
+        let i = (y * 200 + x) * 4;
+        [rgba[i], rgba[i + 1], rgba[i + 2], rgba[i + 3]]
+    };
+    assert_eq!(at(100, 50), [255, 0, 0, 255], "on the page");
+    assert_eq!(at(25, 50)[3], 0, "left of the page");
+    assert_eq!(at(175, 50)[3], 0, "right of the page");
+}

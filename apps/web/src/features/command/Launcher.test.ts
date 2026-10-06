@@ -17,6 +17,7 @@ vi.mock(
   '@app/features/block-spreadsheet/queries/create-spreadsheet',
   () => ({})
 );
+vi.mock('@app/features/block-ai/queries/create-ai', () => ({}));
 vi.mock('@app/features/block-psd/queries/create-psd', () => ({}));
 vi.mock('@app/features/block-fig/queries/create-fig', () => ({}));
 vi.mock('@app/features/block-spreadsheet/queries/spreadsheet-access', () => ({
@@ -33,6 +34,7 @@ vi.mock('@core/component/EntityIcon', () => ({
   getIconConfig: () => ({ icon: () => null }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
+  enableAiEditor: 'ai',
   enableChatV3Agents: 'agents',
   enableDatabases: 'databases',
   enableFigViewer: 'fig',

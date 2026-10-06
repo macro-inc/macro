@@ -253,6 +253,17 @@ pub enum Op {
         /// Canvas offset.
         offset: Option<[f64; 2]>,
     },
+    /// Copies nodes into a container, deleted ones too (what a cut left):
+    /// the editor's paste.
+    Paste {
+        /// The nodes copied, in stacking order (bottom first).
+        ids: Vec<u32>,
+        /// Canvas offset.
+        offset: Option<[f64; 2]>,
+        /// The layer or group they go in (the top unlocked layer when
+        /// absent).
+        parent: Option<u32>,
+    },
     /// Moves nodes into a layer or group.
     Move {
         /// The nodes (kept in their order).
@@ -685,6 +696,11 @@ fn run(ctx: &mut Ctx<'_>, op: &Op) -> Result<()> {
         } => tree::create(ctx, node, *parent, *position).map(|_| ()),
         Op::Delete { ids } => tree::delete(ctx, ids),
         Op::Duplicate { ids, offset } => tree::duplicate(ctx, ids, *offset),
+        Op::Paste {
+            ids,
+            offset,
+            parent,
+        } => tree::paste(ctx, ids, *offset, *parent),
         Op::Move {
             ids,
             parent,

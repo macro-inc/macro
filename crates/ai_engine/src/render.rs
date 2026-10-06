@@ -9,7 +9,7 @@ mod images;
 mod paint;
 
 use crate::build::node_bounds;
-use crate::geom::{Affine, Rect};
+use crate::geom::{Affine, PathData, Rect};
 use crate::model::{Document, ImageSource, Node, NodeIdx, NodeKind, Paint, PathNode, TextNode};
 use canvas::{Canvas, Group};
 use images::ImageCache;
@@ -199,7 +199,7 @@ impl Renderer {
             NodeKind::Image(img) => {
                 self.draw_image(ctx, canvas, n, &img.source, img.width, img.height)
             }
-            NodeKind::Raw { .. } => {
+            NodeKind::Raw { bounds } => {
                 if ctx.outline {
                     if let Some(b) = node_bounds(ctx.doc, i) {
                         outline_box(ctx, canvas, b);
@@ -215,6 +215,17 @@ impl Renderer {
                     // Page space (as read) to pixels.
                     let page_to_device =
                         source.transform.followed_by(&delta).followed_by(&ctx.view);
+                    // A shading fills all the clip leaves it, and the page's
+                    // own clip is dropped on reading (artwork past the
+                    // artboard shows): it stays in the area it was read with.
+                    let shading = source.ops.iter().any(|o| o.is("sh"));
+                    if shading {
+                        let area = PathData::rect(*bounds)
+                            .transform(&delta)
+                            .transform(&ctx.view)
+                            .to_skia();
+                        canvas.push_clip(area.as_ref(), FillRule::Winding);
+                    }
                     let layered = n.opacity < 1.0 || n.blend != crate::model::BlendMode::Normal;
                     if layered {
                         canvas.push_group(Group {
@@ -232,6 +243,9 @@ impl Renderer {
                     );
                     if layered {
                         canvas.pop_group();
+                    }
+                    if shading {
+                        canvas.pop_clip();
                     }
                 }
             }

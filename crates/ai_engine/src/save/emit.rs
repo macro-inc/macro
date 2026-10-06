@@ -160,6 +160,16 @@ impl<'a, 'b> PageWriter<'a, 'b> {
             let props = self.top().res.name("Properties", Object::Ref(h));
             self.push(op("BDC", vec![Object::name("OC"), Object::Name(props)]));
         }
+        // An object's name (Illustrator keeps names in its own data, which
+        // the saved file leaves out).
+        let named = !n.is_container() && !n.name.is_empty();
+        if named {
+            let mark = marks::name_props(&n.name);
+            self.push(op(
+                "BDC",
+                vec![Object::name(marks::NAME), Object::Dict(mark)],
+            ));
+        }
         match &n.kind {
             NodeKind::Layer { .. } => {}
             NodeKind::Group { .. } => self.group(i),
@@ -199,6 +209,9 @@ impl<'a, 'b> PageWriter<'a, 'b> {
             }
             NodeKind::Image(img) => self.image(n, img),
             NodeKind::Raw { .. } => {}
+        }
+        if named {
+            self.push(op("EMC", Vec::new()));
         }
         if hidden && self.shared.hidden.is_some() {
             self.push(op("EMC", Vec::new()));

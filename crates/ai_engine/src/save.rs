@@ -107,6 +107,10 @@ pub fn save(doc: &Document) -> Result<Vec<u8>> {
                 .objects
                 .add(Object::Stream(compressed(Dict::new(), &content)));
             page.set("Type", Object::name("Page"));
+            page.set(
+                crate::marks::ARTBOARD,
+                Object::String(crate::pdf::encode_text(&a.name)),
+            );
             page.set("Parent", Object::Ref(pages_ref));
             page.set("Resources", Object::Dict(resources));
             page.set("Contents", Object::Ref(contents));

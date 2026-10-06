@@ -261,6 +261,33 @@ pub fn duplicate(ctx: &mut Ctx<'_>, ids: &[u32], offset: Option<[f64; 2]>) -> Re
     Ok(())
 }
 
+/// Copies nodes on top of a container, in the order given; deleted nodes
+/// (what a cut left) are copied too. Layers are not copied.
+pub fn paste(
+    ctx: &mut Ctx<'_>,
+    ids: &[u32],
+    offset: Option<[f64; 2]>,
+    parent: Option<u32>,
+) -> Result<()> {
+    let m = offset.map(|[x, y]| Affine::translate(x, y));
+    let found: Vec<NodeIdx> = ids
+        .iter()
+        .filter_map(|&id| ctx.doc.find(id))
+        .filter(|&i| !ctx.doc.node(i).is_layer())
+        .collect();
+    let nodes = outermost(ctx, &found);
+    if nodes.is_empty() {
+        return Ok(());
+    }
+    let container = target(ctx, parent)?;
+    for i in nodes {
+        let copy = copy_tree(ctx, i, Some(container), m.as_ref());
+        ctx.doc.node_mut(copy).removed = false;
+        attach(ctx, copy, Some(container), Position::Top);
+    }
+    Ok(())
+}
+
 /// Moves nodes into a container (or reorders layers).
 pub fn move_nodes(
     ctx: &mut Ctx<'_>,
@@ -415,10 +442,16 @@ pub fn release_clip(ctx: &mut Ctx<'_>, ids: &[u32]) -> Result<()> {
             _ => continue,
         };
         let artboard = ctx.doc.node(i).artboard;
-        if let NodeKind::Group { clip, .. } = &mut ctx.node(i).kind {
+        let group = ctx.node(i);
+        if let NodeKind::Group { clip, .. } = &mut group.kind {
             *clip = None;
         }
-        ctx.node(i).edits |= flags::CLIP;
+        group.edits |= flags::CLIP;
+        // What was a clip group (by the name it was made with) is a group.
+        if group.name == "Clip Group" {
+            group.name = "Group".into();
+            group.edits |= flags::NAME;
+        }
         let mut p = Node::new(
             0,
             NodeKind::Path(PathNode {
@@ -428,7 +461,7 @@ pub fn release_clip(ctx: &mut Ctx<'_>, ids: &[u32]) -> Result<()> {
                 stroke: None,
             }),
         );
-        p.name = "Clipping Path".into();
+        p.name = "Path".into();
         p.artboard = artboard;
         let p = ctx.push(p);
         attach(ctx, p, Some(i), Position::Top);
@@ -567,3 +600,6 @@ pub fn place_image(
     attach(ctx, i, Some(container), Position::Top);
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

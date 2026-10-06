@@ -99,6 +99,31 @@ fn marquees_and_bounds() {
 }
 
 #[test]
+fn shape_bounds_leave_strokes_out() {
+    let (mut d, square, ring, over) = doc_with_shapes();
+    let ring_info = info(&d, ring).expect("info");
+    // The 4-wide stroke reaches 2 beyond the outline.
+    assert_eq!(ring_info.bounds, Some(Rect::new(198.0, 8.0, 302.0, 112.0)));
+    assert_eq!(
+        ring_info.shape_bounds,
+        Some(Rect::new(200.0, 10.0, 300.0, 110.0))
+    );
+    History::new()
+        .apply(
+            &mut d,
+            &[Op::Group {
+                ids: vec![square, ring, over],
+            }],
+            None,
+        )
+        .expect("groups");
+    let group = rows(&d)[1].id;
+    let g = info(&d, group).expect("info");
+    assert_eq!(g.shape_bounds, Some(Rect::new(10.0, 10.0, 300.0, 110.0)));
+    assert_eq!(g.bounds, Some(Rect::new(10.0, 8.0, 302.0, 112.0)));
+}
+
+#[test]
 fn images_encode_and_decode() {
     let rgba: Vec<u8> = (0..6)
         .flat_map(|k| [k * 40, 255 - k * 40, 7, 255])

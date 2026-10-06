@@ -111,6 +111,7 @@ export function buildEntityData(
         'pptx',
         'psd',
         'fig',
+        'ai',
         'video',
         'unknown',
         'csv',
