@@ -26,6 +26,7 @@ import Rectangle from '@phosphor/rectangle.svg';
 import Selection from '@phosphor/selection.svg';
 import TextT from '@phosphor/text-t.svg';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { css } from '../core/color';
 import {
   EDIT_TOOLS,
@@ -68,10 +69,19 @@ export function Toolbar(props: {
   onResetColors: () => void;
   onPickColor: (which: 'foreground' | 'background') => void;
 }) {
-  const [flyout, setFlyout] = createSignal<string>();
+  /** The group whose tools are listed, beside its button. */
+  const [flyout, setFlyoutState] = createSignal<{
+    key: string;
+    at: DOMRect;
+  }>();
   let root!: HTMLDivElement;
+  let list: HTMLDivElement | undefined;
+  const openFlyout = (key: string, button: HTMLElement) =>
+    setFlyoutState({ key, at: button.getBoundingClientRect() });
+  const closeFlyout = () => setFlyoutState(undefined);
   const onDocumentDown = (e: PointerEvent) => {
-    if (!root.contains(e.target as Node)) setFlyout(undefined);
+    const target = e.target as Node;
+    if (!root.contains(target) && !list?.contains(target)) closeFlyout();
   };
   document.addEventListener('pointerdown', onDocumentDown);
   onCleanup(() => document.removeEventListener('pointerdown', onDocumentDown));
@@ -113,14 +123,16 @@ export function Toolbar(props: {
                   'bg-accent/15 text-accent': active(),
                   'text-ink-muted hover:bg-hover hover:text-ink': !active(),
                 }}
-                onClick={() => {
-                  if (active() && toolsOf(group.key).length > 1)
-                    setFlyout(flyout() === group.key ? undefined : group.key);
-                  else props.onTool(tool());
+                onClick={(e) => {
+                  if (active() && toolsOf(group.key).length > 1) {
+                    if (flyout()?.key === group.key) closeFlyout();
+                    else openFlyout(group.key, e.currentTarget);
+                  } else props.onTool(tool());
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
-                  if (toolsOf(group.key).length > 1) setFlyout(group.key);
+                  if (toolsOf(group.key).length > 1)
+                    openFlyout(group.key, e.currentTarget);
                 }}
               >
                 {TOOL_ICONS[tool()]({ class: 'size-4' })}
@@ -128,26 +140,38 @@ export function Toolbar(props: {
                   <span class="absolute right-0.5 bottom-0.5 size-0 border-t-[3px] border-t-transparent border-r-[3px] border-r-current opacity-60" />
                 </Show>
               </button>
-              <Show when={flyout() === group.key}>
-                <div class="absolute top-0 left-full z-50 ml-1 w-52 rounded-lg border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg">
-                  <For each={toolsOf(group.key)}>
-                    {(t) => (
-                      <button
-                        type="button"
-                        data-testid={`psd-tool-option-${t}`}
-                        class="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover"
-                        onClick={() => {
-                          props.onTool(t);
-                          setFlyout(undefined);
-                        }}
-                      >
-                        {TOOL_ICONS[t]({ class: 'size-3.5' })}
-                        <span class="flex-1">{TOOL_LABELS[t]}</span>
-                        <span class="text-ink-muted">{group.key}</span>
-                      </button>
-                    )}
-                  </For>
-                </div>
+              <Show when={flyout()?.key === group.key && flyout()}>
+                {(open) => (
+                  // Over the page: the toolbar scrolls, which would clip it.
+                  <Portal>
+                    <div
+                      ref={list}
+                      class="fixed z-50 w-52 rounded-lg border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg"
+                      style={{
+                        left: `${open().at.right + 4}px`,
+                        top: `${open().at.top}px`,
+                      }}
+                    >
+                      <For each={toolsOf(group.key)}>
+                        {(t) => (
+                          <button
+                            type="button"
+                            data-testid={`psd-tool-option-${t}`}
+                            class="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-hover"
+                            onClick={() => {
+                              props.onTool(t);
+                              closeFlyout();
+                            }}
+                          >
+                            {TOOL_ICONS[t]({ class: 'size-3.5' })}
+                            <span class="flex-1">{TOOL_LABELS[t]}</span>
+                            <span class="text-ink-muted">{group.key}</span>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </Portal>
+                )}
               </Show>
             </div>
           );
