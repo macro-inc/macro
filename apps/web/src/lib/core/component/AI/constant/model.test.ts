@@ -19,14 +19,18 @@ describe('modelsForPlan / defaultModelForPlan', () => {
   it('gives paid users every picker model and an Anthropic-smart default', () => {
     const paid = modelsForPlan(true);
     expect(paid).toEqual(PAID_MODELS);
+    expect(paid).toContain(Model.gemini38Flash);
+    expect(paid).toContain(Model.haiku45);
     expect(paid).not.toContain(Model.fable51);
     expect(DEFAULT_MODEL).toBe(Model.sonnet5);
     expect(defaultModelForPlan(true)).toBe(DEFAULT_MODEL);
   });
 
-  it('gives free users only the fast model, defaulted to it', () => {
+  it('gives free users only Gemini Flash, defaulted to it', () => {
     const free = modelsForPlan(false);
-    expect(free).toEqual([FREE_DEFAULT_MODEL]);
+    expect(free).toEqual([Model.gemini38Flash]);
+    expect(FREE_DEFAULT_MODEL).toBe(Model.gemini38Flash);
+    expect(free).not.toContain(Model.haiku45);
     expect(defaultModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
     // The premium models are *not* in a free user's selectable set.
     expect(free).not.toContain(Model.opus5);
@@ -70,6 +74,14 @@ describe('parseModel', () => {
 });
 
 describe('alternateProviderModel', () => {
+  it('does not offer a paid fallback when the free provider fails', () => {
+    expect(
+      alternateProviderModel(Model.gemini38Flash, {
+        candidates: modelsForPlan(false),
+      })
+    ).toBeUndefined();
+  });
+
   it('always suggests a model from a different provider than the current one', () => {
     for (const current of Object.values(Model)) {
       const alt = alternateProviderModel(current);
@@ -119,14 +131,17 @@ describe('alternateProviderModel', () => {
     expect(PROVIDER_OF(first!)).toBe('openai');
     current = first!;
 
-    // OpenAI then also fails → there is no un-failed provider left, so we must
-    // NOT bounce the user back to Anthropic (which already failed this session).
+    // OpenAI then also fails → Gemini is the remaining provider.
     failedProviders.add(PROVIDER_OF(current));
     const second = alternateProviderModel(current, {
       candidates,
       failedProviders,
     });
-    expect(second).toBeUndefined();
+    expect(second).toBe(Model.gemini38Flash);
+    failedProviders.add(PROVIDER_OF(second!));
+    expect(
+      alternateProviderModel(second!, { candidates, failedProviders })
+    ).toBeUndefined();
   });
 
   it('still avoids the current provider when no failures are recorded', () => {

@@ -33,7 +33,7 @@ impl<P> Clone for UserPermissionsState<P> {
 /// Axum extractor resolving the requesting user's model entitlement from their
 /// permissions.
 ///
-/// Free users may use only [`FREE_MODEL`] (Haiku); professional (paid) users
+/// Free users may use only [`FREE_MODEL`] (Gemini Flash); professional (paid) users
 /// may use every chat model. Backed by [`ModelAccessServiceImpl`].
 ///
 /// Type parameter `Auth` is the authorization service implementation and `P`
@@ -155,7 +155,7 @@ mod test {
     }
 
     #[test]
-    fn free_user_defaults_to_haiku_and_only_has_haiku() {
+    fn free_user_defaults_to_gemini_flash_and_only_has_gemini_flash() {
         let free = access(&[]);
         assert_eq!(free.best_model(), FREE_MODEL);
         assert!(free.has_access(FREE_MODEL));

@@ -152,7 +152,7 @@ describe('ModelSelector: availability', () => {
       <ModelSelector models={options} onSelect={() => {}} />
     ));
 
-    const available = itemFor(container, Model.haiku45);
+    const available = itemFor(container, Model.gemini38Flash);
     expect(available.className).not.toContain('opacity-50');
     expect(available.querySelector('[data-testid="lock-icon"]')).toBeNull();
 
@@ -239,7 +239,7 @@ describe('ModelSelector: what is shown is what is sent', () => {
       available: freeAllowed.includes(id),
     }));
     function FreeHarness() {
-      const [model, setModel] = createSignal<TModel>(Model.haiku45);
+      const [model, setModel] = createSignal<TModel>(Model.gemini38Flash);
       return (
         <>
           <span data-testid="would-send">{model()}</span>
@@ -254,10 +254,10 @@ describe('ModelSelector: what is shown is what is sent', () => {
     }
     const { container, getByTestId } = render(() => <FreeHarness />);
 
-    fireEvent.click(itemFor(container, Model.opus5)); // locked
+    fireEvent.click(itemFor(container, Model.haiku45)); // locked
     // The would-send value is unchanged; only the paywall fired.
-    expect(getByTestId('would-send').textContent).toBe(Model.haiku45);
-    expect(onLocked).toHaveBeenCalledWith(Model.opus5);
+    expect(getByTestId('would-send').textContent).toBe(Model.gemini38Flash);
+    expect(onLocked).toHaveBeenCalledWith(Model.haiku45);
   });
 });
 

@@ -1,5 +1,6 @@
 use super::*;
 
+const GEMINI_FLASH: &str = "google/gemini-3.8-flash";
 const HAIKU: &str = "anthropic/claude-haiku-4-5";
 const SONNET_5: &str = "anthropic/claude-sonnet-5";
 const OPUS: &str = "anthropic/claude-opus-5";
@@ -9,10 +10,12 @@ const GPT_5_5: &str = "openai/gpt-5.5";
 const GPT_5_MINI: &str = "openai/gpt-5-mini";
 
 #[test]
-fn free_user_only_has_haiku() {
+fn free_user_only_has_gemini_flash() {
     let svc = ModelAccessServiceImpl;
-    assert_eq!(svc.best_model(false), HAIKU);
-    assert!(svc.has_access(false, HAIKU));
+    assert_eq!(svc.best_model(false), GEMINI_FLASH);
+    assert!(svc.has_access(false, GEMINI_FLASH));
+    assert!(!svc.has_access(false, HAIKU));
+    assert!(!svc.has_access(false, "unknown/model"));
     assert!(!svc.has_access(false, OPUS));
     assert!(!svc.has_access(false, SONNET_4_6));
     assert!(!svc.has_access(false, GPT_5_5));
@@ -24,6 +27,7 @@ fn professional_user_has_everything() {
     assert_eq!(svc.best_model(true), SONNET_5);
     assert!(svc.has_access(true, SONNET_5));
     assert!(svc.has_access(true, HAIKU));
+    assert!(svc.has_access(true, GEMINI_FLASH));
     assert!(svc.has_access(true, OPUS));
     assert!(svc.has_access(true, OPUS_4_7));
     assert!(svc.has_access(true, SONNET_4_6));

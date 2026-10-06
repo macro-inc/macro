@@ -1,5 +1,6 @@
 import OpenAiIcon from '@core/component/AI/assets/openai.svg';
 import ClaudeIcon from '@icon/wide-claude.svg';
+import GoogleIcon from '@phosphor-fill/google-logo-fill.svg';
 
 /**
  * Frontend-owned set of model ids. These are the `provider/model` ids the
@@ -16,6 +17,7 @@ export const Model = {
   gpt6Astra: 'openai/gpt-6-astra',
   gpt56: 'openai/gpt-5.6',
   gpt56Mini: 'openai/gpt-5.6-mini',
+  gemini38Flash: 'google/gemini-3.8-flash',
 } as const;
 
 // `Model` is both a value (the const above) and a type (the union of api ids).
@@ -40,6 +42,7 @@ export const MODEL_PRETTYNAME: ExhaustiveMap = {
   'openai/gpt-6-astra': 'GPT-6 Astra',
   'openai/gpt-5.6': 'GPT-5.6',
   'openai/gpt-5.6-mini': 'GPT-5.6 mini',
+  'google/gemini-3.8-flash': 'Gemini 3.8 Flash',
 } as const;
 
 export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
@@ -50,6 +53,7 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
   'openai/gpt-6-astra': OpenAiIcon,
   'openai/gpt-5.6': OpenAiIcon,
   'openai/gpt-5.6-mini': OpenAiIcon,
+  'google/gemini-3.8-flash': GoogleIcon,
 };
 
 /**
@@ -57,7 +61,8 @@ export const MODEL_PROVIDER_ICON: ExhaustiveMap = {
  * default model (Sonnet 5 = 1). Mirrors the per-token rates in `ai_pricing`
  * (output price, which dominates chat cost): Haiku $5, Sonnet $10, Opus $25,
  * Fable $50, GPT-6 Astra $50, GPT-5.6 $30, GPT-5.6 mini $4.50 per million
- * tokens. Shown in the picker so choosing a heavy model is a deliberate trade.
+ * tokens; Gemini 3.8 Flash $3.75. Shown in the picker so choosing a heavy
+ * model is a deliberate trade.
  */
 export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
   'anthropic/claude-sonnet-5': 1,
@@ -67,6 +72,7 @@ export const MODEL_USAGE_MULTIPLIER: { [K in TModel]: number } = {
   'openai/gpt-6-astra': 5,
   'openai/gpt-5.6': 3,
   'openai/gpt-5.6-mini': 0.45,
+  'google/gemini-3.8-flash': 0.375,
 };
 
 /**
@@ -85,9 +91,9 @@ export const DEFAULT_MODEL: TModel = Model.sonnet5;
 /**
  * Default model for free users. Free users aren't entitled to the premium
  * "smart" models (which the backend rejects with a 403), so they start on the
- * fast model instead of Opus.
+ * Gemini Flash model.
  */
-export const FREE_DEFAULT_MODEL: TModel = Model.haiku45;
+export const FREE_DEFAULT_MODEL: TModel = Model.gemini38Flash;
 
 /**
  * Models a paid user may select. Fable remains a known model so persisted
@@ -97,7 +103,7 @@ export const PAID_MODELS: readonly TModel[] =
   Object.values(Model).filter(isModelPickerOption);
 
 /**
- * Models a free user may select. Free users only get the fast model
+ * Models a free user may select. Free users only get Gemini Flash
  * (`FREE_DEFAULT_MODEL`); every other model is paid-only and shows locked in
  * the selector, where selecting one opens the paywall instead of being sent
  * and rejected by the backend. The heavy models (Opus, Fable, GPT-6 Astra)
@@ -125,6 +131,7 @@ export const MODEL_PROVIDER: ExhaustiveMap = {
   'openai/gpt-6-astra': 'openai',
   'openai/gpt-5.6': 'openai',
   'openai/gpt-5.6-mini': 'openai',
+  'google/gemini-3.8-flash': 'google',
 } as const;
 
 /** Options for {@link alternateProviderModel}. */
