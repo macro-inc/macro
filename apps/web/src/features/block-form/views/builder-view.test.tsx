@@ -159,6 +159,35 @@ function mount(
 }
 
 describe('BuilderView', () => {
+  it('saves a focused title before a background click closes question editing', async () => {
+    const { context } = mount();
+    const rename = vi.spyOn(context.columns('database-1', 'table-1'), 'rename');
+    fireEvent.click(screen.getByRole('group', { name: 'Question 1: Name' }));
+    const title = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'Question',
+    });
+    title.focus();
+    fireEvent.input(title, { target: { value: 'Full name' } });
+    fireEvent.click(screen.getByRole('region', { name: 'Form canvas' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rename).toHaveBeenCalledWith('name', 'Full name', 'Name');
+    expect(screen.queryByRole('textbox', { name: 'Question' })).toBeNull();
+    expect(document.activeElement).not.toBe(title);
+  });
+
+  it('keeps question controls active inside the card and clears section targeting on the background', () => {
+    mount();
+    fireEvent.click(screen.getByRole('group', { name: 'Question 2: Team' }));
+    fireEvent.click(screen.getByRole('textbox', { name: 'Option 1' }));
+    expect(screen.getByRole('textbox', { name: 'Question' })).toBeTruthy();
+    const outline = screen.getByRole('navigation', { name: 'Form outline' });
+    const section = within(outline).getByRole('button', { name: 'About you' });
+    fireEvent.click(section);
+    expect(section.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(screen.getByRole('region', { name: 'Form canvas' }));
+    expect(section.getAttribute('aria-current')).not.toBe('true');
+  });
+
   it('keeps focus on a new section after the compact add menu closes', async () => {
     mount();
     const trigger = screen.getByRole('button', {

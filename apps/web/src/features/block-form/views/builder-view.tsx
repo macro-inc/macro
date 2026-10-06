@@ -537,13 +537,30 @@ function BuilderCanvas(
   return (
     <div
       ref={viewport}
+      data-form-builder-background
       class="@container/builder relative h-full min-h-0 overflow-y-auto bg-canvas-base touch:pb-(--mobile-content-inset-bottom)"
+      onClick={(event) => {
+        if (
+          !(event.target instanceof HTMLElement) ||
+          !event.target.hasAttribute('data-form-builder-background')
+        )
+          return;
+        // Commit blur-saved inputs before their selected editor unmounts.
+        const focused = document.activeElement;
+        if (focused instanceof HTMLElement && viewport?.contains(focused))
+          focused.blur();
+        builder.select(undefined);
+        setEditingRules(undefined);
+      }}
     >
       <DragInstructions id={instructionsId} />
       <div aria-live="assertive" aria-atomic="true" class="sr-only">
         {drag.announcement()}
       </div>
-      <div class="mx-auto grid w-full max-w-[1320px] grid-cols-1 items-start justify-center gap-5 p-4 @3xl/builder:grid-cols-[minmax(0,680px)_272px] @5xl/builder:grid-cols-[272px_minmax(0,680px)_272px] @5xl/builder:py-6">
+      <div
+        data-form-builder-background
+        class="mx-auto grid w-full max-w-[1320px] grid-cols-1 items-start justify-center gap-5 p-4 @3xl/builder:grid-cols-[minmax(0,680px)_272px] @5xl/builder:grid-cols-[272px_minmax(0,680px)_272px] @5xl/builder:py-6"
+      >
         <div class="mx-auto w-full max-w-[680px] @3xl/builder:col-span-full @3xl/builder:max-w-none">
           <TitleCard
             databaseLink={
@@ -657,6 +674,7 @@ function BuilderCanvas(
         <div
           role="region"
           aria-label="Form canvas"
+          data-form-builder-background
           class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4"
         >
           <Show when={props.detail.tableGone}>
