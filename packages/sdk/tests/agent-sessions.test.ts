@@ -301,7 +301,7 @@ describe('AgentSession', () => {
     });
   });
 
-  test('lists the queue and edits or removes an entry through its handle', async () => {
+  test('lists the queue and edits, steers, or removes an entry through its handle', async () => {
     const actionId = '0198a4cc-e138-7670-a308-a6b766602704';
     const requests: Request[] = [];
     globalThis.fetch = (async (input) => {
@@ -338,11 +338,13 @@ describe('AgentSession', () => {
     expect(queued?.createdAt).toBe('2026-08-24T12:01:00Z');
 
     await queued?.edit('Also update the README');
+    await queued?.steer();
     await queued?.remove();
 
     expect(requests.map((request) => request.method)).toEqual([
       'GET',
       'PUT',
+      'POST',
       'DELETE',
     ]);
     expect(requests[1]?.url).toBe(
@@ -352,6 +354,10 @@ describe('AgentSession', () => {
       prompt: 'Also update the README',
     });
     expect(requests[2]?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`
+    );
+    expect(requests[2]?.headers.get('authorization')).toBe('Bearer user-token');
+    expect(requests[3]?.url).toBe(
       `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
     );
   });

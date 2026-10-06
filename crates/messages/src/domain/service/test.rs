@@ -375,6 +375,12 @@ async fn thread_patch_cannot_detach_non_markdown_anchors() {
             sheet_name: "Budget".into(),
             range: "B4:C9".into(),
         },
+        ThreadAnchor::Fig {
+            page_id: "0:1".into(),
+            node_id: Some("12:34".into()),
+            x: 4.0,
+            y: 8.0,
+        },
     ] {
         let mut repo = fixture();
         repo.state.anchor = Some(anchor);
@@ -1588,6 +1594,115 @@ async fn spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range() {
         range: "A1".into(),
     });
     assert!(validate_post(&MessageParent::parse("document", "doc").unwrap(), &input).is_err());
+}
+
+fn fig_anchor(node_id: Option<&str>) -> NewThreadAnchor {
+    NewThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: node_id.map(str::to_owned),
+        x: 12.5,
+        y: -3.0,
+    }
+}
+
+#[tokio::test]
+async fn fig_anchors_require_a_design_root() {
+    for file_type in [
+        None,
+        Some("md"),
+        Some("pdf"),
+        Some("spreadsheet"),
+        Some("fig"),
+    ] {
+        for node_id in [Some("12:34"), None] {
+            let mut repo = fixture();
+            repo.file_type = file_type.map(str::to_owned);
+            let creates = repo.creates.clone();
+            let service = MessageService::new(repo, Events::default());
+            let mut input = post_input();
+            input.anchor = Some(fig_anchor(node_id));
+            let result = service
+                .post(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    input.clone(),
+                )
+                .await;
+            assert_eq!(result.is_ok(), file_type == Some("fig"), "{file_type:?}");
+            assert_eq!(
+                creates.lock().unwrap().len(),
+                usize::from(file_type == Some("fig"))
+            );
+            input.thread_id = Some(Uuid::from_u128(1));
+            assert!(
+                service
+                    .post(
+                        access("macro|author@example.com", "doc", AccessLevel::Comment),
+                        input.clone()
+                    )
+                    .await
+                    .is_err()
+            );
+        }
+    }
+    let mut input = post_input();
+    input.anchor = Some(NewThreadAnchor::Spreadsheet {
+        sheet_id: "sheet-1".into(),
+        sheet_name: "Budget".into(),
+        range: "A1".into(),
+    });
+    let mut repo = fixture();
+    repo.file_type = Some("fig".into());
+    let service = MessageService::new(repo, Events::default());
+    assert!(
+        service
+            .post(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input
+            )
+            .await
+            .is_err()
+    );
+}
+
+#[test]
+fn fig_anchors_need_bounded_ids_and_finite_positions() {
+    let document = MessageParent::parse("document", "doc").unwrap();
+    let with = |anchor: NewThreadAnchor| {
+        let mut input = post_input();
+        input.anchor = Some(anchor);
+        validate_post(&document, &input)
+    };
+    assert!(with(fig_anchor(Some("12:34"))).is_ok());
+    assert!(with(fig_anchor(None)).is_ok());
+    let limit = "1".repeat(FIG_ANCHOR_ID_LIMIT);
+    assert!(with(fig_anchor(Some(&limit))).is_ok());
+    let over = format!("{limit}1");
+    let invalid = [
+        ("", None, 0.0, 0.0),
+        (" ", None, 0.0, 0.0),
+        ("0:1", Some(""), 0.0, 0.0),
+        ("0:1", Some("\t"), 0.0, 0.0),
+        ("0:1", Some(over.as_str()), 0.0, 0.0),
+        (over.as_str(), None, 0.0, 0.0),
+        ("0:1", None, f64::NAN, 0.0),
+        ("0:1", None, 0.0, f64::INFINITY),
+        ("0:1", Some("1:2"), f64::NEG_INFINITY, 0.0),
+    ];
+    for (page_id, node_id, x, y) in invalid {
+        assert!(
+            with(NewThreadAnchor::Fig {
+                page_id: page_id.to_owned(),
+                node_id: node_id.map(str::to_owned),
+                x,
+                y,
+            })
+            .is_err(),
+            "{page_id:?} {node_id:?} {x} {y}"
+        );
+    }
+    let mut input = post_input();
+    input.anchor = Some(fig_anchor(None));
+    assert!(validate_post(&MessageParent::Channel(Uuid::from_u128(2)), &input).is_err());
 }
 
 fn call_receipt<P: RequiredPermission>(

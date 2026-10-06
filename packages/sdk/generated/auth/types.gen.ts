@@ -60,6 +60,20 @@ export type CheckoutSessionMetadata = {
 };
 
 /**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
+};
+
+/**
  * Explicit remote environment for future Codex sessions.
  */
 export type CodexConfigRequest = {
@@ -191,6 +205,10 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
     plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
@@ -358,7 +376,7 @@ export type CursorModelsResponse = {
 /**
  * Why a request was refused.
  */
-export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -580,6 +598,11 @@ export type GithubLinkStatusResponse = {
      */
     reauthentication_required: boolean;
 };
+
+/**
+ * How GitHub combines a pull request's commits into its base branch.
+ */
+export type GithubMergeMethod = 'merge' | 'squash' | 'rebase';
 
 /**
  * A check run associated with a GitHub pull request.
@@ -973,6 +996,40 @@ export type MacroApiTokenResponse = {
     macro_api_token: string;
 };
 
+/**
+ * A request to merge one pull request on the user's behalf.
+ */
+export type MergeGithubPullRequestRequest = {
+    mergeMethod?: null | GithubMergeMethod;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a merged pull request.
+ */
+export type MergeGithubPullRequestResponse = {
+    /**
+     * GitHub's own summary of the merge.
+     */
+    message: string;
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * The merge commit's SHA.
+     */
+    sha: string;
+};
+
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -1139,13 +1196,18 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, list-rate cents.
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly list price per seat, cents.
+     * Monthly subscription price per seat, cents.
      */
     monthly_price_cents: number;
+    /**
+     * Whether a new purchase or plan move may pick this plan today.
+     */
+    purchasable: boolean;
     /**
      * The tier.
      */
@@ -1169,7 +1231,8 @@ export type PlanCatalogResponse = {
      */
     overage_limit_min_cents: number;
     /**
-     * Free and every purchasable paid plan, cheapest first.
+     * Every plan, cheapest first. Clients read allowances from here rather
+     * than hard-coding them; `purchasable` marks the plans a user can buy.
      */
     plans: Array<PlanCatalogEntry>;
 };
@@ -1476,19 +1539,19 @@ export type UsageSnapshot = {
      */
     can_manage_billing: boolean;
     /**
-     * Shared prepaid credit balance.
+     * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
     /**
-     * Shared payer credits already applied to this period.
+     * Shared payer credits already applied to this period, in customer cents.
      */
     credits_consumed_cents: number;
     /**
-     * Included AI for this user's seat this period, in list-rate cents.
+     * Included AI for this user's seat this period, in cents at provider cost.
      */
     included_cents: number;
     /**
-     * Shared overage charged so far this period.
+     * Shared overage charged so far this period, in customer cents.
      */
     overage_charged_cents: number;
     /**
@@ -1496,7 +1559,7 @@ export type UsageSnapshot = {
      */
     overage_enabled: boolean;
     /**
-     * Per-period overage cap.
+     * Per-period overage cap, in customer cents.
      */
     overage_limit_cents: number;
     /**
@@ -1516,8 +1579,9 @@ export type UsageSnapshot = {
      */
     period_start: string;
     /**
-     * This seat's remaining allowance plus shared credit/overage headroom; 0
-     * when blocked.
+     * Cost cents of usage this seat may still consume: its remaining allowance
+     * plus whatever shared credit and overage headroom pays for at the markup.
+     * 0 when blocked.
      */
     remaining_cents: number;
     /**
@@ -1529,8 +1593,9 @@ export type UsageSnapshot = {
      */
     tier: PlanTier;
     /**
-     * Team-wide usage beyond per-seat allowances that is not yet covered by
-     * shared credits or charges (awaiting settlement).
+     * Team-wide usage beyond per-seat allowances, at the overage markup, that
+     * is not yet covered by shared credits or charges (awaiting settlement).
+     * Customer cents.
      */
     uncovered_cents: number;
     /**
@@ -1538,7 +1603,7 @@ export type UsageSnapshot = {
      */
     unlimited: boolean;
     /**
-     * AI used by this user this period, in list-rate cents.
+     * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
 };
@@ -2044,6 +2109,40 @@ export type EnrichGithubPullRequestsResponses = {
 };
 
 export type EnrichGithubPullRequestsResponse2 = EnrichGithubPullRequestsResponses[keyof EnrichGithubPullRequestsResponses];
+
+export type MergeGithubPullRequestData = {
+    body: MergeGithubPullRequestRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/merge';
+};
+
+export type MergeGithubPullRequestErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot push to the repository
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * The pull request is not mergeable as it stands, or its head moved
+     */
+    409: ErrorResponse;
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
+
+export type MergeGithubPullRequestResponses = {
+    200: MergeGithubPullRequestResponse;
+};
+
+export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -3529,7 +3628,7 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];

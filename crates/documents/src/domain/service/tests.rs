@@ -1871,8 +1871,11 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
-    repo.expect_get_document_metadata()
-        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
+    repo.expect_get_document_metadata().returning(|_| {
+        let mut metadata = make_test_metadata();
+        metadata.sub_type = Some(DocumentSubType::Task);
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1896,6 +1899,7 @@ async fn test_delete_document_publishes_document_deleted_event() {
     assert_eq!(event.payload["event_type"], "document.deleted");
     assert_eq!(event.payload["schema_version"], 1);
     assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["sub_type"], "task");
     assert_eq!(
         event.payload["metadata"]["actor_user_id"],
         "macro|user@user.com"
@@ -3307,4 +3311,29 @@ async fn an_email_import_cannot_choose_its_document_id() {
     .unwrap_err();
 
     assert!(matches!(err, DocumentError::BadRequest(_)));
+}
+
+#[tokio::test]
+async fn user_display_names_join_the_parts_a_user_set() {
+    for (first, last, expected) in [
+        (Some(" Jacob "), Some("Beckerman"), Some("Jacob Beckerman")),
+        (Some("Jacob"), None, Some("Jacob")),
+        (Some(" "), None, None),
+        (None, None, None),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_user_name()
+            .withf(|user_id| user_id == "macro|user@user.com")
+            .return_once(move |_| {
+                Box::pin(std::future::ready(Ok((
+                    first.map(str::to_owned),
+                    last.map(str::to_owned),
+                ))))
+            });
+        let name = make_test_service(repo)
+            .internal_get_user_display_name("macro|user@user.com")
+            .await
+            .unwrap();
+        assert_eq!(name.as_deref(), expected);
+    }
 }

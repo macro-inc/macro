@@ -79,7 +79,7 @@ export const NonDocumentBlockTypes = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
   'initiative',
@@ -132,6 +132,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   canvas: allBlockNames,
   spreadsheet: allBlockNames,
   pptx: allBlockNames,
+  fig: allBlockNames,
   project: allBlockNames,
   unknown: allBlockNames,
   video: allBlockNames,
@@ -140,7 +141,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   task: allBlockNames,
   snippet: allBlockNames,
   skill: allBlockNames,
-  automation: allBlockNames,
+  routine: allBlockNames,
   csv: allBlockNames,
   pr: allBlockNames,
   agent: allBlockNames,
@@ -154,6 +155,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   canvas: new Set(['md']),
   spreadsheet: new Set([]),
   pptx: new Set([]),
+  fig: new Set([]),
   database: new Set([]),
   chat: new Set([]),
   pdf: new Set(['md']),
@@ -171,7 +173,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   task: new Set([]),
   snippet: new Set([]),
   skill: new Set([]),
-  automation: new Set([]),
+  routine: new Set([]),
   csv: new Set([]),
   pr: new Set([]),
   agent: new Set([]),
@@ -373,6 +375,9 @@ export type BlockDefinition<
 
   /** The component for the block. */
   component: BlockComponent<Name>;
+
+  /** Lightweight placeholder while the block's component or data loads. */
+  loading?: Component;
 
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;

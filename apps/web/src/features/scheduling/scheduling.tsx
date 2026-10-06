@@ -67,7 +67,6 @@ function SchedulingSettingsContent() {
         userId: () => user.userId() ?? '',
         createSource: createSchedulingSource,
         link: schedulingLink,
-        openConnections: () => settings.openSettings('Connected'),
         openTeamSettings: () => settings.openSettings('Team'),
         copyLink: async (profile, slug) => {
           if (
@@ -87,7 +86,7 @@ function SchedulingSettingsContent() {
 export function SchedulingSettings() {
   return (
     <Suspense
-      fallback={<p class="p-8 text-ink-muted">Loading calendar settings…</p>}
+      fallback={<p class="p-8 text-ink-muted">Loading booking links…</p>}
     >
       <SchedulingSettingsContent />
     </Suspense>

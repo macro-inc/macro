@@ -97,7 +97,8 @@ type FakeExecution = {
       source: 'live-network' | 'normalized-cache-hit' | 'affected-cache-reread';
       revision?: string;
       persistence?: Promise<string | undefined>;
-    }
+    },
+    error?: CombinedError
   ): void;
 };
 
@@ -144,11 +145,13 @@ function makeFakeClient(): {
         subject.next({ operation, error, stale: false, hasNext: false }),
       next: (
         data,
-        metadata = { source: 'live-network', revision: REVISION_1 }
+        metadata = { source: 'live-network', revision: REVISION_1 },
+        error
       ) =>
         subject.next({
           operation,
           data,
+          error,
           extensions: { __macroNormalizedCache: metadata },
           stale: false,
           hasNext: false,
@@ -495,6 +498,146 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     } finally {
       state.dispose();
     }
+  });
+
+  describe('cached response errors before local reconciliation', () => {
+    function fixture() {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const local = deferred<unknown>();
+      let resetGeneration = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: (callback: () => void) => {
+          resetGeneration = callback;
+          return () => {};
+        },
+      });
+      entityFilterMock.mockReturnValue(local.promise);
+      const [limit, setLimit] = createSignal(50);
+      makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+        cursor ? { continuation: { cursor } } : { initial: { limit: limit() } }
+      );
+      const root = createRoot((dispose) => ({
+        dispose,
+        query: createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({
+            enabled: true,
+            projection: 'channel-list',
+            keepPreviousData: true,
+          })
+        ),
+      }));
+      const error = new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+      });
+      return {
+        ...root,
+        fake,
+        error,
+        setLimit,
+        resetGeneration: () => resetGeneration(),
+        cached(empty = false, failure?: CombinedError) {
+          fake.executions.at(-1)!.next(
+            graphqlSoupPage({
+              items: empty ? [] : [{ id: 'cached-channel' }],
+              next_cursor: 'next',
+            }),
+            { source: 'normalized-cache-hit', revision: REVISION_0 },
+            failure
+          );
+        },
+        dispose() {
+          root.dispose();
+          local.resolve({ kind: 'unsupported' });
+        },
+      };
+    }
+
+    it.each([false, true])(
+      'keeps cached results quiet while reconciliation is pending (empty=%s)',
+      (empty) => {
+        const f = fixture();
+        try {
+          f.cached(empty);
+          f.fake.executions[0].fail(f.error);
+          expect(f.query.data()?.entities).toHaveLength(empty ? 0 : 1);
+          expect(f.query.error()).toBeUndefined();
+        } finally {
+          f.dispose();
+        }
+      }
+    );
+
+    it('clears an early failure when a delayed cache hit carries the same error', () => {
+      const f = fixture();
+      try {
+        f.fake.executions[0].fail(f.error);
+        expect(f.query.error()).toBe(f.error);
+        expect(f.query.data()).toBeUndefined();
+        f.cached(false, f.error);
+        expect(f.query.data()?.entities).toHaveLength(1);
+        expect(f.query.error()).toBeUndefined();
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('does not use retained data from other filters or a reset cache generation', () => {
+      const f = fixture();
+      try {
+        f.cached();
+        f.setLimit(20);
+        f.fake.executions.at(-1)!.fail(f.error);
+        expect(f.query.error()).toBe(f.error);
+        f.cached(false, f.error);
+        expect(f.query.error()).toBeUndefined();
+        f.resetGeneration();
+        expect(f.query.error()).toBe(f.error);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it('keeps a failed load-more request visible despite cached earlier pages', async () => {
+      const f = fixture();
+      try {
+        f.cached();
+        const more = f.query.fetchNextPage();
+        f.fake.executions.at(-1)!.fail(f.error);
+        await more;
+        expect(f.query.data()?.entities).toHaveLength(1);
+        expect(f.query.error()).toBe(f.error);
+      } finally {
+        f.dispose();
+      }
+    });
+
+    it.each([
+      new CombinedError({ graphQLErrors: ['Forbidden'] }),
+      new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+        graphQLErrors: ['Resolver failed'],
+      }),
+      ...[401, 403, 503].map(
+        (status) =>
+          new CombinedError({
+            networkError: new Error('HTTP failure'),
+            response: { status },
+          })
+      ),
+    ])('does not suppress server errors with cached data: %s', (error) => {
+      const f = fixture();
+      try {
+        f.cached(false, error);
+        expect(f.query.error()).toBe(error);
+      } finally {
+        f.dispose();
+      }
+    });
   });
 
   describe('mixed folder contents', () => {
@@ -923,7 +1066,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(delegateChannelNotificationRefresh(fake.client, page)).toBe(true);
       await vi.advanceTimersByTimeAsync(100);
       expect(refresh).toHaveBeenCalledOnce();
-      expect(query.error()).toBe(error);
+      // The refresh still retries, but its failure does not warn over a cached page.
+      expect(query.error()).toBeUndefined();
       await vi.advanceTimersByTimeAsync(1000);
       expect(refresh).toHaveBeenCalledTimes(2);
       expect(refresh).toHaveBeenLastCalledWith(page.document, page.variables, {

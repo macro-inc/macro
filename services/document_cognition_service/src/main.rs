@@ -275,7 +275,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("initialized soup service");
 
     let s3_client = macro_aws_config::s3_client().await;
-    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
         db.clone(),
         s3_client.clone(),
         config.document_storage_bucket.to_string(),
@@ -369,7 +369,8 @@ async fn main() -> anyhow::Result<()> {
             &side_effect_clients,
         ),
     )
-    .with_presentation_files(Arc::new(presentation_files));
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files));
 
     tracing::info!("initialized document tool context");
 
@@ -488,6 +489,14 @@ async fn main() -> anyhow::Result<()> {
     // collection (Stripe) lives in the authentication service, which the
     // recorder below asks to settle once a payer runs past their allowance
     // and ENABLE_AI_USAGE_BILLING is enabled. This instance never settles.
+    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
+    ));
+    let ai_pricing = config.ai_pricing();
     let ai_billing = Arc::new(
         ai_billing::domain::BillingServiceImpl::new(
             ai_billing::outbound::RolesTeamsEntitlementSource::new(
@@ -495,8 +504,9 @@ async fn main() -> anyhow::Result<()> {
                 teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
             ),
             ai_billing::outbound::PgUsageReader::new(db.clone()),
-            ai_billing::outbound::PgBillingRepo::new(db.clone()),
-            ai_billing::outbound::NoOpPaymentGateway,
+            ai_billing::outbound::PgBillingRepo::new(db.clone(), ai_pricing),
+            ai_billing::outbound::HttpPaymentGateway::new(auth_service_client.clone()),
+            ai_pricing,
         )
         .with_enforcement(config.enable_ai_usage_enforcement),
     );
@@ -505,10 +515,6 @@ async fn main() -> anyhow::Result<()> {
             ai_billing.clone(),
             config.enable_ai_usage_enforcement,
         ));
-    let auth_service_client = Arc::new(authentication_service_client::AuthServiceClient::new(
-        internal_api_key.clone(),
-        AuthServiceUrl::new()?.to_string(),
-    ));
     let recorder: Arc<dyn ai_usage::UsageRecorder> =
         Arc::new(ai_billing::outbound::SettlingUsageRecorder::new(
             Arc::new(
@@ -618,6 +624,7 @@ async fn main() -> anyhow::Result<()> {
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
     // connectors and falls back to the native ones (see `mcp_select`).
+    // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         Arc::new(pipedream_repo.clone()),
@@ -646,6 +653,9 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(entity_creator),
             recorder.clone(),
         )
+        .with_slack_source(Arc::new(
+            import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+        ))
         .with_admission(admission.clone())
         .with_notifier(import_notify),
     );
@@ -732,6 +742,10 @@ async fn main() -> anyhow::Result<()> {
             DocumentStorageServiceUrl::new()?.to_string(),
             pipedream_client.clone(),
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            internal_api_key.clone(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
@@ -741,7 +755,7 @@ async fn main() -> anyhow::Result<()> {
             soup_service.clone(),
             &document_tool_context,
         ),
-        schedule_tool_context: ai_tools::NoOpScheduleContext,
+        schedule_tool_context: ai_tools::build_routine_tool_context()?,
         anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
         admission,
         recorder,

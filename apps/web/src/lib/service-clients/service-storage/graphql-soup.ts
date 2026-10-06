@@ -297,9 +297,27 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+const reconnectListeners = new Set<() => void>();
+
+/**
+ * Hear every reconnect of the Soup GraphQL websocket after its first
+ * connection. A subscription survives a reconnect, but nothing published
+ * while the socket was down reaches it: a listener that follows a stream
+ * refetches what it may have missed.
+ */
+export function subscribeGraphqlSoupReconnected(
+  listener: () => void
+): () => void {
+  reconnectListeners.add(listener);
+  return () => {
+    reconnectListeners.delete(listener);
+  };
+}
+
 function createGraphqlSoupWebSocketClient(
   onConnected: () => void
 ): GraphqlWsClient {
+  let connections = 0;
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
@@ -314,7 +332,14 @@ function createGraphqlSoupWebSocketClient(
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
-    on: { connected: onConnected },
+    on: {
+      connected: () => {
+        onConnected();
+        connections += 1;
+        if (connections === 1) return;
+        for (const listener of reconnectListeners) listener();
+      },
+    },
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
 }

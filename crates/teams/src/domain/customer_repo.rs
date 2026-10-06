@@ -53,7 +53,8 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         to: SeatPlan,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 
-    /// Cancels a subscription immediately.
+    /// Cancels a subscription immediately. A subscription that is already
+    /// cancelled or no longer exists counts as cancelled.
     fn cancel_subscription(
         &self,
         subscription_id: &stripe::SubscriptionId,

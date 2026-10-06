@@ -95,6 +95,18 @@ pub struct Config {
     /// its policy decides every settlement, however it was requested.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
+    /// The free plan's hard monthly AI cap, in cents at provider cost.
+    /// Mandatory; set in Doppler.
+    pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Premium seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Max seat per period, in cents at provider
+    /// cost. Mandatory; set in Doppler.
+    pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// Markup on paid AI usage past the allowance, as a whole percent of
+    /// provider cost. Mandatory; set in Doppler.
+    pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
     #[allow(dead_code)]
     pub base_url: BaseUrl,
     /// The connection URL for the Postgres database this application should use.
@@ -202,6 +214,19 @@ pub(crate) struct MicrosoftCredentials {
 }
 
 impl Config {
+    /// The AI pricing every billing component is composed with. Every value
+    /// is validated when the configuration loads.
+    pub fn ai_pricing(&self) -> ai_billing::AiPricing {
+        ai_billing::AiPricing::new(
+            ai_billing::PlanAllowances {
+                free: self.ai_usage_free_included_allowance_cents,
+                premium: self.ai_usage_included_allowance_cents,
+                max: self.ai_usage_max_included_allowance_cents,
+            },
+            self.ai_usage_overage_markup_percent,
+        )
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -267,9 +292,13 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
+        // Temporarily open Develop signups even when Doppler disables the bypass.
+        // Remove this override to restore the configured allowlist policy.
+        let bypass_allowlist =
+            self.development_bypass_signup_allowlist || matches!(environment, Environment::Develop);
         resolve_signup_policy(
             environment,
-            self.development_bypass_signup_allowlist,
+            bypass_allowlist,
             &self.development_signup_allowlist_json,
         )
     }

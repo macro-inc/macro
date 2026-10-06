@@ -1,5 +1,10 @@
-use super::{ReturnUrlError, get_plans_handler, validate_return_url};
-use crate::domain::PlanTier;
+use super::{
+    ReturnUrlError, SettleRequest, SubscriptionPeriodQuery, get_plans_handler, scope_from_query,
+    validate_return_url,
+};
+use crate::domain::{AiPricing, PlanTier, SubscriptionScope};
+use axum::extract::{Query, State};
+use macro_uuid::Uuid;
 
 #[test]
 fn return_urls_must_be_https_on_the_calling_origin() {
@@ -48,14 +53,72 @@ fn return_urls_must_be_https_on_the_calling_origin() {
 }
 
 #[tokio::test]
-async fn plan_catalog_contains_only_free_and_purchasable_paid_plans() {
-    let tiers = get_plans_handler()
-        .await
-        .0
-        .plans
-        .into_iter()
-        .map(|plan| plan.tier)
+async fn plan_catalog_lists_every_tier_and_marks_the_purchasable_ones() {
+    let pricing = AiPricing::testing();
+    let plans = get_plans_handler(State(pricing)).await.0.plans;
+    let summary = plans
+        .iter()
+        .map(|plan| (plan.tier, plan.purchasable, plan.included_ai_cents_per_seat))
         .collect::<Vec<_>>();
 
-    assert_eq!(tiers, vec![PlanTier::Free, PlanTier::Premium]);
+    // The frontend reads allowances from here, so every tier it can display is
+    // listed with its own configured allowance; Free's is its monthly hard cap.
+    assert_eq!(
+        summary,
+        vec![
+            (
+                PlanTier::Free,
+                false,
+                pricing.included_allowance_cents_for(PlanTier::Free)
+            ),
+            (
+                PlanTier::Premium,
+                true,
+                pricing.included_allowance_cents_for(PlanTier::Premium)
+            ),
+            (
+                PlanTier::Max,
+                true,
+                pricing.included_allowance_cents_for(PlanTier::Max)
+            ),
+        ]
+    );
+    assert_eq!(summary[0].2, 500);
+    assert_eq!(summary[1].2, 2_000);
+    assert_eq!(summary[2].2, 10_000);
+}
+
+#[test]
+fn subscription_period_query_selects_the_scope() {
+    let Query(team) = Query::<SubscriptionPeriodQuery>::try_from_uri(
+        &"/internal/ai-billing/subscription-period?customerId=cus_123&teamId=00000000-0000-0000-0000-000000000007"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(team.customer_id, "cus_123");
+    assert_eq!(
+        scope_from_query(team.team_id),
+        SubscriptionScope::Team {
+            team_id: Uuid::from_u128(7)
+        }
+    );
+
+    let Query(personal) = Query::<SubscriptionPeriodQuery>::try_from_uri(
+        &"/internal/ai-billing/subscription-period?customerId=cus_123"
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(personal.customer_id, "cus_123");
+    assert_eq!(
+        scope_from_query(personal.team_id),
+        SubscriptionScope::Personal
+    );
+}
+
+#[test]
+fn settle_request_reads_the_camel_case_user_id() {
+    let request: SettleRequest = serde_json::from_str(r#"{"userId":"macro|a@b.c"}"#).unwrap();
+    assert_eq!(request.user_id, "macro|a@b.c");
 }

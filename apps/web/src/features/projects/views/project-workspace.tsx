@@ -37,6 +37,7 @@ export function ProjectWorkspace(props: {
   source: ProjectSource;
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
+  navigation: JSX.Element;
   onDelete(): void;
   onOpenTask: ProjectTasksListProps['onOpenTask'];
   onCreateTask(): void;
@@ -45,7 +46,6 @@ export function ProjectWorkspace(props: {
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const [deleting, setDeleting] = createSignal(false);
-  const [addingTasks, setAddingTasks] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -107,6 +107,11 @@ export function ProjectWorkspace(props: {
         </SidePanel.HeaderActions>
       </Show>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+        <Show when={props.section === 'overview'}>
+          <div class="min-w-0 shrink-0 overflow-x-auto scrollbar-hidden px-4 py-2">
+            {props.navigation}
+          </div>
+        </Show>
         <Show when={error()}>
           {(message) => (
             <p role="alert" class="px-6 py-2 text-sm text-failure">
@@ -178,10 +183,16 @@ export function ProjectWorkspace(props: {
             </Match>
             <Match when={props.section === 'tasks'}>
               <ProjectTasksList
+                navigation={props.navigation}
                 projectId={props.project.id}
+                projectName={props.project.name}
                 onOpenTask={props.onOpenTask}
                 onCreateTask={canEdit() ? props.onCreateTask : undefined}
-                onAddTasks={canEdit() ? () => setAddingTasks(true) : undefined}
+                addTasksAction={
+                  <Show when={canEdit()}>
+                    <AddProjectTasks project={props.project} />
+                  </Show>
+                }
               />
             </Match>
           </Switch>
@@ -201,12 +212,6 @@ export function ProjectWorkspace(props: {
               props.onDelete();
             })
           }
-        />
-      </Show>
-      <Show when={addingTasks() && canEdit()}>
-        <AddProjectTasks
-          project={props.project}
-          onClose={() => setAddingTasks(false)}
         />
       </Show>
     </SidePanel.Layout>

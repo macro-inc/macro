@@ -1,10 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
+import { connectSlugForPipedreamApp } from '@core/pipedream/slugs';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { AiGrantActions } from './ai-grant-actions';
 import { capabilityFacts } from './capability-row';
 import {
@@ -25,6 +26,7 @@ import {
   SettingsSection,
 } from './primitives';
 import { providerIcon } from './provider-meta';
+import { SlackChannelImportCard } from './slack-channel-import/SlackChannelImportCard';
 import { useConnectionsView } from './view-state';
 
 const COPY: Record<
@@ -72,7 +74,7 @@ export function PipedreamAiProvider(props: {
   const native = useNativeMcpActions();
   const { connect, busy } = createPipedreamCatalogConnect({
     entry: () => ({
-      app_slug: props.provider,
+      app_slug: connectSlugForPipedreamApp(props.provider),
       display_name: copy.name,
     }),
     onConnected: () => toast.success(`${copy.name} connected`),
@@ -95,7 +97,7 @@ export function PipedreamAiProvider(props: {
       return;
     }
     update.mutate(
-      { app_slug: props.provider, enabled },
+      { app_slug: row()?.appSlug ?? props.provider, enabled },
       { onError: () => toast.failure('Failed to update connector') }
     );
   };
@@ -126,7 +128,7 @@ export function PipedreamAiProvider(props: {
       body: `Disconnect ${copy.name}?`,
       onConfirm: () =>
         remove.mutate(
-          { app_slug: props.provider },
+          { app_slug: row()?.appSlug ?? props.provider },
           {
             onSuccess: () =>
               toast.success(`Disconnected ${copy.name} from Macro`),
@@ -181,6 +183,17 @@ export function PipedreamAiProvider(props: {
           </IntegrationRow>
         </SettingsCard>
       </SettingsSection>
+      <Show
+        when={
+          props.provider === 'slack' &&
+          row()?.mechanism === 'pipedream' &&
+          row()?.status === 'connected'
+        }
+      >
+        <Suspense>
+          <SlackChannelImportCard />
+        </Suspense>
+      </Show>
       <DisconnectConfirmDialog
         request={disconnect()}
         onClose={() => setDisconnect(null)}

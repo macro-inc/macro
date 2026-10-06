@@ -28,6 +28,7 @@ import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit
 import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { RemindersRouteView } from '@app/features/reminders/route-views';
 import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
+import { RoutineCreator } from '@app/features/routines/routine-creator';
 import { SettingsRouteView } from '@app/features/settings/route-views';
 import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -36,6 +37,7 @@ import { EventComposerSplit } from '@block-calendar/components/EventComposerSpli
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
 import { ComposeTask } from '@block-md/component/ComposeTask';
+import { ComposeDocument } from '@block-md/views/compose-document';
 import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
@@ -227,6 +229,11 @@ registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
+  'routines',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'agents',
   () => <AgentsRouteView />,
   () =>
@@ -314,6 +321,20 @@ registerComponent('email-compose', (params) => {
     />
   );
 });
+registerComponent('routine-compose', (params) => (
+  <RoutineCreator
+    onCreated={
+      typeof params.onCreated === 'function'
+        ? (params.onCreated as (id: string) => void)
+        : undefined
+    }
+  />
+));
+registerComponent('document-compose', (params) => {
+  usePageViewTracking('document-compose');
+  return <ComposeDocument {...params} />;
+});
+
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
@@ -354,7 +375,11 @@ registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))
 );
-registerComponent('settings', () => <SettingsRouteView />);
+registerComponent(
+  'settings',
+  () => <SettingsRouteView />,
+  () => composableLayout()
+);
 
 if (LOCAL_ONLY) {
   registerComponent(
@@ -459,7 +484,7 @@ if (LOCAL_ONLY) {
 
   registerComponent(
     'agent-changes-ui',
-    lazy(() => import('@app/features/agent-changes/debug/Gallery'))
+    lazy(() => import('@app/features/changes/debug/Gallery'))
   );
 
   registerComponent(

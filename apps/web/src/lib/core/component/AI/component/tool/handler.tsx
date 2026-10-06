@@ -24,6 +24,7 @@ import {
 } from './Bots';
 import {
   createCalendarEventHandler,
+  createConfirmedCalendarEventHandler,
   deleteCalendarEventHandler,
   listCalendarEventsHandler,
   listCalendarsHandler,
@@ -34,6 +35,10 @@ import {
   manageChannelParticipantsHandler,
   renameChannelHandler,
 } from './ChannelMutations';
+import {
+  dispatchCodingAgentHandler,
+  listCodingAgentsHandler,
+} from './CodingAgents';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -43,6 +48,7 @@ import {
   lazyDatabaseToolHandlers,
 } from './DatabaseToolHandlers';
 import { deleteTagHandler } from './DeleteTag';
+import { readDesignHandler } from './Design';
 import { displayResultsHandler } from './DisplayResults';
 import {
   commentOnDocumentHandler,
@@ -101,6 +107,12 @@ import {
   updateReminderHandler,
 } from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
+import {
+  createRoutineHandler,
+  listRoutinesHandler,
+  readRoutineHandler,
+  updateRoutineHandler,
+} from './Routines';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
 import { searchToolsHandler } from './SearchTools';
@@ -127,14 +139,23 @@ import { updateThreadLabelsHandler } from './UpdateThreadLabels';
 import { uploadFileHandler } from './UploadFile';
 import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
+import {
+  editWordDocumentHandler,
+  readWordDocumentHandler,
+} from './WordDocument';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
+  DispatchCodingAgent: dispatchCodingAgentHandler,
+  ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
   ReadPresentation: readPresentationHandler,
   EditPresentation: editPresentationHandler,
+  ReadDesign: readDesignHandler,
+  ReadWordDocument: readWordDocumentHandler,
+  EditWordDocument: editWordDocumentHandler,
   ConfigureAgent: configureAgentHandler,
   ListAgents: listAgentsHandler,
   ConfigureBot: configureBotHandler,
@@ -146,6 +167,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListBots: listBotsHandler,
   ManageBotChannelAccess: manageBotChannelAccessHandler,
   CreateCalendarEvent: createCalendarEventHandler,
+  CreateConfirmedCalendarEvent: createConfirmedCalendarEventHandler,
   UpdateCalendarEvent: updateCalendarEventHandler,
   DeleteCalendarEvent: deleteCalendarEventHandler,
   ListCalendarEvents: listCalendarEventsHandler,
@@ -165,6 +187,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ManageChannelParticipants: manageChannelParticipantsHandler,
   ListNotifications: listNotificationsHandler,
   ListReminders: listRemindersHandler,
+  CreateRoutine: createRoutineHandler,
+  ListRoutines: listRoutinesHandler,
+  ReadRoutine: readRoutineHandler,
+  UpdateRoutine: updateRoutineHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,

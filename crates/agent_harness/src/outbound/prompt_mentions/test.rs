@@ -98,7 +98,7 @@ async fn an_editor_shares_the_session_with_everyone_they_mention() {
         .share_with_mentioned(
             AgentSessionId::TEST_A,
             Some(&user("a@macro.com")),
-            "@b @c @a @b",
+            "<m-user-mention>{\"userId\":\"macro|b@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|c@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|a@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|b@macro.com\"}</m-user-mention>",
         )
         .await
         .expect("mentions resolve");
@@ -127,7 +127,7 @@ async fn a_viewer_amplifies_nobody_and_only_existing_viewers_are_named() {
     );
 
     let users = mentions
-        .share_with_mentioned(AgentSessionId::TEST_A, Some(&user("a@macro.com")), "@b @c")
+        .share_with_mentioned(AgentSessionId::TEST_A, Some(&user("a@macro.com")), "<m-user-mention>{\"userId\":\"macro|b@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|c@macro.com\"}</m-user-mention>")
         .await
         .expect("mentions resolve");
 
@@ -147,7 +147,7 @@ async fn a_prompt_with_no_user_behind_it_shares_nothing() {
     );
 
     let users = mentions
-        .share_with_mentioned(AgentSessionId::TEST_A, None, "@owner @c")
+        .share_with_mentioned(AgentSessionId::TEST_A, None, "<m-user-mention>{\"userId\":\"macro|owner@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|c@macro.com\"}</m-user-mention>")
         .await
         .expect("mentions resolve");
 
@@ -191,6 +191,29 @@ async fn a_prompt_naming_nobody_never_touches_access() {
 }
 
 #[tokio::test]
+async fn a_prompt_without_a_user_mention_tag_never_asks_the_lexical_service() {
+    struct Unreachable;
+    impl MentionSource for Unreachable {
+        async fn mentioned_user_ids(&self, _markdown: &str) -> Result<Vec<String>> {
+            panic!("a prompt with no <m-user-mention> tag should not be parsed")
+        }
+    }
+    let mentions =
+        LexicalPromptMentions::new(Unreachable, access(vec![(owner(), AccessLevel::Owner)]));
+
+    let users = mentions
+        .share_with_mentioned(
+            AgentSessionId::TEST_A,
+            Some(&owner()),
+            "fix the bug @a mentioned in <m-document-mention>{\"documentId\":\"d\"}</m-document-mention>",
+        )
+        .await
+        .expect("mentions resolve");
+
+    assert!(users.is_empty());
+}
+
+#[tokio::test]
 async fn ids_that_are_not_macro_users_are_skipped() {
     let access = access(vec![(owner(), AccessLevel::Owner)]);
     let mentions = LexicalPromptMentions::new(
@@ -202,7 +225,7 @@ async fn ids_that_are_not_macro_users_are_skipped() {
     );
 
     let users = mentions
-        .share_with_mentioned(AgentSessionId::TEST_A, Some(&owner()), "@junk @a")
+        .share_with_mentioned(AgentSessionId::TEST_A, Some(&owner()), "<m-user-mention>{\"userId\":\"macro|junk@macro.com\"}</m-user-mention> <m-user-mention>{\"userId\":\"macro|a@macro.com\"}</m-user-mention>")
         .await
         .expect("mentions resolve");
 
@@ -217,7 +240,11 @@ async fn a_lexical_failure_is_an_error_not_an_empty_answer() {
     );
 
     let error = mentions
-        .share_with_mentioned(AgentSessionId::TEST_A, Some(&owner()), "@a")
+        .share_with_mentioned(
+            AgentSessionId::TEST_A,
+            Some(&owner()),
+            "<m-user-mention>{\"userId\":\"macro|a@macro.com\"}</m-user-mention>",
+        )
         .await
         .expect_err("the failure surfaces");
 

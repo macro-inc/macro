@@ -103,7 +103,7 @@ fn create_notes_slide(pres: &mut Presentation, slide_part: &str) -> Result<Strin
 }
 
 /// The notes master, created (with a copy of the deck's theme) when missing.
-fn ensure_notes_master(pres: &mut Presentation) -> Result<String> {
+pub(super) fn ensure_notes_master(pres: &mut Presentation) -> Result<String> {
     let main = pres.main_part.clone();
     let rels = pres.part_rels(&main)?;
     if let Some(existing) = rels

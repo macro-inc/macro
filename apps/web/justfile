@@ -116,9 +116,11 @@ cache_wasm_target := justfile_directory() / "../../target/cache-wasm"
 agent_fold_wasm_target := justfile_directory() / "../../target/agent-fold-wasm"
 database_sql_wasm_target := justfile_directory() / "../../target/database-sql-wasm"
 pptx_engine_wasm_target := justfile_directory() / "../../target/pptx-engine-wasm"
+docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm"
+fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -168,6 +170,15 @@ bundle-smoke-server *ARGS:
 
 test-watch:
     bunx --bun vitest
+
+# Sign-in, sign-up, and onboarding in Chromium against fake backends (no network).
+# Flags pass through to Playwright: `--ui` to watch and step through, `--headed`
+# to see the browser. With --ui, closing the onboarding window opens auth's.
+# The Linux dev shell points LD_LIBRARY_PATH at Nix libraries, which Playwright's
+# system-glibc Chromium can't load; Nix binaries find theirs through RPATH.
+test-signup-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
@@ -264,7 +275,7 @@ build-cache-wasm-profile:
 # (gitignored). `--no-default-features` drops the crate's `cli` feature, whose
 # tokio/clap do not build for wasm32; the fold itself needs neither.
 build-agent-fold-wasm:
-    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
+    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/folds/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
 
 # Dev fast path: build the agent-fold wasm pkg only when it is missing or any
 # fold source is newer than the built artifact. A stale artifact folds with the
@@ -273,7 +284,7 @@ ensure-agent-fold-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/agent-fold/wasm/agent_fold_bg.wasm"
-    CRATE="{{justfile_directory()}}/../../crates/agent_fold"
+    CRATE="{{justfile_directory()}}/../../crates/folds/agent_fold"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-agent-fold-wasm
     fi
@@ -323,9 +334,42 @@ ensure-pptx-engine-wasm:
         just --justfile "{{justfile()}}" build-pptx-engine-wasm
     fi
 
+# Build the docx-engine wasm module (DOCX layout, rendering and editing, hosted
+# in a worker by the write block) into src/lib/core/docx-engine/wasm (gitignored).
+build-docx-engine-wasm:
+    CARGO_TARGET_DIR="{{docx_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/docx_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/docx-engine/wasm
+
+# Dev fast path: build the docx-engine wasm pkg only when it is missing or any
+# engine source (including the pptx engine it builds on) is newer than it.
+ensure-docx-engine-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/docx-engine/wasm/docx_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/docx_engine"
+    PPTX="{{justfile_directory()}}/../../crates/pptx_engine"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$PPTX/src" "$PPTX/fonts" "$PPTX/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-docx-engine-wasm
+    fi
+
+# Build the fig-engine wasm module (.fig parsing and tile rasterization, hosted
+# in workers by the fig block) into src/lib/core/fig-engine/wasm (gitignored).
+build-fig-engine-wasm:
+    CARGO_TARGET_DIR="{{fig_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/fig_engine --target web --profile fig-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/fig-engine/wasm
+
+# Dev fast path: build the fig-engine wasm pkg only when it is missing or any
+# engine source is newer than the built artifact.
+ensure-fig-engine-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/fig-engine/wasm/fig_engine_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/fig_engine"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-fig-engine-wasm
+    fi
+
 # Regenerate src/lib/service-clients/service-agent-fold/generated/types.ts
 # from agent_fold's Rust wire types with specta. Run after changing anything
-# under crates/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
+# under crates/folds/agent_fold/src/inbound/wire.rs. Specta's own output is tabs and
 # commas, not this project's style, so biome reformats it in place - without
 # that, every regeneration would be a diff-format mismatch even with no real
 # change.

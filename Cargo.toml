@@ -2,12 +2,13 @@
 resolver = "2"
 
 members = [
+  "crates/routines",
   "crates/activity",
-  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/agent_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/agent_preview",
   "crates/agent_inmem",
-  "crates/agent_runtime_protocol", "crates/agent_session",
+  "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
   "crates/ai_billing",
   "crates/ai_projections",
@@ -91,6 +92,8 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/docx_engine",
+  "crates/fig_engine",
   "crates/pptx_engine",
   "crates/predicate_index",
   "crates/prompt",
@@ -206,6 +209,7 @@ axum-extra = { version = "0.10" }
 backoff = { version = "0.4.0", features = ["tokio"] }
 base64 = "0.22.1"
 bebop = "3.1.3"
+brotli-decompressor = { version = "5.0.3", default-features = false, features = ["std"] }
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
@@ -238,9 +242,11 @@ hex = "0.4.3"
 hmac = "0.12.1"
 encoding_rs = "0.8"
 http = "1"
+http-body = "1.0.1"
 http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
+image-webp = "0.2"
 indexmap = "2"
 infer = "0.19.0"
 indoc = "2"
@@ -310,6 +316,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
+skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
@@ -319,6 +326,7 @@ rustix = { version = "1", default-features = false, features = ["process", "std"
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
+ruzstd = { version = "0.8", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -370,7 +378,6 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
-ttf-parser = { version = "0.25", default-features = false, features = ["opentype-layout", "std"] }
 tui-input = { version = "0.14.0", default-features = false }
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
@@ -441,3 +448,10 @@ strip = "none"
 inherits = "release"
 lto = true
 opt-level = "s"
+
+# The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
+# codegen unit and full LTO, so its rasterizing loops inline across crates.
+[profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

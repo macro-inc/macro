@@ -1,6 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { HomeBackfillProgress } from '@app/features/home/home-backfill-progress';
-import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
+import { InteractiveOnboardingModal } from '@app/features/tutorial/InteractiveOnboardingModal';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';

@@ -1,38 +1,30 @@
+import {
+  closeDocument,
+  collabState,
+  openDocument,
+} from '@core/docx-engine/client';
 import { LoroDoc } from 'loro-crdt';
-import { bridgeEngine, type DocxSyncBridge } from './docx-engine';
-import { seedDocxState } from './docx-loro';
+import { writeCollabState } from './docx-loro';
 
-/** Settings every session in a collaborative editor is opened with. */
-export const DOCX_SYNC_SESSION_SETTINGS = {
-  // The editor re-renders from HTML; markdown patches are wasted work.
-  emitMarkdownPatch: false,
-  // Raw operations only ever carry XML the engine itself serialized.
-  validateRawOps: false,
-};
-
-type SeedBridge = DocxSyncBridge & {
-  OpenSession: (bytes: Uint8Array, settingsJson: string) => number;
-  CloseSession: (handle: number) => void;
-};
+let seeds = 0;
 
 /**
- * The first collaborative snapshot of an uploaded DOCX: open it once, split
- * the engine's save into blocks and parts, and write them to a new Loro
- * document. Every peer that opens the same upload derives the same block ids.
+ * The first collaborative snapshot of an uploaded DOCX: the engine opens it
+ * once and its shared state goes into a new Loro document. Block ids are
+ * assigned in document order, so every peer that seeds the same upload
+ * derives the same ids (only one seed is ever stored).
  */
-export function buildSeedSnapshot(
-  bridge: SeedBridge,
+export async function buildSeedSnapshot(
   bytes: Uint8Array
-): Uint8Array {
-  const handle = bridge.OpenSession(
-    bytes,
-    JSON.stringify(DOCX_SYNC_SESSION_SETTINGS)
-  );
+): Promise<Uint8Array> {
+  const key = `docx-seed-${++seeds}`;
+  await openDocument(key, bytes.slice().buffer);
   try {
+    const state = await collabState(key);
     const doc = new LoroDoc();
-    seedDocxState(doc, bridgeEngine(bridge, () => handle).snapshot());
+    writeCollabState(doc, state);
     return doc.export({ mode: 'snapshot' });
   } finally {
-    bridge.CloseSession(handle);
+    await closeDocument(key).catch(() => {});
   }
 }

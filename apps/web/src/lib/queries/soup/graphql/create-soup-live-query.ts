@@ -14,7 +14,7 @@ import {
 import { NIL as NIL_UUID } from 'uuid';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
-import { isTransientRequestError } from '../../../core/util/request-error';
+import { isResponseFreeNetworkError } from '../../../core/util/request-error';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
@@ -101,6 +101,9 @@ export function createSoupLiveQuery(
     };
   };
   const isSupported = () => firstPageInput() !== undefined;
+  const inputKey = createMemo(() =>
+    JSON.stringify([options().projection, firstPageInput()])
+  );
   type ServerProjection = {
     pageParams: readonly (string | null)[];
     records: Accessor<GraphqlSoupItem[]>;
@@ -160,6 +163,7 @@ export function createSoupLiveQuery(
     disposed = true;
   });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
+  const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
   let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
@@ -306,6 +310,7 @@ export function createSoupLiveQuery(
     ServerProjection
   >(() => {
     const firstInput = firstPageInput();
+    const firstInputKey = inputKey();
     const queryOptions = options();
 
     return {
@@ -331,7 +336,10 @@ export function createSoupLiveQuery(
       keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         if (!result.data) return;
-        setBaselineGeneration(cacheGeneration);
+        batch(() => {
+          setBaselineGeneration(cacheGeneration);
+          setBaselineInputKey(firstInputKey);
+        });
         const metadata = normalizedCacheResultMetadata(result);
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
@@ -769,13 +777,18 @@ export function createSoupLiveQuery(
     const error = query.error;
     // A background transport failure must not replace usable current-query
     // cache results (including an empty result) with the full-screen error state.
-    // Keep server responses (including HTTP auth failures), GraphQL errors,
-    // and failures without current-query local proof visible.
+    // A normalized page is usable before local reconciliation finishes. Keep
+    // server responses, uncached queries and failed continuation reads visible;
+    // previous-filter or previous-generation pages are not fallback evidence.
     if (
-      error &&
-      isTransientRequestError(error) &&
-      !error.response &&
-      displayLocalProjection()
+      isResponseFreeNetworkError(error) &&
+      options().enabled !== false &&
+      isSupported() &&
+      !query.isFetchNextPageError &&
+      (displayLocalProjection() ||
+        (query.data !== undefined &&
+          baselineGeneration() === cacheGeneration &&
+          baselineInputKey() === inputKey()))
     ) {
       return undefined;
     }

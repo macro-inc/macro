@@ -17,8 +17,31 @@ off-topic text) keep the typed text and show a red error there instead. The box 
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
-Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
-sidebar has a collapsible `Tags` section listing every personal and team tag, with a
+Task creation is available from the `New` button in the Tasks sidebar. With Projects
+enabled, `My projects` appears below the tabs and favorites, above Tags. It lists
+accessible projects by most recently updated, with a capped height and its own scroll
+area. Click a project to open its overview within the current Tasks view, keeping
+the sidebar mounted, or Shift-click to open it in a new split.
+The current project is highlighted. Collapse the heading to hide the list; this
+preference persists. `Load more projects` fetches the next page when available.
+The plus button beside `My projects` opens the project composer, even while the
+section is collapsed or loading. Its rows use the shared project query/cache and
+load inside a local Suspense boundary, leaving sidebar controls available.
+Once a current-query project page is cached, an offline/background refresh failure
+must not show **Could not load projects** beside those rows (or a cached empty
+result). Retrying a refresh must not reintroduce that warning merely because the
+refresh promise rejects; the cached project links remain available. Cache misses,
+server/permission errors, and failed **Load more projects** requests still show
+failure and retry controls. Verify both background refresh and manual retry.
+Opening a project shows a content-shaped skeleton while its data loads: title,
+wrapping property pills, description, and discussion for Overview; toolbar and
+rows for Tasks. The mobile skeleton uses the same compact insets as the content.
+The description has its own subtle three-line skeleton while its collaborative
+editor initializes; the project title, properties, and discussion stay visible.
+Project task lists automatically fetch all matching pages in every group, without
+per-group `Load More` rows. A failed continuation stops automatic requests and shows
+`Try again` above the list; already fetched group rows remain available.
+The sidebar also has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
 clears it, and switching tabs clears it like any other filter. On mobile, the tabs
@@ -33,6 +56,13 @@ does nothing. Typing H in a text field remains ordinary input.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
+
+The Project column shows the linked project's name when one project is assigned,
+and `Project` when empty. Multiple linked projects show an item count.
+Long assignee and project names truncate within their columns; hover the cell
+to read the full value.
+The project pill beneath a task title shows the project icon and name without
+a `Project:` prefix.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -54,6 +84,17 @@ For tags, include a task with no prior tag assignment. Delay
 should appear immediately and stay visible through both responses in the list,
 task header, side panel, and a reopened picker. A rejected save should remove only
 the optimistic tag. Repeat with an existing assignment and with removal.
+
+## Cached grouped lists
+
+With GraphQL caching enabled, previously loaded grouped task lists remain usable
+when their background refresh fails without an HTTP response. Load a Priority-grouped
+view online, navigate away, then reopen it offline. Repeat by holding its GroupSoup
+request: cached rows should appear before the response, and rejecting that request
+must not replace them with **Tasks couldn’t be loaded**. A cached empty result is
+also usable. An initial cache miss still shows failure; HTTP and GraphQL errors
+remain visible even with cached rows. Change filters while retaining prior rows:
+those older results must not hide a failure for the new, uncached query.
 
 ## Reviews view
 
@@ -215,8 +256,12 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks in
-that top bar. Opening an associated task extends the breadcrumb trail; choose
+and side-panel controls as task detail. Choose Overview or Tasks in the
+bubble-tab row below that top bar. In Tasks, an outlined circular search button
+to the right of the tabs expands into a focused `Search in <project name>` field. Close or Escape
+clears the query and restores focus to the button. The row stays the same height
+and scrolls horizontally in narrow splits, keeping list controls, Add existing
+tasks, and New task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).
@@ -288,9 +333,11 @@ request carries it, so there is no separate assignment step. The new row appears
 once the task is created. Verify this with GraphQL Soup both enabled and
 disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
-`New task`, search for tasks, select several, and confirm `Add N tasks`. Tasks
+`New task`; both actions use bordered buttons with a background. `Add existing
+tasks` opens an anchored task-selector dropdown: search, select several, and
+confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
-project; the dialog explains this before saving. A partial failure keeps only
+project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
 
 The regular Tasks list includes a Project column. Its cell is a regular property

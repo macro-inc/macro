@@ -144,7 +144,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
-    blockId: useMaybeBlockId(),
   });
 
   const customDocs = props.entities

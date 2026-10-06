@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT billed_users AS \"billed_users!\",\n               included_cents_by_user AS \"included_cents_by_user!\",\n               included_cost_cents_by_user,\n               updated_at\n        FROM ai_billing_period_allowance\n        WHERE user_id = $1 AND period_start = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "billed_users!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "included_cents_by_user!",
+        "type_info": "Int8Array"
+      },
+      {
+        "ordinal": 2,
+        "name": "included_cost_cents_by_user",
+        "type_info": "Int8Array"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "097d81df581fceedb035d0b862ba2b46e9c701aa52d0cd285164bdc4d9b65a83"
+}

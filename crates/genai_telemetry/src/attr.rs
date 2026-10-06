@@ -72,6 +72,27 @@ pub const MACRO_CONTEXT_USED_TOKENS: &str = "macro.genai.context.used_tokens";
 /// Macro-specific: the agent's context window size in tokens (ACP
 /// `usage_update.size`).
 pub const MACRO_CONTEXT_SIZE_TOKENS: &str = "macro.genai.context.size_tokens";
+/// Macro-specific: milliseconds from sending `session/prompt` to the first
+/// output the harness streamed back (prose, reasoning or a tool call), as the
+/// session actor observed it. Absent when the turn ended without output.
+pub const MACRO_TIME_TO_FIRST_OUTPUT_MS: &str = "macro.genai.turn.time_to_first_output_ms";
+/// Milliseconds from sending `session/prompt` to the first non-whitespace
+/// agent message text observed by the session actor. Excludes thoughts and
+/// tool calls; absent for turns with no answer text. This is server-observed,
+/// not browser render latency, and excludes session initialization.
+pub const MACRO_TIME_TO_FIRST_TEXT_MS: &str = "macro.genai.turn.time_to_first_text_ms";
+/// Milliseconds from sending `session/prompt` to the first non-whitespace thought.
+pub const MACRO_TIME_TO_FIRST_REASONING_MS: &str = "macro.genai.turn.time_to_first_reasoning_ms";
+/// Milliseconds from sending `session/prompt` to the first tool call.
+pub const MACRO_TIME_TO_FIRST_TOOL_CALL_MS: &str = "macro.genai.turn.time_to_first_tool_call_ms";
+/// Macro-specific: milliseconds from a model call's request to the first chunk
+/// it streamed back (text, reasoning or a tool call), on its `chat` span. The
+/// call's duration includes generation; this is the provider's latency alone.
+pub const MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS: &str = "macro.genai.chat.time_to_first_chunk_ms";
+/// Macro-specific: what a model call streamed first: `text`, `reasoning` or
+/// `tool_call`.
+pub const MACRO_CHAT_FIRST_CHUNK_KIND: &str = "macro.genai.chat.first_chunk_kind";
+
 /// Macro-specific: the coarse ACP tool kind (`execute`, `edit`, `read`, …).
 pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";
 /// Macro-specific: the human-readable title the harness gave a tool call.

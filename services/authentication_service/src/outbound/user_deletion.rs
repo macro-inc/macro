@@ -15,12 +15,13 @@ use uuid::Uuid;
 
 use crate::service::user::delete_user::UserDeletionGateway;
 
-/// HTTP, in-process team service, and database adapter composed at
+/// HTTP, in-process team service, Stripe, and database adapter composed at
 /// authentication-service startup.
 pub struct UserDeletionAdapter<T: TeamService> {
     db: PgPool,
     documents: Arc<DocumentStorageServiceClient>,
     teams: Arc<T>,
+    stripe: Arc<stripe::Client>,
     client: reqwest::Client,
     internal_key: String,
     harness_url: String,
@@ -38,6 +39,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
         db: PgPool,
         documents: Arc<DocumentStorageServiceClient>,
         teams: Arc<T>,
+        stripe: Arc<stripe::Client>,
         internal_key: String,
         harness_url: String,
         scheduled_action_url: String,
@@ -46,6 +48,7 @@ impl<T: TeamService> UserDeletionAdapter<T> {
             db,
             documents,
             teams,
+            stripe,
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(300))
                 .redirect(reqwest::redirect::Policy::none())
@@ -119,6 +122,55 @@ impl<T: TeamService> UserDeletionGateway for UserDeletionAdapter<T> {
         macro_db_client::user::delete_user::delete_user(&self.db, user.as_ref(), account)
             .await
             .context("failed to delete user profile")?;
+        Ok(())
+    }
+
+    async fn delete_billing_customer(&self, account: &Uuid) -> Result<(), Report> {
+        let customer_id =
+            match macro_db_client::macro_user::get_macro_user(&self.db, &account.to_string()).await
+            {
+                Ok(account) => account.stripe_customer_id,
+                // A retry after the account row is gone has nothing left to delete.
+                Err(error)
+                    if matches!(
+                        error.downcast_ref::<sqlx::Error>(),
+                        Some(sqlx::Error::RowNotFound)
+                    ) =>
+                {
+                    None
+                }
+                Err(error) => Err(error.into_rootcause())
+                    .context("failed to load account for billing cleanup")?,
+            };
+        let Some(customer_id) = customer_id else {
+            return Ok(());
+        };
+        let customer_id: stripe::CustomerId = match customer_id.parse() {
+            Ok(customer_id) => customer_id,
+            // Local stacks store placeholder ids: there is nothing in Stripe to
+            // delete, and failing here would block the deletion forever.
+            Err(error) => {
+                tracing::warn!(
+                    error = ?error,
+                    "stripe customer id is not a stripe id; skipping customer deletion"
+                );
+                return Ok(());
+            }
+        };
+
+        stripe::Customer::delete(&self.stripe, &customer_id)
+            .await
+            .map(drop)
+            .or_else(|error| match error {
+                // Already deleted, for example by an earlier attempt.
+                stripe::StripeError::Stripe(request)
+                    if matches!(request.code, Some(stripe::ErrorCode::ResourceMissing)) =>
+                {
+                    Ok(())
+                }
+                error => Err(Report::new(error).into_dynamic()),
+            })
+            .context("failed to delete stripe customer")?;
         Ok(())
     }
 

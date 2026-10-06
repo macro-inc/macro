@@ -1,4 +1,4 @@
-import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
+import { ChangesToggle } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
@@ -80,7 +80,7 @@ export function agentSessionTitle(
  * toolbar: static label, shared entity actions, the session's pull request
  * once one exists, and external-provider links.
  *
- * Rename lives on the title menu (channel / automation), not on a tap of
+ * Rename lives on the title menu (channel / routine), not on a tap of
  * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
  * the dropdown instead of an inline editor.
  */

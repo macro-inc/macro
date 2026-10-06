@@ -414,6 +414,7 @@ describe('createGraphqlGroupedSoupQueries', () => {
     );
     await failedFetch;
 
+    expect(a.error()?.message).toContain('continuation failed');
     expect(entityIds(a)).toEqual(['a-1']);
     expect(a.hasNextPage()).toBe(true);
     expect(a.isFetchingNextPage()).toBe(false);
@@ -427,6 +428,7 @@ describe('createGraphqlGroupedSoupQueries', () => {
     fake.executions[2]?.next(page([group('a', ['a-2'], null)], [item('a-2')]));
     await retry;
 
+    expect(a.error()).toBeNull();
     expect(entityIds(a)).toEqual(['a-1', 'a-2']);
     expect(a.hasNextPage()).toBe(false);
   });

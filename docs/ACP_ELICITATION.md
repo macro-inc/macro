@@ -242,7 +242,7 @@ Without the feature there is no `ClientCapabilities::elicitation`, no
 `elicitation/create`. No pin bump is needed. One line in the workspace
 `Cargo.toml` turns it on.
 
-Zed-as-client recordings in `crates/agent_fold/fixtures/real/` already
+Zed-as-client recordings in `crates/folds/agent_fold/fixtures/real/` already
 advertise `"elicitation":{"form":{},"url":{}}` on `initialize`. That is
 Zed's capability object, not ours.
 
@@ -251,7 +251,7 @@ Zed's capability object, not ours.
 What each popular ACP agent actually does when it wants to ask the user
 something, from reading adapter source. The shared idiom (a select plus an
 "Other" free-text companion, and the answer the harness settled on) is read
-through two `HarnessReader` methods in `crates/agent_fold/src/domain/harness/`
+through two `HarnessReader` methods in `crates/folds/agent_fold/src/domain/harness/`
 - `custom_answer_for` and `reported_elicitation_answer` - with the shared
 marker as the neutral reading (`generic.rs`) and each harness's own marker
 and naming fallback in its file (`claude_code.rs`, `codex.rs`). The fold
@@ -753,7 +753,7 @@ service-level tests can drive the loop end-to-end.
 
 ### 3. `agent_fold` — the type surface
 
-`crates/agent_fold/src/domain/model.rs`. Everything here is
+`crates/folds/agent_fold/src/domain/model.rs`. Everything here is
 `Serialize + specta::Type` and lands in
 `apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts`
 via `just gen-agent-fold-types`.

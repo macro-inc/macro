@@ -71,6 +71,7 @@ function PlanCard(props: {
   secondaryLine?: string;
   note: JSX.Element;
   buttonName: string;
+  buttonLabel?: string;
 }) {
   return (
     <section
@@ -189,7 +190,7 @@ function PlanCard(props: {
             width: '100%',
           }}
         >
-          Get started
+          {props.buttonLabel ?? 'Get started'}
         </a>
       </div>
     </section>
@@ -218,17 +219,18 @@ function PricingPlans() {
         }}
       >
         <PlanCard
-          eyebrow="Free"
+          eyebrow="Guest"
           price="$0"
-          primaryLine="for personal use"
-          secondaryLine="free forever"
+          primaryLine="to join a workspace"
+          secondaryLine="no subscription required"
           note={
             <>
-              <strong>Free includes:</strong> "Sent with Macro" in email
+              <strong>Guest access includes:</strong> "Sent with Macro" in email
               signatures, limits on storage and AI.
             </>
           }
           buttonName="pricing_free_connect_google"
+          buttonLabel="Join as Guest"
         />
         <PlanCard
           accent
@@ -369,7 +371,7 @@ function ComparisonGrid() {
 
   return (
     <section
-      aria-label="Free versus paid comparison"
+      aria-label="Guest access versus paid comparison"
       style={{
         'box-sizing': 'border-box',
         display: 'grid',
@@ -399,7 +401,7 @@ function ComparisonGrid() {
         >
           <div aria-hidden="true" />
           <div style={{ 'text-align': 'center' }}>
-            <div style={comparisonPlanHeadingStyle('var(--c1)')}>Free</div>
+            <div style={comparisonPlanHeadingStyle('var(--c1)')}>Guest</div>
             <div
               style={{
                 color: 'var(--c4)',
@@ -797,8 +799,8 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
         Macro works great solo or as a team, and pricing is the same either way.
         Teams share email, tasks, documents, and calls through workspace
         permissions. Agents can search and read the work you have access to, and
-        use memory built from your workspace activity. Note there is no free
-        plan for teams.
+        use memory built from your workspace activity. Team subscriptions
+        require a paid seat for every member.
       </>
     ),
   },
@@ -971,7 +973,7 @@ export const RoutePricing: Component = () => {
   setPageSeo({
     title: 'Pricing — Macro',
     description:
-      'Macro is free for personal use. The paid plan is $40 per seat per month for the first 5 seats, then $80. Every module is included on every plan — we charge for limits and team features, not feature gates.',
+      'Join a workspace as a Guest for free. The paid plan is $40 per seat per month for the first 5 seats, then $80. Every module is included on every plan — we charge for limits and team features, not feature gates.',
     path: '/pricing',
   });
 

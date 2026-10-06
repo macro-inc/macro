@@ -75,6 +75,8 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod coding_agents;
+pub use coding_agents::{ToolCodingAgentToolContext, build_coding_agent_tool_context};
 mod images;
 #[cfg(any(test, feature = "test-support"))]
 pub use images::build_image_generation_tool_context_test;
@@ -1530,6 +1532,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::pg_import_repo::PgImportRepo,
     ToolMcpSelector,
     ToolEntityCreator,
+    import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
 >;
 
 /// Type alias for the import tool context. Built `unwired` by the shared
@@ -1561,12 +1564,21 @@ pub fn build_activity_tool_context(
     ))
 }
 
-#[derive(Clone, Default)]
-pub struct NoOpScheduleContext;
+pub use routines::inbound::RoutineToolContext;
+
+/// Build the routine client from standard service URL and auth configuration.
+pub fn build_routine_tool_context() -> anyhow::Result<RoutineToolContext> {
+    Ok(RoutineToolContext {
+        service: Some(routines::outbound::RoutineClient::new(
+            macro_service_urls::ScheduledActionServiceUrl::new()?.as_ref(),
+            &macro_auth::InternalApiKey::new()?,
+        )?),
+    })
+}
 
 #[cfg(any(test, feature = "test-support"))]
-pub fn no_op_schedule_context() -> NoOpScheduleContext {
-    NoOpScheduleContext
+pub fn no_op_schedule_context() -> RoutineToolContext {
+    RoutineToolContext::default()
 }
 
 /// The full service context containing all API clients.
@@ -1599,13 +1611,14 @@ pub struct ToolServiceContext {
     pub chat_tool_context: ToolChatToolContext,
     pub channel_tool_context: ToolChannelToolContext,
     pub bot_tool_context: ToolBotToolContext,
+    pub coding_agent_tool_context: ToolCodingAgentToolContext,
     pub project_tool_context: ToolProjectToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,
     pub team_tool_context: ToolTeamToolContext,
     pub crm_tool_context: ToolCrmToolContext,
     pub skill_tool_context: ToolSkillToolContext,
-    pub schedule_tool_context: NoOpScheduleContext,
+    pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
     /// Shared admission for independently initiated AI work. Hosts must inject

@@ -19,6 +19,8 @@ export interface CreateCheckoutSessionV2Request {
   discount?: CreateCheckoutSessionV2RequestDiscount;
   /** Tracking metadata for conversion attribution */
   metadata?: CheckoutSessionMetadata;
+  /** Request the automatic, first-subscription 30-day Premium trial. */
+  onboardingTrial?: boolean;
   plan?: CreateCheckoutSessionV2RequestPlan;
   /** The URL to redirect to on successful checkout */
   successUrl: string;

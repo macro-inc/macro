@@ -64,6 +64,14 @@ pub mod rel_type {
     /// Slide → comments.
     pub const COMMENTS: &str =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+    /// Slide → video file (`a:videoFile r:link`).
+    pub const VIDEO: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video";
+    /// Slide → audio file (`a:audioFile r:link`).
+    pub const AUDIO: &str =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio";
+    /// Slide → embedded media (`p14:media r:embed`).
+    pub const MEDIA: &str = "http://schemas.microsoft.com/office/2007/relationships/media";
     /// Package → core properties.
     pub const CORE_PROPERTIES: &str =
         "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties";
@@ -288,6 +296,22 @@ impl Package {
                 Ok(Cow::Owned(zip::inflate_entry(entry, raw)?))
             }
             PartData::Modified(bytes, _) => Ok(Cow::Borrowed(bytes.as_slice())),
+        }
+    }
+
+    /// Reads at most the first `max` bytes of a part (inflating only those),
+    /// for file headers.
+    pub fn read_prefix(&self, name: &str, max: usize) -> Result<Cow<'_, [u8]>> {
+        let part = self
+            .part(name)
+            .ok_or_else(|| Error::MissingPart(name.to_owned()))?;
+        match &part.data {
+            PartData::Original(entry) => {
+                let raw = &self.source
+                    [entry.data_start..entry.data_start + entry.compressed_size as usize];
+                Ok(Cow::Owned(zip::inflate_prefix(entry, raw, max)?))
+            }
+            PartData::Modified(bytes, _) => Ok(Cow::Borrowed(&bytes[..max.min(bytes.len())])),
         }
     }
 

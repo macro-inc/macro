@@ -71,10 +71,10 @@ pub async fn get_owner_and_deleted(
         EntityType::DatabaseRow => {
             sqlx::query!(
                 r#"
-            SELECT d.owner_id, d.trashed_at
+            SELECT d.user_id AS owner_id, d.trashed_at
             FROM database_rows r
             JOIN database_tables t ON t.id = r.table_id
-            JOIN databases d ON d.id = t.database_id
+            JOIN database_entities d ON d.database_id = t.database_id
             WHERE r.id = $1
             "#,
                 Uuid::parse_str(entity_id)?,

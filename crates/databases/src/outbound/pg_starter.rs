@@ -86,7 +86,7 @@ where
         .is_some();
         if !claimed {
             let database_id = sqlx::query_scalar!(
-                r#"SELECT d.id FROM database_starter_seeds s JOIN databases d ON d.id = s.database_id
+                r#"SELECT d.database_id FROM database_starter_seeds s JOIN database_entities d ON d.database_id = s.database_id
                    WHERE s.user_id = $1 AND d.trashed_at IS NULL"#,
                 user_id,
             )
@@ -101,7 +101,7 @@ where
         }
         // Existing and trashed databases both mean the user already started.
         if sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM databases WHERE owner_id = $1) AS \"exists!\"",
+            "SELECT EXISTS(SELECT 1 FROM database_entities WHERE user_id = $1) AS \"exists!\"",
             user_id
         )
         .fetch_one(&mut *transaction)

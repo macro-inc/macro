@@ -183,6 +183,14 @@ type CompleteSubscriptionRoot {
 	"""
 	soupUpdates: [SoupPatch!]!
 	"""
+	Frames appended to one accessible agent session's log from now on,
+	one run per flush, in log order. Each entry is the row `agentSession.log`
+	serves, so a subscriber folds the same bytes a reader of the log does.
+	The stream ends with an error when the subscriber falls behind: rows
+	were missed, and the log must be refetched.
+	"""
+	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
@@ -739,6 +747,70 @@ input GraphqlAgentSessionLiteral @oneOf {
 	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
+}
+
+"""
+One session's raw protocol log and the agent whose messages it derives.
+"""
+type GraphqlAgentSessionLog {
+	"""
+	The bot the session runs as: the sender of every agent message.
+	"""
+	bot: GraphqlAgentSessionLogBot!
+	"""
+	Effective history in ascending `(createdAt, id)` order. The first row
+	is the inclusive history boundary; a reader reconciles overlap by id.
+	"""
+	entries: [GraphqlAgentSessionLogEntry!]!
+}
+
+"""
+The bot as the log's reader needs it, handle included.
+"""
+type GraphqlAgentSessionLogBot {
+	"""
+	The bot's id. A message it sent has `"bot|{id}"` as its sender.
+	"""
+	id: ID!
+	"""
+	Display name.
+	"""
+	name: String!
+	"""
+	Stable `@` handle, without a leading `@`.
+	"""
+	handle: String!
+	"""
+	Avatar, when it has one.
+	"""
+	avatarUrl: String
+}
+
+"""
+One logged frame, in the shape the fold reads: the transport row's
+identity and time beside the frame's own `direction` and `content`.
+"""
+type GraphqlAgentSessionLogEntry {
+	"""
+	Durable transport row identity; with `createdAt`, its order cursor.
+	"""
+	id: ID!
+	"""
+	When the log recorded the frame.
+	"""
+	createdAt: String!
+	"""
+	The user whose action produced the frame, absent when no user did.
+	"""
+	userId: String
+	"""
+	Which way the frame travelled: `to_server` or `to_runtime`.
+	"""
+	direction: String!
+	"""
+	The protocol envelope, verbatim.
+	"""
+	content: JSON!
 }
 
 """
@@ -4715,6 +4787,30 @@ enum GraphqlScheduledActionEventName {
 	"""
 	DOCUMENT_UPDATED
 	"""
+	A document was deleted.
+	"""
+	DOCUMENT_DELETED
+	"""
+	A task was created.
+	"""
+	TASK_CREATED
+	"""
+	A task's status changed.
+	"""
+	TASK_STATUS_CHANGED
+	"""
+	A task's priority changed.
+	"""
+	TASK_PRIORITY_CHANGED
+	"""
+	A task property changed.
+	"""
+	TASK_PROPERTY_CHANGED
+	"""
+	A new email was received.
+	"""
+	EMAIL_MESSAGE_RECEIVED
+	"""
 	A channel was created.
 	"""
 	CHANNEL_CREATED
@@ -4747,9 +4843,23 @@ type GraphqlScheduledActionEventsTrigger {
 }
 
 """
+Any of several schedules and optional Macro event filters.
+"""
+type GraphqlScheduledActionMultipleTrigger {
+	"""
+	Each schedule retains its own timezone and next firing.
+	"""
+	schedules: [GraphqlScheduledActionCronTrigger!]!
+	"""
+	Events that can also trigger this routine.
+	"""
+	events: GraphqlScheduledActionEventsTrigger
+}
+
+"""
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
 A select-option property value.
@@ -4969,6 +5079,12 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	The bot running this session, when its profile still exists.
 	"""
 	bot: GraphqlSessionBot
+	"""
+	The session's raw protocol log: what the client folds into messages.
+	Served whole, in log order, the same rows the harness's REST log
+	endpoint serves.
+	"""
+	log: GraphqlAgentSessionLog!
 	"""
 	The runtime snapshotted when the session was created.
 	"""
@@ -7116,6 +7232,11 @@ type GraphqlUser {
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	Fetch one accessible agent session by id, with its protocol log
+	reachable through `log`.
+	"""
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession
 	"""
 	Fetch Soup items nested into grouping bins.
 	"""

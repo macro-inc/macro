@@ -11,7 +11,6 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 import { devHttps } from './scripts/dev-https';
-import { docxodusRuntime } from './scripts/docxodus-runtime';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
@@ -100,7 +99,6 @@ export const createAppViteConfig = (): UserConfigFn => {
           root: './',
         }),
         gitBranchHmrPlugin(),
-        docxodusRuntime(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,

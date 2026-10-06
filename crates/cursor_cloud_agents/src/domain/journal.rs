@@ -124,6 +124,12 @@ struct RunState {
     /// What the reader sees of `text`: the same stream minus the `<img>`
     /// tags Cursor writes for files only its sandbox can reach.
     images: InlineImageFilter,
+    /// Whether the transport broke after the last content record, so that
+    /// `text` may be missing its end. Set by an interruption, cleared by
+    /// the next content record: a resume that continues the stream leaves
+    /// no gap, and only a run whose outcome then arrives by polling is
+    /// still behind when its final text is compared.
+    interrupted: bool,
 }
 /// Complete live/replay state, including user prompts and terminal tool cleanup.
 #[derive(Debug, Default)]
@@ -204,7 +210,12 @@ impl ReplayMachine {
                     .map(|b| SessionUpdate::UserMessageChunk(ContentChunk::new(b)))
                     .collect())
             }
-            JournalInput::Sse(record) => self.event(run, record.decode()),
+            JournalInput::Sse(record) => {
+                if record.is_content() {
+                    state.interrupted = false;
+                }
+                self.event(run, record.decode())
+            }
             JournalInput::ArtifactsCollected(artifacts) => {
                 if artifacts.is_empty() {
                     return Ok(Vec::new());
@@ -251,12 +262,14 @@ impl ReplayMachine {
                 // This closes local work, but does not claim remote capture is complete.
                 Ok(self.translator.close_open_calls())
             }
+            JournalInput::TransportError(_) | JournalInput::StreamInterrupted { .. } => {
+                state.interrupted = true;
+                Ok(Vec::new())
+            }
             JournalInput::HistoryComplete
             | JournalInput::Reconciled
             | JournalInput::PromptAccepted(_)
-            | JournalInput::PromptAborted(_)
-            | JournalInput::TransportError(_)
-            | JournalInput::StreamInterrupted { .. } => Ok(Vec::new()),
+            | JournalInput::PromptAborted(_) => Ok(Vec::new()),
         }
     }
     fn event(
@@ -332,6 +345,29 @@ impl ReplayMachine {
                         Some(suffix) => {
                             updates.extend(self.translator.push(CursorEvent::Assistant {
                                 text: state.images.push(suffix),
+                            }));
+                            state.text = text;
+                        }
+                        // The stream broke and nothing came after it, so the
+                        // captured text is the front of an answer whose end
+                        // was never streamed. Streamed chunks cannot be taken
+                        // back, so the whole answer follows as its own
+                        // passage: the user sees the fragment and then the
+                        // answer, rather than the fragment alone.
+                        None if state.interrupted => {
+                            tracing::warn!(
+                                %run,
+                                captured = state.text.len(),
+                                restated = text.len(),
+                                "Cursor restated the answer after a stream gap; appending it whole"
+                            );
+                            let separator = if state.text.is_empty() || state.text.ends_with('\n') {
+                                ""
+                            } else {
+                                "\n\n"
+                            };
+                            updates.extend(self.translator.push(CursorEvent::Assistant {
+                                text: state.images.push(&format!("{separator}{text}")),
                             }));
                             state.text = text;
                         }

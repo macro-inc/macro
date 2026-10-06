@@ -1984,7 +1984,7 @@
 		min-width: 150px;
 	}
 
-	/* routine block page (block-automation/component/Automation.tsx) */
+	/* routine block page (block-routine/component/Routine.tsx) */
 	:where(.agents-view, .agents-view-portal) .switch {
 		display: inline-flex;
 		align-items: center;

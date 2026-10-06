@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbaaff046a2092289ffd1c9bed577905aa3cdaf212f867b827f6ef4a0de215f2"
+}

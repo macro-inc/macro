@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -363,11 +363,35 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Run a queued action next. Moves it ahead of the rest of the queue and
+     * cancels the turn in flight, so this entry dispatches when that turn ends.
+     */
+    public steerQueuedAction<ThrowOnError extends boolean = false>(options: Options<SteerQueuedActionData, ThrowOnError>): RequestResult<SteerQueuedActionResponses, SteerQueuedActionErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SteerQueuedActionResponses, SteerQueuedActionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/queue/{action_id}/steer', ...options });
+    }
+    
+    /**
      * Resize this session's sandbox and remember the size as the owner's default.
      */
     public putAgentSessionSandboxSize<ThrowOnError extends boolean = false>(options: Options<PutAgentSessionSandboxSizeData, ThrowOnError>): RequestResult<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/sandbox-size',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Answer a tool call the agent made in a turn somebody other than the
+     * session's owner prompted. Approve and deny are the owner's; cancel is
+     * anyone's with edit access.
+     */
+    public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

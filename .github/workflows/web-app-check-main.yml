@@ -29,7 +29,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
-            - 'crates/agent_fold/**'
+            - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
             - 'crates/client/cache-turso/**'
@@ -193,6 +193,9 @@ jobs:
         playwright: 'true'
     - name: Test
       run: bunx vitest
+      working-directory: apps/web
+    - name: Sign-up Browser Tests
+      run: just test-signup-browser
       working-directory: apps/web
     - name: Teardown Nix
       if: always()

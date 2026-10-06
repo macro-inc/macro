@@ -566,18 +566,6 @@ export const botManagement = defineFlag({
   default: onInDev,
 });
 
-// Onboarding v4: the full-screen stepper new users land in after signup
-// (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
-// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
-// callers can wait instead of treating "flags not loaded yet" as "off").
-// `just run_local` sets the env to false unless `--enable-onboarding`.
-export const enableOnboardingV4 = defineFlag({
-  key: 'enable-onboarding-v4',
-  env: 'ENABLE_ONBOARDING_V4',
-  default: onInDev,
-});
-
 // Calendar UI: calendar surfaces and the elevated-permissions upgrade flow
 // that re-runs Google consent for inboxes connected before the calendar
 // scope existed. PostHog-gated with a dev-mode default; override with
@@ -754,6 +742,17 @@ export const enablePptxEditor = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
+ * files as before: download only. On in dev; deployed environments follow
+ * PostHog.
+ */
+export const enableFigViewer = defineFlag({
+  key: 'enable-fig-viewer',
+  env: 'ENABLE_FIG_VIEWER',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
@@ -770,6 +769,20 @@ export const enableSpreadsheets = defineFlag({
 export const enableDictation = defineFlag({
   key: 'enable-dictation',
   env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * AI usage billing UI: enables production Usage controls and the usage-limit
+ * dialog, plus the "$N of AI usage" plan copy. Dev and local Usage remain
+ * interactive regardless of this flag. Presentation only:
+ * backend quota admission and settlement are gated separately by
+ * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
+ * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.
+ */
+export const enableAiUsageBilling = defineFlag({
+  key: 'enable-ai-usage-billing',
+  env: 'ENABLE_AI_USAGE_BILLING',
   default: onInDev,
 });
 

@@ -1,3 +1,4 @@
+import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -32,14 +33,7 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
 import { useMessageRootsQuery } from '@queries/messages/document-messages';
 import { Badge } from '@ui';
-import {
-  createMemo,
-  createSignal,
-  Match,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
 import type { DocxBlockData } from './definition';
 import {
   buildDocxSeed,
@@ -49,7 +43,6 @@ import {
   initializeDocxSync,
 } from './queries/docx-document';
 import { createDocxSession } from './queries/docx-session';
-import { type DocxodusRuntime, loadDocxodus } from './queries/docxodus-runtime';
 import { DocxCommentMargin, DocxDetachedComments } from './views/DocxComments';
 import { DocxEditorView } from './views/DocxEditorView';
 
@@ -98,14 +91,6 @@ export default function DocxBlock(props: { share?: string }) {
   const roots = useMessageRootsQuery(parent);
   // Gated: reading a pending query's data would suspend and blank the editor.
   const rootThreads = () => (roots.isSuccess ? (roots.data ?? []) : []);
-  // A plain signal, not a resource: reading a pending resource would suspend
-  // the block and blank it while the engine streams in.
-  const [runtime, setRuntime] = createSignal<DocxodusRuntime>();
-  const [runtimeError, setRuntimeError] = createSignal(false);
-  loadDocxodus().then(setRuntime, (error: unknown) => {
-    console.error('DOCX engine failed to load', error);
-    setRuntimeError(true);
-  });
   const reportError = (error: unknown) => {
     console.error('DOCX editor error', error);
     toast.failure(
@@ -127,6 +112,19 @@ export default function DocxBlock(props: { share?: string }) {
         </SplitHeaderLeft>
         <SplitHeaderRight>
           <BlockLiveIndicators />
+        </SplitHeaderRight>
+        <SplitHeaderRight>
+          <div class="order-[999] flex items-center">
+            <ChatWithAgentButton
+              label="Ask Macro"
+              entity={{
+                type: 'document',
+                id: documentId,
+                name: name(),
+                fileType: 'docx',
+              }}
+            />
+          </div>
         </SplitHeaderRight>
         <ResponsivePermissionsBadge />
         <ResponsiveBlockToolbar
@@ -179,7 +177,7 @@ export default function DocxBlock(props: { share?: string }) {
             );
             return (
               <Switch>
-                <Match when={state().t === 'error' || runtimeError()}>
+                <Match when={state().t === 'error'}>
                   <div class="p-6 text-sm text-failure">
                     {(() => {
                       const current = state();
@@ -189,69 +187,63 @@ export default function DocxBlock(props: { share?: string }) {
                     })()}
                   </div>
                 </Match>
-                <Match when={!runtime() || !target()}>
+                <Match when={!target()}>
                   <div class="p-6 text-sm text-ink-muted">
                     Opening document…
                   </div>
                 </Match>
-                <Match when={runtime()}>
-                  {(engine) => (
-                    <Show when={target()} keyed>
-                      {({ doc, original }) => (
-                        <DocxEditorView
-                          runtime={engine()}
-                          doc={doc}
-                          original={original}
-                          canEdit={!!doc && canEdit()}
+                <Match when={target()} keyed>
+                  {({ doc, original }) => (
+                    <DocxEditorView
+                      doc={doc}
+                      original={original}
+                      canEdit={!!doc && canEdit()}
+                      canComment={() => !!doc && canComment()}
+                      fileName={fileName()}
+                      peers={session.peers}
+                      displayName={displayName}
+                      author={displayName(userId())}
+                      documentId={documentId}
+                      onSelection={session.setSelection}
+                      commentRoots={doc ? rootThreads : undefined}
+                      margin={(context) => (
+                        <DocxCommentMargin
+                          documentId={documentId}
+                          comments={context.comments}
+                          geometry={context.geometry}
+                          selectionTop={context.selectionTop}
                           canComment={() => !!doc && canComment()}
-                          author={displayName(userId()) || 'Macro user'}
-                          fileName={fileName()}
-                          peers={session.peers}
-                          displayName={displayName}
-                          onSelection={session.setSelection}
-                          subscribeRemote={session.onRemoteChange}
-                          commentRoots={doc ? rootThreads : undefined}
-                          margin={(context) => (
-                            <DocxCommentMargin
-                              documentId={documentId}
-                              comments={context.comments}
-                              editorRoot={context.editorRoot}
-                              margin={context.margin}
-                              revision={context.revision}
-                              canComment={() => !!doc && canComment()}
-                              isOwner={isOwner}
-                              userId={userId}
-                            />
-                          )}
-                          footer={(comments) => (
-                            <>
-                              <DocxDetachedComments
-                                documentId={documentId}
-                                threads={comments.detached()}
-                                canComment={canComment}
-                                isOwner={isOwner}
-                              />
-                              <EntityDiscussion
-                                parent={parent()}
-                                canWrite={canComment()}
-                                canModerate={isOwner()}
-                                link={{ type: 'write', id: documentId }}
-                                label="Discussion"
-                              />
-                            </>
-                          )}
-                          onDownload={(bytes) =>
-                            downloadFile(
-                              new Blob([bytes.slice().buffer], {
-                                type: DOCX_MIME,
-                              }),
-                              fileName()
-                            )
-                          }
-                          onError={reportError}
+                          isOwner={isOwner}
+                          userId={userId}
                         />
                       )}
-                    </Show>
+                      footer={(comments) => (
+                        <>
+                          <DocxDetachedComments
+                            documentId={documentId}
+                            threads={comments.detached()}
+                            canComment={canComment}
+                            isOwner={isOwner}
+                          />
+                          <EntityDiscussion
+                            parent={parent()}
+                            canWrite={canComment()}
+                            canModerate={isOwner()}
+                            link={{ type: 'write', id: documentId }}
+                            label="Discussion"
+                          />
+                        </>
+                      )}
+                      onDownload={(bytes) =>
+                        downloadFile(
+                          new Blob([bytes.slice().buffer], {
+                            type: DOCX_MIME,
+                          }),
+                          fileName()
+                        )
+                      }
+                      onError={reportError}
+                    />
                   )}
                 </Match>
               </Switch>

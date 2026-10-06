@@ -144,6 +144,14 @@ impl AgentSessionNotificationRecipient for Controls {
     ) -> SessionResult<()> {
         panic!("not a routine capability")
     }
+    async fn steer_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
     async fn set_sandbox_size(&self, _: AgentSessionId, _: SandboxSize) -> SessionResult<()> {
         panic!("not a routine capability")
     }
@@ -285,6 +293,7 @@ async fn external_preparation_uses_requested_identity_and_model() {
         assert_eq!(
             requests.as_slice(),
             &[RequestedExternalSession {
+                repo_url: None,
                 session_id: fx.session.id,
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),

@@ -8,6 +8,7 @@ import { match } from 'ts-pattern';
 import { type DatabaseViewColumn, isBoardGroupColumn } from './database-view';
 import { moveBeside } from './move-beside';
 import { titleColumn } from './table';
+import type { DatabaseViewState } from './view-state';
 
 /** A table layout's column, with its width. */
 type LayoutColumn = {
@@ -252,10 +253,10 @@ function withoutColumnNode(
  * entry go. A board grouped by it has nothing else to group by, so the
  * column cannot be removed from it, as the service refuses too.
  */
-export function withoutColumn(
-  view: DatabaseView,
+export function withoutColumn<T extends DatabaseViewState>(
+  view: T,
   columnId: string
-): Result<DatabaseView, { kind: 'board-groups-by-column' }> {
+): Result<T, { kind: 'board-groups-by-column' }> {
   if (view.layout.kind === 'board' && view.layout.groupBy === columnId)
     return err({ kind: 'board-groups-by-column' });
   const filter = view.query.filter;

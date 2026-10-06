@@ -1,6 +1,7 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { ActivityRouteView } from '@app/features/activity/route-views';
 import { AgentsRouteView } from '@app/features/agents-view/route-views';
+import { MobileWebSignup } from '@app/features/auth/auth';
 import { CallDetailRouteView } from '@app/features/block-call/route-views';
 import { PrDetailRouteView } from '@app/features/block-pr/route-views';
 import { CalendarRouteView } from '@app/features/calendar-view/route-views';
@@ -32,7 +33,6 @@ import {
   RecentRouteView,
   SearchRouteView,
 } from '@app/features/next-soup/route-views';
-import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
 import {
   ReminderDetailRouteView,
   RemindersRouteView,
@@ -41,6 +41,7 @@ import {
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
 } from '@app/features/reviews-view/route-views';
+import { RoutineCreateRouteView } from '@app/features/routines/route-views';
 import { SettingsRouteView } from '@app/features/settings/route-views';
 import { TasksDetailRouteView } from '@app/features/tasks-view/components/TasksDetailView';
 import {
@@ -78,7 +79,6 @@ import {
   LoginPopupSuccess,
   OnboardingPage,
   PublicBookingRoutePage,
-  SetupPage,
   SignupPage,
   TaskSlugPage,
   WelcomePage,
@@ -137,9 +137,11 @@ import {
   remindersRoute,
   reviewsPrRoute,
   reviewsSplitRoute,
+  routineCreateRoute,
+  routineDetailRoute,
+  routinesRoute,
   searchRoute,
   settingsRoute,
-  setupRoute,
   signupRoute,
   taskDetailRoute,
   taskSlugRoute,
@@ -215,7 +217,6 @@ export function AppRouterView() {
       <Route definition={welcomeRoute} component={WelcomePage} />
       <Route definition={mobileEmailSignupRoute} component={MobileWebSignup} />
       <Route definition={onboardingRoute} component={OnboardingPage} />
-      <Route definition={setupRoute} component={SetupPage} />
       <Route definition={inviteRoute} component={InviteWelcome} />
       <Route
         definition={internalInviteLinksRoute}
@@ -248,6 +249,12 @@ export function AppRouterView() {
           />
         </Route>
         <Route definition={settingsRoute} component={SettingsRouteView} />
+        <Route
+          definition={routineCreateRoute}
+          component={RoutineCreateRouteView}
+        />
+        <Route definition={routineDetailRoute} component={AgentsRouteView} />
+        <Route definition={routinesRoute} component={AgentsRouteView} />
         <Route definition={agentsRoute} component={AgentsRouteView} />
         <Route definition={codersRoute} component={AgentsRouteView} />
         <Route definition={agentChatsRoute} component={AgentsRouteView} />

@@ -511,6 +511,26 @@ export type AiAdmissionErrorBody = {
     error: string;
 };
 
+/**
+ * Request body for answering a held tool call.
+ */
+export type AnswerToolApprovalRequest = {
+    /**
+     * The answer.
+     */
+    answer: ToolApprovalAnswerDto;
+};
+
+/**
+ * Response body for answering a held tool call.
+ */
+export type AnswerToolApprovalResponse = {
+    /**
+     * Where the call stands now.
+     */
+    status: ToolApprovalStatusDto;
+};
+
 export type BotId = string;
 
 /**
@@ -1370,6 +1390,16 @@ export type StatusResponse = {
     ephemeral: boolean;
 };
 
+/**
+ * How a person answers a held tool call.
+ */
+export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' | 'cancel';
+
+/**
+ * Where a held tool call stands once answered.
+ */
+export type ToolApprovalStatusDto = 'pending' | 'approved' | 'denied' | 'cancelled' | 'expired';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -2161,6 +2191,40 @@ export type EditQueuedActionResponses = {
 
 export type EditQueuedActionResponse = EditQueuedActionResponses[keyof EditQueuedActionResponses];
 
+export type SteerQueuedActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID the action was accepted under
+         */
+        action_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/queue/{action_id}/steer';
+};
+
+export type SteerQueuedActionErrors = {
+    401: string;
+    403: string;
+    /**
+     * Already dispatched or never queued
+     */
+    404: string;
+    500: string;
+};
+
+export type SteerQueuedActionError = SteerQueuedActionErrors[keyof SteerQueuedActionErrors];
+
+export type SteerQueuedActionResponses = {
+    204: void;
+};
+
+export type SteerQueuedActionResponse = SteerQueuedActionResponses[keyof SteerQueuedActionResponses];
+
 export type PutAgentSessionSandboxSizeData = {
     body: SandboxSizeBody;
     path: {
@@ -2186,6 +2250,48 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type AnswerAgentSessionToolApprovalData = {
+    body: AnswerToolApprovalRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+        /**
+         * ID of the held tool call
+         */
+        approval_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}';
+};
+
+export type AnswerAgentSessionToolApprovalErrors = {
+    401: string;
+    /**
+     * Not the owner, for approve or deny; or no edit access
+     */
+    403: string;
+    404: string;
+    /**
+     * Already resolved
+     */
+    409: string;
+    /**
+     * Approve for good, for a call no person asked for
+     */
+    422: string;
+    500: string;
+};
+
+export type AnswerAgentSessionToolApprovalError = AnswerAgentSessionToolApprovalErrors[keyof AnswerAgentSessionToolApprovalErrors];
+
+export type AnswerAgentSessionToolApprovalResponses = {
+    200: AnswerToolApprovalResponse;
+};
+
+export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
 export type DisconnectData = {
     body: EmptyRequest;

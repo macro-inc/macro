@@ -11,7 +11,7 @@ use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSe
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
-use rig_core::message::Message;
+use rig_core::message::{AssistantContent, Message};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
@@ -274,6 +274,7 @@ impl AgentLoop {
                         }
                         let adapter = DynToolSetAdapter::loaded(
                             tool.name,
+                            tool.description,
                             tool.schema,
                             toolset.clone(),
                             context.clone(),
@@ -481,6 +482,14 @@ impl Session {
             )));
         };
 
+        // A session lives for one turn, so whatever the conversation loaded
+        // before is gone. Reload what it called, in the order it first did,
+        // rather than have the model reload each tool every turn.
+        let called = called_catalog_tools(history, &self.request_context.searchable_tools);
+        if !called.is_empty() {
+            (self.bridge_inputs.register_loaded)(called).await;
+        }
+
         let stream = self
             .agent
             .run_stream(
@@ -503,4 +512,27 @@ impl Session {
     pub fn get_history(&self) -> &[Message] {
         &self.history
     }
+}
+
+/// The catalog tools `history` called, in the order of their first call.
+fn called_catalog_tools(history: &[Message], catalog: &[SearchableTool]) -> Vec<SearchableTool> {
+    let mut called: Vec<SearchableTool> = Vec::new();
+    for message in history {
+        let Message::Assistant { content, .. } = message else {
+            continue;
+        };
+        for content in content.iter() {
+            let AssistantContent::ToolCall(call) = content else {
+                continue;
+            };
+            let name = &call.function.name;
+            if called.iter().any(|tool| &tool.name == name) {
+                continue;
+            }
+            if let Some(tool) = catalog.iter().find(|tool| &tool.name == name) {
+                called.push(tool.clone());
+            }
+        }
+    }
+    called
 }

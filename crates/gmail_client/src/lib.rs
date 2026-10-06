@@ -7,6 +7,7 @@ pub(crate) mod history;
 pub(crate) mod labels;
 pub(crate) mod messages;
 pub(crate) mod profile;
+pub(crate) mod send_as;
 pub(crate) mod threads;
 pub(crate) mod watch;
 
@@ -356,5 +357,14 @@ impl GmailClient {
         filter_id: &str,
     ) -> Result<(), GmailApiHttpError> {
         filters::delete_filter(self, access_token, filter_id).await
+    }
+
+    /// Lists all sendAs aliases for the user, including their signatures.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_send_as(
+        &self,
+        access_token: &str,
+    ) -> Result<models_email::gmail::ListSendAsResponse, GmailApiHttpError> {
+        send_as::list_send_as(self, access_token).await
     }
 }

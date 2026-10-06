@@ -2,7 +2,12 @@
 //!
 //! Layout happens in the coordinate space of the shape's text rectangle (points,
 //! origin at its top-left). Vertical text is laid out in a rotated virtual box and
-//! mapped back through [`TextLayout::transform`].
+//! mapped back through [`TextLayout::transform`]: lines run along the box's
+//! height and stack across its width. Insets stay on the sides of the shape
+//! they name, as in PowerPoint; the anchor follows the text ("top" is where
+//! the first line goes). Upright glyphs in vertical text (CJK in East Asian
+//! vertical text, every letter of stacked text) are turned back a quarter
+//! turn about their own center (see [`PlacedGlyph::upright`]).
 
 use crate::font::{FaceId, FontChoice, FontDb, SymbolFont, remap_symbol};
 use crate::model::color::Rgba;
@@ -15,6 +20,9 @@ use crate::path::{Affine, Rect};
 use serde::Serialize;
 
 mod bullet;
+mod math;
+
+pub use math::{EquationBox, TextPath};
 
 pub use bullet::autonum_text;
 use bullet::{BulletInfo, make_bullet};
@@ -28,6 +36,9 @@ pub struct PlacedGlyph {
     pub x: f32,
     /// Baseline y.
     pub y: f32,
+    /// Drawn a quarter turn counter-clockwise about its origin `(x, y)`, so
+    /// it stands upright in a layout rotated 90° clockwise (vertical text).
+    pub upright: bool,
 }
 
 /// Glyphs sharing a face, size, and paint.
@@ -95,6 +106,10 @@ pub struct TextLayout {
     pub decorations: Vec<Decoration>,
     /// Lines (for carets and hit testing).
     pub lines: Vec<LineBox>,
+    /// Filled outlines drawn over the text.
+    pub paths: Vec<TextPath>,
+    /// Equations, in drawing order.
+    pub equations: Vec<EquationBox>,
     /// Total height of the laid-out text, including insets.
     pub content_height: f32,
     /// Widest line, including insets.
@@ -142,6 +157,72 @@ struct Item {
     break_after: bool,
     /// The (display) character.
     ch: char,
+    /// Stands upright in vertical text; `adv` is then its advance down the
+    /// line and `glyph_w` its own (horizontal) advance.
+    upright: bool,
+    glyph_w: f32,
+    /// The typeset equation an equation item draws.
+    math: Option<std::sync::Arc<crate::math::MathBox>>,
+}
+
+/// Which glyphs of vertical text stand upright.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Upright {
+    /// None (rotated with the line).
+    None,
+    /// CJK characters (East Asian and Mongolian vertical text).
+    Cjk,
+    /// Every character (stacked WordArt text).
+    All,
+}
+
+impl Upright {
+    fn of(vert: Vert) -> Self {
+        match vert {
+            Vert::EaVert | Vert::MongolianVert => Upright::Cjk,
+            Vert::WordArtVert | Vert::WordArtVertRtl => Upright::All,
+            Vert::Horz | Vert::Vert | Vert::Vert270 => Upright::None,
+        }
+    }
+
+    fn applies(self, kind: ItemKind, c: char) -> bool {
+        match self {
+            Upright::None => false,
+            Upright::Cjk => kind == ItemKind::Glyph && is_cjk(c),
+            Upright::All => matches!(kind, ItemKind::Glyph | ItemKind::Space),
+        }
+    }
+}
+
+/// Height of an upright glyph's center above the baseline, in ems (the
+/// middle of the ideographic em box, and about the middle of capitals).
+const UPRIGHT_MID: f32 = 0.38;
+
+/// How far above its baseline the middle of a single-spaced line of text
+/// sits, in ems (the line box spans one em above the baseline and
+/// `LINE_HEIGHT_FACTOR - 1` below).
+const LINE_MID: f32 = (2.0 - LINE_HEIGHT_FACTOR) / 2.0;
+
+/// The insets of a body in layout space (`[left, top, right, bottom]` of the
+/// rotated box): each inset stays on the side of the shape it names.
+pub fn layout_insets(vert: Vert, insets: [f32; 4]) -> [f32; 4] {
+    let [l, t, r, b] = insets;
+    match vert {
+        Vert::Horz => insets,
+        // Layout x runs up the shape, layout y to its right.
+        Vert::Vert270 => [b, l, t, r],
+        // Layout x runs down the shape, layout y to its left.
+        _ => [t, r, b, l],
+    }
+}
+
+/// Layout space → text-rectangle space for a `w`×`h` rectangle.
+pub fn layout_transform(vert: Vert, w: f32, h: f32) -> Affine {
+    match vert {
+        Vert::Horz => Affine::IDENTITY,
+        Vert::Vert270 => Affine::translate(0.0, f64::from(h)).pre_concat(&Affine::rotate(-90.0)),
+        _ => Affine::translate(f64::from(w), 0.0).pre_concat(&Affine::rotate(90.0)),
+    }
 }
 
 /// Parameters controlling layout that callers may vary (autofit search).
@@ -267,17 +348,15 @@ struct LaidLine {
 /// Lays out a text body inside a `w`×`h` text rectangle.
 pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutParams) -> TextLayout {
     let bp = &body.body;
-    let vertical = matches!(bp.vert, Vert::Vert | Vert::Vert270 | Vert::EaVert);
+    let vertical = bp.vert.is_vertical();
     // Vertical text: lay out in the rotated box and rotate back.
     let (bw, bh) = if vertical { (h, w) } else { (w, h) };
-    let [li, ti, ri, bi] = if vertical {
-        match bp.vert {
-            Vert::Vert270 => [bp.insets[3], bp.insets[0], bp.insets[1], bp.insets[2]],
-            _ => [bp.insets[1], bp.insets[2], bp.insets[3], bp.insets[0]],
-        }
-    } else {
-        bp.insets
-    };
+    let [li, ti, ri, bi] = layout_insets(bp.vert, bp.insets);
+    // Mongolian and stacked text sit in the box rotated 90° clockwise, where
+    // lines would stack right to left; theirs stack left to right, so their
+    // first line starts at the far (layout bottom) edge.
+    let reversed = matches!(bp.vert, Vert::MongolianVert | Vert::WordArtVert);
+    let upright = Upright::of(bp.vert);
     let wrap = bp.wrap;
     let area_w = (bw - li - ri).max(0.0);
     let ncol = bp.num_col.max(1) as f32;
@@ -295,7 +374,7 @@ pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutPar
 
     for (pi, para) in body.paragraphs.iter().enumerate() {
         let pp = &para.props;
-        let items = shape_paragraph(&shaper, para, params);
+        let items = shape_paragraph(&shaper, para, params, upright);
         let has_text = items.iter().any(|i| i.kind != ItemKind::Break);
         let number = match &pp.bullet.kind {
             BulletKind::AutoNum { scheme, start } if has_text => {
@@ -379,7 +458,8 @@ pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutPar
 
     let content_h = y;
     let avail_h = (bh - ti - bi).max(0.0);
-    let y0 = ti
+    // Distance of the text block from the edge the first line starts at.
+    let y0 = if reversed { bi } else { ti }
         + match bp.anchor {
             Anchor::Top => 0.0,
             Anchor::Middle => (avail_h - content_h) / 2.0,
@@ -422,12 +502,19 @@ pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutPar
             } else {
                 area_w.max(max_w) - para.props.mar_r
             };
+            // Lines stacking from the far edge keep their own orientation.
+            let line_top = if reversed {
+                bh - (y0 + top) - l.height
+            } else {
+                y0 + top
+            };
             let geo = LineGeometry {
                 x_base: li + col_off + block_off,
                 avail,
-                baseline: y0 + top + l.ascent,
-                top: y0 + top,
-                bottom: y0 + top + l.height,
+                baseline: line_top + l.ascent,
+                top: line_top,
+                bottom: line_top + l.height,
+                align: math::display_align(para).unwrap_or(para.props.align),
             };
             emit_line(&mut out, fonts, para, *pi, items, &l.line, &geo);
         }
@@ -435,20 +522,16 @@ pub fn layout(body: &TextBody, w: f32, h: f32, fonts: &FontDb, params: LayoutPar
 
     out.content_height = content_h + ti + bi;
     out.content_width = max_w + li + ri;
-    out.transform = if vertical {
-        match bp.vert {
-            Vert::Vert270 => {
-                Affine::translate(0.0, f64::from(h)).pre_concat(&Affine::rotate(-90.0))
-            }
-            _ => Affine::translate(f64::from(w), 0.0).pre_concat(&Affine::rotate(90.0)),
-        }
-    } else {
-        Affine::IDENTITY
-    };
+    out.transform = layout_transform(bp.vert, w, h);
     out
 }
 
-fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) -> Vec<Item> {
+fn shape_paragraph(
+    shaper: &Shaper<'_>,
+    para: &Paragraph,
+    params: LayoutParams,
+    upright: Upright,
+) -> Vec<Item> {
     let fonts = shaper.fonts;
     let mut items: Vec<Item> = Vec::new();
     let mut src = 0usize;
@@ -474,7 +557,15 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 shift: 0.0,
                 break_after: true,
                 ch: '\u{b}',
+                upright: false,
+                glyph_w: 0.0,
+                math: None,
             });
+            src += 1;
+            continue;
+        }
+        if let RunKind::Math(eq) = &run.kind {
+            items.push(math::math_item(eq, run, ri, src, fonts, params));
             src += 1;
             continue;
         }
@@ -514,7 +605,19 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 _ if kind == ItemKind::Glyph => size * 0.5,
                 _ => 0.0,
             };
-            if let (true, Some(ch), Some(g), Some((pf, pg))) = (kern_on, choice, glyph, prev)
+            let up = upright.applies(kind, shown);
+            let glyph_w = adv;
+            if up {
+                // Upright glyphs advance down the line by an em (CJK) or by
+                // a whole line (stacked letters).
+                adv = if upright == Upright::All {
+                    size * LINE_HEIGHT_FACTOR
+                } else {
+                    size
+                };
+            }
+            if let (true, false, Some(ch), Some(g), Some((pf, pg))) =
+                (kern_on, up, choice, glyph, prev)
                 && pf == ch.face
             {
                 let k = fonts.kerning(ch.face, pg, g) * size;
@@ -526,7 +629,7 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 adv += p.spacing;
             }
             prev = match (choice, glyph) {
-                (Some(ch), Some(g)) => Some((ch.face, g)),
+                (Some(ch), Some(g)) if !up => Some((ch.face, g)),
                 _ => None,
             };
             let (ascent, descent) = choice
@@ -549,6 +652,9 @@ fn shape_paragraph(shaper: &Shaper<'_>, para: &Paragraph, params: LayoutParams) 
                 shift,
                 break_after,
                 ch: shown,
+                upright: up,
+                glyph_w,
+                math: None,
             });
             src += 1;
         }
@@ -765,6 +871,8 @@ struct LineGeometry {
     baseline: f32,
     top: f32,
     bottom: f32,
+    /// Horizontal alignment (the paragraph's, or its display equation's).
+    align: Align,
 }
 
 fn emit_line(
@@ -776,7 +884,6 @@ fn emit_line(
     line: &LineRange,
     g: &LineGeometry,
 ) {
-    let pp = &para.props;
     let free = if g.avail.is_finite() {
         g.avail - line.x_start - line.width
     } else {
@@ -786,7 +893,7 @@ fn emit_line(
         .rev()
         .find(|&i| !matches!(items[i].kind, ItemKind::Space | ItemKind::Break))
         .map_or(line.start, |i| i + 1);
-    let (offset, per_space, per_char) = match pp.align {
+    let (offset, per_space, per_char) = match g.align {
         Align::Center => (free / 2.0, 0.0, 0.0),
         Align::Right => (free, 0.0, 0.0),
         Align::Justify if !line.last && free > 0.0 => {
@@ -813,7 +920,7 @@ fn emit_line(
 
     // The bullet hangs at the indent and moves with centered/right-aligned text.
     if let Some(b) = &line.bullet {
-        let shift = if matches!(pp.align, Align::Center | Align::Right) {
+        let shift = if matches!(g.align, Align::Center | Align::Right) {
             offset
         } else {
             0.0
@@ -825,9 +932,7 @@ fn emit_line(
                     out,
                     ch,
                     it.size,
-                    gl,
-                    bx,
-                    g.baseline,
+                    (gl, bx, g.baseline, false),
                     &b.fill,
                     &None,
                     &Effects::default(),
@@ -886,17 +991,31 @@ fn emit_line(
         if it.kind != ItemKind::Glyph {
             continue;
         }
+        if let Some(bx) = &it.math {
+            math::emit_math(out, it, bx, para, pi, xs[k - line.start], g.baseline);
+            continue;
+        }
         let (Some(ch), Some(gl)) = (it.choice, it.glyph) else {
             continue;
         };
         let props = &para.runs[it.run].props;
+        let x = xs[k - line.start];
+        let baseline = g.baseline - it.shift;
+        let placed = if it.upright {
+            // The glyph's middle goes to the middle of its cell on the line;
+            // turned back a quarter turn about its pen origin, that origin
+            // lies a quarter turn away from the middle.
+            let cx = x + it.adv / 2.0;
+            let cy = baseline - LINE_MID * it.size;
+            (gl, cx + UPRIGHT_MID * it.size, cy + it.glyph_w / 2.0, true)
+        } else {
+            (gl, x, baseline, false)
+        };
         push_glyph(
             out,
             ch,
             it.size,
-            gl,
-            xs[k - line.start],
-            g.baseline - it.shift,
+            placed,
             &props.fill,
             &props.outline,
             &props.effects,
@@ -978,18 +1097,22 @@ fn emit_line(
     });
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Adds glyph `(id, x, y, upright)` to the last run when it shares the look.
 fn push_glyph(
     out: &mut TextLayout,
     choice: FontChoice,
     size: f32,
-    glyph: u16,
-    x: f32,
-    y: f32,
+    (glyph, x, y, upright): (u16, f32, f32, bool),
     fill: &Fill,
     outline: &Option<LineProps>,
     effects: &Effects,
 ) {
+    let placed = PlacedGlyph {
+        id: glyph,
+        x,
+        y,
+        upright,
+    };
     if let Some(run) = out.runs.last_mut()
         && run.face == choice.face
         && run.size == size
@@ -999,13 +1122,13 @@ fn push_glyph(
         && run.synthetic_italic == choice.synthetic_italic
         && run.effects == *effects
     {
-        run.glyphs.push(PlacedGlyph { id: glyph, x, y });
+        run.glyphs.push(placed);
         return;
     }
     out.runs.push(GlyphRun {
         face: choice.face,
         size,
-        glyphs: vec![PlacedGlyph { id: glyph, x, y }],
+        glyphs: vec![placed],
         fill: fill.clone(),
         outline: outline.clone(),
         synthetic_bold: choice.synthetic_bold,

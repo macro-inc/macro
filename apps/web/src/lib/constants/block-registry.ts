@@ -13,6 +13,8 @@ export const BlockRegistry = [
   'spreadsheet',
   // PowerPoint presentations, edited in the browser.
   'pptx',
+  // Figma files, viewed in the browser.
+  'fig',
   'channel',
   'project',
   'unknown',
@@ -20,7 +22,7 @@ export const BlockRegistry = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
   // A task project (`project` is a folder).

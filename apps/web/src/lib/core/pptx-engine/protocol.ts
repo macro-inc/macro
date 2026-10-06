@@ -7,11 +7,21 @@
  */
 
 import type {
+  CellRef,
+  ClipboardPayload,
   DeckOutline,
   EditResult,
   EntryChange,
+  FindOptions,
+  LinkRegion,
+  PresetPath,
+  ShapeGeometryInfo,
   SlideOutline,
+  SmartArtCatalog,
+  SmartArtPreviewPath,
+  SmartArtPreviewSpec,
   TextLayoutInfo,
+  TextMatch,
 } from './types';
 
 interface Base {
@@ -38,12 +48,59 @@ export type PptxRequest =
       mode: 'without' | 'only';
       shape: number;
     })
-  | (Base & { kind: 'textLayout'; index: number; shape: number })
+  /** Top-level shapes at z-order positions `start..end` (slide show layers). */
+  | (Base & {
+      kind: 'renderSpan';
+      index: number;
+      width: number;
+      start: number;
+      end: number;
+      backdrop: boolean;
+    })
+  /** A shape's text, or with `cell` the text of that table cell. */
+  | (Base & {
+      kind: 'textLayout';
+      index: number;
+      shape: number;
+      cell?: CellRef;
+    })
+  /** The bytes of a video or audio clip. */
+  | (Base & { kind: 'mediaBytes'; part: string })
+  /** The clickable areas of a slide. */
+  | (Base & { kind: 'linkRegions'; index: number })
+  /** A shape's outline as editable paths (Edit Points). */
+  | (Base & { kind: 'geometryPaths'; index: number; shape: number })
   | (Base & { kind: 'apply'; ops: string; group?: string })
   | (Base & { kind: 'breakGroup' })
   | (Base & { kind: 'undo' })
   | (Base & { kind: 'redo' })
-  | (Base & { kind: 'save' });
+  | (Base & { kind: 'save' })
+  /** Preset shape outlines for galleries (no document needed). */
+  | (Base & {
+      kind: 'presetPaths';
+      names: string[];
+      width: number;
+      height: number;
+    })
+  /** SmartArt gallery previews (no document needed). */
+  | (Base & { kind: 'smartArtPreviews'; specs: SmartArtPreviewSpec[] })
+  /** The SmartArt layouts, colors, and styles (no document needed). */
+  | (Base & { kind: 'smartArtCatalog' })
+  /** Copies shapes of slide `index` (by id); answers `clipboard`. */
+  | (Base & { kind: 'copyShapes'; index: number; shapes: number[] })
+  /** Copies slides (by id) with their notes; answers `clipboard`. */
+  | (Base & { kind: 'copySlides'; slides: number[] })
+  /** Finds text on every slide; answers `matches`. */
+  | (Base & { kind: 'findText'; query: string; options?: FindOptions })
+  /** Renders linear text as a PNG (no document needed); answers `png`. */
+  | (Base & {
+      kind: 'renderEquation';
+      latex: string;
+      display: boolean;
+      size: number;
+      scale: number;
+      color: string;
+    });
 
 /** History availability, reported after every state change. */
 export interface HistoryState {
@@ -70,6 +127,14 @@ export type PptxResponse =
       millis: number;
     }
   | { id: number; ok: true; kind: 'textLayout'; layout: TextLayoutInfo | null }
+  | { id: number; ok: true; kind: 'linkRegions'; regions: LinkRegion[] }
+  | {
+      id: number;
+      ok: true;
+      kind: 'geometryPaths';
+      geometry: ShapeGeometryInfo | null;
+    }
+  | { id: number; ok: true; kind: 'mediaBytes'; bytes: Uint8Array }
   | {
       id: number;
       ok: true;
@@ -81,4 +146,20 @@ export type PptxResponse =
     }
   | { id: number; ok: true; kind: 'collab'; changes: EntryChange[] }
   | { id: number; ok: true; kind: 'save'; bytes: ArrayBuffer }
+  | {
+      id: number;
+      ok: true;
+      kind: 'presetPaths';
+      paths: Record<string, PresetPath[]>;
+    }
+  | {
+      id: number;
+      ok: true;
+      kind: 'smartArtPreviews';
+      previews: (SmartArtPreviewPath[] | null)[];
+    }
+  | { id: number; ok: true; kind: 'smartArtCatalog'; catalog: SmartArtCatalog }
+  | { id: number; ok: true; kind: 'clipboard'; payload: ClipboardPayload }
+  | { id: number; ok: true; kind: 'matches'; matches: TextMatch[] }
+  | { id: number; ok: true; kind: 'png'; bytes: Uint8Array }
   | { id: number; ok: false; error: string };

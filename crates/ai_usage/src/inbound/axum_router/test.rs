@@ -31,7 +31,12 @@ fn token_prices_remain_explicit_including_free_models() {
                 "price_per_mil_in": input,
                 "price_per_mil_out": output,
             })),
-            Ok(ModelPricing::Tokens { input, output })
+            Ok(ModelPricing::Tokens {
+                input,
+                output,
+                cache_read: None,
+                cache_write: None
+            })
         );
     }
 }
@@ -64,4 +69,49 @@ fn mixed_billing_units_are_rejected() {
             Err("choose token pricing or audio pricing")
         );
     }
+}
+
+#[test]
+fn cache_rates_are_optional_and_kept_when_given() {
+    assert_eq!(
+        pricing(json!({
+            "model": "claude-opus-5",
+            "price_per_mil_in": 5.0,
+            "price_per_mil_out": 25.0,
+            "price_per_mil_cache_read": 0.5,
+            "price_per_mil_cache_write": 6.25,
+        })),
+        Ok(ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
+        })
+    );
+    assert_eq!(
+        pricing(json!({
+            "model": "gpt-5.5",
+            "price_per_mil_in": 5.0,
+            "price_per_mil_out": 30.0,
+            "price_per_mil_cache_read": 0.5,
+        })),
+        Ok(ModelPricing::Tokens {
+            input: 5.0,
+            output: 30.0,
+            cache_read: Some(0.5),
+            cache_write: None,
+        })
+    );
+}
+
+#[test]
+fn cache_rates_cannot_accompany_audio_pricing() {
+    assert_eq!(
+        pricing(json!({
+            "model": "whisper-1",
+            "price_per_audio_minute": 0.006,
+            "price_per_mil_cache_read": 0.5,
+        })),
+        Err("choose token pricing or audio pricing")
+    );
 }

@@ -1,3 +1,4 @@
+import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
@@ -165,6 +166,53 @@ describe('Chat session input', () => {
     ).toBe(true);
   });
 
+  it('restores an unsent session message after the composer remounts', () => {
+    localStorage.clear();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-restore');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={vi.fn()}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Hold this for the session');
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).toHaveBeenCalledWith(
+      'Hold this for the session'
+    );
+  });
+
+  it('drops the saved session message once it is sent', () => {
+    localStorage.clear();
+    const send = vi.fn();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-sent');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={send}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Send and forget');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith('Send and forget', []);
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Send and forget');
+  });
+
   it('keeps a draft intact while the session is pending', () => {
     const send = vi.fn();
     render(() => <ChatSessionInput disabled onSend={send} />);
@@ -229,7 +277,7 @@ describe('Chat session input', () => {
       expect(editor.enter?.(undefined, '')).toBe(false);
       expect(stop).not.toHaveBeenCalled();
       fireEvent.click(
-        screen.getByRole('button', { name: 'Send next queued message' })
+        screen.getByRole('button', { name: 'Flush queued messages' })
       );
       expect(stop).toHaveBeenCalledOnce();
     });

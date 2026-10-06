@@ -1,7 +1,9 @@
 //! The presentation model derived from the package XML.
 
 pub mod color;
+pub mod field;
 pub mod fill;
+pub mod masters;
 pub mod presentation;
 pub mod shape;
 pub mod table;

@@ -229,9 +229,13 @@ impl Parse<'_> {
                 }
                 "buNone" => p.bu_kind = Some(BulletKind::None),
                 "buChar" => {
-                    p.bu_kind = Some(BulletKind::Char(
-                        doc.attr(c, "char").unwrap_or("\u{2022}").to_owned(),
-                    ))
+                    // Only the first character shows (SmartArt drawings
+                    // often write the bullet twice).
+                    let ch = doc
+                        .attr(c, "char")
+                        .and_then(|s| s.chars().next())
+                        .unwrap_or('\u{2022}');
+                    p.bu_kind = Some(BulletKind::Char(ch.to_string()))
                 }
                 "buAutoNum" => {
                     p.bu_kind = Some(BulletKind::AutoNum {
@@ -405,7 +409,15 @@ fn resolve_inner(
         })
         .collect();
     let family = placeholder.map_or("other", Placeholder::style_family);
-    let master_style = ctx.master.as_ref().and_then(|m| {
+    // A master drawn as itself (Slide Master view) styles its own placeholders.
+    let master = ctx.master.as_ref().or_else(|| {
+        let root = ctx.slide.doc.root();
+        ctx.slide
+            .doc
+            .is(root, Ns::P, "sldMaster")
+            .then_some(&ctx.slide)
+    });
+    let master_style = master.and_then(|m| {
         let style = match family {
             "title" => "titleStyle",
             "body" => "bodyStyle",
@@ -470,6 +482,10 @@ fn resolve_inner(
 
         let mut runs = Vec::new();
         for r in doc.children(p) {
+            if let Some(m) = crate::math::equation_element(doc, r) {
+                runs.push(math_run(&parse, own_part, &pp.def_rpr, m, r));
+                continue;
+            }
             let kind = match doc.local(r) {
                 "r" => RunKind::Text,
                 "br" => RunKind::Break,
@@ -481,21 +497,12 @@ fn resolve_inner(
                 .map(|n| parse.rpr(own_part, n))
                 .unwrap_or_default();
             rp.inherit(&pp.def_rpr);
-            let link = doc
+            let hlink = doc
                 .child(r, Ns::A, "rPr")
-                .and_then(|n| doc.child(n, Ns::A, "hlinkClick"))
-                .map(|h| {
-                    let target = doc
-                        .attr_ns(h, Ns::R, "id")
-                        .and_then(|id| own_part.rels.get(id))
-                        .map(|rel| rel.target.clone());
-                    (
-                        target.unwrap_or_default(),
-                        hyperlink_uses_text_color(doc, h),
-                    )
-                });
+                .and_then(|n| doc.child(n, Ns::A, "hlinkClick"));
+            let link = hlink.and_then(|h| read_link(own_part, h));
             let mut props = finish_run(&rp, &parse.colors);
-            if let Some((_, false)) = &link {
+            if hlink.is_some_and(|h| !hyperlink_uses_text_color(doc, h)) {
                 if let Some(c) = parse.colors.scheme_color("hlink") {
                     props.fill = Fill::Solid(c);
                 }
@@ -503,19 +510,29 @@ fn resolve_inner(
                     props.underline = Underline::Single;
                 }
             }
+            let cached = || {
+                doc.child(r, Ns::A, "t")
+                    .map(|t| doc.text(t))
+                    .unwrap_or_default()
+            };
             let text = match &kind {
                 RunKind::Break => String::new(),
-                RunKind::Field(t) if t == "slidenum" => ctx.number.to_string(),
-                _ => doc
-                    .child(r, Ns::A, "t")
-                    .map(|t| doc.text(t))
-                    .unwrap_or_default(),
+                // Masters and layouts show the field's placeholder text (`‹#›`).
+                RunKind::Field(t) if t == "slidenum" && !ctx.is_master_page() => {
+                    ctx.number.to_string()
+                }
+                RunKind::Field(t) if t == "slidenum" => cached(),
+                RunKind::Field(t) => ctx
+                    .clock
+                    .and_then(|now| now.format(t))
+                    .unwrap_or_else(cached),
+                RunKind::Text | RunKind::Math(_) => cached(),
             };
             runs.push(Run {
                 text,
                 props,
                 kind,
-                link: link.map(|(t, _)| t),
+                link,
                 node: r,
             });
         }
@@ -535,6 +552,66 @@ fn resolve_inner(
         body,
         paragraphs,
         node: body_node,
+    })
+}
+
+/// An equation of a paragraph as a run: `item` is the paragraph child (the
+/// `a14:m` or the `mc:AlternateContent` around it), `m` the `a14:m`.
+fn math_run(parse: &Parse<'_>, part: &PartRef, defaults: &PRun, m: NodeId, item: NodeId) -> Run {
+    let doc = &part.doc;
+    let resolve = |rpr: NodeId| {
+        let mut rp = parse.rpr(part, rpr);
+        rp.inherit(defaults);
+        Some(Box::new(finish_run(&rp, &parse.colors)))
+    };
+    let equation = crate::math::read_equation(doc, m, &resolve);
+    // The equation's size and color are its first run's.
+    let first = doc
+        .descendants(m)
+        .into_iter()
+        .find(|&n| doc.is(n, Ns::A, "rPr"));
+    let props = first
+        .and_then(|n| resolve(n).map(|b| *b))
+        .unwrap_or_else(|| finish_run(defaults, &parse.colors));
+    Run {
+        text: crate::math::OBJECT_CHAR.to_string(),
+        props,
+        kind: RunKind::Math(Box::new(equation)),
+        link: None,
+        node: item,
+    }
+}
+
+/// Reads an `a:hlinkClick` (on a run or a shape's `p:cNvPr`) of `part`.
+/// Actions other than slide jumps (macros, programs, OLE verbs) read as no
+/// link.
+pub fn read_link(part: &PartRef, hlink: NodeId) -> Option<Link> {
+    let doc = &part.doc;
+    let rel = doc
+        .attr_ns(hlink, Ns::R, "id")
+        .filter(|id| !id.is_empty())
+        .and_then(|id| part.rels.get(id));
+    let target = match doc.attr(hlink, "action").unwrap_or("") {
+        "" => {
+            let rel = rel?;
+            match rel.mode {
+                crate::opc::TargetMode::External => LinkTarget::Url(rel.target.clone()),
+                crate::opc::TargetMode::Internal => LinkTarget::Url(part.rels.resolve(rel)),
+            }
+        }
+        "ppaction://hlinksldjump" => LinkTarget::Slide(part.rels.resolve(rel?)),
+        action => LinkTarget::Jump(
+            action
+                .strip_prefix("ppaction://hlinkshowjump?jump=")?
+                .to_owned(),
+        ),
+    };
+    Some(Link {
+        target,
+        tooltip: doc
+            .attr(hlink, "tooltip")
+            .filter(|t| !t.is_empty())
+            .map(str::to_owned),
     })
 }
 
@@ -585,13 +662,10 @@ fn resolve_body_props(sources: &[(&PartRef, NodeId)]) -> BodyProps {
             .and_then(|v| crate::xml::parse_bool(&v))
             .unwrap_or(false),
         wrap: get("wrap").is_none_or(|w| w != "none"),
-        vert: match get("vert").as_deref() {
-            Some("vert") => Vert::Vert,
-            Some("vert270") => Vert::Vert270,
-            Some("eaVert") | Some("mongolianVert") => Vert::EaVert,
-            Some("wordArtVert") | Some("wordArtVertRtl") => Vert::Stacked,
-            _ => Vert::Horz,
-        },
+        vert: get("vert")
+            .as_deref()
+            .and_then(Vert::parse)
+            .unwrap_or_default(),
         rot: num("rot").map_or(0.0, |v| (v / 60000.0) as f32),
         num_col: num("numCol").map_or(1, |v| v.clamp(1.0, 16.0) as u32),
         spc_col: num("spcCol").map_or(0.0, emu_to_pt),

@@ -19,6 +19,14 @@ import {
   reminderIdFromDetailContent,
 } from '@app/features/reminders/reminder-navigation';
 import {
+  ROUTINE_CREATE_ROUTE_ID,
+  ROUTINE_DETAIL_ROUTE_ID,
+  ROUTINES_ROUTE_ID,
+  routineContent,
+  routineIdFromContent,
+  routineLocation,
+} from '@app/features/routines/routine-navigation';
+import {
   canonicalRoute,
   decodePane,
   decodeSegment,
@@ -57,6 +65,8 @@ export function decodeLegacyPair(
   id: string
 ): SplitContent | undefined {
   if (!type || !id) return;
+
+  if (type === 'routine' || type === 'automation') return routineContent(id);
 
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) return { type: 'component', id: agentsRoute };
@@ -100,6 +110,7 @@ export function decodeLegacyPair(
 }
 
 function legacyLocation(type: string, id: string): SplitLocation | undefined {
+  if (type === 'routine' || type === 'automation') return routineLocation(id);
   const agentsRoute = agentsRouteFromSegments(type, id);
   if (agentsRoute) {
     return { route: paneRoute({ id: type, params: { id } }) };
@@ -134,6 +145,8 @@ export function handleLegacySplitPath(
   if (
     context.matchedRouteId &&
     context.matchedRouteId !== 'settings' &&
+    context.matchedRouteId !== ROUTINE_DETAIL_ROUTE_ID &&
+    context.matchedRouteId !== ROUTINE_CREATE_ROUTE_ID &&
     !context.matchedRouteId.startsWith('view-') &&
     context.matchedRouteId !== 'legacy-content'
   ) {
@@ -208,6 +221,23 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  // Persisted panes can still contain the old block discriminator.
+  if (['routine', 'automation'].includes(content.type))
+    return routineLocation(content.id);
+  if (content.type === 'component' && content.id === 'routines') {
+    return routineLocation(routineIdFromContent(content));
+  }
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'routines'
+  ) {
+    return routineLocation(
+      typeof content.params.routineId === 'string'
+        ? content.params.routineId
+        : undefined
+    );
+  }
   const reminderId =
     content.type === 'component' && content.id === REMINDER_DETAIL_COMPONENT_ID
       ? reminderIdFromDetailContent(content)
@@ -355,6 +385,15 @@ export function splitContentFromLocation(
 
   if (!root || root.id === NOT_FOUND_ROUTE_ID) {
     return { type: 'component', id: NOT_FOUND_ROUTE_ID };
+  }
+
+  if (root.id === ROUTINES_ROUTE_ID) return routineContent();
+  if (root.id === ROUTINE_CREATE_ROUTE_ID) return routineContent('new');
+  if (root.id === ROUTINE_DETAIL_ROUTE_ID) {
+    const { routineId } = routeParams(location.route);
+    if (typeof routineId === 'string' && routineId.length > 0)
+      return routineContent(routineId);
+    throw new Error('Invalid routine detail split route');
   }
 
   if (root.id === REMINDER_DETAIL_ROUTE_ID) {

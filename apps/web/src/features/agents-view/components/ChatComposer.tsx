@@ -360,8 +360,9 @@ export function ChatComposer(props: {
                       >
                         <SendButton
                           appearance="composer"
-                          aria-label="Send next queued message"
-                          tooltip="Send next queued message"
+                          intent="flush"
+                          aria-label="Flush queued messages"
+                          tooltip="Flush queued messages"
                           shortcut="Enter"
                           onClick={sendNext}
                         />
@@ -400,7 +401,13 @@ export function ChatComposer(props: {
 
 /** Adapt the session's controls to the same input used for a new Chat. */
 export function ChatSessionInput(props: AgentInputProps) {
-  const [draft, setDraft] = createSignal(props.initialInput ?? '');
+  const [owned, setOwned] = createSignal(props.initialInput ?? '');
+  const controlled = () => props.onDraftChange !== undefined;
+  const draft = () => (controlled() ? (props.draft ?? '') : owned());
+  const setDraft = (value: string) => {
+    if (props.onDraftChange) props.onDraftChange(value);
+    else setOwned(value);
+  };
   return (
     <ChatComposer
       draft={draft()}

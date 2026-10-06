@@ -6,9 +6,12 @@ import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
+import EmailIcon from '@phosphor/envelope-simple.svg';
+import GaugeIcon from '@phosphor/gauge.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
+import LinkIcon from '@phosphor/link.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import PlugsConnectedIcon from '@phosphor/plugs-connected.svg';
 import BotIcon from '@phosphor/robot.svg';
@@ -26,6 +29,7 @@ import {
   botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
+  ENABLE_EMAIL,
   enableCalendarScheduling,
   enableChatV3Agents,
   enableCrm,
@@ -64,37 +68,25 @@ export type SettingsTabGroup = {
  */
 export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
   {
-    label: 'General',
+    label: 'Blocks',
     items: [
       {
-        tab: 'Account',
-        label: 'Account',
-        icon: UserIconPhosphor,
-        keywords: ['profile', 'user', 'email', 'name'],
+        tab: 'Email',
+        label: 'Email',
+        icon: EmailIcon,
+        keywords: ['gmail', 'inbox', 'signature', 'sync'],
       },
       {
-        tab: 'API Keys',
-        label: 'API Keys',
-        icon: KeyIcon,
-        keywords: ['api', 'key', 'token', 'authentication'],
+        tab: 'Calendar',
+        label: 'Calendar',
+        icon: CalendarIcon,
+        keywords: ['google', 'accounts', 'visibility', 'colors'],
       },
       {
-        tab: 'Notifications',
-        label: 'Notifications',
-        icon: BellIcon,
-        keywords: ['alerts', 'email', 'sound'],
-      },
-      {
-        tab: 'Billing',
-        label: 'Billing',
-        icon: CreditCardIcon,
-        keywords: ['payment', 'subscription', 'invoice', 'plan'],
-      },
-      {
-        tab: 'Appearance',
-        label: 'Appearance',
-        icon: SwatchesIcon,
-        keywords: ['theme', 'dark', 'light', 'color'],
+        tab: 'Booking links',
+        label: 'Booking links',
+        icon: LinkIcon,
+        keywords: ['scheduling', 'bookings', 'availability', 'meetings'],
       },
       {
         tab: 'Agents',
@@ -103,23 +95,57 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['ai', 'assistant', 'bot'],
       },
       {
-        tab: 'Harness',
-        label: 'Runtimes',
-        icon: HardDrivesIcon,
-        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
-        searchOnly: true,
+        tab: 'CRM',
+        label: 'CRM',
+        icon: BuildingsIcon,
+        keywords: ['contacts', 'customers', 'deals'],
+      },
+    ],
+  },
+  {
+    label: 'Personal',
+    items: [
+      {
+        tab: 'Account',
+        label: 'Account',
+        icon: UserIconPhosphor,
+        keywords: ['profile', 'user', 'email', 'name'],
+      },
+      {
+        tab: 'Appearance',
+        label: 'Appearance',
+        icon: SwatchesIcon,
+        keywords: ['theme', 'dark', 'light', 'color'],
+      },
+      {
+        tab: 'Notifications',
+        label: 'Notifications',
+        icon: BellIcon,
+        keywords: ['alerts', 'email', 'sound'],
+      },
+      {
+        tab: 'Shortcuts',
+        label: 'Keyboard shortcuts',
+        icon: KeyboardIcon,
+        keywords: ['keyboard', 'hotkey', 'keybinding'],
+      },
+      {
+        tab: 'Usage',
+        label: 'Usage',
+        icon: GaugeIcon,
+        keywords: ['ai', 'limit', 'credits', 'reload', 'usage'],
+      },
+      {
+        tab: 'Billing',
+        label: 'Billing',
+        icon: CreditCardIcon,
+        keywords: ['payment', 'subscription', 'invoice', 'plan'],
       },
       {
         tab: 'Mobile App',
         label: 'Mobile App',
         icon: DeviceMobileIcon,
         keywords: ['phone', 'ios', 'android'],
-      },
-      {
-        tab: 'Shortcuts',
-        label: 'Shortcuts',
-        icon: KeyboardIcon,
-        keywords: ['keyboard', 'hotkey', 'keybinding'],
       },
     ],
   },
@@ -139,28 +165,27 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['label', 'category'],
       },
       {
-        tab: 'CRM',
-        label: 'CRM',
-        icon: BuildingsIcon,
-        keywords: ['contacts', 'customers', 'deals'],
-      },
-      {
-        tab: 'Calendar',
-        label: 'Calendar',
-        icon: CalendarIcon,
-        keywords: ['scheduling', 'bookings', 'availability'],
-      },
-      {
         tab: 'Connected',
         label: 'Integrations',
         icon: CpuIcon,
         keywords: ['integrations', 'apps', 'connections'],
       },
+    ],
+  },
+  {
+    label: 'Developer',
+    items: [
       {
         tab: 'Connections',
-        label: 'Connections',
+        label: 'Agent connections',
         icon: PlugsConnectedIcon,
         keywords: ['agent', 'tools', 'apps', 'mcp'],
+      },
+      {
+        tab: 'Harness',
+        label: 'Runtimes',
+        icon: HardDrivesIcon,
+        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
       },
       {
         tab: 'Agent',
@@ -169,10 +194,16 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         keywords: ['mcp', 'server', 'protocol'],
       },
       {
+        tab: 'API Keys',
+        label: 'API Keys',
+        icon: KeyIcon,
+        keywords: ['api', 'key', 'token', 'authentication'],
+      },
+      {
         tab: 'Bots',
         label: 'Bots',
         icon: BotIcon,
-        keywords: ['automation', 'bot'],
+        keywords: ['routine', 'bot'],
       },
     ],
   },
@@ -192,6 +223,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
   'API Keys': 'api-keys',
   Notifications: 'notifications',
+  Usage: 'usage',
   Billing: 'billing',
   Subscription: 'subscription',
   Organization: 'organization',
@@ -207,6 +239,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Bots: 'bots',
   Team: 'team',
   Calendar: 'calendar',
+  'Booking links': 'booking-links',
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
@@ -254,9 +287,13 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'Usage':
       case 'Billing':
         return true;
+      case 'Email':
+        return ENABLE_EMAIL;
       case 'Calendar':
+      case 'Booking links':
         return calendarSchedulingFlag().enabled;
       // Issuing and copying a key is desk work, and the mobile sheet has no
       // good place for a one-time secret.

@@ -151,6 +151,18 @@ where
             .map_err(into_session_error)
     }
 
+    async fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SteerQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
     async fn set_sandbox_size(
         &self,
         id: AgentSessionId,
@@ -229,6 +241,50 @@ where
                 reason: reason.to_string(),
             },
         ));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> crate::domain::ports::HeldToolCallObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
+    /// the call may have been held on any replica, and only the one managing
+    /// the session knows the turn whose reply to change.
+    fn changed(&self, id: AgentSessionId, change: crate::domain::model::ToolApprovalChange) {
+        drop(self.execute(id, HarnessCommand::ToolApproval(change)));
     }
 }
 

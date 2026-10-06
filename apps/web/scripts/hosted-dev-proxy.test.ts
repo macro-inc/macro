@@ -40,8 +40,11 @@ it('maps dev HTTP and WebSocket URLs while preserving production and OAuth hosts
 
 it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects other origins', async () => {
   const sockets = new Set<Socket>();
-  const upgrades: { cookie: string | undefined; path: string | undefined }[] =
-    [];
+  const upgrades: {
+    cookie: string | undefined;
+    origin: string | null;
+    path: string | undefined;
+  }[] = [];
   let requests = 0;
   const backend = createHttpServer((req, res) => {
     requests++;
@@ -55,6 +58,7 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
         path: req.url,
         cookie: req.headers.cookie,
         host: req.headers.host,
+        origin: req.headers.origin ?? null,
       })
     );
   });
@@ -63,7 +67,11 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
     socket.on('close', () => sockets.delete(socket));
   });
   backend.on('upgrade', (req, socket) => {
-    upgrades.push({ cookie: req.headers.cookie, path: req.url });
+    upgrades.push({
+      cookie: req.headers.cookie,
+      origin: req.headers.origin ?? null,
+      path: req.url,
+    });
     const accept = createHash('sha1')
       .update(
         `${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`
@@ -140,6 +148,7 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
       path: '/auth/user/me?check=1',
       cookie,
       host: new URL(upstream).host,
+      origin: null,
     });
     expect(response.cookies).toEqual([
       `${cookie}; Path=/; Secure; HttpOnly; SameSite=None`,
@@ -186,7 +195,9 @@ it('forwards authenticated HTTP and WS over HTTPS, rewrites cookies, and rejects
         req.end();
       });
     await connect(origin);
-    expect(upgrades).toEqual([{ cookie, path: '/connection-gateway?check=1' }]);
+    expect(upgrades).toEqual([
+      { cookie, origin: null, path: '/connection-gateway?check=1' },
+    ]);
     await expect(connect('https://unrelated.example')).rejects.toThrow();
     expect(upgrades).toHaveLength(1);
   } finally {

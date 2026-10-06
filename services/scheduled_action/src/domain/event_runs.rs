@@ -203,6 +203,7 @@ impl PendingEventRun {
 pub enum EventAccessCapability {
     Document(EntityAccessReceipt<ViewAccessLevel>),
     Channel(EntityAccessReceipt<ViewOnly>),
+    EmailThread(EntityAccessReceipt<ViewAccessLevel>),
 }
 
 impl EventAccessCapability {
@@ -215,6 +216,9 @@ impl EventAccessCapability {
             }
             (Self::Channel(receipt), EventEntityType::Channel) => {
                 receipt_matches(receipt, owner, event, EntityType::Channel)
+            }
+            (Self::EmailThread(receipt), EventEntityType::EmailThread) => {
+                receipt_matches(receipt, owner, event, EntityType::EmailThread)
             }
             _ => false,
         }

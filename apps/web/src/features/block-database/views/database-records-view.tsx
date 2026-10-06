@@ -1,4 +1,3 @@
-import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { until } from '@solid-primitives/promise';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
@@ -51,6 +50,7 @@ import {
   rowValue,
   titleColumn,
 } from '../core/table';
+import type { DatabaseViewState, ViewChange } from '../core/view-state';
 import {
   databaseReadMessage,
   databaseWriteMessage,
@@ -60,7 +60,6 @@ import { createDraftRows } from '../primitives/draft-rows';
 import { createHeldGridRows } from '../primitives/held-grid-rows';
 import { createRecordActions } from '../primitives/record-actions';
 import { createTableController } from '../primitives/table-controller';
-import type { ViewChange } from '../queries/views';
 import { type BoardPositions, DatabaseBoardView } from './database-board-view';
 import { DatabaseTableView } from './database-table-view';
 
@@ -90,12 +89,12 @@ export type RelationCellProps = GridCellEditorOptions & {
 };
 
 /** A table's records in the view's layout — a grid or a board — with the record panel over them. */
-export function DatabaseRecordsView(props: {
+export type DatabaseRecordsViewProps = {
   name: string;
   source: DatabaseRowsSource;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
-  view: DatabaseView;
+  view: DatabaseViewState;
   /** Whether the view is stored, so changing it changes it for everyone. */
   preparingView?: boolean;
   stored: boolean;
@@ -133,11 +132,13 @@ export function DatabaseRecordsView(props: {
   renderToolbar?: (actions: DatabaseRecordsActions) => JSX.Element;
   /** Create a new column at the end of the table and return its id. */
   createColumn?: () => DatabaseSchemaChange<string>;
-  addColumn: (
+  addColumn?: (
     label?: string,
     onCreated?: (columnId: string) => boolean
   ) => JSX.Element;
-}) {
+};
+
+export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
   const controller = createTableController(props.source, (mutation, result) =>
     records.recordSaved(mutation, result)
   );
@@ -527,7 +528,7 @@ export function DatabaseRecordsView(props: {
               }
               canEdit={props.canEdit}
               pending={controller.pending()}
-              addColumn={props.addColumn(
+              addColumn={props.addColumn?.(
                 columns().length ? undefined : 'Add first column',
                 focusColumn
               )}

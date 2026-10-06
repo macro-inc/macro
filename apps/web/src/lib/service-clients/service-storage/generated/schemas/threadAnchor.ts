@@ -7,6 +7,7 @@
 import type { ThreadAnchorOneOf } from './threadAnchorOneOf';
 import type { ThreadAnchorOneOfFour } from './threadAnchorOneOfFour';
 import type { ThreadAnchorOneOfNine } from './threadAnchorOneOfNine';
+import type { ThreadAnchorOneOfOneone } from './threadAnchorOneOfOneone';
 import type { ThreadAnchorOneOfSeven } from './threadAnchorOneOfSeven';
 
 /**
@@ -16,4 +17,5 @@ export type ThreadAnchor =
   | ThreadAnchorOneOf
   | ThreadAnchorOneOfFour
   | ThreadAnchorOneOfSeven
-  | ThreadAnchorOneOfNine;
+  | ThreadAnchorOneOfNine
+  | ThreadAnchorOneOfOneone;

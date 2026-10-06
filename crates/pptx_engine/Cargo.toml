@@ -9,7 +9,12 @@ version = "0.1.0"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+default = ["wasm-bindings"]
+# The wasm-bindgen API in `wasm` (the presentation editor's worker module).
+# Crates that build their own wasm module on top of this one (the DOCX engine
+# reuses its containers, fonts and rasterizer) turn it off, so the
+# presentation exports are not linked into their module.
+wasm-bindings = []
 # Compile the bundled font set into native builds (AI tools, the corpus CLI).
 # The wasm build always includes it: the browser worker has no font directory.
 embedded-fonts = []
@@ -31,9 +36,9 @@ png = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+skrifa = { workspace = true }
 thiserror = { workspace = true }
 tiny-skia = { workspace = true }
-ttf-parser = { workspace = true }
 zune-core = { workspace = true }
 zune-jpeg = { workspace = true }
 

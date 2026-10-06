@@ -13,7 +13,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/collab/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'src/collab/**/*.{test,spec}.{ts,tsx}',
+      'src/docx/**/*.{test,spec}.{ts,tsx}',
+    ],
     name: 'collaboration',
   },
 } as any);

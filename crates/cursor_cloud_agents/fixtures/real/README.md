@@ -60,7 +60,7 @@ credential someone pasted or `cat`ed:
 
 ```bash
 doppler run --project shared_ai --config dev -- \
-  ./crates/agent_fold/scripts/sanitize_recording.py \
+  ./crates/folds/agent_fold/scripts/sanitize_recording.py \
   recordings/<label>/<file>.sse fixtures/real/<name>.sse
 ```
 

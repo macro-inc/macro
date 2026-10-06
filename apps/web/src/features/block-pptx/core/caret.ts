@@ -210,6 +210,40 @@ export function moveVertical(
   };
 }
 
+export type ArrowKey = 'left' | 'right' | 'up' | 'down';
+
+const SCREEN: Record<ArrowKey, Point> = {
+  left: { x: -1, y: 0 },
+  right: { x: 1, y: 0 },
+  up: { x: 0, y: -1 },
+  down: { x: 0, y: 1 },
+};
+
+/**
+ * The caret move an arrow key makes: `left`/`right` step through the text,
+ * `up`/`down` go to the previous/next line. In vertical text the keys
+ * follow the screen, as in PowerPoint: in text rotated 90°, Down steps to
+ * the next character and Left to the next line.
+ */
+export function logicalArrow(layout: TextLayoutInfo, key: ArrowKey): ArrowKey {
+  const [a, b, c, d] = layout.transform;
+  const v = SCREEN[key];
+  const along = v.x * a + v.y * b;
+  const across = v.x * c + v.y * d;
+  if (Math.abs(along) >= Math.abs(across)) return along > 0 ? 'right' : 'left';
+  // Lines usually follow each other down the layout; stacked and Mongolian
+  // text lists them from the layout's far side.
+  let up = 0;
+  let down = 0;
+  for (let i = 1; i < layout.lines.length; i++) {
+    const step = layout.lines[i].top - layout.lines[i - 1].top;
+    if (step > 0.01) down++;
+    else if (step < -0.01) up++;
+  }
+  const forward = up > down ? across < 0 : across > 0;
+  return forward ? 'down' : 'up';
+}
+
 /** Start or end of the visual line (Home / End). */
 export function lineEdge(
   layout: TextLayoutInfo,

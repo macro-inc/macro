@@ -52,6 +52,10 @@ function tabCopy(tab: EmailTab): { title: string; description: string } {
       title: 'No shared email',
       description: 'Threads teammates share with you will appear here.',
     }))
+    .with('archived', () => ({
+      title: 'No archived email',
+      description: 'Email you archive will appear here.',
+    }))
     .with('all', () => ({
       title: 'No email yet',
       description: 'Everything in your inbox will appear here as it arrives.',

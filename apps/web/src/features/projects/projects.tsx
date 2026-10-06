@@ -41,6 +41,10 @@ import { ProjectShareLauncher } from './project-share';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
+import {
+  ProjectsSidebar,
+  type ProjectsSidebarProps,
+} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -96,6 +100,14 @@ export function ProjectsTab(props: {
   return (
     <Projects>
       <ProjectsCollectionHost {...props} />
+    </Projects>
+  );
+}
+
+export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
+  return (
+    <Projects>
+      <ProjectsSidebar {...props} />
     </Projects>
   );
 }
