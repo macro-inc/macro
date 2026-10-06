@@ -23,6 +23,7 @@ files:
   - apps/web/src/features/channel/Call/chat/components/**
   - apps/web/src/features/block-agent/ui/**
   - apps/web/src/features/block-ai/components/**
+  - apps/web/src/features/block-psd/components/**
   - apps/web/src/features/meetings/components/**
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**

@@ -951,147 +951,6 @@ entries. Its Playwright suites run with
 installed); `collaboration.browser.e2e.ts` opens several people on one deck. The editor sections above were verified on this fixture; the
 `/app/pptx` route itself needs a backend with an uploaded deck.
 
-## Photoshop editor
-
-Uploaded `.psd` and `.psb` files open in the `psd` block
-(`/app/psd/<documentId>`), and **Photoshop file** in the create menu (key
-**H**, also in project create menus) makes a new 1920 × 1080 document with a
-white Background. Both are behind the `enable-psd-editor` PostHog flag (on
-by default in development builds; `ENABLE_PSD_EDITOR` overrides it); with
-the flag off the block offers the file for download. The file is read,
-composited, and edited by the Rust `psd_engine` compiled to WebAssembly, in
-one worker. The canvas draws 512 px tiles from a pyramid of scales (the
-nearest one shows while zooming, then it sharpens) and redraws only what an
-edit changed. How Macro AI and search read these files is under
-[Photoshop and Illustrator documents](#photoshop-and-illustrator-documents).
-
-People with edit access get the editor; others get the same view read-only
-(no painting or editing tools, no editing shortcuts). Documents the editor
-cannot edit as they are (CMYK, Lab, Indexed, Bitmap, Duotone, Multichannel,
-32-bit) open read-only with a bar (`psd-notice`, reason in
-`psd-notice-readonly`) whose **Convert to RGB** (`psd-notice-convert`, also
-Image > Mode > RGB Color) converts them to 8-bit RGB; the same bar lists
-parts of the file that could not be read (`psd-notice-warnings`), and
-`psd-notice-dismiss` hides it. Edits save automatically 1.5 s after the last
-change and when the tab is hidden, as a new document version through
-`PUT /documents/{id}/simple_save`; `psd-save-state` (`data-state` is `saved`,
-`unsaved`, `saving`, or `error`) shows where that stands.
-
-Everyone with the document open edits it live, as in the Figma editor:
-changes go through the sync service as Loro maps of each changed layer's
-state and pixel tiles (see `psd_engine::collab`); the stored file stays the
-base everyone opens, and the first editor seeds the shared copy. Undo takes
-back only your own steps. Of the people editing, one (the lowest peer id)
-stores the merged file. Presence: other people's pointers with name tags
-(`psd-peer-cursor`, `data-peer="<name>"`), their selections' outlines in
-their colors, and their avatars at the top right of the canvas
-(`psd-collaborators`, one `psd-collaborator` per person); clicking an avatar
-follows their view (`psd-following`) until **Stop**. Without the sync
-service the document opens read-only, and for editors a bar
-(`psd-session-notice`) explains why, with **Retry** (`psd-session-action`);
-a file stored outside the session (an upload, an AI edit) turns open copies
-read-only with **Reload**.
-
-The editor (`psd-editor`) is laid out as Photoshop is:
-
-- **Menu bar** (`psd-menu-bar`): File, Edit, Image, Layer, Select, Filter,
-  and View (`psd-menu-file` … `psd-menu-view`); items carry ids such as
-  `psd-menu-new-layer`, `psd-menu-image-size`, `psd-menu-filter-gaussianBlur`,
-  `psd-menu-adjust-levels`, `psd-menu-flatten`, `psd-menu-export-png`, and
-  `psd-menu-download`. Filters (Gaussian Blur, Unsharp Mask, Add Noise,
-  Mosaic, Motion Blur) and Image > Adjustments open a dialog
-  (`psd-filter-dialog`, `psd-adjust-dialog`) at the top right that previews
-  on the canvas; OK keeps it as one step, Cancel or Escape drops it. Image
-  Size (`psd-image-size`), Canvas Size (`psd-canvas-size`), Resolution,
-  Feather (⇧F6), Expand, and Contract open small dialogs (`*-ok`,
-  `*-cancel`).
-- **Options bar** (`psd-options-bar`, tool name in `psd-options-tool`): the
-  tool's settings (brush size, hardness, opacity, flow, spacing, pressure;
-  marquee feather; wand and bucket tolerance; gradient style and method;
-  type size), and **Fit Screen** / **100%** (`psd-zoom-fit`,
-  `psd-zoom-100`). During Free Transform (⌘/Ctrl+T) and Crop it shows the
-  box's size with commit and cancel (`psd-options-commit`,
-  `psd-options-cancel`; Enter and Escape do the same).
-- **Toolbar** (`psd-toolbar`, `psd-tool-<tool>` with `aria-pressed`;
-  clicking the tool in use again, or right-clicking, lists its group's
-  other tools, `psd-tool-option-<tool>`):
-  Move **V** (auto-selects the layer under the pointer; arrows nudge, ⇧ by
-  10), Marquee **M** (rectangle, ellipse; ⇧ adds, ⌥ subtracts, ⇧⌥
-  intersects), Lasso **L** (freehand, polygonal), Magic Wand **W**, Crop
-  **C**, Eyedropper **I**, Brush and Pencil **B** (`[` and `]` size, digits
-  opacity), Eraser **E**, Gradient and Paint Bucket **G**, Type **T**,
-  Rectangle and Ellipse **U** (shape layers in the foreground color), Hand
-  **H** (or hold Space), and Zoom **Z** (⌥ zooms out). ⇧ with a tool's key
-  cycles its group. Below, the foreground and background swatches
-  (`psd-foreground-color`, `psd-background-color`; clicking one opens the
-  Color tab), **X** swaps them (`psd-swap-colors`) and **D** resets them
-  (`psd-default-colors`).
-- **Canvas** (`psd-canvas`, with the zoom and size in `psd-status`, zoom in
-  `psd-zoom`): wheel scrolls; pinch, ⌥-wheel, or ⌘/Ctrl-wheel zooms; ⌘0 fits,
-  ⌘1 is 100%, ⌘+ and ⌘− step. Selections show marching ants; guides from
-  the file are drawn. Pasting an image (⌘V) or dropping image files places
-  them as new layers; ⌘C copies the selected pixels as PNG, ⇧⌘C copies
-  merged.
-- **Panels** (`psd-panels`): tabs **Properties** and **Color**
-  (`psd-tab-properties`, `psd-tab-color`) over the Layers panel.
-  Properties (`psd-properties-panel`) shows the active layer's kind and
-  bounds (`psd-layer-bounds`) and its settings: text (font, style, size,
-  leading, tracking, color, alignment `psd-text-align-<left|center|right>`,
-  faux styles, and **Edit text…** `psd-text-edit`), fill and shape layers
-  (solid color or gradient with its style and method, the shape's stroke,
-  `psd-stroke-add`), adjustment layers, masks (density, feather, enabled),
-  and the layer style's effects on or off. Color (`psd-color-panel`) edits
-  the foreground or background (`psd-color-target-foreground`,
-  `psd-color-target-background`) with a saturation and brightness area,
-  hue strip, hex, RGB, and HSB (`psd-color-hex`, `psd-color-r`, …).
-- **Layers panel** (`psd-layers-panel`): the active layer's blend mode
-  (`psd-blend-mode`), Opacity and Fill (`psd-layer-opacity`,
-  `psd-layer-fill`; drag their labels to scrub), and locks
-  (`psd-lock-transparency`, `psd-lock-pixels`, `psd-lock-position`,
-  `psd-lock-all`); then the layers top first (`psd-layer-row`,
-  `data-layer-id`, `data-layer-name`), each with visibility
-  (`psd-layer-visibility`), group disclosure (`psd-layer-disclosure`), the
-  thumbnail, the mask (`psd-layer-mask`; clicking it makes painting edit the
-  mask), and the layer style marker (`psd-layer-effects`, click toggles).
-  Click chooses, ⌘/Ctrl-click adds, ⇧-click picks a range, double-click
-  renames (`psd-layer-rename`), dragging reorders or moves into groups, and
-  right-click (or `psd-layer-menu`) opens the layer's menu (duplicate,
-  delete, group, clipping mask, masks, rasterize, merge down, export). The
-  bottom buttons add a fill or adjustment layer (`psd-new-adjustment`), a
-  mask (`psd-add-mask`), a group (`psd-new-group`), and a layer
-  (`psd-new-layer`, ⇧⌘N), and delete (`psd-delete-layer`).
-
-Typing: with Type, click the canvas for new text, or a text layer to edit
-it. A box under the text (`psd-text-editing`, field `psd-text-input`)
-takes the typing; each keystroke lays the layer out again on the canvas.
-New text becomes a layer at the first character, named after its first
-line (the name follows the text until someone renames the layer); Escape
-or ⌘/Ctrl+Enter finishes, and the whole typing is one undo step. Text left
-empty is removed. Other shortcuts: ⌘Z / ⇧⌘Z (Ctrl+Y), ⌘A, ⌘D, ⇧⌘I, ⌘J,
-⇧⌘J, ⌘E, ⌘G, ⇧⌘G, ⌥⌘G (clipping mask), ⌥⌫ and ⌘⌫ fill with the
-foreground and background, ⌫ clears the selection or deletes the layer,
-and ⌘/ (or the keyboard button) lists them all (`psd-shortcuts`).
-
-To exercise the editor without a backend, run the browser fixture from
-`apps/web` (build the engine first with `just ensure-psd-engine-wasm`):
-
-```sh
-bunx vite --config src/features/block-psd/browser-test/vite.config.ts
-# http://127.0.0.1:3020/?new
-```
-
-`?new` opens a new document (`&size=800x600` for another size), `?file=`
-a file from the directory `PSD_CORPUS_DIR` names, `?readonly` a viewer,
-and `?reload` reopens each save to check it round-trips. `?collab`
-(`&people=alice,bob`) puts several people side by side on one document
-through an in-page sync server; `window.psdFixture` exposes `engine()`,
-`saves()`, `downloads()`, `errors()`, `notices()`, and `collab`. Its
-Playwright suites run with
-`bunx playwright test --config src/features/block-psd/browser-test/playwright.config.ts`
-(`PSD_BROWSER_PORT` picks another port than 3020; set
-`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
-installed).
-
 ## Designs (Figma)
 
 Uploaded `.fig` files open in the `fig` block (`/app/fig/<documentId>`), and
@@ -1556,7 +1415,150 @@ colors, or absent glows. Wait for the tiles to sharpen after zooming. The
 fixture preserves imported text outlines, but
 its substitute fonts do not verify the appearance of newly edited text.
 
-## Illustrator files
+## Photoshop editor
+
+Uploaded `.psd` and `.psb` files open in the `psd` block
+(`/app/psd/<documentId>`), and **Photoshop file** in the create menu (key
+**H**, also in project create menus) makes a new 1920 × 1080 document with a
+white Background. Both are behind the `enable-psd-editor` PostHog flag (on
+by default in development builds; `ENABLE_PSD_EDITOR` overrides it); with
+the flag off the block offers the file for download. The file is read,
+composited, and edited by the Rust `psd_engine` compiled to WebAssembly, in
+one worker. The canvas draws 512 px tiles from a pyramid of scales (the
+nearest one shows while zooming, then it sharpens) and redraws only what an
+edit changed. How Macro AI and search read these files is under
+[Photoshop and Illustrator documents](#photoshop-and-illustrator-documents).
+
+People with edit access get the editor; others get the same view read-only
+(no painting or editing tools, no editing shortcuts). Documents the editor
+cannot edit as they are (CMYK, Lab, Indexed, Bitmap, Duotone, Multichannel,
+32-bit) open read-only with a bar (`psd-notice`, reason in
+`psd-notice-readonly`) whose **Convert to RGB** (`psd-notice-convert`, also
+Image > Mode > RGB Color) converts them to 8-bit RGB; the same bar lists
+parts of the file that could not be read (`psd-notice-warnings`), and
+`psd-notice-dismiss` hides it. Edits save automatically 1.5 s after the last
+change and when the tab is hidden, as a new document version through
+`PUT /documents/{id}/simple_save`; `psd-save-state` (`data-state` is `saved`,
+`unsaved`, `saving`, or `error`) shows where that stands.
+
+Everyone with the document open edits it live, as in the Figma editor:
+changes go through the sync service as Loro maps of each changed layer's
+state and pixel tiles (see `psd_engine::collab`); the stored file stays the
+base everyone opens, and the first editor seeds the shared copy. Undo takes
+back only your own steps. Of the people editing, one (the lowest peer id)
+stores the merged file. Presence: other people's pointers with name tags
+(`psd-peer-cursor`, `data-peer="<name>"`), their selections' outlines in
+their colors, and their avatars at the top right of the canvas
+(`psd-collaborators`, one `psd-collaborator` per person); clicking an avatar
+follows their view (`psd-following`) until **Stop**. Without the sync
+service the document opens read-only, and for editors a bar
+(`psd-session-notice`) explains why, with **Retry** (`psd-session-action`);
+a file stored outside the session (an upload, an AI edit) turns open copies
+read-only with **Reload**.
+
+The editor (`psd-editor`) is laid out as Photoshop is:
+
+- **Menu bar** (`psd-menu-bar`): File, Edit, Image, Layer, Select, Filter,
+  and View (`psd-menu-file` … `psd-menu-view`); items carry ids such as
+  `psd-menu-new-layer`, `psd-menu-image-size`, `psd-menu-filter-gaussianBlur`,
+  `psd-menu-adjust-levels`, `psd-menu-flatten`, `psd-menu-export-png`, and
+  `psd-menu-download`. Filters (Gaussian Blur, Unsharp Mask, Add Noise,
+  Mosaic, Motion Blur) and Image > Adjustments open a dialog
+  (`psd-filter-dialog`, `psd-adjust-dialog`) at the top right that previews
+  on the canvas; OK keeps it as one step, Cancel or Escape drops it. Image
+  Size (`psd-image-size`), Canvas Size (`psd-canvas-size`), Resolution,
+  Feather (⇧F6), Expand, and Contract open small dialogs (`*-ok`,
+  `*-cancel`).
+- **Options bar** (`psd-options-bar`, tool name in `psd-options-tool`): the
+  tool's settings (brush size, hardness, opacity, flow, spacing, pressure;
+  marquee feather; wand and bucket tolerance; gradient style and method;
+  type size), and **Fit Screen** / **100%** (`psd-zoom-fit`,
+  `psd-zoom-100`). During Free Transform (⌘/Ctrl+T) and Crop it shows the
+  box's size with commit and cancel (`psd-options-commit`,
+  `psd-options-cancel`; Enter and Escape do the same).
+- **Toolbar** (`psd-toolbar`, `psd-tool-<tool>` with `aria-pressed`;
+  clicking the tool in use again, or right-clicking, lists its group's
+  other tools, `psd-tool-option-<tool>`):
+  Move **V** (auto-selects the layer under the pointer; arrows nudge, ⇧ by
+  10), Marquee **M** (rectangle, ellipse; ⇧ adds, ⌥ subtracts, ⇧⌥
+  intersects), Lasso **L** (freehand, polygonal), Magic Wand **W**, Crop
+  **C**, Eyedropper **I**, Brush and Pencil **B** (`[` and `]` size, digits
+  opacity), Eraser **E**, Gradient and Paint Bucket **G**, Type **T**,
+  Rectangle and Ellipse **U** (shape layers in the foreground color), Hand
+  **H** (or hold Space), and Zoom **Z** (⌥ zooms out). ⇧ with a tool's key
+  cycles its group. Below, the foreground and background swatches
+  (`psd-foreground-color`, `psd-background-color`; clicking one opens the
+  Color tab), **X** swaps them (`psd-swap-colors`) and **D** resets them
+  (`psd-default-colors`).
+- **Canvas** (`psd-canvas`, with the zoom and size in `psd-status`, zoom in
+  `psd-zoom`): wheel scrolls; pinch, ⌥-wheel, or ⌘/Ctrl-wheel zooms; ⌘0 fits,
+  ⌘1 is 100%, ⌘+ and ⌘− step. Selections show marching ants; guides from
+  the file are drawn. Pasting an image (⌘V) or dropping image files places
+  them as new layers; ⌘C copies the selected pixels as PNG, ⇧⌘C copies
+  merged.
+- **Panels** (`psd-panels`): tabs **Properties** and **Color**
+  (`psd-tab-properties`, `psd-tab-color`) over the Layers panel.
+  Properties (`psd-properties-panel`) shows the active layer's kind and
+  bounds (`psd-layer-bounds`) and its settings: text (font, style, size,
+  leading, tracking, color, alignment `psd-text-align-<left|center|right>`,
+  faux styles, and **Edit text…** `psd-text-edit`), fill and shape layers
+  (solid color or gradient with its style and method, the shape's stroke,
+  `psd-stroke-add`), adjustment layers, masks (density, feather, enabled),
+  and the layer style's effects on or off. Color (`psd-color-panel`) edits
+  the foreground or background (`psd-color-target-foreground`,
+  `psd-color-target-background`) with a saturation and brightness area,
+  hue strip, hex, RGB, and HSB (`psd-color-hex`, `psd-color-r`, …).
+- **Layers panel** (`psd-layers-panel`): the active layer's blend mode
+  (`psd-blend-mode`), Opacity and Fill (`psd-layer-opacity`,
+  `psd-layer-fill`; drag their labels to scrub), and locks
+  (`psd-lock-transparency`, `psd-lock-pixels`, `psd-lock-position`,
+  `psd-lock-all`); then the layers top first (`psd-layer-row`,
+  `data-layer-id`, `data-layer-name`), each with visibility
+  (`psd-layer-visibility`), group disclosure (`psd-layer-disclosure`), the
+  thumbnail (artboards show a frame, `psd-layer-artboard`, and Properties
+  titles them Artboard), the mask (`psd-layer-mask`, with its thumbnail
+  `psd-layer-mask-thumbnail`; clicking it makes painting edit the mask),
+  and the layer style marker (`psd-layer-effects`, click toggles).
+  Click chooses, ⌘/Ctrl-click adds, ⇧-click picks a range, double-click
+  renames (`psd-layer-rename`), dragging reorders or moves into groups, and
+  right-click (or `psd-layer-menu`) opens the layer's menu (duplicate,
+  delete, group, clipping mask, masks, rasterize, merge down, export). The
+  bottom buttons add a fill or adjustment layer (`psd-new-adjustment`), a
+  mask (`psd-add-mask`), a group (`psd-new-group`), and a layer
+  (`psd-new-layer`, ⇧⌘N), and delete (`psd-delete-layer`).
+
+Typing: with Type, click the canvas for new text, or a text layer to edit
+it. A box under the text (`psd-text-editing`, field `psd-text-input`)
+takes the typing; each keystroke lays the layer out again on the canvas.
+New text becomes a layer at the first character, named after its first
+line (the name follows the text until someone renames the layer); Escape
+or ⌘/Ctrl+Enter finishes, and the whole typing is one undo step. Text left
+empty is removed. Other shortcuts: ⌘Z / ⇧⌘Z (Ctrl+Y), ⌘A, ⌘D, ⇧⌘I, ⌘J,
+⇧⌘J, ⌘E, ⌘G, ⇧⌘G, ⌥⌘G (clipping mask), ⌥⌫ and ⌘⌫ fill with the
+foreground and background, ⌫ clears the selection or deletes the layer,
+and ⌘/ (or the keyboard button) lists them all (`psd-shortcuts`).
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web` (build the engine first with `just ensure-psd-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-psd/browser-test/vite.config.ts
+# http://127.0.0.1:3020/?new
+```
+
+`?new` opens a new document (`&size=800x600` for another size), `?file=`
+a file from the directory `PSD_CORPUS_DIR` names, `?readonly` a viewer,
+and `?reload` reopens each save to check it round-trips. `?collab`
+(`&people=alice,bob`) puts several people side by side on one document
+through an in-page sync server; `window.psdFixture` exposes `engine()`,
+`saves()`, `downloads()`, `errors()`, `notices()`, and `collab`. Its
+Playwright suites run with
+`bunx playwright test --config src/features/block-psd/browser-test/playwright.config.ts`
+(`PSD_BROWSER_PORT` picks another port than 3020; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed).
+
+## Illustrator editor
 
 Uploaded `.ai` files open in the `ai` block (`/app/ai/<documentId>`), and
 **Illustrator file** in the create menu (key **V**, also in project create
