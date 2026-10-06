@@ -258,4 +258,14 @@ describe('contact discovery', () => {
     await t.discovery.refresh();
     expect(t.refresh).toHaveBeenCalledOnce();
   });
+
+  it('does not refetch an earlier or empty search while the query settles', async () => {
+    const t = setup();
+    t.setQuery('pat');
+    await t.discovery.refresh();
+    expect(t.refresh).not.toHaveBeenCalled();
+    t.setServerQuery('pat');
+    await t.discovery.refresh();
+    expect(t.refresh).toHaveBeenCalledOnce();
+  });
 });

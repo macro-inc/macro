@@ -132,8 +132,10 @@ export function createContactDiscovery(options: {
       searching() &&
       (options.server.isLoadingMore() || options.cached.isLoadingMore()),
     loadMore,
+    // A query still settling fetches fresh pages once it does; refreshing
+    // now would refetch the previous (possibly empty, unfiltered) search.
     refresh: async () => {
-      if (searching()) await options.server.refresh();
+      if (searching() && serverSettled()) await options.server.refresh();
     },
   };
 }
