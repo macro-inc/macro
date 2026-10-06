@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use ai_usage::{UsageContext, UsageRecorder};
+use ai_usage::{UsageAmount, UsageContext, UsageRecorder};
 use serde_json::Value;
 
 use super::{
@@ -45,10 +45,15 @@ impl<P: JevProvider> YesNoClassifier for JevClassifier<P> {
         }
         let evaluation = self.provider.evaluate(input, questions).await?;
         // The provider billed the call even if its answers are unusable.
+        // Jev has no prompt cache, so every input token is uncached.
         self.recorder.record(usage.into_event(
             self.provider.model_id().to_owned(),
-            evaluation.input_tokens,
-            evaluation.output_tokens,
+            UsageAmount::Tokens {
+                input: evaluation.input_tokens,
+                output: evaluation.output_tokens,
+                cache_read: 0,
+                cache_write: 0,
+            },
         ));
         if evaluation.probabilities.len() != questions.len() {
             return Err(JevError::InvalidResponse);

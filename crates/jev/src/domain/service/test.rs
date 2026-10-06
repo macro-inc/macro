@@ -105,7 +105,9 @@ async fn returns_answers_in_question_order_and_records_tokens() {
         events[0].amount,
         UsageAmount::Tokens {
             input: 120,
-            output: 4
+            output: 4,
+            cache_read: 0,
+            cache_write: 0,
         }
     ));
 }
