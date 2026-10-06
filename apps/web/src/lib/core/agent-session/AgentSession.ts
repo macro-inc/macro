@@ -481,6 +481,21 @@ export class AgentSession {
     return this.chain.then(() => readSession(this.id));
   }
 
+  /** Observe mounted answer DOM only while this tab awaits that prompt's paint. */
+  observeRenderedText(
+    turn: number,
+    element: HTMLElement
+  ): (() => void) | undefined {
+    const stops = [...this.prompts].flatMap((prompt) => {
+      const stop = prompt.observeRenderedText(turn, element);
+      return stop ? [stop] : [];
+    });
+    if (stops.length === 0) return;
+    return () => {
+      for (const stop of stops) stop();
+    };
+  }
+
   release(): void {
     this.references -= 1;
     if (this.references > 0) return;
@@ -694,11 +709,11 @@ export class AgentSession {
       if (this.closed || events.length === 0) return;
       const metadata = events.findLast((event) => event.kind === 'metadata');
       if (metadata) this.setTurn(metadata.metadata.turn);
-      for (const listener of this.listeners) listener(events);
       for (const prompt of this.prompts) {
         prompt.observe(events, delivery);
         if (prompt.ended) this.prompts.delete(prompt);
       }
+      for (const listener of this.listeners) listener(events);
     });
     // A failed push must not poison the chain for every input after it.
     this.chain = run.catch((error: unknown) => {

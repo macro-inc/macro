@@ -15,6 +15,19 @@ first prose. Verify a second prompt and a reload preserve the complete answer.
 Selected model and effort must be confirmed before the first prompt; settings
 already confirmed by the runtime do not need another control request.
 
+The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
+answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
+its paint (`first_text_paint`). Only the final milestone is a visible-response
+success. Bare Markdown prefixes and code-toolbar labels do not count. A hidden
+tab reports `hidden`; raw text without a visible renderer within ten seconds
+reports `not_rendered`, including whether a renderer mounted and stayed attached.
+`submit_surface` uses bounded route categories, and all milestones omit message
+contents. Compare these timings with created, loaded, configured, delivery, and
+fold timing to distinguish startup, transport, and rendering delays.
+The same stages are available immediately in DevTools as
+`performance.getEntriesByType('measure')` entries named `agent.prompt.*`, with
+session ID in `detail`; the `agent.prompt` entry includes the final outcome.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and

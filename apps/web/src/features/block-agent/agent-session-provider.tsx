@@ -1,5 +1,6 @@
 /** App-facing composition for the agent session and its controllers. */
 
+import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
@@ -161,6 +162,10 @@ export function AgentSessionProvider(
           bot: live.bot,
           metadata: live.metadata,
           messages,
+          observeRenderedText: (id, turn, element) =>
+            id === sessionId()
+              ? AgentSession.get(id)?.observeRenderedText(turn, element)
+              : undefined,
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
           loadFailed: () => live.loadFailed() || failed(),
