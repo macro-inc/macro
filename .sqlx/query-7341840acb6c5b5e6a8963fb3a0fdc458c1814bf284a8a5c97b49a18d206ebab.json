@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_review_capture (agent_session_id, claim, expires_at)\n            VALUES ($1, $2, now() + interval '5 minutes')\n            ON CONFLICT (agent_session_id) DO UPDATE SET claim = EXCLUDED.claim, expires_at = EXCLUDED.expires_at\n            WHERE agent_review_capture.expires_at < now() RETURNING claim",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claim",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7341840acb6c5b5e6a8963fb3a0fdc458c1814bf284a8a5c97b49a18d206ebab"
+}

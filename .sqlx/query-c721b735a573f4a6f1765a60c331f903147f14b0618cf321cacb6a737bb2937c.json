@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_review_capture WHERE agent_session_id = $1 AND claim = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c721b735a573f4a6f1765a60c331f903147f14b0618cf321cacb6a737bb2937c"
+}

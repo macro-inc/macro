@@ -1044,6 +1044,23 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         Ok(())
     }
 
+    async fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[StoredQueuedAction],
+    ) -> Result<()> {
+        self.store_queued_actions(id, remaining, Some(action)).await
+    }
+    async fn action_completed(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> Result<bool> {
+        let found = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM agent_session_log WHERE agent_session_id = $1 AND direction = 'to_server' AND content->>'id' = $2 AND (content ? 'result' OR content ? 'error')) OR EXISTS(SELECT 1 FROM agent_session_cancelled_action WHERE agent_session_id = $1 AND action_id::text = $2)", id.as_uuid(), action.as_uuid().to_string()).fetch_one(&self.pool).await.map_err(|e| anyhow::anyhow!(e))?;
+        Ok(found.unwrap_or(false))
+    }
+
     async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
         self.load_queued_actions(id).await
     }
@@ -1053,7 +1070,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         id: AgentSessionId,
         entries: &[StoredQueuedAction],
     ) -> Result<()> {
-        self.store_queued_actions(id, entries).await
+        self.store_queued_actions(id, entries, None).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

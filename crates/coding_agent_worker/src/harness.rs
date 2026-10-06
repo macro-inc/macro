@@ -44,7 +44,8 @@ pub async fn bridge(
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
+    let reviews = WorkspaceReviews(agent_review_runtime::WorkspaceCapture::new(cwd.to_owned()));
+    let (mut runtime, acp) = RuntimeConnection::connect_with_handlers(channel, probes, reviews);
 
     let agent = AcpProcess::new(&harness.command, harness.args.clone(), cwd)
         .envs(harness.env.clone())
@@ -73,6 +74,35 @@ pub async fn bridge(
     }
 
     outcome.map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+struct WorkspaceReviews(agent_review_runtime::WorkspaceCapture);
+
+impl agent_runtime_protocol::domain::connection::ReviewCaptureHandler for WorkspaceReviews {
+    async fn capture(
+        &self,
+        workspace: String,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> agent_runtime_protocol::domain::schema::v0::ReviewCaptureResult {
+        use agent_runtime_protocol::domain::schema::v0::ReviewCaptureResult;
+        match self
+            .0
+            .capture(
+                workspace.into(),
+                agent_review_runtime::Comparison { base, head },
+            )
+            .await
+        {
+            Ok(capture) => match serde_json::to_value(capture) {
+                Ok(capture) => ReviewCaptureResult::Available { capture },
+                Err(_) => ReviewCaptureResult::Error {
+                    message: "Could not encode the workspace snapshot".into(),
+                },
+            },
+            Err(message) => ReviewCaptureResult::Error { message },
+        }
+    }
 }
 
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {

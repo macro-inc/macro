@@ -6,7 +6,9 @@ set -euo pipefail
 # exactly the failure this whole pipeline exists to prevent, so it is checked
 # here rather than assumed.
 
-binary="target/$TARGET/release/macrod"
+daemon="target/$TARGET/release/macrod"
+engine="target/review-engine/$TARGET/release/difft"
+for binary in "$daemon" "$engine"; do
 if [ ! -x "$binary" ]; then
   echo "no daemon binary at $binary" >&2
   exit 1
@@ -51,11 +53,14 @@ else
   echo "skipping smoke run: $TARGET does not execute on this runner"
 fi
 
+done
+
 mkdir -p artifacts
 name="macrod-${SAFE_TAG}-${SLUG}"
 stage=$(mktemp -d)
-install -m 755 "$binary" "$stage/macrod"
-tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod
+install -m 755 "$daemon" "$stage/macrod"
+install -m 755 "$engine" "$stage/difft"
+tar -czf "artifacts/${name}.tar.gz" -C "$stage" macrod difft
 rm -rf "$stage"
 
 # coreutils on Linux, BSD/perl on macOS.

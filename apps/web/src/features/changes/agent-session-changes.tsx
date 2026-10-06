@@ -62,3 +62,7 @@ export function AgentChangesProvider(props: ParentProps) {
     </ChangesProvider>
   );
 }
+
+export type { ReviewNote as LegacyReviewNote } from './core/review-notes';
+// Preserve unsent local notes when the dedicated reader replaces the old pane.
+export { createReviewState as createLegacyReviewState } from './primitives/create-review-state';

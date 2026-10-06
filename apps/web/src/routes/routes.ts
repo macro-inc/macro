@@ -1,3 +1,4 @@
+import { reviewSearch } from '@app/features/agent-review/review-search';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
@@ -298,7 +299,7 @@ export const agentsRoute = defineRoute({
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [reviewSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -308,7 +309,7 @@ export const codersRoute = defineRoute({
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [reviewSearch.namespace, agentDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -319,7 +320,7 @@ export const agentChatsRoute = defineRoute({
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'chat', id }),
-  search: [changesSearch.namespace],
+  search: [reviewSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 
@@ -672,6 +673,8 @@ const debugComponentIds = [
         'agent-ui',
         'agent-replay',
         'agent-changes-ui',
+        'agent-review-ui',
+        'agent-review-integration',
         'diff-view-ui',
       ]
     : []),

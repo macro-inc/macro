@@ -39,6 +39,13 @@ export const agentHarnessBacklog = [
   'answerAgentSessionToolApproval',
   'getAgentSessionPermissions',
   'updateAgentSessionPermissions',
+  // Code review currently uses the app client and session-bound Internal MCP.
+  'capture',
+  'comment',
+  'file',
+  'link',
+  'resolve',
+  'view',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const authExcluded = [

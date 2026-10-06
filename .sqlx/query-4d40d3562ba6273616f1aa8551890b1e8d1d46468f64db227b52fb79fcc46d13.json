@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT claim FROM agent_review_capture WHERE agent_session_id = $1 AND claim = $2 AND expires_at > now() FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claim",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4d40d3562ba6273616f1aa8551890b1e8d1d46468f64db227b52fb79fcc46d13"
+}

@@ -329,6 +329,29 @@ async fn gateway_egress_keeps_authentication_and_git_basic_challenge() {
     assert!(service.seen.lock().unwrap().is_empty());
 }
 
+#[test]
+fn review_openapi_is_compatible_with_the_service() {
+    use utoipa::OpenApi;
+
+    // This same document is built when the HTTP listener starts. The review
+    // crate uses diffd's newer Utoipa; an incompatible response can panic here.
+    let document = super::swagger::ApiDoc::openapi();
+    for suffix in ["", "/file", "/capture", "/comment", "/link", "/resolve"] {
+        let path = format!("/agent-sessions/{{session_id}}/review{suffix}");
+        assert!(document.paths.paths.contains_key(&path), "{path}");
+    }
+    assert!(
+        document
+            .paths
+            .paths
+            .contains_key("/agent-sessions/{session_id}/log")
+    );
+    let schemas = &document.components.as_ref().unwrap().schemas;
+    for name in ["Review", "FileDiff", "ReviewLink", "Comment"] {
+        assert!(schemas.contains_key(name), "{name}");
+    }
+}
+
 impl CodingAgentService for RoutineSessionsSpy {
     fn list(
         &self,

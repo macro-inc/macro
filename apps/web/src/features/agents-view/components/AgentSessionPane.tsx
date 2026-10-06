@@ -1,3 +1,8 @@
+import {
+  AgentReviewProvider,
+  ReviewSessionSurface,
+  ReviewToggle,
+} from '@app/features/agent-review/agent-review';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
@@ -16,13 +21,6 @@ import {
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
 import { createAgentRouteTarget } from '@app/features/block-agent/primitives/create-agent-route-target';
-import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
-import {
-  ChangesHandoff,
-  ChangesSplit,
-  ChangesToggle,
-  ReviewNotesDock,
-} from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -225,7 +223,7 @@ function SessionContent(props: {
               />
             )}
           </Show>
-          <ChangesToggle />
+          <ReviewToggle />
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
@@ -283,8 +281,6 @@ function SessionContent(props: {
                         </Show>
                       }
                     >
-                      <ChangesHandoff />
-                      <ReviewNotesDock />
                       <AgentComposer
                         autofocus={!searchTarget()}
                         input={ChatSessionInput}
@@ -318,14 +314,14 @@ export function AgentSessionPane(props: {
 
   return (
     <AgentSessionProvider blockId={props.id} onSessionId={props.onSessionId}>
-      <AgentChangesProvider>
-        <ChangesSplit>
+      <AgentReviewProvider>
+        <ReviewSessionSurface>
           <SessionContent
             onDeleted={props.onDeleted}
             notificationSource={props.notificationSource}
           />
-        </ChangesSplit>
-      </AgentChangesProvider>
+        </ReviewSessionSurface>
+      </AgentReviewProvider>
     </AgentSessionProvider>
   );
 }

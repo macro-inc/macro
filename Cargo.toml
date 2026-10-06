@@ -2,11 +2,14 @@
 resolver = "2"
 
 members = [
+  "vendor/diffd-core",
   "crates/routines",
   "crates/activity",
   "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/agent_preview",
+  "crates/agent_review",
+  "crates/agent_review_runtime",
   "crates/agent_inmem",
   "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
@@ -164,6 +167,9 @@ members = [
 ]
 
 [workspace.dependencies]
+diffd-core = { path = "vendor/diffd-core" }
+rayon = "1.11"
+similar = "2"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
 apollo-compiler = "1"

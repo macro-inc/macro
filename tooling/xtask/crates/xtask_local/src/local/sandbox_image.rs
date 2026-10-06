@@ -24,7 +24,7 @@ mod test;
 pub const DEFAULT_LOCAL_TAG: &str = "macro-agent-harness:latest";
 
 /// Build context matching `just -f crates/agent_harness/justfile build-local`.
-pub const CONTEXT_REL: &str = "crates/agent_harness/container";
+pub const CONTEXT_REL: &str = ".";
 
 /// What [`ensure`] will do for a resolved env, before talking to Docker.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +57,11 @@ impl EnsurePlan {
 pub(crate) fn build_args(tag: &str, context: &Path) -> Vec<String> {
     vec![
         "build".to_owned(),
+        "--file".to_owned(),
+        context
+            .join("crates/agent_harness/container/Dockerfile")
+            .display()
+            .to_string(),
         "--tag".to_owned(),
         tag.to_owned(),
         context.display().to_string(),

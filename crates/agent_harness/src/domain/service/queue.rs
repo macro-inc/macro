@@ -381,7 +381,21 @@ where
             }
             HarnessCommand::RemoveQueued { action_id, .. } => {
                 queue_result(self.queues.remove(session_id, action_id), session_id)?;
-                self.persist_or_rollback(session_id).await?;
+                let remaining = self
+                    .queues
+                    .snapshot(session_id)
+                    .iter()
+                    .map(QueuedEntry::to_stored)
+                    .collect::<anyhow::Result<Vec<_>>>()
+                    .map_err(AgentSessionError::Unknown)?;
+                if let Err(error) = self
+                    .sessions
+                    .cancel_queued_action(session_id, action_id, &remaining)
+                    .await
+                {
+                    self.reload_queue(session_id).await?;
+                    return Err(error.into());
+                }
                 self.publish_queue(session_id).await;
                 Ok(CommandOutcome::Completed)
             }
@@ -582,10 +596,8 @@ where
     /// An action whose id this session already holds is the same action
     /// arriving twice - a caller retrying a control request under the id it
     /// named. It reports what became of the first copy instead of queueing a
-    /// second, so a retry cannot double-prompt. Only what this replica still
-    /// holds is checked: an id whose action has already finished its turn is
-    /// no longer anywhere to be seen, and accepting it again is indistinguishable
-    /// from asking for the same thing twice on purpose.
+    /// second, so a retry cannot double-prompt. Durable completion records also
+    /// suppress retries after a turn has finished or been cancelled.
     ///
     /// A channel follow-up (`announce` set) that lands on a running turn
     /// steers: it goes to the front of the queue, a stop cancels the current
@@ -599,12 +611,27 @@ where
         self.authorize_action(&command).await?;
         let action_id = command.id;
         if self.queues.contains(session_id, action_id) {
+            if !self.busy.is_pending(session_id) {
+                self.busy.admit(session_id);
+                if let Err(error) = self.dispatch_next(session_id).await {
+                    self.busy.clear(session_id);
+                    return Err(error);
+                }
+                self.publish_queue(session_id).await;
+            }
             return Ok(CommandOutcome::Queued);
         }
         if self
             .busy
             .turn(session_id)
             .is_some_and(|turn| turn.action_id == action_id)
+        {
+            return Ok(CommandOutcome::Completed);
+        }
+        if self
+            .sessions
+            .action_completed(session_id, action_id)
+            .await?
         {
             return Ok(CommandOutcome::Completed);
         }

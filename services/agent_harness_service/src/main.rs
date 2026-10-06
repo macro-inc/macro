@@ -19,6 +19,7 @@ mod harness_bindings;
 mod internal_mcp;
 mod model_providers;
 mod permission_policy;
+mod reviews;
 mod routine_sessions;
 mod runtime_commands;
 mod trigger;
@@ -573,7 +574,7 @@ async fn run() -> anyhow::Result<()> {
         replica,
     )
     .with_tool_catalog(tool_catalog);
-    let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
+    let sandbox_and_inmem = RoutedContainers::new(sandbox.clone(), Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
@@ -627,14 +628,6 @@ async fn run() -> anyhow::Result<()> {
                 session_audience.clone(),
             ),
         ),
-    );
-    let internal_mcp = internal_mcp::router(
-        Arc::new(session_repo.clone()),
-        session_pull_requests.clone(),
-        url::Url::parse(&egress_base_url)?
-            .host_str()
-            .context("egress URL needs a host")?
-            .to_owned(),
     );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
@@ -714,7 +707,7 @@ async fn run() -> anyhow::Result<()> {
             )
         }),
     )
-    .with_pull_requests(session_pull_requests);
+    .with_pull_requests(session_pull_requests.clone());
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
     // edited agents require no service restart.
@@ -994,7 +987,7 @@ async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
-                egress_base_url,
+                egress_base_url.clone(),
             )
             .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
@@ -1016,6 +1009,73 @@ async fn run() -> anyhow::Result<()> {
         .with_admission(admission.clone())
         .with_repositories(open_repositories),
     );
+    let review_s3 = macro_aws_config::s3_client().await;
+    let review_runtime_bus = reviews::ReviewRuntimeBus::new(
+        runtimes.clone(),
+        redis.clone(),
+        review_s3.clone(),
+        config.agent_session_changes_bucket.clone(),
+    );
+    let review_service: Arc<dyn agent_review::domain::service::Reviews> =
+        Arc::new(agent_review::domain::service::ReviewService::new(
+            session_repo.clone(),
+            Arc::new(agent_review::outbound::postgres::PgReviewRepo::new(
+                pool.clone(),
+            )),
+            Arc::new(agent_review::outbound::s3::S3ReviewBodies::new(
+                review_s3,
+                config.agent_session_changes_bucket.clone(),
+            )),
+            Arc::new(reviews::Sources {
+                bindings: PgHarnessBindings::new(pool.clone()),
+                runtimes: review_runtime_bus.clone(),
+                managed: sandbox.clone(),
+                pull_requests: Arc::new(reviews::GithubReviews::new(
+                    InstallationTokenService::new(
+                        InstallationTokenConfig {
+                            client_id: config.github_sync_app_client_id.clone(),
+                            private_key_pem: config
+                                .github_sync_app_pem_secret_key
+                                .as_ref()
+                                .to_owned(),
+                        },
+                        PgGithubSyncRepo::new(pool.clone()),
+                        GithubSyncClientImpl::default(),
+                    ),
+                )),
+            }),
+            Arc::new(agent_review::outbound::session::SessionFeedback::new(
+                harness.clone(),
+                entity_access.clone(),
+            )),
+            Arc::new(agent_review::outbound::session::SessionReviewEvents(
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_audience.clone(),
+                ),
+            )),
+            url::Url::parse(macro_service_urls::AppServiceUrl::new()?.as_ref())?,
+        ));
+    let internal_mcp = internal_mcp::router(
+        Arc::new(session_repo.clone()),
+        session_pull_requests.clone(),
+        review_service.clone(),
+        url::Url::parse(&egress_base_url)?
+            .host_str()
+            .context("egress URL needs a host")?
+            .to_owned(),
+    );
+    let review_delivery = review_service.clone();
+    let review_worker = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(2));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(error) = review_delivery.deliver_pending().await {
+                tracing::warn!(?error, "review feedback worker will retry");
+            }
+        }
+    });
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
@@ -1052,7 +1112,16 @@ async fn run() -> anyhow::Result<()> {
 
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue, and capture what the turn changed.
-    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    turn_observer.bind((
+        harness.clone(),
+        (
+            CaptureOnTurnEnd::new(changes.clone()),
+            reviews::CaptureOnTurnEnd {
+                sessions: session_repo.clone(),
+                reviews: review_service.clone(),
+            },
+        ),
+    ));
     held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
@@ -1076,6 +1145,7 @@ async fn run() -> anyhow::Result<()> {
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),
+                    review_runtime_bus.clone(),
                 )
             },
         )
@@ -1163,6 +1233,13 @@ async fn run() -> anyhow::Result<()> {
         )),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let review_routes = agent_review::inbound::axum_router::router(
+        agent_review::inbound::axum_router::ReviewRouterState::new(
+            review_service,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
     );
     let changes_state = AgentChangesRouterState::new(
         changes,
@@ -1280,6 +1357,7 @@ async fn run() -> anyhow::Result<()> {
             )
             .with_claude_auth(claude_auth)
             .with_sharing(sharing)
+            .with_reviews(review_routes)
             .with_routine_sessions(routine_sessions)
             .with_coding_agents(coding_agents)
             .with_capabilities(capabilities)
@@ -1355,6 +1433,8 @@ async fn run() -> anyhow::Result<()> {
         },
     ));
 
+    // Keep durable feedback delivery alive for the lifetime of the service.
+    let _review_worker = review_worker;
     let egress_port = config.egress_port;
     let egress_http = tokio::spawn(async move {
         if let Err(error) =

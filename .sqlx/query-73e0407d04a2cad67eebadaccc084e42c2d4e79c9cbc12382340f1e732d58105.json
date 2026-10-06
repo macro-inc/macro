@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_review (agent_session_id, review_id, version, state)\n            SELECT $1, $2, $3, $4 WHERE $5::bigint IS NULL\n            ON CONFLICT (agent_session_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "73e0407d04a2cad67eebadaccc084e42c2d4e79c9cbc12382340f1e732d58105"
+}

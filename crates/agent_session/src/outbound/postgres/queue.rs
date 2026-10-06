@@ -27,7 +27,12 @@ impl<B> PgAgentSessionRepo<B> {
         &self,
         id: AgentSessionId,
         entries: &[StoredQueuedAction],
+        cancelled: Option<agent_runtime_protocol::domain::action::AgentActionId>,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await.context("begin queue mutation")?;
+        if let Some(action) = cancelled {
+            sqlx::query!("INSERT INTO agent_session_cancelled_action (agent_session_id, action_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", id.as_uuid(), action.as_uuid()).execute(&mut *tx).await.context("record explicit queue cancellation")?;
+        }
         if entries.is_empty() {
             sqlx::query!(
                 r#"
@@ -36,9 +41,10 @@ impl<B> PgAgentSessionRepo<B> {
                 "#,
                 id.as_uuid(),
             )
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await
             .context("clear agent session queue")?;
+            tx.commit().await.context("commit queue cancellation")?;
             return Ok(());
         }
 
@@ -53,9 +59,10 @@ impl<B> PgAgentSessionRepo<B> {
             id.as_uuid(),
             Json(entries) as _,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("replace agent session queue")?;
+        tx.commit().await.context("commit queue mutation")?;
         Ok(())
     }
 }

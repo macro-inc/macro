@@ -1,5 +1,85 @@
 # Navigation and App Structure
 
+## Agent reviews
+
+Coder sessions expose **Review changes** on desktop and mobile. This opens a
+full reader in the same pane. **Back to session** restores the conversation and
+its draft. The agent's diff citations enter the same reader; links carry
+`sN.review.open`, `id`, `revision`, `target`, and optional `thread` search keys.
+
+The left navigation contains **Walkthrough**, **Full Diff**, **Threads**, and **History**. Each
+walkthrough chapter shows its explanation inline and contains a file tree that starts collapsed. Click anywhere
+on a chapter header to expand or collapse its tree; collapsing keeps the code
+viewport in place. Files show colored change status and green/red change bars
+with exact added/removed line counts on hover. Files outside the tour appear
+under **Other changes**. Without a tour, **Changes** contains all files. On a phone,
+use **Review navigation** to open or close the drawer. Expanding a chapter keeps
+the drawer open; choosing a file closes it. Right/down carets indicate collapsed
+and expanded trees; the chevrons sit at the right edge of each row. **Collapse all** closes every chapter and folder. Visibility
+chips show or hide agent-defined file groups, such as generated files and tests.
+Hidden files remain available through citations and can be revealed with a chip.
+**Full Diff** shows the complete changed-file tree in repository order, including
+generated files and groups hidden from the walkthrough. Folders start expanded;
+click a folder to collapse it or a file to open its diff. This view omits walkthrough
+explanations and keeps the current code position when switching from the tour.
+Each view retains its own folder expansion and sidebar scroll position.
+**Collapse all** applies to the current view only.
+The code pane scrolls continuously across files. Full Diff follows repository
+order; Walkthrough follows chapter order, then remaining visible files, without
+repeating files shared by chapters. The active file and chapter follow scrolling.
+Entering a different section expands its walkthrough tree. Manually collapsing
+the current section keeps it closed until you leave and return.
+Only nearby file bodies and code lines mount, so large comparisons stay usable.
+Threads and History retain the current reading order. New agent revisions update
+the same scroll surface; composing a comment still pauses revision following.
+
+The review fills the viewport using the app's fullscreen dialog. Home, Agents,
+and app navigation are covered while reviewing. **Back to session** restores
+the mounted conversation and its draft. Reopening the review retains its code
+position and comment draft. Escape first dismisses search, selection, or a
+comment composer; with none open it returns to the session.
+
+Press `/` or click the search icon to open **Find in file** and **Go to line**.
+Search covers the full source, including unmounted lines; Escape closes it.
+Code uses compact rows, wraps long lines, and shows aligned side-by-side columns
+with AST token highlights on wide panes. New and deleted files use a centered
+single column without a full green/red background. Syntax colors remain visible
+on changed lines, including SQL. Narrow panes use one column. Unchanged regions
+expand from either edge independently; clicking the count reveals the whole gap.
+Generated file bodies can expand. The walkthrough explanation starts sized to its content. Drag its
+bottom edge to resize it; the focused divider also supports ArrowUp/Down,
+Home/End, and double-click reset to the content size.
+
+Drag over code or line numbers to select a region, or click a line number and
+Shift-click another. Clicking code also selects its line. An **Ask agent** chip
+appears beside the selected lines. Escape clears the selection. **Ask agent** opens a composer
+below the selected side on desktop. Clicking outside an
+empty composer dismisses it; typed drafts stay open. Cmd/Ctrl+Enter sends and
+Escape cancels. Editors can comment; comments are sent to the agent in the same
+session. Agent replies appear
+inline and their code links are clickable. Resolve/Reopen belongs to the human.
+Viewers can select code and follow citations. A failed/uncertain save offers a retry of
+the same message. Saved notes from the old changes panel can be recovered as drafts.
+
+The reader follows the latest revision automatically, pausing while a comment is
+being composed and resuming when the draft is cleared. History and copied links
+stay pinned; **View latest** returns to live reading. Moved comments follow unique
+matching text. Outdated threads retain an original-context link. Background capture
+updates workspace changes; `r` also captures without moving the viewport.
+Revision changes retain the mounted reader without a full-page loading state;
+selection and comments wait until the requested source is ready. Linked PRs can be reviewed
+when a workspace is unavailable.
+
+On touch screens, the reader reserves space for the floating app header and dock,
+so **Back to session**, navigation, and code remain reachable.
+Escape dismisses the navigation drawer, search, comment composer, selection, or
+corner map before returning to the session. The drawer restores focus to its opener.
+
+Local-only `/app/debug/agent-review-ui` is the original simulated sketch with a
+100k-line fixture. `/app/debug/agent-review-integration` is the production-reader
+browser lab. See [design and validation](../AGENT_REVIEW_DESIGN.md) and the
+[reproduction guide](../../apps/web/scripts/review-browser/README.md).
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and

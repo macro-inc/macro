@@ -116,6 +116,21 @@ fn first_party_claude_routes_to_the_claude_provider() {
 }
 
 impl AgentSessionRepo for FixedBotSessions {
+    async fn cancel_queued_action(
+        &self,
+        _: AgentSessionId,
+        _: agent_runtime_protocol::domain::action::AgentActionId,
+        _: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        Ok(())
+    }
+    async fn action_completed(
+        &self,
+        _id: AgentSessionId,
+        _action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> SessionResult<bool> {
+        Ok(false)
+    }
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the router never creates sessions")
     }

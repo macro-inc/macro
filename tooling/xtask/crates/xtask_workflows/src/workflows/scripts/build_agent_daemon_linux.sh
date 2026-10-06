@@ -18,3 +18,5 @@ export AWS_LC_SYS_CMAKE_BUILDER=1
 export SQLX_OFFLINE=true
 
 cargo zigbuild --release --package coding_agent_worker --target "$TARGET"
+
+bash tooling/xtask/crates/xtask_workflows/src/workflows/scripts/build_review_engine.sh

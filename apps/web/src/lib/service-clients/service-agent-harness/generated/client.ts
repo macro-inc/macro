@@ -15,6 +15,8 @@ import type {
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
+  Comment,
+  Comparison,
   CompleteRequest,
   ControlRequest,
   ControlResponse,
@@ -24,6 +26,9 @@ import type {
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  FileDiff,
+  FileParams,
+  LinkBody,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -32,6 +37,10 @@ import type {
   PullRequestSessionsResponse,
   PullRequestUrl,
   RenameAgentSessionRequest,
+  ResolveBody,
+  ResolveResponse,
+  ReviewLink,
+  ReviewResponse,
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
@@ -40,6 +49,7 @@ import type {
   StatusResponse,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  ViewParams,
 } from './schemas';
 
 /**
@@ -1971,6 +1981,224 @@ export const steerQueuedAction = async (
     status: res.status,
     headers: res.headers,
   } as steerQueuedActionResponse;
+};
+
+export type viewResponse200 = {
+  data: ReviewResponse;
+  status: 200;
+};
+
+export type viewResponseSuccess = viewResponse200 & {
+  headers: Headers;
+};
+
+export type viewResponse = viewResponseSuccess;
+
+export const getViewUrl = (sessionId: string, params?: ViewParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/review?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/review`;
+};
+
+export const view = async (
+  sessionId: string,
+  params?: ViewParams,
+  options?: RequestInit
+): Promise<viewResponse> => {
+  const res = await fetch(getViewUrl(sessionId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: viewResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as viewResponse;
+};
+
+export type captureResponse200 = {
+  data: ReviewLink;
+  status: 200;
+};
+
+export type captureResponseSuccess = captureResponse200 & {
+  headers: Headers;
+};
+
+export type captureResponse = captureResponseSuccess;
+
+export const getCaptureUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/review/capture`;
+};
+
+export const capture = async (
+  sessionId: string,
+  comparison: Comparison,
+  options?: RequestInit
+): Promise<captureResponse> => {
+  const res = await fetch(getCaptureUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(comparison),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: captureResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as captureResponse;
+};
+
+export type commentResponse200 = {
+  data: ReviewLink;
+  status: 200;
+};
+
+export type commentResponseSuccess = commentResponse200 & {
+  headers: Headers;
+};
+
+export type commentResponse = commentResponseSuccess;
+
+export const getCommentUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/review/comment`;
+};
+
+export const comment = async (
+  sessionId: string,
+  comment: Comment,
+  options?: RequestInit
+): Promise<commentResponse> => {
+  const res = await fetch(getCommentUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(comment),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: commentResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as commentResponse;
+};
+
+export type fileResponse200 = {
+  data: FileDiff;
+  status: 200;
+};
+
+export type fileResponseSuccess = fileResponse200 & {
+  headers: Headers;
+};
+
+export type fileResponse = fileResponseSuccess;
+
+export const getFileUrl = (sessionId: string, params: FileParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/review/file?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/review/file`;
+};
+
+export const file = async (
+  sessionId: string,
+  params: FileParams,
+  options?: RequestInit
+): Promise<fileResponse> => {
+  const res = await fetch(getFileUrl(sessionId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: fileResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as fileResponse;
+};
+
+export type linkResponse200 = {
+  data: ReviewLink;
+  status: 200;
+};
+
+export type linkResponseSuccess = linkResponse200 & {
+  headers: Headers;
+};
+
+export type linkResponse = linkResponseSuccess;
+
+export const getLinkUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/review/link`;
+};
+
+export const link = async (
+  sessionId: string,
+  linkBody: LinkBody,
+  options?: RequestInit
+): Promise<linkResponse> => {
+  const res = await fetch(getLinkUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: linkResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as linkResponse;
+};
+
+export type resolveResponse200 = {
+  data: ResolveResponse;
+  status: 200;
+};
+
+export type resolveResponseSuccess = resolveResponse200 & {
+  headers: Headers;
+};
+
+export type resolveResponse = resolveResponseSuccess;
+
+export const getResolveUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/review/resolve`;
+};
+
+export const resolve = async (
+  sessionId: string,
+  resolveBody: ResolveBody,
+  options?: RequestInit
+): Promise<resolveResponse> => {
+  const res = await fetch(getResolveUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resolveBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as resolveResponse;
 };
 
 /**

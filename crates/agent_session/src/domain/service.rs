@@ -305,6 +305,21 @@ pub trait AgentSessionService: Send + Sync + 'static {
         event: AgentSessionQueueChanged,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Atomically remove a queued action and remember explicit cancellation across retries.
+    fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[StoredQueuedAction],
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Whether an action was explicitly cancelled or has a durable ACP result/error, across history resets.
+    fn action_completed(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
     /// The session's waiting actions, oldest first. Missing row is empty.
     fn list_queued_actions(
         &self,
@@ -1029,6 +1044,18 @@ where
         Ok(self.realtime.publish_queue_changed(event).await?)
     }
 
+    async fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.cancel_queued_action(id, action, remaining).await
+    }
+    async fn action_completed(&self, id: AgentSessionId, action: AgentActionId) -> Result<bool> {
+        self.repo.action_completed(id, action).await
+    }
+
     async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {
         self.repo.list_queued_actions(id).await
     }
@@ -1738,6 +1765,18 @@ where
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
+    }
+
+    async fn cancel_queued_action(
+        &self,
+        id: AgentSessionId,
+        action: agent_runtime_protocol::domain::action::AgentActionId,
+        remaining: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.cancel_queued_action(id, action, remaining).await
+    }
+    async fn action_completed(&self, id: AgentSessionId, action: AgentActionId) -> Result<bool> {
+        self.repo.action_completed(id, action).await
     }
 
     async fn list_queued_actions(&self, id: AgentSessionId) -> Result<Vec<StoredQueuedAction>> {

@@ -124,3 +124,17 @@ impl Transport<ToRuntimeMessage, ToServerMessage> for HarnessContainer {
         }
     }
 }
+
+impl crate::domain::ports::WorkspaceReviewSource for HarnessContainers {
+    async fn capture_workspace_review(
+        &self,
+        session: AgentSessionId,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<Option<serde_json::Value>> {
+        match self {
+            Self::Daytona(manager) => manager.capture_workspace_review(session, base, head).await,
+            Self::Local(manager) => manager.capture_workspace_review(session, base, head).await,
+        }
+    }
+}

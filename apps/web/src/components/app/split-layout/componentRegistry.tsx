@@ -488,6 +488,16 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'agent-review-integration',
+    lazy(() => import('@app/features/agent-review/debug/Integration'))
+  );
+
+  registerComponent(
+    'agent-review-ui',
+    lazy(() => import('@app/features/agent-review/debug/Gallery'))
+  );
+
+  registerComponent(
     'diff-view-ui',
     lazy(() => import('@app/components/diff-view/debug/DiffViewGallery'))
   );

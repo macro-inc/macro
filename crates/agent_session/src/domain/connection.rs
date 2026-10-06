@@ -28,7 +28,8 @@ use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ModelProbeResult, ReviewCaptureResult, SystemEvent, ToRuntimeMessage,
+    ToServerMessage,
 };
 use dashmap::DashMap;
 use tokio::sync::{Mutex, mpsc, watch};
@@ -59,6 +60,8 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// A review capture is routed to its private waiter, never to a transcript.
+    Review,
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -96,6 +99,12 @@ impl Routes {
     /// expectation is consumed - a second answer to one request has no owner.
     /// Anything carrying a `sessionId` belongs to that ACP session's owner.
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
+        if matches!(
+            message,
+            ToServerMessage::ReviewCaptured { .. } | ToServerMessage::ReviewCaptureChunk { .. }
+        ) {
+            return Routed::Review;
+        }
         if matches!(message, ToServerMessage::ModelProbeResponse { .. }) {
             return Routed::Probe;
         }
@@ -247,6 +256,22 @@ type Bound = DashMap<AgentSessionId, mpsc::Sender<ToServerMessage>>;
 /// The latest model probe answer, or `None` for "no answer is coming".
 type ProbeAnswers = watch::Sender<Option<ModelProbeResult>>;
 
+struct PendingReview {
+    send: tokio::sync::oneshot::Sender<ReviewCaptureResult>,
+    json: String,
+}
+
+struct ReviewWaiter<'a> {
+    id: String,
+    pending: &'a DashMap<String, PendingReview>,
+}
+
+impl Drop for ReviewWaiter<'_> {
+    fn drop(&mut self) {
+        self.pending.remove(&self.id);
+    }
+}
+
 /// One runtime connection and the sessions riding on it.
 ///
 /// Holds the carrier's sending half only: the receiving half belongs to the
@@ -266,6 +291,7 @@ pub struct RuntimeConnection<Sender> {
     /// on this connection asks the same parameterless question, so any answer
     /// serves any waiter.
     probe_answers: ProbeAnswers,
+    review_answers: DashMap<String, PendingReview>,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -298,6 +324,7 @@ where
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
             probe_answers: watch::channel(None).0,
+            review_answers: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -361,6 +388,42 @@ where
             Some(ModelProbeResult::Available { config_options }) => Ok(config_options),
             Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
             None => Err(ModelProbeError::Closed),
+        }
+    }
+
+    /// Request one correlated snapshot without entering a session's conversation log.
+    pub async fn capture_review(
+        &self,
+        workspace: String,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<ReviewCaptureResult, ModelProbeError> {
+        let request_id = macro_uuid::generate_uuid_v7().to_string();
+        let (send, receive) = tokio::sync::oneshot::channel();
+        self.review_answers.insert(
+            request_id.clone(),
+            PendingReview {
+                send,
+                json: String::new(),
+            },
+        );
+        let _cleanup = ReviewWaiter {
+            id: request_id.clone(),
+            pending: &self.review_answers,
+        };
+        self.outbound
+            .send(ToRuntimeMessage::ReviewCapture {
+                request_id,
+                workspace,
+                base,
+                head,
+            })
+            .await
+            .map_err(ModelProbeError::Transport)?;
+        tokio::select! {
+            result = receive => result.map_err(|_| ModelProbeError::Closed),
+            () = self.closed.cancelled() => Err(ModelProbeError::Closed),
+            () = tokio::time::sleep(std::time::Duration::from_secs(120)) => Err(ModelProbeError::Runtime("Workspace capture timed out; the runtime may need an update".into())),
         }
     }
 
@@ -468,6 +531,7 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Review => self.answer_review(message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -478,6 +542,50 @@ where
         }
         self.bound.clear();
         self.closed.cancel();
+    }
+
+    fn answer_review(&self, message: ToServerMessage) {
+        match message {
+            ToServerMessage::ReviewCaptured { request_id, result } => {
+                if let Some((_, pending)) = self.review_answers.remove(&request_id) {
+                    let _ = pending.send.send(result);
+                }
+            }
+            ToServerMessage::ReviewCaptureChunk {
+                request_id,
+                chunk,
+                done,
+            } => {
+                let Some(mut pending) = self.review_answers.get_mut(&request_id) else {
+                    return;
+                };
+                if chunk.len() > 256 * 1024 || pending.json.len() + chunk.len() > 256 * 1024 * 1024
+                {
+                    drop(pending);
+                    if let Some((_, pending)) = self.review_answers.remove(&request_id) {
+                        let _ = pending.send.send(ReviewCaptureResult::Error {
+                            message: "Workspace capture exceeds the transfer budget".into(),
+                        });
+                    }
+                    return;
+                }
+                pending.json.push_str(&chunk);
+                drop(pending);
+                if done && let Some((_, pending)) = self.review_answers.remove(&request_id) {
+                    // Parsing a large body must not hold up this connection's ACP router.
+                    tokio::task::spawn_blocking(move || {
+                        let result = match serde_json::from_str(&pending.json) {
+                            Ok(capture) => ReviewCaptureResult::Available { capture },
+                            Err(_) => ReviewCaptureResult::Error {
+                                message: "Runtime returned an invalid review capture".into(),
+                            },
+                        };
+                        let _ = pending.send.send(result);
+                    });
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Hand one answer to every probe waiting on this connection. An answer

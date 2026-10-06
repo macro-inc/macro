@@ -107,6 +107,7 @@ import { UnknownMention as UnknownMentionDecorator } from '../decorator/UnknownM
 import { UserMention as UserMentionDecorator } from '../decorator/UserMention';
 import { Watermark as WatermarkDecorator } from '../decorator/Watermark';
 import { LinkWithPreview } from './LinkWithPreview';
+import { $linkifyStaticText } from './linkifyStaticText';
 
 type HeadingTag = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
 
@@ -1083,6 +1084,8 @@ export function StaticMarkdown(props: {
   rootRef?: (ref: HTMLDivElement) => void;
   target?: 'internal' | 'external' | 'both';
   singleLine?: boolean;
+  /** Turn bare protocol URLs in prose into links, leaving code untouched. */
+  autoLink?: boolean;
   lazy?: boolean;
 }) {
   let {
@@ -1131,6 +1134,7 @@ export function StaticMarkdown(props: {
     }
 
     setEditorStateFromMarkdown(editor, props.markdown, props.target);
+    if (props.autoLink) editor.update($linkifyStaticText, { discrete: true });
     if (props.singleLine) {
       forceSingleLine(editor);
     }
@@ -1144,6 +1148,7 @@ export function StaticMarkdown(props: {
     // Handle citations without affecting mentions
     replaceCitations(props.markdown).then((content: string) => {
       setEditorStateFromMarkdown(editor, content, props.target);
+      if (props.autoLink) editor.update($linkifyStaticText, { discrete: true });
       if (props.singleLine) {
         forceSingleLine(editor);
       }

@@ -138,6 +138,17 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// Capture a session workspace outside the ACP conversation stream.
+    ReviewCapture {
+        /// Correlation ID, scoped to this live connection.
+        request_id: String,
+        /// Persisted session workspace, supplied only by the service.
+        workspace: String,
+        /// Base branch or pinned commit.
+        base: Option<String>,
+        /// Optional tip commit; absent means the working tree.
+        head: Option<String>,
+    },
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -157,5 +168,38 @@ pub enum ToServerMessage {
     ModelProbeResponse {
         /// Raw options or a safe failure.
         result: ModelProbeResult,
+    },
+    /// One bounded UTF-8 chunk of a review capture, interleaved with ACP traffic.
+    ReviewCaptureChunk {
+        /// ID of the request this belongs to.
+        request_id: String,
+        /// Serialized capture data, at most 256 KiB before envelope escaping.
+        chunk: String,
+        /// This chunk completes the capture.
+        done: bool,
+    },
+    /// An independently correlated review response; never logged as ACP traffic.
+    ReviewCaptured {
+        /// ID of the request this answers.
+        request_id: String,
+        /// Full structural snapshot or an actionable capability error.
+        result: ReviewCaptureResult,
+    },
+}
+
+/// Versioned runtime capture outcome. The owning review domain validates snapshots.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ReviewCaptureResult {
+    /// Pinned diffd structural capture data.
+    Available {
+        /// Review capture schema, version one.
+        #[specta(type = Unknown)]
+        capture: serde_json::Value,
+    },
+    /// The workspace cannot be captured by this runtime.
+    Error {
+        /// Safe error suitable for the reader and agent.
+        message: String,
     },
 }

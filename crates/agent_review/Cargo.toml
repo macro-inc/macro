@@ -1,0 +1,39 @@
+[package]
+name = "agent_review"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+test-utils = ["agent_session/test-utils"]
+
+[dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+ai_toolset = { path = "../ai_toolset" }
+async-trait.workspace = true
+aws-sdk-s3.workspace = true
+axum.workspace = true
+chrono.workspace = true
+diffd-core.workspace = true
+entity_access = { path = "../entity_access", default-features = false, features = ["inbound", "ports"] }
+futures.workspace = true
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+rootcause.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx = { workspace = true, features = ["json"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["time", "sync"] }
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+utoipa.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }

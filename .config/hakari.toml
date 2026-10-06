@@ -40,6 +40,10 @@ platforms = [
 # macro_sync_service_jwt and the sync-service packages must stay wasm-safe, so
 # they must not gain the workspace-hack dep, which pulls native-only features.
 workspace-members = [
+    # The source engine and capture runtime also ship in the standalone agent
+    # sidecar; they must not inherit the backend's infrastructure feature union.
+    "diffd-core",
+    "agent_review_runtime",
     # Standalone protocol library. Until a deployable service consumes it,
     # ACP's schema features must not alter unrelated service build/codegen closures.
     "agent_runtime_protocol",

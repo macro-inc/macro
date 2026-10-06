@@ -484,3 +484,92 @@ async fn pending_model_probe_ends_when_the_connection_closes() {
         Err(ModelProbeError::Closed)
     ));
 }
+
+#[tokio::test]
+async fn chunked_review_larger_than_a_socket_frame_never_enters_the_transcript() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_, mut session_inbound) = attachment.connector.split();
+    let capture = {
+        let connection = connection.clone();
+        tokio::spawn(async move {
+            connection
+                .capture_review("/workspace".into(), None, None)
+                .await
+        })
+    };
+    let Some(ToRuntimeMessage::ReviewCapture { request_id, .. }) = runtime.rx.recv().await else {
+        panic!("missing capture request")
+    };
+    let payload = serde_json::json!({"files":[], "padding":"x".repeat(17 * 1024 * 1024)});
+    let json = serde_json::to_string(&payload).unwrap();
+    let chunks: Vec<_> = json.as_bytes().chunks(256 * 1024).collect();
+    for (index, chunk) in chunks.iter().enumerate() {
+        runtime
+            .tx
+            .send(ToServerMessage::ReviewCaptureChunk {
+                request_id: request_id.clone(),
+                chunk: std::str::from_utf8(chunk).unwrap().into(),
+                done: index + 1 == chunks.len(),
+            })
+            .unwrap();
+    }
+    let result = tokio::time::timeout(Duration::from_secs(10), capture)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(result, agent_runtime_protocol::domain::schema::v0::ReviewCaptureResult::Available { capture } if capture == payload)
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), session_inbound.recv())
+            .await
+            .is_err()
+    );
+    assert!(connection.review_answers.is_empty());
+}
+
+#[tokio::test]
+async fn cancelled_review_waiters_release_memory_and_bad_json_fails_only_that_request() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let capture = {
+        let connection = connection.clone();
+        tokio::spawn(async move {
+            connection
+                .capture_review("/workspace".into(), None, None)
+                .await
+        })
+    };
+    runtime.rx.recv().await.unwrap();
+    capture.abort();
+    let _ = capture.await;
+    assert!(connection.review_answers.is_empty());
+    let capture = {
+        let connection = connection.clone();
+        tokio::spawn(async move {
+            connection
+                .capture_review("/workspace".into(), None, None)
+                .await
+        })
+    };
+    let Some(ToRuntimeMessage::ReviewCapture { request_id, .. }) = runtime.rx.recv().await else {
+        panic!("missing request")
+    };
+    runtime
+        .tx
+        .send(ToServerMessage::ReviewCaptureChunk {
+            request_id,
+            chunk: "invalid".into(),
+            done: true,
+        })
+        .unwrap();
+    let result = capture.await.unwrap().unwrap();
+    assert!(matches!(
+        result,
+        agent_runtime_protocol::domain::schema::v0::ReviewCaptureResult::Error { .. }
+    ));
+    assert!(connection.review_answers.is_empty());
+}

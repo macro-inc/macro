@@ -197,7 +197,7 @@ properties_service = { path = "../../crates/properties_service" }
 rate_limit = { path = "../../crates/rate_limit", default-features = false, features = [
   "axum",
 ] }
-rayon = "1.10.0"
+rayon.workspace = true
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = [
   "aio",

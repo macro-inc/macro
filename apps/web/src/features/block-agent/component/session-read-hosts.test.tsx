@@ -112,6 +112,14 @@ vi.mock('@core/component/TopBar/shareModal', () => ({
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
 }));
+vi.mock('@app/features/agent-review/agent-review', () => ({
+  AgentReviewProvider: (props: { children: JSX.Element }) => props.children,
+  ReviewSessionSurface: (props: { children: JSX.Element }) => props.children,
+  ReviewToggle: () => null,
+}));
+vi.mock('@app/features/agent-review/context/review-context', () => ({
+  useOptionalReviewHost: () => undefined,
+}));
 vi.mock('@app/features/changes/agent-session-changes', () => ({
   AgentChangesProvider: (props: { children: JSX.Element }) => props.children,
 }));

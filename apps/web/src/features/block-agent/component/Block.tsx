@@ -1,9 +1,8 @@
-import { AgentChangesProvider } from '@app/features/changes/agent-session-changes';
 import {
-  ChangesHandoff,
-  ChangesSplit,
-  ReviewNotesDock,
-} from '@app/features/changes/changes';
+  AgentReviewProvider,
+  ReviewSessionSurface,
+} from '@app/features/agent-review/agent-review';
+import { useOptionalReviewHost } from '@app/features/agent-review/context/review-context';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
@@ -53,6 +52,7 @@ function AgentBlockContent(props: {
   active: boolean;
   notificationSource: NotificationSource;
 }) {
+  const reviewHost = useOptionalReviewHost();
   const [params] = useSearchParams();
   const routeTarget = createAgentRouteTarget();
   const [searchTarget, setSearchTarget] = createSignal(
@@ -156,9 +156,8 @@ function AgentBlockContent(props: {
               title={metadata()?.title ?? undefined}
             />
             <AgentPreviewBanner />
-            {/* The Changes pane opens beside the transcript; closed, the
-                transcript keeps the whole width. */}
-            <ChangesSplit>
+            {/* Review replaces the content while preserving the mounted conversation. */}
+            <ReviewSessionSurface>
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
@@ -167,7 +166,11 @@ function AgentBlockContent(props: {
                     contribution — the float host is pointer-transparent. */}
                 {/* pb matches ChannelInputContainer so the composer sits at
                     the same height as the channel input. */}
-                <div class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+                <div
+                  classList={{ hidden: reviewHost?.open() }}
+                  inert={reviewHost?.open()}
+                  class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0"
+                >
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
                     <Show
                       when={!session()?.isArchived}
@@ -177,8 +180,6 @@ function AgentBlockContent(props: {
                         </Show>
                       }
                     >
-                      <ChangesHandoff />
-                      <ReviewNotesDock />
                       <AgentComposer
                         autofocus={
                           canAutofocusSplitContent &&
@@ -190,7 +191,7 @@ function AgentBlockContent(props: {
                   </div>
                 </div>
               </AgentComposerRegion>
-            </ChangesSplit>
+            </ReviewSessionSurface>
           </SidePanel.Layout>
         </div>
       </StaticMarkdownContext>
@@ -218,12 +219,12 @@ export default function BlockAgent() {
     <Show when={blockId}>
       {(id) => (
         <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
-          <AgentChangesProvider>
+          <AgentReviewProvider>
             <AgentBlockContent
               active={split?.isPanelActive() ?? false}
               notificationSource={notificationSource}
             />
-          </AgentChangesProvider>
+          </AgentReviewProvider>
         </AgentSessionProvider>
       )}
     </Show>

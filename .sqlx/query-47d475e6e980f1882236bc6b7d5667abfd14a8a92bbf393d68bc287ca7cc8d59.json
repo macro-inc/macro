@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_review_feedback SET lease_until = now() + interval '2 minutes'\n            WHERE agent_session_id = $1 AND message_id = $2 AND NOT delivered\n            AND (lease_until IS NULL OR lease_until < now()) RETURNING message_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "47d475e6e980f1882236bc6b7d5667abfd14a8a92bbf393d68bc287ca7cc8d59"
+}

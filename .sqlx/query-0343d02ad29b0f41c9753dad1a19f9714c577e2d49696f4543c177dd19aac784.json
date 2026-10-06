@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_review_feedback SET delivered = $3, lease_until = now() + interval '30 seconds'\n            WHERE agent_session_id = $1 AND message_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0343d02ad29b0f41c9753dad1a19f9714c577e2d49696f4543c177dd19aac784"
+}

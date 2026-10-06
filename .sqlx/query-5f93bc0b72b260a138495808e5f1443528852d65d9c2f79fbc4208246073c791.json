@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH selected AS MATERIALIZED (\n                SELECT state, COALESCE(\n                    $2::bigint, (state->'revisions'->-1->>'number')::bigint\n                ) AS number\n                FROM agent_review WHERE agent_session_id = $1\n            )\n            SELECT jsonb_set(state, '{revisions}', COALESCE((\n                SELECT jsonb_agg(CASE\n                    WHEN (item->>'number')::bigint = selected.number THEN item\n                    ELSE jsonb_build_object(\n                        'number', item->'number', 'createdAt', item->'createdAt',\n                        'comparison', item->'comparison', 'files', '[]'::jsonb,\n                        'symbols', '[]'::jsonb\n                    ) END ORDER BY position)\n                FROM jsonb_array_elements(state->'revisions')\n                    WITH ORDINALITY AS revisions(item, position)\n            ), '[]'::jsonb)) AS \"state!: Json<Review>\"\n            FROM selected\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: Json<Review>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5f93bc0b72b260a138495808e5f1443528852d65d9c2f79fbc4208246073c791"
+}

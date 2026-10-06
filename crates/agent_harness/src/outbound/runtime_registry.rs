@@ -64,6 +64,26 @@ where
         self.connections.contains_key(&harness)
     }
 
+    /// Capture through the harness's existing socket without logging source into ACP.
+    pub async fn capture_review(
+        &self,
+        harness: HarnessId,
+        workspace: String,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Option<
+        Result<
+            agent_runtime_protocol::domain::schema::v0::ReviewCaptureResult,
+            agent_session::domain::connection::ModelProbeError,
+        >,
+    > {
+        let connection = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry))?;
+        Some(connection.capture_review(workspace, base, head).await)
+    }
+
     /// Ask a harness's live runtime to probe a fresh ACP process.
     ///
     /// Returns `None` when no live connection exists. The caller owns the

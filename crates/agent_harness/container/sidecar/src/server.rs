@@ -24,12 +24,14 @@ pub struct Config {
     workspace: String,
     /// Only one agent connection at a time (ACP is 1:1).
     busy: Arc<Semaphore>,
+    reviews: agent_review_runtime::WorkspaceCapture,
 }
 
 impl Config {
     pub fn new(harness: String, workspace: String) -> Self {
         Self {
             harness,
+            reviews: agent_review_runtime::WorkspaceCapture::new(workspace.clone().into()),
             workspace,
             busy: Arc::new(Semaphore::new(1)),
         }
@@ -39,6 +41,7 @@ impl Config {
 pub fn app(config: Config) -> Router {
     Router::new()
         .route("/ping", get(async || "ok"))
+        .route("/review", axum::routing::post(review))
         .route("/", get(bridge))
         .with_state(config)
 }
@@ -120,4 +123,22 @@ async fn pipe(socket: WebSocket, harness: &str, workspace: &str) {
 
     let _ = child.kill().await;
     tracing::info!("agent disconnected, harness killed");
+}
+
+async fn review(
+    State(config): State<Config>,
+    axum::Json(comparison): axum::Json<agent_review_runtime::Comparison>,
+) -> Response {
+    match config
+        .reviews
+        .capture(config.workspace.into(), comparison)
+        .await
+    {
+        Ok(capture) => axum::Json(capture).into_response(),
+        Err(message) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({ "message": message })),
+        )
+            .into_response(),
+    }
 }

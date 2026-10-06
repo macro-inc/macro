@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_review_cleanup WHERE agent_session_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4aefb2cfa267db2620fe7b5207e3d4a3828952dc8832e0bce7149d22df4335d2"
+}

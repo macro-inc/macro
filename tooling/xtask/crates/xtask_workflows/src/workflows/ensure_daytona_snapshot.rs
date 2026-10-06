@@ -52,9 +52,12 @@ fn image_source_pull_request() -> PullRequest {
     pr
 }
 
-fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 6] {
+fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 9] {
     [
+        xtask_paths::repo_glob!("Cargo.toml"),
         xtask_paths::repo_glob!("crates/agent_harness/container/**"),
+        xtask_paths::repo_glob!("crates/agent_review_runtime/**"),
+        xtask_paths::repo_glob!("vendor/diffd-core/**"),
         xtask_paths::repo_glob!("crates/agent_harness/justfile"),
         xtask_paths::repo_glob!("crates/agent_harness/sandbox_sizes.json"),
         xtask_paths::repo_glob!("nix/cloud-storage.nix"),
@@ -157,7 +160,7 @@ docker buildx build \
   --platform linux/amd64 \
   "${{tags[@]}}" \
   --push \
-  crates/agent_harness/container
+  --file crates/agent_harness/container/Dockerfile .
 "#
                 ))
                 .shell("bash"),

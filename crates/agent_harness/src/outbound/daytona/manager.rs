@@ -706,3 +706,34 @@ async fn dial_sidecar(
 fn unavailable(error: DaytonaError) -> HarnessError {
     HarnessError::Container(error.to_string())
 }
+
+impl crate::domain::ports::WorkspaceReviewSource for DaytonaContainerManager {
+    async fn capture_workspace_review(
+        &self,
+        session: AgentSessionId,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<Option<serde_json::Value>> {
+        let Some(sandbox) = self
+            .client
+            .find_by_label(SESSION_LABEL, &session.to_string())
+            .await
+            .map_err(unavailable)?
+        else {
+            return Ok(None);
+        };
+        let preview = self
+            .client
+            .port_preview(&sandbox, provision::SIDECAR_PORT)
+            .await
+            .map_err(unavailable)?;
+        crate::outbound::sidecar::capture_review(
+            &format!("{}/review", preview.url),
+            preview.token.as_deref(),
+            base,
+            head,
+        )
+        .await
+        .map(Some)
+    }
+}

@@ -341,3 +341,20 @@ fn sandbox_env(
 fn unavailable(error: LocalError) -> HarnessError {
     HarnessError::Container(error.to_string())
 }
+
+impl crate::domain::ports::WorkspaceReviewSource for LocalContainerManager {
+    async fn capture_workspace_review(
+        &self,
+        session: AgentSessionId,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<Option<serde_json::Value>> {
+        let Some(container) = self.find(session).await? else {
+            return Ok(None);
+        };
+        let url = format!("http://{}/review", sidecar_address(&container));
+        crate::outbound::sidecar::capture_review(&url, None, base, head)
+            .await
+            .map(Some)
+    }
+}

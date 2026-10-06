@@ -222,3 +222,48 @@ fn frame_method(frame: &RawJsonRpcMessage) -> Option<&str> {
         RawJsonRpcMessage::Response(_) => None,
     }
 }
+
+/// Fetch a sidecar capture through its private provider address, with bounded IO.
+pub(crate) async fn capture_review(
+    url: &str,
+    token: Option<&str>,
+    base: Option<String>,
+    head: Option<String>,
+) -> crate::domain::error::Result<serde_json::Value> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| crate::domain::error::HarnessError::Container(e.to_string()))?;
+    let mut request = client
+        .post(url)
+        .json(&serde_json::json!({ "base": base, "head": head }));
+    if let Some(token) = token {
+        request = request.header("x-daytona-preview-token", token);
+    }
+    let mut response = request
+        .send()
+        .await
+        .map_err(|e| crate::domain::error::HarnessError::Container(e.to_string()))?;
+    if !response.status().is_success() {
+        return Err(crate::domain::error::HarnessError::Container(format!(
+            "Workspace review capture failed ({})",
+            response.status()
+        )));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|e| crate::domain::error::HarnessError::Container(e.to_string()))?
+    {
+        if bytes.len() + chunk.len() > 256 * 1024 * 1024 {
+            return Err(crate::domain::error::HarnessError::Container(
+                "Workspace capture exceeds the review budget".into(),
+            ));
+        }
+        bytes.extend(chunk);
+    }
+    serde_json::from_slice(&bytes)
+        .map_err(|e| crate::domain::error::HarnessError::Container(e.to_string()))
+}

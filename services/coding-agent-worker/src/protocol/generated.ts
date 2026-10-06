@@ -29,6 +29,17 @@ configOptions: unknown[] } |
 /**  Failure text safe to return across the runtime connection. */
 message: string };
 
+/**  Versioned runtime capture outcome. The owning review domain validates snapshots. */
+export type ReviewCaptureResult =
+/**  Pinned diffd structural capture data. */
+{ status: "available";
+/**  Review capture schema, version one. */
+capture: unknown } |
+/**  The workspace cannot be captured by this runtime. */
+{ status: "error";
+/**  Safe error suitable for the reader and agent. */
+message: string };
+
 /**  Agent Service to Agent Runtime traffic on the logical protocol stream. */
 export type ToRuntimeMessage =
 /**  An ACP message routed to the hosted agent. */
@@ -42,7 +53,17 @@ export type ToRuntimeMessage =
  *  configured harness what it advertises. Answers are therefore
  *  interchangeable, so nothing correlates a response to a request.
  */
-{ type: "modelProbeRequest" };
+({ type: "modelProbeRequest" }) & { base?: never; head?: never; request_id?: never; workspace?: never } |
+/**  Capture a session workspace outside the ACP conversation stream. */
+{ type: "reviewCapture";
+/**  Correlation ID, scoped to this live connection. */
+request_id: string;
+/**  Persisted session workspace, supplied only by the service. */
+workspace: string;
+/**  Base branch or pinned commit. */
+base: string | null;
+/**  Optional tip commit; absent means the working tree. */
+head: string | null };
 
 /**  Agent Runtime to Agent Service traffic on the logical protocol stream. */
 export type ToServerMessage =
@@ -53,8 +74,22 @@ export type ToServerMessage =
 /**  A runtime or agent lifecycle event. */
 ({ type: "event";
 /**  The event name. */
-event: string }) & { result?: never } |
+event: string }) & { chunk?: never; done?: never; request_id?: never; result?: never } |
 /**  An answer to a connection-level model probe. */
 ({ type: "modelProbeResponse";
 /**  Raw options or a safe failure. */
-result: ModelProbeResult }) & { event?: never };
+result: ModelProbeResult }) & { chunk?: never; done?: never; event?: never; request_id?: never } |
+/**  One bounded UTF-8 chunk of a review capture, interleaved with ACP traffic. */
+({ type: "reviewCaptureChunk";
+/**  ID of the request this belongs to. */
+request_id: string;
+/**  Serialized capture data, at most 256 KiB before envelope escaping. */
+chunk: string;
+/**  This chunk completes the capture. */
+done: boolean }) & { event?: never; result?: never } |
+/**  An independently correlated review response; never logged as ACP traffic. */
+({ type: "reviewCaptured";
+/**  ID of the request this answers. */
+request_id: string;
+/**  Full structural snapshot or an actionable capability error. */
+result: ReviewCaptureResult }) & { chunk?: never; done?: never; event?: never };
