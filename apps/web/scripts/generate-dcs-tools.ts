@@ -59,7 +59,10 @@ type FrontendSchemas = z.infer<typeof FrontendSchemasValidator>;
 
 async function buildAndRunSchemaGenerator(): Promise<void> {
   console.log('Building gen_tool_schemas binary...');
-  await $`cd ${rustWorkspaceDir} && SQLX_OFFLINE=true cargo build --package ai_tools --bin gen_tool_schemas`;
+  // No `--package`: like the OpenAPI bins and apps/docs' generator, resolve
+  // features across the workspace, so one build serves every caller instead
+  // of `--package ai_tools` compiling a second feature set of its deps.
+  await $`cd ${rustWorkspaceDir} && SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`;
   console.log('Build complete.');
 
   await $`rm -rf ${path.join(aiToolsDir, 'schemas')}`.quiet();
