@@ -2752,14 +2752,15 @@ describe('normalizedCacheExchange', () => {
         };
         const onCacheError = vi.fn();
         const { forwarded } = harness(host, undefined, { onCacheError });
-        await tick();
+        await vi.waitFor(() =>
+          expect(host.commits.map((commit) => commit.transactionId)).toEqual([
+            'restored-1',
+            'restored-2',
+          ])
+        );
         expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
           'create',
           'edit',
-        ]);
-        expect(host.commits.map((commit) => commit.transactionId)).toEqual([
-          'restored-1',
-          'restored-2',
         ]);
         expect(host.defers).toEqual([]);
         expect(onCacheError).not.toHaveBeenCalled();
