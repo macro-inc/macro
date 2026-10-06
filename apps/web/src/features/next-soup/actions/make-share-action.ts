@@ -1,10 +1,15 @@
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { openGlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
 import {
+  isShareableEntity,
   isShareableEntityType,
-  type ShareableEntityData,
 } from '@app/features/sharing/global-share-modal/shareable-entity';
 import type { EntityData } from '@entity';
+import { restoreSoupFocus } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
+
+/** Only the bulk dialog calls these. `ShareModal` for one row leaves the list as it is. */
+type BulkShareCallbacks = { onFinish?: () => void; onCancel?: () => void };
 
 export const makeShareAction = () => {
   /**
@@ -15,26 +20,42 @@ export const makeShareAction = () => {
     return isShareableEntityType(entity.type);
   };
 
-  const execute = async (entity: EntityData) => {
-    if (!isShareableEntityType(entity.type)) {
+  const execute = async (
+    entities: EntityData[],
+    callbacks: BulkShareCallbacks = {}
+  ) => {
+    const shareable = entities.filter(isShareableEntity);
+    const [first, ...others] = shareable;
+    if (!first) return;
+
+    if (others.length === 0) {
+      openGlobalShareModal({ entity: first });
       return;
     }
 
-    openGlobalShareModal({
-      // TODO: use type guard on entity data, not the type
-      entity: entity as ShareableEntityData,
-    });
+    openBulkEditModal({ view: 'share', entities: shareable, ...callbacks });
   };
 
   const executeWithSoup = async (
     entities: EntityData[],
-    _soup: EntityActionListState
+    soup: EntityActionListState
   ) => {
-    const entity = entities[0];
-    if (!entity) return;
+    const focusedId = soup.focus.id();
 
-    await execute(entity);
-    // Don't clear selection or change focus for share
+    await execute(entities, {
+      // Shared rows stay in the list, so focus stays where the user was.
+      onFinish: () => {
+        soup.selection.clear();
+        void restoreSoupFocus(focusedId);
+      },
+      onCancel: () => {
+        const firstEntity = entities[0];
+        if (firstEntity) {
+          soup.focus.set(firstEntity.id);
+        }
+        void restoreSoupFocus(firstEntity?.id);
+      },
+    });
   };
 
   return { canExecute, execute, executeWithSoup };
