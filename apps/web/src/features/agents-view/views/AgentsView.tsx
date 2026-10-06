@@ -22,6 +22,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import {
   createEffect,
@@ -78,6 +79,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
@@ -251,6 +253,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     const id = startPendingSession({
       ...start,
       userId: userId(),
+      submitSurface: 'agents',
     });
     openConversation(
       { id, type: 'agent_session' },

@@ -7884,6 +7884,12 @@ export const ReadDesign = z.object({
 
 export const ReadDesignResponse = z.object({ content: z.string() });
 
+export const ReadIllustratorDocument = z.object({ documentId: z.string() });
+
+export const ReadIllustratorDocumentResponse = z.object({
+  content: z.string(),
+});
+
 export const ReadInitiative = z.object({
   initiativeId: z.string().uuid(),
   taskCursor: z.union([z.string(), z.null()]).optional(),
@@ -8073,6 +8079,10 @@ export const ReadMetadataResponse = z.object({
   }),
   userAccessLevel: z.enum(['view', 'comment', 'edit', 'owner']),
 });
+
+export const ReadPhotoshopDocument = z.object({ documentId: z.string() });
+
+export const ReadPhotoshopDocumentResponse = z.object({ content: z.string() });
 
 export const ReadPresentation = z.object({
   documentId: z.string(),

@@ -22,6 +22,7 @@ mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod queue;
+mod warm;
 
 use std::sync::Arc;
 
@@ -51,7 +52,7 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
     HarnessCommand, HarnessDefaults, OpenSession, PromptPeople, ReplyOutcome, ResolvedReply,
-    SessionAnnouncement, SpawnContainer, is_macro_staff,
+    SessionAnnouncement, SpawnContainer, ToolApprovalChange, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
@@ -219,6 +220,9 @@ pub struct AgentHarnessService<
     >,
     workers: Arc<SessionWorkers>,
     repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_tools: Arc<dyn agent_session::domain::ports::SessionToolCatalog>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -255,6 +259,9 @@ impl<
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
             repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_tools: Arc::clone(&self.warm_tools),
+            warm_reservations: Arc::clone(&self.warm_reservations),
         }
     }
 }
@@ -340,6 +347,9 @@ where
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
+            warm_lifecycle: None,
+            warm_tools: Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+            warm_reservations: Arc::default(),
         }
     }
 

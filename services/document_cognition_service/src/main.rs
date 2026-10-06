@@ -369,7 +369,9 @@ async fn main() -> anyhow::Result<()> {
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
-    .with_design_files(Arc::new(document_files));
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     tracing::info!("initialized document tool context");
 

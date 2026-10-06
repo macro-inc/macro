@@ -130,6 +130,39 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
     }
 }
 
+/// Every host reads the design files the native engines open, and its
+/// prompt says which tool reads which format.
+#[test]
+fn design_file_readers_are_available_in_every_host_with_their_guidance() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        for name in [
+            "ReadDesign",
+            "ReadPhotoshopDocument",
+            "ReadIllustratorDocument",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(prompt.contains(name), "{host:?}: {name}");
+        }
+    }
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadPhotoshopDocument")
+    );
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadIllustratorDocument")
+    );
+}
+
 /// Document answers get the one SQL tool, not a read-only twin: the access
 /// they run over refuses the writes (see `databases_sql`'s view-only tests).
 #[test]
@@ -332,6 +365,65 @@ fn every_host_exposes_skill_discovery_and_reading() {
         assert!(
             tools.prompt.to_string().contains("ReadSkill"),
             "{host:?} missing skill reading instructions"
+        );
+    }
+}
+
+#[test]
+fn hosts_with_tool_search_defer_all_but_the_core_tools() {
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let lazy = DeferredToolSet::new(tools.toolset.clone(), tools.deferred.clone());
+        let sent: Vec<String> = lazy
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| schema.name)
+            .collect();
+        let catalog: Vec<String> = lazy
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        let prompt = tools.prompt.to_string();
+
+        for name in ["ReadContent", "ContentSearch", "LoadTools", "SearchTools"] {
+            assert!(sent.contains(&name.to_string()), "{host:?} sends {name}");
+        }
+        for name in ["EditPresentation", "EditSpreadsheet", "QueryDatabase"] {
+            assert!(!sent.contains(&name.to_string()), "{host:?} defers {name}");
+            assert!(
+                catalog.contains(&name.to_string()),
+                "{host:?} catalogs {name}"
+            );
+            assert!(
+                prompt.contains(&format!("\n- {name}: ")),
+                "{host:?} lists {name} in the prompt"
+            );
+        }
+        assert_eq!(
+            sent.len() + catalog.len(),
+            tools.toolset.tools.len(),
+            "{host:?}: every tool is either sent or catalogued"
+        );
+    }
+}
+
+#[test]
+fn the_mcp_host_defers_nothing() {
+    let tools = tools_for(AiHost::Mcp);
+
+    assert!(tools.deferred.is_empty());
+    assert!(!tools.prompt.to_string().contains("LoadTools"));
+}
+
+#[test]
+fn every_eager_tool_exists() {
+    let tools = tools_for(AiHost::Chat);
+    for name in EAGER_TOOLS {
+        assert!(
+            tools.toolset.tools.contains_key(*name),
+            "{name} is not a tool"
         );
     }
 }

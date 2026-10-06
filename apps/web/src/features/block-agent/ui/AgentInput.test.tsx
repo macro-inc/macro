@@ -6,14 +6,20 @@ import {
   createEditor,
   type LexicalEditor,
 } from 'lexical';
+
 /**
  * @vitest-environment jsdom
  */
 
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -107,6 +113,7 @@ vi.mock('@phosphor/spinner-gap.svg', () => ({
 }));
 
 beforeEach(() => {
+  vi.mocked(preloadAgentFold).mockClear();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -121,6 +128,16 @@ beforeEach(() => {
   editor.enter = undefined;
   editor.change = undefined;
   vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+it('preloads on document-chat composer focus without submitting its context', () => {
+  const send = vi.fn();
+  render(() => <AgentInput initialInput="Document context" onSend={send} />);
+  expect(preloadAgentFold).not.toHaveBeenCalled();
+  fireEvent.focusIn(screen.getByTestId('agent-input-editor'));
+  expect(preloadAgentFold).toHaveBeenCalledOnce();
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
 });
 
 it('seeds context without sending it and submits it only on Send', () => {

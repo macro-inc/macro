@@ -5,6 +5,46 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Checking first-response latency
+
+From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
+Repeat with the default model and with an explicit model/effort selection.
+The first visible output and the first answer text should appear as they arrive;
+later chunks can arrive in batches. Reasoning or a tool row should not delay the
+first prose. Verify a second prompt and a reload preserve the complete answer.
+Selected model and effort must be confirmed before the first prompt; settings
+already confirmed by the runtime do not need another control request.
+
+Repeat from a fresh tab using Home, Agents, and a document's Chat action.
+Focusing an agent composer prepares its transcript renderer locally; focus alone
+must not send a prompt. Record navigation and focus time separately from typing
+and Enter-to-first-answer time. Check the first readable agent words in the DOM,
+not a loading indicator or a bare Markdown delimiter.
+
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
+The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
+answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
+its paint (`first_text_paint`). Only the final milestone is a visible-response
+success. Bare Markdown prefixes and code-toolbar labels do not count. With only
+a code toolbar visible at a scroll boundary, verify the milestone waits until
+the code itself scrolls into view. A hidden tab reports `hidden`; raw text without
+a visible renderer within ten seconds reports `not_rendered`, including whether
+a renderer mounted and stayed attached.
+`submit_surface` uses bounded composer categories, including explicit Home,
+Agents, and mobile origins so a neighboring split cannot mislabel the submit.
+The fallback recognizes Drive documents; an ambiguous split reports `other`.
+All milestones omit message contents. Compare these timings with created,
+loaded, configured, delivery, and fold timing to distinguish startup, transport,
+and rendering delays.
+The same stages are available immediately in DevTools as
+`performance.getEntriesByType('measure')` entries named `agent.prompt.*`, with
+session ID in `detail`; the `agent.prompt` entry includes the final outcome.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
@@ -1398,3 +1438,29 @@ The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
 apply; ordinary documents and deleted skills cannot be read as skills.
+
+### Agent warm-up
+
+Home's agent composer and the Agents page issue a best-effort authenticated
+`POST /agent-sessions/warm`. It starts an unprompted in-memory session, hidden
+from history and lists. Opening either page must not add an empty conversation
+or execute a model/tool call. A warm response waits until ACP initialization
+and the shared MCP listing have finished. On first send, the default agent can claim the
+prepared session only when the user, model, and instructions match. Other
+personas and changed settings use normal creation. Warm failures must not block
+sending. Unclaimed sessions expire after ten minutes; a claimed conversation
+must remain visible and usable after that deadline.
+
+Taking a reservation clears it immediately, but replacement preparation waits
+until session creation succeeds. This lets a warm claim release its server
+reservation before requesting another. An active Home or Agents surface then
+prepares one replacement; otherwise preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes,
+including when another tab already holds the owner's other warm reservation.
+Successful cold creation also replenishes an empty cache left by an expired or
+failed reservation. A failed create does not trigger more warming.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.

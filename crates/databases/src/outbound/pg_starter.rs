@@ -15,7 +15,7 @@ use properties::domain::database_definition_writer::{
 };
 use sqlx::{PgPool, Postgres, Transaction};
 
-use crate::domain::journal::{JournalActor, created_table};
+use crate::domain::journal::{CellImage, JournalActor, cell_value, created_table};
 use crate::domain::models::Viewer;
 use crate::domain::starter::{DatabaseStarterRepo, StarterBlueprint, StarterDatabase};
 use crate::outbound::pg_databases_repo::{
@@ -86,7 +86,7 @@ where
         .is_some();
         if !claimed {
             let database_id = sqlx::query_scalar!(
-                r#"SELECT d.id FROM database_starter_seeds s JOIN databases d ON d.id = s.database_id
+                r#"SELECT d.database_id FROM database_starter_seeds s JOIN database_entities d ON d.database_id = s.database_id
                    WHERE s.user_id = $1 AND d.trashed_at IS NULL"#,
                 user_id,
             )
@@ -101,7 +101,7 @@ where
         }
         // Existing and trashed databases both mean the user already started.
         if sqlx::query_scalar!(
-            "SELECT EXISTS(SELECT 1 FROM databases WHERE owner_id = $1) AS \"exists!\"",
+            "SELECT EXISTS(SELECT 1 FROM database_entities WHERE user_id = $1) AS \"exists!\"",
             user_id
         )
         .fetch_one(&mut *transaction)
@@ -192,6 +192,7 @@ where
             .await
             .map_err(PgDatabasesRepoError::from)?;
         let mut seeded = Vec::with_capacity(blueprint.rows.len());
+        let mut after = CellImage::default();
         let positions = keys_between(None, None, blueprint.rows.len())?;
         for ((name, stage_index), position) in blueprint.rows.iter().zip(positions) {
             let stage_option = stage
@@ -214,13 +215,25 @@ where
                 entity_type: models_properties::EntityType::DatabaseRow,
                 specific_message_id: None,
             };
-            for (definition_id, value) in [
-                (title.definition.id, PropertyValue::Str((*name).into())),
+            for (column_id, definition_id, value) in [
                 (
+                    title_column_id,
+                    title.definition.id,
+                    PropertyValue::Str((*name).into()),
+                ),
+                (
+                    stage_column_id,
                     stage.definition.id,
                     PropertyValue::SelectOption(vec![stage_option.id]),
                 ),
             ] {
+                if let Some(written) = cell_value(&value) {
+                    after
+                        .cells
+                        .entry(row_id)
+                        .or_default()
+                        .insert(column_id, written);
+                }
                 self.properties
                     .upsert_entity_property_in(&mut transaction, &row, definition_id, Some(value))
                     .await
@@ -252,6 +265,7 @@ where
                 version,
                 &[title_column_id, stage_column_id],
                 &seeded,
+                after,
             )],
         )
         .await?;

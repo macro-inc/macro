@@ -1,6 +1,8 @@
+import { IntegrationRow } from '@app/features/settings/primitives';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
+import SlackIcon from '@icon/mcp-slack.svg';
 import {
   invalidateListChannels,
   useListChannelsQuery,
@@ -32,7 +34,12 @@ export function SlackImport(props: Props): JSX.Element {
         {(teamId) => (
           <Suspense
             fallback={
-              <p class="text-sm text-ink-muted">Loading Slack import…</p>
+              <IntegrationRow
+                icon={<SlackIcon />}
+                title="Slack"
+                description="Loading Slack import…"
+                muted
+              />
             }
           >
             <SlackImportSettings teamId={teamId} />

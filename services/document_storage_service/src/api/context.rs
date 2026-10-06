@@ -754,6 +754,7 @@ pub(crate) struct ApiContext {
     pub dynamo_db: aws_sdk_dynamodb::Client,
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
+    pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,

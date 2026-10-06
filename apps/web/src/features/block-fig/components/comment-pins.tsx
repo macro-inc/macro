@@ -2,17 +2,19 @@
  * Comments on the canvas while the comment tool is on: a pin per thread at
  * a constant size wherever the view is zoomed (filled when unread), the
  * open thread beside its pin, and a click anywhere placing a new comment.
+ * The thread and the composer inside the cards are the comment store's.
  */
 
-import { For, Show } from 'solid-js';
+import CheckCircle from '@phosphor/check-circle.svg';
+import X from '@phosphor/x.svg';
+import { For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { type Camera, pageToScreen, screenToPage } from '../core/camera';
 import { initialsOf } from '../core/comments';
 import type { FigComments } from '../primitives/create-fig-comments';
-import { CommentComposer } from './comment-composer';
-import { CommentThreadView } from './comment-thread';
 
-/** Width of the thread card beside a pin, CSS px. */
-const CARD = 280;
+/** Width of the card beside a pin, CSS px. */
+const CARD = 320;
 
 function Pin(props: {
   label: string;
@@ -47,19 +49,60 @@ function Pin(props: {
   );
 }
 
+/**
+ * A card beside a pin. Its pointer and wheel stay off the canvas (it
+ * scrolls instead of panning); Escape closes it once whatever has focus
+ * inside (a mention menu, an edit) has had it.
+ */
+function PinCard(props: {
+  /** The pin, in screen px. */
+  at: { x: number; y: number };
+  viewport: { w: number; h: number };
+  testId: string;
+  thread?: string;
+  resolved?: boolean;
+  onClose: () => void;
+  children: JSX.Element;
+}) {
+  const top = () =>
+    Math.max(8, Math.min(props.at.y - 28, props.viewport.h - 160));
+  return (
+    <div
+      class="absolute z-10 flex flex-col overflow-hidden rounded-lg border border-edge-muted bg-panel text-ink text-xs shadow-lg"
+      style={{
+        left: `${Math.max(8, Math.min(props.at.x + 16, props.viewport.w - CARD - 8))}px`,
+        top: `${top()}px`,
+        width: `${CARD}px`,
+        'max-height': `${Math.max(120, props.viewport.h - top() - 8)}px`,
+      }}
+      data-testid={props.testId}
+      data-thread={props.thread}
+      data-resolved={
+        props.resolved === undefined ? undefined : String(props.resolved)
+      }
+      onPointerDown={(e) => e.stopPropagation()}
+      onWheel={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape' || e.defaultPrevented) return;
+        e.preventDefault();
+        props.onClose();
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
+
 export function CommentPins(props: {
   comments: FigComments;
   camera: Camera;
   viewport: { w: number; h: number };
+  /** A card closed with Escape: keys go back to the canvas. */
+  onDismiss: () => void;
 }) {
   const c = props.comments;
   const store = c.store;
   const screen = (p: { x: number; y: number }) => pageToScreen(props.camera, p);
-  /** Where a card beside screen point `p` fits in the view. */
-  const cardAt = (p: { x: number; y: number }) => ({
-    left: `${Math.max(8, Math.min(p.x + 16, props.viewport.w - CARD - 8))}px`,
-    top: `${Math.max(8, Math.min(p.y - 28, props.viewport.h - 220))}px`,
-  });
   const shownPins = () =>
     c
       .pins()
@@ -128,6 +171,10 @@ export function CommentPins(props: {
       <Show when={c.draft()}>
         {(d) => {
           const at = () => screen(d().at);
+          const close = () => {
+            c.cancelDraft();
+            props.onDismiss();
+          };
           return (
             <>
               <div
@@ -136,54 +183,83 @@ export function CommentPins(props: {
               >
                 <Pin label="+" open testId="fig-comment-draft-pin" />
               </div>
-              <div
-                class="absolute z-10 rounded-lg border border-edge-muted bg-panel p-2 shadow-lg"
-                style={{ ...cardAt(at()), width: `${CARD}px` }}
-                data-testid="fig-comment-draft"
-                onPointerDown={(e) => e.stopPropagation()}
+              <PinCard
+                at={at()}
+                viewport={props.viewport}
+                testId="fig-comment-draft"
+                onClose={close}
               >
-                <CommentComposer
-                  placeholder="Add a comment"
-                  testId="fig-comment-input"
-                  autofocus
-                  people={store.people}
-                  onSubmit={(text, mentions) => c.post(text, mentions)}
-                  onCancel={() => c.cancelDraft()}
-                />
-              </div>
+                <div class="min-h-0 overflow-y-auto p-2">
+                  <Dynamic
+                    component={store.Composer}
+                    anchor={d().anchor}
+                    onPosted={c.posted}
+                    onCancel={close}
+                  />
+                </div>
+              </PinCard>
             </>
           );
         }}
       </Show>
-      <Show when={open()}>
-        {(pin) => (
-          <div
-            class="absolute z-10 max-h-[60%] overflow-y-auto rounded-lg border border-edge-muted bg-panel p-3 shadow-lg"
-            style={{ ...cardAt(screen(pin().at)), width: `${CARD}px` }}
-            data-testid="fig-comment-popover"
-            data-thread={pin().thread.id}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <CommentThreadView
-              thread={pin().thread}
-              canComment={store.canComment()}
-              canDelete={pin().thread.comments[0]?.author.id === store.me()?.id}
-              people={store.people}
-              onReply={(text, mentions) =>
-                store.reply(pin().thread.id, text, mentions)
-              }
-              onResolve={(resolved) =>
-                void store.setResolved(pin().thread.id, resolved)
-              }
-              onClose={() => c.setOpenThread(undefined)}
-              onDelete={() => {
-                const id = pin().thread.id;
-                c.setOpenThread(undefined);
-                void store.deleteThread(id);
-              }}
-            />
-          </div>
-        )}
+      {/* Keyed by thread, so opening another starts its thread afresh. */}
+      <Show when={open()?.thread.id} keyed>
+        {(threadId) => {
+          const thread = () => open()?.thread;
+          const close = () => {
+            c.setOpenThread(undefined);
+            props.onDismiss();
+          };
+          return (
+            <Show when={open()}>
+              {(pin) => (
+                <PinCard
+                  at={screen(pin().at)}
+                  viewport={props.viewport}
+                  testId="fig-comment-popover"
+                  thread={threadId}
+                  resolved={thread()?.resolved ?? false}
+                  onClose={close}
+                >
+                  <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b pr-1 pl-3">
+                    <span class="flex-1 text-[11px] text-ink-muted">
+                      {thread()?.resolved ? 'Resolved' : 'Comment'}
+                    </span>
+                    <Show when={store.canComment()}>
+                      <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-ink-muted hover:bg-hover hover:text-ink"
+                        data-testid={
+                          thread()?.resolved
+                            ? 'fig-comment-reopen'
+                            : 'fig-comment-resolve'
+                        }
+                        onClick={() =>
+                          void store.setResolved(threadId, !thread()?.resolved)
+                        }
+                      >
+                        <CheckCircle class="size-3.5" />
+                        {thread()?.resolved ? 'Reopen' : 'Resolve'}
+                      </button>
+                    </Show>
+                    <button
+                      type="button"
+                      class="flex size-6 items-center justify-center rounded-md text-ink-muted hover:bg-hover hover:text-ink"
+                      aria-label="Close comment"
+                      data-testid="fig-comment-close"
+                      onClick={close}
+                    >
+                      <X class="size-3.5" />
+                    </button>
+                  </div>
+                  <div class="min-h-0 flex-1 overflow-y-auto p-3">
+                    <Dynamic component={store.Thread} threadId={threadId} />
+                  </div>
+                </PinCard>
+              )}
+            </Show>
+          );
+        }}
       </Show>
     </div>
   );

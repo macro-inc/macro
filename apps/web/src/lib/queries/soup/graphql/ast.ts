@@ -8,6 +8,7 @@ import type {
   GraphqlChannelThreadLiteral as GraphqlChannelThreadLiteralInput,
   GraphqlChatLiteral as GraphqlChatLiteralInput,
   GraphqlCrmCompanyLiteral as GraphqlCrmCompanyLiteralInput,
+  GraphqlCrmContactLiteral,
   GraphqlDateLiteral as GraphqlDateLiteralInput,
   GraphqlDocumentLiteral as GraphqlDocumentLiteralInput,
   GraphqlEmailLiteral as GraphqlEmailLiteralInput,
@@ -62,6 +63,7 @@ type TargetAstKey =
   | 'cthf'
   | 'callf'
   | 'ccf'
+  | 'crmf'
   | 'fef'
   | 'ghprf'
   | 'asf'
@@ -502,6 +504,27 @@ function mapCrmCompanyLiteral(literal: unknown): GraphqlCrmCompanyLiteralInput {
   }
 }
 
+function mapCrmContactLiteral(literal: unknown): GraphqlCrmContactLiteral {
+  if (literal === 'include') return { include: true };
+  const [field, value] = singleLiteralField(literal);
+  switch (field) {
+    case 'id':
+      return { id: mapString(value, 'id') };
+    case 'team_id':
+      return { teamId: mapString(value, 'teamId') };
+    case 'company_id':
+      return { companyId: mapString(value, 'companyId') };
+    case 'email':
+      return { email: mapString(value, 'email') };
+    case 'search':
+      return { search: mapString(value, 'search') };
+    case 'hidden':
+      return { hidden: mapBoolean(value, 'hidden') };
+    default:
+      unsupported(`crm contact literal ${field}`);
+  }
+}
+
 function mapForeignEntityLiteral(
   literal: unknown
 ): GraphqlForeignEntityLiteralInput {
@@ -691,6 +714,9 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
   if (body.callf) filters.callFilter = compileExpr(body.callf, mapCallLiteral);
   if (body.ccf) {
     filters.crmCompanyFilter = compileExpr(body.ccf, mapCrmCompanyLiteral);
+  }
+  if (body.crmf) {
+    filters.crmContactFilter = compileExpr(body.crmf, mapCrmContactLiteral);
   }
   if (body.fef) {
     filters.foreignEntityFilter = compileExpr(

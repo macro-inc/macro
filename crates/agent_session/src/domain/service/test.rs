@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
+mod first_output;
+
 struct Fixture {
     service: AgentSessionServiceImpl<
         InMemoryAgentSessionRepo,

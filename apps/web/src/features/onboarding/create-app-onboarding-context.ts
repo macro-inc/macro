@@ -8,13 +8,15 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import { idToDisplayName, idToEmail } from '@core/user/util';
-import { useCreateCheckoutSessionMutation } from '@queries/auth';
-import { authKeys } from '@queries/auth/keys';
+import {
+  useAiBillingPlansQuery,
+  useCreateCheckoutSessionMutation,
+} from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
-import { queryClient } from '@queries/client';
 import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
 import { useGtmInviteOfferQuery } from '@queries/gtm-invite/links';
 import {
@@ -32,11 +34,11 @@ import {
 } from '@queries/team/teams';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
-  Loadable,
   OnboardingContext,
   ViewerState,
 } from './context/onboarding-context';
 import { onboardingCheckoutRequest } from './core/checkout';
+import { loadableQuery } from './queries/loadable-query';
 
 /** How often connected tools re-check while the user is on the tools step. */
 const CONNECTED_TOOLS_POLL_MS = 5_000;
@@ -44,14 +46,14 @@ const CONNECTED_TOOLS_POLL_MS = 5_000;
 type UserInfoResult = {
   isLoading: boolean;
   isError: boolean;
-  isSuccess: boolean;
+  isPending: boolean;
   error: Error | null;
   data: UserInfoData | undefined;
 };
 
 function toViewerState(result: UserInfoResult): ViewerState {
   // Guarded: an unguarded `data` read suspends while the query is pending.
-  const data = result.isSuccess ? result.data : undefined;
+  const data = queryReadyGate(result) ? result.data : undefined;
   // A signed-out visitor's request 401s rather than answering unauthenticated.
   const authenticated = deriveIsAuthenticated({
     isLoading: result.isLoading,
@@ -73,17 +75,6 @@ function toViewerState(result: UserInfoResult): ViewerState {
   };
 }
 
-/** TanStack status → source availability; data already loaded wins over a background failure. */
-function loadable<T, R>(
-  query: { isSuccess: boolean; isError: boolean; data: T | undefined },
-  map: (data: T) => R
-): Loadable<R> {
-  if (query.isSuccess && query.data !== undefined)
-    return { t: 'ready', value: map(query.data) };
-  if (query.isError) return { t: 'error' };
-  return { t: 'loading' };
-}
-
 /** Real queries, mutations, and app services behind the onboarding contract. */
 export function createAppOnboardingContext(): OnboardingContext {
   const analytics = useAnalytics();
@@ -100,11 +91,6 @@ export function createAppOnboardingContext(): OnboardingContext {
     const state = viewer();
     return state.t === 'signed-in' && !state.viewer.tutorialComplete;
   };
-  const refetchViewer = () =>
-    queryClient
-      .refetchQueries({ queryKey: authKeys.userInfo.queryKey })
-      .catch(() => {});
-
   return {
     viewer,
     refreshViewer: async () => {
@@ -118,7 +104,7 @@ export function createAppOnboardingContext(): OnboardingContext {
       return () =>
         query.isPlaceholderData
           ? { t: 'loading' }
-          : loadable(query, (data) => ({
+          : loadableQuery(query, (data) => ({
               status: data.row.status === 'completed' ? 'completed' : 'active',
               suggestedTeamDomain: data.suggested_team_domain ?? undefined,
             }));
@@ -128,7 +114,7 @@ export function createAppOnboardingContext(): OnboardingContext {
       const query = useEmailLinksQuery();
       return {
         accounts: () =>
-          loadable(query, (data) =>
+          loadableQuery(query, (data) =>
             data.links.map((link) => ({
               address: link.email_address,
               isPrimary: link.is_primary,
@@ -175,16 +161,18 @@ export function createAppOnboardingContext(): OnboardingContext {
       const contacts = useContactsQuery();
       return {
         teams: () =>
-          loadable(teams, (data) => data.map((team) => ({ name: team.name }))),
+          loadableQuery(teams, (data) =>
+            data.map((team) => ({ name: team.name }))
+          ),
         invites: () =>
-          loadable(invites, (data) =>
+          loadableQuery(invites, (data) =>
             (data.invites ?? []).map((invite) => ({
               id: invite.id,
               invitedBy: idToDisplayName(invite.invited_by),
             }))
           ),
         contacts: () =>
-          loadable(contacts, (data) => data.contacts.map(idToEmail)),
+          loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
         retry: () => {
           void teams.refetch();
           void invites.refetch();
@@ -203,7 +191,16 @@ export function createAppOnboardingContext(): OnboardingContext {
 
     createInviteOffer: () => {
       const query = useGtmInviteOfferQuery({ enabled: needsOnboarding });
-      return () => loadable(query, (offer) => offer ?? null);
+      return () => loadableQuery(query, (offer) => offer ?? null);
+    },
+    createPlanCatalog: () => {
+      const query = useAiBillingPlansQuery();
+      return {
+        catalog: () => loadableQuery(query, (data) => data),
+        retry: () => {
+          void query.refetch();
+        },
+      };
     },
     startCheckout: (tier, terms) =>
       checkout.mutateAsync(
@@ -214,33 +211,21 @@ export function createAppOnboardingContext(): OnboardingContext {
         )
       ),
     completeOnboarding: async ({ skipped }) => {
-      const [onboardingResult] = await Promise.allSettled([
-        completeOnboarding.mutateAsync({ skipped }),
-        completeTutorial.mutateAsync(),
-      ]);
-      // Exiting with the row still active would leave staged candidates
-      // undiscarded and the flow resumable after the user thinks it's done.
-      if (onboardingResult.status === 'rejected') return { t: 'failed' };
-      // The Layout redirect keys off tutorialComplete, so leaving before the
-      // cache reflects the PATCH would bounce straight back. Read the cache,
-      // not the observer: its store flushes on a later task.
-      await refetchViewer();
-      const data = queryClient.getQueryData<UserInfoData>(
-        authKeys.userInfo.queryKey
-      );
-      return data?.tutorialComplete === true
-        ? { t: 'completed' }
-        : { t: 'failed' };
+      // Finish the row before publishing tutorialComplete, which lets the
+      // auth gate unmount onboarding. The tutorial mutation updates its cache
+      // from the successful PATCH; a racing refetch isn't a completion check.
+      await completeOnboarding.mutateAsync({ skipped });
+      await completeTutorial.mutateAsync();
+      return { t: 'completed' };
     },
     repairTutorial: async () => {
       await completeTutorial.mutateAsync();
-      await refetchViewer();
     },
 
     applyAccent: applyWorkspaceAccent,
     createGithubStars: () => {
       const stars = useGithubStarsQuery();
-      return () => (stars.isSuccess ? stars.data : undefined);
+      return () => (queryReadyGate(stars) ? stars.data : undefined);
     },
     track: (event, data) => analytics.track(event, data),
     notifyFailure: (message) => toast.failure(message),

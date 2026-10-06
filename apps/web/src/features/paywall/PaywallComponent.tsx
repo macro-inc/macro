@@ -5,10 +5,12 @@ import { useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import CheckIcon from '@phosphor/check.svg';
+import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
+import { PLAN_BY_TIER } from './plans';
 
 export interface PaywallProps {
   cb: () => Promise<void> | void;
@@ -52,7 +54,7 @@ const PaywallComponent = (props: PaywallProps) => {
 
   const teamRole = createMemo(() => {
     const uid = userId();
-    const currentTeam = team.data;
+    const currentTeam = queryReadyGate(team) ? team.data : undefined;
 
     if (!currentTeam) return;
 
@@ -108,9 +110,7 @@ const PaywallComponent = (props: PaywallProps) => {
       <div class="grid grid-cols-1 gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] p-6 sm:px-8 sm:pt-8 sm:pb-4">
         <section class="flex flex-col gap-4">
           <div class="flex flex-col gap-2">
-            <h2 class="text-2xl text-ink font-semibold">
-              Unlock Premium features
-            </h2>
+            <h2 class="text-2xl text-ink font-semibold">Unlock Pro features</h2>
             <p class="text-sm text-ink-extra-muted">
               {paywallMetadata()?.description ??
                 'Upgrade your workspace with more AI power, team collaboration, and room to grow.'}
@@ -124,7 +124,7 @@ const PaywallComponent = (props: PaywallProps) => {
                   rel="noopener"
                 >
                   Learn more about{' '}
-                  {paywallMetadata()!.learnMoreSubject ?? 'Premium'}
+                  {paywallMetadata()!.learnMoreSubject ?? 'Pro'}
                   <ArrowSquareOutIcon class="size-4" />
                 </a>
               )}
@@ -135,7 +135,7 @@ const PaywallComponent = (props: PaywallProps) => {
         <section class="h-full flex flex-col gap-3">
           <div class="flex flex-1 flex-col gap-4 rounded-lg bg-active p-4">
             <div class="flex flex-col">
-              <h3 class="text-sm text-ink">Premium features</h3>
+              <h3 class="text-sm text-ink">Pro features</h3>
             </div>
             <PremiumFeatures />
           </div>
@@ -144,10 +144,14 @@ const PaywallComponent = (props: PaywallProps) => {
 
       <div class="border-t border-t-edge px-8 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-baseline gap-1.5 text-xs text-ink/60">
-          <span class="text-ink font-semibold text-xl leading-6">$40</span>
+          <span class="text-ink font-semibold text-xl leading-6">
+            ${PLAN_BY_TIER.premium.price}
+          </span>
           <span>per seat / per month</span>
 
-          <Show when={teamRole() === 'owner' && team.data}>
+          <Show
+            when={teamRole() === 'owner' && queryReadyGate(team) && team.data}
+          >
             {(team) => (
               <span class="text-ink-extra-muted text-xs">
                 • {team().members.length}{' '}

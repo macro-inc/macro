@@ -220,4 +220,7 @@ export * from './updateSharePermissionRequestV2ChannelSharePermissions';
 export * from './updateSharePermissionRequestV2LinkShare';
 export * from './updateSharePermissionRequestV2LinkShareAccessLevel';
 export * from './updateSharePermissionRequestV2TeamShareAccessLevel';
+export * from './warmAgentSessionRequest';
+export * from './warmAgentSessionResponse';
+export * from './warmAgentSessionResponseSession';
 export * from './withAgentSessionId';

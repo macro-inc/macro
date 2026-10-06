@@ -3,8 +3,10 @@
  * design panel on the right, Figma's keyboard shortcuts throughout.
  */
 
+import '../components/editor-theme.css';
 import { IS_MAC } from '@core/constant/isMac';
 import type { NodeInfo, Rect } from '@core/fig-engine/types';
+import { Tabs } from '@kobalte/core/tabs';
 import {
   createEffect,
   createSignal,
@@ -24,12 +26,16 @@ import { FigContextMenu } from '../components/fig-context-menu';
 import { LayoutGridSection } from '../components/layout-grid-section';
 import { MainMenu } from '../components/main-menu';
 import { MissingFonts } from '../components/missing-fonts';
+import { PanelToggle } from '../components/panel-toggle';
 import { FollowFrame, PeerAvatars } from '../components/peer-presence';
 import { PrototypeNoodles } from '../components/prototype-noodles';
 import { PrototypePanel } from '../components/prototype-panel';
-import { ReviewButtons } from '../components/review-buttons';
+import { ResizablePanel } from '../components/resizable-panel';
+import { CommentButton, PresentButton } from '../components/review-buttons';
+import { SaveIndicator } from '../components/save-indicator';
 import { ShortcutsDialog } from '../components/shortcuts-dialog';
 import { ViewerToolbar } from '../components/viewer-toolbar';
+import { ViewerZoom } from '../components/viewer-zoom';
 import { useFigViewerContext } from '../context/fig-viewer-context';
 import { type Point, zoomLabel } from '../core/camera';
 import { LIBRARY_ASSET_MIME } from '../core/libraries';
@@ -115,6 +121,8 @@ export function FigViewer() {
   const [deepHeld, setDeepHeld] = createSignal(false);
   const [showShortcuts, setShowShortcuts] = createSignal(false);
   const [showActions, setShowActions] = createSignal(false);
+  const [leftWidth, setLeftWidth] = createSignal(280);
+  const [rightWidth, setRightWidth] = createSignal(240);
   const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
   const [info, setInfo] = createSignal<NodeInfo>();
   const designSystem = createDesignSystem({ engine, viewer, editor });
@@ -143,7 +151,7 @@ export function FigViewer() {
     devMode,
   });
   let root!: HTMLDivElement;
-  let searchInput: HTMLInputElement | undefined;
+  let focusSearch: (() => void) | undefined;
 
   onMount(() => {
     void viewer.openPage(0);
@@ -470,7 +478,7 @@ export function FigViewer() {
         viewer.setUiHidden(false);
         viewer.setLayersOpen(true);
         setLeftTab('layers');
-        queueMicrotask(() => searchInput?.focus());
+        queueMicrotask(() => focusSearch?.());
       })
       .with('show-shortcuts', () => setShowShortcuts((s) => !s))
       .with('open-actions', () => {
@@ -534,8 +542,7 @@ export function FigViewer() {
         void editor.setProps({ visible: !visible });
       })
       .with('toggle-locked', () => {
-        const locked = info()?.locked ?? false;
-        void editor.setProps({ locked: !locked });
+        void editor.toggleLocked();
       })
       .with('flip-horizontal', () => void editor.flip(false))
       .with('flip-vertical', () => void editor.flip(true))
@@ -710,6 +717,22 @@ export function FigViewer() {
     if (target.closest('input, textarea, [contenteditable="true"]')) return;
     // Menus (portaled, so their events bubble here) handle their own keys.
     if (target.closest('[role="menu"]')) return;
+    // Menus, tabs, and panel dividers use arrows without moving the selection.
+    if (
+      !mod &&
+      target.closest(
+        '[aria-haspopup="menu"], [aria-haspopup="true"], [role="tab"], [role="separator"]'
+      ) &&
+      [
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+      ].includes(e.key)
+    )
+      return;
     // A focused select or button keeps the keys it uses itself.
     const control = target.closest('select, button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
@@ -877,59 +900,74 @@ export function FigViewer() {
     <div
       ref={root}
       tabIndex={0}
-      class="flex size-full min-h-0 bg-page outline-none"
+      class="fig-editor-theme relative flex size-full min-h-0 min-w-0 bg-page outline-none"
       data-testid="fig-viewer"
       onKeyDown={onPortaledKeyDown}
       onKeyUp={onKeyUp}
       onPaste={onPaste}
     >
       <Show when={showLayers()}>
-        <aside
-          class="flex w-60 shrink-0 flex-col border-edge-muted border-r bg-panel"
+        <ResizablePanel
+          side="left"
+          label="Pages and layers"
+          width={leftWidth()}
+          onResize={setLeftWidth}
           onContextMenu={contextMenu.onLayers}
         >
-          <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2 text-xs">
-            <MainMenu
-              items={[
-                {
-                  label: 'Export frames to PDF…',
-                  onSelect: () => void handoff.exportFramesPdf(),
-                  testId: 'fig-menu-export-frames-pdf',
-                },
-                {
-                  label: 'Export selection…',
-                  shortcut: IS_MAC ? '⇧⌘E' : 'Ctrl+⇧E',
-                  onSelect: () => void handoff.exportSelection(),
-                  testId: 'fig-menu-export-selection',
-                },
-                'divider',
-                ...zoomItems().filter(
-                  (item) =>
-                    item !== 'divider' &&
-                    (item.label === 'Layout grids' || item.label === 'Rulers')
-                ),
-              ]}
-            />
-            <For each={['layers', 'assets'] as const}>
-              {(t) => (
-                <button
-                  type="button"
-                  class="rounded-md px-2 py-1 font-medium"
-                  classList={{
-                    'bg-hover text-ink': leftTab() === t,
-                    'text-ink-muted': leftTab() !== t,
-                  }}
-                  data-testid={`fig-tab-${t}`}
-                  onClick={() => setLeftTab(t)}
-                >
-                  {t === 'layers' ? 'Layers' : 'Assets'}
-                </button>
-              )}
-            </For>
-          </div>
-          <Show
-            when={leftTab() === 'layers'}
-            fallback={
+          <Tabs
+            class="flex min-h-0 flex-1 flex-col"
+            value={leftTab()}
+            onChange={(value) => setLeftTab(value as 'layers' | 'assets')}
+          >
+            <div class="flex h-12 shrink-0 items-center gap-1 px-3 text-xs">
+              <MainMenu
+                canEdit={editor.enabled()}
+                hasSelection={viewer.selected().length > 0}
+                canUndo={editor.canUndo()}
+                canRedo={editor.canRedo()}
+                zoomItems={zoomItems()}
+                onRun={run}
+                onExportFramesPdf={() => void handoff.exportFramesPdf()}
+              />
+              <span
+                class="min-w-0 flex-1 truncate font-semibold"
+                title={context.fileName()}
+              >
+                {context.fileName()}
+              </span>
+              <Show when={editor.enabled()}>
+                <SaveIndicator state={editor.saveState()} />
+              </Show>
+              <PanelToggle
+                side="left"
+                open
+                onClick={() => viewer.setLayersOpen(false)}
+              />
+            </div>
+            <Tabs.List
+              class="flex h-10 shrink-0 items-center gap-1 border-edge-frame border-b px-3 text-xs"
+              aria-label="File navigation"
+            >
+              <For each={['layers', 'assets'] as const}>
+                {(t) => (
+                  <Tabs.Trigger
+                    value={t}
+                    class="rounded-md px-2 py-1 font-medium"
+                    classList={{
+                      'bg-hover text-ink': leftTab() === t,
+                      'text-ink-muted': leftTab() !== t,
+                    }}
+                    data-testid={`fig-tab-${t}`}
+                  >
+                    {t === 'layers' ? 'File' : 'Assets'}
+                  </Tabs.Trigger>
+                )}
+              </For>
+            </Tabs.List>
+            <Tabs.Content
+              value="assets"
+              class="flex min-h-0 flex-1 flex-col outline-none"
+            >
               <AssetsPanel
                 viewer={viewer}
                 engine={engine}
@@ -937,18 +975,22 @@ export function FigViewer() {
                 libraries={libraries}
                 fileName={context.fileName()}
               />
-            }
-          >
-            <LayersPanel
-              viewer={viewer}
-              engine={engine}
-              editor={editor}
-              searchRef={(el) => {
-                searchInput = el;
-              }}
-            />
-          </Show>
-        </aside>
+            </Tabs.Content>
+            <Tabs.Content
+              value="layers"
+              class="flex min-h-0 flex-1 flex-col outline-none"
+            >
+              <LayersPanel
+                viewer={viewer}
+                engine={engine}
+                editor={editor}
+                focusSearchRef={(focus) => {
+                  focusSearch = focus;
+                }}
+              />
+            </Tabs.Content>
+          </Tabs>
+        </ResizablePanel>
       </Show>
       <div
         class="relative min-w-0 flex-1"
@@ -1018,6 +1060,7 @@ export function FigViewer() {
                 comments={c()}
                 camera={viewer.camera()}
                 viewport={viewer.viewport()}
+                onDismiss={() => root.focus({ preventScroll: true })}
               />
             )}
           </Show>
@@ -1036,42 +1079,36 @@ export function FigViewer() {
               Loading page…
             </div>
           </Show>
-          <Show when={!viewer.uiHidden()}>
-            <ViewerToolbar
-              tool={viewer.tool()}
-              onTool={(tool) => {
-                if (editor.penPath()) void editor.penFinish();
-                viewer.setTool(tool);
-              }}
-              onBoolean={
-                editor.enabled() && editor.editableIds().length > 0
-                  ? (op) => void editor.booleanOp(op)
-                  : undefined
-              }
-              onFlatten={() => void editor.flatten()}
-              editable={editor.enabled()}
-              saveState={editor.saveState()}
-              canUndo={editor.canUndo()}
-              canRedo={editor.canRedo()}
-              onUndo={() => editor.undo()}
-              onRedo={() => editor.redo()}
-              zoomLabel={zoomLabel(viewer.camera().zoom)}
-              zoomItems={zoomItems()}
-              onShortcuts={() => setShowShortcuts((s) => !s)}
-              review={
-                <ReviewButtons
-                  mac={IS_MAC}
-                  comments={
-                    review.comments && {
-                      active: review.comments.active(),
-                      unread: review.comments.unreadCount(),
-                      onToggle: review.toggleComments,
-                    }
-                  }
-                  onPresent={() => void review.present()}
+          <Show when={!viewer.uiHidden() && !showLayers()}>
+            <div class="absolute top-2 left-3 z-10 rounded-lg border border-edge-muted bg-panel p-1">
+              <PanelToggle
+                side="left"
+                open={false}
+                onClick={() => viewer.setLayersOpen(true)}
+              />
+            </div>
+          </Show>
+          <Show when={!viewer.uiHidden() && !showDesign()}>
+            <div
+              class="absolute top-2 right-3 z-10 flex items-center gap-1 rounded-lg border border-edge-muted bg-panel px-1"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <PresentButton
+                mac={IS_MAC}
+                onPresent={() => void review.present()}
+              />
+              <ViewerZoom
+                label={zoomLabel(viewer.camera().zoom)}
+                items={zoomItems()}
+              />
+              <Show when={!showDesign()}>
+                <PanelToggle
+                  side="right"
+                  open={false}
+                  onClick={() => viewer.setDesignOpen(true)}
                 />
-              }
-            />
+              </Show>
+            </div>
           </Show>
           <Show when={collab}>
             {(c) => (
@@ -1132,18 +1169,66 @@ export function FigViewer() {
       </div>
       <Show when={showDesign() && review.comments?.active() && review.comments}>
         {(c) => (
-          <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
+          <ResizablePanel
+            side="right"
+            label="Comments"
+            width={rightWidth()}
+            onResize={setRightWidth}
+          >
             <CommentsPanel
               comments={c()}
-              currentPage={viewer.pages[viewer.page()]?.id}
+              headerActions={
+                <>
+                  <PresentButton
+                    mac={IS_MAC}
+                    onPresent={() => void review.present()}
+                  />
+                  <PanelToggle
+                    side="right"
+                    open
+                    onClick={() => viewer.setDesignOpen(false)}
+                  />
+                </>
+              }
+              zoom={
+                <ViewerZoom
+                  label={zoomLabel(viewer.camera().zoom)}
+                  items={zoomItems()}
+                />
+              }
               pageName={(id) => viewer.pages.find((p) => p.id === id)?.name}
             />
-          </aside>
+          </ResizablePanel>
         )}
       </Show>
       <Show when={showDesign() && !review.comments?.active()}>
-        <aside class="flex w-64 shrink-0 flex-col border-edge-muted border-l bg-panel">
+        <ResizablePanel
+          side="right"
+          label="Properties"
+          width={rightWidth()}
+          onResize={setRightWidth}
+        >
           <DesignPanel
+            tab={review.panelTab()}
+            headerActions={
+              <>
+                <PresentButton
+                  mac={IS_MAC}
+                  onPresent={() => void review.present()}
+                />
+                <PanelToggle
+                  side="right"
+                  open
+                  onClick={() => viewer.setDesignOpen(false)}
+                />
+              </>
+            }
+            zoom={
+              <ViewerZoom
+                label={zoomLabel(viewer.camera().zoom)}
+                items={zoomItems()}
+              />
+            }
             info={panel().info}
             fontFamilies={[
               ...new Set([
@@ -1162,6 +1247,16 @@ export function FigViewer() {
             }}
             onAlign={
               editor.enabled() ? (how) => void editor.align(how) : undefined
+            }
+            onFlip={
+              editor.enabled()
+                ? (axis) =>
+                    run(
+                      axis === 'horizontal'
+                        ? 'flip-horizontal'
+                        : 'flip-vertical'
+                    )
+                : undefined
             }
             onPatch={editor.enabled() ? patchSelection : undefined}
             onPageColor={editor.enabled() ? setPageColor : undefined}
@@ -1235,6 +1330,12 @@ export function FigViewer() {
               editor.enabled() ? (op) => void editor.booleanOp(op) : undefined
             }
             onFlatten={() => void editor.flatten()}
+            onCreateComponent={
+              editor.enabled() &&
+              !viewer.selected().some((node) => node.id.startsWith('I'))
+                ? () => void editor.createComponent()
+                : undefined
+            }
             onCopyText={(text) => void copyText(text)}
             onTabChange={review.setPanelTab}
             prototype={
@@ -1266,7 +1367,36 @@ export function FigViewer() {
               <LocalStylesView ds={designSystem} swatches={swatches()} />
             }
           />
-        </aside>
+        </ResizablePanel>
+      </Show>
+      <Show when={!viewer.uiHidden()}>
+        <ViewerToolbar
+          tool={review.comments?.active() ? undefined : viewer.tool()}
+          onTool={(tool) => {
+            review.comments?.setActive(false);
+            if (editor.penPath()) void editor.penFinish();
+            viewer.setTool(tool);
+          }}
+          editable={editor.enabled()}
+          onActions={() => setShowActions(true)}
+          devMode={review.panelTab() === 'code'}
+          onDevMode={() => {
+            viewer.setDesignOpen(true);
+            review.comments?.setActive(false);
+            review.setPanelTab((tab) => (tab === 'code' ? 'design' : 'code'));
+          }}
+          review={
+            <CommentButton
+              comments={
+                review.comments && {
+                  active: review.comments.active(),
+                  unread: review.comments.unreadCount(),
+                  onToggle: review.toggleComments,
+                }
+              }
+            />
+          }
+        />
       </Show>
       <Show when={review.presenting()}>
         {(p) => (

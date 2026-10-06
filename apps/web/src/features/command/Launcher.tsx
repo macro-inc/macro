@@ -1,7 +1,9 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
+import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
@@ -20,10 +22,12 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableAiEditor,
   enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
   enableProjects,
+  enablePsdEditor,
   enableSnippets,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -308,6 +312,16 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'psd':
+      if (!isFeatureEnabled(enablePsdEditor)) return;
+      createBlock({
+        blockName: 'psd',
+        loading: true,
+        createFn: () =>
+          createPsdDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+      });
+      return;
     case 'fig':
       if (!isFeatureEnabled(enableFigViewer)) return;
       createBlock({
@@ -315,6 +329,16 @@ export function runCreateAction(
         loading: true,
         createFn: () =>
           createFigDocument({ projectId: options.projectId, source }),
+        shouldInsert,
+      });
+      return;
+    case 'ai':
+      if (!isFeatureEnabled(enableAiEditor)) return;
+      createBlock({
+        blockName: 'ai',
+        loading: true,
+        createFn: () =>
+          createAiDocument({ projectId: options.projectId, source }),
         shouldInsert,
       });
       return;
@@ -644,7 +668,6 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       return true;
     },
   },
-
   {
     label: 'Snippet',
     icon: getIconConfig('snippet').icon,
@@ -707,6 +730,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Photoshop file',
+    enabled: () => isFeatureEnabled(enablePsdEditor),
+    icon: getIconConfig('psd').icon,
+    description: 'New Photoshop file',
+    launcherHint: 'Layered image editing, saved as .psd',
+    keywords: ['new', 'make', 'add', 'photoshop', 'psd', 'image', 'photo'],
+    blockName: 'psd',
+    hotkeyToken: TOKENS.create.photoshop,
+    altHotkeyToken: TOKENS.create.photoshopNewSplit,
+    hotkey: 'h',
+    keyDownHandler: () => {
+      runCreateAction('psd', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
     label: 'Design',
     enabled: () => isFeatureEnabled(enableFigViewer),
     icon: getIconConfig('fig').icon,
@@ -719,6 +758,30 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'i',
     keyDownHandler: () => {
       runCreateAction('fig', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Illustrator file',
+    enabled: () => isFeatureEnabled(enableAiEditor),
+    icon: getIconConfig('ai').icon,
+    description: 'Create Illustrator file',
+    launcherHint: 'Vector artwork on artboards, saved as .ai',
+    keywords: [
+      'new',
+      'make',
+      'add',
+      'illustrator',
+      'illustration',
+      'vector',
+      'artboard',
+    ],
+    blockName: 'ai',
+    hotkeyToken: TOKENS.create.illustration,
+    altHotkeyToken: TOKENS.create.illustrationNewSplit,
+    hotkey: 'v',
+    keyDownHandler: () => {
+      runCreateAction('ai', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -803,11 +866,15 @@ export function useCreateMenuBlocks(
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
   const projectsFlag = useFeatureFlag(enableProjects);
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const psdFlag = useFeatureFlag(enablePsdEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
+  const aiFlag = useFeatureFlag(enableAiEditor);
   return createMemo(() => {
     agentsFlag();
     databasesFlag();
+    psdFlag();
     figFlag();
+    aiFlag();
     return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;

@@ -8,6 +8,7 @@ async fn codex_session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: model_owner::Owner::User(sender()),

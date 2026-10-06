@@ -97,7 +97,7 @@ test('combines shapes with boolean operations and flattens them', async ({
 }) => {
   await openNew(page);
   await drawTwoShapes(page);
-  await page.keyboard.press('Control+a');
+  await page.keyboard.press('ControlOrMeta+a');
   await expect(page.getByTestId('fig-design-panel')).toContainText(
     '2 layers selected'
   );
@@ -121,10 +121,10 @@ test('combines shapes with boolean operations and flattens them', async ({
 
   // Undo goes back to the subtraction.
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(() => isShape(page, 240, 200)).toBe(false);
 
-  // The toolbar menu flattens it into one vector layer.
+  // The selection menu flattens it into one vector layer.
   await page.getByTestId('fig-boolean-menu').click();
   await page.getByTestId('fig-menu-flatten').click();
   await expect(page.getByTestId('fig-design-panel')).toContainText('Vector');
@@ -171,7 +171,7 @@ test('draws with the pen and edits the points', async ({ page }) => {
   await expect.poll(() => isDark(page, 250, 80)).toBe(true);
   // Undo puts the point back.
   await canvas.focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(page.getByTestId('fig-field-y')).toHaveValue('100');
 
   // A double-click on the last point ends an open path (without adding
@@ -201,6 +201,8 @@ test('draws with the pen and edits the points', async ({ page }) => {
 test('exports SVG that draws like the PNG', async ({ page }) => {
   await page.goto('/?file=showcase.fig');
   await expect(page.getByTestId('fig-layer-row').first()).toBeVisible();
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill('Home');
   await page
     .getByTestId('fig-search-hit')
@@ -209,7 +211,8 @@ test('exports SVG that draws like the PNG', async ({ page }) => {
     .click();
   const exports = page.getByTestId('fig-export');
   await exports.getByRole('button', { name: 'Add export' }).click();
-  await page.getByTestId('fig-export-format-0').selectOption('SVG');
+  await page.getByTestId('fig-export-format-0').click();
+  await page.getByRole('option', { name: 'SVG', exact: true }).click();
   await page.getByTestId('fig-export-button').click();
   await expect
     .poll(() => page.evaluate(() => window.figFixture.downloads()))
@@ -259,6 +262,7 @@ test('exports SVG that draws like the PNG', async ({ page }) => {
 
   // "Copy as SVG" puts the markup on the clipboard.
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy as', exact: true }).click();
   await page.getByTestId('fig-copy-svg').click();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -269,6 +273,8 @@ test('copies layers into another file', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/?file=showcase.fig&edit');
   await expect(page.getByTestId('fig-layer-row').first()).toBeVisible();
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill('Primary button');
   await page
     .getByTestId('fig-search-hit')
@@ -277,7 +283,7 @@ test('copies layers into another file', async ({ page, context }) => {
     .click();
   await page.getByTestId('fig-layer-search').fill('');
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+c');
+  await page.keyboard.press('ControlOrMeta+c');
   await expect
     .poll(() =>
       page.evaluate(async () => {
@@ -293,7 +299,7 @@ test('copies layers into another file', async ({ page, context }) => {
   const other = await context.newPage();
   await openNew(other);
   await other.getByTestId('fig-canvas').focus();
-  await other.keyboard.press('Control+v');
+  await other.keyboard.press('ControlOrMeta+v');
   await expect(other.getByTestId('fig-layer-row')).toHaveText([
     'Primary button',
   ]);
@@ -320,7 +326,7 @@ test('copies layers into another file', async ({ page, context }) => {
   // Numbered after the pasted frame.
   await expect(other.getByTestId('fig-name')).toHaveValue('Frame 2');
   await other.getByTestId('fig-canvas').focus();
-  await other.keyboard.press('Control+v');
+  await other.keyboard.press('ControlOrMeta+v');
   await expect(other.getByTestId('fig-name')).toHaveValue('Primary button');
   await other.getByTestId('fig-canvas').focus();
   await other.keyboard.press('Shift+Enter');

@@ -1,15 +1,15 @@
-import type { PaidPlanTier, PlanTier } from '@app/features/paywall/plans';
+import {
+  billingMessage,
+  type PaidPlanTier,
+  type PlanTier,
+} from '@app/features/paywall/plans';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   CompletionResult,
   OnboardingContext,
 } from '../context/onboarding-context';
 import type { CheckoutTerms } from '../core/checkout';
-import {
-  afterOnboardingTarget,
-  bypassTarget,
-  sanitizeNext,
-} from '../core/next-target';
+import { afterOnboardingTarget, sanitizeNext } from '../core/next-target';
 import { clearFlowProgress, readSavedNext, saveNext } from './flow-storage';
 
 type FinishCapabilities = Pick<
@@ -19,7 +19,7 @@ type FinishCapabilities = Pick<
 
 /**
  * The "leave onboarding" workflow: complete onboarding, then land in the app
- * (the preserved `?next` deep link, or the Getting Started checklist).
+ * (the preserved `?next` deep link, or Home).
  */
 export function createFlowFinish(
   context: FinishCapabilities,
@@ -106,7 +106,7 @@ export function createFlowFinish(
     } catch (error) {
       context.notifyFailure(
         error instanceof Error
-          ? error.message
+          ? billingMessage(error.message)
           : "Couldn't start checkout — please try again"
       );
       setFinishing(false);
@@ -117,7 +117,7 @@ export function createFlowFinish(
     finishing,
     afterTarget,
     persistNext,
-    /** Finish as a Guest (or with the plan step skipped) and enter the app. */
+    /** Finish on Free (or with the plan step skipped) and enter the app. */
     finishFree: (planSkipped = false) => complete('free', planSkipped),
     startPremiumCheckout,
     /** Finish after checkout confirmed payment, recording the tier Stripe returned. */
@@ -126,7 +126,7 @@ export function createFlowFinish(
     bypass: (step: string) =>
       leave({
         skipped: true,
-        target: bypassTarget(options.next(), readSavedNext()),
+        target: afterTarget(),
         onCompleted: () => context.track('onboarding_v4_bypassed', { step }),
       }),
   };

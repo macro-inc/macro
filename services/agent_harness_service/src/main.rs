@@ -49,6 +49,7 @@ use agent_harness::domain::model::{
 };
 use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
+use agent_harness::domain::ports::LateBoundHeldToolCallObserver;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
@@ -94,6 +95,7 @@ use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
 };
 use agent_session::outbound::broker_lifecycle_publisher::BrokerLifecyclePublisher;
+use agent_session::outbound::broker_log_realtime::BrokerLogRealtime;
 use agent_session::outbound::connection_gateway_realtime::ConnectionGatewayAgentSessionRealtime;
 use agent_session::outbound::name_generator::HaikuAgentSessionNameGenerator;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -312,9 +314,14 @@ async fn run() -> anyhow::Result<()> {
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
-        ConnectionGatewayAgentSessionRealtime::new(
-            connection_gateway.clone(),
-            session_audience.clone(),
+        // Frames reach this process's viewers through the gateway and every
+        // other process's through the broker (the GraphQL log subscription).
+        BrokerLogRealtime::new(
+            ConnectionGatewayAgentSessionRealtime::new(
+                connection_gateway.clone(),
+                session_audience.clone(),
+            ),
+            broker.clone(),
         ),
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
             HaikuAgentSessionNameGenerator::new(recorder.clone()),
@@ -446,12 +453,16 @@ async fn run() -> anyhow::Result<()> {
     // for the owner. The rows and their NOTIFY wake a hold on whichever
     // replica serves it; each state lands in the session's log for its
     // viewers, and a call that starts waiting notifies the owner.
+    // The harness hears about each held call too, to tell the thread that
+    // prompted the turn; it is built later, so it binds late.
+    let held_tool_calls = Arc::new(LateBoundHeldToolCallObserver::new());
     let tool_approvals = Arc::new(ToolApprovalService::new(
         PgToolApprovalStore::new(pool.clone()),
         PgToolApprovalSignals::spawn(pool.clone()),
         SessionToolApprovalAnnouncer::new(
             sessions.clone(),
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+            held_tool_calls.clone(),
         ),
     ));
     let egress = Arc::new(
@@ -486,12 +497,16 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    // Every session's MCP tools, listed for its telemetry the way the harness
-    // itself lists them: through the egress proxy, in process.
+    // One connector for the agent and the telemetry catalog. It pools each
+    // server's session for the life of the egress token, so a replaced agent
+    // task and the catalog's listing reuse the handshake instead of opening
+    // a second set of clients and dropping them when the listing ends.
+    let mcp_connector = Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
+        Arc::clone(&egress),
+        &egress_base_url,
+    )));
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
-        Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
-            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
-        ))));
+        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
     let tool_context = ai_tools::build_tool_service_context_from_env(
@@ -539,16 +554,9 @@ async fn run() -> anyhow::Result<()> {
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
     let inmem = InMemRuntime {
-        manager: InMemAgentManager::new(
-            Arc::clone(&inmem_model_engine),
-            frames,
-            Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-                Arc::clone(&egress),
-                &egress_base_url,
-            ))),
-        )
-        .with_admission(admission.clone())
-        .with_dev_commands(enable_dev_commands),
+        manager: InMemAgentManager::new(Arc::clone(&inmem_model_engine), frames, mcp_connector)
+            .with_admission(admission.clone())
+            .with_dev_commands(enable_dev_commands),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
@@ -561,7 +569,7 @@ async fn run() -> anyhow::Result<()> {
         lifecycle_publisher.clone(),
         replica,
     )
-    .with_tool_catalog(tool_catalog);
+    .with_tool_catalog(Arc::clone(&tool_catalog));
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -1003,8 +1011,17 @@ async fn run() -> anyhow::Result<()> {
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
         .with_admission(admission.clone())
-        .with_repositories(open_repositories),
+        .with_repositories(open_repositories)
+        .with_warm_sessions(Arc::new(session_repo.clone()), tool_catalog),
     );
+    let warm_cleanup = Arc::clone(&harness);
+    tokio::spawn(async move {
+        let mut ticks = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            ticks.tick().await;
+            warm_cleanup.reap_warm_sessions().await;
+        }
+    });
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
@@ -1042,6 +1059,7 @@ async fn run() -> anyhow::Result<()> {
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue, and capture what the turn changed.
     turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
@@ -1459,11 +1477,13 @@ async fn run() -> anyhow::Result<()> {
                                     "agent_trigger.set_sandbox_size"
                                 }
                                 // Never trigger-borne: queue mutations arrive over
-                                // HTTP, and the turn signals are the harness's own.
+                                // HTTP, and the turn signals and held tool calls are
+                                // the harness's own.
                                 HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
                                 | HarnessCommand::SteerQueued { .. }
                                 | HarnessCommand::Turn(_)
+                                | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);

@@ -210,24 +210,12 @@ export const slackImportDlqArn = slackImportQueue.dlq.arn;
 export const slackImportDlqName = slackImportQueue.dlq.name;
 export const slackImportWorkerPolicyArn = slackImportQueue.workerPolicy.arn;
 
-const searchProcessingStack = new pulumi.StackReference(
-  'slack-import-search-processing',
-  { name: `macro-inc/search-processing-service/${stack}` }
-);
 const slackImportWorker = deploySlackImportWorker(
   `slack-import-worker-${stack}`,
   {
     ecsClusterArn: cloudStorageClusterArn,
     vpc: coparse_api_vpc,
     workerPolicyArn: slackImportQueue.workerPolicy.arn,
-    stagingBucketName: bulkUploadBucketName,
-    queueName: slackImportQueue.queue.name,
-    dlqName: slackImportQueue.dlq.name,
-    gatewayUrl: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
-    // This is the processing backfill API, not SearchServiceClient's query API.
-    searchProcessingUrl: searchProcessingStack.requireOutput(
-      'searchProcessingServiceUrl'
-    ),
     tags,
   }
 );

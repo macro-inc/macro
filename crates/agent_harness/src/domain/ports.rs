@@ -17,7 +17,7 @@ use super::error::{HarnessError, Result};
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, ConversationContext,
     DeclinedMention, HarnessCommand, ProvisionedEgress, ReachableRepository, ResolvedReply,
-    SandboxEgress, SessionAnnouncement, SessionBlocker, SpawnContainer,
+    SandboxEgress, SessionAnnouncement, SessionBlocker, SpawnContainer, ToolApprovalChange,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -299,6 +299,52 @@ pub trait SessionAnnouncer: Send + Sync + 'static {
     /// session" but "here is what you need first". Same channel, same
     /// sender, no session to point at.
     fn decline(&self, declined: DeclinedMention) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Told when a tool call in a session's turn starts or stops waiting for the
+/// owner's approval, so the thread that prompted the turn can be told.
+///
+/// Synchronous, like the turn observer: the one implementation admits a
+/// command to the session's queue and returns.
+pub trait HeldToolCallObserver: Send + Sync + 'static {
+    /// `session`'s held tool calls changed.
+    fn changed(&self, session: AgentSessionId, change: ToolApprovalChange);
+}
+
+/// A [`HeldToolCallObserver`] bound after construction: the approval service
+/// is built before the harness that observes it. Changes before the bind
+/// are dropped.
+#[derive(Default)]
+pub struct LateBoundHeldToolCallObserver {
+    observer: std::sync::OnceLock<Box<dyn HeldToolCallObserver>>,
+}
+
+impl LateBoundHeldToolCallObserver {
+    /// An observer awaiting its target.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Attach the real observer. A second bind is a wiring bug; the first
+    /// stays authoritative.
+    pub fn bind(&self, observer: impl HeldToolCallObserver) {
+        let _ = self.observer.set(Box::new(observer));
+    }
+}
+
+impl HeldToolCallObserver for LateBoundHeldToolCallObserver {
+    fn changed(&self, session: AgentSessionId, change: ToolApprovalChange) {
+        if let Some(observer) = self.observer.get() {
+            observer.changed(session, change);
+        }
+    }
+}
+
+impl<T: HeldToolCallObserver + ?Sized> HeldToolCallObserver for Arc<T> {
+    fn changed(&self, session: AgentSessionId, change: ToolApprovalChange) {
+        (**self).changed(session, change);
+    }
 }
 
 /// Where a session finds its bot's live runtime connection.

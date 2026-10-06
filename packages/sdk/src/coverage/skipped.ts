@@ -33,6 +33,8 @@ export const agentHarnessExcluded = [
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
+  // Speculative page warm-up requires a signed-in user and is app-internal.
+  'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog = [

@@ -5,7 +5,11 @@ import type { TeamInvite } from '../context/onboarding-context';
 import { ContinueButton, SkipButton } from './controls';
 
 /** Already on a team — auto-joined by domain, or just created/joined here. */
-export function OnTeamPanel(props: { name: string; onContinue: () => void }) {
+export function OnTeamPanel(props: {
+  name: string;
+  finishing: boolean;
+  onContinue: () => void;
+}) {
   return (
     <div class="flex flex-col gap-3">
       <div class="flex flex-col items-center gap-2 py-4 text-center">
@@ -20,7 +24,11 @@ export function OnTeamPanel(props: { name: string; onContinue: () => void }) {
           shared with you.
         </p>
       </div>
-      <ContinueButton onClick={props.onContinue} />
+      <ContinueButton
+        label={props.finishing ? 'Opening your workspace…' : 'Continue'}
+        disabled={props.finishing}
+        onClick={props.onContinue}
+      />
     </div>
   );
 }
@@ -52,7 +60,7 @@ export function InvitesPanel(props: {
           </div>
         )}
       </For>
-      <SkipButton onClick={props.onSkip} />
+      <SkipButton disabled={props.joining} onClick={props.onSkip} />
     </div>
   );
 }

@@ -20,6 +20,7 @@ import type {
 import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
@@ -58,12 +59,28 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
+  const session = useOptionalAgentSession();
   // Match accessors keep a part's renderer mounted when a streamed snapshot
   // replaces the object, preserving disclosures while updating their contents.
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
-        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+        {(part) => (
+          <TextPart
+            text={part().text}
+            inFlight={props.inFlight}
+            observeRender={
+              props.message.author.kind === 'agent'
+                ? (element) =>
+                    session?.observeRenderedText?.(
+                      props.message.agentSessionId,
+                      props.message.turn,
+                      element
+                    )
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={props.part.kind === 'attachment' && props.part}>
         {(part) => <AttachmentPart part={part()} />}

@@ -122,6 +122,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('channel detail navigation', () => {
+  it('measures tab content against the height left after channel chrome', () => {
+    const view = render(() => (
+      <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>
+    ));
+
+    const content = view.container.querySelector('[data-channel-tab-content]');
+    expect(content?.classList.contains('min-h-0')).toBe(true);
+    expect(content?.classList.contains('flex-1')).toBe(true);
+  });
+
   it('navigates the surface for every message link click, including a repeat', async () => {
     render(() => (
       <ChannelDetail channelId={CHANNEL_ID}>{() => null}</ChannelDetail>

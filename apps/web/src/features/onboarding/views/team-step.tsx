@@ -1,4 +1,4 @@
-import { Match, Show, Switch } from 'solid-js';
+import { createMemo, Match, Show, Switch } from 'solid-js';
 import { ContinueButton, SkipButton } from '../components/controls';
 import {
   InvitesPanel,
@@ -19,6 +19,7 @@ import {
  * join, otherwise create (with a domain-derived name and same-domain
  * teammates pre-added to the invite list). */
 export function TeamStep(props: {
+  finishing: boolean;
   onContinue: () => void;
   onSkip: () => void;
 }) {
@@ -31,13 +32,17 @@ export function TeamStep(props: {
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
   };
   // Wait for contacts and the domain suggestion so the form mounts once,
-  // fully formed — nothing rewrites the user's rows afterwards.
-  const seed = () =>
-    teamFormSeed({
-      record: record(),
-      contacts: directory.contacts(),
-      ownEmail: ownEmail(),
-    });
+  // fully formed. Keep the first settled seed so background refreshes cannot
+  // replace the form, reset edits, or steal focus from an input.
+  const seed = createMemo<TeamFormSeed | undefined>(
+    (previous) =>
+      previous ??
+      teamFormSeed({
+        record: record(),
+        contacts: directory.contacts(),
+        ownEmail: ownEmail(),
+      })
+  );
 
   return (
     <TeamSetup>
@@ -49,13 +54,19 @@ export function TeamStep(props: {
           <TeamStatus message="Loading your team…" />
         </Match>
         <Match when={onTeam(team.state())} keyed>
-          {(name) => <OnTeamPanel name={name} onContinue={props.onContinue} />}
+          {(name) => (
+            <OnTeamPanel
+              name={name}
+              finishing={props.finishing}
+              onContinue={props.onContinue}
+            />
+          )}
         </Match>
         <Match when={pendingInvites(team.state())}>
           {(invites) => (
             <InvitesPanel
               invites={invites()}
-              joining={team.joining()}
+              joining={team.joining() || props.finishing}
               onJoin={(id) => void team.join(id)}
               onSkip={props.onSkip}
             />
@@ -64,12 +75,12 @@ export function TeamStep(props: {
         <Match when={team.state().t === 'create'}>
           <Show
             when={seed()}
-            keyed
             fallback={<TeamStatus message="Finding your teammates…" />}
           >
             {(ready) => (
               <TeamForm
-                seed={ready}
+                finishing={props.finishing}
+                seed={ready()}
                 ownEmail={ownEmail()}
                 onContinue={props.onContinue}
                 onSkip={props.onSkip}
@@ -91,6 +102,7 @@ const pendingInvites = (
 ) => (state.t === 'invites' ? state.invites : undefined);
 
 function TeamForm(props: {
+  finishing: boolean;
   seed: TeamFormSeed;
   ownEmail: string | undefined;
   onContinue: () => void;
@@ -107,7 +119,7 @@ function TeamForm(props: {
         id="team"
         name={form.name()}
         emails={form.slots()}
-        disabled={form.pending()}
+        disabled={form.pending() || props.finishing}
         suggested={form.suggested}
         onNameChange={form.setName}
         onEmailChange={form.setSlot}
@@ -116,16 +128,21 @@ function TeamForm(props: {
       />
       <ContinueButton
         label={
-          form.pending()
-            ? 'Creating workspace…'
-            : form.invites().length > 0
-              ? `Create team & invite ${form.invites().length}`
-              : 'Create team'
+          props.finishing
+            ? 'Opening your workspace…'
+            : form.pending()
+              ? 'Creating workspace…'
+              : form.invites().length > 0
+                ? `Create team & invite ${form.invites().length}`
+                : 'Create team'
         }
-        disabled={!form.canCreate()}
+        disabled={!form.canCreate() || props.finishing}
         onClick={() => void form.create()}
       />
-      <SkipButton disabled={form.pending()} onClick={props.onSkip} />
+      <SkipButton
+        disabled={form.pending() || props.finishing}
+        onClick={props.onSkip}
+      />
     </div>
   );
 }

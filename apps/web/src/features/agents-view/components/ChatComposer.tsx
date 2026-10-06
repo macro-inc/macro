@@ -9,6 +9,7 @@ import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
@@ -223,7 +224,10 @@ export function ChatComposer(props: {
         ref={container}
         data-keep-keyboard
         class="min-w-0"
-        onFocusIn={() => setFocused(true)}
+        onFocusIn={() => {
+          setFocused(true);
+          void preloadAgentFold();
+        }}
         onFocusOut={(event) => {
           // iOS control taps can blur with no relatedTarget before click.
           // Collapse only for a known outside focus or pointer interaction.

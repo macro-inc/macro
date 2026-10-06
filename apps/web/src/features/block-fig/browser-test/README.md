@@ -25,10 +25,11 @@ design; saves stay in memory, and `?reload` reopens each one. Test-only
   fixture stands in for Google Fonts and this computer's fonts
   (`font-source.ts`): every family is served as the bundled Inter, and
   "Nowhere Grotesk" is installed locally;
-- `comments`: the in-memory comment store (`memory-comments.ts`, the
-  `FigCommentStore` contract the app fulfils with document discussions):
+- `comments`: the in-memory comment store (`memory-comments.tsx`, the
+  `FigCommentStore` contract the app fulfils with Macro comments, with
+  plain stand-ins for the shared message thread and composer):
   `threads()`, `arrive(author, text, target)` (someone else comments or
-  replies), `notified()` (mentions that would notify), and `people`.
+  replies), `follow(threadId)` (a followed comment link), and `people`.
 
 `?present=<frame id>` opens presenting that frame, as a copied frame link
 does.
@@ -80,9 +81,9 @@ overlay, Back, Close, a link, and a legacy connection, made by
 the arrow keys, the selected frame, copying a frame link and opening it),
 clicking through the prototype (hotspot hints, overlays closing on a click
 outside), editing interactions and flows in the Prototype tab (with the
-connection noodles, undo, and saving), and comments (placing one on a
-frame, @mentions, replies, unread badges, resolving and reopening, and the
-pin following its frame).
+connection noodles, undo, and saving), and the comment tool (placing a
+comment on a frame, replies, unread badges, resolving and reopening, the
+pin following its frame, and following a comment link).
 
 `?libraries` keeps two designs in memory, "Design system"
 (`design-system.fig`, or `&library=<file>`) and a blank "App", with the
@@ -110,6 +111,36 @@ the session, and an unreachable sync service.
 
 `FIG_CORPUS_DIR` (with a trailing slash) serves another directory of
 files; `--port` runs a second server beside the default one.
+`performance.browser.e2e.ts` checks that reopening a design fetches and
+compiles the engine only once per browser page, and that moving over layers
+does not re-composite unchanged page tiles. It also prints engine reopen
+and tile timings; compare those on the same hardware and browser.
+Set `FIG_PERF_FILE` to an absolute local `.fig` path to measure a cold import
+and a second import with cached compiled code, overview raster time, and
+hit-test latency while rendering. The file stays local and unchanged:
+
+```sh
+FIG_PERF_FILE='/absolute/path/design.fig' bunx playwright test --config src/features/block-fig/browser-test/playwright.config.ts performance.browser.e2e.ts --grep 'profiles a local'
+```
+
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed. Failure traces and screenshots stay in the ignored `test-results/`
 folder.
+
+For performance investigations, `?realFonts` uses the application's Google
+Fonts cache and local-font discovery instead of substituting Inter. In this
+mode `fontRequests()` does not record requests; use the browser network trace.
+For a production fixture build, set `FIG_CORPUS_URL=/corpus/` and place only
+the selected test files in the ignored `.dist/corpus/` after building. The
+default `/@fs` fixture URLs are development-server URLs and do not work in
+`vite preview`.
+
+The reported `visibleMs` measures the viewer shell, not a painted document.
+`firstTileFrameMs` measures from selecting the local file to a browser frame
+after the first actual tile draw, using the production font source. This is
+an initial overview, not a guarantee that every sharp tile or font has loaded.
+Neither it nor the engine-only raster timings establish a comparison with
+Figma's complete application. For that comparison, capture both applications
+in the same browser, viewport and cache state, include document retrieval and
+collaboration startup, and inspect the filmstrip for the first visible canvas.
+Keep private exports and browser traces out of Git.

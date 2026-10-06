@@ -1,10 +1,4 @@
-import {
-  formatIncludedAi,
-  type IncludedAiCentsByTier,
-  PLANS,
-  type Plan,
-  type PlanTier,
-} from '@app/features/paywall/plans';
+import { PLANS } from '@app/features/paywall/plans';
 import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
@@ -41,7 +35,6 @@ import XIcon from '@phosphor/x.svg';
 import {
   useAiBillingSummaryQuery,
   useGithubLinkStatusQuery,
-  useIncludedAiCentsByTier,
 } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -174,32 +167,24 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-/** "$40 · $20 of AI" once the catalog has the allowance, otherwise "$40". */
-function planOption(plan: Plan, includedAi: string | undefined): PlanOption {
-  return {
-    value: plan.tier as PaidPlan,
-    label: plan.name,
-    description: includedAi
-      ? `$${plan.price} · ${includedAi} of AI`
-      : `$${plan.price}`,
-  };
-}
-
 /** Every paid plan a seat can be moved to, cheapest first. */
-function planOptionsFor(
-  includedAi: IncludedAiCentsByTier,
-  aiUsageBilling: boolean
-): PlanOption[] {
-  const allowance = (tier: PlanTier) =>
-    aiUsageBilling ? formatIncludedAi(includedAi[tier]) : undefined;
+function planOptionsFor(aiUsageBilling: boolean): PlanOption[] {
   return PLANS.flatMap((plan) =>
-    plan.tier === 'free' ? [] : [planOption(plan, allowance(plan.tier))]
+    plan.tier === 'free'
+      ? []
+      : [
+          {
+            value: plan.tier,
+            label: plan.name,
+            description: `$${plan.price}${aiUsageBilling && plan.tier === 'max' ? ' · 10× usage' : ''}`,
+          },
+        ]
   );
 }
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
- * schema carries `plan`, read it defensively; every seat starts on Premium.
+ * schema carries `plan`, read it defensively; every seat starts on Pro.
  */
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
@@ -211,9 +196,8 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
-  const includedAi = useIncludedAiCentsByTier();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const options = () => planOptionsFor(includedAi(), aiUsageBilling().enabled);
+  const options = () => planOptionsFor(aiUsageBilling().enabled);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -1495,8 +1479,8 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
-          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
+            <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
             <IntegrationRow
               icon={<GithubIcon />}
               title="GitHub App"

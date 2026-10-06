@@ -15,6 +15,11 @@ const resolvedTokens = [
   'edge-muted',
   'content-0',
   'content-1',
+  'page',
+  'panel',
+  'ink',
+  'ink-muted',
+  'input',
 ] as const;
 
 export type ResolvedThemeColors = Readonly<
@@ -180,7 +185,13 @@ export function resolveThemeColors(
   mode: ThemeColorMode
 ): ResolvedThemeColors {
   const defaults = mode === 'dark' ? macroDarkTheme : macroLightTheme;
-  const tokens = { ...defaults.colorTokens, ...authored };
+  const defaultTokens = {
+    // index.css defines control outside the authored theme registry; input
+    // may link to it (as Macro Dark does).
+    control: 'var(--color-surface-2)',
+    ...defaults.colorTokens,
+  };
+  const tokens = { ...defaultTokens, ...authored };
   const key = JSON.stringify([
     mode,
     Object.entries(tokens).sort(([a], [b]) => a.localeCompare(b)),
@@ -190,7 +201,7 @@ export function resolveThemeColors(
   const resolve = resolveGraph(tokens);
   const missing = resolvedTokens.filter((token) => !resolve(token));
   const custom = resolveCustomColors(tokens, missing, mode);
-  const fallback = resolveGraph(defaults.colorTokens);
+  const fallback = resolveGraph(defaultTokens);
   const result = Object.fromEntries(
     resolvedTokens.map((token) => [
       token,

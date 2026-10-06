@@ -1,10 +1,10 @@
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
+import { ConnectAction } from '../integration-ui';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
 } from './connection-more';
-import { ConnectAction } from './integration-ui';
 import type { CapabilityStatus } from './model';
 
 export function AiGrantActions(props: {

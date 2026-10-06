@@ -986,6 +986,14 @@ flag off the block offers the file for download. The file is decoded,
 rendered, and edited by the Rust `fig_engine` compiled to WebAssembly, in a
 primary worker plus up to three tile-raster helpers. The canvas composites
 512 px tiles; while zooming it shows the nearest cached scale, then sharpens.
+Opening shows the file's embedded preview (`fig-opening-preview`, when
+present) while the engine and live session start in parallel. A coarse
+page preview appears before detailed tiles; the visible area gets priority
+over refining the whole-page preview. Reopening a file shares the compiled
+engine code; a new open starts compiling it while the file downloads.
+Each file keeps its own worker memory. Hover and remote
+cursors update the overlay without redrawing an unchanged page canvas.
+The canvas becomes editable only after the shared changes have been applied.
 
 People with edit access get an editor; others get the same view read-only
 (no shape tools, no editing shortcuts). Edits save automatically 1.5 s after
@@ -1034,9 +1042,30 @@ chunk, so content search finds a design by the words on its canvas.
 
 Layout and test hooks:
 
-- **Left panel tabs**: `fig-tab-layers` and `fig-tab-assets`. Assets
-  (`fig-assets`) lists the file's components (`fig-asset`, searchable with
-  `fig-assets-search`); editors click one to place an instance in the middle
+- **Opening a design**: download, collaboration connection, and decoding use
+  the same editor-shaped loading shell (`fig-opening`), without a floating
+  thumbnail or Macro spinner. Its canvas has the same bounds as the editor.
+  The canvas status (`fig-loading-status`) clears when content is first drawn
+  or an empty page is ready; the surrounding controls need not wait for tiles.
+- **Dragging layers with composited effects**: when a layer cannot be moved
+  as a cached sprite, the canvas updates in complete preview frames rather
+  than tiles from different drag positions. Full detail returns together
+  after release. Other collaborators still receive the movement as it happens.
+- **Editor chrome**: both sidebars use the app's page background color,
+  including the loading shell, so they follow the active theme. Horizontal
+  and vertical sidebar dividers use the same `edge-frame` color as the outer
+  navigation rail. The same divider spans the editor below the file header,
+  including while the design is loading.
+  Drag their inner edges (`fig-resize-left|right`) or focus an edge and use
+  Left/Right to resize. `fig-toggle-left|right` hides or shows a panel while
+  preserving its width. The file header shows save status (`fig-save-state`,
+  `data-state` is `saved`, `unsaved`, `saving`, or `error`).
+- **Left panel tabs**: File (`fig-tab-layers`) and Assets (`fig-tab-assets`);
+  arrow keys switch tabs. Assets
+  (`fig-assets`) shows component previews (`fig-asset`, searchable with
+  `fig-assets-search`). `fig-assets-grid|list` switches the local components
+  between thumbnail cards and compact rows; previews load near the visible
+  portion of the list. Editors click one to place an instance in the middle
   of the view, and the arrow beside it (or a click, read-only) goes to the
   main component. ⌥⌘K makes the selection a component (a frame becomes one;
   other layers are wrapped), duplicating or pasting a main component places
@@ -1071,8 +1100,10 @@ Layout and test hooks:
   `fig-library-update-one`, and `fig-library-update-all`. Updating keeps
   instances' overrides; it is one undo step. Libraries are read when the
   design opens and again when the Libraries dialog opens.
-- **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
-  (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
+- **Layers panel** (`fig-layers-panel`, toggled with ⌥1): open layer search
+  with the magnifier (`fig-search-toggle`) or ⌘/Ctrl+F, including from Assets.
+  Search uses `fig-layer-search`; results are `fig-search-hit`. Escape closes
+  search and returns focus to its button. Below are the collapsible pages list
   (`fig-page` buttons; pages named only with dashes are dividers; editors
   get `fig-page-add`, double-click to rename in `fig-page-rename`, and a hover
   `fig-page-delete`), and the layer tree (`fig-layer-row`, `data-layer-id` is
@@ -1090,13 +1121,18 @@ Layout and test hooks:
 - **Canvas** (`fig-canvas`): click selects with Figma's rules (inside a
   top-level frame the click selects the frame's child; sections are
   transparent; ⌘/Ctrl-click selects the deepest layer; double-click goes one
-  level deeper; Shift-click adds). Dragging empty canvas draws a selection
+  level deeper; Shift-click adds). Click a frame's canvas name label to select
+  that frame; Shift-click toggles it in the selection. Drag the label to move
+  the frame. In editable files, double-click the label to rename it in place
+  (`fig-frame-rename`): Enter or blur commits, Escape cancels, and undo restores
+  the previous name. Dragging empty canvas draws a selection
   marquee. Hover outlines what a click would select; holding ⌥ measures from
   the selection to the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch
   zooms, Space-drag or middle-drag pans. When editing: drag a layer to move it
   (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
-  parent frame with red guides; in an auto layout frame the dragged layer
-  takes the slot it is dropped over; the canvas draws the moving layers
+  parent frame with red guides; dropping inside another frame moves the layer
+  into that frame, and dropping outside frames moves it onto the page; in an
+  auto layout frame the dragged layer takes the slot it is dropped over; the canvas draws the moving layers
   itself while they are dragged, the design panel's X and Y follow them, and
   the move is one undo step, which the others in a live design see as it
   goes), drag the selection's corners or edges to
@@ -1130,12 +1166,19 @@ Layout and test hooks:
   cannot be moved, resized, or deleted, but their name, fills, strokes,
   opacity, visibility, and text (typing included) are overridden on the
   instance, as in Figma; text bound to a component text property sets the
-  property.
+  property. A layer row's padlock toggles that layer. Lock/unlock selection
+  (⌘/Ctrl⇧L or the menus) unlocks when all selected layers are locked,
+  otherwise locks the selection. It reads current engine state after pending
+  local and remote edits; verify multi-selection, repeated toggles, and undo/redo.
 - **Main menu, layout grids, and guides**: the menu at the top of the
-  layers panel (`fig-main-menu`) has `fig-menu-export-frames-pdf` ("Export frames
+  layers panel (`fig-main-menu`) groups commands into File, Edit, View,
+  Object, and Arrange. Open Edit (`fig-main-edit`) for Undo/Redo
+  (`fig-undo`, `fig-redo`); open File (`fig-main-file`) for `fig-menu-export-frames-pdf` ("Export frames
   to PDF": the page's top-level frames as a multi-page vector PDF),
-  `fig-menu-export-selection`, and the Layout grids and Rulers toggles (also
-  in the zoom menu, `fig-layout-grids-toggle`). Frames' layout grids draw
+  `fig-menu-export-selection`. View (`fig-main-view`) contains the Layout grids
+  and Rulers toggles (also in the zoom menu, `fig-layout-grids-toggle`).
+  Submenus open with hover or Right Arrow; Left Arrow returns to the parent.
+  Keyboard shortcuts remains a top-level menu command. Frames' layout grids draw
   over the canvas (never in exports) until toggled off. With rulers shown
   (⇧R), editors drag from the top ruler for a horizontal guide or the left
   one for a vertical guide; a guide dropped on a top-level frame belongs to
@@ -1159,7 +1202,17 @@ Layout and test hooks:
   undo step. Both paste what is on the system clipboard (layers from any
   file or tab, as ⌘V does) when the browser lets the page read it, and
   otherwise the layers copied in this design.
-- **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
+- **Design panel** (`fig-design-panel`, toggled with ⌥8): the fixed selection
+  header offers Create component (`fig-create-component`) and Boolean operations
+  for editable selections. Design and Prototype
+  tabs support arrow-key navigation. Zoom and Present are in the top right;
+  the selected layer's heading stays visible while properties scroll.
+  Position groups alignment, X/Y, rotation, 90° rotation (`fig-rotate-90`),
+  and flip controls (`fig-flip-horizontal|vertical`). Layout groups dimensions,
+  resizing, auto layout, and clip content. The aspect-ratio lock
+  (`fig-lock-aspect-ratio`) constrains inspector width/height edits together.
+  Appearance groups opacity, radius, and visibility (`fig-appearance-visible`).
+  Alignment buttons
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
   radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
@@ -1171,30 +1224,35 @@ Layout and test hooks:
   input `fig-fill-<n>-hex`, opacity `-opacity`, `-visibility`, and
   `-remove`; "+" adds; drag a row's grip to reorder), stroke weight,
   position, and dashes (`fig-field-dash`: `4, 2`, or `None`), clip
-  content (`fig-clip-content`), the Text section for text layers (`fig-type`:
+  content (`fig-clip-content`), the Typography section for text layers (`fig-type`:
   family `fig-font-family` (opens the font picker `fig-font-picker`: search
   `fig-font-search`, options `fig-font-option` with `data-family`, the
-  file's fonts first, then Google Fonts, each previewed in its face; a
+  file's fonts first, then Google Fonts, each previewed in its face; use
+  Up/Down to browse results and Enter to apply; a
   missing font shows `fig-font-missing`), weight `fig-font-weight`,
-  `fig-italic`, size,
+  and size on one row,
   line height `fig-field-line-height` as `Auto`, a percentage, or pixels,
-  letter spacing `fig-field-letter-spacing`, paragraph spacing, horizontal
-  and vertical alignment, auto width / auto height / fixed size
-  `fig-text-resize`, `fig-underline`, strikethrough, and case
-  `fig-text-case`), auto layout (`fig-auto-layout-section`: "+" or ⇧A adds
+  letter spacing `fig-field-letter-spacing`, and horizontal/vertical alignment.
+  Open Type settings (`fig-type-settings`) for `fig-italic`, `fig-underline`,
+  strikethrough, paragraph spacing, and case (`fig-text-case`). Auto width /
+  auto height / fixed size (`fig-text-resize`) is in Layout; Text content is
+  a disclosure in Typography), auto layout (`fig-auto-layout-section`: "+" or ⇧A adds
   it, wrapping other layers in a new frame; "−" or ⌥⇧A removes it;
   direction `fig-layout-direction`, gap `fig-field-gap` as a number or
-  `Auto`, padding `fig-field-padding-h|v`, and the alignment grid
-  `fig-layout-align`), width and height sizing (`fig-sizing-w|h`: Fixed,
-  Hug, Fill) and `fig-absolute` for layers in auto layout, constraints
+  `Auto`, padding `fig-field-padding-h|v` or independent sides via
+  `fig-padding-independent` (`fig-field-padding-left|top|right|bottom`), and the
+  alignment grid `fig-layout-align`), width and height sizing
+  (`fig-sizing-w|h`: Fixed, Hug, Fill, beside each dimension) and `fig-absolute`
+  ("Ignore auto layout") for layers in auto layout, constraints
   (`fig-constraint-h|v`; children follow them when their frame is resized,
   and groups scale theirs), effects (`fig-effects`: "+" adds a drop shadow;
-  rows `fig-effect-<n>` pick the kind in `fig-effect-<n>-type` and take
-  offset, blur `fig-effect-<n>-blur`, spread, and color), boolean
-  operations (`fig-boolean-row`, shown for two or more layers or a boolean
-  layer: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
+  rows `fig-effect-<n>` open `fig-effect-<n>-settings`; inside that
+  popover, `fig-effect-<n>-type` picks the kind alongside offset, blur `fig-effect-<n>-blur`, spread,
+  and color in a popover beside the inspector), boolean
+  operations (the selected-layer header menu `fig-boolean-menu`; a boolean
+  layer also shows `fig-boolean-row`: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
   boolean's current operation, which a click changes, and `fig-flatten`),
-  a Layout grid section for frames (`fig-layout-grids`: "+" adds a 10 px
+  a Layout guide section for frames (`fig-layout-grids`: "+" adds a 10 px
   grid; rows `fig-grid-<n>` with color `fig-grid-color-<n>`, kind
   `fig-grid-type-<n>` (`GRID`, `COLUMNS`, `ROWS`), `fig-grid-visible-<n>`,
   `fig-grid-remove-<n>`, and `fig-grid-settings-<n>` opening count
@@ -1203,16 +1261,20 @@ Layout and test hooks:
   or offset `fig-grid-offset-<n>`, and `fig-grid-gutter-<n>`), and the
   Export section (`fig-export`): "+" adds a preset (1x PNG, then 2x, 3x…;
   rows `fig-export-row-<n>` with size `fig-export-size-<n>` typed as `2x`,
-  `0.5x`, `512w`, or `300h`, `fig-export-suffix-<n>`, format
-  `fig-export-format-<n>` (`PNG`, `JPEG`, `SVG`, `PDF`), and for SVG and
-  JPG `fig-export-options-<n>`: `fig-export-outline-text-<n>`,
+  `0.5x`, `512w`, or `300h`, format
+  `fig-export-format-<n>` (`PNG`, `JPEG`, `SVG`, `PDF`). Open
+  `fig-export-options-<n>` for `fig-export-suffix-<n>` and format-specific settings: `fig-export-outline-text-<n>`,
   `fig-export-include-id-<n>`, or `fig-export-quality-<n>`; "−" is
   `fig-export-remove-<n>`). Presets are saved in the file (read-only viewers
   keep theirs for the session). `fig-export-button` ("Export <name>")
   downloads one file named as Figma names it (`Icon@2x.png`) or a ZIP of
   several, `fig-export-preview-toggle` shows a preview
-  (`fig-export-preview`), and `fig-copy-svg` is Copy as SVG; ⌘/Ctrl+⇧E
-  exports the selection with its presets (1x PNG without). Read-only
+  (`fig-export-preview`), and the Export header’s "Copy as" menu contains
+  Copy as PNG and `fig-copy-svg` (Copy as SVG); ⌘/Ctrl+⇧E
+  exports the selection with its presets (1x PNG without). Inspector choices
+  use custom listboxes: click the trigger, then its named `option`; use
+  arrow keys/Enter to choose and Escape to dismiss with focus restored.
+  Read-only
   viewers see the same values as text. The Code tab is Dev Mode's inspect
   panel (`fig-dev-inspect`): size and position (`fig-dev-width`,
   `fig-dev-height`), auto layout padding and gap (`fig-dev-padding`),
@@ -1287,32 +1349,45 @@ Layout and test hooks:
   `fig-color-alpha-field`, and "On this page" swatches
   (`fig-color-swatch`). Dragging previews live and is one undo step;
   Escape closes the picker.
-- **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
-  (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Pen (P),
-  Pencil (⇧P), Text (T), Hand (H) as `fig-tool-<name>`, the boolean menu
+- **Toolbar** (`fig-toolbar`): one floating row centered across the editor at the bottom. Tool groups
+  retain their last-used tool: Move/Hand (`fig-tool-menu-move`), shapes
+  (`fig-tool-menu-rectangle`: Rectangle, Line, Arrow, Ellipse), and
+  Pen/Pencil (`fig-tool-menu-pen`). Menu choices are `fig-choose-<name>`;
+  the group's current button is `fig-tool-<name>`. Frame and Text have their
+  own buttons. Shortcuts remain V/H, F, R/L/⇧L/O, P/⇧P, and T; ⇧ while drawing
+  snaps lines to 45°. Arrow keys, Enter, and Escape operate the menus.
+  Comment (`fig-tool-comment`, C; `fig-comments-unread` counts unread threads)
+  is followed by Actions (`fig-actions-button`) and Dev Mode
+  (`fig-panel-tab-code`, a toggle). Selecting a drawing tool exits Comment.
+  The boolean menu is in the selected layer's inspector heading
   (`fig-boolean-menu`: `fig-menu-boolean-<union|subtract|intersect|exclude>`
-  and `fig-menu-flatten`), undo/redo (`fig-undo`,
-  `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
-  `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
-  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?). After the tools: Comment
-  (`fig-tool-comment`, C; `fig-comments-unread` counts unread threads)
-  where the design has comments, and Present (`fig-present-button`,
-  ⌥⌘↵ / Ctrl+Alt+Enter).
-- **Comments** (the comment tool, C): pins (`fig-comment-pin`,
-  `data-thread`, `data-unread`) at a constant size over the canvas; a click
-  places a comment on the top-level frame there (it moves with the frame)
-  or on the canvas, composed in `fig-comment-input` (Enter posts, ⇧Enter a
-  new line, `@` offers people: `fig-mention-menu`, `fig-mention-option`).
-  A pin opens its thread (`fig-comment-popover`: comments
-  `fig-comment-item`, mentions `fig-comment-mention`, `fig-comment-reply`
-  with `fig-comment-reply-post`, `fig-comment-resolve` /
-  `fig-comment-reopen`, and the author's `fig-comment-delete`). The right
-  panel becomes the comments list (`fig-comments-panel`, filters
-  `fig-comments-filter-<open|resolved|all>`, rows `fig-comment-row` with
-  `data-unread`; a row opens the thread on its page). Escape closes the
-  thread, then the tool. In the app, comments are document discussions
-  with a `fig` thread anchor, on wherever the viewer is; the fixture keeps
-  them in memory.
+  and `fig-menu-flatten`). Zoom (`fig-zoom-menu`) and Present
+  (`fig-present-button`, ⌥⌘↵ / Ctrl+Alt+Enter) are in the inspector header,
+  or float at the canvas's top right while that panel is hidden. The
+  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?) is also in the main menu.
+- **Comments** (the comment tool, C): Macro comments, the same threads as
+  markdown, PDF, and spreadsheet comments. Pins (`fig-comment-pin`,
+  `data-thread`, `data-unread`) sit at a constant size over the canvas; a
+  click places a comment on the top-level frame there (it moves with the
+  frame) or on the canvas, written in `fig-comment-draft` with the app's
+  message composer (Enter posts; `@` mentions people and documents;
+  attachments; Escape cancels). A pin opens its thread beside it
+  (`fig-comment-popover`, `data-thread`, `data-resolved`): the shared
+  message thread (replies, reactions, edit, delete, copy link) under a
+  header with `fig-comment-resolve` / `fig-comment-reopen` and
+  `fig-comment-close`. The right panel becomes the comments list
+  (`fig-comments-panel`), with Present and Zoom in its header. Search
+  (`fig-comments-search`) matches the first comment, the latest replies,
+  and author names. Open `fig-comments-filter` for
+  `fig-comments-filter-<open|resolved|all>`. Rows `fig-comment-row` have
+  `data-unread`; a row opens the thread on its page. Below the rows,
+  `fig-comments-discussion` holds comments on the whole design. A copied
+  comment link (`?comment_id=`) or a comment notification opens the tool
+  at its thread (or at the discussion). Escape closes the thread, then the
+  tool. In the app, a pinned thread's root carries a `fig` thread anchor;
+  the browser fixture keeps comments in memory, with plain stand-ins for
+  the thread (`fig-comment-item`, `fig-comment-reply`) and composer
+  (`fig-comment-input`).
 - **Present** (`fig-present`): the selection's top-level frame (or the
   first flow's start, or the first frame) scaled to fit
   (`fig-present-screen`, `data-frame`), with the prototype playing: clicks
@@ -1328,11 +1403,13 @@ Layout and test hooks:
   `fig-present-next`, Copy link to frame (`fig-present-copy-link`, a link
   with `?present=<frame id>` that opens presenting it), and
   `fig-present-exit`. Variant changes and Scroll to are not played.
-- **Prototype tab** (`fig-panel-tab-prototype`, beside Design and Code;
+- **Prototype tab** (`fig-panel-tab-prototype`, beside Design;
   `fig-prototype-panel`): for a top-level frame, its flow starting point
   (`fig-flow-add`, name `fig-flow-name`, `fig-flow-remove`); for a layer,
   its interactions (`fig-proto-interaction`): editors add a click
-  interaction (`fig-proto-add`), and set its action (`fig-proto-action`:
+  interaction (`fig-proto-add`). Click its compact row (`fig-proto-open`)
+  to open settings beside the inspector (`fig-proto-settings`); adding an
+  interaction opens its settings automatically. Set its action (`fig-proto-action`:
   Navigate to, Open overlay, Back), destination frame
   (`fig-proto-destination`), animation (`fig-proto-transition`), and
   duration in ms (`fig-proto-duration`), or remove it (`fig-proto-remove`);
@@ -1442,6 +1519,325 @@ well as the canvas; an overview thumbnail can hide missing letters, wrong
 colors, or absent glows. Wait for the tiles to sharpen after zooming. The
 fixture preserves imported text outlines, but
 its substitute fonts do not verify the appearance of newly edited text.
+
+## Photoshop editor
+
+Uploaded `.psd` and `.psb` files open in the `psd` block
+(`/app/psd/<documentId>`), and **Photoshop file** in the create menu (key
+**H**, also in project create menus) makes a new 1920 × 1080 document with a
+white Background. Both are behind the `enable-psd-editor` PostHog flag (on
+by default in development builds; `ENABLE_PSD_EDITOR` overrides it); with
+the flag off the block offers the file for download. The file is read,
+composited, and edited by the Rust `psd_engine` compiled to WebAssembly, in
+one worker. The canvas draws 512 px tiles from a pyramid of scales (the
+nearest one shows while zooming, then it sharpens) and redraws only what an
+edit changed. How Macro AI and search read these files is under
+[Photoshop and Illustrator documents](#photoshop-and-illustrator-documents).
+
+People with edit access get the editor; others get the same view read-only
+(no painting or editing tools, no editing shortcuts). Documents the editor
+cannot edit as they are (CMYK, Lab, Indexed, Bitmap, Duotone, Multichannel,
+32-bit) open read-only with a bar (`psd-notice`, reason in
+`psd-notice-readonly`) whose **Convert to RGB** (`psd-notice-convert`, also
+Image > Mode > RGB Color) converts them to 8-bit RGB; the same bar lists
+parts of the file that could not be read (`psd-notice-warnings`), and
+`psd-notice-dismiss` hides it. Edits save automatically 1.5 s after the last
+change and when the tab is hidden, as a new document version through
+`PUT /documents/{id}/simple_save`; `psd-save-state` (`data-state` is `saved`,
+`unsaved`, `saving`, or `error`) shows where that stands.
+
+Everyone with the document open edits it live, as in the Figma editor:
+changes go through the sync service as Loro maps of each changed layer's
+state and pixel tiles (see `psd_engine::collab`); the stored file stays the
+base everyone opens, and the first editor seeds the shared copy. Undo takes
+back only your own steps. Of the people editing, one (the lowest peer id)
+stores the merged file. Presence: other people's pointers with name tags
+(`psd-peer-cursor`, `data-peer="<name>"`), their selections' outlines in
+their colors, and their avatars at the top right of the canvas
+(`psd-collaborators`, one `psd-collaborator` per person); clicking an avatar
+follows their view (`psd-following`) until **Stop**. Without the sync
+service the document opens read-only, and for editors a bar
+(`psd-session-notice`) explains why, with **Retry** (`psd-session-action`);
+a file stored outside the session (an upload, an AI edit) turns open copies
+read-only with **Reload**.
+
+The editor (`psd-editor`) is laid out as Photoshop is:
+
+- **Menu bar** (`psd-menu-bar`): File, Edit, Image, Layer, Select, Filter,
+  and View (`psd-menu-file` … `psd-menu-view`); items carry ids such as
+  `psd-menu-new-layer`, `psd-menu-image-size`, `psd-menu-filter-gaussianBlur`,
+  `psd-menu-adjust-levels`, `psd-menu-flatten`, `psd-menu-export-png`, and
+  `psd-menu-download`. Filters (Gaussian Blur, Unsharp Mask, Add Noise,
+  Mosaic, Motion Blur) and Image > Adjustments open a dialog
+  (`psd-filter-dialog`, `psd-adjust-dialog`) at the top right that previews
+  on the canvas; OK keeps it as one step, Cancel or Escape drops it. Image
+  Size (`psd-image-size`), Canvas Size (`psd-canvas-size`), Resolution,
+  Feather (⇧F6), Expand, and Contract open small dialogs (`*-ok`,
+  `*-cancel`).
+- **Options bar** (`psd-options-bar`, tool name in `psd-options-tool`): the
+  tool's settings (brush size, hardness, opacity, flow, spacing, pressure;
+  marquee feather; wand and bucket tolerance; gradient style and method;
+  type size), and **Fit Screen** / **100%** (`psd-zoom-fit`,
+  `psd-zoom-100`). During Free Transform (⌘/Ctrl+T) and Crop it shows the
+  box's size with commit and cancel (`psd-options-commit`,
+  `psd-options-cancel`; Enter and Escape do the same).
+- **Toolbar** (`psd-toolbar`, `psd-tool-<tool>` with `aria-pressed`;
+  clicking the tool in use again, or right-clicking, lists its group's
+  other tools, `psd-tool-option-<tool>`):
+  Move **V** (auto-selects the layer under the pointer; arrows nudge, ⇧ by
+  10), Marquee **M** (rectangle, ellipse; ⇧ adds, ⌥ subtracts, ⇧⌥
+  intersects), Lasso **L** (freehand, polygonal), Magic Wand **W**, Crop
+  **C**, Eyedropper **I**, Brush and Pencil **B** (`[` and `]` size, digits
+  opacity), Eraser **E**, Gradient and Paint Bucket **G**, Type **T**,
+  Rectangle and Ellipse **U** (shape layers in the foreground color), Hand
+  **H** (or hold Space), and Zoom **Z** (⌥ zooms out). ⇧ with a tool's key
+  cycles its group. Below, the foreground and background swatches
+  (`psd-foreground-color`, `psd-background-color`; clicking one opens the
+  Color tab), **X** swaps them (`psd-swap-colors`) and **D** resets them
+  (`psd-default-colors`).
+- **Canvas** (`psd-canvas`, with the zoom and size in `psd-status`, zoom in
+  `psd-zoom`): wheel scrolls; pinch, ⌥-wheel, or ⌘/Ctrl-wheel zooms; ⌘0 fits,
+  ⌘1 is 100%, ⌘+ and ⌘− step. Selections show marching ants; guides from
+  the file are drawn. Pasting an image (⌘V) or dropping image files places
+  them as new layers; ⌘C copies the selected pixels as PNG, ⇧⌘C copies
+  merged.
+- **Panels** (`psd-panels`): tabs **Properties** and **Color**
+  (`psd-tab-properties`, `psd-tab-color`) over the Layers panel.
+  Properties (`psd-properties-panel`) shows the active layer's kind and
+  bounds (`psd-layer-bounds`) and its settings: text (font, style, size,
+  leading, tracking, color, alignment `psd-text-align-<left|center|right>`,
+  faux styles, and **Edit text…** `psd-text-edit`), fill and shape layers
+  (solid color or gradient with its style and method, the shape's stroke,
+  `psd-stroke-add`), adjustment layers, masks (density, feather, enabled),
+  and the layer style's effects on or off. Color (`psd-color-panel`) edits
+  the foreground or background (`psd-color-target-foreground`,
+  `psd-color-target-background`) with a saturation and brightness area,
+  hue strip, hex, RGB, and HSB (`psd-color-hex`, `psd-color-r`, …).
+- **Layers panel** (`psd-layers-panel`): the active layer's blend mode
+  (`psd-blend-mode`), Opacity and Fill (`psd-layer-opacity`,
+  `psd-layer-fill`; drag their labels to scrub), and locks
+  (`psd-lock-transparency`, `psd-lock-pixels`, `psd-lock-position`,
+  `psd-lock-all`); then the layers top first (`psd-layer-row`,
+  `data-layer-id`, `data-layer-name`), each with visibility
+  (`psd-layer-visibility`), group disclosure (`psd-layer-disclosure`), the
+  thumbnail (artboards show a frame, `psd-layer-artboard`, and Properties
+  titles them Artboard), the mask (`psd-layer-mask`, with its thumbnail
+  `psd-layer-mask-thumbnail`; clicking it makes painting edit the mask),
+  and the layer style marker (`psd-layer-effects`, click toggles).
+  Click chooses, ⌘/Ctrl-click adds, ⇧-click picks a range, double-click
+  renames (`psd-layer-rename`), dragging reorders or moves into groups, and
+  right-click (or `psd-layer-menu`) opens the layer's menu (duplicate,
+  delete, group, clipping mask, masks, rasterize, merge down, export). The
+  bottom buttons add a fill or adjustment layer (`psd-new-adjustment`), a
+  mask (`psd-add-mask`), a group (`psd-new-group`), and a layer
+  (`psd-new-layer`, ⇧⌘N), and delete (`psd-delete-layer`).
+
+Typing: with Type, click the canvas for new text, or a text layer to edit
+it. A box under the text (`psd-text-editing`, field `psd-text-input`)
+takes the typing; each keystroke lays the layer out again on the canvas.
+New text becomes a layer at the first character, named after its first
+line (the name follows the text until someone renames the layer); Escape
+or ⌘/Ctrl+Enter finishes, and the whole typing is one undo step. Text left
+empty is removed. Other shortcuts: ⌘Z / ⇧⌘Z (Ctrl+Y), ⌘A, ⌘D, ⇧⌘I, ⌘J,
+⇧⌘J, ⌘E, ⌘G, ⇧⌘G, ⌥⌘G (clipping mask), ⌥⌫ and ⌘⌫ fill with the
+foreground and background, ⌫ clears the selection or deletes the layer,
+and ⌘/ (or the keyboard button) lists them all (`psd-shortcuts`).
+
+To exercise the editor without a backend, run the browser fixture from
+`apps/web` (build the engine first with `just ensure-psd-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-psd/browser-test/vite.config.ts
+# http://127.0.0.1:3020/?new
+```
+
+`?new` opens a new document (`&size=800x600` for another size), `?file=`
+a file from the directory `PSD_CORPUS_DIR` names, `?readonly` a viewer,
+and `?reload` reopens each save to check it round-trips. `?collab`
+(`&people=alice,bob`) puts several people side by side on one document
+through an in-page sync server; `window.psdFixture` exposes `engine()`,
+`saves()`, `downloads()`, `errors()`, `notices()`, and `collab`. Its
+Playwright suites run with
+`bunx playwright test --config src/features/block-psd/browser-test/playwright.config.ts`
+(`PSD_BROWSER_PORT` picks another port than 3020; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed).
+
+## Illustrator editor
+
+Uploaded `.ai` files open in the `ai` block (`/app/ai/<documentId>`), and
+**Illustrator file** in the create menu (key **V**, also in project create
+menus) makes a new one with a single 1920 × 1080 artboard. Both are behind
+the `enable-ai-editor` PostHog flag (on by default in development builds;
+`ENABLE_AI_EDITOR` overrides it); with the flag off the block offers the
+file for download. The file is read, rendered, and edited by the Rust
+`ai_engine` compiled to WebAssembly, in a primary worker plus up to three
+tile-raster helpers; the canvas composites tiles at the device pixel ratio
+over a gray pasteboard and redraws only what an edit changed.
+
+People with edit access get the editor; others get the same view read-only
+(only the selection, direct selection, hand, and zoom tools; no editing
+keys). Edits save automatically 1.5 s after the last change, when the tab
+is hidden, and on close, as a new document version through
+`PUT /documents/{id}/simple_save`. Saving writes a standard PDF-based `.ai`
+that Illustrator and PDF readers open; an unedited file is written back
+byte for byte. Names given in the Layers and Artboards panels are saved
+with it (`/MacroName` marked content and a `/MacroArtboard` page key, which
+other readers ignore). For files Illustrator saved, a dismissible note
+(`ai-illustrator-note`) says that Illustrator-only editing data (live
+effects and the like) is not kept, and what the engine could not read
+faithfully is listed in `ai-warnings`.
+
+Everyone with the file open edits it live. Changes go through the sync
+service as the Loro maps `aiMeta`, `aiDoc`, `aiNodes`, and `aiImages`
+(`ai_engine::collab`); the stored `.ai` stays the base everyone opens, and
+the first person who can edit seeds the shared copy. Each person creates
+objects in an id session (1–4095) picked at random among those the people
+present do not use, published in their presence. Undo takes back only your
+own changes. Of the people editing, one (the lowest peer id) stores the
+merged file, and the saved file becomes the new base. Presence: pointers
+with name tags (`ai-peer-cursor`, `data-peer="<name>"`), outlines of what
+others selected in their colors, and avatars at the top right
+(`ai-collaborators`, one `ai-collaborator` per person; a click shows their
+view). When the sync service is unreachable the file opens read-only with
+a bar (`ai-session-notice`, **Retry** is `ai-session-action`); a file
+stored outside the session (a new upload) starts the shared copy over, and
+people still in it get a **Reload** bar.
+
+Layout and test hooks (root `ai-editor`, canvas `ai-canvas`):
+
+- **Left panel**: the main menu (`ai-main-menu`: `ai-menu-download` for the
+  `.ai`, `ai-menu-export-png` and `ai-menu-export-png-2x` for the active
+  artboard, then the view items) and the tabs `ai-tab-layers` and
+  `ai-tab-artboards`.
+- **Layers** (`ai-layers-panel`, tree `ai-layer-tree`): rows
+  (`ai-layer-row`, `data-layer-id` is the engine's node id, `data-kind`
+  `layer`/`group`/`clipGroup`/`path`/`text`/`image`/`artwork`,
+  `aria-selected`) list top-most first, as Illustrator does. A click
+  selects (⇧ a range, ⌘/Ctrl toggles) and the canvas follows; a row's
+  `ai-layer-toggle` expands it, layers show their color (`ai-layer-color`,
+  a click cycles it), and hovering shows `ai-layer-lock` and
+  `ai-layer-visibility`. Double-click renames (`ai-layer-rename`). Rows
+  drag to restack, and into groups and other layers. `ai-layer-new` adds a
+  layer on top; `ai-layer-delete` deletes the selection.
+- **Artboards** (`ai-artboards-panel`): `ai-artboard-row` per artboard
+  (click fits it in the window, double-click renames in
+  `ai-artboard-rename`, hover `ai-artboard-delete`) and `ai-artboard-new`.
+- **Toolbar** (`ai-toolbar`, floating on the canvas): `ai-tool-<tool>` for
+  `select` (V), `direct` (A), `pen` (P), `type` (T), `line` (\\),
+  `rectangle` (M), `ellipse` (L), `polygon`, `star`, `eyedropper` (I),
+  `artboard` (⇧O), `hand` (H), and `zoom` (Z); below them the fill and
+  stroke new objects get, or the selection has (`ai-swatch-fill`,
+  `ai-swatch-stroke`, each with a color picker and `…-none`),
+  `ai-swap-colors` (⇧X), and `ai-default-colors` (D).
+- **Properties** (`ai-properties`, title `ai-selection-title`): with
+  nothing selected, the active artboard (`ai-artboard-section`). Otherwise
+  Transform (`ai-field-x`, `-y`, `-w`, `-h` measure outlines without
+  strokes, as Illustrator does; `ai-field-rotation`, flips), Appearance
+  (`ai-fill-hex`, `ai-stroke-hex` take hex or `none`, `ai-field-stroke-width`,
+  `ai-stroke-cap`, `ai-stroke-join`, `ai-field-dash`, `ai-field-opacity`,
+  `ai-blend`; gradients show as swatches without a hex field), Character
+  and Paragraph for text (font picker, `ai-font-style`,
+  `ai-field-font-size`, `ai-field-tracking`, `ai-field-line-height`,
+  `ai-text-align`), Align (`ai-align-left|center|right|top|middle|bottom`,
+  `ai-distribute-horizontal|vertical`), Pathfinder
+  (`ai-pathfinder-unite|subtract|intersect|exclude`), and Quick actions
+  (`ai-arrange-front|forward|backward|back`, `ai-action-group`,
+  `-ungroup`, `-clip`, `-release`, `-outline`).
+- **Status bar** (`ai-status-bar`, bottom center): `ai-undo`, `ai-redo`,
+  `ai-save-state` (`data-state` is `saved`, `unsaved`, `saving`, or
+  `error`), and the zoom menu (`ai-zoom-menu`: `ai-zoom-fit`,
+  `ai-zoom-fit-all`, `ai-zoom-100`, `ai-outline-toggle`).
+- **Canvas gestures**: scroll pans, ⌘/Ctrl or ⌥ + scroll and pinches zoom,
+  Space or the middle button drags to pan. The selection tool selects (⇧
+  adds), draws marquees, moves (⇧ constrains, ⌥ drags a copy), scales by
+  the eight handles (⇧ keeps proportions, ⌥ from the center), and rotates
+  just outside a corner (⇧ by 45°); double-click enters a group or edits
+  text. Direct selection drags anchor points and, once an anchor is
+  chosen, its handles (⌥ breaks a smooth point). Shape tools drag out a box
+  (⇧ square, ⌥ from the center; a click makes a 100 pt one). The pen clicks
+  corners and drags smooth points, closes on its first point, and Enter
+  or Escape ends an open path. The type tool clicks for point text, drags
+  for area text, or clicks into text to edit it; typing happens in an
+  overlay (`ai-text-editing`, input `ai-text-input`, `ai-text-caret`,
+  `ai-text-selection`), and Escape or a click outside ends it. The
+  eyedropper gives the selection the clicked object's fill and stroke.
+  The artboard tool chooses, moves (with the artwork on it), resizes, and
+  draws artboards; Delete deletes the chosen one. Image files dropped on
+  the canvas or pasted are placed (at most 1000 pt long).
+- **Shortcuts** (⌘ is Ctrl off macOS): ⌘Z/⇧⌘Z, ⌘C/⌘X/⌘V (pastes 10 pt
+  further each time), ⌘D duplicate, Delete, arrows nudge 1 pt (⇧ 10 pt),
+  ⌘A / ⇧⌘A select all / none, ⌘G / ⇧⌘G group / ungroup, ⌘7 / ⌥⌘7 make /
+  release clipping mask, ⌘] / ⌘[ forward / backward and ⇧⌘] / ⇧⌘[ front
+  / back, ⇧⌘O create outlines, ⌘Y outline view, ⌘0 fit artboard, ⌥⌘0 fit
+  all, ⌘1 actual size, ⌘+ / ⌘- zoom. While the editor has focus its keys
+  come before the app's; keys it does not use, and Escape with nothing to
+  deselect, stay the app's.
+
+The editor has a browser fixture that needs no backend. From `apps/web`
+(build the engine first with `just ensure-ai-engine-wasm`):
+
+```sh
+bunx vite --config src/features/block-ai/browser-test/vite.config.ts
+# http://127.0.0.1:3021/?sample
+```
+
+`?new` opens a blank document as the create menu makes it, `?sample` a
+sample built with the engine (an 800 × 600 artboard with a red rectangle,
+a blue circle, and the text "Hello" on "Layer 1", and an empty layer
+"Notes"), and `?file=<name>` a file from the directory named by
+`AI_CORPUS_DIR` (with a trailing slash); the header also opens a local
+`.ai`. Saves stay in memory (`?reload` reopens each one); `?readonly`
+opens it as a viewer would. `window.aiFixture` exposes `engine()`,
+`saves()`, `errors()`, `notices()`, `downloads()`, `fontRequests()`, and
+`rowsOf(bytes)`. `?collab` (with `&people=alice,bob`, the default, and
+`&sample` or `&file=`) shows several people side by side
+(`ai-person-<Name>` holds each editor), each with the real shared-document
+session over an in-page sync server; `window.aiFixture.collab` has
+`people()` (each `engine()`, `session()`, `saves()`, `status()`,
+`peers()`), `storeOutside()`, `reopen(name)`, `setReachable(bool)`, and
+`stored()`. The Playwright suite runs with
+`bunx playwright test --config src/features/block-ai/browser-test/playwright.config.ts`
+(`AI_BROWSER_PORT` picks another port than 3021; set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
+installed). The sections above were verified on this fixture; the
+`/app/ai` route itself needs a backend with an uploaded `.ai`.
+
+## Photoshop and Illustrator documents
+
+Uploaded `.psd` and `.psb` files are Photoshop documents (file types `psd`
+and `psb`, the second Photoshop's large document format) and `.ai` files are
+Illustrator documents (`ai`). All three are design files in the `vector`
+association, beside Figma designs, so a Photoshop document is never handled
+as a picture, despite its `image/vnd.adobe.photoshop` media type: the image
+block and image attachments for the agent skip it. The backend reads these
+documents with the Rust `psd_engine` and `ai_engine`, the same engines the
+browser editors run as WebAssembly.
+
+Macro AI reads them with `ReadPhotoshopDocument` and
+`ReadIllustratorDocument` (`ReadContent` returns the same description, and
+attaching one points the agent at its tool):
+
+- Photoshop: the canvas size, color mode, bit depth, and resolution, then
+  the layer tree from top to bottom with each layer's kind (pixels, group,
+  text, shape, fill, adjustment, or smart object), name, id, visibility,
+  opacity, blend mode, position, and size, and the text of text layers with
+  their font, size, and color (`psd_engine::describe::outline`).
+- Illustrator: the artboards with their names, positions, and sizes in
+  points, then the layer tree from top to bottom with each object's kind,
+  name, id, position, size, fill, and stroke, and the text of text objects
+  with their fonts (`ai_engine::describe::outline`).
+
+Descriptions stop at about 60,000 characters. The tools open files up to
+300 MB; a Photoshop document whose layers decode to more than 512 MB of
+pixels is reported as too large to read, and Illustrator files saved by
+version 8 or earlier (PostScript rather than PDF) as unreadable. The tools
+read the stored file and cannot edit these documents.
+
+Search indexes a document's layer and object names and the text of its text
+layers as one chunk, so content search finds a poster by its headline.
+Documents the engines cannot read (old or damaged files, or Photoshop
+documents beyond 256 MB of decoded pixels) are indexed by name only.
 
 ## Create and type
 
@@ -1991,10 +2387,10 @@ still follow normal CRDT collaboration semantics when they reconnect.
 
 ## HTML preview tabs
 
-HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
-the content, below the header, in both standalone desktop blocks and Drive
-detail views. Switch to Code to inspect or edit the source, then back to Render
-to see the current preview. Other code file types do not show this row.
+HTML documents show `Render` and `Code` inset tabs in the top bar in both
+standalone desktop blocks and Drive detail views. Switch to Code to inspect or
+edit the source, then back to Render to see the current preview. Other code file
+types do not show these tabs.
 
 ## Large-document undo checks
 

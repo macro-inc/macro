@@ -20,6 +20,7 @@ export enum GatewayService {
   EMAIL_SERVICE = 'EMAIL_SERVICE',
   MCP_SERVER = 'MCP_SERVER',
   DOCUMENT_COGNITION_SERVICE = 'DOCUMENT_COGNITION_SERVICE',
+  LEXICAL_SERVICE = 'LEXICAL_SERVICE',
 }
 
 /**
@@ -48,6 +49,7 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.MCP_SERVER]: 130,
   [GatewayService.DOCUMENT_COGNITION_SERVICE]: 120,
   [GatewayService.CALENDAR_SERVICE]: 140,
+  [GatewayService.LEXICAL_SERVICE]: 160,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 

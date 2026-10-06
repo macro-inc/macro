@@ -3,6 +3,7 @@ import type { AiPlanTier, PaidPlan } from '@service-auth/ai-billing-types';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { authKeys } from './keys';
 import { invalidateUserInfo } from './user-info';
 
@@ -63,7 +64,7 @@ export function useIncludedAiCentsByTier(): () => Partial<
   const plans = useAiBillingPlansQuery();
   return () =>
     Object.fromEntries(
-      (plans.isSuccess ? plans.data.plans : []).map((plan) => [
+      (queryReadyGate(plans) ? plans.data.plans : []).map((plan) => [
         plan.tier,
         plan.included_ai_cents_per_seat,
       ])

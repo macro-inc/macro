@@ -60,7 +60,7 @@ test('a new user signs up, connects everything, and starts the trial', async ({
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
   // Stripe returns on the success leg; the flow waits for the webhook's license.
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   const world = await fakeWorld(page);
   expect(world.viewer).toMatchObject({
     tutorialComplete: true,
@@ -84,12 +84,12 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Skip for now' }).click();
-  await page.getByRole('button', { name: 'Continue as Guest' }).last().click();
+  await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
   await expectLanded(page, 'Entered Macro at /channel/launch');
 });
 
-test('Guest continuation lives in the comparison below the trial offer', async ({
+test('Free, Pro, and Max appear below the unchanged trial offer', async ({
   page,
 }) => {
   await openFixture(page, '/?view=flow&next=/md/notes');
@@ -101,17 +101,69 @@ test('Guest continuation lives in the comparison below the trial offer', async (
   });
   await page.reload();
 
-  await page.getByRole('button', { name: 'Continue as Guest' }).first().click();
+  await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Choose what works for you.' })
+    page.getByRole('button', { name: 'Start 30 day trial' })
   ).toBeInViewport();
-  await expect(page.getByRole('table')).toContainText('Haiku');
-  await page.getByRole('button', { name: 'Continue as Guest' }).last().click();
+  const comparison = page.getByRole('table', {
+    name: 'Compare Free, Pro, and Max plans',
+  });
+  await expect(comparison).not.toBeInViewport();
+  await page
+    .getByRole('button', { name: 'Continue with Free' })
+    .first()
+    .click();
+  await expect(comparison).toBeInViewport();
+  for (const name of ['Free', 'Pro', 'Max']) {
+    await expect(
+      comparison.getByRole('columnheader', { name: new RegExp(`^${name}`) })
+    ).toBeVisible();
+  }
+  await expect(comparison).toContainText('10× usage');
+  await expect(comparison).not.toContainText('at cost');
+  await page.getByRole('button', { name: 'Continue with Pro' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Start 30 day trial' })
+  ).toBeInViewport();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .getByRole('button', { name: 'Continue with Free' })
+    .first()
+    .click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth
+    )
+  ).toBe(true);
+  await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
   await expectLanded(page, 'Entered Macro at /md/notes');
   expect(await fakeEvents(page)).toContainEqual({
     event: 'onboarding_v4_completed',
     data: expect.objectContaining({ plan: 'free' }),
+  });
+});
+
+test('Max checkout returns with a licensed account and no trial', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow');
+  await page.evaluate(() => {
+    sessionStorage.setItem(
+      'onboarding-flow-step',
+      JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
+    );
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Continue with Max' }).click();
+  await expectLanded(page, 'Entered Macro at /home');
+  expect((await fakeWorld(page)).viewer).toMatchObject({
+    tutorialComplete: true,
+    licensed: true,
+  });
+  expect(await fakeEvents(page)).toContainEqual({
+    event: 'onboarding_v4_completed',
+    data: expect.objectContaining({ plan: 'max' }),
   });
 });
 
@@ -151,7 +203,7 @@ test('an ineligible trial explains itself instead of charging', async ({
   await page.getByRole('button', { name: 'Start 30 day trial' }).click();
 
   await expect(page.getByRole('status', { name: 'Notifications' })).toHaveText(
-    message
+    'The 30-day trial is only available for your first Pro subscription'
   );
   await expect(
     page.getByRole('button', { name: 'Start 30 day trial' })
@@ -182,7 +234,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     page.getByRole('button', { name: 'Start 30 day trial' })
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'Claim your free months' }).click();
-  await expectLanded(page, 'Entered Macro at /getting-started');
+  await expectLanded(page, 'Entered Macro at /home');
   expect((await fakeWorld(page)).viewer?.licensed).toBe(true);
 });
 

@@ -366,6 +366,7 @@ pub fn project_soup_item<T>(
         | SoupItem::Call(_)
         | SoupItem::CalendarEvent(_)
         | SoupItem::CrmCompany(_)
+        | SoupItem::CrmContact(_)
         | SoupItem::ForeignEntity(_)
         | SoupItem::AgentSession(_)
         | SoupItem::Initiative(_)

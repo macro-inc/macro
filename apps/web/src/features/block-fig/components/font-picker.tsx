@@ -12,6 +12,7 @@ import { Layer } from '@ui';
 import {
   createMemo,
   createSignal,
+  createUniqueId,
   For,
   onCleanup,
   onMount,
@@ -22,8 +23,11 @@ import {
 const LIMIT = 150;
 
 function Row(props: {
+  id: string;
   family: string;
   selected: boolean;
+  active: boolean;
+  onActive: () => void;
   preview?: (family: string) => Promise<string | undefined>;
   onSelect: () => void;
 }) {
@@ -50,15 +54,19 @@ function Row(props: {
     <button
       ref={el}
       type="button"
+      id={props.id}
+      tabIndex={-1}
       role="option"
       aria-selected={props.selected}
+      data-active={props.active ? 'true' : undefined}
       data-testid="fig-font-option"
       data-family={props.family}
-      class="w-full truncate rounded px-2 py-1 text-left text-ink hover:bg-hover aria-selected:bg-hover"
+      class="w-full truncate rounded px-2 py-1.5 text-left text-ink hover:bg-hover aria-selected:font-medium data-[active=true]:bg-hover"
       style={{
         'font-family': face() ? `"${face()}", Inter, sans-serif` : undefined,
       }}
       onClick={() => props.onSelect()}
+      onPointerMove={props.onActive}
     >
       {props.family}
     </button>
@@ -80,6 +88,9 @@ export function FontPicker(props: {
 }) {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
+  const [active, setActive] = createSignal<string>();
+  const listId = createUniqueId();
+  let list!: HTMLDivElement;
   const matches = (family: string) =>
     family.toLowerCase().includes(query().trim().toLowerCase());
   const documentRows = createMemo(() => props.documentFamilies.filter(matches));
@@ -97,6 +108,30 @@ export function FontPicker(props: {
     setQuery('');
     props.onSelect(family);
   };
+  const rows = () => [...documentRows(), ...googleRows()];
+  const rowId = (family: string) => `${listId}-${encodeURIComponent(family)}`;
+  const navigate = (event: KeyboardEvent) => {
+    const families = rows();
+    if (families.length === 0) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      choose(active() ?? families[0]);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const current = families.indexOf(active() ?? '');
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      const next =
+        current < 0
+          ? direction > 0
+            ? 0
+            : families.length - 1
+          : (current + direction + families.length) % families.length;
+      setActive(families[next]);
+      list
+        .querySelector('[data-active="true"]')
+        ?.scrollIntoView({ block: 'nearest' });
+    }
+  };
   return (
     <Popover
       placement="left-start"
@@ -104,6 +139,7 @@ export function FontPicker(props: {
       open={open()}
       onOpenChange={(o) => {
         setOpen(o);
+        setActive(undefined);
         if (o) props.onOpen?.();
       }}
     >
@@ -127,7 +163,7 @@ export function FontPicker(props: {
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-modal flex max-h-96 w-64 flex-col rounded-xl border border-edge-muted bg-menu p-2 shadow-xl outline-none"
+            class="fig-editor-theme z-modal flex max-h-96 w-64 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
             aria-label="Fonts"
             data-testid="fig-font-picker"
             onKeyDown={(e: KeyboardEvent) => {
@@ -140,17 +176,26 @@ export function FontPicker(props: {
               placeholder="Search fonts"
               aria-label="Search fonts"
               data-testid="fig-font-search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={open()}
+              aria-controls={listId}
+              aria-activedescendant={active() ? rowId(active()!) : undefined}
               value={query()}
-              onInput={(e) => setQuery(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const first = documentRows()[0] ?? googleRows()[0];
-                  if (first) choose(first);
-                }
+              onInput={(e) => {
+                setQuery(e.currentTarget.value);
+                setActive(undefined);
               }}
+              onKeyDown={navigate}
               autofocus
             />
-            <div class="min-h-0 flex-1 overflow-y-auto" role="listbox">
+            <div
+              ref={list}
+              id={listId}
+              class="min-h-0 flex-1 overflow-y-auto"
+              role="listbox"
+              aria-label="Font families"
+            >
               <Show when={documentRows().length > 0}>
                 <div class="px-2 pt-1 pb-0.5 text-ink-muted text-xs">
                   In this file
@@ -158,8 +203,11 @@ export function FontPicker(props: {
                 <For each={documentRows()}>
                   {(f) => (
                     <Row
+                      id={rowId(f)}
                       family={f}
                       selected={f === props.value}
+                      active={f === active()}
+                      onActive={() => setActive(f)}
                       preview={props.preview}
                       onSelect={() => choose(f)}
                     />
@@ -173,8 +221,11 @@ export function FontPicker(props: {
                 <For each={googleRows()}>
                   {(f) => (
                     <Row
+                      id={rowId(f)}
                       family={f}
                       selected={f === props.value}
+                      active={f === active()}
+                      onActive={() => setActive(f)}
                       preview={props.preview}
                       onSelect={() => choose(f)}
                     />

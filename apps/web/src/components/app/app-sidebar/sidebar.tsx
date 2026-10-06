@@ -4,7 +4,6 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
@@ -38,7 +37,6 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import BellIcon from '@phosphor/bell.svg';
-import CompassIcon from '@phosphor/compass.svg';
 import HomeIcon from '@phosphor/house.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import ActivityIcon from '@phosphor/pulse.svg';
@@ -216,14 +214,12 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
-      gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
@@ -371,15 +367,6 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
-const GETTING_STARTED_LINK: SidebarItem = {
-  id: 'getting-started',
-  label: 'Getting Started',
-  href: '/getting-started',
-  icon: CompassIcon,
-  hotkey: 's',
-  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
-};
-
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
@@ -410,16 +397,12 @@ const REVIEWS_LINK: SidebarItem = {
 };
 
 /**
- * Assemble the ordered sidebar link list: the static links plus Getting
- * started and the flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
+ * Assemble the ordered sidebar link list: the static links plus the
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
- * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
- * passed in because this runs outside a component; when false the link is
- * fully absent — `g s` hotkey and command menu entry.
  */
 const buildSidebarLinks = (
-  showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
@@ -434,12 +417,8 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Getting started, Recent, and Activity follow it in that order.
+  // Home leads; Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (showGettingStarted) {
-    insertAfter(anchorId, GETTING_STARTED_LINK);
-    anchorId = 'getting-started';
-  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';

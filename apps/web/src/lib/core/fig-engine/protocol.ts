@@ -39,7 +39,12 @@ export type QueryMethod =
   | 'liftPlan';
 
 export type FigRequest =
-  | { id: number; kind: 'open'; bytes: ArrayBuffer }
+  | {
+      id: number;
+      kind: 'open';
+      bytes: ArrayBuffer;
+      module?: WebAssembly.Module;
+    }
   | { id: number; kind: 'openPage'; page: number }
   | {
       id: number;
@@ -89,7 +94,7 @@ export type FigRequest =
     }
   | { id: number; kind: 'collabChanges' }
   | { id: number; kind: 'save' }
-  | { id: number; kind: 'blank'; name: string }
+  | { id: number; kind: 'blank'; name: string; module?: WebAssembly.Module }
   | { id: number; kind: 'addImage'; hash: string; bytes: ArrayBuffer }
   | {
       id: number;

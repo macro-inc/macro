@@ -13,6 +13,7 @@ pub mod citations;
 pub mod coding_agents;
 pub mod connected_toolsets;
 pub mod databases;
+pub mod deferred_tools;
 pub mod do_not;
 pub mod document_content_links;
 pub mod email;

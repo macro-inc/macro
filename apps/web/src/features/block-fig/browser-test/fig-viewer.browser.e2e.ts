@@ -68,13 +68,16 @@ async function canvasCenter(page: Page) {
 
 /** Selects a layer through the layer search, then zooms to it. */
 async function focusLayer(page: Page, name: string) {
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill(name);
   await page
     .getByTestId('fig-search-hit')
     .filter({ hasText: name })
     .first()
     .click();
-  await page.getByTestId('fig-layer-search').fill('');
+  await page.getByRole('button', { name: 'Close search', exact: true }).click();
+  await expect(page.getByTestId('fig-design-panel')).toContainText(name);
   await page.getByTestId('fig-canvas').focus();
   await page.keyboard.press('Shift+2');
 }
@@ -315,7 +318,7 @@ test('moves layers lifted off the page, one edit at the drop', async ({
   await expect.poll(() => color(120, 150)).toBe('other');
   // The move is one step.
   await canvas.focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(page.getByTestId('fig-field-x')).toHaveValue('100');
   await expect.poll(() => color(120, 150)).toBe('red');
   await expect
@@ -385,15 +388,15 @@ test('undo and redo bring back the selection', async ({ page }) => {
       )
     );
   await canvas.focus();
-  await page.keyboard.press('Control+d');
+  await page.keyboard.press('ControlOrMeta+d');
   await expect(rows).toHaveCount(2);
   await expect.poll(selectedRows).toEqual([0]);
   // As in Figma, undoing the duplicate selects the original again …
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(rows).toHaveCount(1);
   await expect.poll(selectedRows).toEqual([0]);
   // … and redoing it, the copy.
-  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect(rows).toHaveCount(2);
   await expect.poll(selectedRows).toEqual([0]);
   // Undoing a nudge of a layer no longer selected selects it.
@@ -403,7 +406,7 @@ test('undo and redo bring back the selection', async ({ page }) => {
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Escape');
   await expect.poll(selectedRows).toEqual([]);
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(selectedRows).toEqual([1]);
 });
 
@@ -418,18 +421,21 @@ test('lays out with auto layout', async ({ page }) => {
   await dragOnCanvas(page, [200, 100], [260, 160]);
   await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
   await canvas.focus();
-  await page.keyboard.press('Control+a');
-  await expect(page.getByText('2 layers selected')).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(page.getByTestId('fig-design-panel')).toContainText(
+    '2 layers selected'
+  );
   await page.keyboard.press('Shift+A');
   await expect(page.getByTestId('fig-layer-row').first()).toHaveText('Frame');
   // Side by side with the 60 px gap between them, hugging both.
-  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('HUG');
-  await expect(page.getByTestId('fig-sizing-h')).toHaveValue('HUG');
+  await expect(page.getByTestId('fig-sizing-w')).toHaveText('Hug');
+  await expect(page.getByTestId('fig-sizing-h')).toHaveText('Hug');
   await expect(page.getByTestId('fig-field-w')).toHaveValue('160');
-  // Dragging the first square past the second swaps them.
+  // Drop past the second square, inside the frame, to reorder. Dropping
+  // outside the frame now reparents the square onto the page.
   await canvas.focus();
   await page.keyboard.press('Escape');
-  await dragOnCanvas(page, [120, 120], [262, 122]);
+  await dragOnCanvas(page, [120, 120], [252, 122]);
   await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
   await expect(page.getByTestId('fig-field-x')).toHaveValue('120');
   await expect(page.getByTestId('fig-field-y')).toHaveValue('0');
@@ -446,10 +452,10 @@ test('lays out with auto layout', async ({ page }) => {
   // Fixing the width and filling it with a child.
   await page.getByTestId('fig-field-w').fill('300');
   await page.getByTestId('fig-field-w').press('Enter');
-  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('FIXED');
+  await expect(page.getByTestId('fig-sizing-w')).toHaveText('Fixed');
   await canvas.focus();
-  await page.keyboard.press('Control+z');
-  await expect(page.getByTestId('fig-sizing-w')).toHaveValue('HUG');
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.getByTestId('fig-sizing-w')).toHaveText('Hug');
   await expect(page.getByTestId('fig-field-w')).toHaveValue('150');
 });
 
@@ -464,7 +470,8 @@ test('keeps layers pinned with constraints', async ({ page }) => {
   await dragOnCanvas(page, [250, 100], [300, 150]);
   await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
   await expect(page.getByTestId('fig-field-x')).toHaveValue('200');
-  await page.getByTestId('fig-constraint-h').selectOption('MAX');
+  await page.getByTestId('fig-constraint-h').click();
+  await page.getByRole('option', { name: 'Right', exact: true }).click();
   await canvas.focus();
   await page.keyboard.press('Shift+Enter');
   await expect(page.getByTestId('fig-name')).toHaveValue('Frame 1');
@@ -490,7 +497,7 @@ test('makes components, places instances, and detaches them', async ({
   await canvas.focus();
   await page.keyboard.press('Shift+Enter');
   await expect(page.getByTestId('fig-name')).toHaveValue('Frame 1');
-  await page.keyboard.press('Control+Alt+k');
+  await page.keyboard.press('ControlOrMeta+Alt+k');
   await expect(page.getByTestId('fig-design-panel')).toContainText('Component');
   await page.getByTestId('fig-tab-assets').click();
   await page.getByTestId('fig-asset').filter({ hasText: 'Frame 1' }).click();
@@ -516,7 +523,7 @@ test('makes components, places instances, and detaches them', async ({
     'Frame 1',
   ]);
   await canvas.focus();
-  await page.keyboard.press('Control+Alt+b');
+  await page.keyboard.press('ControlOrMeta+Alt+b');
   await expect(page.getByTestId('fig-design-panel')).not.toContainText(
     'of Frame 1'
   );
@@ -529,11 +536,13 @@ test('adds and edits shadows', async ({ page }) => {
   await dragOnCanvas(page, [100, 100], [200, 200]);
   await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 1');
   await page.getByRole('button', { name: 'Add effects' }).click();
+  await page.getByTestId('fig-effect-0-settings').click();
   await expect(page.getByTestId('fig-effect-0-y')).toHaveValue('4');
   await page.getByTestId('fig-effect-0-blur').fill('20');
   await page.getByTestId('fig-effect-0-blur').press('Enter');
   await expect(page.getByTestId('fig-effect-0-blur')).toHaveValue('20');
-  await page.getByTestId('fig-effect-0-type').selectOption('LAYER_BLUR');
+  await page.getByTestId('fig-effect-0-type').click();
+  await page.getByRole('option', { name: 'Layer blur', exact: true }).click();
   await expect(page.getByTestId('fig-effect-0-y')).toBeHidden();
 });
 
@@ -548,8 +557,10 @@ test('resizes several layers and rotates one', async ({ page }) => {
   await dragOnCanvas(page, [200, 100], [260, 160]);
   await expect(page.getByTestId('fig-name')).toHaveValue('Rectangle 2');
   await canvas.focus();
-  await page.keyboard.press('Control+a');
-  await expect(page.getByText('2 layers selected')).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(page.getByTestId('fig-design-panel')).toContainText(
+    '2 layers selected'
+  );
   // The selection box spans 100–260 × 100–160; its corner doubles it.
   await dragOnCanvas(page, [260, 160], [420, 220]);
   await page
@@ -628,9 +639,9 @@ test('edits fills from the design panel and undoes', async ({ page }) => {
   };
   await expect.poll(red).toBe(true);
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(red).toBe(false);
-  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('ControlOrMeta+Shift+z');
   await expect.poll(red).toBe(true);
 });
 
@@ -664,7 +675,8 @@ test('styles text from the design panel', async ({ page }) => {
   await page.keyboard.press('Escape');
   const width = page.getByTestId('fig-field-w');
   const regular = Number(await width.inputValue());
-  await page.getByTestId('fig-font-weight').selectOption('700');
+  await page.getByTestId('fig-font-weight').click();
+  await page.getByRole('option', { name: 'Bold', exact: true }).click();
   await expect
     .poll(async () => Number(await width.inputValue()))
     .toBeGreaterThan(regular);
@@ -673,12 +685,14 @@ test('styles text from the design panel', async ({ page }) => {
   await lineHeight.fill('200%');
   await lineHeight.press('Enter');
   await expect(page.getByTestId('fig-field-h')).toHaveValue('24');
+  await page.getByTestId('fig-type-settings').click();
   await page.getByTestId('fig-underline').click();
   await expect(page.getByTestId('fig-underline')).toHaveAttribute(
     'aria-pressed',
     'true'
   );
-  await page.getByTestId('fig-text-case').selectOption('UPPER');
+  await page.getByTestId('fig-text-case').click();
+  await page.getByRole('option', { name: 'Uppercase', exact: true }).click();
   await expect(page.getByTestId('fig-text-content')).toHaveText('Type');
 });
 

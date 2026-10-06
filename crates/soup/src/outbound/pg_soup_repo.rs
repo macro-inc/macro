@@ -423,6 +423,7 @@ pub(crate) async fn populate_properties(
                 SoupItem::EmailThread(x) => properties_map.get(&x.thread.id.to_string()),
                 SoupItem::Chat(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::CrmCompany(x) => properties_map.get(&x.id.to_string()),
+                SoupItem::CrmContact(_) => None,
                 SoupItem::Call(x) => properties_map.get(&x.call_id.to_string()),
                 SoupItem::CalendarEvent(x) => properties_map.get(&x.id.to_string()),
                 SoupItem::Channel(_)

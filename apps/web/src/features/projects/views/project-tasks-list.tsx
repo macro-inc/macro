@@ -24,7 +24,6 @@ export type ProjectTasksListProps = Omit<
   projectName: string;
   onCreateTask?: () => void;
   addTasksAction?: JSX.Element;
-  navigation?: JSX.Element;
 };
 
 /** Embeds the actual Tasks list, including its controllers, menus and row editors. */
@@ -71,7 +70,6 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
-        {props.navigation}
         <ProjectTaskSearch
           projectName={props.projectName}
           value={state.search}

@@ -23,19 +23,22 @@ import type {
 import {
   createEffect,
   createMemo,
+  createSignal,
   type JSX,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
+import { FigLoadingStatus } from '../components/fig-opening';
 import {
   drawOverlay,
+  type FrameLabel,
   type OverlayModel,
   type VectorOverlay,
 } from '../components/overlay';
 import { PeerCursors } from '../components/peer-presence';
-import { type Point, screenToPage } from '../core/camera';
+import { type Point, pageToScreen, screenToPage } from '../core/camera';
 import { type SnapLines, snapResize } from '../core/layout-grid';
 import { offsetRect } from '../core/lift';
 import { measure } from '../core/measure';
@@ -113,7 +116,7 @@ type Pressed = { row: LayerRow; wasSelected: boolean } | undefined;
 /** A move drag: offsets from where the layers started, then the drop. */
 interface Mover {
   to(dx: number, dy: number): void;
-  end(): Promise<void>;
+  end(at?: Point): Promise<void>;
 }
 
 /** Layers lifted when pressed, before a drag starts (see `startMove`). */
@@ -280,9 +283,42 @@ export function ViewerCanvas(props: {
   children?: JSX.Element;
 }) {
   const viewer = props.viewer;
+  const [paintedPage, setPaintedPage] = createSignal<number>();
   let host!: HTMLDivElement;
   let tileCanvas!: HTMLCanvasElement;
   let overlayCanvas!: HTMLCanvasElement;
+  let frameLabels: FrameLabel[] = [];
+  let labelsPage: number | undefined;
+  const [renamingFrame, setRenamingFrame] = createSignal<
+    FrameLabel & { page: number }
+  >();
+  const frameLabelAt = (p: Point) => {
+    if (labelsPage !== viewer.page()) return;
+    // Labels painted last take precedence where their text overlaps.
+    return frameLabels.findLast(
+      ({ rect }) =>
+        p.x >= rect.x &&
+        p.x <= rect.x + rect.w &&
+        p.y >= rect.y &&
+        p.y <= rect.y + rect.h
+    );
+  };
+  const finishFrameRename = (name?: string) => {
+    const label = renamingFrame();
+    setRenamingFrame(undefined);
+    const trimmed = name?.trim();
+    if (
+      !label ||
+      label.page !== viewer.page() ||
+      !trimmed ||
+      trimmed === label.frame.name ||
+      !props.editor?.enabled()
+    )
+      return;
+    void props.editor.apply([
+      { op: 'set', ids: [label.frame.id], props: { name: trimmed } },
+    ]);
+  };
   const [dpr, setDpr] = (() => {
     let value =
       typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
@@ -297,12 +333,17 @@ export function ViewerCanvas(props: {
   })();
 
   let frame: number | undefined;
-  const requestDraw = () => {
+  let tilesDirty = true;
+  const requestOverlayDraw = () => {
     if (frame !== undefined) return;
     frame = requestAnimationFrame(() => {
       frame = undefined;
       draw();
     });
+  };
+  const requestDraw = () => {
+    tilesDirty = true;
+    requestOverlayDraw();
   };
 
   const compositor = createTileCompositor({
@@ -347,6 +388,7 @@ export function ViewerCanvas(props: {
           compositor.setContent(viewer.contentBounds());
         } else {
           // A new page, view, or canvas color: render it afresh.
+          setPaintedPage(undefined);
           shownPage = { page, outline, background: color };
           compositor.setPage({
             page,
@@ -511,17 +553,25 @@ export function ViewerCanvas(props: {
         () => props.aids?.model(),
         () => props.devMode?.(),
       ],
-      requestDraw
+      requestOverlayDraw
     )
   );
 
   function draw() {
     const v = view();
     if (v.viewport.w <= 0) return;
-    const ctx = tileCanvas.getContext('2d', { alpha: false });
-    if (ctx) compositor.draw(ctx, v);
+    // Hover, selection, guides and remote cursors live on the overlay.
+    // Keep the already-composited page when only those have changed.
+    if (tilesDirty) {
+      const ctx = tileCanvas.getContext('2d', { alpha: false });
+      if (ctx && compositor.draw(ctx, v)) setPaintedPage(viewer.page());
+      tilesDirty = false;
+    }
     const octx = overlayCanvas.getContext('2d');
-    if (octx) drawOverlay(octx, overlayModel());
+    if (octx) {
+      frameLabels = drawOverlay(octx, overlayModel());
+      labelsPage = viewer.page();
+    }
   }
 
   // ---- size --------------------------------------------------------------
@@ -719,7 +769,7 @@ export function ViewerCanvas(props: {
     }
     if (editing() && tool === 'pencil' && editor) {
       drag = { kind: 'pencil', points: [pageAt(p)] };
-      requestDraw();
+      requestOverlayDraw();
       return;
     }
     const edit = editor?.vectorEdit();
@@ -747,7 +797,8 @@ export function ViewerCanvas(props: {
       drag = { kind: 'create', tool, start: p, current: p };
       return;
     }
-    const handle = handleAt(p);
+    const label = frameLabelAt(p);
+    const handle = label ? undefined : handleAt(p);
     const info = props.info?.();
     const bounds = viewer.selectionBounds();
     if (handle && bounds && props.editor) {
@@ -764,7 +815,7 @@ export function ViewerCanvas(props: {
       };
       return;
     }
-    if (rotateAt(p) && info && bounds && props.editor) {
+    if (!label && rotateAt(p) && info && bounds && props.editor) {
       const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
       const at = pageAt(p);
       drag = {
@@ -777,10 +828,12 @@ export function ViewerCanvas(props: {
       return;
     }
     const additive = e.shiftKey;
-    const pressed = viewer.pressAt(p, {
-      deep: IS_MAC ? e.metaKey : e.ctrlKey,
-      additive,
-    });
+    const pressed = label
+      ? pressFrameLabel(label, additive)
+      : viewer.pressAt(p, {
+          deep: IS_MAC ? e.metaKey : e.ctrlKey,
+          additive,
+        });
     const press: Extract<Drag, { kind: 'press' }> = {
       kind: 'press',
       start: p,
@@ -800,6 +853,17 @@ export function ViewerCanvas(props: {
           press.prepared = prepareMove(ids);
       }
     });
+  };
+
+  const pressFrameLabel = async (
+    label: FrameLabel,
+    additive: boolean
+  ): Promise<Pressed> => {
+    const id = label.frame.id;
+    const wasSelected = viewer.selected().some((row) => row.id === id);
+    if (!wasSelected || additive) await viewer.selectIds([id], additive);
+    const [row] = await props.engine.rows(viewer.page(), [id]);
+    return row ? { row, wasSelected } : undefined;
   };
 
   /**
@@ -875,6 +939,7 @@ export function ViewerCanvas(props: {
         requestDraw();
         return;
       }
+      compositor.beginInteractive();
       stepwise = editor.startMove(ids);
       if (offset.x !== 0 || offset.y !== 0) stepwise.to(offset.x, offset.y);
     })();
@@ -890,15 +955,23 @@ export function ViewerCanvas(props: {
           requestDraw();
         }
       },
-      end() {
+      end(at?: Point) {
         const done = (async () => {
           await decided;
-          if (stepwise) return stepwise.end();
+          if (stepwise) {
+            try {
+              await stepwise.end(at);
+            } finally {
+              compositor.endInteractive();
+              requestDraw();
+            }
+            return;
+          }
           if (!follower) return;
           compositor.freezeLift();
           let moved: Point | null = null;
           try {
-            moved = await follower.end();
+            moved = await follower.end(at);
           } finally {
             // Down once the page shows the move (at once if it did not
             // apply); the selection box lands with the edit.
@@ -936,7 +1009,7 @@ export function ViewerCanvas(props: {
     // The pointer came up while this was starting (a copy being made, or
     // the press still resolving): the move ends where it got to.
     if (drag !== press) {
-      void press.mover.end();
+      void press.mover.end(pageAt(press.current));
       return;
     }
     if (start) {
@@ -973,7 +1046,7 @@ export function ViewerCanvas(props: {
       dx = constrain && dx === 0 ? 0 : Math.round(snapped.dx);
       dy = constrain && dy === 0 ? 0 : Math.round(snapped.dy);
       guides = snapped.guides;
-      requestDraw();
+      requestOverlayDraw();
     }
     press.mover.to(dx, dy);
   };
@@ -984,11 +1057,16 @@ export function ViewerCanvas(props: {
     if (e.pointerType !== 'touch') props.onPointer?.(pageAt(p));
     if (!drag && editing() && viewer.tool() === 'pen') {
       penCursor = pageAt(p);
-      requestDraw();
+      requestOverlayDraw();
       return;
     }
     if (!drag) {
       if (e.pointerType !== 'touch' && !panning()) {
+        if (frameLabelAt(p) && viewer.tool() === 'move') {
+          setCursorOverride('default');
+          hoverAt(undefined);
+          return;
+        }
         const handle = handleAt(p);
         setCursorOverride(
           handle
@@ -1017,19 +1095,19 @@ export function ViewerCanvas(props: {
       if (isLineTool(drag.tool))
         linePreview = [drag.start, lineEnd(drag.start, p, e.shiftKey)];
       else marquee = shapeRect(drag.start, p, e.shiftKey);
-      requestDraw();
+      requestOverlayDraw();
     } else if (drag.kind === 'pen') {
       props.editor?.penHandle(
         dragHandle(drag.start, pageAt(p), PEN_DRAG / viewer.camera().zoom)
       );
-      requestDraw();
+      requestOverlayDraw();
     } else if (drag.kind === 'pencil') {
       const at = pageAt(p);
       const last = drag.points[drag.points.length - 1];
       // A point per screen pixel or so is plenty to smooth.
       if (Math.hypot(at.x - last.x, at.y - last.y) * viewer.camera().zoom >= 1)
         drag.points.push(at);
-      requestDraw();
+      requestOverlayDraw();
     } else if (drag.kind === 'vector') {
       const edit = props.editor?.vectorEdit();
       if (edit) {
@@ -1083,7 +1161,7 @@ export function ViewerCanvas(props: {
           w: Math.abs(p.x - press.start.x),
           h: Math.abs(p.y - press.start.y),
         };
-        requestDraw();
+        requestOverlayDraw();
       } else movePress(press, p, e.shiftKey);
     }
   };
@@ -1152,14 +1230,14 @@ export function ViewerCanvas(props: {
     if (ended.kind === 'create') {
       marquee = undefined;
       linePreview = undefined;
-      requestDraw();
+      requestOverlayDraw();
       void finishCreate(ended, e.shiftKey);
     } else if (ended.kind === 'vector') {
       void ended.mover.end();
     } else if (ended.kind === 'pen') {
-      requestDraw();
+      requestOverlayDraw();
     } else if (ended.kind === 'pencil') {
-      requestDraw();
+      requestOverlayDraw();
       void props.editor?.pencilFinish(
         ended.points,
         PENCIL_TOLERANCE / viewer.camera().zoom
@@ -1174,8 +1252,8 @@ export function ViewerCanvas(props: {
       if (!ended.mover) dropPrepared(ended.prepared);
       if (ended.mover) {
         guides = [];
-        requestDraw();
-        void ended.mover.end();
+        requestOverlayDraw();
+        void ended.mover.end(pageAt(local(e)));
       } else if (ended.marquee && marquee) {
         const c = viewer.camera();
         const a = screenToPage(c, { x: marquee.x, y: marquee.y });
@@ -1184,7 +1262,7 @@ export function ViewerCanvas(props: {
           e.shiftKey
         );
         marquee = undefined;
-        requestDraw();
+        requestOverlayDraw();
       } else if (!ended.active) {
         // A click on one layer of a multi-selection selects just it.
         void ended.pressed.then((r) => {
@@ -1200,6 +1278,13 @@ export function ViewerCanvas(props: {
     if (panning() || isShapeTool(tool) || tool === 'pen' || tool === 'pencil')
       return;
     if (props.editor?.vectorEdit()) return;
+    const label = frameLabelAt(local(e));
+    if (label) {
+      await viewer.selectIds([label.frame.id]);
+      if (editing() && !label.frame.id.startsWith('I'))
+        setRenamingFrame({ ...label, page: viewer.page() });
+      return;
+    }
     const before = viewer.selected().map((s) => s.id);
     await viewer.clickAt(local(e), {
       deep: false,
@@ -1322,6 +1407,46 @@ export function ViewerCanvas(props: {
         ref={overlayCanvas}
         class="pointer-events-none absolute inset-0 size-full"
       />
+      <Show when={renamingFrame()} keyed>
+        {(label) => (
+          <input
+            ref={(el) =>
+              queueMicrotask(() => {
+                el.focus();
+                el.select();
+              })
+            }
+            aria-label="Frame name"
+            data-testid="fig-frame-rename"
+            class="absolute z-10 h-5 rounded-sm bg-input px-1 text-[11px] text-ink outline outline-1 outline-accent"
+            style={{
+              left: `${pageToScreen(viewer.camera(), label.frame.bounds).x - 4}px`,
+              top: `${pageToScreen(viewer.camera(), label.frame.bounds).y - 21}px`,
+              width: `${Math.max(80, label.rect.w + 16)}px`,
+            }}
+            value={label.frame.name}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerMove={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+            onDblClick={(e) => e.stopPropagation()}
+            onBlur={(e) => finishFrameRename(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.isComposing) return;
+              if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault();
+                finishFrameRename(
+                  e.key === 'Enter' ? e.currentTarget.value : undefined
+                );
+                host.focus({ preventScroll: true });
+              }
+            }}
+          />
+        )}
+      </Show>
+      <Show when={paintedPage() !== viewer.page()}>
+        <FigLoadingStatus />
+      </Show>
       <Show when={props.peers}>
         {(peers) => <PeerCursors peers={peers()()} camera={viewer.camera()} />}
       </Show>

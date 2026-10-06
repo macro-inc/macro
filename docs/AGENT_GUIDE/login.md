@@ -18,6 +18,15 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Temporary open signup in Develop
+
+Once the temporary authentication-service override is deployed, Develop accepts
+new accounts with any email address regardless of signup allowlist membership or
+the configured bypass flag. Verify with an authorized test account outside
+`macro.com` that is absent from the allowlist. Email verification and provider
+sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
+for restoring allowlist enforcement.
+
 ## Hosted-dev proxy SSO
 
 On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
@@ -94,7 +103,10 @@ New desktop users enter the same flow from
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
-interests and security. No account is required for these slides. Below the color
+interests and security. No account is required for these slides. The signed-out
+page should remain stable after the session check returns
+401; it must not alternate with the loading screen or reset a selected color.
+Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Connect work email uses Google sign-up to create the Macro account and link
 the primary inbox. This step offers Google sign-up only, with no alternate email
@@ -103,7 +115,7 @@ redirect; after authentication the accent is saved to the user's theme and setup
 resumes at work email. Regular `/app/login` retains the direct sign-in screen.
 
 The steps are workspace color, feature interests, security, work Google account,
-personal Google account, tools, team, and the trial offer. Color selection forks
+personal Google account, tools, team, and plan selection. Color selection forks
 the default Macro Light or Macro Dark theme for the current mode and pins the
 custom accent palette; it does not modify a built-in theme. Interests are visual
 preferences only. Security and Google steps have a Read more section below the fold.
@@ -115,18 +127,40 @@ Tools use the same Pipedream catalog and connection UI as Settings. Search, load
 more, cancel/retry connection, and confirm connected checks persist on return.
 Team setup retains existing membership, invite acceptance, domain suggestions,
 and editable invite recipients; submitting the form sends real invitations.
+On the create-team form, type a workspace name and edit a teammate address,
+then allow onboarding/contacts queries to refresh. The same inputs must retain
+their values and focus as suggestions arrive or a background request fails.
+Pending queries must show local loading states without suspending the flow.
 
-The trial offer contains no card fields or wallet buttons. Its primary button
-requests an automatic 30-day Premium trial through Stripe Checkout; no coupon
-code is required. Stripe collects the payment method for billing after the trial.
-Only a customer's first subscription qualifies, including canceled subscriptions
-in that check. Ineligible trial requests show an error instead of opening an
-immediately paid checkout. Standard purchases retain their existing billing terms.
-Cancellation returns to this step. A successful return
-polls the server's license state, completes onboarding, and enters the app without
-an extra confirmation click. A pending webhook shows a retryable confirmation
-state. The Guest scroll cue opens a comparison with a separate Guest continuation.
-Both completion paths preserve an original `next` destination. Old saved email,
+Members with an active or trialing license, including a license from their team,
+finish directly from the team step without visiting the plan page. The Continue
+button reads "Opening your workspace…" while saving; a failed save leaves the
+team step available to retry. Checkout returns still use the plan step to confirm
+payment. Session refreshes must preserve the mounted onboarding flow so
+completion finishes instead of repeatedly flashing or restarting.
+
+Finishing setup saves the onboarding record before marking the tutorial complete.
+The confirmed tutorial save updates the session cache before leaving. A successful
+finish must not show "Couldn't finish setup — please try again", including when
+a background session refresh overlaps it.
+
+The final screen keeps the “Free Claude & GPT for 30 days” headline and trial
+button above the fold. The “Continue with Free” scroll cue opens the pricing grid
+below, comparing Free, Pro, and Max. The grid loads monthly subscription prices
+from the billing catalog and describes Max as 10× Pro usage, without displaying
+dollar-denominated included AI allowances. Free completes onboarding without a
+card. Pro returns to the trial offer; Max starts standard paid checkout.
+The trial button requests 30 days free through Stripe Checkout, with no coupon
+required. Stripe collects the payment method for billing after the trial. Only a
+customer's first subscription qualifies, including canceled subscriptions in that
+check. Ineligible requests show an error instead of opening an immediately paid
+checkout. Invite promotions retain their own offer and terms.
+Cancellation returns to this step. A successful return polls the server's license
+state, completes onboarding, and enters the app without an extra confirmation
+click. A pending webhook shows a retryable confirmation state. If the catalog
+cannot load, Free remains available, Pro still returns to the trial offer, and
+Max checkout stays disabled until prices can be loaded with the retry action.
+Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
 
 ## Public onboarding preview

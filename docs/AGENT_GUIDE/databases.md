@@ -58,6 +58,10 @@ PostHog unless the variable was set when it was built. With the flag off:
 
 ## Properties and records
 
+An embedded records editor can allow cell edits while its host controls the
+schema. In that case, column creation and schema actions are absent; record
+editing still works. The standalone database app keeps its full column controls.
+
 Use **Add column** immediately after the table’s headers. It creates an **Unnamed**
 Text column (**Unnamed 2**, and so on if that name exists), selects its name in the
 header, and lets you type immediately. Enter saves; Escape keeps the default name.
@@ -116,6 +120,8 @@ focused (**Search or create…**). Typing filters the options; when the typed na
 not an option yet, a **Create “…”** row adds it, picks it, and keeps focus (on the
 cell for a single select, in the search for a multi-select, which stays open). Arrow
 keys move through the rows and Enter picks; **Clear value** empties the cell.
+From a freshly opened picker, Down starts at the first row and Up starts at the
+last; both wrap around at the ends.
 Multi-select pickers toggle each option and keep the others.
 
 Each option row has a **⋯** button (`Edit <option>`) that opens the option editor:
@@ -158,7 +164,9 @@ skipped. Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
 Number cells display thousands separators (for example, `100,000`); opening an
-editor shows the raw number for editing.
+editor shows the raw number for editing. Invalid numbers and integers outside the
+safe integer range stay in the editor with **Enter a valid number** instead of
+saving a rounded value. Signed decimals and scientific notation remain supported.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**

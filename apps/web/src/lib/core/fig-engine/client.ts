@@ -2,12 +2,13 @@
  * The `.fig` engine as the app calls it: async methods, workers behind them.
  *
  * Each open file gets a primary worker, which answers queries (layers, hit
- * tests, properties) and renders until helpers are ready, plus raster
+ * tests, properties), plus raster
  * helpers that open the same file and rasterize tiles in parallel. Workers
  * are terminated when the file is closed, which returns their memory (wasm
  * memory never shrinks while a worker lives).
  */
 
+import { compiledFigModule } from './compiled-module';
 import type { CollectionInfo, DesignInfo, StyleInfo } from './design-types';
 import type {
   Exportable,
@@ -192,7 +193,8 @@ export class FigEngine {
   static async blank(name: string): Promise<Uint8Array<ArrayBuffer>> {
     const worker = new EngineWorker(() => {});
     try {
-      const r = await worker.request({ kind: 'blank', name });
+      const module = await compiledFigModule();
+      const r = await worker.request({ kind: 'blank', name, module });
       if (r.kind !== 'saved') throw new Error('unexpected response');
       return new Uint8Array(r.bytes);
     } finally {
@@ -208,15 +210,17 @@ export class FigEngine {
     let engine: FigEngine | undefined;
     const primary = new EngineWorker((e) => engine?.onFailure?.(e));
     try {
+      const module = await compiledFigModule();
       const copy = bytes.slice(0);
-      const response = await primary.request({ kind: 'open', bytes: copy }, [
-        copy,
-      ]);
+      const response = await primary.request(
+        { kind: 'open', bytes: copy, module },
+        [copy]
+      );
       if (response.kind !== 'open') throw new Error('unexpected response');
       engine = new FigEngine(primary, response.summary);
       engine.onFailure = options.onFailure;
       const helpers = options.helpers ?? helperCount(bytes.byteLength);
-      for (let i = 0; i < helpers; i++) engine.startHelper(bytes);
+      for (let i = 0; i < helpers; i++) engine.startHelper(bytes, module);
       return engine;
     } catch (error) {
       primary.terminate();
@@ -224,7 +228,7 @@ export class FigEngine {
     }
   }
 
-  private startHelper(bytes: ArrayBuffer) {
+  private startHelper(bytes: ArrayBuffer, module: WebAssembly.Module) {
     const helper = new EngineWorker(() => {
       const at = this.helpers.indexOf(helper);
       if (at >= 0) this.helpers.splice(at, 1);
@@ -235,7 +239,7 @@ export class FigEngine {
     this.starting.add(helper);
     const copy = bytes.slice(0);
     helper
-      .request({ kind: 'open', bytes: copy }, [copy])
+      .request({ kind: 'open', bytes: copy, module }, [copy])
       .then(() => {
         this.starting.delete(helper);
         if (this.closed) helper.terminate();
@@ -265,7 +269,11 @@ export class FigEngine {
   /** Queues a tile render on the least busy worker. */
   render(tile: TileRequest): PendingTile {
     const live = this.helpers.filter((h) => !h.dead);
-    const pool = live.length > 0 ? live : [this.primary];
+    // Helpers accept work behind their open request. Do not fill the primary
+    // with slow raster jobs while they start: it must answer pointer queries.
+    const opening = [...this.starting].filter((h) => !h.dead);
+    const pool =
+      live.length > 0 ? live : opening.length > 0 ? opening : [this.primary];
     const worker = pool.reduce((a, b) => (b.renders < a.renders ? b : a));
     const id = nextId++;
     worker.renders++;

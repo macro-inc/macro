@@ -1,4 +1,3 @@
-import LogoIcon from '@icon/macro-logo.svg';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
@@ -6,7 +5,7 @@ import {
   focusStepHeading,
 } from '../components/motion/step-change';
 import { OnboardingShell } from '../components/onboarding-shell';
-import { PlanComparison } from '../components/plan-comparison';
+import { StepFallback } from '../components/step-fallback';
 import { OnboardingTrustDetails } from '../components/trust-details';
 import { useOnboardingContext } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
@@ -20,22 +19,11 @@ import {
 import { createFlowFinish } from '../primitives/flow-finish';
 import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
+import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
 import { ToolsStep } from './tools-step';
-
-function StepFallback() {
-  return (
-    <div
-      role="status"
-      aria-label="Loading setup"
-      class="flex justify-center py-10"
-    >
-      <LogoIcon class="size-6 animate-pulse text-ink/30" />
-    </div>
-  );
-}
 
 /** The signed-in onboarding steps, from the workspace slides to the trial offer. */
 export function OnboardingFlowView(props: {
@@ -107,11 +95,32 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
-  const advance = (outcome: StepOutcome = 'completed') =>
-    goTo(flow.leave(outcome));
+  const advance = (outcome: StepOutcome = 'completed') => {
+    if (finish.finishing()) return;
+    const next = flow.leave(outcome);
+    const viewer = context.viewer();
+    if (
+      step() === 'team' &&
+      viewer.t === 'signed-in' &&
+      viewer.viewer.licensed
+    ) {
+      void finish.finishPremium();
+      return;
+    }
+    goTo(next);
+  };
   const viewerEmail = () => {
     const viewer = context.viewer();
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
+  };
+  const showPlanOffer = () => {
+    const viewer = context.viewer();
+    return (
+      step() === 'plan' &&
+      props.checkoutReturn?.t !== 'success' &&
+      viewer.t === 'signed-in' &&
+      !viewer.viewer.licensed
+    );
   };
   const back = () => {
     const current = step();
@@ -133,13 +142,16 @@ export function OnboardingFlowView(props: {
           )}
         </Show>
       }
-      explainerLabel={step() === 'plan' ? 'Continue as Guest' : undefined}
+      explainerLabel={showPlanOffer() ? 'Continue with Free' : undefined}
       explainer={
-        step() === 'plan' ? (
-          <PlanComparison
+        showPlanOffer() ? (
+          <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueGuest={() => void finish.finishFree()}
+            onContinueFree={() => void finish.finishFree()}
             onBackToPro={() => focusStepHeading(content, true)}
+            onStartMax={() =>
+              void finish.startPremiumCheckout('max', 'standard')
+            }
           />
         ) : step() === 'security' ||
           step() === 'work' ||
@@ -177,6 +189,7 @@ export function OnboardingFlowView(props: {
           </Match>
           <Match when={step() === 'team'}>
             <TeamStep
+              finishing={finish.finishing()}
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />

@@ -44,52 +44,86 @@ async function requestSoup(
   return await response.json();
 }
 
-test('real generated backfill document validates, pages, and includes projection/preview metadata', async () => {
-  server = startFixtureServer();
-  const ids: string[] = [];
-  let cursor: string | null = null;
-  for (let page = 0; page < 3; page++) {
-    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
-      method: 'POST',
-      body: JSON.stringify({
-        query,
-        operationName: 'SoupMailBackfill',
-        variables: {
-          input: cursor
-            ? { continuation: { cursor, emailView: 'ALL' } }
-            : { initial: { limit: 100, emailView: 'ALL' } },
-        },
-      }),
-    });
-    const result: {
-      errors?: unknown;
-      data: {
-        user: {
-          soup: {
-            items: {
-              id: string;
-              cacheProjection: string;
-              mailAllPreview: { subject: string };
-            }[];
-            nextCursor: string | null;
-          };
+const recencyTree = (importance: boolean) => ({
+  and: {
+    left: { literal: { importance } },
+    right: { literal: { updatedAt: { gte: '2026-01-01T00:00:00.000Z' } } },
+  },
+});
+
+async function requestMetadata(input: SoupInput) {
+  if (!server) throw new Error('Fixture server must be started first');
+  const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      operationName: 'SoupMailBackfill',
+      variables: { input },
+    }),
+  });
+  const result: {
+    errors?: { message: string }[];
+    data: {
+      user: {
+        soup: {
+          items: {
+            id: string;
+            cacheProjection: string;
+            mailAllPreview: { subject: string };
+          }[];
+          nextCursor: string | null;
         };
       };
-    } = await response.json();
-    expect(result.errors).toBeUndefined();
-    const soup = result.data.user.soup;
-    expect(soup.items).toHaveLength(2);
-    for (const item of soup.items) {
-      ids.push(item.id);
-      expect(item.cacheProjection).toBeString();
-      expect(item.mailAllPreview.subject).toStartWith('Email ');
+    } | null;
+  } = await response.json();
+  return result;
+}
+
+test('real generated backfill document validates, pages each signal class, and includes projection/preview metadata', async () => {
+  server = startFixtureServer();
+  for (const [importance, expected] of [
+    [true, [6, 9, 12]],
+    [false, [4, 8, 10]],
+  ] as const) {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 2; page++) {
+      const result = await requestMetadata(
+        cursor
+          ? { continuation: { cursor, emailView: 'ALL' } }
+          : {
+              initial: {
+                limit: 100,
+                emailView: 'ALL',
+                filters: { emailFilter: { tree: recencyTree(importance) } },
+              },
+            }
+      );
+      expect(result.errors).toBeUndefined();
+      const soup = result.data!.user.soup;
+      for (const item of soup.items) {
+        ids.push(item.id);
+        expect(item.cacheProjection).toBeString();
+        expect(item.mailAllPreview.subject).toStartWith('Email ');
+      }
+      cursor = soup.nextCursor;
+      if (page < 1) expect(cursor).toBeString();
     }
-    cursor = soup.nextCursor;
-    if (page < 2) expect(cursor).toBeString();
+    expect(cursor).toBeNull();
+    expect(ids).toEqual(expected.map(fixtureId));
   }
-  expect(cursor).toBeNull();
-  expect(ids).toEqual([4, 6, 8, 9, 10, 12].map(fixtureId));
-  expect(server.metadataPagesServed).toBe(3);
+  expect(server.metadataPagesServed).toBe(4);
+  expect(server.expectedMetadataPages).toBe(4);
+});
+
+test('metadata backfill without a recency-bounded signal class fails', async () => {
+  server = startFixtureServer();
+  const result = await requestMetadata({
+    initial: { limit: 100, emailView: 'ALL' },
+  });
+  expect(result.errors?.map((error) => error.message)).toEqual([
+    'Metadata backfill must bound one signal class by recency',
+  ]);
 });
 
 const signalTree = {

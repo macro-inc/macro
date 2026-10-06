@@ -5,6 +5,7 @@
 mod chat_reply;
 mod quota;
 mod user_cleanup;
+mod warm;
 
 use agent_session::domain::service::AgentSessionService as _;
 use messages::domain::models::MessageParent;
@@ -675,6 +676,7 @@ async fn disconnected_session_owned_by(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: owner,

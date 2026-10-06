@@ -437,7 +437,7 @@ Settings opens its own glass sheet with a grouped main page. Select a settings
 section, use **Back to settings** to return, or **Close settings** in the top
 right to dismiss without changing the underlying app view.
 Opening Settings again starts at the grouped main page. In-app actions that
-request a specific section, including Getting Started actions, open that section
+request a specific section open that section
 directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
@@ -644,6 +644,16 @@ email mentions keep their separate search-service path. Text search loads only
 its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
+
+With CRM enabled, normal `@` menus include CRM contacts under **People** in
+documents, channels, discussions, and composers. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and collapses duplicate full email addresses case-insensitively.
+The most recently active visible team record represents each email. An eligible
+Macro user with the same email takes precedence and keeps normal user-mention
+notifications. External contacts insert a link to their original CRM record;
+they do not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update

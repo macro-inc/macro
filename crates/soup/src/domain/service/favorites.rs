@@ -121,7 +121,14 @@ pub(super) fn apply(mut ast: EntityFilterAst, entities: &[Entity<'_>]) -> Entity
             InitiativeLiteral::Id,
         );
     }
-    // CRM exposes an ID-list service contract instead of arbitrary
+    if ast.crm_contact_filter.is_some() {
+        constrain(
+            &mut ast.crm_contact_filter,
+            ids(entities, EntityType::CrmContact),
+            item_filters::ast::crm_contact::CrmContactLiteral::Id,
+        );
+    }
+    // CRM companies expose an ID-list service contract instead of arbitrary
     // AST evaluation. Intersect those lists separately, never OR them together.
     ast
 }

@@ -1,6 +1,7 @@
 [
   "macro.activity",
   "macro.agent_session_lifecycle",
+  "macro.agent_session_log",
   "macro.agent_sessions",
   "macro.bots",
   "macro.calendar",

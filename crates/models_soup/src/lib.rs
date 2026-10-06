@@ -14,6 +14,8 @@ pub mod chat;
 pub mod comms;
 /// CRM company models for Soup responses.
 pub mod crm_company;
+/// CRM contact rows.
+pub mod crm_contact;
 /// Database row models for Soup responses.
 pub mod database_row;
 /// Document models for Soup responses.

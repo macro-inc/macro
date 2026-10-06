@@ -15,6 +15,8 @@ async function openNew(page: Page) {
 }
 
 async function selectLayer(page: Page, name: string) {
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill(name);
   await page
     .getByTestId('fig-search-hit')
@@ -90,11 +92,14 @@ test('stores export presets and exports them as a ZIP', async ({ page }) => {
   await expect(page.getByTestId('fig-export-size-0')).toHaveValue('1x');
   await add.click();
   await expect(page.getByTestId('fig-export-size-1')).toHaveValue('2x');
-  await page.getByTestId('fig-export-format-1').selectOption('JPEG');
+  await page.getByTestId('fig-export-format-1').click();
+  await page.getByRole('option', { name: 'JPEG', exact: true }).click();
+  await page.getByTestId('fig-export-options-0').click();
   await page.getByTestId('fig-export-suffix-0').fill('-small');
   await page.getByTestId('fig-export-suffix-0').press('Enter');
   await add.click();
-  await page.getByTestId('fig-export-format-2').selectOption('SVG');
+  await page.getByTestId('fig-export-format-2').click();
+  await page.getByRole('option', { name: 'SVG', exact: true }).click();
   await page.getByTestId('fig-export-options-2').click();
   await page.getByTestId('fig-export-include-id-2').check();
   await expect(page.getByTestId('fig-export-row-2')).toBeVisible();
@@ -145,6 +150,7 @@ test('stores export presets and exports them as a ZIP', async ({ page }) => {
 test('exports the page frames to PDF', async ({ page }) => {
   await openShowcase(page);
   await page.getByTestId('fig-main-menu').click();
+  await page.getByTestId('fig-main-file').hover();
   await page.getByTestId('fig-menu-export-frames-pdf').click();
   await expect
     .poll(() => page.evaluate(() => window.figFixture.downloads()))
@@ -215,9 +221,10 @@ test('adds layout grids, toggles them, and saves them', async ({ page }) => {
   await openNew(page);
   const id = await drawFrame(page, [100, 100], [400, 300]);
   const grids = page.getByTestId('fig-layout-grids');
-  await grids.getByRole('button', { name: 'Add layout grid' }).click();
+  await grids.getByRole('button', { name: 'Add layout guide' }).click();
   await expect(page.getByTestId('fig-grid-0')).toBeVisible();
-  await page.getByTestId('fig-grid-type-0').selectOption('COLUMNS');
+  await page.getByTestId('fig-grid-type-0').click();
+  await page.getByRole('option', { name: 'Columns (5)', exact: true }).click();
   await page.getByTestId('fig-grid-settings-0').click();
   await page.getByTestId('fig-grid-count-0').fill('3');
   await page.getByTestId('fig-grid-count-0').press('Enter');
@@ -233,11 +240,15 @@ test('adds layout grids, toggles them, and saves them', async ({ page }) => {
   expect((await overlayPixel(page, 195, 200))[3]).toBe(0);
   // Ctrl+⇧4 (⌃G on a Mac) hides them.
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+Shift+Digit4');
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Control+g' : 'Control+Shift+Digit4'
+  );
   await expect
     .poll(async () => (await overlayPixel(page, 140, 200))[3])
     .toBe(0);
-  await page.keyboard.press('Control+Shift+Digit4');
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Control+g' : 'Control+Shift+Digit4'
+  );
   await expect
     .poll(async () => (await overlayPixel(page, 140, 200))[3])
     .toBeGreaterThan(0);

@@ -1238,8 +1238,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
-    /// Filters applied to agent sessions (wire key `asf`). An
-    /// empty/omitted returns **no** agent sessions: they are opt-in, so the
+    /// Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+    #[serde(default, rename = "crmf")]
+    #[schema(value_type = serde_json::Value)]
+    pub crm_contact_filter: LiteralTree<item_filters::ast::crm_contact::CrmContactLiteral>,
+    /// Filters applied to agent sessions (wire key `asf`). An empty or
+    /// omitted filter returns **no** agent sessions: they are opt-in, so the
     /// caller must send `inc`, an id, or an owner to get any.
     #[serde(default, rename = "asf")]
     #[schema(value_type = serde_json::Value)]
@@ -1346,6 +1350,7 @@ impl ApiEntityFilterAst {
             github_pull_request_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             agent_session_filter,
             properties_filter,
             email_crm_domains,
@@ -1414,6 +1419,7 @@ impl ApiEntityFilterAst {
             channel_thread_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             foreign_entity_filter,
             github_pull_request_filter,
             agent_session_filter,

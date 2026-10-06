@@ -1,3 +1,4 @@
+pub(crate) mod contact_listing;
 pub mod grouping;
 
 mod exclusions;

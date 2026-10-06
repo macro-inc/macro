@@ -3,6 +3,22 @@ import app from './index';
 
 const PORT = parseInt(process.env.PORT || '8096', 10);
 
+// The shared gateway routes `/lexical/*` here without stripping the prefix;
+// the app's routes, and the target group's health check, are at the root.
+const GATEWAY_PREFIX = '/lexical';
+
+function withoutGatewayPrefix(req: Request): Request {
+  const url = new URL(req.url);
+  if (
+    url.pathname !== GATEWAY_PREFIX &&
+    !url.pathname.startsWith(`${GATEWAY_PREFIX}/`)
+  ) {
+    return req;
+  }
+  url.pathname = url.pathname.slice(GATEWAY_PREFIX.length) || '/';
+  return new Request(url, req);
+}
+
 const env = {
   INTERNAL_AUTH_KEY:
     process.env.INTERNAL_AUTH_KEY || process.env.INTERNAL_API_SECRET_KEY,
@@ -26,7 +42,7 @@ for (const varName of requiredVars) {
 const server = Bun.serve({
   port: PORT,
   fetch(req) {
-    return app.fetch(req, env);
+    return app.fetch(withoutGatewayPrefix(req), env);
   },
 });
 

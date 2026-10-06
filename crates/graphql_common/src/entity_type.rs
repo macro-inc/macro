@@ -22,6 +22,8 @@ pub enum GraphqlSoupEntityType {
     Call,
     /// CRM company entity.
     CrmCompany,
+    /// CRM contact entity.
+    CrmContact,
     /// Foreign entity.
     ForeignEntity,
     /// Calendar event entity.
@@ -99,6 +101,7 @@ impl GraphqlSoupEntityType {
             EntityType::ChannelMessage => Self::ChannelMessage,
             EntityType::Call => Self::Call,
             EntityType::CrmCompany => Self::CrmCompany,
+            EntityType::CrmContact => Self::CrmContact,
             EntityType::ForeignEntity => Self::ForeignEntity,
             EntityType::CalendarEvent => Self::CalendarEvent,
             EntityType::AgentSession => Self::AgentSession,
@@ -108,7 +111,6 @@ impl GraphqlSoupEntityType {
             | EntityType::Reminder
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ScheduledAction
             | EntityType::Database => return None,
@@ -126,6 +128,7 @@ impl GraphqlSoupEntityType {
             Self::ChannelMessage => EntityType::ChannelMessage,
             Self::Call => EntityType::Call,
             Self::CrmCompany => EntityType::CrmCompany,
+            Self::CrmContact => EntityType::CrmContact,
             Self::ForeignEntity => EntityType::ForeignEntity,
             Self::CalendarEvent => EntityType::CalendarEvent,
             Self::AgentSession => EntityType::AgentSession,

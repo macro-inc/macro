@@ -5907,6 +5907,7 @@ fn mock_empty_ast() -> EntityFilterAst {
         channel_thread_filter: None,
         call_filter: None,
         crm_company_filter: None,
+        crm_contact_filter: None,
         foreign_entity_filter: None,
         github_pull_request_filter: None,
         agent_session_filter: None,

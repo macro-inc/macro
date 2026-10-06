@@ -45,6 +45,8 @@ pub(crate) struct FontFile {
     width: f32,
     /// Axes: tag, minimum, default, maximum.
     axes: Vec<(Tag, f32, f32, f32)>,
+    /// The face's PostScript name ("Inter-Bold"), when it has one.
+    postscript: Option<String>,
     hash: u64,
 }
 
@@ -155,6 +157,7 @@ fn faces(data: &'static [u8], family: Option<&str>) -> Vec<FontFile> {
                 style
             };
             let width = axis(WDTH).map_or(attrs.stretch.ratio() * 100.0, |a| a.2);
+            let postscript = name(&[StringId::POSTSCRIPT_NAME]);
             Some(FontFile {
                 data,
                 index,
@@ -164,6 +167,7 @@ fn faces(data: &'static [u8], family: Option<&str>) -> Vec<FontFile> {
                 italic,
                 width,
                 axes,
+                postscript,
                 hash,
             })
         })
@@ -398,6 +402,112 @@ fn select(family: &str, style: &str) -> (Vec<&'static FontFile>, FontStatus) {
     }
 }
 
+/// A registered face's font file, for engines that read glyphs or embed
+/// fonts themselves (the Photoshop and Illustrator engines).
+#[derive(Clone, Debug)]
+pub struct FaceSource {
+    /// The `sfnt` bytes (WOFF and WOFF2 files are stored decoded).
+    pub data: &'static [u8],
+    /// The face's index in a collection (0 otherwise).
+    pub index: u32,
+    pub family: String,
+    pub style: String,
+    pub postscript: Option<String>,
+}
+
+impl From<&FontFile> for FaceSource {
+    fn from(f: &FontFile) -> Self {
+        FaceSource {
+            data: f.data,
+            index: f.index,
+            family: f.family.clone(),
+            style: f.style.clone(),
+            postscript: f.postscript.clone(),
+        }
+    }
+}
+
+/// The face that shows `family` in `style` (Inter when the family is not
+/// registered) and how well it matches.
+pub fn face_source(family: &str, style: &str) -> (FaceSource, FontStatus) {
+    let (faces, status) = select(family, style);
+    (FaceSource::from(faces[0]), status)
+}
+
+/// The family and style of the registered face with a PostScript name
+/// ("Inter-SemiBold"), compared without case.
+pub fn postscript_face(name: &str) -> Option<(String, String)> {
+    registry()
+        .lock()
+        .expect("font registry")
+        .iter()
+        .find(|f| {
+            f.postscript
+                .as_deref()
+                .is_some_and(|p| p.eq_ignore_ascii_case(name))
+        })
+        .map(|f| (f.family.clone(), f.style.clone()))
+}
+
+/// The family and style a PostScript font name ("MyriadPro-BoldIt")
+/// stands for: the registered face with that name, else read from the name
+/// ("Myriad Pro", "Bold Italic").
+pub fn family_and_style(postscript: &str) -> (String, String) {
+    if let Some(found) = postscript_face(postscript) {
+        return found;
+    }
+    let name = postscript.trim();
+    let (family, style) = match name.split_once('-') {
+        Some((f, s)) => (f, s),
+        None => (name, "Regular"),
+    };
+    let family = family
+        .trim_end_matches("PSMT")
+        .trim_end_matches("MT")
+        .trim_end_matches("PS");
+    let style = style.trim_end_matches("MT").trim_end_matches("PS");
+    (spaced(family), style_words(style))
+}
+
+/// "MyriadPro" as "Myriad Pro" (a capital after a lowercase letter starts a
+/// word).
+fn spaced(s: &str) -> String {
+    let mut out = String::new();
+    let mut prev_lower = false;
+    for c in s.chars() {
+        if c.is_uppercase() && prev_lower {
+            out.push(' ');
+        }
+        prev_lower = c.is_lowercase() || c.is_ascii_digit();
+        out.push(c);
+    }
+    out
+}
+
+/// A PostScript style suffix as style words ("BoldIt" is "Bold Italic").
+fn style_words(s: &str) -> String {
+    let words = spaced(s);
+    let mut out: Vec<String> = Vec::new();
+    for w in words.split_whitespace() {
+        let w = match w {
+            "It" | "Ital" | "Obl" => "Italic",
+            "Bd" => "Bold",
+            "Semibold" | "Smbd" => "SemiBold",
+            "Lt" => "Light",
+            "Md" | "Med" => "Medium",
+            "Blk" => "Black",
+            "Roman" | "Book" | "Regular" | "Reg" => "Regular",
+            other => other,
+        };
+        out.push(w.to_string());
+    }
+    if out.is_empty() {
+        "Regular".into()
+    } else {
+        out.join(" ")
+    }
+}
+
 /// Whether text in `family` and `style` lays out in its own font.
 pub fn font_status(family: &str, style: &str) -> FontStatus {
     select(family, style).1
@@ -413,6 +523,8 @@ struct Face {
     kern: Vec<Vec<PairPos<'static>>>,
     /// Identifies the face and its axis values in glyph caches.
     key: u64,
+    /// The file the face comes from.
+    source: FaceSource,
 }
 
 impl Face {
@@ -451,6 +563,7 @@ impl Face {
             location,
             upm,
             key,
+            source: FaceSource::from(file),
         }
     }
 
@@ -516,7 +629,7 @@ fn pair_value(pair: &PairPos<'_>, l: GlyphId, r: GlyphId) -> Option<i16> {
 /// A font set up for one family and style: its faces (the style's, then
 /// Inter for characters they lack), glyph lookup with fallback, advances,
 /// kerning, metrics, and outlines.
-pub(crate) struct Font {
+pub struct Font {
     faces: Vec<Face>,
     /// Faked italic: outlines are sheared when no face is italic.
     slant: f32,
@@ -524,7 +637,7 @@ pub(crate) struct Font {
 
 /// A glyph in one of a [`Font`]'s faces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct FontGlyph {
+pub struct FontGlyph {
     pub face: u8,
     pub id: GlyphId,
 }
@@ -617,18 +730,27 @@ impl Font {
         cache: &mut HashMap<(u64, u32), Option<u32>>,
         g: FontGlyph,
     ) -> Option<u32> {
-        let face = self.face(g);
-        let key = (face.key, g.id.to_u32());
+        let key = (self.face(g).key, g.id.to_u32());
         if let Some(&blob) = cache.get(&key) {
             return blob;
         }
+        let blob = self
+            .path(g)
+            .map(|path| doc.blobs.push(&geometry::encode_blob(&path)));
+        cache.insert(key, blob);
+        blob
+    }
+
+    /// The glyph's outline in em units, y up (synthesized italics sheared);
+    /// `None` for glyphs that draw nothing.
+    pub fn path(&self, g: FontGlyph) -> Option<tiny_skia::Path> {
+        let face = self.face(g);
         let mut pen = Pen {
             pb: PathBuilder::new(),
             scale: 1.0 / face.upm,
             slant: self.slant,
         };
-        let blob = face
-            .font
+        face.font
             .outline_glyphs()
             .get(g.id)
             .and_then(|o| {
@@ -639,9 +761,12 @@ impl Font {
                 .ok()
             })
             .and_then(|_| pen.pb.finish())
-            .map(|path| doc.blobs.push(&geometry::encode_blob(&path)));
-        cache.insert(key, blob);
-        blob
+    }
+
+    /// The font file and face index a glyph comes from, for embedding the
+    /// font in an exported file.
+    pub fn face_source(&self, g: FontGlyph) -> FaceSource {
+        self.faces[usize::from(g.face)].source.clone()
     }
 
     /// Ascender, descender (negative), and line gap, in em.

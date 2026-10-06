@@ -280,6 +280,34 @@ const ALLOWLIST_SETTING_CASES: [Option<&str>; 5] = [
 const UNLISTED_PUBLIC_EMAIL: &str = "unlisted.user@example.test";
 
 #[test]
+fn develop_config_temporarily_allows_unlisted_signups_regardless_of_bypass() {
+    for bypass in [None, Some(false), Some(true)] {
+        for allowlist in ALLOWLIST_SETTING_CASES {
+            let mut values = config_values();
+            values["ENVIRONMENT"] = serde_json::json!("develop");
+            if let Some(bypass) = bypass {
+                values["DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST"] = serde_json::json!(bypass);
+            }
+            if let Some(allowlist) = allowlist {
+                values["DEVELOPMENT_SIGNUP_ALLOWLIST_JSON"] = serde_json::json!(allowlist);
+            }
+            let config: Config = serde_json::from_value(values).unwrap();
+
+            // Exercise both runtime startup and the Doppler validator's entry point.
+            for policy in [
+                config.signup_policy().unwrap(),
+                config
+                    .signup_policy_for_environment(Environment::Develop)
+                    .unwrap(),
+            ] {
+                assert_eq!(policy.allowed_email_count(), None);
+                assert_eq!(policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL), Ok(()));
+            }
+        }
+    }
+}
+
+#[test]
 fn develop_signup_policy_requires_configured_allowlist() {
     for value in [None, Some(""), Some(" \t ")] {
         let error =

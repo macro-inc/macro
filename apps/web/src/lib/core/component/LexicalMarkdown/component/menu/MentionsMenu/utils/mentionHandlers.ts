@@ -79,6 +79,16 @@ async function handleEntityMention(
     return await handleAgentSessionMention(entity, dependencies);
   }
 
+  if (entity.type === 'crm_contact') {
+    // A CRM reference does not share a file, invite a user, or notify the contact.
+    editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+      documentId: entity.id,
+      documentName: entity.name || entity.email,
+      blockName: 'contact',
+    });
+    return;
+  }
+
   const blockNameForMention = getBlockNameFromEntity(item);
   const itemName = entityDisplayName(item);
 

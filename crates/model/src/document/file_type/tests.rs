@@ -156,3 +156,22 @@ fn test_split_suffix_match() {
         Some(("REPORT", "MD"))
     );
 }
+
+#[test]
+fn design_files_are_editable_documents_not_images() {
+    for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Fig] {
+        assert!(!file_type.is_image(), "{file_type}");
+        assert!(file_type.is_editable(), "{file_type}");
+        assert!(!file_type.is_text_content(), "{file_type}");
+        assert!(!ContentType::from(file_type).is_image(), "{file_type}");
+    }
+    assert!(ContentType::Png.is_image());
+    assert_eq!(
+        FileType::split_suffix_match("Poster.final.psd"),
+        Some(("Poster.final", "psd"))
+    );
+    assert_eq!(
+        FileType::split_suffix_match("billboard.PSB"),
+        Some(("billboard", "PSB"))
+    );
+}

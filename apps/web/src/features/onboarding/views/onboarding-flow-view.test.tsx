@@ -62,7 +62,7 @@ const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
 describe('onboarding flow', () => {
-  it('walks every step and finishes as a Guest', async () => {
+  it('walks every step and finishes with Free', async () => {
     const { fake, navigate } = setup({ next: '/channel/launch' });
 
     await heading('Create your workspace');
@@ -99,9 +99,9 @@ describe('onboarding flow', () => {
     );
 
     await heading('Free Claude & GPT for 30 days.');
-    // The scroll cue and the comparison share a label; the comparison's CTA finishes.
-    const guest = screen.getAllByRole('button', { name: 'Continue as Guest' });
-    fireEvent.click(guest[guest.length - 1]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
 
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith('/channel/launch')
@@ -155,13 +155,10 @@ describe('onboarding flow', () => {
       checkoutReturn: { t: 'success', tier: 'premium' },
       world: { webhookPollsRemaining: 1 },
     });
-    await heading('Free Claude & GPT for 30 days.');
-    await waitFor(
-      () => expect(navigate).toHaveBeenCalledWith('/getting-started'),
-      {
-        timeout: 3_000,
-      }
-    );
+    await heading('Your workspace is ready.');
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
+      timeout: 3_000,
+    });
   });
 
   it('starts hosted checkout from the trial offer', async () => {
@@ -173,6 +170,27 @@ describe('onboarding flow', () => {
         'https://checkout.stripe.test/premium'
       )
     );
+  });
+
+  it('preserves team inputs and focus when onboarding suggestions refresh', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    const name = screen.getByDisplayValue('Acme');
+    const email = screen.getByLabelText('Teammate 1 email');
+    fireEvent.input(name, { target: { value: 'My workspace' } });
+    fireEvent.input(email, { target: { value: 'chosen@example.com' } });
+    email.focus();
+
+    fake.update((world) => {
+      world.record.suggestedTeamDomain = 'updated.example.com';
+      world.contacts.push('new@updated.example.com');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('My workspace')).toBe(name);
+      expect(screen.getByDisplayValue('chosen@example.com')).toBe(email);
+      expect(document.activeElement).toBe(email);
+    });
   });
 
   it('joins a pending team invite instead of creating a team', async () => {
@@ -199,6 +217,104 @@ describe('onboarding flow', () => {
       event: 'onboarding_v4_team',
       data: { action: 'already_on_team' },
     });
+  });
+
+  it('finishes for a licensed team member without showing trial or Free offers', async () => {
+    const { navigate, redirect } = setup({
+      resume: 'plan',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+      },
+    });
+    await heading('Your workspace is ready.');
+    expect(
+      screen.queryByRole('button', { name: 'Start 30 day trial' })
+    ).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Continue with Free' })
+    ).toBeNull();
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('finishes a licensed member directly on the team step while saving', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+      },
+    });
+    const completion = Promise.withResolvers<{ t: 'completed' }>();
+    const save = vi
+      .spyOn(fake.context, 'completeOnboarding')
+      .mockReturnValue(completion.promise);
+    await heading('Built for teams.');
+    click('Continue');
+
+    const opening = await screen.findByRole('button', {
+      name: 'Opening your workspace…',
+    });
+    expect(opening.hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('heading', { name: 'Built for teams.' })
+    ).toBeTruthy();
+    expect(screen.queryByText('Your workspace is ready.')).toBeNull();
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('team');
+    expect(save).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+
+    completion.resolve({ t: 'completed' });
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+  });
+
+  it('lets a licensed member retry a failed save from the team step', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+        failures: { completion: 'Save failed' },
+      },
+    });
+    await heading('Built for teams.');
+    click('Continue');
+    await waitFor(() => expect(fake.notifications()).toHaveLength(1));
+    expect(
+      screen.getByRole('heading', { name: 'Built for teams.' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')
+    ).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+    fake.update((world) => {
+      delete world.failures.completion;
+    });
+    click('Continue');
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
   });
 
   it('sends a signed-out visitor to sign in', async () => {
@@ -253,5 +369,14 @@ describe('onboarding flow', () => {
     setup({ resume: 'team' });
     await heading('Built for teams.');
     expect(screen.queryByRole('button', { name: 'Bypass' })).toBeNull();
+  });
+
+  it('paints the resumed step on the first render, without a placeholder in between', () => {
+    setup({ resume: 'team' });
+    // Synchronous: no effect or timer has run yet.
+    expect(screen.queryByRole('status', { name: 'Loading setup' })).toBeNull();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Built for teams.' })
+    ).toBeTruthy();
   });
 });

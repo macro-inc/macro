@@ -519,3 +519,15 @@ fn a_tables_rows_compile_to_the_database_row_partition() {
         Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
     );
 }
+
+#[test]
+fn contact_queries_require_server_authorization_and_deduplication() {
+    let mut ast = excluded_deferred_partitions();
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Include)));
+    assert_eq!(
+        check_soup_flat_v3(&ast, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("crmContact"))
+    );
+    ast.crm_contact_filter = Some(Arc::new(Expr::val(CrmContactLiteral::Id(Uuid::nil()))));
+    assert_eq!(check_soup_flat_v3(&ast, request()), Eligibility::Supported);
+}

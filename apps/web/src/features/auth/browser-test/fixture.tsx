@@ -7,6 +7,7 @@ import { OnboardingProvider } from '../../onboarding/context/onboarding-context'
 import { createFakeOnboarding } from '../../onboarding/tests/fake-onboarding-context';
 import { renderInviteOfferStub } from '../../onboarding/tests/invite-offer-stub';
 import { OnboardingFlowView } from '../../onboarding/views/onboarding-flow-view';
+import { OnboardingPendingView } from '../../onboarding/views/onboarding-pending-view';
 import { SignupJourneyView } from '../../onboarding/views/signup-journey-view';
 import { AuthProvider, type AuthUser } from '../context/auth-context';
 import { sessionTokenParam } from '../core/email-code';
@@ -26,6 +27,8 @@ import { FIXTURE_KEYS } from './fixture-keys';
  */
 const params = Object.fromEntries(new URLSearchParams(location.search));
 const page = params.page ?? 'login';
+/** `?latency=ms`: both backends load like a cold page instead of instantly. */
+const latencyMs = Number(params.latency ?? 0);
 const read = <T,>(key: string): T | undefined => {
   const raw = sessionStorage.getItem(key);
   return raw ? (JSON.parse(raw) as T) : undefined;
@@ -45,15 +48,29 @@ const auth = createFakeAuth(
   {
     onChange: (world) => write(FIXTURE_KEYS.auth, world),
     ssoEmail: sessionStorage.getItem(FIXTURE_KEYS.ssoEmail) ?? undefined,
-    // The identity provider returns to the same page with a session code.
+    // The identity provider returns to the same page with a session code;
+    // `?sso=cookie` models hosted web instead, where cookies are already set.
     ssoRedirect: async (provider, _intent, email) => {
-      const token = `${provider}-${Date.now()}`;
-      auth.update((draft) => {
-        draft.sessionTokens[token] = email;
-      });
-      location.assign(`${location.pathname}?page=${page}&token=${token}`);
+      if (params.sso === 'cookie') {
+        auth.update((draft) => {
+          draft.accounts[email] ??= { tutorialComplete: false };
+          draft.user = {
+            id: `macro|${email}`,
+            email,
+            tutorialComplete: draft.accounts[email].tutorialComplete,
+          };
+        });
+        location.assign(location.href);
+      } else {
+        const token = `${provider}-${Date.now()}`;
+        auth.update((draft) => {
+          draft.sessionTokens[token] = email;
+        });
+        location.assign(`${location.pathname}?page=${page}&token=${token}`);
+      }
       await new Promise(() => {});
     },
+    sessionLatencyMs: latencyMs,
   }
 );
 write(FIXTURE_KEYS.auth, structuredClone(unwrap(auth.world)));
@@ -79,6 +96,7 @@ function createOnboardingFor(user: AuthUser) {
         location.reload();
         await new Promise(() => {});
       },
+      latencyMs,
     }
   );
   write(FIXTURE_KEYS.onboarding, structuredClone(unwrap(fake.world)));
@@ -159,7 +177,10 @@ function Fixture() {
                 : undefined
             }
             onSignIn={() => location.assign(`${location.pathname}?page=login`)}
-            signedIn={(user) => <SignedIn user={user} />}
+            pending={
+              page === 'signup' ? () => <OnboardingPendingView /> : undefined
+            }
+            signedIn={(user) => <SignedIn user={user()} />}
           />
         </Match>
       </Switch>

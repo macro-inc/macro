@@ -1,4 +1,5 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -32,6 +33,7 @@ export type FakeOnboardingWorld = {
   connectedTools: string[];
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
+  planCatalog: AiPlanCatalog;
   /** License refreshes left before the Stripe webhook lands; undefined when none is pending. */
   webhookPollsRemaining: number | undefined;
   /** How many refreshes a checkout's webhook takes to land. */
@@ -45,6 +47,7 @@ export type FakeOnboardingWorld = {
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
+      | 'planCatalog'
       | 'checkout'
       | 'completion',
       string
@@ -76,6 +79,31 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     connectedTools: [],
     githubStars: 12_345,
     inviteOffer: null,
+    planCatalog: {
+      plans: [
+        {
+          tier: 'free',
+          monthly_price_cents: 0,
+          included_ai_cents_per_seat: 100,
+          purchasable: false,
+        },
+        {
+          tier: 'premium',
+          monthly_price_cents: 4000,
+          included_ai_cents_per_seat: 2000,
+          purchasable: true,
+        },
+        {
+          tier: 'max',
+          monthly_price_cents: 20000,
+          included_ai_cents_per_seat: 10000,
+          purchasable: true,
+        },
+      ],
+      credit_packs_cents: [],
+      overage_limit_min_cents: 0,
+      overage_limit_max_cents: 0,
+    },
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
@@ -94,6 +122,10 @@ export function createFakeOnboarding(
     onChange?: (world: FakeOnboardingWorld) => void;
     roundTrip?: (apply: () => void) => Promise<void>;
     checkoutUrl?: (tier: PaidPlanTier) => string;
+    /** Report the sources as loading this long, like a cold page load. */
+    latencyMs?: number;
+    /** The viewer's own delay; a host that just resolved sign-in already has it. */
+    viewerLatencyMs?: number;
   } = {}
 ) {
   const [world, setWorld] = createStore<FakeOnboardingWorld>({
@@ -115,18 +147,29 @@ export function createFakeOnboarding(
     if (message === undefined) return;
     throw new Error(message);
   };
+  const [settled, setSettled] = createSignal(!options.latencyMs);
+  if (options.latencyMs) setTimeout(() => setSettled(true), options.latencyMs);
   const loadable = <T>(
     failure: keyof FakeOnboardingWorld['failures'],
     value: () => T
   ): Loadable<T> =>
-    world.failures[failure] !== undefined
-      ? { t: 'error' }
-      : { t: 'ready', value: value() };
+    !settled()
+      ? { t: 'loading' }
+      : world.failures[failure] !== undefined
+        ? { t: 'error' }
+        : { t: 'ready', value: value() };
 
+  const [viewerSettled, setViewerSettled] = createSignal(
+    !options.viewerLatencyMs
+  );
+  if (options.viewerLatencyMs)
+    setTimeout(() => setViewerSettled(true), options.viewerLatencyMs);
   const viewerState = (): ViewerState =>
-    world.viewer
-      ? { t: 'signed-in', viewer: { ...world.viewer } }
-      : { t: 'signed-out' };
+    !viewerSettled()
+      ? { t: 'loading' }
+      : world.viewer
+        ? { t: 'signed-in', viewer: { ...world.viewer } }
+        : { t: 'signed-out' };
 
   const context: OnboardingContext = {
     viewer: viewerState,
@@ -141,7 +184,8 @@ export function createFakeOnboarding(
         });
       return viewerState();
     },
-    createOnboardingRecord: () => () => ({ t: 'ready', value: world.record }),
+    createOnboardingRecord: () => () =>
+      settled() ? { t: 'ready', value: world.record } : { t: 'loading' },
     createEmailAccounts: () => ({
       accounts: () => loadable('emailAccounts', () => world.emailAccounts),
       refresh: async () => {},
@@ -209,6 +253,10 @@ export function createFakeOnboarding(
       });
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
+    createPlanCatalog: () => ({
+      catalog: () => loadable('planCatalog', () => world.planCatalog),
+      retry: () => call('retryPlanCatalog'),
+    }),
     startCheckout: async (tier, terms) => {
       call(`startCheckout:${tier}:${terms}`);
       fail('checkout');

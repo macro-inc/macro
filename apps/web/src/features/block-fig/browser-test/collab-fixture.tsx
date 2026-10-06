@@ -25,9 +25,9 @@ import {
   type FigSharing,
   FigViewerProvider,
 } from '../context/fig-viewer-context';
-import { fileFingerprint } from '../core/collab-entries';
 import { createDesignCollabSession } from '../queries/fig-collab';
 import { shareFigEngine } from '../queries/fig-sharing';
+import { prepareFigEngine } from '../queries/prepare-engine';
 import { FigViewer } from '../views/fig-viewer';
 import { MemorySyncServer } from './memory-sync';
 
@@ -84,6 +84,8 @@ function Person(props: {
   const [saves, setSaves] = createSignal(0);
   const [failure, setFailure] = createSignal<string>();
   const [replaced, setReplaced] = createSignal(false);
+  const opening = prepareFigEngine(props.server.stored());
+  onCleanup(() => void opening.dispose());
   const session = createDesignCollabSession({
     documentId,
     userId: props.user,
@@ -123,16 +125,22 @@ function Person(props: {
     let sharedEngine: FigSharing | undefined;
     const open = async () => {
       try {
-        const bytes = props.server.stored();
-        const fingerprint = await fileFingerprint(bytes);
-        opened = await FigEngine.open(bytes);
-        if (closed) return;
+        const ready = await opening.take((e) => setFailure(e.message));
+        opened = ready.engine;
+        const fingerprint = ready.fingerprint;
+        if (closed) {
+          opened.close();
+          return;
+        }
         if (shared) {
           sharedEngine = await shareFigEngine(opened, shared, {
             fingerprint,
             delivered: session.delivered,
           });
-          if (closed) return;
+          if (closed) {
+            sharedEngine.close();
+            return;
+          }
           sharedEngine.onReplaced(() => setReplaced(true));
           setSharing(sharedEngine);
         }

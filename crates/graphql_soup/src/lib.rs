@@ -29,10 +29,10 @@ pub use mutation_thread::{
 pub use objects::{
     GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel,
     GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview, GraphqlSoupChat,
-    GraphqlSoupCrmCompany, GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
-    GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupInitiative,
-    GraphqlSoupProject, GroupedSoup, SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch,
-    SoupUpdated,
+    GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument,
+    GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
+    GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GroupedSoup,
+    SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
     SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,

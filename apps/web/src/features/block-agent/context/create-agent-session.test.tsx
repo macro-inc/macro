@@ -38,7 +38,7 @@ vi.mock('@queries/agent-session/log', () => ({
     fetched: logSource.fetched(),
     stop: () => {},
   }),
-  appendAgentSessionLogRows: vi.fn(async () => undefined),
+  canFollowAgentSessionLog: () => false,
   forgetAgentSessionLog: vi.fn(async () => undefined),
 }));
 vi.mock('@queries/agent-session/session-metadata-sync', () => ({

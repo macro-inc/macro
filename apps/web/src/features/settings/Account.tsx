@@ -330,8 +330,7 @@ export function Account() {
   const [isDeleting, setIsDeleting] = createSignal(false);
 
   // The shared own-name cache entry (the one saveUserName invalidates), so
-  // this panel and other readers (e.g. the Getting Started checklist) can't
-  // drift.
+  // this panel and other readers can't drift.
   const userName = useOwnUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
     string | undefined

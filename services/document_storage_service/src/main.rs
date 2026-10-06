@@ -12,6 +12,9 @@ use crate::{
     },
     service::s3::S3,
 };
+use agent_session_realtime::{
+    domain::service::AgentSessionLogConsumerService, outbound::log_topic_consumer::LogTopicConsumer,
+};
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -1614,6 +1617,42 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let agent_session_log_realtime = Arc::new(AgentSessionLogConsumerService::new(
+        LogTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
+            anyhow::anyhow!("failed to create agent session log topic consumer: {error:?}")
+        })?,
+    ));
+    consumer_tracker.spawn({
+        let service = Arc::clone(&agent_session_log_realtime);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(
+                        error = ?error,
+                        "agent session log subscription consumer stopped"
+                    );
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
@@ -1863,6 +1902,9 @@ async fn run() -> anyhow::Result<()> {
             soup_realtime_service,
             websocket_notification_consumer_service,
             activity_realtime_service,
+        ),
+        agent_session_log_subscriptions: complete_graph::agent_session_log_subscriptions(
+            agent_session_log_realtime,
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

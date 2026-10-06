@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * Editing auto layout as Figma's design panel does: direction, gap (a
  * number, or Auto to space children apart), horizontal and vertical
@@ -8,7 +9,8 @@
 import type { AutoLayout, NodeInfo, Sizing } from '@core/fig-engine/types';
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
-import { For, Show } from 'solid-js';
+import CornersOut from '@phosphor/corners-out.svg';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Constraint, Patch } from '../primitives/create-fig-editor';
 import { ChoiceRow, NumberField, ParsedField } from './design-fields';
 
@@ -43,10 +45,16 @@ function parseGap(text: string): number | 'AUTO' | null {
 
 export function AutoLayoutControls(props: {
   layout: AutoLayout;
+  children?: JSX.Element;
   onPatch: (patch: Patch, live: boolean) => void;
 }) {
   const al = () => props.layout;
   const horizontal = () => al().mode === 'HORIZONTAL';
+  const [paddingMode, setPaddingMode] = createSignal<boolean>();
+  const individual = () =>
+    paddingMode() ??
+    (al().paddingLeft !== al().paddingRight ||
+      al().paddingTop !== al().paddingBottom);
   const primary = (): Spot =>
     (SPOTS as readonly string[]).includes(al().primaryAlign ?? '')
       ? (al().primaryAlign as Spot)
@@ -69,51 +77,18 @@ export function AutoLayoutControls(props: {
     return c === counter() && (isAuto(al()) || p === primary());
   };
   return (
-    <div class="flex flex-col gap-1.5" data-testid="fig-auto-layout">
-      <div class="grid grid-cols-[2fr_3fr] gap-1.5">
-        <ChoiceRow
-          value={al().mode}
-          options={DIRECTIONS}
-          testId="fig-layout-direction"
-          onChange={(layoutMode) => props.onPatch({ layoutMode }, false)}
-        />
-        <ParsedField
-          label="Gap"
-          shown={isAuto(al()) ? 'Auto' : String(al().spacing)}
-          parse={parseGap}
-          testId="fig-field-gap"
-          onChange={(gap) =>
-            props.onPatch(
-              gap === 'AUTO'
-                ? { primaryAlign: 'SPACE_BETWEEN' }
-                : {
-                    itemSpacing: gap,
-                    ...(isAuto(al()) ? { primaryAlign: 'MIN' as const } : {}),
-                  },
-              false
-            )
-          }
-        />
-      </div>
-      <div class="grid grid-cols-[1fr_1fr_auto] items-start gap-1.5">
-        <NumberField
-          label="↔"
-          value={al().paddingLeft}
-          min={0}
-          testId="fig-field-padding-h"
-          onChange={(v, live) =>
-            props.onPatch({ paddingLeft: v, paddingRight: v }, live)
-          }
-        />
-        <NumberField
-          label="↕"
-          value={al().paddingTop}
-          min={0}
-          testId="fig-field-padding-v"
-          onChange={(v, live) =>
-            props.onPatch({ paddingTop: v, paddingBottom: v }, live)
-          }
-        />
+    <div class="flex flex-col gap-2" data-testid="fig-auto-layout">
+      <span class="text-ink-muted text-[11px]">Flow</span>
+      <ChoiceRow
+        value={al().mode}
+        options={DIRECTIONS}
+        testId="fig-layout-direction"
+        onChange={(layoutMode) => props.onPatch({ layoutMode }, false)}
+      />
+      {props.children}
+      <div class="grid grid-cols-2 gap-2">
+        <span class="text-ink-muted text-[11px]">Alignment</span>
+        <span class="text-ink-muted text-[11px]">Gap</span>
         <div
           class="grid grid-cols-3 gap-0.5 rounded-md bg-inset p-1"
           data-testid="fig-layout-align"
@@ -126,7 +101,7 @@ export function AutoLayoutControls(props: {
                     type="button"
                     aria-label={`Align ${row.toLowerCase()} ${column.toLowerCase()}`}
                     aria-pressed={active(row, column)}
-                    class="flex size-3.5 items-center justify-center rounded-sm hover:bg-hover"
+                    class="flex h-4 items-center justify-center rounded-sm hover:bg-hover"
                     onClick={() => select(row, column)}
                   >
                     <span
@@ -142,6 +117,108 @@ export function AutoLayoutControls(props: {
             )}
           </For>
         </div>
+        <div class="self-start">
+          <ParsedField
+            label="↔"
+            ariaLabel="Gap"
+            shown={isAuto(al()) ? 'Auto' : String(al().spacing)}
+            parse={parseGap}
+            testId="fig-field-gap"
+            onChange={(gap) =>
+              props.onPatch(
+                gap === 'AUTO'
+                  ? { primaryAlign: 'SPACE_BETWEEN' }
+                  : {
+                      itemSpacing: gap,
+                      ...(isAuto(al()) ? { primaryAlign: 'MIN' as const } : {}),
+                    },
+                false
+              )
+            }
+          />
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-ink-muted text-[11px]">Padding</span>
+        <button
+          type="button"
+          aria-label="Independent padding"
+          title="Independent padding"
+          aria-pressed={individual()}
+          data-testid="fig-padding-independent"
+          class="flex size-6 items-center justify-center rounded text-ink-muted hover:bg-hover aria-pressed:bg-accent/15 aria-pressed:text-accent"
+          onClick={() => setPaddingMode(!individual())}
+        >
+          <CornersOut class="size-3.5" />
+        </button>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <Show
+          when={individual()}
+          fallback={
+            <>
+              <NumberField
+                label="↔"
+                ariaLabel="Horizontal padding"
+                value={al().paddingLeft}
+                min={0}
+                testId="fig-field-padding-h"
+                onChange={(v, live) =>
+                  props.onPatch({ paddingLeft: v, paddingRight: v }, live)
+                }
+              />
+              <NumberField
+                label="↕"
+                ariaLabel="Vertical padding"
+                value={al().paddingTop}
+                min={0}
+                testId="fig-field-padding-v"
+                onChange={(v, live) =>
+                  props.onPatch({ paddingTop: v, paddingBottom: v }, live)
+                }
+              />
+            </>
+          }
+        >
+          <NumberField
+            label="←"
+            ariaLabel="Left padding"
+            value={al().paddingLeft}
+            min={0}
+            testId="fig-field-padding-left"
+            onChange={(paddingLeft, live) =>
+              props.onPatch({ paddingLeft }, live)
+            }
+          />
+          <NumberField
+            label="↑"
+            ariaLabel="Top padding"
+            value={al().paddingTop}
+            min={0}
+            testId="fig-field-padding-top"
+            onChange={(paddingTop, live) => props.onPatch({ paddingTop }, live)}
+          />
+          <NumberField
+            label="→"
+            ariaLabel="Right padding"
+            value={al().paddingRight}
+            min={0}
+            testId="fig-field-padding-right"
+            onChange={(paddingRight, live) =>
+              props.onPatch({ paddingRight }, live)
+            }
+          />
+          <NumberField
+            label="↓"
+            ariaLabel="Bottom padding"
+            value={al().paddingBottom}
+            min={0}
+            testId="fig-field-padding-bottom"
+            onChange={(paddingBottom, live) =>
+              props.onPatch({ paddingBottom }, live)
+            }
+          />
+        </Show>
       </div>
     </div>
   );
@@ -154,8 +231,9 @@ const SIZING_LABEL: Record<Sizing, string> = {
 };
 
 /** Fixed / Hug / Fill for the width and height, where they apply. */
-export function SizingControls(props: {
+export function SizingControl(props: {
   info: NodeInfo;
+  axis: 0 | 1;
   onPatch: (patch: Patch, live: boolean) => void;
 }) {
   const choices = (): Sizing[] => {
@@ -166,36 +244,24 @@ export function SizingControls(props: {
   };
   return (
     <Show when={props.info.sizing && choices().length > 1}>
-      <div class="grid grid-cols-2 gap-1.5">
-        <For each={[0, 1] as const}>
-          {(axis) => (
-            <select
-              class="min-w-0 rounded-md bg-inset px-2 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent"
-              aria-label={axis === 0 ? 'Width sizing' : 'Height sizing'}
-              data-testid={axis === 0 ? 'fig-sizing-w' : 'fig-sizing-h'}
-              value={props.info.sizing?.[axis] ?? 'FIXED'}
-              onChange={(e) => {
-                const v = e.currentTarget.value as Sizing;
-                props.onPatch(
-                  axis === 0 ? { sizingHorizontal: v } : { sizingVertical: v },
-                  false
-                );
-              }}
-            >
-              <For each={choices()}>
-                {(c) => (
-                  <option
-                    value={c}
-                    selected={c === (props.info.sizing?.[axis] ?? 'FIXED')}
-                  >
-                    {axis === 0 ? 'W' : 'H'} · {SIZING_LABEL[c]}
-                  </option>
-                )}
-              </For>
-            </select>
-          )}
-        </For>
-      </div>
+      <InspectorSelect
+        class="w-10 shrink-0 [&_button]:px-1 [&_svg]:hidden"
+        label={props.axis === 0 ? 'Width sizing' : 'Height sizing'}
+        testId={props.axis === 0 ? 'fig-sizing-w' : 'fig-sizing-h'}
+        value={props.info.sizing?.[props.axis] ?? 'FIXED'}
+        options={choices().map((value) => ({
+          value,
+          label: SIZING_LABEL[value],
+        }))}
+        onChange={(value) =>
+          props.onPatch(
+            props.axis === 0
+              ? { sizingHorizontal: value as Sizing }
+              : { sizingVertical: value as Sizing },
+            false
+          )
+        }
+      />
     </Show>
   );
 }
@@ -228,33 +294,24 @@ export function ConstraintControls(props: {
       <div class="grid grid-cols-2 gap-1.5">
         <For each={[0, 1] as const}>
           {(axis) => (
-            <select
-              class="min-w-0 rounded-md bg-inset px-2 py-1 text-ink outline-none focus:outline focus:outline-1 focus:outline-accent"
-              aria-label={
+            <InspectorSelect
+              label={
                 axis === 0 ? 'Horizontal constraint' : 'Vertical constraint'
               }
-              data-testid={axis === 0 ? 'fig-constraint-h' : 'fig-constraint-v'}
-              onChange={(e) => {
-                const v = e.currentTarget.value;
+              testId={axis === 0 ? 'fig-constraint-h' : 'fig-constraint-v'}
+              value={current(axis)}
+              options={(axis === 0
+                ? HORIZONTAL_CONSTRAINTS
+                : VERTICAL_CONSTRAINTS
+              ).map(([value, label]) => ({ value, label }))}
+              onChange={(value) =>
                 props.onPatch(
                   axis === 0
-                    ? { constraintHorizontal: v as Constraint }
-                    : { constraintVertical: v as Constraint }
-                );
-              }}
-            >
-              <For
-                each={
-                  axis === 0 ? HORIZONTAL_CONSTRAINTS : VERTICAL_CONSTRAINTS
-                }
-              >
-                {([value, label]) => (
-                  <option value={value} selected={value === current(axis)}>
-                    {label}
-                  </option>
-                )}
-              </For>
-            </select>
+                    ? { constraintHorizontal: value as Constraint }
+                    : { constraintVertical: value as Constraint }
+                )
+              }
+            />
           )}
         </For>
       </div>

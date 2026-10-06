@@ -232,6 +232,10 @@ type ToolParserMap = {
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
+  ReadIllustratorDocument: {
+    call: types.ReadIllustratorDocument;
+    response: types.ReadIllustratorDocumentResponse;
+  };
   ReadInitiative: {
     call: types.ReadInitiative;
     response: types.ProjectReadResult;
@@ -243,6 +247,10 @@ type ToolParserMap = {
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
+  };
+  ReadPhotoshopDocument: {
+    call: types.ReadPhotoshopDocument;
+    response: types.ReadPhotoshopDocumentResponse;
   };
   ReadPresentation: {
     call: types.ReadPresentation;
@@ -585,6 +593,10 @@ const toolParserMap = {
     call: schemas.ReadDesign,
     response: schemas.ReadDesignResponse,
   },
+  ReadIllustratorDocument: {
+    call: schemas.ReadIllustratorDocument,
+    response: schemas.ReadIllustratorDocumentResponse,
+  },
   ReadInitiative: {
     call: schemas.ReadInitiative,
     response: schemas.ProjectReadResult,
@@ -596,6 +608,10 @@ const toolParserMap = {
   ReadMetadata: {
     call: schemas.ReadMetadata,
     response: schemas.ReadMetadataResponse,
+  },
+  ReadPhotoshopDocument: {
+    call: schemas.ReadPhotoshopDocument,
+    response: schemas.ReadPhotoshopDocumentResponse,
   },
   ReadPresentation: {
     call: schemas.ReadPresentation,
@@ -931,6 +947,10 @@ type ToolDataMap = {
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
+  ReadIllustratorDocument: {
+    call: types.ReadIllustratorDocument;
+    response: types.ReadIllustratorDocumentResponse;
+  };
   ReadInitiative: {
     call: types.ReadInitiative;
     response: types.ProjectReadResult;
@@ -942,6 +962,10 @@ type ToolDataMap = {
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
+  };
+  ReadPhotoshopDocument: {
+    call: types.ReadPhotoshopDocument;
+    response: types.ReadPhotoshopDocumentResponse;
   };
   ReadPresentation: {
     call: types.ReadPresentation;

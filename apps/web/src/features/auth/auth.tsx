@@ -1,6 +1,7 @@
 import {
   clearSignupDraft,
   Onboarding,
+  OnboardingPending,
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -49,7 +50,9 @@ export function Login(props: { signupMode?: boolean }) {
             : undefined
         }
         onSignIn={() => navigate('/login')}
-        signedIn={(user) => <PostAuthGate user={user} />}
+        // Desktop sign-up resolves into onboarding's frame either way.
+        pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
+        signedIn={(user) => <PostAuthGate user={user()} />}
       />
     </AuthProvider>
   );

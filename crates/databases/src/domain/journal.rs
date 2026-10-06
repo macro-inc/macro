@@ -518,13 +518,14 @@ pub fn settled_column(
 
 /// The entry of a table made whole, by an import or a new database's
 /// starter: its columns and rows, created together. Undoing it removes the
-/// table.
+/// table. The written cells also describe each row's initial history.
 pub fn created_table(
     database_id: DatabaseId,
     table: TableId,
     version: TableVersion,
     columns: &[ColumnId],
     rows: &[RowId],
+    after: CellImage,
 ) -> JournalEntry {
     JournalEntry {
         database_id,
@@ -536,6 +537,7 @@ pub fn created_table(
                 table,
                 change: models_databases::TableChange::Delete,
             }],
+            after,
             ..ChangeInverse::default()
         },
         rows: rows

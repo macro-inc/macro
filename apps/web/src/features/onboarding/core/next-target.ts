@@ -1,8 +1,8 @@
-import { AFTER_SETUP_ROUTE, DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 
 /**
  * Same-app relative paths only. A `next` at the default route is not a real
- * deep link, so it falls through to the post-setup landing.
+ * deep link, so it falls through to the default landing.
  */
 export function sanitizeNext(value: unknown): string | undefined {
   return typeof value === 'string' &&
@@ -14,18 +14,13 @@ export function sanitizeNext(value: unknown): string | undefined {
     : undefined;
 }
 
-function firstDeepLink(candidates: readonly unknown[]): string | undefined {
+/** Where leaving onboarding lands: the first valid deep link, else Home. */
+export function afterOnboardingTarget(
+  ...candidates: readonly unknown[]
+): string {
   for (const candidate of candidates) {
     const next = sanitizeNext(candidate);
     if (next) return next;
   }
-  return undefined;
+  return DEFAULT_ROUTE;
 }
-
-/** Where finishing onboarding lands: the first valid deep link, else Getting Started. */
-export const afterOnboardingTarget = (...candidates: readonly unknown[]) =>
-  firstDeepLink(candidates) ?? AFTER_SETUP_ROUTE;
-
-/** Where bypassing lands: the deep link, else straight in the app — Getting Started is onboarding too. */
-export const bypassTarget = (...candidates: readonly unknown[]) =>
-  firstDeepLink(candidates) ?? DEFAULT_ROUTE;

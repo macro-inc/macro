@@ -390,6 +390,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -661,6 +662,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_session_realtime"
+version = "0.1.0"
+dependencies = [
+ "agent_runtime_protocol",
+ "agent_session",
+ "broadcast",
+ "chrono",
+ "kafka_util",
+ "macro_event_broker",
+ "macro_uuid",
+ "rdkafka",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tokio-retry",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_trigger"
 version = "0.1.0"
 dependencies = [
@@ -794,6 +815,27 @@ dependencies = [
  "utoipa",
  "wiremock",
  "workspace-hack",
+]
+
+[[package]]
+name = "ai_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -4392,10 +4434,13 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_runtime_protocol",
  "agent_session",
+ "agent_session_realtime",
  "anyhow",
  "apollo-compiler",
  "async-graphql",
+ "async-stream",
  "axum",
  "bots",
  "chrono",
@@ -4943,6 +4988,8 @@ dependencies = [
  "call",
  "chrono",
  "entity_access",
+ "filter_ast",
+ "item_filters",
  "kafka_util",
  "macro_authorization",
  "macro_db_migrator",
@@ -6117,6 +6164,7 @@ dependencies = [
  "activity",
  "agent_changes",
  "agent_session",
+ "agent_session_realtime",
  "ai_billing",
  "ai_tools",
  "ai_usage",
@@ -6367,6 +6415,7 @@ version = "0.1.0"
 dependencies = [
  "activity",
  "ai_billing",
+ "ai_engine",
  "ai_toolset",
  "ai_usage",
  "anyhow",
@@ -6426,6 +6475,7 @@ dependencies = [
  "models_properties",
  "non_empty",
  "pptx_engine",
+ "psd_engine",
  "rdkafka",
  "redis",
  "reqwest 0.13.4",
@@ -14901,6 +14951,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "psd_engine"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "console_error_panic_hook",
+ "fig_engine",
+ "js-sys",
+ "miniz_oxide",
+ "png",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tiny-skia",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "pxfm"
 version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16480,6 +16547,7 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "agent_session",
+ "ai_engine",
  "anyhow",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -16535,6 +16603,7 @@ dependencies = [
  "pdfium-render",
  "projects",
  "properties",
+ "psd_engine",
  "rdkafka",
  "rootcause",
  "rust-embed",

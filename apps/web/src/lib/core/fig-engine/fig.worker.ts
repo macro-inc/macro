@@ -32,8 +32,9 @@ const renders: Render[] = [];
 let scheduled = false;
 let busy = false;
 
-/** Nodes decoded per idle slice (some tens of milliseconds on large files). */
-const DECODE_SLICE = 2048;
+/** Bound background work so hit tests can run between decode slices. */
+const DECODE_BUDGET_MS = 8;
+let decodeSlice = 128;
 
 /** Queries that read only a page, answered before the file is decoded. */
 const PAGE_QUERIES = new Set<QueryMethod>([
@@ -114,7 +115,7 @@ function openFile(): WasmFigFile {
 async function serve(request: FigRequest) {
   switch (request.kind) {
     case 'open': {
-      const wasm = await loadFigEngineWasm();
+      const wasm = await loadFigEngineWasm(request.module);
       file?.free();
       file = new wasm.FigFile(new Uint8Array(request.bytes));
       post({
@@ -404,7 +405,7 @@ async function serve(request: FigRequest) {
       return;
     }
     case 'blank': {
-      const wasm = await loadFigEngineWasm();
+      const wasm = await loadFigEngineWasm(request.module);
       const bytes = wasm.FigFile.blank(request.name).slice().buffer;
       post({ id: request.id, ok: true, kind: 'saved', bytes }, [bytes]);
       return;
@@ -448,7 +449,16 @@ async function pump() {
     if (!request) return;
     if (request === 'decode') {
       try {
-        openFile().decodeSome(DECODE_SLICE);
+        const started = performance.now();
+        openFile().decodeSome(decodeSlice);
+        const elapsed = Math.max(1, performance.now() - started);
+        decodeSlice = Math.max(
+          32,
+          Math.min(
+            2048,
+            Math.round(decodeSlice * Math.min(2, DECODE_BUDGET_MS / elapsed))
+          )
+        );
       } catch (error) {
         // Decoding the rest failed: what needs it fails when served.
         if (isWasmTrap(error)) trapped = true;
