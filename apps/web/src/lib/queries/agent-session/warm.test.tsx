@@ -47,7 +47,7 @@ function prepared(id: string) {
       name: '',
       ownerId: OWNER,
       sandboxSize: 'default',
-      status: { kind: 'unknown' },
+      status: { kind: 'no_messages' },
       workspace: '/workspace',
     },
   });
