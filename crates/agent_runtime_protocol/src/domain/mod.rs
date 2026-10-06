@@ -12,6 +12,8 @@ pub mod connection;
 pub mod ports;
 /// Versioned protocol message types.
 pub mod schema;
+/// The log frame an MCP tool call held for the owner's approval leaves.
+pub mod tool_approval;
 
 /// Agent-neutral reconstructed turn lifecycle.
 pub mod turn;

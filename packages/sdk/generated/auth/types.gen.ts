@@ -60,6 +60,20 @@ export type CheckoutSessionMetadata = {
 };
 
 /**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
+};
+
+/**
  * Explicit remote environment for future Codex sessions.
  */
 export type CodexConfigRequest = {
@@ -191,6 +205,10 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
     plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
@@ -358,7 +376,7 @@ export type CursorModelsResponse = {
 /**
  * Why a request was refused.
  */
-export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -580,6 +598,11 @@ export type GithubLinkStatusResponse = {
      */
     reauthentication_required: boolean;
 };
+
+/**
+ * How GitHub combines a pull request's commits into its base branch.
+ */
+export type GithubMergeMethod = 'merge' | 'squash' | 'rebase';
 
 /**
  * A check run associated with a GitHub pull request.
@@ -973,6 +996,40 @@ export type MacroApiTokenResponse = {
     macro_api_token: string;
 };
 
+/**
+ * A request to merge one pull request on the user's behalf.
+ */
+export type MergeGithubPullRequestRequest = {
+    mergeMethod?: null | GithubMergeMethod;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a merged pull request.
+ */
+export type MergeGithubPullRequestResponse = {
+    /**
+     * GitHub's own summary of the merge.
+     */
+    message: string;
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * The merge commit's SHA.
+     */
+    sha: string;
+};
+
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -1139,7 +1196,8 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, in cents at provider cost.
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
      */
     included_ai_cents_per_seat: number;
     /**
@@ -2051,6 +2109,40 @@ export type EnrichGithubPullRequestsResponses = {
 };
 
 export type EnrichGithubPullRequestsResponse2 = EnrichGithubPullRequestsResponses[keyof EnrichGithubPullRequestsResponses];
+
+export type MergeGithubPullRequestData = {
+    body: MergeGithubPullRequestRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/merge';
+};
+
+export type MergeGithubPullRequestErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot push to the repository
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * The pull request is not mergeable as it stands, or its head moved
+     */
+    409: ErrorResponse;
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
+
+export type MergeGithubPullRequestResponses = {
+    200: MergeGithubPullRequestResponse;
+};
+
+export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -3536,7 +3628,7 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];

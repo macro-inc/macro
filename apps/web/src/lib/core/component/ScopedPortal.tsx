@@ -1,7 +1,8 @@
 import { getSplitPanelRef } from '@components/app/split-layout/layoutUtils';
 import { isInBlock } from '@core/block';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type { ComponentProps } from 'solid-js';
+import { mergeRefs } from '@solid-primitives/refs';
+import { type ComponentProps, splitProps } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
 
 export type PortalScope = 'local' | 'block' | 'global' | 'split';
@@ -20,6 +21,7 @@ export function ScopedPortal(
     show?: boolean;
   }
 ) {
+  const [local, portalProps] = splitProps(props, ['ref']);
   let searchRef!: HTMLDivElement;
 
   const mountRef = () => {
@@ -45,7 +47,17 @@ export function ScopedPortal(
   return (
     <Show when={props.show !== false}>
       <div class="hidden" ref={searchRef} />
-      <Portal mount={mountRef()}>{props.children}</Portal>
+      <Portal
+        {...portalProps}
+        mount={mountRef()}
+        ref={mergeRefs(local.ref, (element) => {
+          // A local overlay must not add a flex/grid item (and an extra gap)
+          // to its host. The positioned children still own their layout.
+          if (props.scope === 'local') element.style.display = 'contents';
+        })}
+      >
+        {props.children}
+      </Portal>
     </Show>
   );
 }

@@ -8,7 +8,7 @@ use agent_session::domain::events::{
     SessionSettledMetadata, SessionStoppedMetadata, TurnEndedMetadata, TurnStartedMetadata,
     WaitingForInputMetadata,
 };
-use agent_session::domain::model::StoredQueuedAction;
+use agent_session::domain::model::{StoredQueuedAction, TurnPrompter};
 
 use super::*;
 
@@ -339,6 +339,7 @@ where
             }
             HarnessCommand::Open(_)
             | HarnessCommand::Turn(_)
+            | HarnessCommand::ToolApproval(_)
             | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
@@ -531,6 +532,10 @@ where
                 .await;
                 Ok(CommandOutcome::Completed)
             }
+            HarnessCommand::ToolApproval(change) => {
+                self.tool_approval_changed(session_id, change).await;
+                Ok(CommandOutcome::Completed)
+            }
             HarnessCommand::SetSandboxSize(size) => {
                 self.apply_sandbox_size(session_id, size).await?;
                 Ok(CommandOutcome::Completed)
@@ -718,6 +723,35 @@ where
     ///
     /// A failed cancel is best-effort. The entry is already at the front, so
     /// it still drains when the current turn ends on its own.
+    /// Keep the running turn's reply honest about tool calls held for the
+    /// owner: it names the oldest one waiting, and goes back to pending once
+    /// none are. Only the managing replica knows the turn, so a change for a
+    /// session with nothing in flight here has no reply to touch.
+    async fn tool_approval_changed(&self, session_id: AgentSessionId, change: ToolApprovalChange) {
+        let mut waiting_before = None;
+        let Some(turn) = self.busy.update_turn(session_id, |turn| {
+            waiting_before = turn.held_tool_calls.first().cloned();
+            match &change {
+                ToolApprovalChange::Held(call) => turn.held_tool_calls.push(call.clone()),
+                ToolApprovalChange::Settled { approval_id } => turn
+                    .held_tool_calls
+                    .retain(|held| held.approval_id != *approval_id),
+            }
+        }) else {
+            tracing::info!(%session_id, "held tool call changed with no in-flight record");
+            return;
+        };
+        let waiting = turn.held_tool_calls.first().cloned();
+        if waiting == waiting_before {
+            return;
+        }
+        let outcome = match waiting {
+            Some(call) => ReplyOutcome::AwaitingApproval(call),
+            None => ReplyOutcome::Resumed,
+        };
+        self.resolve_reply(session_id, Some(&turn), outcome).await;
+    }
+
     async fn steer_queued(
         &self,
         session_id: AgentSessionId,
@@ -1006,6 +1040,25 @@ where
             }
         }
 
+        // Recorded before delivery, since the runtime may call a tool the
+        // moment the prompt lands: the egress proxy judges every call by who
+        // prompted the turn it belongs to, and it may be serving the call on
+        // another replica.
+        if let Err(error) = self
+            .sessions
+            .set_turn_prompter(
+                session_id,
+                &TurnPrompter {
+                    action_id: entry.action_id,
+                    user: entry.actor.clone(),
+                },
+            )
+            .await
+        {
+            self.requeue_claimed(session_id, entry).await?;
+            return Err(error.into());
+        }
+
         let command = DeliverAction {
             id: entry.action_id,
             action: composed,
@@ -1021,6 +1074,7 @@ where
                     announce: entry.announce,
                     announcement_message_id: entry.announced,
                     dispatched_at: chrono::Utc::now(),
+                    held_tool_calls: Vec::new(),
                 };
                 self.busy.mark_turn(session_id, turn.clone());
                 self.publish_lifecycle(session_id, |identity| {

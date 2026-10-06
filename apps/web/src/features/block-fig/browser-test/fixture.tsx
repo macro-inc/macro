@@ -17,6 +17,7 @@ import { render } from 'solid-js/web';
 import { FigOpening } from '../components/fig-opening';
 import { FigViewerProvider } from '../context/fig-viewer-context';
 import type { FigCommentAnchor, FigPerson } from '../core/comments';
+import { createFontSource } from '../queries/font-source';
 import { FigViewer } from '../views/fig-viewer';
 import { CollabFixture, type FixtureCollab } from './collab-fixture';
 import { fixtureFontSource } from './font-source';
@@ -83,7 +84,8 @@ function Fixture() {
   const [current, setCurrent] = createSignal<string>();
   const comments = createMemoryComments();
 
-  const fonts = fixtureFontSource();
+  const fixtureFonts = fixtureFontSource();
+  const fonts = params.has('realFonts') ? createFontSource() : fixtureFonts;
   window.figFixture = {
     engine,
     errors,
@@ -96,7 +98,7 @@ function Fixture() {
       notified: comments.notified,
       people: FIXTURE_PEOPLE,
     },
-    fontRequests: fonts.requests,
+    fontRequests: fixtureFonts.requests,
   };
 
   // Several people on one design, side by side (`?collab&people=a,b`).
@@ -224,7 +226,7 @@ function Fixture() {
           )}
         </Show>
         <Show when={opening()} keyed>
-          {(bytes) => <FigOpening bytes={bytes} />}
+          <FigOpening />
         </Show>
         <Show when={engine()} keyed>
           {(e) => {

@@ -34,6 +34,7 @@ agent_changes = { path = "../../crates/agent_changes", default-features = false,
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
 initiative_description = { path = "../../crates/initiative_description" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
+agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }

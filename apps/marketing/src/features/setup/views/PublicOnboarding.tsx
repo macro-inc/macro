@@ -2,6 +2,9 @@ import { createSignal, Match, onCleanup, Show, Switch } from 'solid-js';
 import { GoogleAccountsStep } from '../components/GoogleAccountsStep';
 import { OnboardingShell } from '../components/OnboardingShell';
 import { OnboardingTrustDetails } from '../components/OnboardingTrustDetails';
+import { PaymentPreview } from '../components/PaymentPreview';
+import { PlanComparison } from '../components/PlanComparison';
+import { PlanSelection } from '../components/PlanSelection';
 import { StoryStage } from '../components/StoryStage';
 import { buildGoogleWorkOnboardingUrl } from '../core/onboardingHandoff';
 import type { OnboardingIntegration } from '../core/onboardingIntegrations';
@@ -25,6 +28,7 @@ export function PublicOnboarding(props: {
     'personal',
     'tools',
     'team',
+    'plan',
   ] as const;
   type Step = (typeof steps)[number];
   const [step, setStep] = createSignal<Step>('welcome');
@@ -76,12 +80,29 @@ export function PublicOnboarding(props: {
           : undefined
       }
       explainer={
-        ['security', 'work', 'personal'].includes(step()) ? (
+        props.preview && step() === 'plan' ? (
+          <PlanComparison
+            onContinueGuest={() => window.location.assign(props.loginUrl)}
+            onBackToPro={() => {
+              content
+                .querySelector<HTMLElement>('h1')
+                ?.focus({ preventScroll: true });
+              content.closest('[data-onboarding-scroll]')?.scrollTo({
+                top: 0,
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+                  .matches
+                  ? 'instant'
+                  : 'smooth',
+              });
+            }}
+          />
+        ) : ['security', 'work', 'personal'].includes(step()) ? (
           <OnboardingTrustDetails
             topic={step() === 'security' ? 'security' : 'google'}
           />
         ) : undefined
       }
+      explainerLabel={step() === 'plan' ? 'Continue as Guest' : undefined}
     >
       <div ref={content} class="flex flex-col gap-8">
         <Switch>
@@ -139,7 +160,11 @@ export function PublicOnboarding(props: {
             </StoryStage>
           </Match>
           <Match when={props.preview && step() === 'team'}>
-            <PublicTeamStep
+            <PublicTeamStep onContinue={() => goTo('plan')} />
+          </Match>
+          <Match when={props.preview && step() === 'plan'}>
+            <PlanSelection
+              payment={<PaymentPreview />}
               onContinue={() => window.location.assign(props.loginUrl)}
             />
           </Match>

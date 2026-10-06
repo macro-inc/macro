@@ -31,6 +31,7 @@ import {
 } from '../core/paint';
 import { ColorPicker } from './color-picker';
 import { NumberField, TextField } from './design-fields';
+import { InspectorSelect } from './inspector-select';
 import { SwatchPopover } from './swatch-popover';
 
 const title = (s: string) =>
@@ -209,33 +210,23 @@ function PaintEditor(props: {
 
   return (
     <div class="flex flex-col gap-3" data-testid="fig-paint-popover">
-      <select
-        aria-label="Paint type"
-        data-testid="fig-paint-type"
-        class="w-full rounded-md bg-inset px-2 py-1 text-ink text-xs outline-none"
+      <InspectorSelect
+        label="Paint type"
+        testId="fig-paint-type"
         value={p().type}
-        onChange={(e) => {
-          const type = e.currentTarget.value as PaintType;
-          if (type === 'IMAGE') {
+        options={PAINT_TYPES.map((type) => ({
+          ...type,
+          disabled: type.value === 'IMAGE' && !props.onAddImage,
+        }))}
+        onChange={(value) => {
+          if (value === 'IMAGE') {
             fileInput.click();
-            e.currentTarget.value = p().type;
             return;
           }
           setActive(0);
-          props.onEdit({ type }, false);
+          props.onEdit({ type: value as PaintType }, false);
         }}
-      >
-        <For each={PAINT_TYPES}>
-          {(t) => (
-            <option
-              value={t.value}
-              disabled={t.value === 'IMAGE' && !props.onAddImage}
-            >
-              {t.label}
-            </option>
-          )}
-        </For>
-      </select>
+      />
       <input
         ref={fileInput}
         type="file"
@@ -323,7 +314,7 @@ export function PaintList(props: {
         const testId = () => `fig-${props.kind}-${index()}`;
         return (
           <div
-            class="group relative flex items-center gap-1.5 rounded-md bg-inset py-1 pr-1.5 pl-0.5"
+            class="group relative flex h-6 items-center gap-2"
             data-testid={testId()}
             classList={{ 'opacity-60': !paint().visible }}
             onDragOver={(e) => {
@@ -359,7 +350,7 @@ export function PaintList(props: {
             <span
               draggable={props.paints.length > 1}
               aria-hidden="true"
-              class="flex w-3 shrink-0 cursor-grab justify-center text-ink-muted opacity-0 group-hover:opacity-100"
+              class="absolute -left-3 flex w-3 shrink-0 cursor-grab justify-center text-ink-muted opacity-0 group-hover:opacity-100"
               classList={{ invisible: props.paints.length < 2 }}
               onDragStart={(e) => {
                 setDragged(index());
@@ -373,67 +364,69 @@ export function PaintList(props: {
             >
               <DotsSixVertical class="size-3" />
             </span>
-            <SwatchPopover
-              swatch={paintSwatch(paint())}
-              label={`Edit ${props.kind}`}
-              testId={`${testId()}-swatch`}
-              onOpenChange={(open) => {
-                if (open) props.onPickerOpen?.();
-              }}
-            >
-              <PaintEditor
-                paint={paint()}
-                swatches={props.swatches}
-                onAddImage={props.onAddImage}
-                onEdit={(edit, live) =>
-                  change(index(), (spec) => ({ ...spec, ...edit }), live)
-                }
-              />
-            </SwatchPopover>
-            <Show
-              when={paint().type === 'SOLID'}
-              fallback={
-                <span class="min-w-0 flex-1 truncate text-ink">
-                  {paintLabel(paint())}
-                </span>
-              }
-            >
-              <TextField
-                value={paint().color ?? ''}
-                class="font-mono"
-                testId={`${testId()}-hex`}
-                onChange={(v) => {
-                  const hex = normalizeHex(v);
-                  if (!hex) return;
-                  // Six digits keep the paint's own alpha; eight set it.
-                  change(index(), (spec, p) => ({
-                    ...spec,
-                    color:
-                      hex.length === 6 && (p.alpha ?? 1) < 1
-                        ? rgbaToHex({ ...hexToRgba(hex), a: p.alpha ?? 1 })
-                        : hex,
-                  }));
+            <div class="flex h-6 min-w-0 flex-1 items-center gap-1 rounded-md bg-inset pl-1">
+              <SwatchPopover
+                swatch={paintSwatch(paint())}
+                label={`Edit ${props.kind}`}
+                testId={`${testId()}-swatch`}
+                onOpenChange={(open) => {
+                  if (open) props.onPickerOpen?.();
                 }}
-              />
-            </Show>
-            <div class="w-14 shrink-0">
-              <NumberField
-                label=""
-                value={paint().opacity}
-                percent
-                min={0}
-                max={1}
-                testId={`${testId()}-opacity`}
-                onChange={(opacity, live) =>
-                  change(index(), (spec) => ({ ...spec, opacity }), live)
+              >
+                <PaintEditor
+                  paint={paint()}
+                  swatches={props.swatches}
+                  onAddImage={props.onAddImage}
+                  onEdit={(edit, live) =>
+                    change(index(), (spec) => ({ ...spec, ...edit }), live)
+                  }
+                />
+              </SwatchPopover>
+              <Show
+                when={paint().type === 'SOLID'}
+                fallback={
+                  <span class="min-w-0 flex-1 truncate text-ink">
+                    {paintLabel(paint())}
+                  </span>
                 }
-              />
+              >
+                <TextField
+                  value={paint().color ?? ''}
+                  class="font-sans"
+                  testId={`${testId()}-hex`}
+                  onChange={(v) => {
+                    const hex = normalizeHex(v);
+                    if (!hex) return;
+                    // Six digits keep the paint's own alpha; eight set it.
+                    change(index(), (spec, p) => ({
+                      ...spec,
+                      color:
+                        hex.length === 6 && (p.alpha ?? 1) < 1
+                          ? rgbaToHex({ ...hexToRgba(hex), a: p.alpha ?? 1 })
+                          : hex,
+                    }));
+                  }}
+                />
+              </Show>
+              <div class="w-14 shrink-0 border-l border-edge-frame">
+                <NumberField
+                  label=""
+                  value={paint().opacity}
+                  percent
+                  min={0}
+                  max={1}
+                  testId={`${testId()}-opacity`}
+                  onChange={(opacity, live) =>
+                    change(index(), (spec) => ({ ...spec, opacity }), live)
+                  }
+                />
+              </div>
             </div>
             <button
               type="button"
               aria-label={paint().visible ? 'Hide' : 'Show'}
               data-testid={`${testId()}-visibility`}
-              class="rounded p-0.5 text-ink-muted hover:text-ink"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
               onClick={() =>
                 change(index(), (spec, p) => ({ ...spec, visible: !p.visible }))
               }
@@ -449,7 +442,7 @@ export function PaintList(props: {
               type="button"
               aria-label="Remove"
               data-testid={`${testId()}-remove`}
-              class="rounded p-0.5 text-ink-muted hover:text-ink"
+              class="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
               onClick={() => change(index(), () => null)}
             >
               <Minus class="size-3.5" />

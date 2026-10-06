@@ -1,0 +1,9 @@
+subscription AgentSessionLogAppended($sessionId: ID!) {
+	agentSessionLogAppended(sessionId: $sessionId) {
+		id
+		createdAt
+		userId
+		direction
+		content
+	}
+}

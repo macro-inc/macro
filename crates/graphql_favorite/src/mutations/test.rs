@@ -66,7 +66,7 @@ impl SoupEntityEdges for TestSoupEdges {
         Ok(None)
     }
 
-    fn agent_session_edges(_bot_id: Uuid) -> Self::AgentSessionEdges {
+    fn agent_session_edges(_session_id: Uuid, _bot_id: Uuid) -> Self::AgentSessionEdges {
         TestAgentSessionEdges { available: true }
     }
 

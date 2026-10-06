@@ -76,6 +76,11 @@ export interface VectorOverlay {
 
 const LABEL_TYPES = new Set(['FRAME', 'SYMBOL', 'SECTION', 'INSTANCE']);
 
+export interface FrameLabel {
+  frame: FrameRow;
+  rect: Rect;
+}
+
 function pill(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -120,6 +125,7 @@ function drawPixelGrid(ctx: CanvasRenderingContext2D, m: OverlayModel) {
 }
 
 function drawFrameLabels(ctx: CanvasRenderingContext2D, m: OverlayModel) {
+  const labels: FrameLabel[] = [];
   ctx.font = '11px Inter, system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'bottom';
@@ -144,7 +150,17 @@ function drawFrameLabels(ctx: CanvasRenderingContext2D, m: OverlayModel) {
       name = `${name.slice(0, -2)}…`;
     }
     ctx.fillText(name, Math.round(p.x), Math.round(p.y - 4));
+    labels.push({
+      frame: f,
+      rect: {
+        x: Math.round(p.x),
+        y: Math.round(p.y - 20),
+        w: ctx.measureText(name).width,
+        h: 18,
+      },
+    });
   }
+  return labels;
 }
 
 function drawSelection(ctx: CanvasRenderingContext2D, m: OverlayModel) {
@@ -407,7 +423,7 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   ctx.setTransform(m.dpr, 0, 0, m.dpr, 0, 0);
   drawPixelGrid(ctx, m);
   if (m.layoutAids) drawLayoutGrids(ctx, m, m.layoutAids);
-  drawFrameLabels(ctx, m);
+  const labels = drawFrameLabels(ctx, m);
   drawHover(ctx, m);
   if (m.layoutAids) drawSpacing(ctx, m, m.layoutAids);
   drawSelection(ctx, m);
@@ -418,4 +434,5 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, m: OverlayModel) {
   drawPeers(ctx, m);
   if (m.layoutAids?.guides) drawRulerGuides(ctx, m, m.layoutAids);
   drawRulers(ctx, m);
+  return labels;
 }

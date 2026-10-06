@@ -650,7 +650,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 ),
                 ai_billing::outbound::PgUsageReader::new(pool.clone()),
                 ai_billing::outbound::PgBillingRepo::new(pool.clone(), pricing),
-                ai_billing::outbound::NoOpPaymentGateway,
+                ai_billing::outbound::HttpPaymentGateway::new(Arc::new(
+                    authentication_service_client::AuthServiceClient::new(
+                        "testing".to_string(),
+                        "http://127.0.0.1:9".to_string(),
+                    ),
+                )),
                 pricing,
             )
             .with_enforcement(enforcement),

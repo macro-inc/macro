@@ -584,14 +584,17 @@ fn legacy_free_enterprise_and_exempt_features_keep_their_paths() {
         AccountingRoute::Unmetered
     );
     assert_eq!(PlanTier::Premium.monthly_price_cents(), 4_000);
-    // Both accounting paths read the same configured allowance.
+    // Both accounting paths read the same configured Premium allowance.
     let pricing = AiPricing::testing();
     let allowance = pricing.included_allowance_cents();
     assert_eq!(
         PlanTier::Premium.included_ai_cents_per_seat(pricing),
         allowance
     );
-    assert_eq!(PlanTier::Max.included_ai_cents_per_seat(pricing), allowance);
+    assert_eq!(
+        PlanTier::Max.included_ai_cents_per_seat(pricing),
+        pricing.included_allowance_cents_for(PlanTier::Max)
+    );
     assert_eq!(
         included_public_usage(pricing),
         public_cents(allowance as u64)

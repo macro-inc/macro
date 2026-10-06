@@ -1,3 +1,7 @@
+import CircleHalf from '@phosphor/circle-half.svg';
+import CornersOut from '@phosphor/corners-out.svg';
+import List from '@phosphor/list.svg';
+import { InspectorSelect } from './inspector-select';
 /**
  * The right panel: the selected layer's properties as Figma's design panel
  * shows them (editable when `onPatch` is given), CSS as Dev Mode writes
@@ -11,13 +15,11 @@ import type {
   PaintInfo,
   TextInfo,
 } from '@core/fig-engine/types';
-import AlignBottom from '@phosphor/align-bottom.svg';
-import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
-import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
-import AlignLeft from '@phosphor/align-left.svg';
-import AlignRight from '@phosphor/align-right.svg';
-import AlignTop from '@phosphor/align-top.svg';
+import { Tabs } from '@kobalte/core/tabs';
 import Copy from '@phosphor/copy.svg';
+import DiamondsFour from '@phosphor/diamonds-four.svg';
+import Eye from '@phosphor/eye.svg';
+import EyeSlash from '@phosphor/eye-slash.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
@@ -29,20 +31,31 @@ import { formatDashes, parseDashes } from '../core/paint';
 import type { MixedTextField } from '../core/rich-text';
 import { formatLetterSpacing, formatLineHeight } from '../core/type';
 import type { Patch } from '../primitives/create-fig-editor';
-import {
-  AutoLayoutControls,
-  ConstraintControls,
-  SizingControls,
-} from './auto-layout-controls';
-import { BooleanButtons } from './boolean-controls';
+import { BooleanButtons, BooleanMenu } from './boolean-controls';
 import { ColorPicker } from './color-picker';
 import { NumberField, ParsedField, TextField } from './design-fields';
 import { EffectList } from './effect-controls';
+import { LayoutSection, PositionSection } from './geometry-sections';
 import { MixedFields } from './mixed-fields';
 import { PaintList, paintLabel, paintSwatch } from './paint-controls';
 import { Section } from './panel-section';
 import { SwatchPopover } from './swatch-popover';
 import { TypeControls } from './type-controls';
+
+function CreateComponentButton(props: { onCreate: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="Create component"
+      title="Create component"
+      data-testid="fig-create-component"
+      class="flex size-7 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink focus-visible:ring-1 focus-visible:ring-accent"
+      onClick={props.onCreate}
+    >
+      <DiamondsFour class="size-4" />
+    </button>
+  );
+}
 
 function Field(props: { label: string; value: string | number }) {
   return (
@@ -148,37 +161,6 @@ function EffectRow(props: { effect: EffectInfo }) {
   );
 }
 
-const canHaveAutoLayout = (type: string) => ['FRAME', 'SYMBOL'].includes(type);
-
-function AutoLayoutFields(props: { info: NodeInfo }) {
-  return (
-    <Show when={props.info.autoLayout}>
-      {(al) => (
-        <Section title="Auto layout">
-          <div class="grid grid-cols-2 gap-1.5">
-            <Field label="Direction" value={title(al().mode)} />
-            <Field label="Gap" value={fmt(al().spacing)} />
-            <Field
-              label="Padding"
-              value={[
-                al().paddingTop,
-                al().paddingRight,
-                al().paddingBottom,
-                al().paddingLeft,
-              ]
-                .map(fmt)
-                .join(' ')}
-            />
-            <Show when={al().primaryAlign}>
-              {(a) => <Field label="Align" value={title(a())} />}
-            </Show>
-          </div>
-        </Section>
-      )}
-    </Show>
-  );
-}
-
 function TextFields(props: { text: TextInfo }) {
   const t = () => props.text;
   return (
@@ -225,12 +207,16 @@ export interface TypeOptions {
 }
 
 export function DesignPanel(props: {
+  tab?: PanelTab;
+  headerActions?: JSX.Element;
+  zoom?: JSX.Element;
   info: NodeInfo | undefined;
   selectionCount: number;
   /** Edits the selection; absent when the file is read-only. */
   onPatch?: (patch: Patch, live: boolean) => void;
   /** Aligns the selection; absent when the file is read-only. */
   onAlign?: (how: Alignment) => void;
+  onFlip?: (axis: 'horizontal' | 'vertical') => void;
   page: PageSummary | undefined;
   /** The Export section of the selected layer. */
   exportSection?: JSX.Element;
@@ -241,6 +227,7 @@ export function DesignPanel(props: {
   /** Boolean operations on the selection; absent when read-only. */
   onBoolean?: (operation: BooleanOperation) => void;
   onFlatten?: () => void;
+  onCreateComponent?: () => void;
   onCopyText: (text: string) => void;
   /** Font families the document uses. */
   fontFamilies?: readonly string[];
@@ -268,56 +255,139 @@ export function DesignPanel(props: {
   /** The shared style control of a fill, stroke, text, or effect section. */
   styleControl?: (kind: StyleKind) => JSX.Element;
 }) {
-  const [tab, setTabSignal] = createSignal<PanelTab>('design');
+  const [localTab, setTabSignal] = createSignal<PanelTab>('design');
+  const tab = () => props.tab ?? localTab();
   const setTab = (t: PanelTab) => {
     setTabSignal(t);
     props.onTabChange?.(t);
   };
   const tabs = (): PanelTab[] =>
-    props.prototype === undefined
-      ? ['design', 'code']
-      : ['design', 'prototype', 'code'];
+    props.prototype === undefined ? ['design'] : ['design', 'prototype'];
   return (
-    <div
+    <Tabs
       class="flex size-full min-h-0 flex-col text-ink text-xs"
       data-testid="fig-design-panel"
+      value={tab() === 'code' ? 'design' : tab()}
+      onChange={(value) => setTab(value as PanelTab)}
     >
-      <div class="flex h-9 shrink-0 items-center gap-1 border-edge-muted border-b px-2">
-        <For each={tabs()}>
-          {(t) => (
-            <button
-              type="button"
-              class="rounded-md px-2 py-1 font-medium"
-              classList={{
-                'bg-hover text-ink': tab() === t,
-                'text-ink-muted': tab() !== t,
-              }}
-              data-testid={`fig-panel-tab-${t}`}
-              onClick={() => setTab(t)}
-            >
-              {PANEL_TAB_LABELS[t]}
-            </button>
-          )}
-        </For>
+      <div class="flex h-12 shrink-0 items-center justify-end px-3">
+        {props.headerActions}
       </div>
-      <Show when={tab() === 'prototype'}>
-        <div class="min-h-0 flex-1 overflow-y-auto">{props.prototype}</div>
+      <div class="flex h-10 shrink-0 items-center gap-1 border-edge-frame border-b px-3">
+        <Tabs.List
+          aria-label="Inspector"
+          class="flex min-w-0 flex-1 items-center gap-1"
+        >
+          <For each={tabs()}>
+            {(t) => (
+              <Tabs.Trigger
+                value={t}
+                class="rounded-md px-2 py-1 font-medium"
+                classList={{
+                  'bg-hover text-ink':
+                    (tab() === 'code' ? 'design' : tab()) === t,
+                  'text-ink-muted': (tab() === 'code' ? 'design' : tab()) !== t,
+                }}
+                data-testid={`fig-panel-tab-${t}`}
+                onClick={() => setTab(t)}
+              >
+                {PANEL_TAB_LABELS[t]}
+              </Tabs.Trigger>
+            )}
+          </For>
+        </Tabs.List>
+        {props.zoom}
+      </div>
+      <Show
+        when={tab() === 'design' && !props.info && props.selectionCount > 1}
+      >
+        <div class="flex h-14 shrink-0 items-center justify-between gap-2 border-edge-frame border-b px-3">
+          <span class="min-w-0 flex-1 truncate font-medium text-sm">
+            {props.selectionCount} layers selected
+          </span>
+          <Show when={props.onCreateComponent}>
+            {(create) => <CreateComponentButton onCreate={create()} />}
+          </Show>
+          <Show when={props.onBoolean}>
+            {(onBoolean) => (
+              <BooleanMenu
+                onBoolean={onBoolean()}
+                onFlatten={() => props.onFlatten?.()}
+              />
+            )}
+          </Show>
+        </div>
       </Show>
-      <div
+      <Show when={tab() === 'design' ? props.info : undefined}>
+        {(info) => (
+          <div class="shrink-0 border-edge-frame border-b px-3 py-3">
+            <div class="flex h-7 items-center justify-between gap-2">
+              <span class="min-w-0 flex-1 truncate font-medium text-sm">
+                {info().typeLabel}
+              </span>
+              <Show
+                when={
+                  info().type !== 'SYMBOL' &&
+                  info().type !== 'INSTANCE' &&
+                  props.onCreateComponent
+                }
+              >
+                {(create) => <CreateComponentButton onCreate={create()} />}
+              </Show>
+              <Show when={props.onBoolean}>
+                {(onBoolean) => (
+                  <BooleanMenu
+                    onBoolean={onBoolean()}
+                    onFlatten={() => props.onFlatten?.()}
+                  />
+                )}
+              </Show>
+            </div>
+            <Show
+              when={props.onPatch}
+              fallback={
+                <div class="truncate text-ink-muted" title={info().name}>
+                  {info().name}
+                </div>
+              }
+            >
+              {(patch) => (
+                <TextField
+                  value={info().name}
+                  class="-mx-1 text-ink-muted"
+                  testId="fig-name"
+                  onChange={(name) => patch()({ name }, false)}
+                />
+              )}
+            </Show>
+            <Show when={info().mainComponent}>
+              {(main) => <div class="text-ink-muted">Instance of {main()}</div>}
+            </Show>
+            <Show when={info().description}>
+              {(description) => (
+                <p class="mt-1 text-ink-muted">{description()}</p>
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+      <Tabs.Content
+        value="prototype"
+        class="min-h-0 flex-1 overflow-y-auto outline-none"
+      >
+        {props.prototype}
+      </Tabs.Content>
+      <Tabs.Content
+        value="design"
+        forceMount
         class="min-h-0 flex-1 overflow-y-auto"
         classList={{ hidden: tab() === 'prototype' }}
       >
         <Show
-          when={props.onAlign && props.selectionCount > 0 && tab() === 'design'}
-        >
-          <AlignRow onAlign={(how) => props.onAlign?.(how)} />
-        </Show>
-        <Show
           when={
             props.onBoolean &&
             tab() === 'design' &&
-            (props.selectionCount > 1 ||
-              props.info?.type === 'BOOLEAN_OPERATION')
+            props.info?.type === 'BOOLEAN_OPERATION'
           }
         >
           <BooleanButtons
@@ -386,6 +456,7 @@ export function DesignPanel(props: {
               {(mixed) => (
                 <MixedFields
                   mixed={mixed()}
+                  onAlign={props.onAlign}
                   onPatch={props.onPatch}
                   swatches={props.swatches}
                   onPickerOpen={props.onPickerOpen}
@@ -404,235 +475,49 @@ export function DesignPanel(props: {
                 )
               }
             >
-              <div class="border-edge-muted border-b px-3 py-3">
-                <Show
-                  when={props.onPatch}
-                  fallback={
-                    <div
-                      class="truncate font-semibold text-sm"
-                      title={info().name}
-                    >
-                      {info().name}
-                    </div>
-                  }
-                >
-                  {(patch) => (
-                    <TextField
-                      value={info().name}
-                      class="-mx-1 font-semibold text-sm"
-                      testId="fig-name"
-                      onChange={(name) => patch()({ name }, false)}
-                    />
-                  )}
-                </Show>
-                <div class="text-ink-muted">
-                  {info().typeLabel}
-                  <Show when={info().mainComponent}>
-                    {(main) => <> of {main()}</>}
-                  </Show>
-                </div>
-                <Show when={info().description}>
-                  {(d) => <p class="mt-1 text-ink-muted">{d()}</p>}
-                </Show>
-              </div>
               {props.designSections}
-              <Section title="Layout">
-                <Show
-                  when={props.onPatch && !info().id.startsWith('I')}
-                  fallback={
-                    <div class="grid grid-cols-2 gap-1.5">
-                      <Field label="X" value={fmt(info().x)} />
-                      <Field label="Y" value={fmt(info().y)} />
-                      <Field label="W" value={fmt(info().width)} />
-                      <Field label="H" value={fmt(info().height)} />
-                      <Show when={Math.abs(info().rotation) > 0.01}>
-                        <Field label="↻" value={`${fmt(info().rotation)}°`} />
-                      </Show>
-                      <Show when={info().cornerRadius}>
-                        {(r) => (
-                          <Field label="Radius" value={radiusLabel(r())} />
-                        )}
-                      </Show>
-                    </div>
-                  }
-                >
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <NumberField
-                      label="X"
-                      value={info().x}
-                      testId="fig-field-x"
-                      onChange={(x, live) => props.onPatch?.({ x }, live)}
-                    />
-                    <NumberField
-                      label="Y"
-                      value={info().y}
-                      testId="fig-field-y"
-                      onChange={(y, live) => props.onPatch?.({ y }, live)}
-                    />
-                    <NumberField
-                      label="W"
-                      value={info().width}
-                      min={0.01}
-                      testId="fig-field-w"
-                      onChange={(width, live) =>
-                        props.onPatch?.({ width }, live)
-                      }
-                    />
-                    <NumberField
-                      label="H"
-                      value={info().height}
-                      min={0.01}
-                      testId="fig-field-h"
-                      onChange={(height, live) =>
-                        props.onPatch?.({ height }, live)
-                      }
-                    />
-                    <NumberField
-                      label="↻"
-                      value={info().rotation}
-                      testId="fig-field-rotation"
-                      onChange={(rotation, live) =>
-                        props.onPatch?.({ rotation }, live)
-                      }
-                    />
-                    <Show when={info().cornerRadius || hasCorners(info().type)}>
-                      <NumberField
-                        label="◜"
-                        value={info().cornerRadius?.top_left ?? 0}
-                        min={0}
-                        testId="fig-field-radius"
-                        onChange={(cornerRadius, live) =>
-                          props.onPatch?.({ cornerRadius }, live)
-                        }
-                      />
-                    </Show>
-                  </div>
-                  <SizingControls
-                    info={info()}
-                    onPatch={(patch, live) => props.onPatch?.(patch, live)}
-                  />
-                  <Show when={info().layoutParent}>
-                    {(positioning) => (
-                      <label class="flex items-center gap-2 text-ink-muted">
-                        <input
-                          type="checkbox"
-                          checked={positioning() === 'ABSOLUTE'}
-                          data-testid="fig-absolute"
-                          onChange={(e) =>
-                            props.onPatch?.(
-                              {
-                                layoutPositioning: e.currentTarget.checked
-                                  ? 'ABSOLUTE'
-                                  : 'AUTO',
-                              },
-                              false
-                            )
-                          }
-                        />
-                        Absolute position
-                      </label>
-                    )}
-                  </Show>
-                  <Show when={info().type === 'FRAME'}>
-                    <label class="flex items-center gap-2 text-ink-muted">
-                      <input
-                        type="checkbox"
-                        checked={info().clipsContent}
-                        data-testid="fig-clip-content"
-                        onChange={(e) =>
-                          props.onPatch?.(
-                            { clipContent: e.currentTarget.checked },
-                            false
-                          )
-                        }
-                      />
-                      Clip content
-                    </label>
-                  </Show>
-                </Show>
-                <Show
-                  when={props.onPatch && info().constrained}
-                  fallback={
-                    <>
-                      <Show
-                        when={
-                          !props.onPatch &&
-                          info().clipsContent &&
-                          info().childCount > 0
-                        }
-                      >
-                        <span class="text-ink-muted">Clips content</span>
-                      </Show>
-                      <Show when={info().constraints}>
-                        {(c) => (
-                          <span class="text-ink-muted">
-                            Constraints: {title(c()[0])} · {title(c()[1])}
-                          </span>
-                        )}
-                      </Show>
-                    </>
-                  }
-                >
-                  <ConstraintControls
-                    constraints={info().constraints}
-                    onPatch={(patch) => props.onPatch?.(patch, false)}
-                  />
-                </Show>
-              </Section>
-              <Show
-                when={props.onPatch && !info().id.startsWith('I')}
-                fallback={<AutoLayoutFields info={info()} />}
-              >
-                <Show
-                  when={info().autoLayout}
-                  fallback={
-                    <Show when={canHaveAutoLayout(info().type)}>
-                      <Section
-                        title="Auto layout"
-                        testId="fig-auto-layout-section"
-                        onAdd={props.onAddAutoLayout}
-                      >
-                        <span class="text-ink-muted">⇧A adds auto layout</span>
-                      </Section>
-                    </Show>
-                  }
-                >
-                  {(al) => (
-                    <Section
-                      title="Auto layout"
-                      testId="fig-auto-layout-section"
-                      onRemove={() =>
-                        props.onPatch?.({ layoutMode: 'NONE' }, false)
+              <PositionSection
+                info={info()}
+                onAlign={props.onAlign}
+                onFlip={props.onFlip}
+                onPatch={!info().id.startsWith('I') ? props.onPatch : undefined}
+              />
+              <LayoutSection
+                info={info()}
+                onPatch={!info().id.startsWith('I') ? props.onPatch : undefined}
+                onAddAutoLayout={props.onAddAutoLayout}
+              />
+              <Section
+                title="Appearance"
+                actions={
+                  <Show when={props.onPatch}>
+                    <button
+                      type="button"
+                      aria-label={info().visible ? 'Hide layer' : 'Show layer'}
+                      title={info().visible ? 'Hide layer' : 'Show layer'}
+                      data-testid="fig-appearance-visible"
+                      class="flex size-6 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
+                      onClick={() =>
+                        props.onPatch?.({ visible: !info().visible }, false)
                       }
                     >
                       <Show
-                        when={
-                          (al().mode === 'HORIZONTAL' ||
-                            al().mode === 'VERTICAL') &&
-                          !al().wrap
-                        }
-                        fallback={
-                          <span class="text-ink-muted">
-                            {title(al().mode)}
-                            {al().wrap ? ' (wrap)' : ''}: kept as laid out in
-                            Figma
-                          </span>
-                        }
+                        when={info().visible}
+                        fallback={<EyeSlash class="size-3.5" />}
                       >
-                        <AutoLayoutControls
-                          layout={al()}
-                          onPatch={(patch, live) =>
-                            props.onPatch?.(patch, live)
-                          }
-                        />
+                        <Eye class="size-3.5" />
                       </Show>
-                    </Section>
-                  )}
-                </Show>
-              </Show>
-              {props.layoutGrids}
-              <Section title="Appearance">
+                    </button>
+                  </Show>
+                }
+              >
                 <div class="grid grid-cols-2 gap-1.5">
+                  <span class="text-ink-muted text-[11px]">Opacity</span>
+                  <span class="text-ink-muted text-[11px]">
+                    {info().cornerRadius || hasCorners(info().type)
+                      ? 'Corner radius'
+                      : ''}
+                  </span>
                   <Show
                     when={props.onPatch}
                     fallback={
@@ -640,7 +525,8 @@ export function DesignPanel(props: {
                     }
                   >
                     <NumberField
-                      label="◐"
+                      label={<CircleHalf class="size-3.5" />}
+                      ariaLabel="Opacity"
                       value={info().opacity}
                       percent
                       min={0}
@@ -651,12 +537,53 @@ export function DesignPanel(props: {
                       }
                     />
                   </Show>
-                  <Field label="Blend" value={title(info().blendMode)} />
+                  <Show when={info().cornerRadius || hasCorners(info().type)}>
+                    <Show
+                      when={props.onPatch}
+                      fallback={
+                        <Field
+                          label="Radius"
+                          value={
+                            info().cornerRadius
+                              ? radiusLabel(info().cornerRadius!)
+                              : '0'
+                          }
+                        />
+                      }
+                    >
+                      <NumberField
+                        label={<CornersOut class="size-3.5" />}
+                        ariaLabel="Corner radius"
+                        value={info().cornerRadius?.top_left ?? 0}
+                        min={0}
+                        mixed={
+                          !!info().cornerRadius &&
+                          radiusLabel(info().cornerRadius!).includes(',')
+                        }
+                        testId="fig-field-radius"
+                        onChange={(cornerRadius, live) =>
+                          props.onPatch?.({ cornerRadius }, live)
+                        }
+                      />
+                    </Show>
+                  </Show>
+                  <Show
+                    when={
+                      !['PASS_THROUGH', 'NORMAL'].includes(info().blendMode)
+                    }
+                  >
+                    <div class="col-span-2">
+                      <Field label="Blend" value={title(info().blendMode)} />
+                    </div>
+                  </Show>
                 </div>
               </Section>
               <Show when={info().text}>
                 {(t) => (
-                  <Section title="Text" actions={props.styleControl?.('TEXT')}>
+                  <Section
+                    title="Typography"
+                    actions={props.styleControl?.('TEXT')}
+                  >
                     <Show
                       when={props.onPatch}
                       fallback={<TextFields text={t()} />}
@@ -677,23 +604,26 @@ export function DesignPanel(props: {
                         Also uses {t().fonts.join(', ')}
                       </span>
                     </Show>
-                    <div class="relative">
-                      <p
-                        class="max-h-40 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-inset px-2 py-1.5 text-ink"
-                        data-testid="fig-text-content"
-                      >
-                        {t().characters}
-                        {t().truncated ? '…' : ''}
-                      </p>
-                      <button
-                        type="button"
-                        aria-label="Copy text"
-                        class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
-                        onClick={() => props.onCopyText(t().characters)}
-                      >
-                        <Copy class="size-3" />
-                      </button>
-                    </div>
+                    <details class="mt-1 text-ink-muted">
+                      <summary class="py-1">Text content</summary>
+                      <div class="relative">
+                        <p
+                          class="max-h-40 select-text overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-inset px-2 py-1.5 text-ink"
+                          data-testid="fig-text-content"
+                        >
+                          {t().characters}
+                          {t().truncated ? '…' : ''}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Copy text"
+                          class="absolute top-1 right-1 rounded p-0.5 text-ink-muted hover:text-ink"
+                          onClick={() => props.onCopyText(t().characters)}
+                        >
+                          <Copy class="size-3" />
+                        </button>
+                      </div>
+                    </details>
                   </Section>
                 )}
               </Show>
@@ -771,7 +701,7 @@ export function DesignPanel(props: {
                   <Show when={info().strokes.length > 0}>
                     <div class="grid grid-cols-2 gap-1.5">
                       <NumberField
-                        label="≡"
+                        label={<List class="size-3.5" />}
                         value={info().strokeWeight ?? 1}
                         min={0}
                         testId="fig-field-stroke-weight"
@@ -779,23 +709,23 @@ export function DesignPanel(props: {
                           props.onPatch?.({ strokeWeight }, live)
                         }
                       />
-                      <select
-                        class="rounded-md bg-inset px-2 py-1 text-ink outline-none"
+                      <InspectorSelect
+                        label="Stroke alignment"
                         value={info().strokeAlign ?? 'CENTER'}
-                        onChange={(e) =>
+                        options={[
+                          { value: 'INSIDE', label: 'Inside' },
+                          { value: 'CENTER', label: 'Center' },
+                          { value: 'OUTSIDE', label: 'Outside' },
+                        ]}
+                        onChange={(strokeAlign) =>
                           props.onPatch?.(
                             {
-                              strokeAlign: e.currentTarget
-                                .value as Patch['strokeAlign'],
+                              strokeAlign: strokeAlign as Patch['strokeAlign'],
                             },
                             false
                           )
                         }
-                      >
-                        <option value="INSIDE">Inside</option>
-                        <option value="CENTER">Center</option>
-                        <option value="OUTSIDE">Outside</option>
-                      </select>
+                      />
                       <div class="col-span-2">
                         <ParsedField
                           label="Dash"
@@ -883,6 +813,7 @@ export function DesignPanel(props: {
                   </For>
                 </Section>
               </Show>
+              {props.layoutGrids}
               {props.exportSection}
             </Show>
           )}
@@ -892,46 +823,8 @@ export function DesignPanel(props: {
         >
           {props.pageExtra}
         </Show>
-      </div>
-    </div>
-  );
-}
-
-const ALIGN_BUTTONS: {
-  how: Alignment;
-  label: string;
-  icon: (props: { class?: string }) => JSX.Element;
-}[] = [
-  { how: 'left', label: 'Align left', icon: AlignLeft },
-  {
-    how: 'center',
-    label: 'Align horizontal centers',
-    icon: AlignCenterHorizontal,
-  },
-  { how: 'right', label: 'Align right', icon: AlignRight },
-  { how: 'top', label: 'Align top', icon: AlignTop },
-  { how: 'middle', label: 'Align vertical centers', icon: AlignCenterVertical },
-  { how: 'bottom', label: 'Align bottom', icon: AlignBottom },
-];
-
-function AlignRow(props: { onAlign: (how: Alignment) => void }) {
-  return (
-    <div class="flex items-center justify-between border-edge-muted border-b px-2 py-1.5">
-      <For each={ALIGN_BUTTONS}>
-        {(b) => (
-          <button
-            type="button"
-            aria-label={b.label}
-            title={b.label}
-            data-testid={`fig-align-${b.how}`}
-            class="rounded p-1 text-ink-muted hover:bg-hover hover:text-ink"
-            onClick={() => props.onAlign(b.how)}
-          >
-            {b.icon({ class: 'size-4' })}
-          </button>
-        )}
-      </For>
-    </div>
+      </Tabs.Content>
+    </Tabs>
   );
 }
 

@@ -12,12 +12,14 @@ export type AiPlanTier = 'free' | 'premium' | 'max';
 
 export type AiDenyReason =
   | 'allowance_exhausted'
+  | 'free_allowance_exhausted'
   | 'overage_limit_reached'
   | 'overage_payment_failed';
 
 /** Machine-readable codes carried in 402 bodies from the AI endpoints. */
 export type AiDenyCode =
   | 'ai_allowance_exhausted'
+  | 'ai_free_allowance_exhausted'
   | 'ai_overage_limit_reached'
   | 'ai_overage_payment_failed';
 

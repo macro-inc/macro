@@ -31,7 +31,15 @@ async fn configured_recorders_preserve_analytics_and_count_only_enabled_billable
         (enabled, UsageContext::system(AiFeature::Chat)),
     ] {
         assert!(recorder.tracking().is_some());
-        recorder.record(context.into_event("claude-opus-5".into(), 1_000_000, 0));
+        recorder.record(context.into_event(
+            "claude-opus-5".into(),
+            ai_usage::UsageAmount::Tokens {
+                input: 1_000_000,
+                output: 0,
+                cache_read: 0,
+                cache_write: 0,
+            },
+        ));
     }
 
     let analytics = ai_usage::outbound::PgUsageRepo::new(pool.clone());

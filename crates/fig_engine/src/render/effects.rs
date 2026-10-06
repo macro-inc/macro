@@ -3,8 +3,10 @@
 //! Figma's blur radius is twice the Gaussian standard deviation (as in CSS
 //! `box-shadow`); Gaussians are approximated by three box blurs.
 
+use super::blend::{div255, over_pixel};
+use super::coarse::{PAD, coarse_sigma, coarseness_for};
 use super::{Painter, Surface};
-use crate::model::{Color, Effect, Rect};
+use crate::model::{Affine, Color, Effect, Rect};
 use crate::scene::SceneIdx;
 use tiny_skia::{Mask, Pixmap, PixmapPaint, Transform};
 
@@ -145,12 +147,12 @@ fn blur_channels<const C: usize>(data: &mut [u8], w: usize, h: usize, sigma: f32
 }
 
 /// Blurs premultiplied RGBA in place.
-pub(crate) fn blur_pixmap(pixmap: &mut Pixmap, sigma: f32) {
+pub(super) fn blur_pixmap(pixmap: &mut Pixmap, sigma: f32) {
     let (w, h) = (pixmap.width() as usize, pixmap.height() as usize);
     blur_channels::<4>(pixmap.data_mut(), w, h, sigma);
 }
 
-fn blur_alpha(alpha: &mut [u8], w: usize, h: usize, sigma: f32) {
+pub(super) fn blur_alpha(alpha: &mut [u8], w: usize, h: usize, sigma: f32) {
     blur_channels::<1>(alpha, w, h, sigma);
 }
 
@@ -206,7 +208,115 @@ fn max_pass(
     }
 }
 
-fn alpha_plane(pixmap: &Pixmap) -> Vec<u8> {
+/// [`spread`] by a fraction of a pixel too: between the planes spread by the
+/// whole pixels either side of `r`, weighted by how near each is. Blurred
+/// afterwards, that is as good as moving the edges by the fraction.
+pub(super) fn spread_by(alpha: &mut [u8], w: usize, h: usize, r: f32) {
+    let below = r.floor();
+    let t = ((r - below) * 256.0).round() as u16;
+    let below = below as i32;
+    if t == 0 || t == 256 {
+        spread(alpha, w, h, below + i32::from(t == 256));
+        return;
+    }
+    // Spread as far as the nearer of the two to zero, then a pixel further
+    // for the other (square filters compose by adding their radii).
+    let near = if below >= 0 { below } else { below + 1 };
+    spread(alpha, w, h, near);
+    let mut far = alpha.to_vec();
+    spread(&mut far, w, h, if below >= 0 { 1 } else { -1 });
+    let (lo, hi): (&[u8], &[u8]) = if below >= 0 {
+        (alpha, &far)
+    } else {
+        (&far, alpha)
+    };
+    let mixed: Vec<u8> = lo
+        .iter()
+        .zip(hi)
+        .map(|(&a, &b)| ((u16::from(a) * (256 - t) + u16::from(b) * t + 128) >> 8) as u8)
+        .collect();
+    alpha.copy_from_slice(&mixed);
+}
+
+/// Bilinear resampling of `C`-channel pixels, with zero outside the source:
+/// `dst` (`dw` pixels wide) is `src` (`sw × sh`) scaled up `k` times, with
+/// its first pixel's top-left corner at source position `origin` (source
+/// pixels from the source's top-left corner).
+pub(super) fn resample<const C: usize>(
+    src: &[u8],
+    (sw, sh): (usize, usize),
+    dst: &mut [u8],
+    dw: usize,
+    k: f64,
+    origin: (f64, f64),
+) {
+    // Each output column (row) reads the source column (row) at or left of
+    // its center and the next one, the next weighted by `t` of 256.
+    let taps = |n: usize, o: f64| -> Vec<(isize, u16)> {
+        (0..n)
+            .map(|x| {
+                let u = o + (x as f64 + 0.5) / k - 0.5;
+                let i = u.floor();
+                let t = ((u - i) * 256.0).round() as u16;
+                if t >= 256 {
+                    (i as isize + 1, 0)
+                } else {
+                    (i as isize, t)
+                }
+            })
+            .collect()
+    };
+    let line = dw * C;
+    if line == 0 {
+        return;
+    }
+    let cols = taps(dw, origin.0);
+    let rows = taps(dst.len() / line, origin.1);
+    let (Some(first), Some(last)) = (rows.first(), rows.last()) else {
+        return;
+    };
+    // Horizontal pass, over the source rows the output reads: weighted sums
+    // of 256 (at most 255 × 256, a u16).
+    let r0 = first.0.clamp(0, sh as isize) as usize;
+    let r1 = (last.0 + 2).clamp(0, sh as isize) as usize;
+    let mut tmp = vec![0u16; (r1.max(r0) - r0) * line];
+    let px = |row: &[u8], i: isize, c: usize| -> u16 {
+        if i >= 0 && (i as usize) < sw {
+            u16::from(row[i as usize * C + c])
+        } else {
+            0
+        }
+    };
+    for (y, out) in (r0..r1).zip(tmp.chunks_exact_mut(line)) {
+        let row = &src[y * sw * C..(y + 1) * sw * C];
+        for (o, &(i, t)) in out.chunks_exact_mut(C).zip(&cols) {
+            for (c, o) in o.iter_mut().enumerate() {
+                *o = px(row, i, c) * (256 - t) + px(row, i + 1, c) * t;
+            }
+        }
+    }
+    // Vertical pass.
+    let sums = |j: isize| -> Option<&[u16]> {
+        (j >= r0 as isize && j < r1 as isize)
+            .then(|| &tmp[(j as usize - r0) * line..(j as usize - r0 + 1) * line])
+    };
+    for (out, &(j, t)) in dst.chunks_exact_mut(line).zip(&rows) {
+        let (wa, wb) = (u32::from(256 - t), u32::from(t));
+        let mix = |a: u16, b: u16| ((u32::from(a) * wa + u32::from(b) * wb + 32768) >> 16) as u8;
+        match (sums(j), sums(j + 1)) {
+            (Some(a), Some(b)) => {
+                for ((o, &a), &b) in out.iter_mut().zip(a).zip(b) {
+                    *o = mix(a, b);
+                }
+            }
+            (Some(a), None) => out.iter_mut().zip(a).for_each(|(o, &a)| *o = mix(a, 0)),
+            (None, Some(b)) => out.iter_mut().zip(b).for_each(|(o, &b)| *o = mix(0, b)),
+            (None, None) => out.fill(0),
+        }
+    }
+}
+
+pub(super) fn alpha_plane(pixmap: &Pixmap) -> Vec<u8> {
     pixmap.data().chunks_exact(4).map(|p| p[3]).collect()
 }
 
@@ -229,21 +339,65 @@ fn shifted(plane: &[u8], w: usize, h: usize, dx: i32, dy: i32, fill: u8) -> Vec<
     out
 }
 
-fn colorize(alpha: &[u8], color: Color, w: u32, h: u32) -> Option<Pixmap> {
-    let mut out = Pixmap::new(w, h)?;
+/// The premultiplied pixel of `color` at each coverage.
+fn shades(color: Color) -> [[u8; 4]; 256] {
     let a = color.a.clamp(0.0, 1.0);
     let (r, g, b) = (color.r * a, color.g * a, color.b * a);
-    for (px, &m) in out.data_mut().chunks_exact_mut(4).zip(alpha) {
-        if m == 0 {
-            continue;
+    std::array::from_fn(|m| {
+        let k = m as f32 / 255.0;
+        [r, g, b, a].map(|c| (c * k * 255.0 + 0.5) as u8)
+    })
+}
+
+/// Draws coverage `plane` (`w` pixels wide) in `color` onto `dst`, its
+/// top-left corner at `(x, y)`.
+fn paint_coverage(
+    dst: &mut Pixmap,
+    (x, y): (i32, i32),
+    plane: &[u8],
+    w: u32,
+    color: Color,
+    blend: tiny_skia::BlendMode,
+) {
+    let h = plane.len() as u32 / w.max(1);
+    let shades = shades(color);
+    if blend != tiny_skia::BlendMode::SourceOver {
+        let Some(mut out) = Pixmap::new(w, h) else {
+            return;
+        };
+        for (px, &m) in out.data_mut().chunks_exact_mut(4).zip(plane) {
+            px.copy_from_slice(&shades[usize::from(m)]);
         }
-        let k = f32::from(m) / 255.0;
-        px[0] = (r * k * 255.0 + 0.5) as u8;
-        px[1] = (g * k * 255.0 + 0.5) as u8;
-        px[2] = (b * k * 255.0 + 0.5) as u8;
-        px[3] = (a * k * 255.0 + 0.5) as u8;
+        dst.draw_pixmap(
+            x,
+            y,
+            out.as_ref(),
+            &PixmapPaint {
+                opacity: 1.0,
+                blend_mode: blend,
+                quality: tiny_skia::FilterQuality::Nearest,
+            },
+            Transform::identity(),
+            None,
+        );
+        return;
     }
-    Some(out)
+    let (dw, dh) = (dst.width() as i32, dst.height() as i32);
+    let (x0, x1) = (x.max(0), (x + w as i32).min(dw));
+    if x0 >= x1 {
+        return;
+    }
+    let line = dw as usize * 4;
+    let data = dst.data_mut();
+    for row in y.max(0)..(y + h as i32).min(dh) {
+        let src = &plane[(row - y) as usize * w as usize..][(x0 - x) as usize..(x1 - x) as usize];
+        let out = &mut data[row as usize * line..][x0 as usize * 4..x1 as usize * 4];
+        for (d, &m) in out.chunks_exact_mut(4).zip(src) {
+            if m != 0 {
+                over_pixel(d, shades[usize::from(m)]);
+            }
+        }
+    }
 }
 
 /// Draws a drop shadow of `content` into `dst` (same size and position).
@@ -272,38 +426,29 @@ pub(crate) fn drop_shadow(
         0,
     );
     blur_alpha(&mut plane, w, h, (f64::from(e.radius) / 2.0 * scale) as f32);
+    paint_shadow(dst, &mut plane, &source, e);
+}
+
+/// Draws a drop shadow whose alpha is `plane` into `dst` (the same size),
+/// cut out under its node's content (alpha `content`) unless it shows behind
+/// it.
+pub(super) fn paint_shadow(dst: &mut Pixmap, plane: &mut [u8], content: &[u8], e: &Effect) {
     if !e.show_behind_node {
-        for (s, &a) in plane.iter_mut().zip(&source) {
+        for (s, &a) in plane.iter_mut().zip(content) {
             *s = ((u16::from(*s) * u16::from(255 - a) + 127) / 255) as u8;
         }
     }
-    let Some(shadow) = colorize(&plane, e.color, content.width(), content.height()) else {
-        return;
-    };
-    dst.draw_pixmap(
-        0,
-        0,
-        shadow.as_ref(),
-        &PixmapPaint {
-            opacity: 1.0,
-            blend_mode: e.blend_mode.to_skia(),
-            quality: tiny_skia::FilterQuality::Nearest,
-        },
-        Transform::identity(),
-        None,
-    );
+    let w = dst.width();
+    paint_coverage(dst, (0, 0), plane, w, e.color, e.blend_mode.to_skia());
 }
 
 impl Painter<'_> {
-    /// The node's own shape coverage as an alpha plane over `area` (device
-    /// pixels, relative to `surface`).
-    fn shape_plane(&self, i: SceneIdx, surface: &Surface, area: (i32, i32, u32, u32)) -> Vec<u8> {
-        let (x, y, w, h) = area;
+    /// The node's own shape coverage as a `w × h` alpha plane, `ts` mapping
+    /// the node's coordinates to the plane's.
+    fn shape_plane(&self, i: SceneIdx, ts: Transform, (w, h): (u32, u32)) -> Vec<u8> {
         let Some(mut mask) = Mask::new(w, h) else {
             return Vec::new();
         };
-        let ts = Transform::from_translate(-x as f32, -y as f32)
-            .pre_concat(self.node_transform(i, surface).to_skia());
         let props = self.props(i);
         if props.node_type().is_text() {
             if let Some(layout) = &props.text_layout {
@@ -356,6 +501,22 @@ impl Painter<'_> {
         Some((x0, y0, w, h))
     }
 
+    /// The pixels `k` times coarser than the device's (see `coarse`) that
+    /// cover device rectangle `r`: the first one's position in coarse pixels
+    /// from the grid, and how many across and down.
+    fn coarse_cover(&self, r: &Rect, k: f64) -> ((f64, f64), (usize, usize)) {
+        let grid = self.grid();
+        let (x0, y0) = (((r.x - grid.0) / k).floor(), ((r.y - grid.1) / k).floor());
+        let x1 = ((r.right() - grid.0) / k).ceil();
+        let y1 = ((r.bottom() - grid.1) / k).ceil();
+        (
+            (x0, y0),
+            ((x1 - x0).max(1.0) as usize, (y1 - y0).max(1.0) as usize),
+        )
+    }
+
+    /// Inner shadows: cast inside the node's shape from outside it, offset,
+    /// spread, and blurred, at a fraction of the resolution when wide.
     pub(crate) fn inner_shadows(
         &mut self,
         i: SceneIdx,
@@ -363,70 +524,92 @@ impl Painter<'_> {
         surface: &mut Surface,
         clip: Option<&Mask>,
     ) {
-        let Some(area) = self.surface_area(i, surface, 1.0) else {
+        // They show inside the node's own shape, where it is on the surface.
+        let Some(shown) = self.surface_area(i, surface, 1.0) else {
             return;
         };
-        let (x, y, w, h) = area;
-        let shape = self.shape_plane(i, surface, area);
+        let (x, y, w, h) = shown;
+        let to_surface = self.node_transform(i, surface).to_skia();
+        let shape = self.shape_plane(
+            i,
+            Transform::from_translate(-x as f32, -y as f32).pre_concat(to_surface),
+            (w, h),
+        );
         if shape.is_empty() {
             return;
         }
-        let scale = self.scene.node(i).world.scale_factor() * self.scale;
+        let clip = clip.map(|c| sub_mask(c, shown));
+        let world = self.scene.node(i).world;
+        let scale = world.scale_factor() * self.scale;
+        let spreads = self.props(i).supports_shadow_spread();
+        let grid = self.grid();
+        let (ox, oy) = (f64::from(surface.ox + x), f64::from(surface.oy + y));
         for e in effects {
-            let inverse: Vec<u8> = shape.iter().map(|a| 255 - a).collect();
-            let mut plane = inverse;
-            spread(
-                &mut plane,
-                w as usize,
-                h as usize,
-                if self.props(i).supports_shadow_spread() {
-                    (f64::from(e.spread) * scale).round() as i32
-                } else {
-                    0
-                },
-            );
+            let sigma = f64::from(e.radius) / 2.0 * scale;
+            let k = f64::from(coarseness_for(sigma));
+            let spread = if spreads {
+                f64::from(e.spread) * scale
+            } else {
+                0.0
+            };
             let (dx, dy) = self.device_vector(i, e.offset);
-            let mut plane = shifted(
-                &plane,
-                w as usize,
-                h as usize,
-                dx.round() as i32,
-                dy.round() as i32,
-                255,
-            );
-            blur_alpha(
+            // Cast from outside the shape as far around what shows as the
+            // shadow reaches, `k` times coarser than the device.
+            let reach =
+                3.0 * sigma + spread.abs() + f64::from(dx.abs().max(dy.abs())) + 3.0 + PAD * k;
+            let around = Rect::new(ox, oy, f64::from(w), f64::from(h)).outset(reach);
+            let ((cx, cy), (cw, ch)) = self.coarse_cover(&around, k);
+            let to_coarse = Affine::translate(-cx, -cy)
+                .mul(&Affine::scale(1.0 / k, 1.0 / k))
+                .mul(&Affine::translate(-grid.0, -grid.1))
+                .mul(&self.base)
+                .mul(&world);
+            let mut outside = self.shape_plane(i, to_coarse.to_skia(), (cw as u32, ch as u32));
+            if outside.is_empty() {
+                continue;
+            }
+            outside.iter_mut().for_each(|a| *a = 255 - *a);
+            spread_by(&mut outside, cw, ch, (spread / k) as f32);
+            let blur = if k > 1.0 {
+                coarse_sigma(sigma, k)
+            } else {
+                sigma as f32
+            };
+            blur_alpha(&mut outside, cw, ch, blur);
+            // Scaled up over what shows, moved by the offset.
+            let mut plane = vec![0u8; shape.len()];
+            resample::<1>(
+                &outside,
+                (cw, ch),
                 &mut plane,
                 w as usize,
-                h as usize,
-                (f64::from(e.radius) / 2.0 * scale) as f32,
+                k,
+                (
+                    (ox - f64::from(dx) - grid.0) / k - cx,
+                    (oy - f64::from(dy) - grid.1) / k - cy,
+                ),
             );
             for (s, &a) in plane.iter_mut().zip(&shape) {
                 *s = ((u16::from(*s) * u16::from(a) + 127) / 255) as u8;
             }
-            if let Some(c) = clip {
-                let part = sub_mask(c, area);
-                for (s, &m) in plane.iter_mut().zip(part.data()) {
+            if let Some(c) = &clip {
+                for (s, &m) in plane.iter_mut().zip(c.data()) {
                     *s = ((u16::from(*s) * u16::from(m) + 127) / 255) as u8;
                 }
             }
-            let Some(shadow) = colorize(&plane, e.color, w, h) else {
-                continue;
-            };
-            surface.pixmap.draw_pixmap(
-                x,
-                y,
-                shadow.as_ref(),
-                &PixmapPaint {
-                    opacity: 1.0,
-                    blend_mode: e.blend_mode.to_skia(),
-                    quality: tiny_skia::FilterQuality::Nearest,
-                },
-                Transform::identity(),
-                None,
+            paint_coverage(
+                &mut surface.pixmap,
+                (x, y),
+                &plane,
+                w,
+                e.color,
+                e.blend_mode.to_skia(),
             );
         }
     }
 
+    /// A background blur: what is under the node's shape, blurred, at a
+    /// fraction of the resolution when wide.
     pub(crate) fn background_blur(
         &mut self,
         i: SceneIdx,
@@ -443,40 +626,119 @@ impl Painter<'_> {
         };
         let scale = self.scene.node(i).world.scale_factor() * self.scale;
         let sigma = f64::from(e.radius) / 2.0 * scale;
-        let Some(area) = self.surface_area(i, surface, sigma * 3.0) else {
+        let k = coarseness_for(sigma);
+        let kf = f64::from(k);
+        // The shape, where it is on the surface (and in the clip).
+        let Some(shown) = self.surface_area(i, surface, 1.0) else {
             return;
         };
-        let (x, y, w, h) = area;
-        let Some(rect) = tiny_skia::IntRect::from_xywh(x, y, w, h) else {
+        let (x, y, w, h) = shown;
+        let ts = Transform::from_translate(-x as f32, -y as f32)
+            .pre_concat(self.node_transform(i, surface).to_skia());
+        let mut cover = Mask::new(w, h);
+        let Some(cover) = cover.as_mut() else {
             return;
         };
-        let Some(mut backdrop) = surface.pixmap.clone_rect(rect) else {
-            return;
-        };
-        blur_pixmap(&mut backdrop, sigma as f32);
-        let ts = self.node_transform(i, surface);
-        let pattern = tiny_skia::Pattern::new(
-            backdrop.as_ref(),
-            tiny_skia::SpreadMode::Pad,
-            tiny_skia::FilterQuality::Nearest,
-            1.0,
-            ts.invert()
-                .unwrap_or_default()
-                .mul(&crate::model::Affine::translate(f64::from(x), f64::from(y)))
-                .to_skia(),
+        for s in self.fill_shapes(i) {
+            cover.fill_path(s.path(), s.rule(), true, ts);
+        }
+        if let Some(c) = clip {
+            let part = sub_mask(c, shown);
+            for (a, &m) in cover.data_mut().iter_mut().zip(part.data()) {
+                *a = ((u16::from(*a) * u16::from(m) + 127) / 255) as u8;
+            }
+        }
+        // The backdrop, as far around the shape as the blur reaches (the
+        // render's margin holds it), averaged `k` times coarser.
+        let around = Rect::new(
+            f64::from(surface.ox + x),
+            f64::from(surface.oy + y),
+            f64::from(w),
+            f64::from(h),
+        )
+        .outset(3.0 * sigma + 3.0 + PAD * kf);
+        let ((cx, cy), (cw, ch)) = self.coarse_cover(&around, kf);
+        let grid = self.grid();
+        let at = (
+            grid.0 + cx * kf - f64::from(surface.ox),
+            grid.1 + cy * kf - f64::from(surface.oy),
         );
-        let paint = tiny_skia::Paint {
-            shader: pattern,
-            blend_mode: tiny_skia::BlendMode::Source,
-            anti_alias: true,
-            force_hq_pipeline: false,
+        let Some(mut backdrop) = shrink(&surface.pixmap, at, k, (cw, ch)) else {
+            return;
         };
-        for s in &self.fill_shapes(i) {
-            surface
-                .pixmap
-                .fill_path(s.path(), &paint, s.rule(), ts.to_skia(), clip);
+        blur_pixmap(
+            &mut backdrop,
+            if k > 1 {
+                coarse_sigma(sigma, kf)
+            } else {
+                sigma as f32
+            },
+        );
+        // Scaled up under the shape.
+        let mut blurred = vec![0u8; w as usize * h as usize * 4];
+        resample::<4>(
+            backdrop.data(),
+            (cw, ch),
+            &mut blurred,
+            w as usize,
+            kf,
+            ((f64::from(x) - at.0) / kf, (f64::from(y) - at.1) / kf),
+        );
+        let line = surface.pixmap.width() as usize * 4;
+        let data = surface.pixmap.data_mut();
+        let rows = blurred
+            .chunks_exact(w as usize * 4)
+            .zip(cover.data().chunks_exact(w as usize));
+        for (row, (src, cover)) in rows.enumerate() {
+            let at = (y as usize + row) * line + x as usize * 4;
+            let dst = &mut data[at..at + w as usize * 4];
+            for ((d, s), &m) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)).zip(cover) {
+                // The backdrop replaces what is under the shape.
+                match m {
+                    0 => {}
+                    255 => d.copy_from_slice(s),
+                    _ => {
+                        let (m, n) = (u32::from(m), 255 - u32::from(m));
+                        for (d, &s) in d.iter_mut().zip(s) {
+                            *d = div255(u32::from(s) * m + u32::from(*d) * n + 127) as u8;
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+/// `src` averaged over `k × k` blocks: `w × h` of them, the first one's
+/// top-left corner at `at` (pixels of `src`, whole numbers); outside `src`
+/// counts as transparent.
+fn shrink(src: &Pixmap, at: (f64, f64), k: u32, (w, h): (usize, usize)) -> Option<Pixmap> {
+    let mut out = Pixmap::new(w as u32, h as u32)?;
+    let (sw, sh) = (src.width() as i64, src.height() as i64);
+    let (k, ax, ay) = (i64::from(k), at.0.round() as i64, at.1.round() as i64);
+    let area = (k * k) as u32;
+    let data = src.data();
+    let mut sums = vec![0u32; w * 4];
+    for (q, row) in out.data_mut().chunks_exact_mut(w * 4).enumerate() {
+        sums.fill(0);
+        let top = ay + q as i64 * k;
+        for sy in top.max(0)..(top + k).min(sh) {
+            let line = &data[(sy * sw * 4) as usize..((sy + 1) * sw * 4) as usize];
+            for (p, sum) in sums.chunks_exact_mut(4).enumerate() {
+                let left = ax + p as i64 * k;
+                for sx in left.max(0)..(left + k).min(sw) {
+                    let px = &line[(sx * 4) as usize..(sx * 4 + 4) as usize];
+                    for (s, &v) in sum.iter_mut().zip(px) {
+                        *s += u32::from(v);
+                    }
+                }
+            }
+        }
+        for (o, &s) in row.iter_mut().zip(&sums) {
+            *o = ((s + area / 2) / area) as u8;
+        }
+    }
+    Some(out)
 }
 
 /// The part of a mask under `area`, as its own mask.

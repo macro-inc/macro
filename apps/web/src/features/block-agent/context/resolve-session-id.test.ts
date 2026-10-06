@@ -112,6 +112,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
 }));
 
 const { startPendingSession } = await import('./pending-session');
+const { PromptTrace } = await import('@core/agent-session/prompt-telemetry');
 const { agentHarnessServiceClient } = await import(
   '@service-agent-harness/client'
 );
@@ -462,6 +463,7 @@ it.each([undefined, 'explicit-user'])(
     await flush();
     expect(create.attribution).toHaveBeenCalledWith({
       userId: userId ?? 'session-owner',
+      trace: expect.any(PromptTrace),
     });
   }
 );

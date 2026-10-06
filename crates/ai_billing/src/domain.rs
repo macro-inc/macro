@@ -29,6 +29,7 @@ pub use ports::{
     PaymentGateway, PendingCharge, SettlementOutcome, SettlementTrigger, UsageReader,
 };
 pub use pricing::{
-    AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PricingError, cost_cents,
+    AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PlanAllowances, PricingError,
+    cost_cents,
 };
 pub use service::BillingServiceImpl;

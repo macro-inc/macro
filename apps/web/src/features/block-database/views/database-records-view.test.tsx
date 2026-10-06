@@ -26,9 +26,9 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseWriteResult } from '../context/table-source';
 import type { DatabaseViewColumn } from '../core/database-view';
+import type { ViewChange } from '../core/view-state';
 import { allRecordsView } from '../core/views';
 import type { DatabaseWriteFailure } from '../core/write-failure';
-import type { ViewChange } from '../queries/views';
 import { createFakeRowsSource, titleContains } from '../tests/fake-rows-source';
 import type { BoardPositions } from './database-board-view';
 import {
@@ -36,7 +36,7 @@ import {
   DatabaseRecordsView,
 } from './database-records-view';
 
-// The real date selector opens the app's websockets on import.
+// Date interactions are covered by the GridCell tests.
 vi.mock('@property/editors/selectors/PropertyDateSelector', () => ({
   PropertyDateSelector: () => null,
 }));
@@ -234,6 +234,47 @@ afterEach(() => {
 });
 
 describe('database table view', () => {
+  it('edits host-owned records with only layout state and no schema actions', async () => {
+    const fixture = createFakeRowsSource({
+      columns: [columns[0]],
+      table: {
+        version: 1,
+        rows: [{ rowId: 'row', cells: { title: 'Plan launch' } }],
+      },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    render(() => (
+      <DatabaseRecordsView
+        name="Embedded records"
+        source={fixture.source}
+        canEdit
+        view={{
+          query: { filter: null },
+          layout: { kind: 'table', columns: [] },
+        }}
+        stored={false}
+        boardPositions={unplacedCards}
+      />
+    ));
+    expect(screen.getAllByRole('columnheader')).toHaveLength(2);
+    expect(screen.getByRole('grid').getAttribute('aria-colcount')).toBe('2');
+    const user = userEvent.setup();
+    await user.dblClick(
+      screen.getByRole('button', { name: /^Name: Plan launch\./ })
+    );
+    const input = screen.getByRole('textbox', { name: 'Edit Name' });
+    await user.clear(input);
+    await user.type(input, 'Launch ready');
+    await user.keyboard('{Tab}');
+    await waitFor(() =>
+      expect(fixture.source.snapshot()?.rows[0].cells.title).toBe(
+        'Launch ready'
+      )
+    );
+    expect(screen.queryByRole('button', { name: 'Add column' })).toBeNull();
+  });
+
   it('offers refresh and draft recovery after a lost create response without a duplicate Retry', async () => {
     const fixture = createFakeRowsSource({
       columns,
@@ -2085,8 +2126,6 @@ describe('database table view', () => {
         canEdit
         view={{
           ...allRecords,
-          id: 'by-status',
-          name: 'By status',
           layout: {
             kind: 'table',
             columns: [

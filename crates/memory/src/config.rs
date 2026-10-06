@@ -14,9 +14,13 @@ env_var!(
     pub struct EnvVars {
         pub DatabaseUrl,
         pub UserId,
-        /// In-plan AI allowance per paid seat per period, cents at provider cost.
+        /// The free plan's hard monthly AI cap, cents at provider cost.
+        pub AiUsageFreeIncludedAllowanceCents,
+        /// In-plan AI allowance per Premium seat per period, cents at provider cost.
         pub AiUsageIncludedAllowanceCents,
-        /// Markup on AI usage past the allowance, a whole percent of provider cost.
+        /// In-plan AI allowance per Max seat per period, cents at provider cost.
+        pub AiUsageMaxIncludedAllowanceCents,
+        /// Markup on paid AI usage past the allowance, a whole percent of provider cost.
         pub AiUsageOverageMarkupPercent,
     }
 );
@@ -31,11 +35,17 @@ impl Config {
         let EnvVars {
             database_url,
             user_id,
+            ai_usage_free_included_allowance_cents,
             ai_usage_included_allowance_cents,
+            ai_usage_max_included_allowance_cents,
             ai_usage_overage_markup_percent,
         } = env_vars;
         let ai_pricing = ai_billing::config::parse_ai_pricing(
-            &ai_usage_included_allowance_cents,
+            ai_billing::config::RawPlanAllowances {
+                free: &ai_usage_free_included_allowance_cents,
+                premium: &ai_usage_included_allowance_cents,
+                max: &ai_usage_max_included_allowance_cents,
+            },
             &ai_usage_overage_markup_percent,
         )
         .map_err(|error| anyhow::anyhow!("{error}"))?;

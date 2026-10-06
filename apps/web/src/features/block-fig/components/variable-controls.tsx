@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * Variables in the design panel: the color variable a fill or stroke is
  * bound to (with a picker of the file's color variables and "Detach
@@ -119,7 +120,7 @@ export function VariableControl(props: {
             <Popover.Portal>
               <Layer depth={3}>
                 <Popover.Content
-                  class="z-modal flex max-h-96 w-60 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+                  class="fig-editor-theme z-modal flex max-h-96 w-60 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
                   aria-label="Color variables"
                   onKeyDown={(e: KeyboardEvent) => {
                     if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
@@ -193,23 +194,22 @@ export function VariableModes(props: {
         <For each={props.modes}>
           {(m) => (
             <PropertyRow label={m.collection.name}>
-              <select
-                class="w-full rounded-md bg-inset px-1.5 py-0.5 text-ink outline-none disabled:opacity-60"
+              <InspectorSelect
+                label={m.collection.name}
                 value={m.mode ?? ''}
                 disabled={!props.onMode}
-                data-testid={`fig-variable-mode-${m.collection.name.replace(/\s+/g, '-')}`}
-                onChange={(e) =>
-                  props.onMode?.(
-                    m.collection.id,
-                    e.currentTarget.value || undefined
-                  )
+                testId={`fig-variable-mode-${m.collection.name.replace(/\s+/g, '-')}`}
+                options={[
+                  { value: '', label: 'Auto' },
+                  ...m.modes.map((mode) => ({
+                    value: mode.id,
+                    label: mode.name,
+                  })),
+                ]}
+                onChange={(value) =>
+                  props.onMode?.(m.collection.id, value || undefined)
                 }
-              >
-                <option value="">Auto</option>
-                <For each={m.modes}>
-                  {(mode) => <option value={mode.id}>{mode.name}</option>}
-                </For>
-              </select>
+              />
             </PropertyRow>
           )}
         </For>

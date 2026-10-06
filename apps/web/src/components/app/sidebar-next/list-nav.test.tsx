@@ -3,6 +3,7 @@ import { createSignal, type JSX, type ParentProps, splitProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ListNav } from './list-nav';
 import type { SidebarNextNavItem } from './nav-items';
+import { SidebarPrefsProvider } from './use-sidebar-prefs';
 
 const mocks = vi.hoisted(() => ({
   setActiveView: (_view: string) => {},
@@ -73,10 +74,10 @@ afterEach(() => {
 describe('ListNav', () => {
   it('does not reclaim the highlight when the view it left becomes active again', () => {
     render(() => (
-      <>
+      <SidebarPrefsProvider>
         <ListNav item={item('home', 'Home')} />
         <ListNav item={item('agents', 'Agents')} />
-      </>
+      </SidebarPrefsProvider>
     ));
     const agents = screen.getByRole('button', { name: 'Agents' });
 

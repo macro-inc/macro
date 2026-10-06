@@ -118,7 +118,7 @@ test('runs actions from the actions menu (⌘P)', async ({ page }) => {
     );
     return seen;
   });
-  await page.keyboard.press('Control+p');
+  await page.keyboard.press('ControlOrMeta+p');
   const palette = page.getByTestId('fig-actions');
   await expect(palette).toBeVisible();
   // The browser does not print.
@@ -139,13 +139,13 @@ test('runs actions from the actions menu (⌘P)', async ({ page }) => {
     'true'
   );
   // Escape closes it; ⌘P again too.
-  await page.keyboard.press('Control+p');
+  await page.keyboard.press('ControlOrMeta+p');
   await expect(palette).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(palette).toBeHidden();
-  await page.keyboard.press('Control+p');
+  await page.keyboard.press('ControlOrMeta+p');
   await expect(palette).toBeVisible();
-  await page.keyboard.press('Control+p');
+  await page.keyboard.press('ControlOrMeta+p');
   await expect(palette).toBeHidden();
 });
 
@@ -153,9 +153,9 @@ test('hides and shows the UI with ⌘.', async ({ page }) => {
   await openNew(page);
   await page.getByTestId('fig-canvas').focus();
   await expect(page.getByTestId('fig-layers-panel')).toBeVisible();
-  await page.keyboard.press('Control+.');
+  await page.keyboard.press('ControlOrMeta+.');
   await expect(page.getByTestId('fig-layers-panel')).toBeHidden();
-  await page.keyboard.press('Control+.');
+  await page.keyboard.press('ControlOrMeta+.');
   await expect(page.getByTestId('fig-layers-panel')).toBeVisible();
 });
 
@@ -166,7 +166,7 @@ test('aligns, distributes, sets opacity, and swaps fill and stroke', async ({
   await drawRectangle(page, 100, 40, 'Rectangle 1');
   await drawRectangle(page, 160, 60, 'Rectangle 2');
   await drawRectangle(page, 400, 20, 'Rectangle 3');
-  await page.keyboard.press('Control+a');
+  await page.keyboard.press('ControlOrMeta+a');
   await expect(page.getByTestId('fig-design-panel')).toContainText(
     '3 layers selected'
   );

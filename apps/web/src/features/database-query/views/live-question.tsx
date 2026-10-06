@@ -1,3 +1,4 @@
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import { Popover } from '@kobalte/core/popover';
 import LightningIcon from '@phosphor/lightning.svg';
@@ -204,7 +205,7 @@ export function LiveQuestion(props: {
           </ResizableAnswer>
         </div>
       </Show>
-      <Popover.Portal>
+      <ScopedPortal scope="local">
         <Popover.Content
           ref={content}
           class="z-action-menu w-[min(440px,calc(100vw-2rem))] max-h-[min(720px,var(--kb-popper-content-available-height,100dvh),calc(100dvh-1rem))] overflow-auto rounded-xl border border-edge-muted bg-panel text-ink shadow-xl"
@@ -267,7 +268,7 @@ export function LiveQuestion(props: {
             {props.editor?.(() => setOpen(false))}
           </Show>
         </Popover.Content>
-      </Popover.Portal>
+      </ScopedPortal>
     </Popover>
   );
 }

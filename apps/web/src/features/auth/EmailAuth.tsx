@@ -1,6 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
@@ -138,7 +137,6 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   };
 
   const userInfoQuery = useUserInfoQuery();
-  const onboardingV4 = useOnboardingV4Flag();
 
   // Return to the layout the flow left from, if this callback belongs to a
   // flow that stashed one. Consent replaced the page, so nothing in memory
@@ -161,7 +159,6 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     // return straight to it. Landing in mail settings would mount the app
     // shell mid-onboarding just for NewOnboardingRedirect to bounce back.
     if (
-      onboardingV4().enabled &&
       !isMobile() &&
       !isNativeMobilePlatform() &&
       userInfoQuery.data?.tutorialComplete === false

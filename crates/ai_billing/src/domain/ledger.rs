@@ -21,6 +21,9 @@
 //! cap, and the chunk is worth charging). Between settlements `uncovered` is
 //! simply usage that has not been booked yet; the gate accounts for it through
 //! `headroom`.
+//!
+//! Free users have no credits or overage: their `remaining` is only the
+//! unused part of the free allowance, and nothing is ever settled for them.
 
 #[cfg(test)]
 mod test;
@@ -131,10 +134,13 @@ pub fn build_snapshot(
     } else {
         0
     };
+    let seat_remaining = (included_cents - used_cost_cents).max(0);
     let remaining_cents = if entitlement.unlimited {
         i64::MAX
+    } else if !entitlement.tier.is_paid() {
+        // A hard cap: no credits or overage can extend the free allowance.
+        seat_remaining
     } else {
-        let seat_remaining = (included_cents - used_cost_cents).max(0);
         let shared_headroom = ((shared_covered - shared_chargeable_customer_cents)
             + credit_balance_cents.max(0)
             + overage_room)
@@ -171,13 +177,16 @@ pub fn build_snapshot(
 
 /// The gate: may this user start another AI request?
 ///
-/// Free users are not metered here (the free tier has its own limits), and
-/// enterprise users are never metered. Everyone else needs headroom.
+/// Enterprise users are never metered. Free users are allowed until their
+/// monthly cap is used up, after which only an upgrade helps. Everyone else
+/// needs headroom from their allowance, credits, or overage.
 pub fn decide(snapshot: &UsageSnapshot) -> AllowanceDecision {
-    if snapshot.unlimited || snapshot.tier == PlanTier::Free || snapshot.remaining_cents > 0 {
+    if snapshot.unlimited || snapshot.remaining_cents > 0 {
         return AllowanceDecision::Allow;
     }
-    let reason = if snapshot.overage_suspended {
+    let reason = if snapshot.tier == PlanTier::Free {
+        DenyReason::FreeAllowanceExhausted
+    } else if snapshot.overage_suspended {
         DenyReason::OveragePaymentFailed
     } else if snapshot.overage_enabled && snapshot.overage_limit_cents > 0 {
         DenyReason::OverageLimitReached
