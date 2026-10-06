@@ -1,16 +1,20 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useSendMessageToPeople } from './channels';
+import { ThrownResultError } from './result';
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   direct: vi.fn(),
   group: vi.fn(),
+  goTo: vi.fn(),
 }));
 vi.mock('@block-channel/constants', () => ({
   URL_PARAMS: { message: 'message' },
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
-  useGlobalBlockOrchestrator: () => ({ getBlockHandle: vi.fn() }),
+  useGlobalBlockOrchestrator: () => ({
+    getBlockHandle: async () => ({ goToLocationFromParams: mocks.goTo }),
+  }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ replaceSplit: vi.fn() }),
@@ -79,4 +83,80 @@ it('does not post an attachment when its destination grant fails', async () => {
     })
   ).rejects.toThrow('Only owner');
   expect(mocks.send).not.toHaveBeenCalled();
+});
+
+function postedIds() {
+  return mocks.send.mock.calls.map(([vars]) => vars.optimisticId);
+}
+
+it('posts under a supplied id and opens the stored message', async () => {
+  const { sendToChannel } = useSendMessageToPeople();
+  mocks.send.mockResolvedValue({ id: 'server-1' });
+
+  const sent = await sendToChannel({
+    channelId: 'channel',
+    content: 'Have a look',
+    mentions: [],
+    messageId: 'planned-1',
+  });
+  await sent?.navigateToChannel();
+
+  expect(postedIds()).toEqual(['planned-1']);
+  expect(sent?.messageId).toBe('server-1');
+  expect(mocks.goTo.mock.calls).toEqual([[{ message: 'server-1' }]]);
+});
+
+it('mints a message id when none is supplied', async () => {
+  const { sendToChannel } = useSendMessageToPeople();
+
+  await sendToChannel({ channelId: 'channel', content: '', mentions: [] });
+
+  expect(postedIds()).toEqual(['019f694c-d7c0-7000-8000-000000000001']);
+});
+
+it('counts a conflict on a supplied id as delivered', async () => {
+  const { sendToUsers } = useSendMessageToPeople();
+  mocks.send.mockRejectedValue(
+    new ThrownResultError([
+      { code: 'CONFLICT', message: 'message id already exists' },
+    ])
+  );
+
+  const sent = await sendToUsers({
+    users: ['recipient'],
+    content: '',
+    mentions: [],
+    messageId: 'planned-1',
+  });
+  await sent?.navigateToChannel();
+
+  expect(sent?.channelId).toBe('resolved-dm');
+  expect(sent?.messageId).toBe('planned-1');
+  expect(mocks.goTo.mock.calls).toEqual([[{ message: 'planned-1' }]]);
+});
+
+it.each([
+  {
+    failure: 'a conflict on a minted id',
+    messageId: undefined,
+    code: 'CONFLICT',
+  },
+  { failure: 'any other error', messageId: 'planned-1', code: 'SERVER_ERROR' },
+])('fails on $failure', async ({ messageId, code }) => {
+  const { sendToChannel } = useSendMessageToPeople();
+  mocks.send.mockRejectedValue(
+    new ThrownResultError([{ code, message: code }])
+  );
+
+  const sent = await sendToChannel({
+    channelId: 'channel',
+    content: '',
+    mentions: [],
+    messageId,
+  });
+
+  expect(postedIds()).toEqual([
+    messageId ?? '019f694c-d7c0-7000-8000-000000000001',
+  ]);
+  expect(sent).toBeUndefined();
 });

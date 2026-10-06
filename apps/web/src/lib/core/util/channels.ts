@@ -16,6 +16,7 @@ import {
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
+import { thrownResultErrorHasCode } from './result';
 
 type SendContent = {
   content: string;
@@ -23,6 +24,11 @@ type SendContent = {
   attachments?: NewAttachment[];
   /** An entity owner may need to authorize the resolved DM/channel before sending. */
   beforeSend?: (channelId: string) => Promise<void>;
+  /**
+   * Reuse one id across retries of the same message. The server stores one
+   * copy, and a conflict on a supplied id counts as delivered.
+   */
+  messageId?: string;
 };
 
 type NavigationOptions = {
@@ -49,26 +55,43 @@ export function useSendMessageToPeople() {
   const userId = useUserId();
   const sendMessage = useSendMessageMutation();
 
+  /** The stored message's id, or undefined when the post failed. */
+  async function postMessage(
+    channelId: string,
+    senderId: string,
+    args: SendContent
+  ): Promise<string | undefined> {
+    const messageId = args.messageId ?? newMessageId();
+    try {
+      const response = await sendMessage.mutateAsync({
+        parent: { type: 'channel', id: channelId },
+        message: {
+          content: args.content,
+          attachments: args.attachments ?? [],
+          mentions: args.mentions,
+        },
+        senderId,
+        optimisticId: messageId,
+      });
+      return response.id;
+    } catch (error) {
+      // A conflict on a reused id means an earlier attempt stored the message.
+      const stored =
+        args.messageId !== undefined &&
+        thrownResultErrorHasCode(error, 'CONFLICT');
+      return stored ? messageId : undefined;
+    }
+  }
+
   async function sendAndNavigateToChannel(
     channelId: string,
-    content: string,
-    mentions: SimpleMention[],
-    attachments: NewAttachment[],
-    navigate?: NavigationOptions,
-    beforeSend?: (channelId: string) => Promise<void>
+    args: SendContent & { navigate?: NavigationOptions }
   ) {
     const senderId = userId();
     if (!senderId) return;
-    await beforeSend?.(channelId);
-    const messageResponse = await sendMessage
-      .mutateAsync({
-        parent: { type: 'channel', id: channelId },
-        message: { content, attachments, mentions },
-        senderId,
-        optimisticId: newMessageId(),
-      })
-      .catch(() => null);
-    if (!messageResponse) return;
+    await args.beforeSend?.(channelId);
+    const messageId = await postMessage(channelId, senderId, args);
+    if (messageId === undefined) return;
 
     invalidateListChannels();
     invalidateContacts();
@@ -79,19 +102,19 @@ export function useSendMessageToPeople() {
           type: 'channel',
           id: channelId,
         },
-        mergeHistory: navigate?.mergeHistory,
+        mergeHistory: args.navigate?.mergeHistory,
       });
       const handle = await orchestrator.getBlockHandle(channelId);
       await handle?.goToLocationFromParams({
-        [CHANNEL_PARAMS.message]: messageResponse.id,
+        [CHANNEL_PARAMS.message]: messageId,
       });
     };
 
-    if (navigate?.navigate) {
+    if (args.navigate?.navigate) {
       await navigateToChannel();
     }
 
-    return { channelId, messageResponse, navigateToChannel };
+    return { channelId, messageId, navigateToChannel };
   }
 
   async function sendToUsers(args: SendToUsersArgs) {
@@ -112,25 +135,11 @@ export function useSendMessageToPeople() {
       return;
     }
 
-    return sendAndNavigateToChannel(
-      channelId,
-      args.content,
-      args.mentions,
-      args.attachments ?? [],
-      args.navigate,
-      args.beforeSend
-    );
+    return sendAndNavigateToChannel(channelId, args);
   }
 
   async function sendToChannel(args: SendToChannelArgs) {
-    return sendAndNavigateToChannel(
-      args.channelId,
-      args.content,
-      args.mentions,
-      args.attachments ?? [],
-      args.navigate,
-      args.beforeSend
-    );
+    return sendAndNavigateToChannel(args.channelId, args);
   }
 
   return {
