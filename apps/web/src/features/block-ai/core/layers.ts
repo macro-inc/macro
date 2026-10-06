@@ -19,7 +19,7 @@ export interface LayerRow {
 }
 
 /** Where a node goes among its new siblings. */
-export type Position =
+type Position =
   | { type: 'top' }
   | { type: 'bottom' }
   | { type: 'above'; id: number }

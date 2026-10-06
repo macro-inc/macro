@@ -72,7 +72,7 @@ const HEARTBEAT_MS = 3_000;
 /** How long storing a file waits for the sync service to have every change. */
 const DELIVERY_TIMEOUT_MS = 5_000;
 
-export type AiCollabState =
+type AiCollabState =
   | { t: 'loading' }
   | { t: 'ready'; doc: LoroDoc }
   /** Nobody who can edit has opened it yet: show the stored file. */
