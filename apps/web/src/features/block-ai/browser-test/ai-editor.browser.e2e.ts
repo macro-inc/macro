@@ -464,3 +464,56 @@ test('a viewer sees the document but cannot change it', async ({ page }) => {
   await expect.poll(async () => (await engineRows(page)).length).toBe(5);
   await expect(page.getByTestId('ai-field-x')).toHaveValue('100');
 });
+
+test('pans with Space, zooms with the wheel and the zoom tool', async ({
+  page,
+}) => {
+  await open(page);
+  const canvas = canvasOf(page);
+  const view = await fitted(canvas);
+  const red = view.at(RED_BOX);
+  await canvas.click({ position: { x: 5, y: 5 } });
+  // Space-drag pans: the rectangle follows the pointer, and stays put in
+  // the document.
+  await page.keyboard.down('Space');
+  await dragOn(page, red, { x: red.x + 100, y: red.y + 60 });
+  await page.keyboard.up('Space');
+  await expect
+    .poll(() => pixelAt(canvas, { x: red.x + 100, y: red.y + 60 }))
+    .toEqual([...SAMPLE_COLORS.red]);
+  expect((await objectAt(page, RED_BOX))?.bounds).toEqual({
+    x0: 100,
+    y0: 100,
+    x1: 300,
+    y1: 250,
+  });
+
+  // ⌘+wheel zooms at the pointer.
+  const zoom = page.getByTestId('ai-zoom-menu');
+  const before = await zoom.textContent();
+  await page.mouse.move(red.x + 100, red.y + 60);
+  await page.keyboard.down(MOD);
+  await page.mouse.wheel(0, -300);
+  await page.keyboard.up(MOD);
+  await expect(zoom).not.toHaveText(before ?? '');
+  // The point under the pointer stays under it.
+  await expect
+    .poll(() => pixelAt(canvas, { x: red.x + 100, y: red.y + 60 }))
+    .toEqual([...SAMPLE_COLORS.red]);
+
+  // The zoom tool: a click zooms in a step, ⌥-click out.
+  const percent = async () =>
+    Number.parseInt((await zoom.textContent()) ?? '0');
+  await page.keyboard.press(`${MOD}+0`);
+  const fit = await percent();
+  await page.keyboard.press('z');
+  const c = await canvas.boundingBox();
+  if (!c) throw new Error('no canvas');
+  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2);
+  await expect.poll(percent).toBeGreaterThan(fit);
+  const zoomedIn = await percent();
+  await page.keyboard.down('Alt');
+  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2);
+  await page.keyboard.up('Alt');
+  await expect.poll(percent).toBeLessThan(zoomedIn);
+});

@@ -273,3 +273,52 @@ test('pastes an image from the clipboard', async ({ page }) => {
   await expect(page.getByTestId('ai-field-w')).toHaveValue('40');
   await expect(page.getByTestId('ai-field-h')).toHaveValue('20');
 });
+
+test('switches fonts, loading them first', async ({ page }) => {
+  await open(page);
+  await select(page, HELLO);
+  await page.getByTestId('fig-font-family').click();
+  await page.getByTestId('fig-font-search').fill('Roboto Mono');
+  await page
+    .locator('[data-testid="fig-font-option"][data-family="Roboto Mono"]')
+    .click();
+  // The stylesheet and file are fetched before the text is laid out.
+  const requested = async (match: (r: string) => boolean) =>
+    (await page.evaluate(() => window.aiFixture.fontRequests())).some(match);
+  await expect
+    .poll(() => requested((r) => r.includes('family=Roboto+Mono')))
+    .toBe(true);
+  await expect
+    .poll(() => requested((r) => r.endsWith('InterVariable.ttf')))
+    .toBe(true);
+  await expect
+    .poll(async () => {
+      const id = (await objectAt(page, HELLO))?.id;
+      return id === undefined ? null : (await infoOf(page, id))?.text?.family;
+    })
+    .toBe('Roboto Mono');
+});
+
+test('layers expand, collapse, take colors, and delete', async ({ page }) => {
+  await open(page);
+  const rows = page.getByTestId('ai-layer-row');
+  const layer = rows.filter({ hasText: 'Layer 1' });
+  await layer.getByTestId('ai-layer-toggle').click();
+  await expect(rows).toHaveText(['Notes', 'Layer 1']);
+  await layer.getByTestId('ai-layer-toggle').click();
+  await expect(rows).toHaveCount(5);
+
+  // A click on the color swatch gives the layer the next color.
+  const id = Number(await layer.getAttribute('data-layer-id'));
+  const color = async () =>
+    (await engineRows(page)).find((r) => r.id === id)?.color;
+  const first = await color();
+  await layer.getByTestId('ai-layer-color').click();
+  await expect.poll(color).not.toEqual(first);
+
+  // Selected in the panel (and so on the canvas), then deleted.
+  await rows.filter({ hasText: 'Red box' }).click();
+  await expect.poll(() => selectedRows(page)).toEqual(['Red box']);
+  await page.getByTestId('ai-layer-delete').click();
+  await expect(rows).toHaveText(['Notes', 'Layer 1', 'Hello', 'Blue circle']);
+});

@@ -58,14 +58,17 @@ bunx playwright test --config src/features/block-ai/browser-test/playwright.conf
 scaling with the bounding box, ⌥-drag copies, undo and redo, editing and
 making text, the layers panel (hide, lock, rename, new layer, drag to
 restack), grouping, arranging, copy, paste, duplicate, direct selection,
-the pen, artboards, outline view, zoom shortcuts, exports, saving, and
+the pen, artboards, outline view, zoom shortcuts, panning with Space,
+wheel and zoom-tool zooming, exports, saving (renames included), and
 read-only access. `ai-panels` covers the properties panel (fill, stroke,
 joins, opacity, size, rotation), the toolbar swatches, the eyedropper,
 align and the pathfinder, clipping masks, create outlines, select all,
-text settings, polygons and stars, rotating, dragging into another layer,
-and pasting an image. `ai-collaboration` covers edits, undo, pointers, and
-avatars reaching the other person, both people's objects on both sides, a
-file stored outside the session, and an unreachable sync service.
+text settings, switching fonts (loaded first), polygons and stars,
+rotating, dragging into another layer, expanding, coloring, and deleting
+in the layers panel, and pasting an image. `ai-collaboration` covers
+edits, undo, pointers, and avatars reaching the other person, both
+people's objects on both sides, a file stored outside the session, and an
+unreachable sync service.
 
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when the bundled browser is not
 installed. Failure traces and screenshots stay in the ignored
