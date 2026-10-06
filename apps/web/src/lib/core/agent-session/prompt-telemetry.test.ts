@@ -62,6 +62,17 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
     new DOMRect(10, 10, 300, 30)
   );
+  const createRange = document.createRange.bind(document);
+  vi.spyOn(document, 'createRange').mockImplementation(() => {
+    const range = createRange();
+    range.getClientRects = () => {
+      const rects = [
+        range.startContainer.parentElement!.getBoundingClientRect(),
+      ];
+      return Object.assign(rects, { item: (index: number) => rects[index] });
+    };
+    return range;
+  });
 });
 
 afterEach(() => {

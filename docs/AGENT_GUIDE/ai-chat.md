@@ -18,9 +18,11 @@ already confirmed by the runtime do not need another control request.
 The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
 answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
 its paint (`first_text_paint`). Only the final milestone is a visible-response
-success. Bare Markdown prefixes and code-toolbar labels do not count. A hidden
-tab reports `hidden`; raw text without a visible renderer within ten seconds
-reports `not_rendered`, including whether a renderer mounted and stayed attached.
+success. Bare Markdown prefixes and code-toolbar labels do not count. With only
+a code toolbar visible at a scroll boundary, verify the milestone waits until
+the code itself scrolls into view. A hidden tab reports `hidden`; raw text without
+a visible renderer within ten seconds reports `not_rendered`, including whether
+a renderer mounted and stayed attached.
 `submit_surface` uses bounded composer categories, including explicit Home,
 Agents, and mobile origins so a neighboring split cannot mislabel the submit.
 The fallback recognizes Drive documents; an ambiguous split reports `other`.

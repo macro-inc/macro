@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { observeRenderedAnswer } from './render-telemetry';
 
 const cleanups: (() => void)[] = [];
+const rangeRects = vi.fn<(range: Range) => DOMRect[]>();
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -13,6 +14,18 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
     new DOMRect(10, 10, 300, 30)
   );
+  rangeRects.mockImplementation((range) => [
+    range.startContainer.parentElement!.getBoundingClientRect(),
+  ]);
+  const createRange = document.createRange.bind(document);
+  vi.spyOn(document, 'createRange').mockImplementation(() => {
+    const range = createRange();
+    range.getClientRects = () => {
+      const rects = rangeRects(range);
+      return Object.assign(rects, { item: (index: number) => rects[index] });
+    };
+    return range;
+  });
 });
 
 afterEach(() => {
@@ -23,10 +36,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function observe(html: string) {
+function observe(html: string, parent = document.body) {
   const element = document.createElement('div');
   element.innerHTML = html;
-  document.body.append(element);
+  parent.append(element);
   const callbacks = {
     readable: vi.fn(),
     painted: vi.fn(),
@@ -70,6 +83,52 @@ describe('rendered answer telemetry', () => {
     'counts readable answers including %s',
     (text) => {
       const { callbacks } = observe(text);
+      vi.advanceTimersByTime(32);
+      expect(callbacks.painted).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('waits until actual code scrolls into view when only its toolbar intersects', () => {
+    let partTop = 90;
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(
+      () => new DOMRect(10, partTop, 300, 80)
+    );
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    document.body.append(scroller);
+    vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(10, 10, 300, 100)
+    );
+    vi.spyOn(scroller, 'clientHeight', 'get').mockReturnValue(100);
+    // The pre's box overlaps the viewport, but its text is below the clip.
+    rangeRects.mockImplementation(() => [
+      new DOMRect(10, partTop + 50, 100, 20),
+    ]);
+    const { callbacks } = observe(
+      '<div class="md-static-code-container"><div>JavaScript<button>Copy</button></div><pre>const answer = 42;</pre></div>',
+      scroller
+    );
+    vi.advanceTimersByTime(32);
+    expect(callbacks.readable).not.toHaveBeenCalled();
+    expect(callbacks.painted).not.toHaveBeenCalled();
+
+    partTop = 30;
+    scroller.dispatchEvent(new Event('scroll'));
+    expect(callbacks.readable).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(32);
+    expect(callbacks.painted).toHaveBeenCalledOnce();
+  });
+
+  it.each(['<strong>Hello</strong>', '<em>42</em>'])(
+    'counts visible inline text %s inside an overflow clip',
+    (html) => {
+      const scroller = document.createElement('div');
+      scroller.style.overflowX = 'hidden';
+      scroller.style.overflowY = 'auto';
+      document.body.append(scroller);
+      vi.spyOn(scroller, 'clientWidth', 'get').mockReturnValue(300);
+      vi.spyOn(scroller, 'clientHeight', 'get').mockReturnValue(30);
+      const { callbacks } = observe(html, scroller);
       vi.advanceTimersByTime(32);
       expect(callbacks.painted).toHaveBeenCalledOnce();
     }
@@ -124,6 +183,7 @@ describe('rendered answer telemetry', () => {
   });
 
   it('cancels pending frames and DOM observation on cleanup', async () => {
+    const removeListener = vi.spyOn(document, 'removeEventListener');
     const { element, callbacks, stop } = observe('Hello');
     stop();
     element.textContent = 'More words';
@@ -131,5 +191,10 @@ describe('rendered answer telemetry', () => {
     vi.advanceTimersByTime(32);
     expect(callbacks.painted).not.toHaveBeenCalled();
     expect(callbacks.readable).toHaveBeenCalledOnce();
+    expect(removeListener).toHaveBeenCalledWith(
+      'scroll',
+      expect.any(Function),
+      true
+    );
   });
 });

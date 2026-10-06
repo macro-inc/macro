@@ -8,9 +8,12 @@ function readableText(element: HTMLElement): boolean {
     if (
       !parent ||
       parent.closest('button, input, select, [aria-hidden="true"]') ||
-      (parent.closest('.md-static-code-container') && !parent.closest('pre')) ||
-      !visible(parent)
+      (parent.closest('.md-static-code-container') && !parent.closest('pre'))
     )
+      continue;
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    if (![...range.getClientRects()].some((rect) => visible(parent, rect)))
       continue;
     text += node.textContent ?? '';
   }
@@ -18,19 +21,16 @@ function readableText(element: HTMLElement): boolean {
   return /[\p{L}\p{N}]/u.test(text) && !/^\s*\d+[.)][\s*_`~]*$/u.test(text);
 }
 
-function visible(element: HTMLElement): boolean {
+function visible(
+  element: HTMLElement,
+  rect = element.getBoundingClientRect()
+): boolean {
   if (!element.isConnected || document.visibilityState === 'hidden')
     return false;
-  const rect = element.getBoundingClientRect();
-  if (
-    rect.width <= 0 ||
-    rect.height <= 0 ||
-    rect.bottom <= 0 ||
-    rect.right <= 0 ||
-    rect.top >= window.innerHeight ||
-    rect.left >= window.innerWidth
-  )
-    return false;
+  let left = Math.max(0, rect.left);
+  let top = Math.max(0, rect.top);
+  let right = Math.min(window.innerWidth, rect.right);
+  let bottom = Math.min(window.innerHeight, rect.bottom);
   for (
     let node: HTMLElement | null = element;
     node;
@@ -44,6 +44,24 @@ function visible(element: HTMLElement): boolean {
       style.opacity === '0'
     )
       return false;
+    // A container can intersect while all its text is clipped below a scroll
+    // viewport. Intersect the actual glyph rectangles with every overflow clip.
+    const clipsX = /^(auto|scroll|hidden|clip)$/.test(style.overflowX);
+    const clipsY = /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+    if (clipsX || clipsY) {
+      const bounds = node.getBoundingClientRect();
+      if (clipsX) {
+        const start = bounds.left + node.clientLeft;
+        left = Math.max(left, start);
+        right = Math.min(right, start + node.clientWidth);
+      }
+      if (clipsY) {
+        const start = bounds.top + node.clientTop;
+        top = Math.max(top, start);
+        bottom = Math.min(bottom, start + node.clientHeight);
+      }
+    }
+    if (left >= right || top >= bottom) return false;
   }
   return true;
 }
@@ -102,6 +120,8 @@ export function observeRenderedAnswer(
         });
   intersection?.observe(element);
   document.addEventListener('visibilitychange', check);
+  // Scrolling can reveal text without changing whether its outer part intersects.
+  document.addEventListener('scroll', check, true);
   check();
 
   return () => {
@@ -110,5 +130,6 @@ export function observeRenderedAnswer(
     mutations.disconnect();
     intersection?.disconnect();
     document.removeEventListener('visibilitychange', check);
+    document.removeEventListener('scroll', check, true);
   };
 }
