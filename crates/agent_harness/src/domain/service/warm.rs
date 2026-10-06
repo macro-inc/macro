@@ -173,7 +173,12 @@ where
                 self.warm_reservations.lock().await.remove(&session_id);
                 tracing::Span::current().record("agent.session.warm_hit", true);
                 let session = self.inner.sessions.get_session(session_id).await?;
-                self.inner.publish_opened(&session).await;
+                self.inner
+                    .publish_opened(&session)
+                    .instrument(
+                        tracing::info_span!("agent.init.publish", agent.session.id = %session_id),
+                    )
+                    .await;
                 if let Some(prompt) = request.prompt {
                     self.execute(
                         session_id,
@@ -240,7 +245,12 @@ where
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
         if !warm {
-            self.inner.publish_opened(&session).await;
+            self.inner
+                .publish_opened(&session)
+                .instrument(
+                    tracing::info_span!("agent.init.publish", agent.session.id = %session_id),
+                )
+                .await;
         }
 
         let mcp_servers = if kind == AgentKind::CodexCloud {
