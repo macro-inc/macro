@@ -49,6 +49,7 @@ runs:
         DATABASE_URL: ${{ steps.get-db-url.outputs.database_url }}
       run: |
         echo "Running migrations for ${{ inputs.environment }} environment..."
+        bash repair-slack-archive-checksum.sh
         if [ "${{ inputs.environment }}" = "dev" ]; then
           cargo sqlx migrate run --ignore-missing
         else

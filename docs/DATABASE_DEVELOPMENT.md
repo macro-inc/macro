@@ -138,6 +138,27 @@ individual crate or try `just prepare_db --tests`.
   is environmental, report it. Do not hand-edit the cache or wipe databases as
   an automatic workaround.
 
+### Slack archive migration on PostgreSQL 14
+
+Migration `20260930171728` originally used PostgreSQL 15's `NULLS NOT DISTINCT`
+syntax, which failed on production PostgreSQL 14. The repaired migration uses
+an ordinary unique constraint and a partial unique index with equivalent
+semantics. Databases that applied the original migration keep their existing
+constraint; they do not need a schema rewrite.
+
+The deployment action reconciles only the known original SQLx checksum before
+running migrations. For an existing local database that reports a checksum
+mismatch for this version, run the same helper with your local `DATABASE_URL`:
+
+```bash
+bash crates/macro_db_client/repair-slack-archive-checksum.sh
+```
+
+The helper verifies the replacement file's checksum and changes only a successful
+history row with the exact original checksum. Unknown checksums and failed rows
+remain untouched and are still rejected by SQLx. Never clear migration history
+or reset a database to resolve this mismatch.
+
 ### Destructive local reset — explicit approval required
 
 Only after confirming the target is the disposable local database and the user
