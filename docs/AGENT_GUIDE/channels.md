@@ -184,9 +184,12 @@ email at all. The bot's prompt carries the current date and time in the mentioni
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
-`@coder` / `@cursor` / `@codex` / `@claude` for everyone — opens
+`@cursor` / `@codex` / `@claude` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
+when it appears among existing participants or bots. Check with the agents
+rollout both enabled and disabled.
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
 `ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),

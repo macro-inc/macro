@@ -840,9 +840,9 @@ reads `Waiting for approval`. The agent's hidden context names the owner and the
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
 the classic in-channel reply; with it, the same mention opens an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
-`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
-mention menu; which of the two answers is the rollout's decision, not a second choice in
-the menu.
+`@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
+suggestions. There is only ever one Macro entry in the mention menu; which of the
+two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
 

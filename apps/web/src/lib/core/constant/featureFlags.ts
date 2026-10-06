@@ -685,9 +685,9 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry, the folded agent-session view in
-// channels, and which bot the single `@macro` mention targets — the agent
-// session when on, the classic in-channel reply when off.
+// AI agents: the folded agent-session view in channels, and which bot the
+// single `@macro` mention targets — the agent session when on, the classic
+// in-channel reply when off.
 // Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
