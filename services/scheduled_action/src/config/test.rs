@@ -7,18 +7,30 @@ fn config_values() -> Value {
         "DATABASE_URL": "postgres://localhost/macro",
         "KAFKA_BROKERS": "existing-broker:9092",
         "INTERNAL_API_KEY": "test",
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 2000,
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 10000,
         "AI_USAGE_OVERAGE_MARKUP_PERCENT": 5
     })
 }
 
 #[test]
 fn ai_pricing_is_mandatory_and_validated() {
+    use ai_billing::PlanTier;
+
     let config: Config = serde_json::from_value(config_values()).unwrap();
-    assert_eq!(config.ai_pricing().included_allowance_cents(), 2_000);
-    assert_eq!(config.ai_pricing().overage_markup_percent(), 5);
+    let pricing = config.ai_pricing();
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Premium),
+        2_000
+    );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Max), 10_000);
+    assert_eq!(pricing.overage_markup_percent(), 5);
     for key in [
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_OVERAGE_MARKUP_PERCENT",
     ] {
         let mut values = config_values();

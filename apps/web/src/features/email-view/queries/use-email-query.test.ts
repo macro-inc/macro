@@ -355,6 +355,38 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual(['noise']);
   });
 
+  it('lists done rows on Archived and drops a row when it is unarchived', () => {
+    const { source, setState, setEntities } = mount();
+    const archived = { ...email('archived'), done: true };
+    const active = { ...email('active'), done: false };
+    batch(() => {
+      setState('tab', 'archived');
+      setEntities([archived, active]);
+    });
+    expect(ids(source)).toEqual(['archived']);
+    expect(source.isLoading()).toBe(false);
+
+    setEntities([{ ...archived, done: false }, active]);
+    expect(ids(source)).toEqual([]);
+    expect(source.isLoading()).toBe(false);
+  });
+
+  it('trims archived search results to done threads', () => {
+    const { source, setState, setSearchEntities } = mount('invoice');
+    const archived = { ...email('archived'), done: true };
+    const active = { ...email('active'), done: false };
+    batch(() => {
+      setState('tab', 'archived');
+      setSearchEntities([archived, active]);
+    });
+    expect(ids(source)).toEqual(['archived']);
+    expect(source.isLoading()).toBe(false);
+
+    setSearchEntities([{ ...archived, done: false }, active]);
+    expect(ids(source)).toEqual([]);
+    expect(source.isLoading()).toBe(false);
+  });
+
   it('does not suspend on pending native data while its fetch is paused', () => {
     const { source, setPaused, setEntities, query } = mount();
     expect(() => setPaused(true)).not.toThrow();

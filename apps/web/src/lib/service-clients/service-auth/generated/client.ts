@@ -9,6 +9,7 @@ import type {
   AppleLoginRequest,
   ChangePlanRequest,
   ChangePlanResponse,
+  CheckoutSessionV2Response,
   CodexConfigRequest,
   CodexConnectionStatus,
   CodexEnvironment,
@@ -5468,7 +5469,7 @@ export const getUserQuota = async (
  * @summary Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionV2Response200 = {
-  data: StripeSessionResponse;
+  data: CheckoutSessionV2Response;
   status: 200;
 };
 

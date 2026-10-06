@@ -332,6 +332,13 @@ pub struct OpenManagedSession {
 /// its own schedule, while a managed session's sandbox is provisioned here.
 /// That difference is why only one of them takes a workspace.
 pub trait SessionOpener: Send + Sync + 'static {
+    /// Prepare an unprompted hidden in-memory session for an authenticated user.
+    fn warm_session(
+        &self,
+        owner: Owner,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
@@ -395,6 +402,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         id: AgentSessionId,
         hash: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who prompted the turn `id` is about to run.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Who prompted the turn `id` is running or last ran; `None` before its
+    /// first dispatch.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
 
     /// The session a sandbox's egress token stands for, if any still does.
     ///

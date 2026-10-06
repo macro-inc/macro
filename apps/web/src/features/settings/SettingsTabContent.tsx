@@ -4,6 +4,7 @@ import { Show, Suspense } from 'solid-js';
 import { CalendarSettings } from '../calendar/calendar-settings';
 import { CrmSettings as Crm } from '../crm/crm-settings';
 import { SchedulingSettings } from '../scheduling/scheduling';
+import { Usage } from '../usage/usage';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
@@ -54,6 +55,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Billing')}>
         <Billing />
+      </Show>
+      <Show when={isCurrentTab('Usage')}>
+        <Usage />
       </Show>
       <Show when={isCurrentTab('Appearance')}>
         <Appearance />

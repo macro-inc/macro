@@ -10,7 +10,8 @@ import type { PlanTier } from './planTier';
  * One plan in the catalog.
  */
 export interface PlanCatalogEntry {
-  /** Included AI per seat per period, in cents at provider cost. */
+  /** Included AI per seat per period, in cents at provider cost. For the
+free plan this is its monthly hard cap. */
   included_ai_cents_per_seat: number;
   /** Monthly subscription price per seat, cents. */
   monthly_price_cents: number;

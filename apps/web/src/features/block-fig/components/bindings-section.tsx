@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * For a layer inside a main component: which component property drives
  * its visibility, its text, or (for a nested instance) which component it
@@ -43,27 +44,27 @@ export function BindingsSection(props: {
       <For each={b().fields}>
         {(f) => (
           <PropertyRow label={FIELD_LABELS[f.field]}>
-            <select
-              class="w-full rounded-md bg-inset px-1.5 py-0.5 text-ink outline-none disabled:opacity-60"
+            <InspectorSelect
+              label={FIELD_LABELS[f.field]}
               value={f.property ?? ''}
               disabled={!props.actions}
-              data-testid={`fig-bind-${f.field}`}
-              onChange={(e) => {
-                const v = e.currentTarget.value;
-                if (v === CREATE) {
-                  e.currentTarget.value = f.property ?? '';
-                  props.actions?.onCreate(f.field);
-                } else props.actions?.onBind(f.field, v || undefined);
-              }}
-            >
-              <option value="">None</option>
-              <For each={b().properties.filter((p) => p.kind === f.kind)}>
-                {(p) => <option value={p.id}>{p.name}</option>}
-              </For>
-              <option value={CREATE}>
-                Create {PROPERTY_KIND_LABELS[f.kind].toLowerCase()} property…
-              </option>
-            </select>
+              testId={`fig-bind-${f.field}`}
+              options={[
+                { value: '', label: 'None' },
+                ...b()
+                  .properties.filter((p) => p.kind === f.kind)
+                  .map((p) => ({ value: p.id, label: p.name })),
+                {
+                  value: CREATE,
+                  label: `Create ${PROPERTY_KIND_LABELS[f.kind].toLowerCase()} property…`,
+                },
+              ]}
+              onChange={(value) =>
+                value === CREATE
+                  ? props.actions?.onCreate(f.field)
+                  : props.actions?.onBind(f.field, value || undefined)
+              }
+            />
           </PropertyRow>
         )}
       </For>

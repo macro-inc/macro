@@ -22,8 +22,9 @@ import { isThemeV2, isThemeV3 } from '../utils/themeValidation';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 
+/** First-paint colors for index.html: page (`color`), panel, and ink. */
 export const [htmlColor, setHtmlColor] = makePersisted(
-  createSignal({ color: '' }),
+  createSignal<{ color: string; panel?: string; ink?: string }>({ color: '' }),
   { name: 'html-color-theme' }
 );
 

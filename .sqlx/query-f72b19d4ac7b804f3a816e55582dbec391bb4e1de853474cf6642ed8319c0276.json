@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session SET status = 'disconnected'\n                WHERE id IN (\n                    SELECT id FROM agent_session\n                    WHERE list_hidden AND thread_id IS NULL\n                      AND created_at <= NOW() - INTERVAL '10 minutes'\n                    ORDER BY created_at LIMIT 64 FOR UPDATE SKIP LOCKED\n                ) RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f72b19d4ac7b804f3a816e55582dbec391bb4e1de853474cf6642ed8319c0276"
+}

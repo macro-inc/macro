@@ -14,6 +14,8 @@ async function open(page: Page) {
 
 /** Selects the layer named exactly `name` on the open page. */
 async function select(page: Page, name: string) {
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill(name);
   await page
     .getByTestId('fig-search-hit')
@@ -88,7 +90,7 @@ test('sets an instance’s properties, swaps it, and resets it', async ({
     .click();
   await expect(page.getByTestId('fig-main-component')).toHaveText('Icon/Heart');
   await page.getByTestId('fig-canvas').focus();
-  await page.keyboard.press('Control+z');
+  await page.keyboard.press('ControlOrMeta+z');
   await expect(page.getByTestId('fig-main-component')).toHaveText('Card');
 
   // Go to main component.
@@ -102,16 +104,20 @@ test('switches variants of an instance', async ({ page }) => {
   await open(page);
   await select(page, 'Button');
   const type = page.getByTestId('fig-variant-Type');
-  await expect(type).toHaveValue('Primary');
-  await expect(type.locator('option')).toHaveText(['Primary', 'Secondary']);
-  await type.selectOption('Secondary');
-  await expect(type).toHaveValue('Secondary');
+  await expect(type).toHaveText('Primary');
+  await type.click();
+  await expect(page.getByRole('option')).toHaveText(['Primary', 'Secondary']);
+  await page.keyboard.press('Escape');
+  await type.click();
+  await page.getByRole('option', { name: 'Secondary', exact: true }).click();
+  await expect(type).toHaveText('Secondary');
   // The text property survives the switch.
   const label = page.getByTestId('fig-prop-Label');
   await label.fill('Go');
   await label.press('Enter');
-  await type.selectOption('Primary');
-  await expect(type).toHaveValue('Primary');
+  await type.click();
+  await page.getByRole('option', { name: 'Primary', exact: true }).click();
+  await expect(type).toHaveText('Primary');
   await expect(label).toHaveValue('Go');
   await expectSavedCleanly(page);
 });
@@ -140,7 +146,8 @@ test('edits a component set’s variants and properties', async ({ page }) => {
   // Create a boolean property on the set.
   await section.getByRole('button', { name: 'Add variant' }).first().click();
   await expect(page.getByTestId('fig-new-property')).toBeVisible();
-  await page.getByTestId('fig-new-property-kind').selectOption('BOOL');
+  await page.getByTestId('fig-new-property-kind').click();
+  await page.getByRole('option', { name: 'Boolean', exact: true }).click();
   await page.getByTestId('fig-new-property-name').fill('Disabled');
   await page.getByTestId('fig-new-property-create').click();
   await expect(page.getByTestId('fig-property-name-Disabled')).toBeVisible();
@@ -156,14 +163,19 @@ test('binds layers of a main component to properties', async ({ page }) => {
   const bindings = page.getByTestId('fig-bindings-section');
   await expect(bindings).toBeVisible();
   const visible = page.getByTestId('fig-bind-VISIBLE');
-  await expect(visible).toHaveValue('');
+  await expect(visible).toHaveText('None');
   // "Create boolean property…" makes one from the layer and binds it.
-  await visible.selectOption({ label: 'Create boolean property…' });
-  await expect(visible.locator('option:checked')).toHaveText('Show');
-  await visible.selectOption({ label: 'Show icon' });
-  await expect(visible.locator('option:checked')).toHaveText('Show icon');
-  await visible.selectOption({ label: 'None' });
-  await expect(visible).toHaveValue('');
+  await visible.click();
+  await page
+    .getByRole('option', { name: 'Create boolean property…', exact: true })
+    .click();
+  await expect(visible).toHaveText('Show');
+  await visible.click();
+  await page.getByRole('option', { name: 'Show icon', exact: true }).click();
+  await expect(visible).toHaveText('Show icon');
+  await visible.click();
+  await page.getByRole('option', { name: 'None', exact: true }).click();
+  await expect(visible).toHaveText('None');
   await expectSavedCleanly(page);
 });
 
@@ -225,7 +237,8 @@ test('lists variables, binds colors, and switches modes', async ({ page }) => {
   await expect(page.getByTestId('fig-variable-FILL')).toHaveText('Surface');
   await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('FFFFFF');
   const mode = page.getByTestId('fig-variable-mode-Theme');
-  await mode.selectOption({ label: 'Dark' });
+  await mode.click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
   await expect(page.getByTestId('fig-fill-0-hex')).toHaveValue('000000');
 
   // The logo's Brand color aliases Surface in the dark mode.

@@ -30,20 +30,31 @@ fn config_values() -> serde_json::Value {
     ] {
         values[key] = serde_json::json!("test");
     }
+    values["AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(500);
     values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(2_000);
+    values["AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(10_000);
     values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(5);
     values
 }
 
 #[test]
 fn ai_pricing_is_mandatory_and_validated() {
+    use ai_billing::PlanTier;
+
     let config: Config = serde_json::from_value(config_values()).unwrap();
     let pricing = config.ai_pricing();
-    assert_eq!(pricing.included_allowance_cents(), 2_000);
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Premium),
+        2_000
+    );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Max), 10_000);
     assert_eq!(pricing.overage_markup_percent(), 5);
 
     for key in [
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
         "AI_USAGE_OVERAGE_MARKUP_PERCENT",
     ] {
         let mut values = config_values();
@@ -61,9 +72,18 @@ fn ai_pricing_is_mandatory_and_validated() {
     let mut values = config_values();
     values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(100);
     assert!(serde_json::from_value::<Config>(values).is_err());
-    let mut values = config_values();
-    values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(-1);
-    assert!(serde_json::from_value::<Config>(values).is_err());
+    for key in [
+        "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_INCLUDED_ALLOWANCE_CENTS",
+        "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS",
+    ] {
+        let mut values = config_values();
+        values[key] = serde_json::json!(-1);
+        assert!(
+            serde_json::from_value::<Config>(values).is_err(),
+            "{key} must be non-negative"
+        );
+    }
 }
 
 #[test]
@@ -258,6 +278,34 @@ const ALLOWLIST_SETTING_CASES: [Option<&str>; 5] = [
 ];
 
 const UNLISTED_PUBLIC_EMAIL: &str = "unlisted.user@example.test";
+
+#[test]
+fn develop_config_temporarily_allows_unlisted_signups_regardless_of_bypass() {
+    for bypass in [None, Some(false), Some(true)] {
+        for allowlist in ALLOWLIST_SETTING_CASES {
+            let mut values = config_values();
+            values["ENVIRONMENT"] = serde_json::json!("develop");
+            if let Some(bypass) = bypass {
+                values["DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST"] = serde_json::json!(bypass);
+            }
+            if let Some(allowlist) = allowlist {
+                values["DEVELOPMENT_SIGNUP_ALLOWLIST_JSON"] = serde_json::json!(allowlist);
+            }
+            let config: Config = serde_json::from_value(values).unwrap();
+
+            // Exercise both runtime startup and the Doppler validator's entry point.
+            for policy in [
+                config.signup_policy().unwrap(),
+                config
+                    .signup_policy_for_environment(Environment::Develop)
+                    .unwrap(),
+            ] {
+                assert_eq!(policy.allowed_email_count(), None);
+                assert_eq!(policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL), Ok(()));
+            }
+        }
+    }
+}
 
 #[test]
 fn develop_signup_policy_requires_configured_allowlist() {

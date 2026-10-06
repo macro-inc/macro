@@ -90,6 +90,30 @@ fn soup_document(id: Uuid) -> SoupItem<()> {
     grouped_document(id).map_extra(|_| ())
 }
 
+fn soup_agent_session(id: Uuid) -> SoupItem<()> {
+    SoupItem::AgentSession(models_soup::agent_session::SoupAgentSession {
+        id,
+        name: "A session".to_string(),
+        is_archived: false,
+        owner_id: Owner::from_principal_str(VALID_USER_ID).unwrap(),
+        bot_id: Uuid::from_u128(99),
+        harness: "claude".to_string(),
+        repo_url: None,
+        repo_branch: None,
+        pull_request_url: None,
+        working_branch: None,
+        pull_request_state: None,
+        pull_request_id: None,
+        turn_state: None,
+        thread_id: None,
+        status: "no_messages".to_string(),
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        extra: (),
+    })
+}
+
 fn soup_initiative(id: Uuid) -> SoupItem<()> {
     SoupItem::Initiative(SoupInitiative {
         id,
@@ -1324,6 +1348,127 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
             .as_ref(),
         Some(&user_id)
     );
+}
+
+#[tokio::test]
+async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
+    use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
+    use agent_session::domain::model::{
+        AgentSessionId, AgentSessionLog, Message, StoredAgentSessionLog,
+    };
+    use agent_session_realtime::domain::ports::AgentSessionLogSubscriptionService;
+    use async_graphql::futures_util::{StreamExt as _, pin_mut};
+
+    struct TestLogSubscriptions {
+        receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<Vec<StoredAgentSessionLog>>>>>,
+        subscribed: Arc<Mutex<Option<AgentSessionId>>>,
+    }
+
+    impl AgentSessionLogSubscriptionService for TestLogSubscriptions {
+        fn subscribe(
+            &self,
+            session_id: AgentSessionId,
+        ) -> tokio::sync::mpsc::Receiver<Vec<StoredAgentSessionLog>> {
+            *self.subscribed.lock().expect("subscribed lock") = Some(session_id);
+            self.receiver
+                .lock()
+                .expect("receiver lock")
+                .take()
+                .expect("subscribed once")
+        }
+    }
+
+    let user_id = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    let session_id = Uuid::from_u128(7);
+    let other_session_id = Uuid::from_u128(8);
+    let (sender, receiver) = tokio::sync::mpsc::channel(2);
+    let subscribed = Arc::new(Mutex::new(None));
+    let subscriptions = crate::agent_session_log_subscriptions(TestLogSubscriptions {
+        receiver: Arc::new(Mutex::new(Some(receiver))),
+        subscribed: Arc::clone(&subscribed),
+    });
+    let soup_service = CountingSoupService::default();
+    soup_service.set_raw_response(vec![soup_agent_session(session_id)]);
+    let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
+    let schema = build_schema_with_service::<
+        CountingSoupService,
+        NoOpEmailService,
+        NoOpEntityAccessService,
+        SchemaOnlyAuthorizationService,
+        SchemaOnlyState,
+        NoOpEntityPropertyWriter,
+        UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
+        NoOpChannelActivityMutationService,
+        NoOpNotificationMutationService,
+        NoOpSoupNotificationEdgeReader,
+        NoOpEntityPropertyReader,
+        NoOpSoupEmailContentEdgeReader,
+        NoOpEntityFavoriteEdgeReader,
+        NoOpEntityPermissionEdgeReader,
+        NoOpActivityReader,
+    >(soup_service);
+    let query = format!(
+        "subscription {{ agentSessionLogAppended(sessionId: \"{session_id}\") {{ id userId direction content }} }}"
+    );
+
+    // A session the viewer cannot see cannot be followed.
+    let refused = schema
+        .execute_stream(
+            async_graphql::Request::new(format!(
+                "subscription {{ agentSessionLogAppended(sessionId: \"{other_session_id}\") {{ id }} }}"
+            ))
+            .data(user_id.clone())
+            .data(loader.clone())
+            .data(subscriptions.clone()),
+        )
+        .next()
+        .await
+        .expect("one response");
+    assert!(!refused.errors.is_empty());
+    assert!(subscribed.lock().expect("subscribed lock").is_none());
+
+    let responses = schema.execute_stream(
+        async_graphql::Request::new(query)
+            .data(user_id)
+            .data(loader)
+            .data(subscriptions),
+    );
+    pin_mut!(responses);
+    sender
+        .send(vec![StoredAgentSessionLog {
+            id: Uuid::from_u128(1),
+            created_at: Default::default(),
+            entry: AgentSessionLog {
+                agent_session_id: AgentSessionId::new_from_uuid(session_id),
+                user_id: None,
+                content: Message::ToServer(ToServerMessage::Event {
+                    event: SystemEvent::AcpReady,
+                }),
+            },
+        }])
+        .await
+        .expect("subscription remains open");
+    drop(sender);
+
+    let response = responses.next().await.expect("a run");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    let run = data["agentSessionLogAppended"]
+        .as_array()
+        .expect("a run is a list");
+    assert_eq!(run.len(), 1);
+    assert_eq!(run[0]["id"], Uuid::from_u128(1).to_string());
+    assert_eq!(run[0]["direction"], "to_server");
+    assert!(run[0]["content"].is_object());
+    assert_eq!(
+        *subscribed.lock().expect("subscribed lock"),
+        Some(AgentSessionId::new_from_uuid(session_id))
+    );
+    // The fan-out closing means rows were missed: the stream ends with an error.
+    let closed = responses.next().await.expect("a closing response");
+    assert!(!closed.errors.is_empty());
+    assert!(responses.next().await.is_none());
 }
 
 #[tokio::test]

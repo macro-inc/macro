@@ -24,12 +24,9 @@ import {
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
-import { Paywall } from '@app/features/paywall/Paywall';
-import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
-import { MobileSettings } from '@app/features/settings/MobileSettings';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
@@ -44,11 +41,7 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import {
-  enableAiUsageBilling,
-  enableDatabases,
-  enableReminders,
-} from '@core/constant/featureFlags';
+import { enableDatabases, enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -56,7 +49,9 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { queryClient } from '@queries/client';
 import {
   type RouteSectionProps,
   useLocation,
@@ -90,6 +85,21 @@ const StarterDatabase = lazy(async () => {
   );
   return { default: module.StarterDatabase };
 });
+
+// Modals and mobile-only surfaces stay out of the entry chunk; each one
+// renders inside a Suspense boundary and loads when it first mounts.
+const Paywall = lazyNamed(
+  () => import('@app/features/paywall/Paywall'),
+  'Paywall'
+);
+const PropertyEditorModal = lazyNamed(
+  () => import('@app/features/property/editor/PropertyEditorModal'),
+  'PropertyEditorModal'
+);
+const MobileSettings = lazyNamed(
+  () => import('@app/features/settings/MobileSettings'),
+  'MobileSettings'
+);
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -141,19 +151,15 @@ function NewOnboardingRedirect() {
   const userInfoQuery = useUserInfoQuery();
   const navigate = useNavigate();
   const location = useLocation();
-  const onboardingV4 = useOnboardingV4Flag();
-
   createEffect(() => {
-    if (!onboardingV4().enabled || isMobile() || isNativeMobilePlatform()) {
-      return;
-    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     const data = userInfoQuery.data;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
     if (AUTH_URLS.includes(location.pathname)) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // /setup carries it as ?next and its finish() returns there instead of
+    // onboarding carries it as ?next and its finish() returns there instead of
     // the post-setup landing. Base-relative so navigate() can resolve it
     // against the router.
     const target =
@@ -175,6 +181,8 @@ function LayoutInner(props: RouteSectionProps) {
   const { paywallOpen, showPaywall } = usePaywallState();
   const { usageLimitOpen } = useAiUsageLimitState();
   const location = useLocation();
+
+  onCleanup(observeAiUsageLimitMutations(queryClient));
 
   useAppSquishHandlers();
 
@@ -270,11 +278,9 @@ function LayoutInner(props: RouteSectionProps) {
           <Paywall />
         </Suspense>
       </Show>
-      <ShowFeatureFlag flag={enableAiUsageBilling}>
-        <Show when={usageLimitOpen()}>
-          <AiUsageLimitDialog />
-        </Show>
-      </ShowFeatureFlag>
+      <Show when={usageLimitOpen()}>
+        <AiUsageLimitDialog />
+      </Show>
       <div class="max-h-full grow flex">
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
@@ -299,7 +305,9 @@ function LayoutInner(props: RouteSectionProps) {
           <UserCardDrawer />
         </Suspense>
         <Show when={isMobile()}>
-          <MobileSettings />
+          <Suspense>
+            <MobileSettings />
+          </Suspense>
         </Show>
         <MobileViewsRow />
         <FloatRegion

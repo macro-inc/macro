@@ -18,6 +18,9 @@ export function ParticipantsSearchInput(props: {
         placeholder={props.placeholder ?? 'Search participants'}
         aria-label={props.placeholder ?? 'Search participants'}
       />
+      <InputGroup.Addon align="inline-end">
+        <InputGroup.ClearButton />
+      </InputGroup.Addon>
     </InputGroup>
   );
 }

@@ -99,8 +99,8 @@ export function BotInviteSelect(props: {
   };
 
   return (
-    <div class="flex flex-col gap-2 md:flex-row md:items-center">
-      <div class="min-w-0 flex-1">
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="min-w-0 flex-1 basis-60">
         <Combobox<Bot>
           multiple={false}
           options={availableBots()}
@@ -125,7 +125,10 @@ export function BotInviteSelect(props: {
             <Combobox.Input
               ref={inputRef}
               aria-label="Search existing bots"
-              class={inputClasses({ size: 'lg', class: 'rounded-full' })}
+              class={inputClasses({
+                size: 'lg',
+                class: 'rounded-full px-4',
+              })}
             />
           </Combobox.Control>
           <Combobox.Portal>
@@ -134,16 +137,12 @@ export function BotInviteSelect(props: {
               depth={3}
               class="z-action-menu mt-1 w-[var(--kb-popper-anchor-width)] min-w-72 rounded-xl p-1.5 glass bg-menu-glass"
             >
-              <Show
-                when={availableBots().length > 0}
-                fallback={
-                  <div class="px-3 py-5 text-center text-xs text-ink-muted">
-                    No bots available to invite
-                  </div>
-                }
-              >
-                <Combobox.Listbox class="max-h-64 overflow-y-auto" />
-              </Show>
+              <Combobox.Listbox class="peer max-h-64 overflow-y-auto empty:hidden" />
+              <div class="hidden px-3 py-5 text-center text-xs text-ink-muted peer-empty:block">
+                {availableBots().length > 0
+                  ? 'No matching bots'
+                  : 'No bots available to invite'}
+              </div>
             </Combobox.Content>
           </Combobox.Portal>
         </Combobox>

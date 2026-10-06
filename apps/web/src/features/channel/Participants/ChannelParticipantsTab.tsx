@@ -2,7 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useChannel, useChannelType } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { idToEmail } from '@core/user';
+import { getDisplayName, idToEmail, tryMacroId } from '@core/user';
 
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { usePatchChannelMutation } from '@queries/channel/channels';
@@ -85,6 +85,9 @@ export function ChannelParticipantsTab(props: {
       const email = idToEmail(participant.user_id).toLowerCase();
       return (
         participant.user_id.toLowerCase().includes(query) ||
+        getDisplayName(tryMacroId(participant.user_id))
+          .toLowerCase()
+          .includes(query) ||
         email.includes(query) ||
         participant.role.toLowerCase().includes(query)
       );

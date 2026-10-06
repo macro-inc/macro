@@ -75,9 +75,29 @@ function request(
   const message = build(id);
 
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    ensureWorker().postMessage(message);
+    try {
+      const target = ensureWorker();
+      pending.set(id, { resolve, reject });
+      target.postMessage(message);
+    } catch (error) {
+      pending.delete(id);
+      reject(error);
+    }
   });
+}
+
+/**
+ * Start the shared fold on composer focus, while the user is still typing.
+ * A real request already starts the same worker, so repeat focus is free.
+ * No session is opened and a preload failure must not interrupt the input.
+ */
+export async function preloadAgentFold(): Promise<void> {
+  if (worker) return;
+  try {
+    await request((id) => ({ id, kind: 'preload' }));
+  } catch (error) {
+    console.warn('[agent-fold] fold could not be preloaded', error);
+  }
 }
 
 /**

@@ -13,3 +13,6 @@ pub mod connection_gateway_realtime;
 
 /// Publishing lifecycle facts to the event broker.
 pub mod broker_lifecycle_publisher;
+
+/// Mirroring each appended log run to the event broker.
+pub mod broker_log_realtime;

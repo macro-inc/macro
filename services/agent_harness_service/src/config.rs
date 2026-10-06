@@ -70,11 +70,17 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
-    /// In-plan AI allowance per paid seat per period, in cents at provider
+    /// The free plan's hard monthly AI cap, in cents at provider cost.
+    /// Mandatory; set in Doppler.
+    pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// In-plan AI allowance per Premium seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
     pub ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents,
-    /// Markup on AI usage past the allowance, as a whole percent of provider
+    /// In-plan AI allowance per Max seat per period, in cents at provider
     /// cost. Mandatory; set in Doppler.
+    pub ai_usage_max_included_allowance_cents: ai_billing::IncludedAllowanceCents,
+    /// Markup on paid AI usage past the allowance, as a whole percent of
+    /// provider cost. Mandatory; set in Doppler.
     pub ai_usage_overage_markup_percent: ai_billing::OverageMarkupPercent,
     /// OAuth encryption key; deployments without a key do not advertise sign-in.
     pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
@@ -152,9 +158,8 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
-    /// fall back to the agent loop's default model.
-    #[macro_config_default(String::from("claude-sonnet-5-5"))]
+    /// Provider-qualified model id stamped onto sessions the in-memory bot opens.
+    #[macro_config_default(String::from("anthropic/claude-sonnet-5-5"))]
     pub inmem_model: String,
     /// Harness slug stamped onto sessions the in-memory bot opens.
     #[macro_config_default(String::from("macro-inmem"))]
@@ -213,11 +218,15 @@ pub struct Config {
 }
 
 impl Config {
-    /// The AI pricing every billing component is composed with. Both values
-    /// are validated when the configuration loads.
+    /// The AI pricing every billing component is composed with. Every value
+    /// is validated when the configuration loads.
     pub fn ai_pricing(&self) -> ai_billing::AiPricing {
         ai_billing::AiPricing::new(
-            self.ai_usage_included_allowance_cents,
+            ai_billing::PlanAllowances {
+                free: self.ai_usage_free_included_allowance_cents,
+                premium: self.ai_usage_included_allowance_cents,
+                max: self.ai_usage_max_included_allowance_cents,
+            },
             self.ai_usage_overage_markup_percent,
         )
     }

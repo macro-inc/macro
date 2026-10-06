@@ -26,7 +26,7 @@ export function LibraryAssets(props: {
   const [open, setOpen] = createSignal(true);
   return (
     <div
-      class="border-edge-muted border-t py-1"
+      class="border-edge-frame border-t py-1"
       data-testid="fig-library-assets"
       data-library={props.library}
     >

@@ -12,11 +12,10 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { TabsInset } from '@core/component/TabsInset';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import StackIcon from '@phosphor/stack.svg';
-import { Button } from '@ui';
+import { Button, Tabs } from '@ui';
 import { Match, Show, Suspense, Switch } from 'solid-js';
 import { ProjectContentSkeleton } from './components/project-skeletons';
 import {
@@ -127,38 +126,50 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const navigation = () => (
+    <Tabs
+      list={[
+        { value: 'overview', label: 'Overview' },
+        { value: 'tasks', label: 'Tasks' },
+      ]}
+      value={props.route.section}
+      onChange={(value) => section(value as ProjectSection)}
+      aria-label="Project sections"
+      class="w-max shrink-0 whitespace-nowrap"
+    />
+  );
+  const loading = () => (
+    <>
+      <Show when={props.route.section === 'overview'}>
+        <div class="min-w-0 shrink-0 overflow-x-auto scrollbar-hidden px-4 py-2">
+          {navigation()}
+        </div>
+      </Show>
+      <div class="min-h-0 flex-1">
+        <ProjectContentSkeleton
+          section={props.route.section}
+          navigation={navigation()}
+        />
+      </div>
+    </>
+  );
   return (
     <>
       <Show when={props.breadcrumb}>
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
-      <EntityDetailTopBar
-        navigation={
-          <TabsInset
-            list={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
-            ]}
-            value={props.route.section}
-            onChange={(value) => section(value as ProjectSection)}
-            aria-label="Project sections"
-            class="shrink-0 whitespace-nowrap"
-          />
-        }
-      >
+      <EntityDetailTopBar>
         <Show when={source.project()}>
           {(project) => (
             <ProjectShareTrigger project={project()} commands={commands} />
           )}
         </Show>
       </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1">
-        <Suspense
-          fallback={<ProjectContentSkeleton section={props.route.section} />}
-        >
+      <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        <Suspense fallback={loading()}>
           <Switch>
             <Match when={source.loading() && !source.project()}>
-              <ProjectContentSkeleton section={props.route.section} />
+              {loading()}
             </Match>
             <Match when={source.project()}>
               {(project) => (
@@ -167,6 +178,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   source={source}
                   commands={commands}
                   section={props.route.section}
+                  navigation={navigation()}
                   onDelete={
                     props.onDelete ??
                     (() => navigate({ route: tasksSplitRoute, params: {} }))
@@ -216,6 +228,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
               )}
             </Match>
             <Match when={true}>
+              <div class="px-4 py-2">{navigation()}</div>
               <div role="alert" class="p-6">
                 <p>
                   Project unavailable. It may have been deleted, or you may no

@@ -25,7 +25,6 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
-import { AiUsageControls, AiUsageMeter } from './AiUsage';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 /**
@@ -36,7 +35,12 @@ const BILLING_PLAN_FEATURES: Record<
   PlanTier,
   (includedAi: string | undefined) => string[]
 > = {
-  free: () => ['Access to Haiku', 'MCP access', '5 GB storage'],
+  free: (includedAi) => [
+    'Access to Haiku',
+    ...(includedAi ? [`${includedAi} of AI usage at cost each month`] : []),
+    'MCP access',
+    '5 GB storage',
+  ],
   premium: (includedAi) => [
     'All agents',
     'All models',
@@ -192,8 +196,6 @@ export const Billing = () => {
     }
   };
 
-  const returnUrl = () => `${window.location.origin}/app/settings/billing`;
-
   return (
     <SettingsPage
       title="Billing"
@@ -282,43 +284,6 @@ export const Billing = () => {
         </SettingsCard>
       </SettingsSection>
 
-      <Show
-        when={
-          aiUsageBilling().enabled &&
-          hasPaid() &&
-          summary.isSuccess &&
-          summary.data
-        }
-      >
-        {(snapshot) => (
-          <SettingsSection
-            title="AI usage"
-            description="Your plan includes AI each month, measured at provider cost. Beyond that, prepaid credits and usage billing keep you going."
-          >
-            <SettingsCard>
-              <section class="flex flex-col gap-5 p-4">
-                <Show
-                  when={!snapshot().unlimited}
-                  fallback={
-                    <p class="text-sm text-ink-muted">
-                      Your enterprise plan includes unlimited AI usage.
-                    </p>
-                  }
-                >
-                  <AiUsageMeter snapshot={snapshot()} />
-                  <div class="border-t border-t-edge-muted pt-4">
-                    <AiUsageControls
-                      snapshot={snapshot()}
-                      returnUrl={returnUrl()}
-                    />
-                  </div>
-                </Show>
-              </section>
-            </SettingsCard>
-          </SettingsSection>
-        )}
-      </Show>
-
       <Show when={canChangePlan()}>
         <Switch>
           <Match when={!hasPaid()}>
@@ -344,7 +309,6 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
-              {/*
               <SettingsCard>
                 <section class="flex flex-col gap-4 p-4">
                   <header class="flex items-center gap-2">
@@ -353,7 +317,7 @@ export const Billing = () => {
                       <PlanPrice tier="max" />
                     </div>
                     <Button
-                      class="ml-auto rounded-full py-1.5 px-3"
+                      class="ml-auto py-1.5 px-3"
                       depth={2}
                       variant="outline"
                       onClick={() => void handleCheckout('max')}
@@ -366,10 +330,8 @@ export const Billing = () => {
                   </ul>
                 </section>
               </SettingsCard>
-              */}
             </SettingsSection>
           </Match>
-          {/*
           <Match when={tier() === 'premium'}>
             <SettingsSection
               title={aiUsageBilling().enabled ? 'Need more AI?' : 'Upgrade'}
@@ -382,7 +344,7 @@ export const Billing = () => {
                       <PlanPrice tier="max" />
                     </div>
                     <Button
-                      class="ml-auto rounded-full py-1.5 px-3"
+                      class="ml-auto py-1.5 px-3"
                       depth={2}
                       variant="cta"
                       disabled={changePlan.isPending}
@@ -406,7 +368,6 @@ export const Billing = () => {
               </SettingsCard>
             </SettingsSection>
           </Match>
-          */}
           <Match when={tier() === 'max'}>
             <SettingsSection>
               <p class="px-6 text-xs text-ink-extra-muted">

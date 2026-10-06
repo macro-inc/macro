@@ -9,15 +9,13 @@ import { evaluate } from '../core/arith';
 import { formatMeasure } from '../core/measure';
 import { isCommitKey } from '../core/shortcuts';
 
-const inputClass =
-  'min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none';
-
 /**
  * A number with a label. Typing commits on Enter or blur (Escape reverts);
  * dragging the label scrubs the value, one unit per pixel (⇧: ten).
  */
 export function NumberField(props: {
   label: string | JSX.Element;
+  ariaLabel?: string;
   value: number;
   /** Shown and typed as a percentage of 1. */
   percent?: boolean;
@@ -26,6 +24,8 @@ export function NumberField(props: {
   testId?: string;
   /** Layers in the selection differ: shows "Mixed" until typed into. */
   mixed?: boolean;
+  /** Adjacent control, such as the width's Fixed / Hug / Fill selector. */
+  suffix?: JSX.Element;
   /** `live` changes come from scrubbing (coalesce them); the release
    * commits the last one. */
   onChange: (value: number, live: boolean) => void;
@@ -77,44 +77,53 @@ export function NumberField(props: {
   };
 
   return (
-    <label class="flex min-w-0 items-center gap-2 rounded-md bg-inset px-2 py-1 focus-within:outline focus-within:outline-1 focus-within:outline-accent">
-      <span
-        class="shrink-0 cursor-ew-resize select-none text-ink-muted"
-        onPointerDown={onLabelDown}
-        onPointerMove={onLabelMove}
-        onPointerUp={onLabelUp}
+    <div class="flex min-w-0 items-center rounded-md bg-inset focus-within:outline focus-within:outline-1 focus-within:outline-accent">
+      <label
+        class={`flex h-6 min-w-0 flex-1 items-center ${props.suffix ? 'gap-1 pl-1 pr-0' : 'gap-2 px-2'}`}
       >
-        {props.label}
-      </span>
-      <input
-        class={inputClass}
-        data-testid={props.testId}
-        value={draft() ?? shown()}
-        onFocus={(e) => {
-          setDraft(props.mixed ? '' : e.currentTarget.value);
-          e.currentTarget.select();
-        }}
-        onInput={(e) => setDraft(e.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (isCommitKey(e)) e.currentTarget.blur();
-          if (e.key === 'Escape') {
-            setDraft(undefined);
-            e.currentTarget.blur();
-          }
-          if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !props.mixed) {
-            e.preventDefault();
-            const step = (e.shiftKey ? 10 : 1) * (props.percent ? 0.01 : 1);
-            props.onChange(
-              clamp(props.value + (e.key === 'ArrowUp' ? step : -step)),
-              false
-            );
-            setDraft(undefined);
-          }
-        }}
-      />
-    </label>
+        <span
+          class="shrink-0 cursor-ew-resize select-none text-ink-muted"
+          onPointerDown={onLabelDown}
+          onPointerMove={onLabelMove}
+          onPointerUp={onLabelUp}
+        >
+          {props.label}
+        </span>
+        <input
+          class="min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none"
+          aria-label={props.ariaLabel}
+          data-testid={props.testId}
+          value={draft() ?? shown()}
+          onFocus={(e) => {
+            setDraft(props.mixed ? '' : e.currentTarget.value);
+            e.currentTarget.select();
+          }}
+          onInput={(e) => setDraft(e.currentTarget.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (isCommitKey(e)) e.currentTarget.blur();
+            if (e.key === 'Escape') {
+              setDraft(undefined);
+              e.currentTarget.blur();
+            }
+            if (
+              (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+              !props.mixed
+            ) {
+              e.preventDefault();
+              const step = (e.shiftKey ? 10 : 1) * (props.percent ? 0.01 : 1);
+              props.onChange(
+                clamp(props.value + (e.key === 'ArrowUp' ? step : -step)),
+                false
+              );
+              setDraft(undefined);
+            }
+          }}
+        />
+      </label>
+      {props.suffix}
+    </div>
   );
 }
 
@@ -133,7 +142,7 @@ export function TextField(props: {
   };
   return (
     <input
-      class={`${inputClass} rounded-md px-1 py-0.5 hover:bg-inset focus:bg-inset ${props.class ?? ''}`}
+      class={`min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none rounded-md px-1 py-0.5 hover:bg-inset focus:bg-inset ${props.class ?? ''}`}
       data-testid={props.testId}
       value={draft() ?? props.value}
       onFocus={(e) => setDraft(e.currentTarget.value)}
@@ -157,6 +166,7 @@ export function TextField(props: {
  */
 export function ParsedField<T>(props: {
   label: string | JSX.Element;
+  ariaLabel?: string;
   shown: string;
   parse: (text: string) => T | null;
   testId?: string;
@@ -171,10 +181,11 @@ export function ParsedField<T>(props: {
     if (v !== null) props.onChange(v);
   };
   return (
-    <label class="flex min-w-0 items-center gap-2 rounded-md bg-inset px-2 py-1 focus-within:outline focus-within:outline-1 focus-within:outline-accent">
+    <label class="flex h-6 min-w-0 items-center gap-2 rounded-md bg-inset px-2 focus-within:outline focus-within:outline-1 focus-within:outline-accent">
       <span class="shrink-0 select-none text-ink-muted">{props.label}</span>
       <input
-        class={inputClass}
+        class="min-w-0 flex-1 bg-transparent text-ink tabular-nums outline-none"
+        aria-label={props.ariaLabel}
         data-testid={props.testId}
         value={draft() ?? props.shown}
         onFocus={(e) => {

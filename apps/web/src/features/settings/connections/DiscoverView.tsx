@@ -12,10 +12,10 @@ import XIcon from '@phosphor/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { ConnectAction } from '../integration-ui';
+import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
-import { ConnectAction } from './integration-ui';
 import type { ConnectionsModel } from './model';
-import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 import {
   availableStarters,
   PIPEDREAM_BROWSE_HIDDEN_SLUGS,
@@ -86,7 +86,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
         <div class="grid grid-cols-1 gap-3 @[460px]:grid-cols-2">
           <For each={featured()}>
             {(item) => (
-              <SettingsCard>
+              <SettingsCard class="@container">
                 <button
                   type="button"
                   class="flex h-full w-full flex-col items-stretch text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"

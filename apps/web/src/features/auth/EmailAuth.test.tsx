@@ -51,9 +51,6 @@ vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: vi.fn(),
   useUserInfoQuery: () => ({ data: { tutorialComplete: true } }),
 }));
-vi.mock('@app/features/setup/flow/useOnboardingV4Flag', () => ({
-  useOnboardingV4Flag: () => () => ({ enabled: false }),
-}));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />

@@ -29,7 +29,7 @@ import {
 
 function JourneyEntry() {
   onMount(() => {
-    window.location.replace('/start');
+    window.location.replace('/app/signup');
   });
   return null;
 }

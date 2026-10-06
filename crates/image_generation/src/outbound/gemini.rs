@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use ai_usage::{UsageContext, UsageRecorder};
+use ai_usage::{UsageAmount, UsageContext, UsageRecorder};
 use anyhow::Context as _;
 use base64::Engine as _;
 use serde::Deserialize;
@@ -119,15 +119,21 @@ impl ImageGenerator for GeminiImageGenerator {
             .context("unexpected Gemini response shape")
             .map_err(ImageGenerationError::Provider)?;
         if let Some(metadata) = &parsed.usage_metadata {
+            // The image model publishes no cached-input rate, so implicit
+            // cache reads stay inside the prompt count at the input rate.
             recorder.record(usage.clone().into_event(
                 self.model.clone(),
-                metadata.prompt_token_count,
-                metadata.candidates_token_count.unwrap_or_else(|| {
-                    metadata
-                        .total_token_count
-                        .unwrap_or(metadata.prompt_token_count)
-                        .saturating_sub(metadata.prompt_token_count)
-                }),
+                UsageAmount::Tokens {
+                    input: metadata.prompt_token_count,
+                    output: metadata.candidates_token_count.unwrap_or_else(|| {
+                        metadata
+                            .total_token_count
+                            .unwrap_or(metadata.prompt_token_count)
+                            .saturating_sub(metadata.prompt_token_count)
+                    }),
+                    cache_read: 0,
+                    cache_write: 0,
+                },
             ));
         } else {
             tracing::warn!(model = %self.model, "Gemini image response omitted usage metadata");

@@ -41,6 +41,7 @@ import { resizedOrigin } from '../core/rotation';
 import type { Measure } from '../core/type';
 import { type PenPoint, pencilPoints, penNetwork } from '../core/vector';
 import type { FigViewer, Selected } from './create-fig-viewer';
+import { resolveFrameDrop } from './resolve-frame-drop';
 
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 
@@ -398,13 +399,15 @@ export function createFigEditor(options: FigEditorOptions) {
     viewer.select(wanted.filter((s) => alive.has(s.id)));
   };
 
-  const settle = async (result: EditResult) => {
+  /** After a step: undo state, saving, and (unless `quiet`) the view. */
+  const settle = async (result: EditResult, quiet = false) => {
     setCanUndo(result.canUndo);
     setCanRedo(result.canRedo);
     undoStep = result.undoStep;
     redoStep = result.redoStep;
-    if (result.dirty) options.onDirty(result.dirty);
     scheduleSave();
+    if (quiet) return;
+    if (result.dirty) options.onDirty(result.dirty);
     await viewer.afterEdit();
   };
 
@@ -457,16 +460,25 @@ export function createFigEditor(options: FigEditorOptions) {
   /**
    * Applies operations as one undo step, in order with other edits.
    * Resolves to the engine's result (undefined when not allowed or failed).
+   * `quiet` steps re-render and reload nothing (a lifted move's steps,
+   * which the canvas draws itself).
    */
-  const apply = (ops: Op[], coalesce?: string) => {
-    if (!enabled() || ops.length === 0) return Promise.resolve(undefined);
+  const apply = (
+    ops: Op[] | ((page: number) => Promise<Op[]>),
+    coalesce?: string,
+    quiet = false
+  ) => {
+    if (!enabled() || (Array.isArray(ops) && ops.length === 0))
+      return Promise.resolve(undefined);
     const run = queue.then(async () => {
       try {
         // Other people's changes that arrived first apply first.
         await pullShared();
         const page = viewer.page();
+        const resolved = typeof ops === 'function' ? await ops(page) : ops;
+        if (resolved.length === 0) return undefined;
         const before = viewer.selected();
-        const result = await engine.apply(page, ops, coalesce);
+        const result = await engine.apply(page, resolved, coalesce);
         // A drag's later steps coalesce into its first: keep that one's.
         if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
           stepSelections.set(result.undoStep, { page, before });
@@ -478,7 +490,7 @@ export function createFigEditor(options: FigEditorOptions) {
         }
         if (coalesce) pushSoon();
         else await pushNow();
-        await settle(result);
+        await settle(result, quiet);
         return result;
       } catch (e) {
         options.notifyError(e instanceof Error ? e.message : String(e));
@@ -530,6 +542,24 @@ export function createFigEditor(options: FigEditorOptions) {
     const targets = ids();
     if (targets.length === 0) return Promise.resolve(undefined);
     return apply([{ op: 'set', ids: targets, props: patch }], coalesce);
+  };
+
+  const toggleLocked = (targets = ids()) => {
+    const page = viewer.page();
+    return apply(async (currentPage) => {
+      if (currentPage !== page || targets.length === 0) return [];
+      // Read after queued and remote edits, never from the inspector or a
+      // cached layer row. Several layers unlock only when all are locked.
+      const rows = await engine.rows(page, targets);
+      if (rows.length === 0) return [];
+      return [
+        {
+          op: 'set',
+          ids: rows.map((row) => row.id),
+          props: { locked: rows.some((row) => !row.locked) },
+        },
+      ];
+    });
   };
 
   const deleteSelection = async () => {
@@ -1003,17 +1033,22 @@ export function createFigEditor(options: FigEditorOptions) {
     const key = `drag-${++dragKey}`;
     let applied = { x: 0, y: 0 };
     let wanted = { x: 0, y: 0 };
-    let running = false;
+    let running: Promise<void> | undefined;
     const pump = async () => {
-      if (running) return;
-      running = true;
-      while (wanted.x !== applied.x || wanted.y !== applied.y) {
-        const dx = wanted.x - applied.x;
-        const dy = wanted.y - applied.y;
-        applied = { ...wanted };
-        await apply([{ op: 'translate', ids: targets, dx, dy }], key);
+      if (running) return running;
+      running = (async () => {
+        while (wanted.x !== applied.x || wanted.y !== applied.y) {
+          const dx = wanted.x - applied.x;
+          const dy = wanted.y - applied.y;
+          applied = { ...wanted };
+          await apply([{ op: 'translate', ids: targets, dx, dy }], key);
+        }
+      })();
+      try {
+        await running;
+      } finally {
+        running = undefined;
       }
-      running = false;
     };
     return {
       /** Total page-space offset from the drag's start. */
@@ -1021,12 +1056,66 @@ export function createFigEditor(options: FigEditorOptions) {
         wanted = { x: dx, y: dy };
         void pump();
       },
-      async end() {
+      async end(at?: Point) {
         await pump();
-        // Settle what was dragged into its auto layout slot.
-        if (applied.x !== 0 || applied.y !== 0)
-          await apply([{ op: 'reflow', ids: targets }], key);
         await queue;
+        if (applied.x !== 0 || applied.y !== 0) {
+          const ops = at
+            ? await resolveFrameDrop(engine, viewer.page(), targets, at)
+            : [];
+          ops.push({ op: 'reflow', ids: targets });
+          await apply(ops, key);
+          if (at) await viewer.selectIds(targets);
+        }
+      },
+    };
+  };
+
+  /**
+   * A move the canvas draws itself while the layers are dragged (a lifted
+   * move). In a shared design the document follows at gesture pace,
+   * quietly, so other people see the layers move; the drop applies the
+   * rest, all one undo step. `end` resolves to how far the document moved
+   * them.
+   */
+  const startLiftedMove = (targets: string[]) => {
+    const key = `drag-${++dragKey}`;
+    let wanted = { x: 0, y: 0 };
+    let applied = { x: 0, y: 0 };
+    let moved = { x: 0, y: 0 };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const step = async (last: boolean, at?: Point) => {
+      const dx = wanted.x - applied.x;
+      const dy = wanted.y - applied.y;
+      applied = { ...wanted };
+      const ops: Op[] =
+        dx !== 0 || dy !== 0 ? [{ op: 'translate', ids: targets, dx, dy }] : [];
+      if (last && (applied.x !== 0 || applied.y !== 0)) {
+        if (at)
+          ops.push(
+            ...(await resolveFrameDrop(engine, viewer.page(), targets, at))
+          );
+        ops.push({ op: 'reflow', ids: targets });
+      }
+      const result = await apply(ops, key, !last);
+      if (result) moved = { x: moved.x + dx, y: moved.y + dy };
+    };
+    return {
+      to(dx: number, dy: number) {
+        wanted = { x: dx, y: dy };
+        if (!sharing || timer) return;
+        timer = setTimeout(() => {
+          timer = undefined;
+          void step(false);
+        }, GESTURE_PUSH_MS);
+      },
+      async end(at?: Point) {
+        clearTimeout(timer);
+        timer = undefined;
+        await queue;
+        await step(true, at);
+        if (at) await viewer.selectIds(targets);
+        return moved;
       },
     };
   };
@@ -1266,6 +1355,7 @@ export function createFigEditor(options: FigEditorOptions) {
     undo: () => history('undo'),
     redo: () => history('redo'),
     setProps,
+    toggleLocked,
     deleteSelection,
     duplicateSelection,
     group,
@@ -1292,6 +1382,7 @@ export function createFigEditor(options: FigEditorOptions) {
     importLibrary,
     viewCenter,
     startMove,
+    startLiftedMove,
     startResize,
     startRotate,
     create,

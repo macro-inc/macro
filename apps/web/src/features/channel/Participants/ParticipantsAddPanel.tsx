@@ -45,7 +45,10 @@ export function ParticipantsAddPanel(props: {
           placeholder="Add participants by name or email"
           options={options}
           noPadding
-          class={inputClasses({ class: 'h-auto min-h-9 rounded-full py-1' })}
+          class={inputClasses({
+            class:
+              'h-auto min-h-9 rounded-full py-0.5 focus-within:ring-2 focus-within:ring-edge-muted',
+          })}
         />
       </div>
       <Button

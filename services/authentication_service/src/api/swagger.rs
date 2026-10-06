@@ -43,7 +43,9 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::change_plan::{ChangePlanRequest, ChangePlanResponse};
-use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
+use crate::api::user::stripe::create_checkout_session_v2::{
+    CheckoutSessionV2Response, CreateCheckoutSessionV2Request,
+};
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::user::stripe::{PaidPlan, StripeSessionResponse};
 use crate::api::{
@@ -271,6 +273,7 @@ use model::user::{
 
                         // Stripe
                         CreateCheckoutSessionV2Request,
+                        CheckoutSessionV2Response,
                         CreatePortalSessionRequest,
                         StripeSessionResponse,
 

@@ -37,6 +37,8 @@ async function presented(page: Page, frame: string) {
 
 /** Selects a layer through the layer search. */
 async function select(page: Page, name: string) {
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill(name);
   await page
     .getByTestId('fig-search-hit')
@@ -158,30 +160,34 @@ test('edits interactions and flows in the Prototype tab and saves them', async (
   await page.getByTestId('fig-panel-tab-prototype').click();
   const panel = page.getByTestId('fig-prototype-panel');
   await expect(panel.getByTestId('fig-proto-interaction')).toHaveCount(1);
-  await expect(panel.getByTestId('fig-proto-destination')).toHaveValue('1:20');
-  await expect(panel.getByTestId('fig-proto-transition')).toHaveValue(
-    'DISSOLVE'
-  );
+  await panel.getByTestId('fig-proto-open').click();
+  await expect(page.getByTestId('fig-proto-destination')).toHaveText('Details');
+  await expect(page.getByTestId('fig-proto-transition')).toHaveText('Dissolve');
   // The selection's connection is drawn on the canvas.
   await expect(
     page.locator('[data-testid="fig-noodle"][data-from="1:11"]')
   ).toHaveAttribute('data-to', '1:20');
   await expect(page.getByTestId('fig-flow-badge')).toHaveText(/Onboarding/);
 
-  await panel.getByTestId('fig-proto-destination').selectOption('1:40');
+  await page.getByTestId('fig-proto-destination').click();
+  await page.getByRole('option', { name: 'Done', exact: true }).click();
   await expect(
     page.locator('[data-testid="fig-noodle"][data-from="1:11"]')
   ).toHaveAttribute('data-to', '1:40');
-  await panel
-    .getByTestId('fig-proto-transition')
-    .selectOption('PUSH_FROM_RIGHT');
-  await panel.getByTestId('fig-proto-duration').fill('450');
-  await panel.getByTestId('fig-proto-duration').press('Enter');
+  await page.getByTestId('fig-proto-transition').click();
+  await page.getByRole('option', { name: 'Push', exact: true }).click();
+  await page.getByTestId('fig-proto-duration').fill('450');
+  await page.getByTestId('fig-proto-duration').press('Enter');
+  await page
+    .getByRole('button', { name: 'Close interaction settings' })
+    .click();
   // A second interaction: open the menu as an overlay.
   await panel.getByTestId('fig-proto-add').click();
   await expect(panel.getByTestId('fig-proto-interaction')).toHaveCount(2);
-  await panel.getByTestId('fig-proto-action').nth(1).selectOption('overlay');
-  await panel.getByTestId('fig-proto-destination').nth(1).selectOption('1:30');
+  await page.getByTestId('fig-proto-action').click();
+  await page.getByRole('option', { name: 'Open overlay', exact: true }).click();
+  await page.getByTestId('fig-proto-destination').click();
+  await page.getByRole('option', { name: 'Menu', exact: true }).click();
 
   const proto = () =>
     page.evaluate(async () => {
@@ -200,6 +206,9 @@ test('edits interactions and flows in the Prototype tab and saves them', async (
       { navigation: 'OVERLAY', destination: '1:30' },
     ]);
 
+  await page
+    .getByRole('button', { name: 'Close interaction settings' })
+    .click();
   // A flow starting point on another frame.
   await select(page, 'Unlinked');
   await panel.getByTestId('fig-flow-add').click();
@@ -210,6 +219,8 @@ test('edits interactions and flows in the Prototype tab and saves them', async (
   await select(page, 'Next');
   await panel.getByTestId('fig-proto-remove').nth(1).click();
   await expect(panel.getByTestId('fig-proto-interaction')).toHaveCount(1);
+  await page.getByTestId('fig-main-menu').click();
+  await page.getByTestId('fig-main-edit').hover();
   await page.getByTestId('fig-undo').click();
   await expect(panel.getByTestId('fig-proto-interaction')).toHaveCount(2);
 
@@ -230,7 +241,7 @@ test('edits interactions and flows in the Prototype tab and saves them', async (
   await presented(page, '1:40');
 });
 
-test('comments: pins, replies, mentions, unread, resolve, and moving with the frame', async ({
+test('comments: pins, replies, unread, resolve, and moving with the frame', async ({
   page,
 }) => {
   await open(page, '&edit');
@@ -257,31 +268,29 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
   await page.mouse.click(box.x + box.width * 0.12, box.y + box.height * 0.3);
   const input = page.getByTestId('fig-comment-input');
   await expect(input).toBeFocused();
-  await input.pressSequentially('Please check @Bl');
-  await expect(page.getByTestId('fig-mention-option')).toHaveText([
-    'Blair Chen',
-  ]);
-  await page.keyboard.press('Enter');
-  await input.pressSequentially('thanks');
+  // Typing in the comment box never reaches the canvas's shortcuts.
+  await input.pressSequentially('Please check this');
+  await expect(page.getByTestId('fig-tool-comment')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
   await page.keyboard.press('Enter');
 
   const pin = page.getByTestId('fig-comment-pin');
   await expect(pin).toHaveCount(1);
   const popover = page.getByTestId('fig-comment-popover');
-  await expect(popover.getByTestId('fig-comment-mention')).toHaveText(
-    '@Blair Chen'
-  );
+  await expect(popover.getByTestId('fig-comment-item')).toHaveText([
+    'Alex Morgan Please check this',
+  ]);
   const thread = await page.evaluate(
     () =>
       window.figFixture.comments.threads()[0] as {
         id: string;
-        anchor: { nodeId: string };
+        anchor: { pageId: string; nodeId: string; x: number; y: number };
       }
   );
   expect(thread.anchor.nodeId).toBe('1:10');
-  expect(
-    await page.evaluate(() => window.figFixture.comments.notified())
-  ).toEqual([{ to: 'user-blair', threadId: thread.id }]);
+  await expect(popover).toHaveAttribute('data-thread', thread.id);
 
   // A reply.
   await popover.getByTestId('fig-comment-reply').fill('One more thing');
@@ -308,11 +317,13 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
   await page.keyboard.press('Escape');
   await expect(pin).toHaveCount(0);
   await expect(panel.getByTestId('fig-comment-row')).toHaveCount(0);
-  await panel.getByTestId('fig-comments-filter-resolved').click();
+  await panel.getByTestId('fig-comments-filter').click();
+  await page.getByTestId('fig-comments-filter-resolved').click();
   await expect(panel.getByTestId('fig-comment-row')).toHaveCount(1);
   await panel.getByTestId('fig-comment-row').click();
   await popover.getByTestId('fig-comment-reopen').click();
-  await panel.getByTestId('fig-comments-filter-open').click();
+  await panel.getByTestId('fig-comments-filter').click();
+  await page.getByTestId('fig-comments-filter-open').click();
   await expect(panel.getByTestId('fig-comment-row')).toHaveCount(1);
 
   // The pin moves with its frame.
@@ -332,4 +343,24 @@ test('comments: pins, replies, mentions, unread, resolve, and moving with the fr
     .toBeGreaterThan(20);
   const after = await pin.boundingBox();
   expect(Math.abs((before?.y ?? 0) - (after?.y ?? 0))).toBeLessThan(2);
+
+  // A comment link turns the tool on at its thread.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('fig-comments-panel')).toHaveCount(0);
+  const linked = await page.evaluate((anchor) => {
+    const f = window.figFixture.comments;
+    const id = f.arrive(f.people[2], 'Linked', {
+      anchor: { ...anchor, x: 40, y: 40 },
+    });
+    f.follow(id);
+    return id;
+  }, thread.anchor);
+  await expect(page.getByTestId('fig-tool-comment')).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(popover).toHaveAttribute('data-thread', linked);
+  await expect(popover.getByTestId('fig-comment-item')).toHaveText([
+    'Casey Diaz Linked',
+  ]);
 });

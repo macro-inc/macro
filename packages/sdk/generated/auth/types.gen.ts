@@ -60,6 +60,20 @@ export type CheckoutSessionMetadata = {
 };
 
 /**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
+};
+
+/**
  * Explicit remote environment for future Codex sessions.
  */
 export type CodexConfigRequest = {
@@ -191,6 +205,10 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
     plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
@@ -358,7 +376,7 @@ export type CursorModelsResponse = {
 /**
  * Why a request was refused.
  */
-export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -1178,7 +1196,8 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, in cents at provider cost.
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
      */
     included_ai_cents_per_seat: number;
     /**
@@ -3609,7 +3628,7 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];

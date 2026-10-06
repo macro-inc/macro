@@ -147,6 +147,13 @@ pub(crate) struct ApiContext {
     pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
+    pub subscription_checkout: Arc<
+        authentication_service::service::subscription_checkout::CheckoutService<
+            authentication_service::outbound::subscription_checkout::StripeCheckoutGateway<
+                GtmInviteServiceType,
+            >,
+        >,
+    >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
     pub user_deletion:

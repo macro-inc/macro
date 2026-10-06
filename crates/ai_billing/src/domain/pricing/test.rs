@@ -39,11 +39,22 @@ fn markup_must_be_a_whole_percent_below_one_hundred() {
 }
 
 #[test]
-fn pricing_exposes_both_configured_values() {
+fn pricing_exposes_every_configured_value() {
     let pricing = AiPricing::new(
-        IncludedAllowanceCents::new(3_500).unwrap(),
+        PlanAllowances {
+            free: IncludedAllowanceCents::new(500).unwrap(),
+            premium: IncludedAllowanceCents::new(3_500).unwrap(),
+            max: IncludedAllowanceCents::new(15_000).unwrap(),
+        },
         OverageMarkupPercent::new(12).unwrap(),
     );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Free), 500);
+    assert_eq!(
+        pricing.included_allowance_cents_for(PlanTier::Premium),
+        3_500
+    );
+    assert_eq!(pricing.included_allowance_cents_for(PlanTier::Max), 15_000);
+    // The unqualified accessor is the default paid plan's.
     assert_eq!(pricing.included_allowance_cents(), 3_500);
     assert_eq!(pricing.overage_markup_percent(), 12);
     // A different markup prices the same cost differently.
@@ -66,7 +77,7 @@ fn markup_rounds_up_on_the_cumulative_total() {
 #[test]
 fn zero_markup_charges_cost_exactly() {
     let pricing = AiPricing::new(
-        IncludedAllowanceCents::new(0).unwrap(),
+        PlanAllowances::uniform(0),
         OverageMarkupPercent::new(0).unwrap(),
     );
     for cost in [0, 1, 7, 1_000, 123_456] {
@@ -95,7 +106,7 @@ fn cumulative_conversion_books_exact_increments() {
 fn covered_cost_is_the_exact_inverse_of_the_markup() {
     for markup in [0, 5, 17, 99] {
         let pricing = AiPricing::new(
-            IncludedAllowanceCents::new(2_000).unwrap(),
+            PlanAllowances::uniform(2_000),
             OverageMarkupPercent::new(markup).unwrap(),
         );
         assert_eq!(pricing.cost_cents_covered_by(0), 0);

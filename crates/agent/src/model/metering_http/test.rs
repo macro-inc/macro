@@ -281,6 +281,18 @@ fn provider_semantics_are_disjoint() {
     }
 }
 
+/// gpt-6-astra reports prompt-cache writes on a cache miss, inside `input_tokens`.
+#[test]
+fn openai_cache_writes_are_a_billed_dimension() {
+    assert_eq!(
+        normalize(
+            WireProtocol::Responses,
+            &json!({"input_tokens":9015,"input_tokens_details":{"cache_write_tokens":9012,"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":9020}),
+        ),
+        Some(TrustedTokenUsage::from_disjoint(3, 5, 0, 9012, 0))
+    );
+}
+
 #[test]
 fn absent_inconsistent_and_unsupported_counters_are_not_zero() {
     assert_eq!(

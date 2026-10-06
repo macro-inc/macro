@@ -1,23 +1,26 @@
-//! The two numbers GTM owns and the conversions between provider cost and
+//! The numbers GTM owns and the conversions between provider cost and
 //! customer money that every billing path shares.
 //!
-//! Usage and the in-plan allowance are measured in **cost cents**: the
+//! Usage and the in-plan allowances are measured in **cost cents**: the
 //! provider's public price for what was consumed, in whole cents. Credits,
 //! overage charges, caps and credit packs are **customer cents**: what the
-//! customer actually pays. The two meet only where usage runs past the
+//! customer actually pays. The two meet only where paid usage runs past the
 //! allowance, which is marked up by [`AiPricing::overage_markup_percent`].
 //!
-//! Neither number lives in code. Every host reads the mandatory
-//! `AI_USAGE_INCLUDED_ALLOWANCE_CENTS` and `AI_USAGE_OVERAGE_MARKUP_PERCENT`
-//! from Doppler at startup (see [`crate::config`]) and injects one
-//! [`AiPricing`] into each billing component it composes. Change the values in
-//! Doppler and redeploy to change pricing. The exact-money public-allowance
-//! policy in [`super::policy`] derives its figures from the same value, so the
-//! ledger and that policy can never disagree.
+//! None of the numbers live in code. Every host reads the mandatory
+//! `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
+//! (Premium), `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS` and
+//! `AI_USAGE_OVERAGE_MARKUP_PERCENT` from Doppler at startup (see
+//! [`crate::config`]) and injects one [`AiPricing`] into each billing component
+//! it composes. Change the values in Doppler and redeploy to change pricing.
+//! The exact-money public-allowance policy in [`super::policy`] derives its
+//! figures from the same values, so the ledger and that policy can never
+//! disagree.
 
 #[cfg(test)]
 mod test;
 
+use super::models::PlanTier;
 use thiserror::Error;
 
 /// Why a pricing value was refused.
@@ -31,8 +34,8 @@ pub enum PricingError {
     MarkupOutOfRange(i64),
 }
 
-/// In-plan AI allowance per paid seat per billing period, in cents at
-/// provider cost. The same for every paid plan until GTM defines otherwise.
+/// In-plan AI allowance per seat per billing period for one plan, in cents at
+/// provider cost.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IncludedAllowanceCents(i64);
 
@@ -76,31 +79,65 @@ impl OverageMarkupPercent {
     }
 }
 
-/// The configured pricing. Allowance and markup travel together so no
+/// The in-plan allowance of every plan, so no component can be composed with
+/// one tier's allowance and not another's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlanAllowances {
+    /// The free plan's hard monthly cap. Free users cannot buy credits or
+    /// enable overage, so this is all the AI they get until they upgrade.
+    pub free: IncludedAllowanceCents,
+    /// Included AI per Premium seat per period.
+    pub premium: IncludedAllowanceCents,
+    /// Included AI per Max seat per period.
+    pub max: IncludedAllowanceCents,
+}
+
+impl PlanAllowances {
+    /// The allowance for `tier`, in cost cents.
+    pub const fn for_tier(self, tier: PlanTier) -> IncludedAllowanceCents {
+        match tier {
+            PlanTier::Free => self.free,
+            PlanTier::Premium => self.premium,
+            PlanTier::Max => self.max,
+        }
+    }
+}
+
+/// The configured pricing. Allowances and markup travel together so no
 /// component can be composed with one and not the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AiPricing {
-    included_allowance: IncludedAllowanceCents,
+    allowances: PlanAllowances,
     overage_markup: OverageMarkupPercent,
 }
 
 const PERCENT: i64 = 100;
 
 impl AiPricing {
-    /// Combine two validated values.
-    pub const fn new(
-        included_allowance: IncludedAllowanceCents,
-        overage_markup: OverageMarkupPercent,
-    ) -> Self {
+    /// Combine the validated values.
+    pub const fn new(allowances: PlanAllowances, overage_markup: OverageMarkupPercent) -> Self {
         Self {
-            included_allowance,
+            allowances,
             overage_markup,
         }
     }
 
-    /// In-plan AI allowance per paid seat per period, in cents at provider cost.
+    /// Every plan's allowance.
+    pub const fn allowances(self) -> PlanAllowances {
+        self.allowances
+    }
+
+    /// In-plan AI allowance per seat per period for `tier`, in cents at
+    /// provider cost.
+    pub const fn included_allowance_cents_for(self, tier: PlanTier) -> i64 {
+        self.allowances.for_tier(tier).cents()
+    }
+
+    /// The default paid plan's (Premium's) allowance per seat per period, in
+    /// cents at provider cost. Prefer [`Self::included_allowance_cents_for`]
+    /// whenever the tier is known.
     pub const fn included_allowance_cents(self) -> i64 {
-        self.included_allowance.cents()
+        self.allowances.premium.cents()
     }
 
     /// Markup on usage beyond the allowance, as a whole percent of provider cost.
@@ -145,11 +182,34 @@ pub fn cost_cents(provider_cost_usd: f64) -> i64 {
 
 #[cfg(test)]
 impl AiPricing {
-    /// The $20 allowance and 5% markup the crate's tests assume.
+    /// The $5 free cap, $20 Premium and $100 Max allowances, and 5% markup
+    /// the crate's tests assume.
     pub(crate) fn testing() -> Self {
         Self::new(
-            IncludedAllowanceCents::new(2_000).unwrap(),
+            PlanAllowances::testing(),
             OverageMarkupPercent::new(5).unwrap(),
         )
+    }
+}
+
+#[cfg(test)]
+impl PlanAllowances {
+    /// The $5 free cap, $20 Premium and $100 Max allowances the crate's tests assume.
+    pub(crate) fn testing() -> Self {
+        Self {
+            free: IncludedAllowanceCents::new(500).unwrap(),
+            premium: IncludedAllowanceCents::new(2_000).unwrap(),
+            max: IncludedAllowanceCents::new(10_000).unwrap(),
+        }
+    }
+
+    /// Every plan on the same allowance (for tests of tier-independent arithmetic).
+    pub(crate) fn uniform(cents: i64) -> Self {
+        let allowance = IncludedAllowanceCents::new(cents).unwrap();
+        Self {
+            free: allowance,
+            premium: allowance,
+            max: allowance,
+        }
     }
 }

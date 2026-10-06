@@ -13,7 +13,7 @@ import { match } from 'ts-pattern';
 /** The formats the format menu offers, as Figma labels them. */
 export const EXPORT_FORMATS: { format: ExportFormat; label: string }[] = [
   { format: 'PNG', label: 'PNG' },
-  { format: 'JPEG', label: 'JPG' },
+  { format: 'JPEG', label: 'JPEG' },
   { format: 'SVG', label: 'SVG' },
   { format: 'PDF', label: 'PDF' },
 ];

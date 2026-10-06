@@ -7,10 +7,18 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, onMount } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
+
+const renderTelemetry = vi.hoisted(() => ({
+  context: vi.fn(),
+  observe: vi.fn(),
+}));
+vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: renderTelemetry.context,
+}));
 
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
@@ -33,7 +41,18 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: { text: string }) => <p data-testid="text">{props.text}</p>,
+  TextPart: (props: {
+    text: string;
+    observeRender?: (element: HTMLElement) => void;
+  }) => {
+    let element!: HTMLParagraphElement;
+    onMount(() => props.observeRender?.(element));
+    return (
+      <p ref={element} data-testid="text">
+        {props.text}
+      </p>
+    );
+  },
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
@@ -110,6 +129,8 @@ vi.mock('../views/LiveToolGroup', () => ({
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  renderTelemetry.context.mockReset();
+  renderTelemetry.observe.mockReset();
   cleanup();
 });
 
@@ -146,6 +167,29 @@ const message = (
 });
 
 describe('Message tool grouping', () => {
+  it('observes only agent answer DOM on the existing session and matching turn', () => {
+    renderTelemetry.context.mockReturnValue({
+      observeRenderedText: renderTelemetry.observe,
+    });
+    const answer = message([text('Hello')]);
+    answer.turn = 3;
+    render(() => <Message message={answer} inFlight />);
+    expect(renderTelemetry.observe).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      3,
+      expect.any(HTMLElement)
+    );
+    cleanup();
+    renderTelemetry.observe.mockClear();
+    render(() => (
+      <Message
+        message={{ ...answer, author: { kind: 'user', userId: null } }}
+        inFlight={false}
+      />
+    ));
+    expect(renderTelemetry.observe).not.toHaveBeenCalled();
+  });
+
   it('folds consecutive tool calls into one group, keeping their indices', () => {
     const view = render(() => (
       <Message

@@ -6,6 +6,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
 import { modeForKind } from '../agents-view/core/agent-kind';
@@ -29,6 +30,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
+  useWarmAgentSessionQuery(userId);
   const { draft, setDraft } = createPersistedComposerDraft(
     HOME_CONVERSATION_DRAFT_KEY
   );
@@ -77,7 +79,11 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     },
   });
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession({ ...conversation, userId: userId() });
+    const id = startPendingSession({
+      ...conversation,
+      userId: userId(),
+      submitSurface: 'home',
+    });
     panel.handle.replace({
       next: {
         type: 'component',

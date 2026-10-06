@@ -9,7 +9,8 @@ use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, BillingError, BillingPeriod,
     BillingSettings, CREDIT_PACKS_CENTS, Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS,
     OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope,
-    PeriodAllowance, Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
+    PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatUsage, SubscriptionScope,
+    UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
@@ -223,6 +224,11 @@ where
         anchor: Option<(DateTime<Utc>, DateTime<Utc>)>,
         now: DateTime<Utc>,
     ) -> BillingPeriod {
+        if !entitlement.tier.is_paid() {
+            // The free cap is monthly. A Stripe anchor left behind by a lapsed
+            // subscription says nothing about a free user's period.
+            return BillingPeriod::calendar_month(now);
+        }
         if let Some(period) = BillingPeriod::covering(anchor, now) {
             return period;
         }
@@ -364,9 +370,14 @@ where
                     .await?;
                 let balance = self.repo.credit_balance_cents(&entitlement.payer).await?;
                 (used, chargeable, ledger, balance)
-            } else {
-                // Free users are not metered here; skip the ledger reads.
+            } else if entitlement.unlimited {
                 Default::default()
+            } else {
+                // Free users are hard-capped at their own allowance: only their
+                // usage matters, and there is no ledger, credit, or overage to read.
+                let users = [user.clone().into_owned()];
+                let usage = self.usage.usage_cost_cents_by_user(&users, *period).await?;
+                (usage_for(user, &usage), 0, PeriodLedger::default(), 0)
             };
         Ok(build_snapshot(
             user,
@@ -620,7 +631,7 @@ where
             return Ok(AllowanceDecision::Allow);
         }
         let position = self.position(user, Utc::now()).await?;
-        if !position.entitlement.is_metered() {
+        if position.entitlement.unlimited {
             return Ok(AllowanceDecision::Allow);
         }
         let snapshot = self.snapshot_at(user, &position).await?;

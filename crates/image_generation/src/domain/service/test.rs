@@ -73,11 +73,15 @@ impl ImageGenerator for FakeGenerator {
         recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError> {
         self.requests.lock().unwrap().push(request.clone());
-        recorder.record(
-            usage
-                .clone()
-                .into_event("gemini-2.5-flash-image".to_string(), 8, 1290),
-        );
+        recorder.record(usage.clone().into_event(
+            "gemini-2.5-flash-image".to_string(),
+            ai_usage::UsageAmount::Tokens {
+                input: 8,
+                output: 1290,
+                cache_read: 0,
+                cache_write: 0,
+            },
+        ));
         self.result
             .clone()
             .map_err(|reason| ImageGenerationError::Refused(reason.to_string()))
@@ -540,7 +544,9 @@ async fn attributes_usage_to_the_user_even_when_upload_fails() {
             events[0].amount,
             ai_usage::UsageAmount::Tokens {
                 input: 8,
-                output: 1290
+                output: 1290,
+                cache_read: 0,
+                cache_write: 0,
             }
         );
     }

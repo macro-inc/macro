@@ -40,6 +40,8 @@ vi.mock('@ui', async () => ({
   ...(await import('@ui/components/Button')),
   ...(await import('@ui/components/InputGroup')),
   ...(await import('@ui/components/Avatar')),
+  ...(await import('@ui/components/Badge')),
+  ...(await import('@ui/components/Item')),
 }));
 vi.mock('./ParticipantsActionSheet', () => ({
   ParticipantsActionSheet: (props: {
@@ -74,8 +76,8 @@ it('filters existing bots and keeps row actions separate from opening a bot', ()
   ));
   const search = screen.getByRole('searchbox', { name: 'Search bots' });
   fireEvent.input(search, { target: { value: 'ASSISTANT' } });
-  expect(screen.queryByRole('button', { name: 'Open Teobot' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Open Helper' }));
+  expect(screen.queryByRole('link', { name: 'Open Teobot' })).toBeNull();
+  fireEvent.click(screen.getByRole('link', { name: 'Open Helper' }));
   expect(open).toHaveBeenCalledWith('helper');
   fireEvent.click(screen.getByRole('button', { name: 'Remove Helper' }));
   expect(open).toHaveBeenCalledTimes(1);
@@ -86,7 +88,7 @@ it('filters existing bots and keeps row actions separate from opening a bot', ()
   fireEvent.input(search, { target: { value: 'missing' } });
   expect(screen.getByText('No matching bots')).toBeTruthy();
   fireEvent.input(search, { target: { value: '' } });
-  expect(screen.getByRole('button', { name: 'Open Teobot' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Open Teobot' })).toBeTruthy();
 });
 
 it('uses compact create and invite actions and closes the invite sheet on success', () => {

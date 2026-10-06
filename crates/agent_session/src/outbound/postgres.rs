@@ -22,7 +22,7 @@ use crate::domain::model::{
     ClaimOutcome, CreateAgentSessionParams, ExternalSession, LeaseView, ManagerFence, Message,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession, cursor_run_checkpoint, session_owner_user,
+    ThreadSession, TurnPrompter, cursor_run_checkpoint, session_owner_user,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -296,6 +296,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
 impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let CreateAgentSessionParams {
+            warm,
             id,
             owner_id,
             bot_id,
@@ -342,7 +343,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // An inline @macro mention is a one-shot on the message. It stays out
         // of the agents list and search. Every other session — the agents
         // composer, coding agents — is a list row.
-        let list_hidden = bot_id == MACRO_NEW_BOT_ID && thread_id.is_some();
+        let list_hidden = warm || (bot_id == MACRO_NEW_BOT_ID && thread_id.is_some());
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -461,9 +462,11 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         // row is what Soup's `viewed_at` and the frecency ranking read, so
         // without it a brand-new session would rank below everything the
         // owner has ever opened.
-        upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
-            .await
-            .context("failed to record the agent session in the owner's history")?;
+        if !warm {
+            upsert_user_history(&mut transaction, owner_user.as_ref(), &id.as_uuid())
+                .await
+                .context("failed to record the agent session in the owner's history")?;
+        }
 
         transaction
             .commit()
@@ -709,7 +712,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
-            WHERE owner_id = $1
+            WHERE owner_id = $1 AND NOT list_hidden
             ORDER BY agent_session.created_at DESC, id DESC
             LIMIT $2
             "#,
@@ -791,6 +794,41 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .await
         .context("failed to rotate session credential")?;
         Ok(())
+    }
+
+    async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3 WHERE id = $1",
+            id.as_uuid(),
+            prompter.action_id.as_uuid(),
+            prompter.user.as_ref().map(|user| user.as_ref()),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record the turn prompter")?;
+        Ok(())
+    }
+
+    async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT turn_action_id, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the turn prompter")?;
+        Ok(row.and_then(|row| {
+            row.turn_action_id.map(|action_id| TurnPrompter {
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::from_uuid(
+                    action_id,
+                ),
+                user: row.turn_prompter,
+            })
+        }))
     }
 
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
@@ -1764,3 +1802,5 @@ impl<B: BotFacts + 'static> SessionAudience for PgAgentSessionRepo<B> {
         Ok(viewers)
     }
 }
+
+mod warm;

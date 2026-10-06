@@ -21,7 +21,7 @@ export const RESOURCE_PAGES = [
 
 /** Full document navigation keeps the app and marketing CSS independent. */
 export function journeyHref() {
-  if (typeof window === 'undefined') return '/start';
+  if (typeof window === 'undefined') return '/app/signup';
   try {
     const active = JSON.parse(
       sessionStorage.getItem('onboarding-flow-step') ?? 'null'
@@ -30,5 +30,5 @@ export function journeyHref() {
   } catch {
     // An old or unavailable storage record must not prevent navigation.
   }
-  return '/start';
+  return '/app/signup';
 }

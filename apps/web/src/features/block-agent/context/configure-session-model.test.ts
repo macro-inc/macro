@@ -51,6 +51,17 @@ const flush = async () => {
 };
 
 describe('combined model and effort selection', () => {
+  it('can confirm effort without changing the runtime model', async () => {
+    const f = fixture();
+    const result = configureSessionModel(f.session, undefined, selection);
+    await flush();
+    expect(f.issue.mock.calls).toEqual([
+      [{ type: 'setConfigOption', ...selection }],
+    ]);
+    f.confirm(1);
+    await result;
+  });
+
   it('waits for the model confirmation before issuing the opaque effort, then waits for effort confirmation', async () => {
     const f = fixture();
     let finished = false;

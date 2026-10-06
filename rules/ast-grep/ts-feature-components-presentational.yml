@@ -15,6 +15,7 @@ note: |-
 files:
   - apps/web/src/features/routines/components/**
   - apps/web/src/features/scheduling/components/**
+  - apps/web/src/features/usage/components/**
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/slack-import/components/**
   - apps/web/src/features/channels-view/components/ChannelDetailView*
@@ -33,6 +34,8 @@ files:
   - apps/web/src/features/email-compose/components/**
   - apps/web/src/features/changes/components/**
   - apps/web/src/features/block-write/components/**
+  - apps/web/src/features/onboarding/components/**
+  - apps/web/src/features/auth/components/**
 rule:
   any:
     - kind: string

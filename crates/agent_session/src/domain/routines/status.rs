@@ -49,7 +49,11 @@ pub(super) fn action_status(
         for pending in &fold.inner().metadata().pending_interactions {
             if pending.turn() == prompt.id.0 {
                 let reason = match pending {
-                    PendingInteraction::Permission(_) => RoutinePendingReason::Permission,
+                    // A held tool call waits on the owner's say-so, which a
+                    // routine can no more give than a permission.
+                    PendingInteraction::Permission(_) | PendingInteraction::ToolApproval(_) => {
+                        RoutinePendingReason::Permission
+                    }
                     PendingInteraction::Elicitation(_) => RoutinePendingReason::Elicitation,
                 };
                 return RoutineActionStatus::Pending(reason);

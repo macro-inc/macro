@@ -6,6 +6,35 @@ use crate::scene::Scene;
 use crate::testing::showcase_file;
 use std::collections::BTreeMap;
 
+#[test]
+fn joining_a_lazy_file_keeps_other_pages_deferred() {
+    use crate::testing::{fig_file, node};
+
+    let bytes = Arc::new(fig_file(
+        vec![
+            node(0, None, "DOCUMENT", "Document", vec![]),
+            node(1, Some((0, "a")), "CANVAS", "Cover", vec![]),
+            node(2, Some((0, "b")), "CANVAS", "Screens", vec![]),
+            node(50, Some((2, "a")), "RECTANGLE", "Deferred", vec![]),
+        ],
+        vec![],
+    ));
+    let mut lazy = Document::open_lazy(&bytes).unwrap();
+    let mut full = Document::open_shared(&bytes).unwrap();
+    let session = lazy.props(lazy.root).guid.unwrap().session;
+    let (_, lazy_meta) = Collab::new(&mut lazy, session, None);
+    let (_, full_meta) = Collab::new(&mut full, session, None);
+    assert_eq!(lazy_meta, full_meta);
+    // A colliding session must still allocate after IDs on unopened pages.
+    assert_eq!(lazy.next_guid, full.next_guid);
+    assert_eq!(lazy.next_guid.local, 51);
+    assert!(!lazy.is_complete());
+    let deferred = lazy.node(lazy.pages[1]).children[0];
+    assert!(!lazy.is_decoded(deferred));
+    lazy.complete().unwrap();
+    assert_eq!(lazy.next_guid, full.next_guid);
+}
+
 /// One person editing: a document, its undo history, and its collaboration
 /// state, exchanging entries through a [`Hub`].
 struct Peer {

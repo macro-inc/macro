@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -175,6 +175,20 @@ export class Sdk extends HeyApiClient {
     public previewAgentSessions<ThrowOnError extends boolean = false>(options: Options<PreviewAgentSessionsData, ThrowOnError>): RequestResult<PreviewAgentSessionsResponses, PreviewAgentSessionsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<PreviewAgentSessionsResponses, PreviewAgentSessionsErrors, ThrowOnError>({
             url: '/agent-sessions/preview',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Prepare MCP connections without sending a prompt or creating a visible list row.
+     */
+    public warmAgentSessionHandler<ThrowOnError extends boolean = false>(options: Options<WarmAgentSessionHandlerData, ThrowOnError>): RequestResult<WarmAgentSessionHandlerResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).post<WarmAgentSessionHandlerResponses, unknown, ThrowOnError>({
+            url: '/agent-sessions/warm',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -376,6 +390,22 @@ export class Sdk extends HeyApiClient {
     public putAgentSessionSandboxSize<ThrowOnError extends boolean = false>(options: Options<PutAgentSessionSandboxSizeData, ThrowOnError>): RequestResult<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutAgentSessionSandboxSizeResponses, PutAgentSessionSandboxSizeErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/sandbox-size',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Answer a tool call the agent made in a turn somebody other than the
+     * session's owner prompted. Approve and deny are the owner's; cancel is
+     * anyone's with edit access.
+     */
+    public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({
+            url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

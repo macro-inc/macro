@@ -171,6 +171,15 @@ bundle-smoke-server *ARGS:
 test-watch:
     bunx --bun vitest
 
+# Sign-in, sign-up, and onboarding in Chromium against fake backends (no network).
+# Flags pass through to Playwright: `--ui` to watch and step through, `--headed`
+# to see the browser. With --ui, closing the onboarding window opens auth's.
+# The Linux dev shell points LD_LIBRARY_PATH at Nix libraries, which Playwright's
+# system-glibc Chromium can't load; Nix binaries find theirs through RPATH.
+test-signup-browser *ARGS:
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/onboarding/browser-test/playwright.config.ts {{ARGS}}
+    env -u LD_LIBRARY_PATH bunx playwright test --config src/features/auth/browser-test/playwright.config.ts {{ARGS}}
+
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test
     bun run --cwd ../../packages/email-renderer test:browser

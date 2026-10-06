@@ -1,7 +1,6 @@
 import {
   formatIncludedAi,
   type IncludedAiCentsByTier,
-  PLAN_BY_TIER,
   PLANS,
   type Plan,
   type PlanTier,
@@ -186,19 +185,16 @@ function planOption(plan: Plan, includedAi: string | undefined): PlanOption {
   };
 }
 
+/** Every paid plan a seat can be moved to, cheapest first. */
 function planOptionsFor(
-  currentPlan: PaidPlan,
   includedAi: IncludedAiCentsByTier,
   aiUsageBilling: boolean
 ): PlanOption[] {
   const allowance = (tier: PlanTier) =>
     aiUsageBilling ? formatIncludedAi(includedAi[tier]) : undefined;
-  const purchasable = PLANS.flatMap((plan) =>
+  return PLANS.flatMap((plan) =>
     plan.tier === 'free' ? [] : [planOption(plan, allowance(plan.tier))]
   );
-  return currentPlan === 'max'
-    ? [...purchasable, planOption(PLAN_BY_TIER.max, allowance('max'))]
-    : purchasable;
 }
 
 /**
@@ -217,8 +213,7 @@ function PlanSelect(props: {
 }) {
   const includedAi = useIncludedAiCentsByTier();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const options = () =>
-    planOptionsFor(props.value, includedAi(), aiUsageBilling().enabled);
+  const options = () => planOptionsFor(includedAi(), aiUsageBilling().enabled);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -1500,8 +1495,8 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
-          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
+            <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
             <IntegrationRow
               icon={<GithubIcon />}
               title="GitHub App"

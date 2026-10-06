@@ -124,6 +124,8 @@ test('publishes a library, uses it in another design, and updates it', async ({
   await expect(
     page.getByTestId('fig-layer-row').filter({ hasText: 'Card' })
   ).toBeVisible();
+  if (!(await page.getByTestId('fig-layer-search').isVisible()))
+    await page.getByTestId('fig-search-toggle').click();
   await page.getByTestId('fig-layer-search').fill('Background');
   await page
     .getByTestId('fig-search-hit')

@@ -27,7 +27,8 @@ const nonEmailFilters: EntityFilters = {
 };
 
 // Search has no draft/sent scoping, so those tabs (like All) search the
-// user's own threads — the same reach the legacy mail search had.
+// user's own threads — the same reach the legacy mail search had. It cannot
+// filter archive state either, so `emailMatchesTab` trims Archived hits.
 function tabFilters(tab: EmailTab): EmailFilters {
   return match(tab)
     .with('important', () => ({ importance: true, shared: 'exclude' as const }))
@@ -37,6 +38,7 @@ function tabFilters(tab: EmailTab): EmailFilters {
       shared: 'exclude' as const,
     }))
     .with('shared', () => ({ shared: 'only' as const }))
+    .with('archived', () => ({ shared: 'exclude' as const }))
     .with(
       'favorites',
       'drafts',

@@ -27,6 +27,12 @@ preference persists. `Load more projects` fetches the next page when available.
 The plus button beside `My projects` opens the project composer, even while the
 section is collapsed or loading. Its rows use the shared project query/cache and
 load inside a local Suspense boundary, leaving sidebar controls available.
+Once a current-query project page is cached, an offline/background refresh failure
+must not show **Could not load projects** beside those rows (or a cached empty
+result). Retrying a refresh must not reintroduce that warning merely because the
+refresh promise rejects; the cached project links remain available. Cache misses,
+server/permission errors, and failed **Load more projects** requests still show
+failure and retry controls. Verify both background refresh and manual retry.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -238,8 +244,12 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks in
-that top bar. Opening an associated task extends the breadcrumb trail; choose
+and side-panel controls as task detail. Choose Overview or Tasks in the
+bubble-tab row below that top bar. In Tasks, an outlined circular search button
+to the right of the tabs expands into a focused `Search in <project name>` field. Close or Escape
+clears the query and restores focus to the button. The row stays the same height
+and scrolls horizontally in narrow splits, keeping list controls, Add existing
+tasks, and New task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).

@@ -14,6 +14,8 @@ export * from './checkoutSessionMetadata';
 export * from './checkoutSessionMetadataFbc';
 export * from './checkoutSessionMetadataFbp';
 export * from './checkoutSessionMetadataGaClientId';
+export * from './checkoutSessionV2Response';
+export * from './checkoutSessionV2ResponseTrialDays';
 export * from './codexConfigRequest';
 export * from './codexConnectionStatus';
 export * from './codexConnectionStatusAccountId';

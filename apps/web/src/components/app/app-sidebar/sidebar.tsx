@@ -28,6 +28,7 @@ import {
   ENABLE_CALLS,
   enableCrm,
   enableReminders,
+  enableTasksReviews,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -229,13 +230,15 @@ export const GoToHotkeys = () => {
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reminders = useFeatureFlag(enableReminders);
+  const reviews = useFeatureFlag(enableTasksReviews);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reminders().enabled
+      reminders().enabled,
+      reviews().enabled
     )
   );
 
@@ -408,9 +411,18 @@ const RECENT_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
+const REVIEWS_LINK: SidebarItem = {
+  id: 'reviews',
+  label: 'Reviews',
+  href: '/reviews',
+  icon: getIconConfig('githubPullRequest').icon,
+  hotkey: 'v',
+  hotkeyToken: TOKENS.sidebar.goTo.reviews,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus Getting
- * started and the flag-gated Recent, Activity, Calendar, Reminders, Calls, and CRM
+ * started and the flag-gated Recent, Activity, Calendar, Reminders, Calls, Reviews, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
  * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
@@ -422,7 +434,8 @@ const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReminders: boolean
+  showReminders: boolean,
+  showReviews: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
     (link) =>
@@ -461,6 +474,11 @@ const buildSidebarLinks = (
       COMPANIES_LINK,
       ...links.slice(idx + 1),
     ];
+  }
+
+  if (showReviews) {
+    // Reviews sits at the end (accessed via More menu but has a hotkey).
+    links = [...links, REVIEWS_LINK];
   }
 
   return links;

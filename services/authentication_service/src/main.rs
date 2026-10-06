@@ -506,6 +506,17 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let stripe_client = Arc::new(stripe_client);
+    let gtm_invite_service = Arc::new(gtm_invite_service);
+    let subscription_checkout = Arc::new(
+        authentication_service::service::subscription_checkout::CheckoutService::new(
+            authentication_service::outbound::subscription_checkout::StripeCheckoutGateway::new(
+                db.clone(),
+                stripe_client.clone(),
+                gtm_invite_service.clone(),
+                stripe_prices.seat_prices(),
+            ),
+        ),
+    );
     let ai_payment_gateway = ai_billing::outbound::StripePaymentGateway::new(stripe_client.clone());
     let ai_pricing = config.ai_pricing();
     let ai_billing_service = Arc::new(
@@ -562,6 +573,7 @@ async fn main() -> anyhow::Result<()> {
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,
+            subscription_checkout,
             document_storage_service_client,
             user_deletion,
             email_service_client: Arc::new(email_service_client),
@@ -591,7 +603,7 @@ async fn main() -> anyhow::Result<()> {
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
-            gtm_invite_service: Arc::new(gtm_invite_service),
+            gtm_invite_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
