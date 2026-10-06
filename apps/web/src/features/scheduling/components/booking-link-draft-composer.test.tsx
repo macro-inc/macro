@@ -56,7 +56,7 @@ it('submits edited details and hours together exactly once', async () => {
 });
 it('cancels without executing the draft', async () => {
   const { execute, reject } = fixture();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel review' }));
   await waitFor(() => expect(reject).toHaveBeenCalledTimes(1));
   expect(execute).not.toHaveBeenCalled();
 });

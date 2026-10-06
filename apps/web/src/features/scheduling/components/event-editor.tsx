@@ -25,6 +25,7 @@ export function EventEditor(props: {
   /** Availability slot for an inline draft, otherwise show saved schedule selection. */
   availability?: JSX.Element;
   submitLabel?: string;
+  cancelEditingLabel?: string;
   onChange?: (event: EventType) => void;
   onSave: (event: EventType) => Promise<void>;
   onCancel: () => void;
@@ -68,7 +69,7 @@ export function EventEditor(props: {
     <form onSubmit={(e) => void save(e)} class="@container min-w-0">
       <div class="flex min-w-0 flex-col gap-5">
         <Button variant="ghost" class="self-start" onClick={props.onCancel}>
-          Cancel editing
+          {props.cancelEditingLabel ?? 'Cancel editing'}
         </Button>
         <header class="mb-7 flex items-start justify-between gap-4">
           <div class="min-w-0">

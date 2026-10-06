@@ -119,6 +119,7 @@ export function BookingLinkDraftComposer(props: {
           members={props.members}
           team={!!props.initialData.teamId}
           saving={pending()}
+          cancelEditingLabel="Cancel review"
           submitLabel={
             'eventTypeId' in props.initialData
               ? 'Save booking link'
