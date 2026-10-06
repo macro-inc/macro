@@ -62,7 +62,7 @@ const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
 describe('onboarding flow', () => {
-  it('walks every step and finishes as a Guest', async () => {
+  it('walks every step and finishes with Free', async () => {
     const { fake, navigate } = setup({ next: '/channel/launch' });
 
     await heading('Create your workspace');
@@ -99,9 +99,9 @@ describe('onboarding flow', () => {
     );
 
     await heading('Free Claude & GPT for 30 days.');
-    // The scroll cue and the comparison share a label; the comparison's CTA finishes.
-    const guest = screen.getAllByRole('button', { name: 'Continue as Guest' });
-    fireEvent.click(guest[guest.length - 1]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
 
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith('/channel/launch')
@@ -219,7 +219,7 @@ describe('onboarding flow', () => {
     });
   });
 
-  it('finishes for a licensed team member without showing trial or Guest offers', async () => {
+  it('finishes for a licensed team member without showing trial or Free offers', async () => {
     const { navigate, redirect } = setup({
       resume: 'plan',
       world: {
@@ -238,7 +238,7 @@ describe('onboarding flow', () => {
     ).toBeNull();
     expect(screen.queryByRole('table')).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'Continue as Guest' })
+      screen.queryByRole('button', { name: 'Continue with Free' })
     ).toBeNull();
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')

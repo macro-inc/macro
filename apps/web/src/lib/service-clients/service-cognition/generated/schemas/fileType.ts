@@ -433,6 +433,8 @@ export const FileType = {
   dxf: 'dxf',
   dwg: 'dwg',
   fig: 'fig',
+  psd: 'psd',
+  psb: 'psb',
   stl: 'stl',
   obj: 'obj',
   fbx: 'fbx',

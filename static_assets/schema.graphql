@@ -1759,6 +1759,76 @@ input GraphqlCrmCompanyLiteral @oneOf {
 }
 
 """
+The two operands of a recursive `CrmContactFilterExpr` binary expression.
+"""
+input GraphqlCrmContactBinaryExpr {
+	"""
+	Left expression.
+	"""
+	left: GraphqlCrmContactExpr!
+	"""
+	Right expression.
+	"""
+	right: GraphqlCrmContactExpr!
+}
+
+"""
+A recursive `CrmContactFilterExpr` filter expression.
+"""
+input GraphqlCrmContactExpr @oneOf {
+	"""
+	Both expressions must match.
+	"""
+	and: GraphqlCrmContactBinaryExpr
+	"""
+	Either expression may match.
+	"""
+	or: GraphqlCrmContactBinaryExpr
+	"""
+	Negate an expression.
+	"""
+	not: GraphqlCrmContactExpr
+	"""
+	Match a literal.
+	"""
+	literal: GraphqlCrmContactLiteral
+}
+
+"""
+GraphQL contact predicates over authorized team records.
+"""
+input GraphqlCrmContactLiteral @oneOf {
+	"""
+	Include visible contacts. Must be true.
+	"""
+	include: Boolean
+	"""
+	Exact team-owned contact ID.
+	"""
+	id: ID
+	"""
+	Owning company ID.
+	"""
+	companyId: ID
+	"""
+	Owning team ID.
+	"""
+	teamId: ID
+	"""
+	Full email address, matched case-insensitively.
+	"""
+	email: String
+	"""
+	Literal name/email search text.
+	"""
+	search: String
+	"""
+	Effective hidden state, subject to the viewer's role on each team.
+	"""
+	hidden: Boolean
+}
+
+"""
 Metadata for a discussion on a CRM company or contact.
 """
 type GraphqlCrmDiscussionMetadata {
@@ -2441,6 +2511,11 @@ input GraphqlEntityFilterAst {
 	The crm company filter to apply.
 	"""
 	crmCompanyFilter: GraphqlCrmCompanyExpr
+	"""
+	Opt-in CRM contact filters, applied before contacts are collapsed by
+	normalized email address.
+	"""
+	crmContactFilter: GraphqlCrmContactExpr
 	"""
 	The foreign entity filter to apply.
 	"""
@@ -5881,6 +5956,102 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 }
 
 """
+A team-owned CRM contact with its original record identity and shared Soup edges.
+"""
+type GraphqlSoupCrmContact implements GraphqlSoupEntity {
+	"""
+	Original CRM contact ID.
+	"""
+	id: ID!
+	"""
+	Canonical contact kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Contacts do not use document cache projections.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	Team-local name, falling back to the email address.
+	"""
+	displayName: String
+	"""
+	Record metadata; the parent is the owning company.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	Owning team.
+	"""
+	teamId: ID!
+	"""
+	Parent company.
+	"""
+	companyId: ID!
+	"""
+	Parent company's display name.
+	"""
+	companyName: String!
+	"""
+	Full email address.
+	"""
+	email: String!
+	"""
+	Team-local display name.
+	"""
+	name: String
+	"""
+	Effective hidden state of the contact and its company.
+	"""
+	hidden: Boolean!
+	"""
+	Earliest interaction with this contact on its owning team.
+	"""
+	firstInteraction: String!
+	"""
+	Most recent interaction with this contact on its owning team.
+	"""
+	lastInteraction: String!
+	"""
+	Record creation timestamp.
+	"""
+	createdAt: String!
+	"""
+	Record update timestamp.
+	"""
+	updatedAt: String!
+	"""
+	Viewer visit timestamp.
+	"""
+	viewedAt: String
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	Optional viewer frecency score.
+	"""
+	frecencyScore: Float
+}
+
+"""
 A row of a Macro database table. Its cells are its `properties`, keyed
 by the columns' property definitions.
 """
@@ -6690,6 +6861,10 @@ enum GraphqlSoupEntityType {
 	CRM company entity.
 	"""
 	CRM_COMPANY
+	"""
+	CRM contact entity.
+	"""
+	CRM_CONTACT
 	"""
 	Foreign entity.
 	"""

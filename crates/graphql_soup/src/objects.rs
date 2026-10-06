@@ -283,6 +283,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::ChannelMessage(entity) => entity.2 = score,
             Self::Call(entity) => entity.2 = score,
             Self::CrmCompany(entity) => entity.2 = score,
+            Self::CrmContact(entity) => entity.2 = score,
             Self::ForeignEntity(entity) => entity.2 = score,
             // Calendar events carry no frecency slot; scores never target them.
             Self::CalendarEvent(_) => {}
@@ -306,6 +307,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::Call(_)
             | Self::CalendarEvent(_)
             | Self::CrmCompany(_)
+            | Self::CrmContact(_)
             | Self::ForeignEntity(_)
             | Self::Reminder(_)
             | Self::AgentSession(_)
@@ -433,6 +435,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     CalendarEvent(GraphqlSoupCalendarEvent<E>),
     /// CRM company entity.
     CrmCompany(GraphqlSoupCrmCompany<E>),
+    /// Team-owned CRM contact.
+    CrmContact(GraphqlSoupCrmContact<E>),
     /// Foreign entity.
     ForeignEntity(GraphqlSoupForeignEntity<E>),
     /// Reminder entity.
@@ -463,6 +467,7 @@ where
                 }
                 GraphqlSoupEntityType::Call => GraphqlSoupCall::<E>::type_name(),
                 GraphqlSoupEntityType::CrmCompany => GraphqlSoupCrmCompany::<E>::type_name(),
+                GraphqlSoupEntityType::CrmContact => GraphqlSoupCrmContact::<E>::type_name(),
                 GraphqlSoupEntityType::ForeignEntity => GraphqlSoupForeignEntity::<E>::type_name(),
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::Reminder => GraphqlSoupReminder::<E>::type_name(),
@@ -560,6 +565,12 @@ where
                     model_entity::EntityType::CalendarEvent.with_entity_string(item.id.to_string()),
                 );
                 Self::CalendarEvent(GraphqlSoupCalendarEvent(item, edges))
+            }
+            SoupItem::CrmContact(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::CrmContact.with_entity_string(item.id.to_string()),
+                );
+                Self::CrmContact(GraphqlSoupCrmContact(item, edges, None))
             }
             SoupItem::CrmCompany(item) => {
                 let edges = E::from_entity(
@@ -2279,6 +2290,9 @@ where
     }
 }
 
+pub use crm_contact::GraphqlSoupCrmContact;
+mod crm_contact;
+
 /// GraphQL CRM company entity.
 pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
 
@@ -2701,6 +2715,7 @@ impl_common_interface_edges!(
     GraphqlSoupChannelMessage,
     GraphqlSoupCall,
     GraphqlSoupCrmCompany,
+    GraphqlSoupCrmContact,
     GraphqlSoupForeignEntity,
     GraphqlSoupReminder,
     GraphqlSoupAgentSession,

@@ -55,6 +55,7 @@ use models_soup::{
     call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
+    crm_contact::SoupCrmContact,
     foreign_entity::SoupForeignEntity,
     item::SoupItem,
     reminder::SoupReminder,
@@ -1185,6 +1186,28 @@ where
     }
 
     #[tracing::instrument(err, skip(self, req))]
+    async fn handle_crm_contact_request(
+        &self,
+        req: Option<super::models::contact_listing::GetCrmContactsRequest>,
+    ) -> Result<impl Iterator<Item = SoupCandidate>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Vec::new().into_iter());
+        };
+        let contacts = self
+            .crm_service
+            .list_contacts_for_soup(req.user_id.as_ref(), req.access.as_ref(), req.query)
+            .await
+            .map_err(|_| SoupErr::CrmErr)?;
+        Ok(contacts
+            .into_iter()
+            .map(|contact| {
+                SoupCandidate::plain(SoupItem::CrmContact(SoupCrmContact::from(contact)))
+            })
+            .collect::<Vec<_>>()
+            .into_iter())
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
     async fn handle_crm_company_request(
         &self,
         req: Option<GetCrmCompaniesRequest>,
@@ -1595,6 +1618,7 @@ where
         }
 
         // Borrow before email's builder consumes team_receipt.
+        let crm_contact_request = req.build_crm_contact_request(team_receipt.as_ref())?;
         let mut crm_company_request = req.build_crm_company_request(&team_receipt);
         let foreign_entity_source_ids = req.build_foreign_entity_source_ids(team_receipt.as_ref());
         let metadata_source_ids = foreign_entity_source_ids.clone();
@@ -1642,6 +1666,7 @@ where
                 let comms_thread_soup_fut = self.handle_comms_thread_request(comms_thread_request);
                 let call_soup_fut = self.handle_call_request(call_request);
                 let crm_company_soup_fut = self.handle_crm_company_request(crm_company_request);
+                let crm_contact_soup_fut = self.handle_crm_contact_request(crm_contact_request);
                 let reminder_soup_fut = self.handle_reminder_request(reminder_request);
                 let foreign_entity_soup_fut = self.handle_foreign_entity_request(
                     Some(req.user.to_string()),
@@ -1659,6 +1684,7 @@ where
                     comms_thread_soup,
                     call_soup,
                     crm_company_soup,
+                    crm_contact_soup,
                     reminder_soup,
                     foreign_entity_soup,
                 ) = tokio::join!(
@@ -1668,6 +1694,7 @@ where
                     comms_thread_soup_fut,
                     call_soup_fut,
                     crm_company_soup_fut,
+                    crm_contact_soup_fut,
                     reminder_soup_fut,
                     foreign_entity_soup_fut,
                 );
@@ -1678,6 +1705,7 @@ where
                     .chain(comms_thread_soup?)
                     .chain(call_soup?)
                     .chain(crm_company_soup?)
+                    .chain(crm_contact_soup?)
                     .chain(reminder_soup?)
                     .chain(foreign_entity_soup?)
                     .paginate_on(limit.into(), sort_method)

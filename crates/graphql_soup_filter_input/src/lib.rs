@@ -26,6 +26,7 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
         crm_company::CrmCompanyLiteral,
+        crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
@@ -378,6 +379,9 @@ pub struct GraphqlEntityFilterAst {
     call_filter: Option<GraphqlCallExpr>,
     /// The crm company filter to apply.
     crm_company_filter: Option<GraphqlCrmCompanyExpr>,
+    /// Opt-in CRM contact filters, applied before contacts are collapsed by
+    /// normalized email address.
+    crm_contact_filter: Option<GraphqlCrmContactExpr>,
     /// The foreign entity filter to apply.
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
@@ -421,6 +425,7 @@ impl GraphqlEntityFilterAst {
             channel_thread_filter: optional_tree(self.channel_thread_filter)?,
             call_filter: optional_tree(self.call_filter)?,
             crm_company_filter: optional_tree(self.crm_company_filter)?,
+            crm_contact_filter: optional_tree(self.crm_contact_filter)?,
             foreign_entity_filter: optional_tree(self.foreign_entity_filter)?,
             github_pull_request_filter: optional_tree(self.github_pull_request_filter)?,
             reminder_filter: optional_tree(self.reminder_filter)?,
@@ -529,6 +534,13 @@ filter_expr_input!(
     GraphqlCallLiteral,
     CallLiteral,
     "CallFilterExpr"
+);
+filter_expr_input!(
+    GraphqlCrmContactExpr,
+    GraphqlCrmContactBinaryExpr,
+    GraphqlCrmContactLiteral,
+    CrmContactLiteral,
+    "CrmContactFilterExpr"
 );
 filter_expr_input!(
     GraphqlCrmCompanyExpr,
@@ -1453,5 +1465,41 @@ impl GraphqlGithubPullRequestReviewStatus {
             Self::Approved => GithubPullRequestReviewStatus::Approved,
             Self::ChangesRequested => GithubPullRequestReviewStatus::ChangesRequested,
         }
+    }
+}
+
+/// GraphQL contact predicates over authorized team records.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlCrmContactLiteral {
+    /// Include visible contacts. Must be true.
+    Include(bool),
+    /// Exact team-owned contact ID.
+    Id(ID),
+    /// Owning company ID.
+    CompanyId(ID),
+    /// Owning team ID.
+    TeamId(ID),
+    /// Full email address, matched case-insensitively.
+    Email(String),
+    /// Literal name/email search text.
+    Search(String),
+    /// Effective hidden state, subject to the viewer's role on each team.
+    Hidden(bool),
+}
+
+impl IntoFilterExpr<CrmContactLiteral> for GraphqlCrmContactLiteral {
+    fn into_expr(self) -> InputResult<Expr<CrmContactLiteral>> {
+        Ok(Expr::val(match self {
+            Self::Include(true) => CrmContactLiteral::Include,
+            Self::Include(false) => return Err(InputError::new("contact include must be true")),
+            Self::Id(id) => CrmContactLiteral::Id(parse_id(id, "id")?),
+            Self::CompanyId(id) => CrmContactLiteral::CompanyId(parse_id(id, "companyId")?),
+            Self::TeamId(id) => CrmContactLiteral::TeamId(parse_id(id, "teamId")?),
+            Self::Email(email) => CrmContactLiteral::Email(email.trim().to_lowercase()),
+            Self::Search(query) => CrmContactLiteral::Search(query.trim().to_owned()),
+            Self::Hidden(hidden) => CrmContactLiteral::Hidden(hidden),
+        }))
     }
 }

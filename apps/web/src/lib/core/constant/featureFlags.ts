@@ -750,6 +750,17 @@ export const enablePptxEditor = defineFlag({
 });
 
 /**
+ * The in-browser Photoshop editor (`block-psd`). Off shows uploaded `.psd`
+ * and `.psb` files for download only, and hides creating them. On in dev;
+ * deployed environments follow PostHog.
+ */
+export const enablePsdEditor = defineFlag({
+  key: 'enable-psd-editor',
+  env: 'ENABLE_PSD_EDITOR',
+  default: onInDev,
+});
+
+/**
  * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
  * files as before: download only. On in dev; deployed environments follow
  * PostHog.
@@ -757,6 +768,17 @@ export const enablePptxEditor = defineFlag({
 export const enableFigViewer = defineFlag({
   key: 'enable-fig-viewer',
   env: 'ENABLE_FIG_VIEWER',
+  default: onInDev,
+});
+
+/**
+ * The in-browser Illustrator editor (`block-ai`) and creating `.ai`
+ * documents. Off shows uploaded `.ai` files as before: download only. On in
+ * dev; deployed environments follow PostHog.
+ */
+export const enableAiEditor = defineFlag({
+  key: 'enable-ai-editor',
+  env: 'ENABLE_AI_EDITOR',
   default: onInDev,
 });
 

@@ -1,3 +1,4 @@
+/** API tier identifiers remain stable; `premium` is displayed as Pro. */
 export type PlanTier = 'free' | 'premium' | 'max';
 export type Plan = {
   tier: PlanTier;
@@ -15,9 +16,7 @@ export type Plan = {
 export type IncludedAiCentsByTier = Partial<Record<PlanTier, number>>;
 
 /** "$20" for whole dollars, "$12.50" otherwise; undefined while unknown. */
-export function formatIncludedAi(
-  cents: number | undefined
-): string | undefined {
+export function formatPlanPrice(cents: number | undefined): string | undefined {
   if (cents === undefined) return undefined;
   const dollars = cents / 100;
   return Number.isInteger(dollars)
@@ -32,14 +31,14 @@ export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
 const FREE_PLAN = {
   tier: 'free',
-  name: 'Guest',
+  name: 'Free',
   price: 0,
   highlighted: false,
 } as const satisfies Plan;
 
 const PREMIUM_PLAN = {
   tier: 'premium',
-  name: 'Premium',
+  name: 'Pro',
   price: 40,
   highlighted: true,
 } as const satisfies Plan;
@@ -63,6 +62,11 @@ export const PLAN_BY_TIER: Record<PlanTier, Plan> = {
   max: MAX_PLAN,
 };
 
+/** Older checkout services still use the API tier's old display name. */
+export function billingMessage(message: string): string {
+  return message.replace(/\bPremium\b/g, PLAN_BY_TIER.premium.name);
+}
+
 interface PlanFeature {
   label: string;
   values: Record<PlanTier, string>;
@@ -70,25 +74,12 @@ interface PlanFeature {
   aiUsageBilling?: boolean;
 }
 
-/**
- * The allowance row; amounts come from the plan catalog, "—" until it loads.
- * Free's amount is its monthly hard cap.
- */
-function includedAiRow(includedAi: IncludedAiCentsByTier): PlanFeature {
-  const perMonth = (tier: PlanTier) => {
-    const amount = formatIncludedAi(includedAi[tier]);
-    return amount ? `${amount} / mo at cost` : '—';
-  };
-  return {
-    label: 'AI usage included',
-    aiUsageBilling: true,
-    values: {
-      free: perMonth('free'),
-      premium: perMonth('premium'),
-      max: perMonth('max'),
-    },
-  };
-}
+/** Product copy for included usage, relative to Pro rather than dollar allowances. */
+export const PLAN_USAGE_LABELS: Record<PlanTier, string> = {
+  free: 'Limited usage',
+  premium: 'Standard usage',
+  max: '10× usage',
+};
 
 const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
@@ -118,18 +109,10 @@ const PLAN_FEATURE_ROWS: PlanFeature[] = [
   },
 ];
 
-/**
- * The plan comparison rows. The AI usage rows (included allowance and what
- * covers usage beyond it) appear only while AI usage billing is on; callers
- * read `enableAiUsageBilling` and pass its value, and pass the catalog's
- * allowances from `useIncludedAiCentsByTier` so the amounts are never
- * hard-coded here.
- */
-export function planFeatures(
-  aiUsageBilling: boolean,
-  includedAi: IncludedAiCentsByTier = {}
-) {
-  return [includedAiRow(includedAi), ...PLAN_FEATURE_ROWS].filter(
-    (feature) => !feature.aiUsageBilling || aiUsageBilling
-  );
+/** AI usage rows appear only while usage billing is enabled. */
+export function planFeatures(aiUsageBilling: boolean): PlanFeature[] {
+  return [
+    { label: 'AI usage', values: PLAN_USAGE_LABELS, aiUsageBilling: true },
+    ...PLAN_FEATURE_ROWS,
+  ].filter((row) => !row.aiUsageBilling || aiUsageBilling);
 }

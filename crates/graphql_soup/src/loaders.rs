@@ -26,6 +26,7 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
         crm_company::CrmCompanyLiteral,
+        crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
@@ -344,6 +345,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut channel_threads = Vec::new();
     let mut calls = Vec::new();
     let mut crm_companies = Vec::new();
+    let mut crm_contacts = Vec::new();
     let mut foreign_entities = Vec::new();
     let mut calendar_events = Vec::new();
     let mut reminders = Vec::new();
@@ -371,6 +373,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             }
             EntityType::Call => calls.push(CallLiteral::CallId(id)),
             EntityType::CrmCompany => crm_companies.push(CrmCompanyLiteral::Id(id)),
+            EntityType::CrmContact => crm_contacts.push(CrmContactLiteral::Id(id)),
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
             EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
@@ -379,7 +382,6 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ScheduledAction
             | EntityType::Database => {
@@ -415,6 +417,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
         )),
         call_filter: Some(literal_tree(calls, CallLiteral::CallId(nil))),
         crm_company_filter: Some(literal_tree(crm_companies, CrmCompanyLiteral::Id(nil))),
+        crm_contact_filter: (!crm_contacts.is_empty())
+            .then(|| literal_tree(crm_contacts, CrmContactLiteral::Id(nil))),
         foreign_entity_filter: Some(literal_tree(
             foreign_entities,
             ForeignEntityLiteral::Id(nil),

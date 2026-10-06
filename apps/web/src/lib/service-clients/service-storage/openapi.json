@@ -17416,6 +17416,9 @@
           "chanf": {
             "description": "the filters that should be applied to the channel entity"
           },
+          "crmf": {
+            "description": "Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`)."
+          },
           "cthf": {
             "description": "the filters that should be applied to the channel-thread entity"
           },
@@ -25743,6 +25746,8 @@
           "dxf",
           "dwg",
           "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",
@@ -33782,6 +33787,98 @@
         ],
         "description": "A CRM company as displayed in Soup. Carries the core company\nfields plus display metadata resolved from `crm_domain_directory`\nagainst the primary (earliest-created) domain."
       },
+      "SoupCrmContact_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "teamId",
+              "companyId",
+              "companyName",
+              "email",
+              "hidden",
+              "firstInteraction",
+              "lastInteraction",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "companyId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Parent company ID."
+              },
+              "companyName": {
+                "type": "string",
+                "description": "Parent company's display name."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Record creation time."
+              },
+              "email": {
+                "type": "string",
+                "description": "Full email address."
+              },
+              "firstInteraction": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Earliest interaction for this team record."
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Whether the contact or parent company is hidden."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Original team-owned contact ID."
+              },
+              "lastInteraction": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Latest interaction for this team record."
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Team-local display name, if known."
+              },
+              "teamId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Team owning this record."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Record update time."
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The viewer's latest visit to this record."
+              }
+            }
+          }
+        ],
+        "description": "One original CRM contact record, selected from the viewer's accessible teams."
+      },
       "SoupCrmDomain": {
         "type": "object",
         "description": "A CRM domain as displayed in Soup. Mirrors the crm crate's\n[`CrmDomain`] with a stable wire shape that the FE can rely on.",
@@ -34438,6 +34535,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["crmCompany"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-owned CRM contact.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupCrmContact_SoupPropertiesField",
+                "description": "Team-owned CRM contact."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["crmContact"]
               }
             }
           },

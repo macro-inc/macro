@@ -392,6 +392,10 @@ export type CrmCompanyEntity = EntityBase & {
 
 export type CrmContactEntity = EntityBase & {
   type: 'crm_contact';
+  teamId?: string;
+  companyName?: string;
+  firstInteraction?: string;
+  lastInteraction?: string;
   /** The company the contact belongs to. */
   companyId: string;
   /** The contact's email address. */

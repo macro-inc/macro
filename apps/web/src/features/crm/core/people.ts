@@ -7,6 +7,27 @@ export type PeopleSort =
   | 'lastInteraction'
   | 'firstInteraction';
 
+/** A representative can change between server pages; keep one visible row per email. */
+export function deduplicatePeople(people: CrmPerson[]): CrmPerson[] {
+  const byEmail = new Map<string, CrmPerson>();
+  for (const person of people) {
+    if (person.hidden) continue;
+    const email = person.email.trim().toLowerCase();
+    const previous = byEmail.get(email);
+    if (
+      !previous ||
+      Date.parse(person.lastInteraction) >
+        Date.parse(previous.lastInteraction) ||
+      (Date.parse(person.lastInteraction) ===
+        Date.parse(previous.lastInteraction) &&
+        person.id > previous.id)
+    ) {
+      byEmail.set(email, person);
+    }
+  }
+  return [...byEmail.values()];
+}
+
 export function filterAndSortPeople(
   people: CrmPerson[],
   search: string,

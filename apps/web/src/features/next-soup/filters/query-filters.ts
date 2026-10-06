@@ -198,8 +198,8 @@ export function filterSoupItemByRequestBody(
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
     })
-    .with({ tag: 'databaseRow' }, () => {
-      // A REST body cannot name a table, and rows are opt-in.
+    .with({ tag: 'databaseRow' }, { tag: 'crmContact' }, () => {
+      // These partitions are opt-in through the filter AST only.
       return false;
     })
     .exhaustive();
