@@ -116,6 +116,36 @@ pub fn to_gray(depth: u16, width: u32, height: u32, samples: &[u8]) -> Vec<u8> {
     }
 }
 
+/// Blends straight RGBA8 pixels' colors over white, as Photoshop stores a
+/// merged image with transparency (the alpha stays).
+pub fn matte_white(rgba: &mut [u8]) {
+    for px in rgba.chunks_exact_mut(4) {
+        let a = u32::from(px[3]);
+        if a == 255 {
+            continue;
+        }
+        for c in &mut px[..3] {
+            *c = ((u32::from(*c) * a + 255 * (255 - a) + 127) / 255) as u8;
+        }
+    }
+}
+
+/// The straight colors of a merged image Photoshop blended over white
+/// (see [`matte_white`]). Fully transparent pixels keep their colors.
+pub fn unmatte_white(rgba: &mut [u8]) {
+    for px in rgba.chunks_exact_mut(4) {
+        let a = f32::from(px[3]);
+        if px[3] == 0 || px[3] == 255 {
+            continue;
+        }
+        for c in &mut px[..3] {
+            *c = ((f32::from(*c) - 255.0 + a) * 255.0 / a)
+                .round()
+                .clamp(0.0, 255.0) as u8;
+        }
+    }
+}
+
 /// An RGB or grayscale file's samples at `depth` for RGBA8 pixels: the
 /// mode's color channels, then transparency. Grayscale (and the other
 /// one-channel modes) gets Rec. 601 luma; every other mode gets RGB.

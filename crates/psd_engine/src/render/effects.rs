@@ -209,8 +209,17 @@ pub(crate) fn render(cx: &mut Cx, fx: &Effects, inputs: &Inputs) -> Stages {
     for s in fx.inner_shadows.iter().rev().filter(|e| e.enabled) {
         out.inside.push(inner_shadow(cx, s, k, inputs));
     }
-    for s in fx.strokes.iter().rev().filter(|e| e.enabled) {
-        let (beside, inside) = stroke(cx, s, k, inputs, &a);
+    // Several strokes don't stack: each shows only where the strokes above
+    // it leave room, and blends with what is below the layer.
+    let mut strokes: Vec<(Option<Stage>, Option<Stage>)> = fx
+        .strokes
+        .iter()
+        .filter(|e| e.enabled)
+        .map(|s| stroke(cx, s, k, inputs, &a))
+        .collect();
+    knock_out_below(strokes.iter_mut().filter_map(|s| s.0.as_mut()));
+    knock_out_below(strokes.iter_mut().filter_map(|s| s.1.as_mut()));
+    for (beside, inside) in strokes.into_iter().rev() {
         out.beside.extend(beside);
         out.inside.extend(inside);
     }
@@ -218,6 +227,23 @@ pub(crate) fn render(cx: &mut Cx, fx: &Effects, inputs: &Inputs) -> Stages {
         bevel(cx, b, k, inputs, &mut out);
     }
     out
+}
+
+/// Cuts each stage (topmost first) out of the room the stages above it
+/// already cover.
+fn knock_out_below<'a>(stages: impl Iterator<Item = &'a mut Stage>) {
+    let mut taken: Option<Plane> = None;
+    for s in stages {
+        match &mut taken {
+            None => taken = Some(s.cov.clone()),
+            Some(t) => {
+                for (c, t) in s.cov.v.iter_mut().zip(t.v.iter_mut()) {
+                    *c *= 1.0 - *t;
+                    *t += *c;
+                }
+            }
+        }
+    }
 }
 
 /// The light angle (degrees) an effect uses.

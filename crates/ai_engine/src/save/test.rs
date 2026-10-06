@@ -445,3 +445,83 @@ fn patterns_move_with_their_objects() {
     assert!(left[0] > 200 && left[2] < 60, "{left:?}");
     assert!(right[2] > 200 && right[0] < 60, "{right:?}");
 }
+
+#[test]
+fn gradients_with_transparent_stops_save_as_soft_masks() {
+    use crate::model::{Gradient, GradientStop, NodeKind};
+    use crate::pdf::Pdf;
+
+    let mut doc = open(&sample()).expect("opens").document;
+    let red = first_child(&doc, "Art").id;
+    let stop = |offset: f32, opacity: f32| GradientStop {
+        offset,
+        color: Color::BLACK,
+        opacity,
+    };
+    // Across the red square (page space 10..40): black fading out.
+    let gradient = Gradient {
+        transform: Affine::IDENTITY,
+        radial: false,
+        start: Point::new(10.0, 0.0),
+        end: Point::new(40.0, 0.0),
+        start_radius: 0.0,
+        end_radius: 0.0,
+        stops: vec![stop(0.0, 1.0), stop(1.0, 0.0)],
+        extend: [true, true],
+    };
+    let fill = Paint::Gradient {
+        gradient: gradient.clone(),
+    };
+    apply(
+        &mut doc,
+        vec![Op::SetFill {
+            ids: vec![red],
+            fill: Some(fill.clone()),
+        }],
+    );
+    let bytes = save(&doc).expect("saves");
+
+    // Other readers get a soft mask of the stops' opacities.
+    let pdf = Pdf::open(bytes.clone().into()).expect("parses");
+    fn find_smask(pdf: &Pdf, o: &Object, depth: usize) -> Option<Object> {
+        let o = pdf.resolve(o);
+        let d = o.as_dict()?;
+        if let Some(m) = d.get("SMask") {
+            return Some(m.clone());
+        }
+        if depth == 0 {
+            return None;
+        }
+        d.iter()
+            .filter(|(k, _)| k.as_bytes() != b"Parent")
+            .find_map(|(_, v)| find_smask(pdf, v, depth - 1))
+    }
+    let masks: Vec<Object> = pdf
+        .object_refs()
+        .into_iter()
+        .filter_map(|r| pdf.get(r))
+        .filter_map(|o| find_smask(&pdf, &o, 3))
+        .collect();
+    let smask = masks.first().expect("an ExtGState with a soft mask");
+    let smask = pdf.resolve(smask);
+    let smask = smask.as_dict().expect("a mask dictionary");
+    assert_eq!(
+        smask
+            .get("S")
+            .and_then(Object::as_name)
+            .map(|n| n.as_bytes()),
+        Some(&b"Luminosity"[..])
+    );
+
+    // The engine reads the path back, stops and all.
+    let again = open(&bytes).expect("reopens").document;
+    let n = first_child(&again, "Art");
+    let NodeKind::Path(p) = &n.kind else {
+        panic!("a path, not raw content: {:?}", n.kind)
+    };
+    assert_eq!(p.fill, Some(fill));
+    let img = draw(&again);
+    let (solid, faded) = (pixel(&img, 12, 75), pixel(&img, 38, 75));
+    assert!(solid[0] < 40, "{solid:?}");
+    assert!(faded[0] > 215, "{faded:?}");
+}

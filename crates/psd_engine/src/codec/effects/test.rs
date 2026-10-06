@@ -402,8 +402,8 @@ fn legacy_block() -> Vec<u8> {
     w.u32(2);
     w.fixed(6.0);
     w.u32(0);
-    w.i32(90);
-    w.i32(21);
+    w.fixed(90.0);
+    w.fixed(21.0);
     color::write_binary(&mut w, Rgb::new(1.0, 0.0, 0.0));
     w.sig(b"8BIM");
     w.sig(b"mul ");

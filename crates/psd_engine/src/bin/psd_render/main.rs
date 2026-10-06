@@ -28,7 +28,7 @@ enum Command {
         #[arg(long)]
         tree: bool,
         /// Print each layer's kind, effects, vector mask, and blending
-        /// ranges as JSON.
+        /// ranges as JSON, then the document's patterns.
         #[arg(long)]
         json: bool,
     },
@@ -189,6 +189,15 @@ fn print_json(doc: &Document) {
             "effects": l.effects,
             "vectorMask": l.vector_mask,
             "blendRanges": l.blend_ranges,
+        });
+        println!("{value}");
+    }
+    for p in &doc.patterns {
+        let value = serde_json::json!({
+            "pattern": p.id,
+            "name": p.name,
+            "width": p.width,
+            "height": p.height,
         });
         println!("{value}");
     }

@@ -395,14 +395,21 @@ pub(super) fn layer_record(doc: &Document, header: &Header, layer: &Layer) -> Re
 
     // The style.
     if has(flags::EFFECTS) {
-        let original = source
-            .and_then(|s| s.block(b"lmfx").or_else(|| s.block(b"lfx2")))
-            .map(|b| &b.data[..]);
-        for key in [b"lfx2", b"lmfx", b"lrFX"] {
+        let original = source.and_then(|s| {
+            [b"lmfx", b"lfx2", b"lfxs"]
+                .into_iter()
+                .find_map(|k| s.block(k).map(|b| (*k, &b.data[..])))
+        });
+        for key in [b"lfx2", b"lmfx", b"lfxs", b"lrFX"] {
             r.remove_block(key);
         }
         if let Some(fx) = &layer.effects {
-            let (key, data) = codec::effects::encode(fx, original);
+            let (key, data) = codec::effects::encode(fx, original.map(|(_, d)| d));
+            // A style read from `lfxs` stays there.
+            let key = match original {
+                Some((k, _)) if k == *b"lfxs" => k,
+                _ => key,
+            };
             r.set_block(&key, data);
         }
     }
