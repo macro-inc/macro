@@ -387,6 +387,24 @@ pub struct OverageChargeRequest {
     pub scope: SubscriptionScope,
 }
 
+/// An automatic credit reload to invoice.
+#[derive(Debug, Clone)]
+pub struct CreditReloadRequest {
+    /// The payer's Stripe customer.
+    pub customer_id: String,
+    /// The payer, stamped on the invoice so the webhook can book the credits.
+    pub payer: MacroUserIdStr<'static>,
+    /// The reserved reload; doubles as the idempotency key, so opening the
+    /// same reload twice yields the same invoice.
+    pub reload_id: Uuid,
+    /// Amount, customer cents.
+    pub amount_cents: i64,
+    /// Line description shown on the invoice.
+    pub description: String,
+    /// Which subscription pays this reload.
+    pub scope: SubscriptionScope,
+}
+
 /// The payment provider.
 pub trait PaymentGateway: Send + Sync + 'static {
     /// Start a Checkout Session for a credit pack; returns the hosted URL.
@@ -408,10 +426,23 @@ pub trait PaymentGateway: Send + Sync + 'static {
         request: OverageChargeRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Attempt to collect an open overage invoice now. `scope` is the payer's
-    /// current subscription scope. A scope stamped on the invoice overrides
-    /// it. Invoices without that stamp use `scope`. Distinct effective methods
-    /// in the chosen scope fail with
+    /// Open a finalized invoice for exactly this credit reload, following the
+    /// same routing and payment-method rules as [`open_overage_invoice`]
+    /// (selected by [`CreditReloadRequest::scope`]). Returns the invoice id.
+    /// Idempotent on `reload_id`.
+    ///
+    /// [`open_overage_invoice`]: PaymentGateway::open_overage_invoice
+    fn open_credit_reload_invoice(
+        &self,
+        request: CreditReloadRequest,
+    ) -> impl Future<Output = Result<String>> + Send;
+
+    /// Attempt to collect now an open one-off invoice this crate opened (an
+    /// overage chunk or a credit reload). `charge_id` is the reserved charge
+    /// or reload id and only keeps the idempotency key unique. `scope` is the
+    /// payer's current subscription scope. A scope stamped on the invoice
+    /// overrides it. Invoices without that stamp use `scope`. Distinct
+    /// effective methods in the chosen scope fail with
     /// [`BillingError::Payment`](super::BillingError::Payment).
     /// If no active or trialing subscription matches, an invoice-stored
     /// payment method may still collect the existing debt.

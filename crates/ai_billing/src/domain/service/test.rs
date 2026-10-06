@@ -4,7 +4,7 @@ use crate::domain::models::{
     AllowanceStore, AutoReloadThresholds, CreditReloadStatus, DenyReason, OpenPeriodStart,
     PayerScope, PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
 };
-use crate::domain::ports::{PendingReload, ResolvedReload, SettlementOutcome};
+use crate::domain::ports::{CreditReloadRequest, PendingReload, ResolvedReload, SettlementOutcome};
 use chrono::TimeZone;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
@@ -649,6 +649,7 @@ struct FakePayments {
     pay_outcome: Arc<Mutex<PayOutcome>>,
     checkouts: Arc<Mutex<Vec<CreditCheckoutRequest>>>,
     opened: Arc<Mutex<Vec<OverageChargeRequest>>>,
+    opened_reloads: Arc<Mutex<Vec<CreditReloadRequest>>>,
     payments: Arc<Mutex<Vec<(Uuid, String)>>>,
     period_reply: Arc<Mutex<PeriodReply>>,
     period_requests: Arc<Mutex<Vec<(String, SubscriptionScope)>>>,
@@ -667,6 +668,10 @@ impl FakePayments {
     fn opened(&self) -> Vec<OverageChargeRequest> {
         self.opened.lock().unwrap().clone()
     }
+    #[expect(dead_code, reason = "read once the service collects reloads")]
+    fn opened_reloads(&self) -> Vec<CreditReloadRequest> {
+        self.opened_reloads.lock().unwrap().clone()
+    }
     fn payments(&self) -> Vec<(Uuid, String)> {
         self.payments.lock().unwrap().clone()
     }
@@ -683,6 +688,14 @@ impl PaymentGateway for FakePayments {
         }
         let invoice = format!("in_{}", request.charge_id);
         self.opened.lock().unwrap().push(request);
+        Ok(invoice)
+    }
+    async fn open_credit_reload_invoice(&self, request: CreditReloadRequest) -> Result<String> {
+        if *self.fail_open.lock().unwrap() {
+            return Err(BillingError::Payment(anyhow::anyhow!("stripe unavailable")));
+        }
+        let invoice = format!("in_{}", request.reload_id);
+        self.opened_reloads.lock().unwrap().push(request);
         Ok(invoice)
     }
     async fn pay_overage_invoice(
