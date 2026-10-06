@@ -36,6 +36,9 @@ run-local.fish
 # Per-instance generated local-stack artifacts (compose override, env, kickstart, Caddyfile).
 infra/local/generated/
 **/target/
+# Cloud stack.sh links /target -> ~/.cache/macro-cloud/target. The rule above
+# only matches directories, so without this the symlink is a trackable file.
+/target
 **/ai_tools/schemas/
 .pi/outputs/
 .commandcode/
