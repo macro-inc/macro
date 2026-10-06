@@ -21,7 +21,6 @@ import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import type { Entity } from '@core/types';
 import type { DateValue } from '@core/util/date';
 import { openExternalUrl } from '@core/util/url';
@@ -45,7 +44,6 @@ import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { createPinnedProperties } from '../../primitives/create-pinned-properties';
-import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
@@ -55,7 +53,6 @@ export function MarkdownSidePanelSections() {
   const canEdit = permissions.canEdit;
   const { displayName } = useMarkdownName();
   const isTask = () => kind() === 'task';
-  const canDispatchToAgent = () => isTask() || kind() === 'document';
   const entity = (): Entity => ({
     id: documentId(),
     type: 'document',
@@ -66,19 +63,14 @@ export function MarkdownSidePanelSections() {
   return (
     <>
       <SidePanel.HeaderActions>
-        <div class="flex shrink-0 items-center gap-1">
-          <Show when={canDispatchToAgent() && !isMobile()}>
-            <DispatchAgentButton showPrimaryLabel />
-          </Show>
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: documentId(),
-              name: displayName() ?? '',
-              fileType: 'md',
-            }}
-          />
-        </div>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: documentId(),
+            name: displayName() ?? '',
+            fileType: 'md',
+          }}
+        />
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
         <Show when={!isTask()}>

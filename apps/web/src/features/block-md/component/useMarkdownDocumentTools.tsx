@@ -21,7 +21,7 @@ import ClockCounterClockwise from '@phosphor/clock-counter-clockwise.svg';
 import Download from '@phosphor/download.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import IconLink from '@phosphor/link.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import TerminalIcon from '@phosphor/terminal.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -109,7 +109,7 @@ export function useMarkdownDocumentTools() {
   const tools: BlockTool[] = [
     {
       label: 'Dispatch to Agent',
-      icon: TerminalWindowIcon,
+      icon: TerminalIcon,
       action: () => {},
       condition: () => isTask && !isMobile(),
       buttonComponent: () => <DispatchAgentButton />,
@@ -149,7 +149,7 @@ export function useMarkdownDocumentTools() {
       ? ([
           {
             label: 'Code Actions',
-            icon: TerminalWindowIcon,
+            icon: TerminalIcon,
             action: () => {},
             children: dispatchAgentActions.all,
           },

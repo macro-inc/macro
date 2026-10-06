@@ -13,7 +13,7 @@ import CaretDown from '@phosphor/caret-down.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import TerminalIcon from '@phosphor/terminal.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
 import type { MessageThread } from '@service-storage/messages';
@@ -191,7 +191,7 @@ const COPY_ACTION: AgentAction = {
   key: 'copy',
   name: 'Copy as prompt',
   icon: CopyIcon,
-  buttonIcon: TerminalWindowIcon,
+  buttonIcon: TerminalIcon,
   execute: async (prompt) => {
     await navigator.clipboard.writeText(prompt);
   },
