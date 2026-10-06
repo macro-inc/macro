@@ -18,13 +18,15 @@ use chrono_tz::Tz;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
-use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
+use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use model::response::EmptyResponse;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -132,6 +134,10 @@ where
             delete(delete_user_actions::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/internal/{id}",
+            delete(purge_owned_action::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions",
             get(list_actions::<S, Svc, Auth>).post(create_action::<S, Svc, Auth>),
         )
@@ -167,6 +173,36 @@ where
 {
     state.service.delete_user_actions(user_id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+struct OwnerQuery {
+    owner: Owner,
+}
+
+/// Internal owner removal: never grants delete authority to a user or bot
+/// token. 204 once the action is gone, including when it already was. 409
+/// when another owner holds it, and nothing was deleted. 500 when the delete
+/// failed; the purge converges, so the caller retries.
+#[tracing::instrument(skip_all, fields(%id, owner.kind = ?owner.owner_type()))]
+async fn purge_owned_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(id): Path<Uuid>,
+    Query(OwnerQuery { owner }): Query<OwnerQuery>,
+) -> StatusCode
+where
+    S: ScheduledActionService,
+    Auth: MacroAuthorizationService,
+{
+    match state.service.purge_owned_action(id, &owner).await {
+        Ok(OwnedPurgeOutcome::Purged) => StatusCode::NO_CONTENT,
+        Ok(OwnedPurgeOutcome::OwnedElsewhere) => StatusCode::CONFLICT,
+        Err(error) => {
+            tracing::error!(error = ?error, "unable to purge the owned scheduled action");
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
 }
 
 #[utoipa::path(

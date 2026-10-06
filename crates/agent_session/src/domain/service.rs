@@ -161,6 +161,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// A persisted agent session by id, or `None` when there is none.
+    fn find_session(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Append a frame observed on the runtime's behalf by something other
     /// than its session actor - the egress proxy's tool approvals - and push
     /// it to the session's viewers. Any replica may call this; the frame is
@@ -755,6 +761,10 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
     }
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
@@ -1661,6 +1671,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
     }
 
     async fn preview(

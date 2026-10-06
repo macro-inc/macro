@@ -9,9 +9,10 @@ use entity_access::domain::{
     },
     ports::ScheduledActionGrants,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::event_runs::ConfigurationRevision;
@@ -242,6 +243,30 @@ where
             permit.send(DispatchEvent::Delete(action));
         }
         Ok(())
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> Result<OwnedPurgeOutcome> {
+        let Some(action) = self.repo.get_action(&id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if action.owner != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        // Reserve before deleting: a stopped dispatcher must fail the purge
+        // while the row still exists for the retry to find.
+        let permit = self.dispatcher_tx.reserve().await?;
+        self.repo.delete_action(&id).await?;
+        permit.send(DispatchEvent::Delete(action));
+        Ok(OwnedPurgeOutcome::Purged)
     }
 
     async fn create_action(
