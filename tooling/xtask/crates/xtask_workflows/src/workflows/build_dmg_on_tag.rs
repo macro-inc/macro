@@ -1,7 +1,7 @@
 //! `Build macOS DMG` — reusable workflow that builds the Tauri desktop DMG via
 //! Nix. Called from [`super::build_desktop_on_tag`].
 
-use gh_workflow::{Event, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
+use gh_workflow::{Event, Expression, Job, Run, Step, Workflow, WorkflowCall, WorkflowCallInput};
 
 use crate::workflows::{build_appimage_on_tag, runners, steps, vars};
 
@@ -30,13 +30,20 @@ pub fn build_dmg() -> Workflow {
 pub fn build_dmg_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build macOS DMG")
-        .runs_on(runners::Runner::MacOsArm.to_string())
+        .runs_on(vec![
+            format!("{}-with-cache", runners::Runner::MacOsArm),
+            "nscloud-cache-tag-macro-desktop-macos".to_owned(),
+            "nscloud-cache-size-50gb".to_owned(),
+        ])
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(assert_arm64())
+        .add_step(steps::mount_macos_nix_cache_volume())
         .add_step(steps::install_nix_macos())
+        .add_step(configure_nix_cache())
         .add_step(configure_signing_identity())
         .add_step(steps::derive_artifact_metadata(ref_expr))
         .add_step(nix_build_dmg())
+        .add_step(save_nix_cache())
         .add_step(collect_dmg())
         .add_step(validate_signed_dmg())
         .add_step(notarize_dmg())
@@ -80,6 +87,24 @@ fn nix_build_dmg() -> Step<Run> {
     Step::new("Build DMG with Nix")
         .run(include_str!("scripts/build_dmg.sh"))
         .shell("bash")
+}
+
+fn configure_nix_cache() -> Step<Run> {
+    Step::new("Configure macOS Nix binary cache")
+        .run(include_str!("scripts/configure_macos_nix_cache.sh"))
+        .id("nix-cache")
+        .shell("bash")
+        .continue_on_error(true)
+}
+
+fn save_nix_cache() -> Step<Run> {
+    Step::new("Save macOS Nix build dependencies")
+        .run(include_str!("scripts/save_macos_nix_cache.sh"))
+        .shell("bash")
+        .if_condition(Expression::new(
+            "!cancelled() && steps.nix-cache.outcome == 'success'",
+        ))
+        .continue_on_error(true)
 }
 
 fn collect_dmg() -> Step<Run> {

@@ -443,6 +443,13 @@ pub fn mount_nix_cache_volume() -> Step<Use> {
     nscloud_cache_action("Mount /nix cache volume").add_with(("cache", "nix"))
 }
 
+/// macOS cache mounts are symlinks, which Nix does not support for `/nix`.
+/// Persist a file binary cache instead, leaving the live store to the installer.
+pub fn mount_macos_nix_cache_volume() -> Step<Use> {
+    nscloud_cache_action("Mount macOS Nix binary cache")
+        .add_with(("path", "~/.cache/macro-desktop-nix"))
+}
+
 /// Derive a safe tag name from the git ref for use in artifact names.
 pub fn derive_artifact_metadata(raw_ref_expr: &str) -> Step<Run> {
     Step::new("Derive artifact metadata")
