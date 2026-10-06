@@ -25,7 +25,10 @@ export interface WasmFigFile {
   designInfo: (page: number, id: string) => string;
   /** `PageLayout` JSON. */
   openPage: (page: number) => string;
-  /** Premultiplied RGBA, `width × height × 4` bytes. */
+  /**
+   * RGBA, `width × height × 4` bytes: opaque, or straight alpha when
+   * `layers` (`LayersSpec` JSON) draws on transparency.
+   */
   render: (
     page: number,
     x: number,
@@ -33,8 +36,11 @@ export interface WasmFigFile {
     scale: number,
     width: number,
     height: number,
-    outline: boolean
+    outline: boolean,
+    layers?: string | null
   ) => Uint8Array;
+  /** `LiftPlan` JSON for a JSON array of ids. */
+  liftPlan: (page: number, ids: string) => string;
   /** `LayerRow[]` JSON. */
   layers: (page: number, parent?: string | null) => string;
   /** `LayerRow[]` JSON for a JSON array of ids. */
@@ -158,7 +164,9 @@ interface FigEngineWasmModule {
 let modulePromise: Promise<FigEngineWasmModule> | undefined;
 
 /** Loads and initializes the wasm module once per worker; a failed load is tried again. */
-export function loadFigEngineWasm(): Promise<FigEngineWasmModule> {
+export function loadFigEngineWasm(
+  module?: WebAssembly.Module
+): Promise<FigEngineWasmModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
       try {
@@ -169,7 +177,7 @@ export function loadFigEngineWasm(): Promise<FigEngineWasmModule> {
         // The generated JS's own relative wasm URL 404s in production; a static
         // `new URL` makes vite emit and rewrite the binary.
         const wasmUrl = new URL('./wasm/fig_engine_bg.wasm', import.meta.url);
-        await mod.default({ module_or_path: wasmUrl });
+        await mod.default({ module_or_path: module ?? wasmUrl });
         return mod;
       } catch (error) {
         modulePromise = undefined;

@@ -5,6 +5,46 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Checking first-response latency
+
+From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
+Repeat with the default model and with an explicit model/effort selection.
+The first visible output and the first answer text should appear as they arrive;
+later chunks can arrive in batches. Reasoning or a tool row should not delay the
+first prose. Verify a second prompt and a reload preserve the complete answer.
+Selected model and effort must be confirmed before the first prompt; settings
+already confirmed by the runtime do not need another control request.
+
+Repeat from a fresh tab using Home, Agents, and a document's Chat action.
+Focusing an agent composer prepares its transcript renderer locally; focus alone
+must not send a prompt. Record navigation and focus time separately from typing
+and Enter-to-first-answer time. Check the first readable agent words in the DOM,
+not a loading indicator or a bare Markdown delimiter.
+
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
+The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
+answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
+its paint (`first_text_paint`). Only the final milestone is a visible-response
+success. Bare Markdown prefixes and code-toolbar labels do not count. With only
+a code toolbar visible at a scroll boundary, verify the milestone waits until
+the code itself scrolls into view. A hidden tab reports `hidden`; raw text without
+a visible renderer within ten seconds reports `not_rendered`, including whether
+a renderer mounted and stayed attached.
+`submit_surface` uses bounded composer categories, including explicit Home,
+Agents, and mobile origins so a neighboring split cannot mislabel the submit.
+The fallback recognizes Drive documents; an ambiguous split reports `other`.
+All milestones omit message contents. Compare these timings with created,
+loaded, configured, delivery, and fold timing to distinguish startup, transport,
+and rendering delays.
+The same stages are available immediately in DevTools as
+`performance.getEntriesByType('measure')` entries named `agent.prompt.*`, with
+session ID in `detail`; the `agent.prompt` entry includes the final outcome.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
@@ -535,12 +575,15 @@ than treating it as approval or repeatedly sending the prompt.
 
 Automatic chat naming is admitted independently. If naming is denied or validation
 is unavailable, the successful chat continues with its existing/default title.
-Usage meters, credit controls, out-of-credit dialogs, and model usage multipliers
-are shown only when the `enable-ai-usage-billing` PostHog flag is on (default on
-in frontend development builds). Normal paid-model access rules
-still apply everywhere. Backend enforcement does not depend on those frontend
-controls, and enabling it does not enable credit collection; that needs
-`ENABLE_AI_USAGE_BILLING`. There is no new upgrade prompt in this rollout.
+Settings → Usage is visible for every plan. In production,
+`enable-ai-usage-billing` activates its controls and the AI usage-limit dialog;
+until then Usage shows the October 8, 2026 announcement and disabled controls.
+Dev and local remain active regardless of the flag.
+Usage displays the current period as a **Monthly limit** percentage; its info
+button explains that AI agent chat and AI document editing count toward the limit.
+Plan allowance copy and comparisons still follow `enable-ai-usage-billing`.
+Model pickers have no usage multipliers. Normal paid-model access rules still
+apply. Backend enforcement and credit collection remain independent policies.
 
 Session creation and spending controls also return 402/503 for admission failures.
 Waiting prompts are checked again before execution: exhaustion removes rejected
@@ -568,26 +611,32 @@ for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title
 `You've used this month's included AI`, or the spending-limit / failed-charge
-variants). It shows the same meter and controls as Settings → Billing:
-credit-pack buttons, the `Usage billing` toggle, an `Open billing settings`
-button, and `Upgrade to Max` for Premium payers (on a team this moves only the
-payer's own seat). Team members who are not the payer see a note to ask the
-team owner to add credits or turn on usage billing.
+variants). It shows **Monthly limit**, the message `Add additional credits to
+keep going.`, and an `Open usage settings` button. Credit purchases live in
+Settings → Usage; subscription changes live in Settings → Billing.
 
 The free plan is a hard cap: when its monthly allowance is used up, requests
-answer 402 with code `ai_free_allowance_exhausted` and the dialog (title
-`You've used this month's free AI`) shows the meter against the cap with an
-`Upgrade` button that opens Billing; there are no credit or usage-billing
-controls. The cap resets with the UTC calendar month.
+answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
+`You've used this month's free AI`; it says `Subscribe to a paid plan to keep
+going.` and offers `View plans`, which opens Billing. This upgrade path remains
+available while the usage summary loads or fails. Free users cannot buy credits
+or enable Auto-Reload. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
+
+AI service clients return typed quota errors without opening UI. Foreground
+mutation failures and direct session/edit actions present the shared dialog;
+ordinary HTTP failures and background queries do not. Document AI-edit refusals
+apply no edits and open this dialog instead of the generic `AI edit failed`
+toast. Legacy chat tool errors carrying a recognized quota code also open it.
 
 ### Quota manual checks
 
 Use an isolated local backend with local billing fixtures, not real hosted
 accounts. See [quota rollout and coverage](../AI_QUOTA_ENFORCEMENT.md) for setup
 and the full matrix. Record both browser behavior and the Network/protocol result;
-existing UI does not promise a dedicated quota dialog outside development mode.
+recognized foreground quota refusals open the shared dialog when the frontend
+rollout is active (always in dev and local; flag-controlled in production).
 
 1. With the flag absent/false across all hosts, send a legacy chat and a managed
    session prompt. Confirm ordinary behavior and new uncounted usage rows.
@@ -604,12 +653,20 @@ existing UI does not promise a dedicated quota dialog outside development mode.
    work remains without a retry loop and that Stop still works.
 4. Invoke AI editing on an editable document and an independent AI tool with the
    exhausted fixture. Confirm failed results and unchanged document content. Check
-   manual editing and dictation still work. A successful chat whose optional rename
+   the usage-limit dialog opens, with a subscription CTA for Free or a Usage
+   settings CTA for paid accounts. Check manual editing and dictation still work. A successful chat whose optional rename
    is refused keeps its existing/default title rather than failing the chat.
 5. Set false consistently and restart/redeploy all local processes. Retry refused
    work explicitly and confirm recovery, new uncounted rows, and unchanged counted
    history. Do not erase history to simulate rollback or claim that rollback is a
    quota reset. Check cancellation in both flag states.
+
+For frontend-only checks against dev, use Settings → Usage → **Developer tools**
+to open the Free or paid usage-limit dialog directly, then reset the preview. This is
+a display override, not a quota change. To test actual refusal handling without
+hosted AI spending, intercept only the tested AI request in Chrome DevTools and
+return the matching 402 body; restore the response afterward. Backend admission
+and settlement tests still require the isolated backend fixtures above.
 
 ## Start a doc-scoped chat
 
@@ -755,6 +812,28 @@ answer; viewers see the form locked with `Waiting for an editor`. The owner and 
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
+
+## Tool calls waiting for the session owner
+
+An agent session always runs with its owner's access. When someone else prompts it (a
+second person replying in the session's channel thread, or a bot), every tool call that
+uses that access - Macro's own tools on the owner's email, calendar, documents and so on,
+and any connected app - waits for the owner to approve it. Public lookups (`WebSearch`,
+`WebFetch`, `SelfKnowledge`) and the owner's own turns are never held. The session view
+shows a card over the composer that says what the agent wants to do, e.g. `Dave Seed asked
+the agent to read your email.` The owner sees `Approval needed` with `Decline` /
+`Always allow` / `Approve`; everyone else sees `Waiting for <owner> to approve` (`…to read
+Alice Seed's email`) and, with edit access, a `Cancel` button for when the owner is away.
+`Always allow` approves the call and stops asking about the same person's calls for the
+rest of the session: the same tool on Macro (the card says `Always allow lets Dave Seed
+read your email in this session without asking you.`), every tool of a connected app. It
+also approves that person's other waiting calls it covers, and is not offered for a bot.
+The owner also gets an `agent_session_waiting_for_input` notification. Once answered the
+transcript shows the same action (`Read your email`) with `Approved by …`, `Always allowed
+by …`, `Declined by …`, `Cancelled`, or `Not approved in time` (30 minutes for the
+in-process agent; sandboxed ones wait as long when their MCP client accepts progress, about
+four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
+reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
 ## In channels
 
@@ -1359,3 +1438,29 @@ The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
 apply; ordinary documents and deleted skills cannot be read as skills.
+
+### Agent warm-up
+
+Home's agent composer and the Agents page issue a best-effort authenticated
+`POST /agent-sessions/warm`. It starts an unprompted in-memory session, hidden
+from history and lists. Opening either page must not add an empty conversation
+or execute a model/tool call. A warm response waits until ACP initialization
+and the shared MCP listing have finished. On first send, the default agent can claim the
+prepared session only when the user, model, and instructions match. Other
+personas and changed settings use normal creation. Warm failures must not block
+sending. Unclaimed sessions expire after ten minutes; a claimed conversation
+must remain visible and usable after that deadline.
+
+Taking a reservation clears it immediately, but replacement preparation waits
+until session creation succeeds. This lets a warm claim release its server
+reservation before requesting another. An active Home or Agents surface then
+prepares one replacement; otherwise preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes,
+including when another tab already holds the owner's other warm reservation.
+Successful cold creation also replenishes an empty cache left by an expired or
+failed reservation. A failed create does not trigger more warming.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.

@@ -1,43 +1,12 @@
-import { ActivityRouteView } from '@app/features/activity/route-views';
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { AgentsRouteView } from '@app/features/agents-view/route-views';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { CalendarRouteView } from '@app/features/calendar-view/route-views';
-import { ChannelsRouteView } from '@app/features/channels-view/route-views';
-import { CompaniesRouteView } from '@app/features/crm/route-views';
-import { DriveRouteView } from '@app/features/drive-view/route-views';
-import { EmailCompose } from '@app/features/email-compose/email-compose';
-import { MailRouteView } from '@app/features/email-view/route-views';
 import { HomeRouteView } from '@app/features/home/route-views';
-import {
-  CallsRouteView,
-  FoldersRouteView,
-  RecentRouteView,
-  SearchRouteView,
-} from '@app/features/next-soup/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import {
-  CreateProjectView,
-  ProjectsListView,
-  ProjectView,
-} from '@app/features/projects/project-view';
-import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
-import { RemindersRouteView } from '@app/features/reminders/route-views';
-import { ReviewsRouteView } from '@app/features/reviews-view/route-views';
-import { RoutineCreator } from '@app/features/routines/routine-creator';
-import { SettingsRouteView } from '@app/features/settings/route-views';
-import { TasksRouteView } from '@app/features/tasks-view/route-views';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
-import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
-import { ChannelCompose } from '@block-channel/component/Compose';
-import { ComposeSkill } from '@block-md/component/ComposeSkill';
-import { ComposeTask } from '@block-md/component/ComposeTask';
-import { ComposeDocument } from '@block-md/views/compose-document';
-import NotFound from '@core/component/AccessErrorViews/NotFound';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
@@ -48,7 +17,9 @@ import {
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
+import { lazyNamed } from '@core/util/lazyNamed';
 import {
+  type ComponentProps,
   type JSXElement,
   lazy,
   onMount,
@@ -61,6 +32,115 @@ import {
   usePageViewTracking,
   withAuth,
 } from './split-router/app-route-shell';
+
+// Views load as their own chunks the first time a split opens them.
+const ActivityRouteView = lazyNamed(
+  () => import('@app/features/activity/route-views'),
+  'ActivityRouteView'
+);
+const AgentsRouteView = lazyNamed(
+  () => import('@app/features/agents-view/route-views'),
+  'AgentsRouteView'
+);
+const CalendarRouteView = lazyNamed(
+  () => import('@app/features/calendar-view/route-views'),
+  'CalendarRouteView'
+);
+const ChannelsRouteView = lazyNamed(
+  () => import('@app/features/channels-view/route-views'),
+  'ChannelsRouteView'
+);
+const CompaniesRouteView = lazyNamed(
+  () => import('@app/features/crm/route-views'),
+  'CompaniesRouteView'
+);
+const DriveRouteView = lazyNamed(
+  () => import('@app/features/drive-view/route-views'),
+  'DriveRouteView'
+);
+const EmailCompose = lazyNamed(
+  () => import('@app/features/email-compose/email-compose'),
+  'EmailCompose'
+);
+const MailRouteView = lazyNamed(
+  () => import('@app/features/email-view/route-views'),
+  'MailRouteView'
+);
+const CallsRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'CallsRouteView'
+);
+const FoldersRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'FoldersRouteView'
+);
+const RecentRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'RecentRouteView'
+);
+const SearchRouteView = lazyNamed(
+  () => import('@app/features/next-soup/route-views'),
+  'SearchRouteView'
+);
+const CreateProjectView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'CreateProjectView'
+);
+const ProjectsListView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'ProjectsListView'
+);
+const ProjectView = lazyNamed(
+  () => import('@app/features/projects/project-view'),
+  'ProjectView'
+);
+const ReminderEditorSplit = lazyNamed(
+  () => import('@app/features/reminders/ReminderEditorSplit'),
+  'ReminderEditorSplit'
+);
+const RemindersRouteView = lazyNamed(
+  () => import('@app/features/reminders/route-views'),
+  'RemindersRouteView'
+);
+const ReviewsRouteView = lazyNamed(
+  () => import('@app/features/reviews-view/route-views'),
+  'ReviewsRouteView'
+);
+const RoutineCreator = lazyNamed(
+  () => import('@app/features/routines/routine-creator'),
+  'RoutineCreator'
+);
+const SettingsRouteView = lazyNamed(
+  () => import('@app/features/settings/route-views'),
+  'SettingsRouteView'
+);
+const TasksRouteView = lazyNamed(
+  () => import('@app/features/tasks-view/route-views'),
+  'TasksRouteView'
+);
+const EventComposerSplit = lazyNamed(
+  () => import('@block-calendar/components/EventComposerSplit'),
+  'EventComposerSplit'
+);
+const ChannelCompose = lazyNamed(
+  () => import('@block-channel/component/Compose'),
+  'ChannelCompose'
+);
+const ComposeSkill = lazyNamed(
+  () => import('@block-md/component/ComposeSkill'),
+  'ComposeSkill'
+);
+const ComposeTask = lazyNamed(
+  () => import('@block-md/component/ComposeTask'),
+  'ComposeTask'
+);
+const ComposeDocument = lazyNamed(
+  () => import('@block-md/views/compose-document'),
+  'ComposeDocument'
+);
+const NotFound = lazy(
+  () => import('@core/component/AccessErrorViews/NotFound')
+);
 
 type ComponentParams = Record<string, unknown>;
 
@@ -182,7 +262,9 @@ function ProjectsRouteGate(props: ParentProps) {
   );
 }
 
-const GatedCreateProjectView: typeof CreateProjectView = (props) => (
+const GatedCreateProjectView = (
+  props: ComponentProps<typeof CreateProjectView>
+) => (
   <ProjectsRouteGate>
     <CreateProjectView {...props} />
   </ProjectsRouteGate>

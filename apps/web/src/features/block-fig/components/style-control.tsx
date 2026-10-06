@@ -123,7 +123,7 @@ export function StyleControl(props: {
           <Popover.Portal>
             <Layer depth={3}>
               <Popover.Content
-                class="z-modal flex max-h-96 w-60 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+                class="fig-editor-theme z-modal flex max-h-96 w-60 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
                 aria-label={`${kind()} styles`}
                 data-testid="fig-style-popover"
                 onKeyDown={(e: KeyboardEvent) => {

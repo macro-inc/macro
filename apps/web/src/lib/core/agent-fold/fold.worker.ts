@@ -39,6 +39,11 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
   const wasm = await loadAgentFoldWasm();
 
   return match(request)
+    .with({ kind: 'preload' }, ({ id, kind }) => ({
+      id,
+      kind,
+      ok: true as const,
+    }))
     .with({ kind: 'push' }, ({ id, kind, sessionId, inputs }) => {
       // Created on first use. The machine itself refuses anything before a
       // snapshot, so a caller that lost its machine (a worker restart) hears
@@ -79,9 +84,8 @@ scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
     try {
       response = await serve(request);
     } catch (error) {
-      // Includes the wasm module failing to load at all, which is why the
-      // caller treats a failure as "this session folds to nothing" rather
-      // than retrying: a missing module will not appear on a second try.
+      // A failed WASM preload reports an error without creating a session.
+      // The loader permits a later request to retry initialization.
       response = {
         id: request.id,
         ok: false,

@@ -1,6 +1,7 @@
 import {
   clearSignupDraft,
   Onboarding,
+  OnboardingPending,
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -23,6 +24,7 @@ import { MobileWebSignupView } from './views/mobile-web-signup-view';
  */
 export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
@@ -47,7 +49,10 @@ export function Login(props: { signupMode?: boolean }) {
             ? (slots) => <OnboardingSignup {...slots} />
             : undefined
         }
-        signedIn={(user) => <PostAuthGate user={user} />}
+        onSignIn={() => navigate('/login')}
+        // Desktop sign-up resolves into onboarding's frame either way.
+        pending={desktopSignup() ? () => <OnboardingPending /> : undefined}
+        signedIn={(user) => <PostAuthGate user={user()} />}
       />
     </AuthProvider>
   );

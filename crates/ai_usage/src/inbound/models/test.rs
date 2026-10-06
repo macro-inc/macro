@@ -8,6 +8,8 @@ fn token_usage_keeps_the_existing_http_shape() {
     let amount = UsageAmount::Tokens {
         input: 1_000_000,
         output: 2_000_000,
+        cache_read: 0,
+        cache_write: 0,
     };
     let usage = Usage::from(domain::Usage {
         amount,
@@ -16,6 +18,8 @@ fn token_usage_keeps_the_existing_http_shape() {
             ModelPricing::Tokens {
                 input: 1.0,
                 output: 2.0,
+                cache_read: None,
+                cache_write: None,
             },
             amount,
         ),
@@ -26,14 +30,63 @@ fn token_usage_keeps_the_existing_http_shape() {
         json!({
             "input_tokens": 1_000_000,
             "output_tokens": 2_000_000,
+            "cache_read_input_tokens": 0,
+            "cache_write_input_tokens": 0,
             "audio_seconds": null,
             "model": "text-model",
             "created_at": "2026-09-18T00:00:00Z",
             "price": {
                 "price_per_million_in": 1.0,
                 "price_per_million_out": 2.0,
+                "price_per_million_cache_read": null,
+                "price_per_million_cache_write": null,
                 "price_per_audio_minute": null,
                 "total": 5.0
+            }
+        })
+    );
+}
+
+#[test]
+fn cached_token_usage_exposes_cache_tokens_and_rates() {
+    let created_at = "2026-10-05T00:00:00Z".parse().unwrap();
+    let amount = UsageAmount::Tokens {
+        input: 1_000_000,
+        output: 1_000_000,
+        cache_read: 1_000_000,
+        cache_write: 1_000_000,
+    };
+    let usage = Usage::from(domain::Usage {
+        amount,
+        model: "claude-opus-5".into(),
+        price: domain::Price::compute(
+            ModelPricing::Tokens {
+                input: 5.0,
+                output: 25.0,
+                cache_read: Some(0.5),
+                cache_write: Some(6.25),
+            },
+            amount,
+        ),
+        created_at,
+    });
+    assert_eq!(
+        serde_json::to_value(usage).unwrap(),
+        json!({
+            "input_tokens": 1_000_000,
+            "output_tokens": 1_000_000,
+            "cache_read_input_tokens": 1_000_000,
+            "cache_write_input_tokens": 1_000_000,
+            "audio_seconds": null,
+            "model": "claude-opus-5",
+            "created_at": "2026-10-05T00:00:00Z",
+            "price": {
+                "price_per_million_in": 5.0,
+                "price_per_million_out": 25.0,
+                "price_per_million_cache_read": 0.5,
+                "price_per_million_cache_write": 6.25,
+                "price_per_audio_minute": null,
+                "total": 36.75
             }
         })
     );

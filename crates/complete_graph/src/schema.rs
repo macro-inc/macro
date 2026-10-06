@@ -3,6 +3,9 @@ mod test;
 
 use std::{marker::PhantomData, sync::Arc};
 
+use crate::edges::GraphqlAgentSessionLogEntry;
+use crate::realtime::AgentSessionLogSubscriptions;
+use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
 use axum::extract::FromRef;
 use email::{
@@ -605,6 +608,48 @@ where
     > {
         resolve_soup_updates::<R, Auth, St, SoupEdges<NR, PR, ER, FR, AR, AcR>>(&self.service, ctx)
             .await
+    }
+
+    /// Frames appended to one accessible agent session's log from now on,
+    /// one run per flush, in log order. Each entry is the row `agentSession.log`
+    /// serves, so a subscriber folds the same bytes a reader of the log does.
+    /// The stream ends with an error when the subscriber falls behind: rows
+    /// were missed, and the log must be refetched.
+    async fn agent_session_log_appended(
+        &self,
+        ctx: &Context<'_>,
+        session_id: ID,
+    ) -> async_graphql::Result<
+        impl async_graphql::futures_util::Stream<
+            Item = async_graphql::Result<Vec<GraphqlAgentSessionLogEntry>>,
+        > + 'static,
+    > {
+        let user_id = require_authorized_user::<Auth, St>(ctx).await?;
+        let session_id = parse_id(session_id, "sessionId")?;
+        // Access is what `agentSession` checks: a session the viewer cannot
+        // read is one they cannot follow either.
+        let accessible = resolve_soup_agent_session::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx, user_id, session_id,
+        )
+        .await?
+        .is_some();
+        if !accessible {
+            return Err(async_graphql::Error::new("agent session not found"));
+        }
+        let subscriptions = ctx.data::<AgentSessionLogSubscriptions>()?;
+        let mut receiver = subscriptions.subscribe(AgentSessionId::new_from_uuid(session_id));
+        Ok(async_stream::stream! {
+            while let Some(rows) = receiver.recv().await {
+                yield rows
+                    .into_iter()
+                    .map(GraphqlAgentSessionLogEntry::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|error| async_graphql::Error::new(error.to_string()));
+            }
+            yield Err(async_graphql::Error::new(
+                "agent session log subscription closed after falling behind",
+            ));
+        })
     }
 }
 

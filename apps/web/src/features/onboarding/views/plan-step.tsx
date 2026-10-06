@@ -49,11 +49,14 @@ export function PlanStep(props: {
           tabindex="-1"
           class="font-[Roboto_Slab_Variable] text-[clamp(1.75rem,8vw,3rem)] font-[315] leading-[1.12] tracking-tight outline-none text-balance"
         >
-          Free Claude &amp; GPT for 30 days.
+          {plan.state().t === 'offer'
+            ? 'Free Claude & GPT for 30 days.'
+            : 'Your workspace is ready.'}
         </h1>
         <p class="mx-auto mt-6 max-w-[400px] text-sm leading-6 text-ink-muted text-balance sm:text-[15px]">
-          Every feature, every AI model and 1 TB of storage. Your first 30 days
-          are on us, then $40/user/month.
+          {plan.state().t === 'offer'
+            ? 'Every feature, every AI model and 1 TB of storage. Your first 30 days are on us, then $40/user/month.'
+            : "We're confirming your access so you can continue to your workspace."}
         </p>
       </header>
       <Show

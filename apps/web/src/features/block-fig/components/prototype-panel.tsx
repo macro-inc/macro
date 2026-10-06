@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * The Prototype tab: the page's flows, the selected frame's flow starting
  * point, and the selected layer's interactions. Editors add, change, and
@@ -12,10 +13,22 @@ import type {
   PrototypeInfo,
   PrototypeInteraction,
 } from '@core/fig-engine/prototype-types';
+import { Popover } from '@kobalte/core/popover';
+import ArrowRight from '@phosphor/arrow-right.svg';
+import Minus from '@phosphor/minus.svg';
 import Play from '@phosphor/play.svg';
 import Plus from '@phosphor/plus.svg';
 import Trash from '@phosphor/trash.svg';
-import { createMemo, For, Show } from 'solid-js';
+import X from '@phosphor/x.svg';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Index,
+  on,
+  Show,
+} from 'solid-js';
 import {
   type ActionKind,
   actionKind,
@@ -45,7 +58,6 @@ const label = (value: string) =>
 
 const control =
   'min-w-0 rounded-md border border-edge-muted bg-input px-1.5 py-1 text-ink text-xs';
-const select = `w-full ${control}`;
 
 export function PrototypePanel(props: {
   info: PrototypeInfo | undefined;
@@ -60,6 +72,10 @@ export function PrototypePanel(props: {
   onFlowStart?: (frameId: string, name: string | null) => void;
   onPresent: (frameId?: string) => void;
 }) {
+  const [openInteraction, setOpenInteraction] = createSignal<number>();
+  // Refreshed node metadata is still the same selection; keep its editor open.
+  const selectedId = createMemo(() => props.selected?.id);
+  createEffect(on(selectedId, () => setOpenInteraction(undefined)));
   const frames = () => props.info?.frames ?? [];
   const frameName = (id: string | null | undefined) =>
     frames().find((f) => f.id === id)?.name ?? 'Unknown';
@@ -126,7 +142,7 @@ export function PrototypePanel(props: {
     >
       <Show when={selectedFrame()}>
         {(frame) => (
-          <section class="flex flex-col gap-2 border-edge-muted border-b px-3 py-3">
+          <section class="flex flex-col gap-2 border-edge-frame border-b px-3 py-3">
             <div class="flex items-center">
               <span class="font-semibold">Flow starting point</span>
               <Show when={props.onFlowStart && !flowAt(frame().id)}>
@@ -154,7 +170,7 @@ export function PrototypePanel(props: {
                     fallback={<span class="flex-1">{flow().name}</span>}
                   >
                     <input
-                      class={select}
+                      class={`w-full ${control}`}
                       value={flow().name}
                       aria-label="Flow name"
                       data-testid="fig-flow-name"
@@ -184,7 +200,7 @@ export function PrototypePanel(props: {
         )}
       </Show>
       <Show when={props.selected}>
-        <section class="flex flex-col gap-2 border-edge-muted border-b px-3 py-3">
+        <section class="flex flex-col gap-2 border-edge-frame border-b px-3 py-3">
           <div class="flex items-center">
             <span class="font-semibold">Interactions</span>
             <Show when={editable() && frames().length > 0}>
@@ -196,6 +212,7 @@ export function PrototypePanel(props: {
                 onClick={() => {
                   const id = props.selected?.id;
                   if (!id) return;
+                  setOpenInteraction(interactions().length);
                   props.onInteractions?.(id, interactions().length, {
                     kind: 'navigate',
                     destination: otherFrame()?.id,
@@ -216,132 +233,197 @@ export function PrototypePanel(props: {
               </span>
             }
           >
-            <For each={interactions()}>
-              {(i, index) => {
-                const a = () => i.actions[0];
+            <Index each={interactions()}>
+              {(interaction, index) => {
+                const i = interaction;
+                const a = () => i().actions[0];
                 const kind = () => actionKind(a());
                 const editsThis = () =>
-                  editable() && i.trigger === 'ON_CLICK' && !!kind();
+                  editable() && i().trigger === 'ON_CLICK' && !!kind();
                 return (
                   <div
-                    class="flex flex-col gap-1.5 rounded-md bg-inset p-2"
+                    class="flex items-center gap-1"
                     data-testid="fig-proto-interaction"
                   >
-                    <div class="flex items-center gap-1">
-                      <span class="font-medium">
-                        {TRIGGERS[i.trigger] ?? label(i.trigger)}
-                      </span>
-                      <Show when={editable()}>
-                        <button
-                          type="button"
-                          class="ml-auto rounded-md p-1 text-ink-muted hover:bg-hover hover:text-ink"
-                          aria-label="Remove interaction"
-                          data-testid="fig-proto-remove"
-                          onClick={() => {
-                            const id = props.selected?.id;
-                            if (id) props.onInteractions?.(id, index(), null);
-                          }}
-                        >
-                          <Trash class="size-3.5" />
-                        </button>
-                      </Show>
-                    </div>
-                    <Show
-                      when={editsThis()}
-                      fallback={
-                        <span
-                          class="text-ink-muted"
-                          data-testid="fig-proto-summary"
-                        >
-                          {summary(a())}
-                        </span>
+                    <Popover
+                      placement="left-start"
+                      gutter={24}
+                      open={openInteraction() === index}
+                      onOpenChange={(open) =>
+                        setOpenInteraction(open ? index : undefined)
                       }
                     >
-                      <select
-                        class={select}
-                        aria-label="Action"
-                        data-testid="fig-proto-action"
-                        value={kind()}
-                        onChange={(e) =>
-                          edit(index(), i, {
-                            kind: e.currentTarget.value as ActionKind,
-                          })
-                        }
+                      <Popover.Trigger
+                        class="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-inset px-2 text-left hover:bg-hover focus-visible:ring-1 focus-visible:ring-accent"
+                        data-testid="fig-proto-open"
+                        aria-label={`${editsThis() ? 'Edit' : 'View'} interaction: ${TRIGGERS[i().trigger] ?? label(i().trigger)}, ${summary(a())}`}
                       >
-                        <option value="navigate">Navigate to</option>
-                        <option value="overlay">Open overlay</option>
-                        <option value="back">Back</option>
-                      </select>
-                      <Show when={kind() !== 'back'}>
-                        <select
-                          class={select}
-                          aria-label="Destination"
-                          data-testid="fig-proto-destination"
-                          value={a()?.destination ?? ''}
-                          onChange={(e) =>
-                            edit(index(), i, {
-                              destination: e.currentTarget.value,
-                            })
-                          }
+                        <span class="shrink-0">
+                          {TRIGGERS[i().trigger] ?? label(i().trigger)}
+                        </span>
+                        <ArrowRight class="size-3 shrink-0 text-ink-muted" />
+                        <span class="truncate text-ink-muted">
+                          {summary(a())}
+                        </span>
+                      </Popover.Trigger>
+                      <Popover.Portal>
+                        <Popover.Content
+                          class="fig-editor-theme z-modal w-64 rounded-xl border border-edge-muted bg-menu p-3 text-ink text-xs shadow-xl outline-none"
+                          data-testid="fig-proto-settings"
+                          onKeyDown={(e) => {
+                            if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
                         >
-                          <For each={frames()}>
-                            {(f) => <option value={f.id}>{f.name}</option>}
-                          </For>
-                        </select>
-                      </Show>
-                      <div class="flex gap-1">
-                        <select
-                          class={select}
-                          aria-label="Animation"
-                          data-testid="fig-proto-transition"
-                          value={a()?.transition ?? 'INSTANT_TRANSITION'}
-                          onChange={(e) =>
-                            edit(index(), i, {
-                              transition: e.currentTarget.value,
-                            })
-                          }
-                        >
-                          <Show
-                            when={TRANSITIONS.some(
-                              (t) => t.value === a()?.transition
-                            )}
-                            fallback={
-                              <option value={a()?.transition}>
-                                {label(a()?.transition ?? '')}
-                              </option>
-                            }
-                          >
-                            {null}
-                          </Show>
-                          <For each={TRANSITIONS}>
-                            {(t) => <option value={t.value}>{t.label}</option>}
-                          </For>
-                        </select>
-                        <Show when={a()?.transition !== 'INSTANT_TRANSITION'}>
-                          <input
-                            type="number"
-                            min="0"
-                            max="10000"
-                            step="50"
-                            class={`${control} w-16 shrink-0`}
-                            aria-label="Duration (ms)"
-                            title="Duration (ms)"
-                            data-testid="fig-proto-duration"
-                            value={Math.round((a()?.duration ?? 0.3) * 1000)}
-                            onKeyDown={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const ms = Number(e.currentTarget.value);
-                              if (Number.isFinite(ms) && ms >= 0)
-                                edit(index(), i, { duration: ms / 1000 });
-                            }}
-                          />
-                        </Show>
-                      </div>
+                          <div class="mb-3 flex items-center justify-between">
+                            <Popover.Title class="font-medium">
+                              Interaction
+                            </Popover.Title>
+                            <Popover.CloseButton
+                              class="rounded p-1 hover:bg-hover"
+                              aria-label="Close interaction settings"
+                            >
+                              <X class="size-3.5" />
+                            </Popover.CloseButton>
+                          </div>
+                          <div class="flex flex-col gap-2">
+                            <span class="text-ink-muted">Trigger</span>
+                            <div class="rounded-md bg-inset px-2 py-1.5">
+                              {TRIGGERS[i().trigger] ?? label(i().trigger)}
+                            </div>
+                            <span class="mt-1 text-ink-muted">Action</span>
+                            <Show
+                              when={editsThis()}
+                              fallback={
+                                <span
+                                  class="text-ink-muted"
+                                  data-testid="fig-proto-summary"
+                                >
+                                  {summary(a())}
+                                </span>
+                              }
+                            >
+                              <InspectorSelect
+                                label="Action"
+                                testId="fig-proto-action"
+                                value={kind() ?? 'navigate'}
+                                options={[
+                                  { value: 'navigate', label: 'Navigate to' },
+                                  { value: 'overlay', label: 'Open overlay' },
+                                  { value: 'back', label: 'Back' },
+                                ]}
+                                onChange={(value) =>
+                                  edit(index, i(), {
+                                    kind: value as ActionKind,
+                                  })
+                                }
+                              />
+                              <Show when={kind() !== 'back'}>
+                                <span class="mt-1 text-ink-muted">
+                                  Destination
+                                </span>
+                                <InspectorSelect
+                                  label="Destination"
+                                  testId="fig-proto-destination"
+                                  value={a()?.destination ?? ''}
+                                  options={frames().map((f) => ({
+                                    value: f.id,
+                                    label: f.name,
+                                  }))}
+                                  onChange={(destination) =>
+                                    edit(index, i(), { destination })
+                                  }
+                                />
+                              </Show>
+                              <div class="mt-1 flex gap-1 text-ink-muted">
+                                <span class="flex-1">Animation</span>
+                                <Show
+                                  when={
+                                    a()?.transition !== 'INSTANT_TRANSITION'
+                                  }
+                                >
+                                  <span class="w-20">Duration (ms)</span>
+                                </Show>
+                              </div>
+                              <div class="flex gap-1">
+                                <InspectorSelect
+                                  label="Animation"
+                                  testId="fig-proto-transition"
+                                  value={
+                                    a()?.transition ?? 'INSTANT_TRANSITION'
+                                  }
+                                  options={
+                                    TRANSITIONS.some(
+                                      (t) =>
+                                        t.value ===
+                                        (a()?.transition ??
+                                          'INSTANT_TRANSITION')
+                                    )
+                                      ? TRANSITIONS
+                                      : [
+                                          {
+                                            value: a()?.transition ?? '',
+                                            label: label(a()?.transition ?? ''),
+                                          },
+                                          ...TRANSITIONS,
+                                        ]
+                                  }
+                                  onChange={(transition) =>
+                                    edit(index, i(), { transition })
+                                  }
+                                />
+                                <Show
+                                  when={
+                                    a()?.transition !== 'INSTANT_TRANSITION'
+                                  }
+                                >
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="10000"
+                                    step="50"
+                                    class={`${control} w-20 shrink-0`}
+                                    aria-label="Duration (ms)"
+                                    title="Duration (ms)"
+                                    data-testid="fig-proto-duration"
+                                    value={Math.round(
+                                      (a()?.duration ?? 0.3) * 1000
+                                    )}
+                                    onKeyDown={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                      const ms = Number(e.currentTarget.value);
+                                      if (Number.isFinite(ms) && ms >= 0)
+                                        edit(index, i(), {
+                                          duration: ms / 1000,
+                                        });
+                                    }}
+                                  />
+                                </Show>
+                              </div>
+                            </Show>
+                          </div>
+                        </Popover.Content>
+                      </Popover.Portal>
+                    </Popover>
+                    <Show when={editable()}>
+                      <button
+                        type="button"
+                        class="rounded-md p-1 text-ink-muted hover:bg-hover hover:text-ink"
+                        aria-label="Remove interaction"
+                        data-testid="fig-proto-remove"
+                        onClick={() => {
+                          const id = props.selected?.id;
+                          setOpenInteraction(undefined);
+                          if (id) props.onInteractions?.(id, index, null);
+                        }}
+                      >
+                        <Minus class="size-3.5" />
+                      </button>
                     </Show>
                   </div>
                 );
               }}
-            </For>
+            </Index>
           </Show>
         </section>
       </Show>
@@ -351,7 +433,11 @@ export function PrototypePanel(props: {
           when={flows().length > 0}
           fallback={
             <span class="text-ink-muted">
-              Select a top-level frame to add a starting point.
+              {!props.onFlowStart
+                ? 'No flow starting points.'
+                : selectedFrame()
+                  ? 'Add a flow starting point above to present this frame.'
+                  : 'Select a top-level frame to add a starting point.'}
             </span>
           }
         >

@@ -11,7 +11,6 @@ import {
   MODEL_PROVIDER,
   Model,
   modelsForPlan,
-  modelUsageHint,
   PAID_MODELS,
   type TModel,
 } from './model';
@@ -56,17 +55,6 @@ describe('databaseModelForPlan', () => {
 
   it('asks a free plan for its own model, which the service allows', () => {
     expect(databaseModelForPlan(false)).toBe(FREE_DEFAULT_MODEL);
-  });
-});
-
-describe('modelUsageHint', () => {
-  it('flags the heavy paid models and stays quiet for the default and cheaper', () => {
-    expect(modelUsageHint(Model.gpt6Astra)).toBe('5× usage');
-    expect(modelUsageHint(Model.gpt56)).toBe('3× usage');
-    expect(modelUsageHint(Model.opus55)).toBe('2.5× usage');
-    expect(modelUsageHint(Model.sonnet55)).toBeUndefined();
-    expect(modelUsageHint(Model.haiku45)).toBeUndefined();
-    expect(modelUsageHint(Model.gpt56Mini)).toBeUndefined();
   });
 });
 

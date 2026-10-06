@@ -1,5 +1,12 @@
 import { Stepper } from '@ui/components/Stepper';
-import { type JSX, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  type JSX,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import { EmailForm } from '../components/email-form';
 import { LoginCard } from '../components/login-card';
 import { LoginPicker } from '../components/login-picker';
@@ -19,6 +26,7 @@ import {
 export type SignupJourneySlots = {
   onGoogle: () => Promise<void>;
   onBackFromEmail: () => void;
+  onSignIn: () => void;
   emailForm: JSX.Element;
   showingEmail: boolean;
 };
@@ -36,8 +44,15 @@ export function AuthView(props: {
   onVerified?: () => void;
   /** Desktop sign-up: onboarding's slides host Google and the email form. */
   signupJourney?: (slots: SignupJourneySlots) => JSX.Element;
+  /** Switches a returning visitor from sign-up to sign-in. */
+  onSignIn?: () => void;
+  /**
+   * Shown while the session is still resolving on a cold load, instead of the
+   * signed-out screens a returning visitor would otherwise see flash by.
+   */
+  pending?: () => JSX.Element;
   /** What a signed-in visitor sees instead. */
-  signedIn: (user: AuthUser) => JSX.Element;
+  signedIn: (user: Accessor<AuthUser>) => JSX.Element;
 }) {
   const context = useAuthContext();
   const login = createEmailLogin(context, {
@@ -62,6 +77,7 @@ export function AuthView(props: {
           journey()({
             onGoogle: () => context.startSso('google', 'signup'),
             onBackFromEmail: login.back,
+            onSignIn: () => props.onSignIn?.(),
             showingEmail: login.step() !== 'choose',
             emailForm: (
               <Show when={login.step() !== 'choose'}>
@@ -108,8 +124,16 @@ export function AuthView(props: {
   );
 
   return (
-    <Show when={user()} keyed fallback={signedOut()}>
-      {(signedIn) => props.signedIn(signedIn)}
+    <Show when={context.session().t !== 'loading'} fallback={props.pending?.()}>
+      <Show when={user()} fallback={signedOut()}>
+        {(signedIn) => (
+          // Refreshes update the existing workspace; only changing accounts
+          // should remount it and restart its pending work.
+          <Show when={signedIn().id} keyed>
+            {(_id) => props.signedIn(signedIn)}
+          </Show>
+        )}
+      </Show>
     </Show>
   );
 }

@@ -48,6 +48,7 @@ export function Onboarding() {
 export function OnboardingSignup(props: {
   onGoogle: () => Promise<void>;
   onBackFromEmail: () => void;
+  onSignIn: () => void;
   emailForm?: JSX.Element;
   showingEmail: boolean;
 }) {
@@ -59,3 +60,4 @@ export function OnboardingSignup(props: {
 }
 
 export { clearSignupDraft } from './primitives/flow-storage';
+export { OnboardingPendingView as OnboardingPending } from './views/onboarding-pending-view';

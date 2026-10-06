@@ -4,6 +4,13 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
+when the backend refuses a request with a usage-limit code. Free users can choose
+**View plans**; paid users can choose **Open usage settings** to add credits. The
+failed edit leaves the document unchanged and clears its running state. Other edit
+failures still show **AI edit failed**. The dialog also opens for usage-limit failures
+from live document-editing tools in chat.
+
 Snippet owners manage team sharing under **Share → Team access**. The details
 panel has no separate Sharing section. Choose **Edit** to grant the access the
 old snippet toggle provided, or **None** to remove team access.
@@ -979,6 +986,14 @@ flag off the block offers the file for download. The file is decoded,
 rendered, and edited by the Rust `fig_engine` compiled to WebAssembly, in a
 primary worker plus up to three tile-raster helpers. The canvas composites
 512 px tiles; while zooming it shows the nearest cached scale, then sharpens.
+Opening shows the file's embedded preview (`fig-opening-preview`, when
+present) while the engine and live session start in parallel. A coarse
+page preview appears before detailed tiles; the visible area gets priority
+over refining the whole-page preview. Reopening a file shares the compiled
+engine code; a new open starts compiling it while the file downloads.
+Each file keeps its own worker memory. Hover and remote
+cursors update the overlay without redrawing an unchanged page canvas.
+The canvas becomes editable only after the shared changes have been applied.
 
 People with edit access get an editor; others get the same view read-only
 (no shape tools, no editing shortcuts). Edits save automatically 1.5 s after
@@ -1027,9 +1042,30 @@ chunk, so content search finds a design by the words on its canvas.
 
 Layout and test hooks:
 
-- **Left panel tabs**: `fig-tab-layers` and `fig-tab-assets`. Assets
-  (`fig-assets`) lists the file's components (`fig-asset`, searchable with
-  `fig-assets-search`); editors click one to place an instance in the middle
+- **Opening a design**: download, collaboration connection, and decoding use
+  the same editor-shaped loading shell (`fig-opening`), without a floating
+  thumbnail or Macro spinner. Its canvas has the same bounds as the editor.
+  The canvas status (`fig-loading-status`) clears when content is first drawn
+  or an empty page is ready; the surrounding controls need not wait for tiles.
+- **Dragging layers with composited effects**: when a layer cannot be moved
+  as a cached sprite, the canvas updates in complete preview frames rather
+  than tiles from different drag positions. Full detail returns together
+  after release. Other collaborators still receive the movement as it happens.
+- **Editor chrome**: both sidebars use the app's page background color,
+  including the loading shell, so they follow the active theme. Horizontal
+  and vertical sidebar dividers use the same `edge-frame` color as the outer
+  navigation rail. The same divider spans the editor below the file header,
+  including while the design is loading.
+  Drag their inner edges (`fig-resize-left|right`) or focus an edge and use
+  Left/Right to resize. `fig-toggle-left|right` hides or shows a panel while
+  preserving its width. The file header shows save status (`fig-save-state`,
+  `data-state` is `saved`, `unsaved`, `saving`, or `error`).
+- **Left panel tabs**: File (`fig-tab-layers`) and Assets (`fig-tab-assets`);
+  arrow keys switch tabs. Assets
+  (`fig-assets`) shows component previews (`fig-asset`, searchable with
+  `fig-assets-search`). `fig-assets-grid|list` switches the local components
+  between thumbnail cards and compact rows; previews load near the visible
+  portion of the list. Editors click one to place an instance in the middle
   of the view, and the arrow beside it (or a click, read-only) goes to the
   main component. ⌥⌘K makes the selection a component (a frame becomes one;
   other layers are wrapped), duplicating or pasting a main component places
@@ -1064,8 +1100,10 @@ Layout and test hooks:
   `fig-library-update-one`, and `fig-library-update-all`. Updating keeps
   instances' overrides; it is one undo step. Libraries are read when the
   design opens and again when the Libraries dialog opens.
-- **Layers panel** (`fig-layers-panel`, toggled with ⌥1): layer search
-  (`fig-layer-search`, ⌘/Ctrl+F; results are `fig-search-hit`), the pages list
+- **Layers panel** (`fig-layers-panel`, toggled with ⌥1): open layer search
+  with the magnifier (`fig-search-toggle`) or ⌘/Ctrl+F, including from Assets.
+  Search uses `fig-layer-search`; results are `fig-search-hit`. Escape closes
+  search and returns focus to its button. Below are the collapsible pages list
   (`fig-page` buttons; pages named only with dashes are dividers; editors
   get `fig-page-add`, double-click to rename in `fig-page-rename`, and a hover
   `fig-page-delete`), and the layer tree (`fig-layer-row`, `data-layer-id` is
@@ -1083,13 +1121,21 @@ Layout and test hooks:
 - **Canvas** (`fig-canvas`): click selects with Figma's rules (inside a
   top-level frame the click selects the frame's child; sections are
   transparent; ⌘/Ctrl-click selects the deepest layer; double-click goes one
-  level deeper; Shift-click adds). Dragging empty canvas draws a selection
+  level deeper; Shift-click adds). Click a frame's canvas name label to select
+  that frame; Shift-click toggles it in the selection. Drag the label to move
+  the frame. In editable files, double-click the label to rename it in place
+  (`fig-frame-rename`): Enter or blur commits, Escape cancels, and undo restores
+  the previous name. Dragging empty canvas draws a selection
   marquee. Hover outlines what a click would select; holding ⌥ measures from
   the selection to the hovered layer. Scroll pans, ⌘/Ctrl+scroll or pinch
   zooms, Space-drag or middle-drag pans. When editing: drag a layer to move it
   (⌥ drags a copy, ⇧ constrains, edges and centers snap to siblings and the
-  parent frame with red guides; in an auto layout frame the dragged layer
-  takes the slot it is dropped over), drag the selection's corners or edges to
+  parent frame with red guides; dropping inside another frame moves the layer
+  into that frame, and dropping outside frames moves it onto the page; in an
+  auto layout frame the dragged layer takes the slot it is dropped over; the canvas draws the moving layers
+  itself while they are dragged, the design panel's X and Y follow them, and
+  the move is one undo step, which the others in a live design see as it
+  goes), drag the selection's corners or edges to
   resize (⇧ keeps proportions; several selected layers scale together), drag
   just beyond a corner of one layer to rotate it (⇧ snaps to 15°), draw with the frame, rectangle, ellipse, and
   text tools (a click places a default size; new layers go into the frame
@@ -1120,12 +1166,19 @@ Layout and test hooks:
   cannot be moved, resized, or deleted, but their name, fills, strokes,
   opacity, visibility, and text (typing included) are overridden on the
   instance, as in Figma; text bound to a component text property sets the
-  property.
+  property. A layer row's padlock toggles that layer. Lock/unlock selection
+  (⌘/Ctrl⇧L or the menus) unlocks when all selected layers are locked,
+  otherwise locks the selection. It reads current engine state after pending
+  local and remote edits; verify multi-selection, repeated toggles, and undo/redo.
 - **Main menu, layout grids, and guides**: the menu at the top of the
-  layers panel (`fig-main-menu`) has `fig-menu-export-frames-pdf` ("Export frames
+  layers panel (`fig-main-menu`) groups commands into File, Edit, View,
+  Object, and Arrange. Open Edit (`fig-main-edit`) for Undo/Redo
+  (`fig-undo`, `fig-redo`); open File (`fig-main-file`) for `fig-menu-export-frames-pdf` ("Export frames
   to PDF": the page's top-level frames as a multi-page vector PDF),
-  `fig-menu-export-selection`, and the Layout grids and Rulers toggles (also
-  in the zoom menu, `fig-layout-grids-toggle`). Frames' layout grids draw
+  `fig-menu-export-selection`. View (`fig-main-view`) contains the Layout grids
+  and Rulers toggles (also in the zoom menu, `fig-layout-grids-toggle`).
+  Submenus open with hover or Right Arrow; Left Arrow returns to the parent.
+  Keyboard shortcuts remains a top-level menu command. Frames' layout grids draw
   over the canvas (never in exports) until toggled off. With rulers shown
   (⇧R), editors drag from the top ruler for a horizontal guide or the left
   one for a vertical guide; a guide dropped on a top-level frame belongs to
@@ -1149,7 +1202,17 @@ Layout and test hooks:
   undo step. Both paste what is on the system clipboard (layers from any
   file or tab, as ⌘V does) when the browser lets the page read it, and
   otherwise the layers copied in this design.
-- **Design panel** (`fig-design-panel`, toggled with ⌥8): alignment buttons
+- **Design panel** (`fig-design-panel`, toggled with ⌥8): the fixed selection
+  header offers Create component (`fig-create-component`) and Boolean operations
+  for editable selections. Design and Prototype
+  tabs support arrow-key navigation. Zoom and Present are in the top right;
+  the selected layer's heading stays visible while properties scroll.
+  Position groups alignment, X/Y, rotation, 90° rotation (`fig-rotate-90`),
+  and flip controls (`fig-flip-horizontal|vertical`). Layout groups dimensions,
+  resizing, auto layout, and clip content. The aspect-ratio lock
+  (`fig-lock-aspect-ratio`) constrains inspector width/height edits together.
+  Appearance groups opacity, radius, and visibility (`fig-appearance-visible`).
+  Alignment buttons
   (`fig-align-<left|center|right|top|middle|bottom>`), name (`fig-name`),
   position, size, rotation, radius, opacity (`fig-field-<x|y|w|h|rotation|
   radius|opacity|font-size|stroke-weight>`; type a value or arithmetic, or
@@ -1161,30 +1224,35 @@ Layout and test hooks:
   input `fig-fill-<n>-hex`, opacity `-opacity`, `-visibility`, and
   `-remove`; "+" adds; drag a row's grip to reorder), stroke weight,
   position, and dashes (`fig-field-dash`: `4, 2`, or `None`), clip
-  content (`fig-clip-content`), the Text section for text layers (`fig-type`:
+  content (`fig-clip-content`), the Typography section for text layers (`fig-type`:
   family `fig-font-family` (opens the font picker `fig-font-picker`: search
   `fig-font-search`, options `fig-font-option` with `data-family`, the
-  file's fonts first, then Google Fonts, each previewed in its face; a
+  file's fonts first, then Google Fonts, each previewed in its face; use
+  Up/Down to browse results and Enter to apply; a
   missing font shows `fig-font-missing`), weight `fig-font-weight`,
-  `fig-italic`, size,
+  and size on one row,
   line height `fig-field-line-height` as `Auto`, a percentage, or pixels,
-  letter spacing `fig-field-letter-spacing`, paragraph spacing, horizontal
-  and vertical alignment, auto width / auto height / fixed size
-  `fig-text-resize`, `fig-underline`, strikethrough, and case
-  `fig-text-case`), auto layout (`fig-auto-layout-section`: "+" or ⇧A adds
+  letter spacing `fig-field-letter-spacing`, and horizontal/vertical alignment.
+  Open Type settings (`fig-type-settings`) for `fig-italic`, `fig-underline`,
+  strikethrough, paragraph spacing, and case (`fig-text-case`). Auto width /
+  auto height / fixed size (`fig-text-resize`) is in Layout; Text content is
+  a disclosure in Typography), auto layout (`fig-auto-layout-section`: "+" or ⇧A adds
   it, wrapping other layers in a new frame; "−" or ⌥⇧A removes it;
   direction `fig-layout-direction`, gap `fig-field-gap` as a number or
-  `Auto`, padding `fig-field-padding-h|v`, and the alignment grid
-  `fig-layout-align`), width and height sizing (`fig-sizing-w|h`: Fixed,
-  Hug, Fill) and `fig-absolute` for layers in auto layout, constraints
+  `Auto`, padding `fig-field-padding-h|v` or independent sides via
+  `fig-padding-independent` (`fig-field-padding-left|top|right|bottom`), and the
+  alignment grid `fig-layout-align`), width and height sizing
+  (`fig-sizing-w|h`: Fixed, Hug, Fill, beside each dimension) and `fig-absolute`
+  ("Ignore auto layout") for layers in auto layout, constraints
   (`fig-constraint-h|v`; children follow them when their frame is resized,
   and groups scale theirs), effects (`fig-effects`: "+" adds a drop shadow;
-  rows `fig-effect-<n>` pick the kind in `fig-effect-<n>-type` and take
-  offset, blur `fig-effect-<n>-blur`, spread, and color), boolean
-  operations (`fig-boolean-row`, shown for two or more layers or a boolean
-  layer: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
+  rows `fig-effect-<n>` open `fig-effect-<n>-settings`; inside that
+  popover, `fig-effect-<n>-type` picks the kind alongside offset, blur `fig-effect-<n>-blur`, spread,
+  and color in a popover beside the inspector), boolean
+  operations (the selected-layer header menu `fig-boolean-menu`; a boolean
+  layer also shows `fig-boolean-row`: `fig-boolean-<union|subtract|intersect|exclude>`, pressed for the
   boolean's current operation, which a click changes, and `fig-flatten`),
-  a Layout grid section for frames (`fig-layout-grids`: "+" adds a 10 px
+  a Layout guide section for frames (`fig-layout-grids`: "+" adds a 10 px
   grid; rows `fig-grid-<n>` with color `fig-grid-color-<n>`, kind
   `fig-grid-type-<n>` (`GRID`, `COLUMNS`, `ROWS`), `fig-grid-visible-<n>`,
   `fig-grid-remove-<n>`, and `fig-grid-settings-<n>` opening count
@@ -1193,16 +1261,20 @@ Layout and test hooks:
   or offset `fig-grid-offset-<n>`, and `fig-grid-gutter-<n>`), and the
   Export section (`fig-export`): "+" adds a preset (1x PNG, then 2x, 3x…;
   rows `fig-export-row-<n>` with size `fig-export-size-<n>` typed as `2x`,
-  `0.5x`, `512w`, or `300h`, `fig-export-suffix-<n>`, format
-  `fig-export-format-<n>` (`PNG`, `JPEG`, `SVG`, `PDF`), and for SVG and
-  JPG `fig-export-options-<n>`: `fig-export-outline-text-<n>`,
+  `0.5x`, `512w`, or `300h`, format
+  `fig-export-format-<n>` (`PNG`, `JPEG`, `SVG`, `PDF`). Open
+  `fig-export-options-<n>` for `fig-export-suffix-<n>` and format-specific settings: `fig-export-outline-text-<n>`,
   `fig-export-include-id-<n>`, or `fig-export-quality-<n>`; "−" is
   `fig-export-remove-<n>`). Presets are saved in the file (read-only viewers
   keep theirs for the session). `fig-export-button` ("Export <name>")
   downloads one file named as Figma names it (`Icon@2x.png`) or a ZIP of
   several, `fig-export-preview-toggle` shows a preview
-  (`fig-export-preview`), and `fig-copy-svg` is Copy as SVG; ⌘/Ctrl+⇧E
-  exports the selection with its presets (1x PNG without). Read-only
+  (`fig-export-preview`), and the Export header’s "Copy as" menu contains
+  Copy as PNG and `fig-copy-svg` (Copy as SVG); ⌘/Ctrl+⇧E
+  exports the selection with its presets (1x PNG without). Inspector choices
+  use custom listboxes: click the trigger, then its named `option`; use
+  arrow keys/Enter to choose and Escape to dismiss with focus restored.
+  Read-only
   viewers see the same values as text. The Code tab is Dev Mode's inspect
   panel (`fig-dev-inspect`): size and position (`fig-dev-width`,
   `fig-dev-height`), auto layout padding and gap (`fig-dev-padding`),
@@ -1277,32 +1349,45 @@ Layout and test hooks:
   `fig-color-alpha-field`, and "On this page" swatches
   (`fig-color-swatch`). Dragging previews live and is one undo step;
   Escape closes the picker.
-- **Toolbar** (`fig-toolbar`): Move (V), Frame (F), Rectangle (R), Ellipse
-  (O), Line (L), Arrow (⇧L; ⇧ while drawing snaps lines to 45°), Pen (P),
-  Pencil (⇧P), Text (T), Hand (H) as `fig-tool-<name>`, the boolean menu
+- **Toolbar** (`fig-toolbar`): one floating row centered across the editor at the bottom. Tool groups
+  retain their last-used tool: Move/Hand (`fig-tool-menu-move`), shapes
+  (`fig-tool-menu-rectangle`: Rectangle, Line, Arrow, Ellipse), and
+  Pen/Pencil (`fig-tool-menu-pen`). Menu choices are `fig-choose-<name>`;
+  the group's current button is `fig-tool-<name>`. Frame and Text have their
+  own buttons. Shortcuts remain V/H, F, R/L/⇧L/O, P/⇧P, and T; ⇧ while drawing
+  snaps lines to 45°. Arrow keys, Enter, and Escape operate the menus.
+  Comment (`fig-tool-comment`, C; `fig-comments-unread` counts unread threads)
+  is followed by Actions (`fig-actions-button`) and Dev Mode
+  (`fig-panel-tab-code`, a toggle). Selecting a drawing tool exits Comment.
+  The boolean menu is in the selected layer's inspector heading
   (`fig-boolean-menu`: `fig-menu-boolean-<union|subtract|intersect|exclude>`
-  and `fig-menu-flatten`), undo/redo (`fig-undo`,
-  `fig-redo`), the save state (`fig-save-state`, `data-state` is `saved`,
-  `unsaved`, `saving`, or `error`), the zoom menu (`fig-zoom-menu`), and the
-  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?). After the tools: Comment
-  (`fig-tool-comment`, C; `fig-comments-unread` counts unread threads)
-  where the design has comments, and Present (`fig-present-button`,
-  ⌥⌘↵ / Ctrl+Alt+Enter).
-- **Comments** (the comment tool, C): pins (`fig-comment-pin`,
-  `data-thread`, `data-unread`) at a constant size over the canvas; a click
-  places a comment on the top-level frame there (it moves with the frame)
-  or on the canvas, composed in `fig-comment-input` (Enter posts, ⇧Enter a
-  new line, `@` offers people: `fig-mention-menu`, `fig-mention-option`).
-  A pin opens its thread (`fig-comment-popover`: comments
-  `fig-comment-item`, mentions `fig-comment-mention`, `fig-comment-reply`
-  with `fig-comment-reply-post`, `fig-comment-resolve` /
-  `fig-comment-reopen`, and the author's `fig-comment-delete`). The right
-  panel becomes the comments list (`fig-comments-panel`, filters
-  `fig-comments-filter-<open|resolved|all>`, rows `fig-comment-row` with
-  `data-unread`; a row opens the thread on its page). Escape closes the
-  thread, then the tool. In the app, comments are document discussions
-  with a `fig` thread anchor, on wherever the viewer is; the fixture keeps
-  them in memory.
+  and `fig-menu-flatten`). Zoom (`fig-zoom-menu`) and Present
+  (`fig-present-button`, ⌥⌘↵ / Ctrl+Alt+Enter) are in the inspector header,
+  or float at the canvas's top right while that panel is hidden. The
+  shortcuts dialog (`fig-shortcuts`, Ctrl+⇧+?) is also in the main menu.
+- **Comments** (the comment tool, C): Macro comments, the same threads as
+  markdown, PDF, and spreadsheet comments. Pins (`fig-comment-pin`,
+  `data-thread`, `data-unread`) sit at a constant size over the canvas; a
+  click places a comment on the top-level frame there (it moves with the
+  frame) or on the canvas, written in `fig-comment-draft` with the app's
+  message composer (Enter posts; `@` mentions people and documents;
+  attachments; Escape cancels). A pin opens its thread beside it
+  (`fig-comment-popover`, `data-thread`, `data-resolved`): the shared
+  message thread (replies, reactions, edit, delete, copy link) under a
+  header with `fig-comment-resolve` / `fig-comment-reopen` and
+  `fig-comment-close`. The right panel becomes the comments list
+  (`fig-comments-panel`), with Present and Zoom in its header. Search
+  (`fig-comments-search`) matches the first comment, the latest replies,
+  and author names. Open `fig-comments-filter` for
+  `fig-comments-filter-<open|resolved|all>`. Rows `fig-comment-row` have
+  `data-unread`; a row opens the thread on its page. Below the rows,
+  `fig-comments-discussion` holds comments on the whole design. A copied
+  comment link (`?comment_id=`) or a comment notification opens the tool
+  at its thread (or at the discussion). Escape closes the thread, then the
+  tool. In the app, a pinned thread's root carries a `fig` thread anchor;
+  the browser fixture keeps comments in memory, with plain stand-ins for
+  the thread (`fig-comment-item`, `fig-comment-reply`) and composer
+  (`fig-comment-input`).
 - **Present** (`fig-present`): the selection's top-level frame (or the
   first flow's start, or the first frame) scaled to fit
   (`fig-present-screen`, `data-frame`), with the prototype playing: clicks
@@ -1318,11 +1403,13 @@ Layout and test hooks:
   `fig-present-next`, Copy link to frame (`fig-present-copy-link`, a link
   with `?present=<frame id>` that opens presenting it), and
   `fig-present-exit`. Variant changes and Scroll to are not played.
-- **Prototype tab** (`fig-panel-tab-prototype`, beside Design and Code;
+- **Prototype tab** (`fig-panel-tab-prototype`, beside Design;
   `fig-prototype-panel`): for a top-level frame, its flow starting point
   (`fig-flow-add`, name `fig-flow-name`, `fig-flow-remove`); for a layer,
   its interactions (`fig-proto-interaction`): editors add a click
-  interaction (`fig-proto-add`), and set its action (`fig-proto-action`:
+  interaction (`fig-proto-add`). Click its compact row (`fig-proto-open`)
+  to open settings beside the inspector (`fig-proto-settings`); adding an
+  interaction opens its settings automatically. Set its action (`fig-proto-action`:
   Navigate to, Open overlay, Back), destination frame
   (`fig-proto-destination`), animation (`fig-proto-transition`), and
   duration in ms (`fig-proto-duration`), or remove it (`fig-proto-remove`);
@@ -1615,7 +1702,8 @@ With `ENABLE_GRAPHQL_SOUP` enabled, the popup reuses the reference's live `ItemP
 batch, including task properties and viewer permission, without another fetch.
 Explicit refreshes may revalidate that batch, but requests must settle while the
 pointer stays over the same reference; cache updates must not cause a continuous
-fetch cascade.
+fetch cascade. Adding or changing a direct sibling of a document reference must
+leave the reference mounted without flashing or restarting its preview query.
 
 ## Embedded document cards
 
@@ -1977,6 +2065,13 @@ An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:
 reread and reconsider the change instead of blindly retrying. Unsynced edits
 still follow normal CRDT collaboration semantics when they reconnect.
+
+## HTML preview tabs
+
+HTML documents show `Render` and `Code` bubble tabs in a left-aligned row above
+the content, below the header, in both standalone desktop blocks and Drive
+detail views. Switch to Code to inspect or edit the source, then back to Render
+to see the current preview. Other code file types do not show this row.
 
 ## Large-document undo checks
 

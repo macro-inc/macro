@@ -6,11 +6,13 @@
 
 import type { PaintInfo } from '@core/fig-engine/types';
 import { type JSX, Show } from 'solid-js';
+import type { Alignment } from '../core/align';
 import { formatMeasure } from '../core/measure';
 import { MIXED, type Mixed, type MixedInfo } from '../core/mixed';
 import type { PaintEdit } from '../core/paint';
 import type { Patch } from '../primitives/create-fig-editor';
 import { NumberField } from './design-fields';
+import { AlignRow } from './geometry-sections';
 import { PaintList } from './paint-controls';
 import { Section } from './panel-section';
 
@@ -71,6 +73,7 @@ function MixedPaints(props: {
 
 export function MixedFields(props: {
   mixed: MixedInfo;
+  onAlign?: (how: Alignment) => void;
   /** Edits all the selected layers; absent when read-only. */
   onPatch?: (patch: Patch, live: boolean) => void;
   swatches?: readonly string[];
@@ -82,9 +85,6 @@ export function MixedFields(props: {
     v === MIXED ? 'Mixed' : v === undefined ? '' : formatMeasure(v);
   return (
     <div data-testid="fig-mixed">
-      <div class="border-edge-muted border-b px-3 py-3">
-        <div class="font-semibold text-sm">{m().count} layers selected</div>
-      </div>
       <Show
         when={props.onPatch}
         fallback={
@@ -101,8 +101,17 @@ export function MixedFields(props: {
         {(patch) => (
           <>
             <Show when={!m().inInstance}>
-              <Section title="Layout">
-                <div class="grid grid-cols-2 gap-1.5">
+              <Section title="Position" testId="fig-position-section">
+                <Show when={props.onAlign}>
+                  {(align) => (
+                    <>
+                      <span class="text-ink-muted text-[11px]">Alignment</span>
+                      <AlignRow onAlign={align()} />
+                    </>
+                  )}
+                </Show>
+                <span class="mt-1 text-ink-muted text-[11px]">Position</span>
+                <div class="grid grid-cols-2 gap-2">
                   <NumberField
                     label="X"
                     value={value(m().x)}
@@ -117,6 +126,21 @@ export function MixedFields(props: {
                     testId="fig-field-y"
                     onChange={(y, live) => patch()({ y }, live)}
                   />
+                  <span class="col-span-2 text-ink-muted text-[11px]">
+                    Rotation
+                  </span>
+                  <NumberField
+                    label="↻"
+                    value={value(m().rotation)}
+                    mixed={m().rotation === MIXED}
+                    testId="fig-field-rotation"
+                    onChange={(rotation, live) => patch()({ rotation }, live)}
+                  />
+                </div>
+              </Section>
+              <Section title="Layout" testId="fig-auto-layout-section">
+                <span class="text-ink-muted text-[11px]">Dimensions</span>
+                <div class="grid grid-cols-2 gap-2">
                   <NumberField
                     label="W"
                     value={value(m().width)}
@@ -133,30 +157,17 @@ export function MixedFields(props: {
                     testId="fig-field-h"
                     onChange={(height, live) => patch()({ height }, live)}
                   />
-                  <NumberField
-                    label="↻"
-                    value={value(m().rotation)}
-                    mixed={m().rotation === MIXED}
-                    testId="fig-field-rotation"
-                    onChange={(rotation, live) => patch()({ rotation }, live)}
-                  />
-                  <Show when={m().radius !== undefined}>
-                    <NumberField
-                      label="◜"
-                      value={value(m().radius ?? 0)}
-                      mixed={m().radius === MIXED}
-                      min={0}
-                      testId="fig-field-radius"
-                      onChange={(cornerRadius, live) =>
-                        patch()({ cornerRadius }, live)
-                      }
-                    />
-                  </Show>
                 </div>
               </Section>
             </Show>
             <Section title="Appearance">
               <div class="grid grid-cols-2 gap-1.5">
+                <span class="text-ink-muted text-[11px]">Opacity</span>
+                <span class="text-ink-muted text-[11px]">
+                  {!m().inInstance && m().radius !== undefined
+                    ? 'Corner radius'
+                    : ''}
+                </span>
                 <NumberField
                   label="◐"
                   value={value(m().opacity)}
@@ -167,6 +178,18 @@ export function MixedFields(props: {
                   testId="fig-field-opacity"
                   onChange={(opacity, live) => patch()({ opacity }, live)}
                 />
+                <Show when={!m().inInstance && m().radius !== undefined}>
+                  <NumberField
+                    label="◜"
+                    value={value(m().radius ?? 0)}
+                    mixed={m().radius === MIXED}
+                    min={0}
+                    testId="fig-field-radius"
+                    onChange={(cornerRadius, live) =>
+                      patch()({ cornerRadius }, live)
+                    }
+                  />
+                </Show>
               </div>
             </Section>
             <MixedPaints
@@ -188,7 +211,7 @@ export function MixedFields(props: {
               onPatch={patch()}
             />
             <Show when={m().strokeWeight !== undefined}>
-              <div class="-mt-2 grid grid-cols-2 gap-1.5 border-edge-muted border-b px-3 pb-3">
+              <div class="-mt-2 grid grid-cols-2 gap-1.5 border-edge-frame border-b px-3 pb-3">
                 <NumberField
                   label="≡"
                   value={value(m().strokeWeight ?? 0)}

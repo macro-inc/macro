@@ -5,7 +5,6 @@ import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incom
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { SearchProvider } from '@app/features/soup/search/context';
-import { InteractiveOnboardingModal } from '@app/features/tutorial/InteractiveOnboardingModal';
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -21,6 +20,7 @@ import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
 import { isMeetingPath } from '@channel/Call/call-link';
 import { CallKitSync } from '@channel/Call/use-callkit';
+import { dismissBootShell } from '@components/app/boot-shell';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
@@ -32,6 +32,7 @@ import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import {
   UserContextProvider,
+  useIsAuthenticated,
   useUserId,
   useUserInfo,
 } from '@core/context/user';
@@ -49,6 +50,7 @@ import {
   syncLoginStorage,
   updateCookie,
 } from '@core/util/cookies';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -103,9 +105,16 @@ import {
   onMount,
   type ParentProps,
   Show,
+  Suspense,
 } from 'solid-js';
 import { useReminderAlerts } from '../features/reminders/reminder-alerts';
 import { AppRouterView } from './app-router-view';
+
+// Only first-time mobile web users see it, and only once it opens.
+const InteractiveOnboardingModal = lazyNamed(
+  () => import('@app/features/tutorial/InteractiveOnboardingModal'),
+  'InteractiveOnboardingModal'
+);
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -291,6 +300,9 @@ function InitialInteractiveOnboardingModal() {
   const userInfoQuery = useUserInfoQuery();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+  // Mounting waits for the first open so the modal's chunk stays off startup;
+  // it stays mounted afterwards so closing can animate.
+  const [hasOpened, setHasOpened] = createSignal(false);
 
   const modalOpen = () =>
     open() &&
@@ -303,6 +315,7 @@ function InitialInteractiveOnboardingModal() {
   createEffect(() => {
     if (modalOpen()) {
       setOnboardingStarted(true);
+      setHasOpened(true);
     }
   });
 
@@ -336,25 +349,49 @@ function InitialInteractiveOnboardingModal() {
   };
 
   return (
-    <InteractiveOnboardingModal
-      open={modalOpen()}
-      isFirstTimeOnboarding
-      onOpenChange={handleOpenChange}
-    />
+    <Show when={hasOpened()}>
+      <Suspense>
+        <InteractiveOnboardingModal
+          open={modalOpen()}
+          isFirstTimeOnboarding
+          onOpenChange={handleOpenChange}
+        />
+      </Suspense>
+    </Show>
   );
+}
+
+/** Longest the boot shell waits for auth before showing whatever the app has. */
+const BOOT_SHELL_MAX_WAIT_MS = 8000;
+
+/**
+ * Hands off from index.html's boot shell once the app frame can draw: when
+ * auth is known (the rail or the login page renders), at once for public
+ * links, and after a cap so an outage never hides the app's own error states.
+ */
+function useBootShellHandoff(isPublicPath: () => boolean) {
+  const isAuthenticated = useIsAuthenticated();
+  onMount(() => {
+    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    onCleanup(() => clearTimeout(cap));
+  });
+  createEffect(() => {
+    if (isPublicPath() || isAuthenticated() !== undefined) dismissBootShell();
+  });
 }
 
 /** Meeting and booking links have a focused shell and skip app onboarding. */
 function AppRouteLayout(props: RouteSectionProps) {
   const location = useLocation();
+  const isBookingPath = () =>
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`);
+  useBootShellHandoff(
+    () => isBookingPath() || isMeetingPath(location.pathname)
+  );
   return (
     <Show
-      when={
-        !(
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
-          location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`)
-        )
-      }
+      when={!isBookingPath()}
       fallback={
         <div class="h-dvh overflow-y-auto bg-page text-ink">
           {props.children}

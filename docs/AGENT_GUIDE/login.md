@@ -18,6 +18,15 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Temporary open signup in Develop
+
+Once the temporary authentication-service override is deployed, Develop accepts
+new accounts with any email address regardless of signup allowlist membership or
+the configured bypass flag. Verify with an authorized test account outside
+`macro.com` that is absent from the allowlist. Email verification and provider
+sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
+for restoring allowlist enforcement.
+
 ## Hosted-dev proxy SSO
 
 On an allowed OAuth origin such as `https://localhost:<port>`, Google/SSO
@@ -94,7 +103,11 @@ New desktop users enter the same flow from
 open `/app/signup`. Existing members and native mobile keep their existing routes.
 
 Signed-out `/app/signup` starts at the workspace color picker, followed by feature
-interests and security. No account is required for these slides. At the work-email
+interests and security. No account is required for these slides. The signed-out
+page should remain stable after the session check returns
+401; it must not alternate with the loading screen or reset a selected color.
+Verify that Continue advances without signing in. Below the color
+picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Connect work email uses Google sign-up to create the Macro account and link
 the primary inbox. This step offers Google sign-up only, with no alternate email
 button. The chosen accent and work step survive the OAuth
@@ -115,6 +128,18 @@ more, cancel/retry connection, and confirm connected checks persist on return.
 Team setup retains existing membership, invite acceptance, domain suggestions,
 and editable invite recipients; submitting the form sends real invitations.
 
+Members with an active or trialing license, including a license from their team,
+finish directly from the team step without visiting the plan page. The Continue
+button reads "Opening your workspace…" while saving; a failed save leaves the
+team step available to retry. Checkout returns still use the plan step to confirm
+payment. Session refreshes must preserve the mounted onboarding flow so
+completion finishes instead of repeatedly flashing or restarting.
+
+Finishing setup saves the onboarding record before marking the tutorial complete.
+The confirmed tutorial save updates the session cache before leaving. A successful
+finish must not show "Couldn't finish setup — please try again", including when
+a background session refresh overlaps it.
+
 The trial offer contains no card fields or wallet buttons. Its primary button
 requests an automatic 30-day Premium trial through Stripe Checkout; no coupon
 code is required. Stripe collects the payment method for billing after the trial.
@@ -125,7 +150,7 @@ Cancellation returns to this step. A successful return
 polls the server's license state, completes onboarding, and enters the app without
 an extra confirmation click. A pending webhook shows a retryable confirmation
 state. The Guest scroll cue opens a comparison with a separate Guest continuation.
-Both completion paths preserve an original `next` destination. Old saved email,
+Both completion paths preserve an original `next` destination and otherwise land on Home (`/app/home`). Old saved email,
 connector, building, and summary step names are migrated on resume.
 
 ## Public onboarding preview

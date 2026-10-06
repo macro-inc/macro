@@ -773,9 +773,9 @@ export const enableDictation = defineFlag({
 });
 
 /**
- * AI usage billing UI: the Billing settings usage meter, credit packs and
- * usage-billing controls, the out-of-credits dialog, the "$N of AI usage"
- * plan copy, and the model picker's usage multipliers. Presentation only:
+ * AI usage billing UI: enables production Usage controls and the usage-limit
+ * dialog, plus the "$N of AI usage" plan copy. Dev and local Usage remain
+ * interactive regardless of this flag. Presentation only:
  * backend quota admission and settlement are gated separately by
  * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
  * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.

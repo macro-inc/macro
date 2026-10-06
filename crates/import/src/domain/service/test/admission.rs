@@ -521,6 +521,7 @@ impl<Context: Send> ToolSet<Context> for Tools {
     fn request_schemas(&self) -> Option<Vec<ai_toolset::RequestSchema>> {
         Some(vec![ai_toolset::RequestSchema {
             name: self.name.into(),
+            description: String::new(),
             schema: schemars::schema_for!(serde_json::Value),
         }])
     }

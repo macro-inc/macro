@@ -155,7 +155,7 @@ export function createFigContextMenu(options: {
       // Several layers: hide them all unless all are hidden already.
       void editor.setProps({ visible: !open.facts.anyVisible });
     } else if (action === 'toggle-locked' && open?.facts) {
-      void editor.setProps({ locked: open.facts.anyUnlocked });
+      void editor.toggleLocked();
     } else {
       options.run(action);
     }

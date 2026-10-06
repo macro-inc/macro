@@ -183,6 +183,14 @@ type CompleteSubscriptionRoot {
 	"""
 	soupUpdates: [SoupPatch!]!
 	"""
+	Frames appended to one accessible agent session's log from now on,
+	one run per flush, in log order. Each entry is the row `agentSession.log`
+	serves, so a subscriber folds the same bytes a reader of the log does.
+	The stream ends with an error when the subscriber falls behind: rows
+	were missed, and the log must be refetched.
+	"""
+	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!

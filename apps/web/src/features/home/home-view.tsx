@@ -1,6 +1,5 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
-import { CalendarView } from '@app/features/calendar-view/calendar-view';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
 import { homeCalendarRoute } from '@app/routes/routes';
@@ -12,6 +11,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { createEffect, onMount, Show } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
@@ -23,6 +23,12 @@ import { HomeTabs } from './components/HomeTabs';
 import { HomeViewProvider, useHomeView } from './home-view-context';
 import { homeTour } from './tour';
 import type { HomeViewStateOptions } from './types';
+
+// The calendar grid (FullCalendar) only loads once Home's calendar route opens.
+const CalendarView = lazyNamed(
+  () => import('@app/features/calendar-view/calendar-view'),
+  'CalendarView'
+);
 
 export type HomeViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */

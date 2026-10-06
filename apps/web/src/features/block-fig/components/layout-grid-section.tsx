@@ -1,3 +1,4 @@
+import { InspectorSelect } from './inspector-select';
 /**
  * The design panel's Layout grid section for frames, as in Figma: "+"
  * adds a 10 px grid; each grid is a square grid, columns, or rows, with
@@ -97,27 +98,32 @@ function GridRow(props: {
             }
           />
         </SwatchPopover>
-        <select
-          class="min-w-0 flex-1 rounded-md bg-inset px-1.5 py-1 text-ink outline-none"
-          aria-label="Grid type"
-          data-testid={`fig-grid-type-${k()}`}
+        <InspectorSelect
+          label="Grid type"
+          testId={`fig-grid-type-${k()}`}
           value={kindOf(g())}
-          onChange={(e) => {
-            const kind = e.currentTarget.value as GridKind;
+          options={[
+            { value: 'GRID', label: `Grid ${g().sectionSize}px` },
+            {
+              value: 'COLUMNS',
+              label: `Columns (${g().count === 0 ? 'Auto' : g().count})`,
+            },
+            {
+              value: 'ROWS',
+              label: `Rows (${g().count === 0 ? 'Auto' : g().count})`,
+            },
+          ]}
+          onChange={(kind) =>
             props.onChange(
-              { ...newGrid(kind), color: g().color, alpha: g().alpha },
+              {
+                ...newGrid(kind as GridKind),
+                color: g().color,
+                alpha: g().alpha,
+              },
               false
-            );
-          }}
-        >
-          <option value="GRID">Grid {g().sectionSize}px</option>
-          <option value="COLUMNS">
-            Columns ({g().count === 0 ? 'Auto' : g().count})
-          </option>
-          <option value="ROWS">
-            Rows ({g().count === 0 ? 'Auto' : g().count})
-          </option>
-        </select>
+            )
+          }
+        />
         <button
           type="button"
           aria-label="Grid settings"
@@ -174,20 +180,20 @@ function GridRow(props: {
               }}
               onChange={(count) => set({ count })}
             />
-            <select
-              class="min-w-0 rounded-md bg-inset px-1.5 py-1 text-ink outline-none"
-              aria-label="Type"
-              data-testid={`fig-grid-align-${k()}`}
+            <InspectorSelect
+              label="Type"
+              testId={`fig-grid-align-${k()}`}
               value={g().align}
-              onChange={(e) =>
-                set({ align: e.currentTarget.value as LayoutGridInfo['align'] })
+              options={[
+                { value: 'STRETCH', label: 'Stretch' },
+                { value: 'MIN', label: columns() ? 'Left' : 'Top' },
+                { value: 'CENTER', label: 'Center' },
+                { value: 'MAX', label: columns() ? 'Right' : 'Bottom' },
+              ]}
+              onChange={(align) =>
+                set({ align: align as LayoutGridInfo['align'] })
               }
-            >
-              <option value="STRETCH">Stretch</option>
-              <option value="MIN">{columns() ? 'Left' : 'Top'}</option>
-              <option value="CENTER">Center</option>
-              <option value="MAX">{columns() ? 'Right' : 'Bottom'}</option>
-            </select>
+            />
             <Show when={g().align !== 'STRETCH'}>
               <NumberField
                 label={columns() ? 'Width' : 'Height'}
@@ -231,7 +237,7 @@ export function LayoutGridSection(props: {
     props.onChange?.(grids, live);
   return (
     <Section
-      title="Layout grid"
+      title="Layout guide"
       testId="fig-layout-grids"
       onAdd={
         props.onChange ? () => update([...props.grids, newGrid()]) : undefined

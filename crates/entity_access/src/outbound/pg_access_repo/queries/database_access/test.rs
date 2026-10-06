@@ -7,10 +7,62 @@ const OWNER: &str = "macro|owner@team.com";
 const MEMBER: &str = "macro|member@team.com";
 const MEMBER_TEAM: &str = "00000000-0000-0000-0000-0000000ea001";
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn core_storage_does_not_become_an_entity_through_a_stray_grant(pool: PgPool) {
+    use super::super::database_row_access::{
+        get_database_row_access, get_database_row_database, get_database_rows_access,
+    };
+    let database = Uuid::now_v7();
+    let table = Uuid::now_v7();
+    let row = Uuid::now_v7();
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!("INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Contacts', '80')", table, database)
+        .execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO database_rows (id, table_id, position) VALUES ($1, $2, '80')",
+        row,
+        table
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'database', $2, 'user', 'owner')", database, OWNER)
+        .execute(&pool).await.unwrap();
+    let owner = source_ids(&pool, "owner@team.com").await;
+    assert_eq!(
+        get_database_access(&pool, &database, &owner).await.unwrap(),
+        None
+    );
+    assert!(
+        list_database_access(&pool, &owner)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        get_database_row_access(&pool, &row, &owner).await.unwrap(),
+        None
+    );
+    assert!(
+        get_database_rows_access(&pool, &[row], &owner)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(get_database_row_database(&pool, &row).await.unwrap(), None);
+}
+
 async fn insert_database(pool: &PgPool) -> Uuid {
     let database_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'db', $2)"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
         database_id,
         OWNER,
     )

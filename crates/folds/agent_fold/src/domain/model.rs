@@ -50,7 +50,7 @@ pub use elicitation::{
     ElicitationSchema, PendingElicitation,
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
-pub use interaction::{PendingInteraction, PendingPermission};
+pub use interaction::{PendingInteraction, PendingPermission, PendingToolApproval};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};

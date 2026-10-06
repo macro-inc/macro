@@ -9,7 +9,7 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -44,7 +44,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::admission::admit_turn;
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
@@ -133,6 +133,10 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
+    /// handshake does not join it; the first turn does, so SearchTools still
+    /// sees the catalog.
+    pub mcp_connect: Mutex<Option<tokio::task::JoinHandle<()>>>,
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
@@ -143,9 +147,9 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// every turn that follows. Done at `session/new`/`session/resume`, the
-    /// same moment a sandboxed harness connects its servers, so the first
-    /// turn already has them.
+    /// every turn that follows. Started at `session/new`/`session/resume` so
+    /// the handshake is not held by `tools/list`; the first turn joins the
+    /// same work so SearchTools still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
         let servers = dialable_servers(servers);
         let requested = servers.len();
@@ -163,7 +167,30 @@ impl AgentState {
             .expect("mcp tools lock should not be poisoned") = tools;
     }
 
-    fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
+    /// Start [`Self::connect_mcp`] without joining it. `session/new` and
+    /// `session/resume` call this so create can return while listing runs.
+    fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
+        let state = Arc::clone(self);
+        let handle = tokio::spawn(async move {
+            state.connect_mcp(servers).await;
+        });
+        *self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned") = Some(handle);
+    }
+
+    /// The tools the next turn should compose, waiting out an in-flight
+    /// connect so the searchable catalog is not empty on turn one.
+    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
+        let handle = self
+            .mcp_connect
+            .lock()
+            .expect("mcp connect lock should not be poisoned")
+            .take();
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
         self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
@@ -277,33 +304,6 @@ impl AgentState {
         {
             cancel.cancel();
         }
-    }
-}
-
-/// How many questions a turn currently has out to the user. Shared between
-/// the turn's requester, which counts each question it is waiting on, and the
-/// turn loop, which reads it to tell "waiting on the user" from "hung".
-#[derive(Default)]
-struct AwaitingUser(AtomicUsize);
-
-impl AwaitingUser {
-    fn is_waiting(&self) -> bool {
-        self.0.load(Ordering::Acquire) > 0
-    }
-
-    /// Count one outstanding question until the guard drops - on an answer,
-    /// an error, or the asking future being cancelled.
-    fn begin(&self) -> AwaitingGuard<'_> {
-        self.0.fetch_add(1, Ordering::AcqRel);
-        AwaitingGuard(self)
-    }
-}
-
-struct AwaitingGuard<'a>(&'a AwaitingUser);
-
-impl Drop for AwaitingGuard<'_> {
-    fn drop(&mut self) {
-        self.0.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -555,7 +555,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    state.connect_mcp(request.mcp_servers).await;
+                    state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
                         NewSessionResponse::new(acp_id.clone())
                             .config_options(state.session_config_options()),
@@ -576,7 +576,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id.clone(), true);
-                    state.connect_mcp(request.mcp_servers).await;
+                    state.start_connect_mcp(request.mcp_servers);
                     let responded = responder.respond(
                         ResumeSessionResponse::new().config_options(state.session_config_options()),
                     );
@@ -780,6 +780,11 @@ async fn run_turn(
         "agent.turn.admission_wait_ms",
         elapsed_ms(admission_started),
     );
+    let mcp_tools = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+        tools = state.mcp_tools_for_turn() => tools,
+    };
     let TurnInput {
         messages,
         model,
@@ -790,13 +795,15 @@ async fn run_turn(
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        session_id: state.session_id,
+        awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
         model,
         reasoning_effort,
         identity,
         instructions,
         messages,
-        mcp_tools: state.current_mcp_tools(),
+        mcp_tools,
         cancel: cancel.clone(),
         user_input: requester
             .clone()

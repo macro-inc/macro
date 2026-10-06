@@ -148,9 +148,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderActivity() {
+/** Registry views are lazy chunks; settle the chunk so assertions see the view. */
+async function renderActivity() {
   const activity = resolveComponent('activity');
-  return render(() => <Suspense>{activity.element()}</Suspense>);
+  const result = render(() => <Suspense>{activity.element()}</Suspense>);
+  await import('@app/features/activity/route-views');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return result;
 }
 describe('calendar layout registration', () => {
   it('owns desktop chrome but keeps the floating split header on touch', () => {
@@ -163,8 +167,8 @@ describe('calendar layout registration', () => {
 });
 
 describe('activity registration', () => {
-  it('redirects a disabled feed to inbox without mounting or tracking it', () => {
-    renderActivity();
+  it('redirects a disabled feed to inbox without mounting or tracking it', async () => {
+    await renderActivity();
 
     expect(state.replace).toHaveBeenCalledExactlyOnceWith({
       next: { type: 'component', id: 'home', entryMetadata: { search: {} } },
@@ -180,7 +184,7 @@ describe('activity registration', () => {
       const [flagsLoaded, setFlagsLoaded] = createSignal(false);
       state.enabled = flagEnabled;
       state.flagsLoaded = flagsLoaded;
-      renderActivity();
+      await renderActivity();
 
       expect(state.replace).not.toHaveBeenCalled();
       expect(state.mountActivity).not.toHaveBeenCalled();
@@ -211,7 +215,7 @@ describe('activity registration', () => {
     const [authenticated, setAuthenticated] = createSignal(false);
     state.authenticated = authenticated;
     state.enabled = () => true;
-    renderActivity();
+    await renderActivity();
 
     expect(screen.getByText('Authenticating')).toBeTruthy();
     expect(state.mountActivity).not.toHaveBeenCalled();

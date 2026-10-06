@@ -19,6 +19,7 @@ import {
  * join, otherwise create (with a domain-derived name and same-domain
  * teammates pre-added to the invite list). */
 export function TeamStep(props: {
+  finishing: boolean;
   onContinue: () => void;
   onSkip: () => void;
 }) {
@@ -49,13 +50,19 @@ export function TeamStep(props: {
           <TeamStatus message="Loading your team…" />
         </Match>
         <Match when={onTeam(team.state())} keyed>
-          {(name) => <OnTeamPanel name={name} onContinue={props.onContinue} />}
+          {(name) => (
+            <OnTeamPanel
+              name={name}
+              finishing={props.finishing}
+              onContinue={props.onContinue}
+            />
+          )}
         </Match>
         <Match when={pendingInvites(team.state())}>
           {(invites) => (
             <InvitesPanel
               invites={invites()}
-              joining={team.joining()}
+              joining={team.joining() || props.finishing}
               onJoin={(id) => void team.join(id)}
               onSkip={props.onSkip}
             />
@@ -69,6 +76,7 @@ export function TeamStep(props: {
           >
             {(ready) => (
               <TeamForm
+                finishing={props.finishing}
                 seed={ready}
                 ownEmail={ownEmail()}
                 onContinue={props.onContinue}
@@ -91,6 +99,7 @@ const pendingInvites = (
 ) => (state.t === 'invites' ? state.invites : undefined);
 
 function TeamForm(props: {
+  finishing: boolean;
   seed: TeamFormSeed;
   ownEmail: string | undefined;
   onContinue: () => void;
@@ -107,7 +116,7 @@ function TeamForm(props: {
         id="team"
         name={form.name()}
         emails={form.slots()}
-        disabled={form.pending()}
+        disabled={form.pending() || props.finishing}
         suggested={form.suggested}
         onNameChange={form.setName}
         onEmailChange={form.setSlot}
@@ -116,16 +125,21 @@ function TeamForm(props: {
       />
       <ContinueButton
         label={
-          form.pending()
-            ? 'Creating workspace…'
-            : form.invites().length > 0
-              ? `Create team & invite ${form.invites().length}`
-              : 'Create team'
+          props.finishing
+            ? 'Opening your workspace…'
+            : form.pending()
+              ? 'Creating workspace…'
+              : form.invites().length > 0
+                ? `Create team & invite ${form.invites().length}`
+                : 'Create team'
         }
-        disabled={!form.canCreate()}
+        disabled={!form.canCreate() || props.finishing}
         onClick={() => void form.create()}
       />
-      <SkipButton disabled={form.pending()} onClick={props.onSkip} />
+      <SkipButton
+        disabled={form.pending() || props.finishing}
+        onClick={props.onSkip}
+      />
     </div>
   );
 }

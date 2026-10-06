@@ -85,6 +85,13 @@ pub const MACRO_TIME_TO_FIRST_TEXT_MS: &str = "macro.genai.turn.time_to_first_te
 pub const MACRO_TIME_TO_FIRST_REASONING_MS: &str = "macro.genai.turn.time_to_first_reasoning_ms";
 /// Milliseconds from sending `session/prompt` to the first tool call.
 pub const MACRO_TIME_TO_FIRST_TOOL_CALL_MS: &str = "macro.genai.turn.time_to_first_tool_call_ms";
+/// Macro-specific: milliseconds from a model call's request to the first chunk
+/// it streamed back (text, reasoning or a tool call), on its `chat` span. The
+/// call's duration includes generation; this is the provider's latency alone.
+pub const MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS: &str = "macro.genai.chat.time_to_first_chunk_ms";
+/// Macro-specific: what a model call streamed first: `text`, `reasoning` or
+/// `tool_call`.
+pub const MACRO_CHAT_FIRST_CHUNK_KIND: &str = "macro.genai.chat.first_chunk_kind";
 
 /// Macro-specific: the coarse ACP tool kind (`execute`, `edit`, `read`, …).
 pub const MACRO_TOOL_KIND: &str = "macro.genai.tool.kind";

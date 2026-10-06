@@ -51,6 +51,28 @@ fn describes_a_node() {
     );
     assert_eq!(info.fills.len(), 1);
     assert_eq!(info.fills[0].color.as_deref(), Some("FF0000"));
+    // The frame is not turned: a move on the page moves x and y as much.
+    assert_eq!(info.panel_move, [1.0, 0.0, 0.0, 1.0]);
+}
+
+#[test]
+fn maps_page_moves_into_a_turned_frame() {
+    let (mut doc, _) = open();
+    let ops: Vec<crate::edit::Op> =
+        serde_json::from_str(r#"[{"op":"set","ids":["1:2"],"props":{"rotation":90}}]"#).unwrap();
+    crate::edit::History::default()
+        .apply(&mut doc, &ops, None)
+        .unwrap();
+    let scene = Scene::build(&doc, doc.pages[0]);
+    let info = node_info(&doc, &scene, scene.find(&doc, "1:3").unwrap());
+    let [a, b, c, d] = info.panel_move;
+    // Moving the layer right on the page moves it along the frame's turned
+    // axes; the panel's x and y follow the frame.
+    let (dx, dy) = (a * 10.0 + b * 0.0, c * 10.0 + d * 0.0);
+    assert!(
+        (dx.abs() + dy.abs() - 10.0).abs() < 1e-9 && dx.abs() < 1e-9,
+        "{dx}, {dy}"
+    );
 }
 
 #[test]

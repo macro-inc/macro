@@ -12,4 +12,7 @@ export const FIXTURE_KEYS = {
   checkoutOutcome: 'onboarding-fixture:checkout-outcome',
 } as const;
 
-export type FixtureLanding = { t: 'app'; target: string } | { t: 'signed-out' };
+export type FixtureLanding =
+  | { t: 'app'; target: string }
+  | { t: 'signed-out' }
+  | { t: 'sign-in' };

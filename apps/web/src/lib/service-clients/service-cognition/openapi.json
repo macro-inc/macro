@@ -4280,6 +4280,16 @@
             "format": "float",
             "description": "Price per audio minute (USD), absent for token billing."
           },
+          "price_per_million_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
+          "price_per_million_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
@@ -4512,6 +4522,16 @@
             "type": ["number", "null"],
             "format": "float",
             "description": "Price per minute of audio (USD), or null for token-only pricing."
+          },
+          "price_per_mil_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache reads then stay unpriced."
+          },
+          "price_per_mil_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache writes then stay unpriced."
           },
           "price_per_mil_in": {
             "type": ["number", "null"],
@@ -5103,12 +5123,31 @@
       "Usage": {
         "type": "object",
         "description": "Measured usage for one invocation.",
-        "required": ["input_tokens", "output_tokens", "model", "created_at"],
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cache_read_input_tokens",
+          "cache_write_input_tokens",
+          "model",
+          "created_at"
+        ],
         "properties": {
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
             "description": "Audio duration in seconds, absent for token billing."
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "minimum": 0
+          },
+          "cache_write_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "minimum": 0
           },
           "created_at": {
             "type": "string",
@@ -5118,7 +5157,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio billing.",
             "minimum": 0
           },
           "model": {

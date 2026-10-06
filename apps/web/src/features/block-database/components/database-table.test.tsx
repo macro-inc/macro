@@ -16,8 +16,8 @@ import type { DatabaseRow } from '../core/table';
 import { DatabaseTableView as DatabaseTable } from '../views/database-table-view';
 import type { DatabaseTableControls } from './database-table';
 
-// The property utils barrel pulls in live clients, which open sockets under jsdom.
-vi.mock('@property/utils', () => ({
+// JSDOM has no intersection observer to drive the date selector's focus.
+vi.mock('@property/utils/focus', () => ({
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
 }));
@@ -52,6 +52,11 @@ const rows: DatabaseRow[] = [
   { rowId: 'two', cells: { name: 'Second', notes: 'Second note' } },
 ];
 function setup(canEdit = true) {
+  const onAddColumnMount = vi.fn();
+  function AddColumn() {
+    onAddColumnMount();
+    return <button>Add column</button>;
+  }
   const onOpen = vi.fn();
   const onClearCells = vi.fn(async () => true);
   const onCellFocus = vi.fn();
@@ -80,7 +85,7 @@ function setup(canEdit = true) {
       widths={{}}
       canEdit={canEdit}
       pending={false}
-      addColumn={<button>Add column</button>}
+      addColumn={<AddColumn />}
       controlsRef={(tableControls) => {
         controls = tableControls;
       }}
@@ -106,6 +111,7 @@ function setup(canEdit = true) {
     />
   ));
   return {
+    onAddColumnMount,
     onOpen,
     onClearCells,
     onCellFocus,
@@ -143,6 +149,16 @@ afterEach(() => {
 });
 
 describe('spreadsheet interactions', () => {
+  it('creates the add-column control once across grid layout and row updates', () => {
+    const fixture = setup();
+    expect(fixture.onAddColumnMount).toHaveBeenCalledOnce();
+    fixture.setRecords([...rows, { rowId: 'three', cells: { name: 'Third' } }]);
+    expect(fixture.onAddColumnMount).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole('button', { name: 'Add column' })).toHaveLength(
+      1
+    );
+  });
+
   function dragGeometry(scrollLeft = () => 0) {
     const positions: Record<string, number> = {
       Name: 40,

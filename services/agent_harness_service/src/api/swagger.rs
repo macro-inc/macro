@@ -13,6 +13,10 @@ use agent_harness::inbound::model_load::{
 use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
 };
+use agent_harness::inbound::tool_approvals::{
+    self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
+    ToolApprovalStatusDto,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLink};
@@ -57,6 +61,7 @@ impl Modify for SecurityAddon {
         claude_auth::complete,
         claude_auth::disconnect,
         axum_router::create_agent_session_handler,
+        axum_router::warm_agent_session_handler,
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
         axum_router::rename_agent_session_handler,
@@ -84,6 +89,7 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
+        tool_approvals::answer_tool_approval_handler,
     ),
     components(schemas(
         claude_auth::StatusResponse,
@@ -140,6 +146,10 @@ impl Modify for SecurityAddon {
         CaptureOutcomeDto,
         ChangesetSourceDto,
         FileChangeKindDto,
+        AnswerToolApprovalRequest,
+        AnswerToolApprovalResponse,
+        ToolApprovalAnswerDto,
+        ToolApprovalStatusDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

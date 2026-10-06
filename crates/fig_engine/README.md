@@ -60,9 +60,12 @@ document         nodes, the tree, pages, blobs (geometry parsed lazily, once)
 scene            one page with instances expanded: overrides, component
                  properties, swaps, shared styles, world transforms, bounds
 render           tiles: fills, strokes (inside/outside via clipping), masks,
-                 blend modes, isolation, effects (shadows, blurs), images, text
+                 blend modes, isolation, effects (shadows, blurs), images, text;
+                 some layers only (a paint-order window, a set, all but a set);
+                 wide blurs at a fraction of the resolution (render/coarse)
 inspect          layer rows, frames, hit tests, marquee, node info, search, SVG
-                 outlines; a page's prototype (inspect/prototype)
+                 outlines; a page's prototype (inspect/prototype); how to draw
+                 moving layers apart from the page (inspect/lift)
 describe         a design summarized for AI agents and search: pages, frames,
                  their text and components, the design system; text by page
 edit             edit operations, undo/redo, fractional-index positions;
@@ -349,6 +352,46 @@ uses the instance's derived sizes, transforms, and geometry. Rendering is a
 CPU rasterizer over the scene; the viewer asks for 512 px tiles at the
 current scale and composites them on a canvas, so a file renders
 progressively and only what is visible is drawn.
+
+## Blurs and shadows
+
+Figma's blur radius is twice a Gaussian's standard deviation, and the
+renderer approximates the Gaussian with three box blurs, which cost the same
+at any radius but grow with the area they cover, as zooming in grows it. A
+wide blur is smooth, so a layer blur, drop shadow, inner shadow, or
+background blur at least 16 device pixels wide (its deviation) renders at a
+power-of-two fraction of the resolution that keeps it at least 8 coarse
+pixels wide, and scales back up bilinearly (`render/coarse`); fractional
+offsets and spreads stay exact. A layer with drop shadows and no layer blur
+keeps its own content at full resolution and casts the shadows from a
+coarse copy. Coarse pixels are aligned to the page's origin, so tiles agree
+where they meet. Inner shadows are cast from the node's own geometry, so
+unlike background blurs they need no margin around the tile. Tests compare
+coarse blurs with true Gaussians and tiles with whole renders.
+
+## Moving layers
+
+A rasterizer cannot redraw the page at every pointer move of a drag, so
+the editor lifts the layers it moves: `inspect::lift_plan` splits the page
+into parts that `render::render_layers` draws on their own, once each, and
+the canvas composites them every frame with the layers shifted, applying
+the move to the document at the drop (and, in a shared design, at gesture
+pace meanwhile, quietly). The parts are what paints below the moving
+layers (a paint-order window ending at them, `Layers::Window`), each run of
+adjacent moving siblings by itself (`Layers::Only`, anchored where the lift
+started, clipped by the canvas to its clipping ancestors' outlines), and
+what paints above each run (the window after it), with bounds so only tiles
+holding something render; page tiles drawn meanwhile leave the layers out
+(`Layers::Skip`). A node paints its fills when the window's walk enters it
+and the strokes it draws over its children when it leaves
+(`Scene::paint_times`), so a window ending at a layer keeps its parent's
+fills and leaves out the parent's border. The composite is exact unless
+moving changes other pixels or a part reads what is behind it, and the plan
+refuses those layers: in components, booleans, or instances; placed by an
+auto layout parent; masks or masked; under an ancestor that composites its
+children as one (opacity, blend mode, drop shadow, layer blur); or with a
+blend mode or background blur in them or above them. Tests composite the
+parts and compare them with the page rendered after the move.
 
 ## Use
 

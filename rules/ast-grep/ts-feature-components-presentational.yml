@@ -15,6 +15,7 @@ note: |-
 files:
   - apps/web/src/features/routines/components/**
   - apps/web/src/features/scheduling/components/**
+  - apps/web/src/features/usage/components/**
   - apps/web/src/features/crm/components/**
   - apps/web/src/features/slack-import/components/**
   - apps/web/src/features/channels-view/components/ChannelDetailView*

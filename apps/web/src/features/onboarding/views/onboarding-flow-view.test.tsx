@@ -155,7 +155,7 @@ describe('onboarding flow', () => {
       checkoutReturn: { t: 'success', tier: 'premium' },
       world: { webhookPollsRemaining: 1 },
     });
-    await heading('Free Claude & GPT for 30 days.');
+    await heading('Your workspace is ready.');
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'), {
       timeout: 3_000,
     });
@@ -196,6 +196,104 @@ describe('onboarding flow', () => {
       event: 'onboarding_v4_team',
       data: { action: 'already_on_team' },
     });
+  });
+
+  it('finishes for a licensed team member without showing trial or Guest offers', async () => {
+    const { navigate, redirect } = setup({
+      resume: 'plan',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+      },
+    });
+    await heading('Your workspace is ready.');
+    expect(
+      screen.queryByRole('button', { name: 'Start 30 day trial' })
+    ).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Continue as Guest' })
+    ).toBeNull();
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it('finishes a licensed member directly on the team step while saving', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+      },
+    });
+    const completion = Promise.withResolvers<{ t: 'completed' }>();
+    const save = vi
+      .spyOn(fake.context, 'completeOnboarding')
+      .mockReturnValue(completion.promise);
+    await heading('Built for teams.');
+    click('Continue');
+
+    const opening = await screen.findByRole('button', {
+      name: 'Opening your workspace…',
+    });
+    expect(opening.hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('heading', { name: 'Built for teams.' })
+    ).toBeTruthy();
+    expect(screen.queryByText('Your workspace is ready.')).toBeNull();
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('team');
+    expect(save).toHaveBeenCalledOnce();
+    expect(navigate).not.toHaveBeenCalled();
+
+    completion.resolve({ t: 'completed' });
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+  });
+
+  it('lets a licensed member retry a failed save from the team step', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+        failures: { completion: 'Save failed' },
+      },
+    });
+    await heading('Built for teams.');
+    click('Continue');
+    await waitFor(() => expect(fake.notifications()).toHaveLength(1));
+    expect(
+      screen.getByRole('heading', { name: 'Built for teams.' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Continue' }).hasAttribute('disabled')
+    ).toBe(false);
+    expect(navigate).not.toHaveBeenCalled();
+    fake.update((world) => {
+      delete world.failures.completion;
+    });
+    click('Continue');
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
   });
 
   it('sends a signed-out visitor to sign in', async () => {
@@ -250,5 +348,14 @@ describe('onboarding flow', () => {
     setup({ resume: 'team' });
     await heading('Built for teams.');
     expect(screen.queryByRole('button', { name: 'Bypass' })).toBeNull();
+  });
+
+  it('paints the resumed step on the first render, without a placeholder in between', () => {
+    setup({ resume: 'team' });
+    // Synchronous: no effect or timer has run yet.
+    expect(screen.queryByRole('status', { name: 'Loading setup' })).toBeNull();
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Built for teams.' })
+    ).toBeTruthy();
   });
 });

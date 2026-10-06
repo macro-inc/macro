@@ -42,6 +42,9 @@ const fake = createFakeOnboarding(loadWorld(), {
     location.assign(`${location.pathname}?view=flow`);
     await new Promise(() => {});
   },
+  // `?latency=ms`: the viewer and sources load like a cold page instead of instantly.
+  latencyMs: Number(params.latency ?? 0),
+  viewerLatencyMs: Number(params.latency ?? 0),
   checkoutUrl: (tier) =>
     sessionStorage.getItem(FIXTURE_KEYS.checkoutOutcome) === 'cancel'
       ? `${location.pathname}?view=flow&subscriptionCancel=true`
@@ -73,7 +76,11 @@ const landed = (): FixtureLanding | undefined => {
 };
 
 const landingText = (landing: FixtureLanding | undefined) =>
-  landing?.t === 'app' ? `Entered Macro at ${landing.target}` : 'Signed out';
+  landing?.t === 'app'
+    ? `Entered Macro at ${landing.target}`
+    : landing?.t === 'sign-in'
+      ? 'Sign in'
+      : 'Signed out';
 
 declare global {
   interface Window {
@@ -105,6 +112,7 @@ function Fixture() {
           <SignupJourneyView
             onGoogle={signUpWithGoogle}
             onBackFromEmail={() => {}}
+            onSignIn={() => land({ t: 'sign-in' })}
             showingEmail={false}
           />
         </Match>

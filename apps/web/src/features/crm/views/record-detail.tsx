@@ -129,30 +129,12 @@ export function CrmCompanyDetail(props: {
           tabindex={-1}
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
-          <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
+          <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 px-4">
             {props.navigation}
             <ViewBreadcrumbs.Outlet
               aria-label="CRM record location"
               class="min-w-0 shrink"
             />
-            <div class="min-w-0 overflow-x-auto">
-              <Show
-                when={selectedContact()}
-                fallback={
-                  <RecordTabs
-                    sections={COMPANY_SECTIONS}
-                    value={companySection()}
-                    onChange={setCompanySection}
-                  />
-                }
-              >
-                <RecordTabs
-                  sections={CONTACT_SECTIONS}
-                  value={contactSection()}
-                  onChange={setContactSection}
-                />
-              </Show>
-            </div>
             <div class="ml-auto flex shrink-0 items-center gap-1">
               <CrmCopyLinkButton
                 type={selectedContact() ? 'contact' : 'company'}
@@ -207,6 +189,13 @@ export function CrmCompanyDetail(props: {
                           <Company
                             companyId={props.company.id}
                             section={companySection()}
+                            navigation={
+                              <RecordTabs
+                                sections={COMPANY_SECTIONS}
+                                value={companySection()}
+                                onChange={setCompanySection}
+                              />
+                            }
                             headerToggle={false}
                             onHidden={props.onClose}
                             onOpenContact={openContact}
@@ -217,6 +206,13 @@ export function CrmCompanyDetail(props: {
                           <Contact
                             contactId={contact.id}
                             section={contactSection()}
+                            navigation={
+                              <RecordTabs
+                                sections={CONTACT_SECTIONS}
+                                value={contactSection()}
+                                onChange={setContactSection}
+                              />
+                            }
                             headerToggle={false}
                             onOpenCompany={(companyId) => {
                               if (companyId !== props.company.id) return false;

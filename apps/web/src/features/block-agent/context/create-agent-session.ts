@@ -41,6 +41,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
 
@@ -111,6 +112,8 @@ export function createAgentSession(
   options: {
     /** The viewer, so a speculated prompt is attributed as the log will. */
     userId: Accessor<string | undefined>;
+    /** This view now owns a reference; a pending navigation may release its own. */
+    onAcquire?: () => void;
   }
 ): AgentSessionHandle {
   // Whether this block went on screen before it had a session to load.
@@ -204,6 +207,7 @@ export function createAgentSession(
       unsubscribe();
       session.release();
     });
+    options.onAcquire?.();
     return session;
   });
 
@@ -358,14 +362,19 @@ export function createAgentSession(
     loadFailed: () => failure() !== undefined,
     accessDenied: () => failure() instanceof AgentSessionAccessDenied,
     retry: () => void refetch(),
-    issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    issue: (action) => {
+      const current = live();
+      return current
+        ? issueSessionAction(current, action, { userId: options.userId() })
+        : undefined;
+    },
     selectModel: async (model, effort) => {
       const current = live();
       if (!current) throw new Error('The agent session is not ready.');
       await configureSessionModel(
         {
           issue: (action) =>
-            current.issue(action, { userId: options.userId() }),
+            issueSessionAction(current, action, { userId: options.userId() }),
           snapshot: () => current.snapshot(),
           subscribe: (listener) => current.subscribe(listener),
         },

@@ -25,7 +25,6 @@ import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Layer } from '@ui';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
-import { AiUsageControls, AiUsageMeter } from './AiUsage';
 import { SettingsCard, SettingsPage, SettingsSection } from './primitives';
 
 /**
@@ -197,8 +196,6 @@ export const Billing = () => {
     }
   };
 
-  const returnUrl = () => `${window.location.origin}/app/settings/billing`;
-
   return (
     <SettingsPage
       title="Billing"
@@ -286,44 +283,6 @@ export const Billing = () => {
           </section>
         </SettingsCard>
       </SettingsSection>
-
-      <Show
-        when={aiUsageBilling().enabled && summary.isSuccess && summary.data}
-      >
-        {(snapshot) => (
-          <SettingsSection
-            title="AI usage"
-            description={
-              snapshot().tier === 'free'
-                ? 'Guest access includes a fixed amount of AI each month, measured at provider cost. Upgrade for more and to unlock every model.'
-                : 'Your plan includes AI each month, measured at provider cost. Beyond that, prepaid credits and usage billing keep you going.'
-            }
-          >
-            <SettingsCard>
-              <section class="flex flex-col gap-5 p-4">
-                <Show
-                  when={!snapshot().unlimited}
-                  fallback={
-                    <p class="text-sm text-ink-muted">
-                      Your enterprise plan includes unlimited AI usage.
-                    </p>
-                  }
-                >
-                  <AiUsageMeter snapshot={snapshot()} />
-                  <Show when={snapshot().tier !== 'free'}>
-                    <div class="border-t border-t-edge-muted pt-4">
-                      <AiUsageControls
-                        snapshot={snapshot()}
-                        returnUrl={returnUrl()}
-                      />
-                    </div>
-                  </Show>
-                </Show>
-              </section>
-            </SettingsCard>
-          </SettingsSection>
-        )}
-      </Show>
 
       <Show when={canChangePlan()}>
         <Switch>

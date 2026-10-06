@@ -175,7 +175,15 @@ async fn record_with_policy(
         settlement,
     );
     let should_count = enforcement.should_count(&user, feature);
-    recorder.record(UsageContext::new(feature, user).into_event("test-model".into(), 10, 10));
+    recorder.record(UsageContext::new(feature, user).into_event(
+        "test-model".into(),
+        ai_usage::UsageAmount::Tokens {
+            input: 10,
+            output: 10,
+            cache_read: 0,
+            cache_write: 0,
+        },
+    ));
     tokio::time::timeout(Duration::from_secs(2), repo.recorded.notified())
         .await
         .expect("usage must be recorded under either settlement policy, including after a retry");

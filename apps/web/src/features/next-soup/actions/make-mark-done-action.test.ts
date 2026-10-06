@@ -134,6 +134,10 @@ describe('canExecuteMarkDoneOnView', () => {
     expect(canExecuteMarkDoneOnView('mail', 'drafts')).toBe(false);
     expect(canExecuteMarkDoneOnView('mail', 'sent')).toBe(false);
   });
+
+  it('allows mark done on the archived tab', () => {
+    expect(canExecuteMarkDoneOnView('mail', 'archived')).toBe(true);
+  });
 });
 
 describe('makeMarkDoneAction', () => {

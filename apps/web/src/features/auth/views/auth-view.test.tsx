@@ -21,6 +21,7 @@ function setup(
   } = {}
 ) {
   const verified = vi.fn();
+  const signIn = vi.fn();
   const { fake } = renderWithFakeAuth(
     () => (
       <AuthView
@@ -31,17 +32,18 @@ function setup(
         autoStart={options.autoStart}
         token={options.token}
         onVerified={verified}
+        onSignIn={signIn}
         signupJourney={options.signupJourney}
         signedIn={(user) => (
           <p data-testid="signed-in">
-            {user.email} {user.tutorialComplete ? 'returning' : 'new'}
+            {user().email} {user().tutorialComplete ? 'returning' : 'new'}
           </p>
         )}
       />
     ),
     options.world
   );
-  return { fake, verified };
+  return { fake, verified, signIn };
 }
 
 const click = (name: string | RegExp) =>
@@ -57,6 +59,38 @@ const typeCode = async (value: string) =>
   });
 
 describe('email sign-in', () => {
+  it('updates a signed-in viewer without remounting their workspace on session refresh', () => {
+    const { fake } = setup({
+      world: {
+        user: {
+          id: 'macro|member@acme.com',
+          email: 'member@acme.com',
+          tutorialComplete: false,
+        },
+      },
+    });
+    const workspace = screen.getByTestId('signed-in');
+
+    fake.update((draft) => {
+      if (draft.user) draft.user.tutorialComplete = true;
+    });
+
+    expect(screen.getByTestId('signed-in')).toBe(workspace);
+    expect(workspace.textContent).toBe('member@acme.com returning');
+
+    fake.update((draft) => {
+      draft.user = {
+        id: 'macro|another@acme.com',
+        email: 'another@acme.com',
+        tutorialComplete: false,
+      };
+    });
+    expect(screen.getByTestId('signed-in')).not.toBe(workspace);
+    expect(screen.getByTestId('signed-in').textContent).toBe(
+      'another@acme.com new'
+    );
+  });
+
   it('sends a code, verifies it, and hands off to the signed-in view', async () => {
     const { fake, verified } = setup();
     click('Continue with email');
@@ -203,6 +237,9 @@ function Journey(props: SignupJourneySlots) {
       <button type="button" onClick={() => void props.onGoogle()}>
         Connect work email
       </button>
+      <button type="button" onClick={props.onSignIn}>
+        Sign in instead
+      </button>
       <p data-testid="showing-email">{String(props.showingEmail)}</p>
       {props.emailForm}
     </section>
@@ -230,5 +267,39 @@ describe('desktop sign-up', () => {
     });
     expect(screen.getByTestId('showing-email').textContent).toBe('true');
     expect(screen.getByDisplayValue('invitee@acme.com')).toBeTruthy();
+  });
+
+  it('lets the slides send a returning visitor to sign in', () => {
+    const { signIn } = setup({
+      intent: 'signup',
+      signupJourney: (slots) => <Journey {...slots} />,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in instead' }));
+    expect(signIn).toHaveBeenCalledOnce();
+  });
+
+  it('holds a pending frame while the session resolves, then shows the signed-out slides', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    renderWithFakeAuth(
+      () => (
+        <AuthView
+          intent="signup"
+          showApple={false}
+          compact={false}
+          signupJourney={(slots) => <Journey {...slots} />}
+          pending={() => <p data-testid="pending">Loading</p>}
+          signedIn={() => <p data-testid="signed-in" />}
+        />
+      ),
+      {},
+      { sessionLatencyMs: 300 }
+    );
+    expect(screen.getByTestId('pending')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Connect work email' })
+    ).toBeNull();
+    await vi.advanceTimersByTimeAsync(300);
+    await screen.findByRole('button', { name: 'Connect work email' });
+    expect(screen.queryByTestId('pending')).toBeNull();
   });
 });

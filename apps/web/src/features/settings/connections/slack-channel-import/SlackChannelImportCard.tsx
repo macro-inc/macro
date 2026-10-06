@@ -17,7 +17,7 @@ import {
   type JSX,
   Show,
 } from 'solid-js';
-import { SettingsCard, SettingsSection } from '../primitives';
+import { SettingsCard, SettingsSection } from '../../primitives';
 import {
   buildRows,
   filterRows,

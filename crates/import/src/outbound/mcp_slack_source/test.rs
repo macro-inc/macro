@@ -45,6 +45,7 @@ impl ToolSet<()> for Tools {
                 .iter()
                 .map(|(name, schema)| RequestSchema {
                     name: name.clone(),
+                    description: String::new(),
                     schema: serde_json::from_value(schema.clone()).unwrap(),
                 })
                 .collect(),

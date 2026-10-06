@@ -187,6 +187,8 @@ pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
+    /// An unclaimed warm session, hidden from lists and history.
+    pub warm: bool,
     /// Caller-minted session id, available before persistence.
     pub id: AgentSessionId,
     /// Who created and owns the session.
@@ -366,6 +368,19 @@ pub struct SessionBot {
     /// Avatar, when it has one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+/// Who prompted the turn a session is running, or last ran.
+///
+/// Written at dispatch, before the runtime can act on the prompt, so the
+/// egress proxy - which may be on any replica - can tell a turn the owner
+/// prompted from one somebody else did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnPrompter {
+    /// The action that opened the turn.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// The user who prompted it, absent when a bot acted on nobody's behalf.
+    pub user: Option<MacroUserIdStr<'static>>,
 }
 
 /// One waiting action as the session store records it.
