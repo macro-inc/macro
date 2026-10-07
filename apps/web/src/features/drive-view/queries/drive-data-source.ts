@@ -19,11 +19,13 @@ import {
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
 import { useDatabasesQuery } from '@queries/storage/databases';
+import { useFormsQuery } from '@queries/storage/forms';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
 import type { DriveListSource, DriveSelection } from '../context/drive-source';
 import { DRIVE_FACETS } from '../filters/drive-facets';
 import { selectDriveDatabases } from './drive-databases';
+import { selectDriveForms } from './drive-forms';
 import { buildDriveQuery } from './drive-query';
 import {
   driveEntityMatchesLocation,
@@ -35,6 +37,7 @@ import { buildDriveSearchRequest } from './drive-search';
 export function createDriveDataSource(options: {
   selection: Accessor<DriveSelection>;
   databasesEnabled: Accessor<boolean>;
+  formsEnabled: Accessor<boolean>;
   userId: Accessor<string | undefined>;
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
@@ -56,6 +59,20 @@ export function createDriveDataSource(options: {
   const databaseEntities = () =>
     includesDatabases() && !databasesQuery.isPending
       ? selectDriveDatabases(databasesQuery.data ?? [], selection(), userId())
+      : [];
+  const formsQuery = useFormsQuery();
+  const includesForms = () => {
+    const current = selection();
+    return (
+      options.formsEnabled() &&
+      current.location.kind === 'tab' &&
+      current.location.tab !== 'recent' &&
+      current.scope !== 'attachments'
+    );
+  };
+  const formEntities = () =>
+    includesForms() && formsQuery.isSuccess
+      ? selectDriveForms(formsQuery.data, selection(), userId())
       : [];
 
   const facetContext = createMemo(() =>
@@ -172,8 +189,11 @@ export function createDriveDataSource(options: {
     if (!facetsReady()) return [];
 
     const matching = [
-      ...rawEntities().filter((entity) => entity.type !== 'database'),
+      ...rawEntities().filter(
+        (entity) => entity.type !== 'database' && entity.type !== 'form'
+      ),
       ...databaseEntities(),
+      ...formEntities(),
     ].filter((entity) => {
       const matchesLocation = driveEntityMatchesLocation(
         entity,
@@ -205,8 +225,11 @@ export function createDriveDataSource(options: {
   const error = () =>
     search.isSearching() ? search.error() : (query.error ?? undefined);
 
+  // Databases and forms come from their own REST lists beside the Soup query.
   const databaseError = () =>
-    includesDatabases() ? (databasesQuery.error ?? undefined) : undefined;
+    (includesDatabases() ? databasesQuery.error : undefined) ??
+    (includesForms() ? formsQuery.error : undefined) ??
+    undefined;
 
   return {
     items,
@@ -216,13 +239,16 @@ export function createDriveDataSource(options: {
       if (!facetsReady()) return true;
       if (search.isSearching())
         return (
-          isFetching() || (includesDatabases() && databasesQuery.isPending)
+          isFetching() ||
+          (includesDatabases() && databasesQuery.isPending) ||
+          (includesForms() && formsQuery.isPending)
         );
 
       return (
         query.isLoading ||
         query.isFetching ||
-        (includesDatabases() && databasesQuery.isPending)
+        (includesDatabases() && databasesQuery.isPending) ||
+        (includesForms() && formsQuery.isPending)
       );
     },
 
@@ -265,6 +291,7 @@ export function createDriveDataSource(options: {
       await Promise.all([
         search.isSearching() ? search.refresh() : query.refresh(),
         includesDatabases() ? databasesQuery.refetch() : Promise.resolve(),
+        includesForms() ? formsQuery.refetch() : Promise.resolve(),
       ]);
     },
 

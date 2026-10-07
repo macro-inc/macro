@@ -44,6 +44,8 @@ pub enum MessageReferenceKind {
     Bot,
     /// A document.
     Document,
+    /// A form; access to the form does not grant access to its response table.
+    Form,
     /// A channel.
     Channel,
     /// An email thread (editors serialize this as `thread`).
@@ -78,6 +80,7 @@ impl MessageReferenceKind {
             "user" => Self::User,
             "bot" => Self::Bot,
             "document" => Self::Document,
+            "form" => Self::Form,
             "channel" => Self::Channel,
             "thread" | "email_thread" | "email" => Self::EmailThread,
             "call" => Self::Call,

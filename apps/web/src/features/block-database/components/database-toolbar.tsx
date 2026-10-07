@@ -33,7 +33,11 @@ import {
 } from '../core/write-failure';
 import { FilterPanel, filterConditionCount } from './database-view-filters';
 import { createInlineRename } from './inline-rename';
-import { type NewView, NewViewDialog } from './new-view-dialog';
+import {
+  type NewFormChoice,
+  type NewView,
+  NewViewDialog,
+} from './new-view-dialog';
 import { SortPanel } from './sort-panel';
 import { ToolbarPopover } from './view-control-popover';
 
@@ -70,6 +74,8 @@ type DatabaseToolbarProps = {
   onCreateRecord?: () => void;
   canCreateRecord?: boolean;
   creating?: boolean;
+  /** A form over this table, offered in the new-view dialog when given. */
+  newForm?: NewFormChoice;
 };
 
 /** View controls contain no data fetching or mutation implementation. */
@@ -259,6 +265,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
           <NewViewDialog
             initialName="Table view"
             columns={props.columns}
+            form={props.newForm}
             returnFocus={origin}
             returnFocusFallback={allRecordsButton}
             onClose={() => setCreating(undefined)}

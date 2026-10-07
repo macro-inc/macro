@@ -184,6 +184,7 @@ export {
 } from './itemType';
 
 import { databasesClient } from './databases';
+import { formsClient } from './forms';
 import type {
   CollabSurfaceResponse,
   CollabSurfaceTokenResponse,
@@ -397,6 +398,8 @@ type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
 export const storageServiceClient = {
   /** Macro Databases — see `./databases.ts`. */
   databases: databasesClient,
+  /** Macro Forms — see `./forms.ts`. */
+  forms: formsClient,
 
   async createSlackImport(args: {
     body: SlackCreateRequest;

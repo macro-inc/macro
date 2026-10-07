@@ -45,6 +45,10 @@ impl BundleAssetPath {
     fn has_extension(&self) -> bool {
         self.0.extension().is_some()
     }
+
+    fn is_entrypoint(&self) -> bool {
+        self.0 == Path::new("index.html")
+    }
 }
 
 /// Error returned when an asset path is not safe to resolve.
@@ -106,6 +110,7 @@ where
         match &routes.active {
             BundleSource::Embedded { .. } => {
                 if path.has_extension()
+                    && !path.is_entrypoint()
                     && let Some(BundleSource::Ota { root, .. }) = &routes.fallback
                     && let Some(bytes) = self.assets.read_asset(root, path).await?
                 {
@@ -122,6 +127,12 @@ where
                         bytes,
                         content_path: path.clone(),
                     });
+                }
+
+                // A new document must identify the active generation. Falling
+                // back to the old index prevents its reload acknowledgement.
+                if path.is_entrypoint() {
+                    return Ok(BundleAssetResolution::NotFound);
                 }
 
                 if !path.has_extension() {

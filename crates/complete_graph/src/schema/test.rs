@@ -48,6 +48,7 @@ mod calendar;
 mod database_activity;
 mod database_row;
 mod email_archive;
+mod form_activity;
 mod initiative;
 mod scheduled_actions;
 mod soup_patches;
@@ -646,6 +647,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
+                        reminder_returned_at: (thread_id.as_u128() % 2 == 0).then(Default::default),
                     }),
                 )
             })
@@ -926,21 +928,28 @@ impl EntityAccessService for CountingEntityAccessService {
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        // The viewer can see exactly one database and no other.
-        if entity_type == EntityType::Database {
-            if entity_id != database_activity::VIEWABLE_DATABASE_ID {
-                return Err(AccessError::Unauthorized);
-            }
+        // The viewer views exactly one database, responds to one form (View),
+        // edits another, and reaches nothing else. A level the grant does not
+        // satisfy is refused as the real service refuses it.
+        let grant = match (entity_type, entity_id) {
+            (EntityType::Database, database_activity::VIEWABLE_DATABASE_ID)
+            | (EntityType::Form, form_activity::RESPONDED_FORM_ID) => Some(AccessLevel::View),
+            (EntityType::Form, form_activity::EDITABLE_FORM_ID) => Some(AccessLevel::Edit),
+            (EntityType::Database | EntityType::Form, _) => None,
+            _ => return Err(AccessError::internal("test access failure")),
+        };
+        if let Some(access_level) = grant {
             return EntityAccessReceipt::try_new_authenticated_user(
                 MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
                 entity_access::domain::models::Entity {
                     entity_id: entity_id.to_owned(),
                     entity_type,
                 },
-                EntityPermission::AccessLevel {
-                    access_level: AccessLevel::View,
-                },
+                EntityPermission::AccessLevel { access_level },
             );
+        }
+        if matches!(entity_type, EntityType::Database | EntityType::Form) {
+            return Err(AccessError::Unauthorized);
         }
         Err(AccessError::internal("test access failure"))
     }
@@ -1125,6 +1134,8 @@ struct TestHarness {
     >,
     state: TestState,
     soup_service: CountingSoupService,
+    /// Answers single agent-session lookups, as the primary does in DSS.
+    primary_soup_service: CountingSoupService,
     email_service: CountingEmailService,
     email_content_reader: RecordingEmailContentReader,
     activity_reader: RecordingActivityReader,
@@ -1167,6 +1178,7 @@ fn harness() -> TestHarness {
             entity_access: Arc::new(entity_access),
         },
         soup_service: soup,
+        primary_soup_service: CountingSoupService::default(),
         email_service: email,
         email_content_reader,
         activity_reader,
@@ -1237,6 +1249,12 @@ impl TestHarness {
             .data(graphql_soup::soup_item_loader(
                 self.soup_service.clone(),
                 Arc::new(self.email_service.clone()),
+            ))
+            .data(graphql_soup::AgentSessionEntityLoader(
+                graphql_soup::soup_item_loader(
+                    self.primary_soup_service.clone(),
+                    Arc::new(self.email_service.clone()),
+                ),
             ))
             .data(graphql_properties::entity_properties_loader(
                 user_id.clone(),
@@ -1355,6 +1373,28 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 }
 
 #[tokio::test]
+async fn agent_session_is_read_from_the_primary_not_the_list_replica() {
+    let harness = harness();
+    let session_id = Uuid::from_u128(7);
+    // Just created: the replica behind Soup lists has not seen the session yet.
+    harness.soup_service.set_raw_response(Vec::new());
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_agent_session(session_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ agentSession(sessionId: "{session_id}") {{ id }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["user"]["agentSession"]["id"], session_id.to_string());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
     use agent_session::domain::model::{
@@ -1393,7 +1433,10 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     });
     let soup_service = CountingSoupService::default();
     soup_service.set_raw_response(vec![soup_agent_session(session_id)]);
-    let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
+    let loader = graphql_soup::AgentSessionEntityLoader(graphql_soup::soup_item_loader(
+        soup_service.clone(),
+        Arc::new(NoOpEmailService),
+    ));
     let schema = build_schema_with_service::<
         CountingSoupService,
         NoOpEmailService,
@@ -2032,7 +2075,7 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
 
     let with_metadata = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs } } } } }"#,
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs reminderReturnedAt } } } } }"#,
         )
         .await;
     assert!(
@@ -2055,6 +2098,8 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert_eq!(items[1]["linkId"], Uuid::from_u128(952).to_string());
     assert!(items[0]["latestInboundMessageTs"].as_str().is_some());
     assert!(items[1]["latestInboundMessageTs"].is_null());
+    assert!(items[0]["reminderReturnedAt"].is_null());
+    assert_eq!(items[1]["reminderReturnedAt"], "1970-01-01T00:00:00+00:00");
 }
 
 #[tokio::test]

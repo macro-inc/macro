@@ -44,6 +44,7 @@ const FIELDS: &[&str] = &[
     "isSignal",
     "cacheProjection",
     "latestInboundMessageTs",
+    "reminderReturnedAt",
     "updatedAt",
     "mailAllPreview",
     "mailDraftPreview",
@@ -79,6 +80,11 @@ fn bool_fact(r: &Record, field: &str, attribute: &str) -> Option<ExactFact> {
         return None;
     };
     boolean_fact(*value, attribute)
+}
+
+// Match the server INBOX view without inventing an inbound message on a sent-only thread.
+fn inbox_timestamp(record: &Record) -> Option<Option<i64>> {
+    Some(timestamp(record, "latestInboundMessageTs")?.max(timestamp(record, "reminderReturnedAt")?))
 }
 fn boolean_fact(value: bool, attribute: &str) -> Option<ExactFact> {
     Some(ExactFact {
@@ -166,10 +172,10 @@ fn project_with_facts(
         attribute: vocabulary::token("mail-all-ts"),
         value: all,
     }];
-    if let Some(inbound) = timestamp(record, "latestInboundMessageTs")? {
+    if let Some(inbox) = inbox_timestamp(record)? {
         times.push(IntegerFact {
             attribute: vocabulary::token("mail-inbox-ts"),
-            value: inbound,
+            value: inbox,
         });
     }
     if let Some(outbound) = cache_facts.latest_outbound_message_ts() {
@@ -414,8 +420,9 @@ pub async fn projection_updates_for_write<S: Storage>(
             }
             // Sort patches cannot express deletion. Suppress a capsule-only
             // projection until a full snapshot replaces cleared INBOX/SENT sorts.
-            if changed.contains("latestInboundMessageTs")
-                && timestamp(&merged, "latestInboundMessageTs")?.is_none()
+            if (changed.contains("latestInboundMessageTs")
+                || changed.contains("reminderReturnedAt"))
+                && inbox_timestamp(&merged)?.is_none()
             {
                 return Some(incomplete());
             }
@@ -436,7 +443,10 @@ pub async fn projection_updates_for_write<S: Storage>(
                 "mail-calendar" | "mail-shared" | "mail-sent-ts" => {
                     changed.contains("cacheProjection")
                 }
-                "mail-inbox-ts" => changed.contains("latestInboundMessageTs"),
+                "mail-inbox-ts" => {
+                    changed.contains("latestInboundMessageTs")
+                        || changed.contains("reminderReturnedAt")
+                }
                 "mail-all-message" => changed.contains("mailAllPreview"),
                 "mail-draft-message" => changed.contains("mailDraftPreview"),
                 "mail-sent-message" => changed.contains("mailSentPreview"),

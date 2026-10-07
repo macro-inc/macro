@@ -482,9 +482,9 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
-                ActionPolicyError::NoFutureFirings | ActionPolicyError::EventManagementDisabled => {
-                    StatusCode::BAD_REQUEST
-                }
+                ActionPolicyError::NoFutureFirings
+                | ActionPolicyError::EventManagementDisabled
+                | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }

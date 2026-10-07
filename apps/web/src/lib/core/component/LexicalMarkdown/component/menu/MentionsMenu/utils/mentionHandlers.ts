@@ -98,6 +98,7 @@ async function handleEntityMention(
       .with('channel', 'dm', () => 'channel' as const)
       .with('initiative', () => 'initiative' as const)
       .with('database', () => 'database' as const)
+      .with('form', () => 'form' as const)
       .otherwise(() => 'document' as const);
     mentionId = await trackMention(blockId, trackType, entity.id);
   }

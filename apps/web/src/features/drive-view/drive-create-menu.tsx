@@ -43,9 +43,12 @@ export function DriveCreateMenu() {
           'code',
           'project',
           'database',
+          'form',
         ].includes(block.blockName) &&
         isEnabled(block.blockName) &&
-        (block.blockName !== 'database' || !state.projectId())
+        // Databases and forms have no folder membership.
+        ((block.blockName !== 'database' && block.blockName !== 'form') ||
+          !state.projectId())
     );
 
   const select = (blockName: CreatableName) => {
