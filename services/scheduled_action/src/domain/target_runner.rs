@@ -47,6 +47,8 @@ impl<Sessions: RoutineSessions> ScheduledAgentRunner for TargetRunner<Sessions> 
         let prepared = self
             .sessions
             .prepare(PrepareRoutineSession {
+                repo_url: None,
+                repo_branch: None,
                 selection: ValidateRoutineSession {
                     owner: identity.owner.clone(),
                     bot_id,

@@ -109,8 +109,12 @@ async fn server(replies: Vec<Reply>) -> Server {
 
 fn command() -> DispatchCodingAgentRequest {
     DispatchCodingAgentRequest {
+        agent_name: None,
+        model: None,
+        repo_url: None,
+        repo_branch: None,
         user_id: MacroUserIdStr::try_from(USER).unwrap(),
-        agent_id: Uuid::now_v7(),
+        agent_id: Some(Uuid::now_v7()),
         prompt: "Fix the regression in the user's repository".into(),
     }
 }
@@ -121,7 +125,7 @@ async fn internal_auth_and_domain_commands_preserve_gateway_prefixes() {
         let command = command();
         let output = DispatchedCodingAgent {
             agent_session_id: Uuid::now_v7(),
-            agent_id: command.agent_id,
+            agent_id: command.agent_id.unwrap(),
             agent_name: "Repository maintainer".into(),
         };
         let server = server(vec![

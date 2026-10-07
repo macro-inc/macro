@@ -536,7 +536,9 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
             let (status, message) = match session {
                 RoutineSessionError::Admission(error) => return (*error).into_response(),
-                RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
+                RoutineSessionError::InvalidCommand
+                | RoutineSessionError::InvalidRepositorySelection
+                | RoutineSessionError::ModelMismatch => {
                     (StatusCode::BAD_REQUEST, session.to_string())
                 }
                 RoutineSessionError::PersonaUnavailable => {

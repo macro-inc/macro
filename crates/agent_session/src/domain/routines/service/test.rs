@@ -3,7 +3,8 @@ use crate::domain::error::Result as SessionResult;
 use crate::domain::model::{AgentMcpServers, ReplicaId, SandboxSize};
 use crate::domain::ports::{
     AcceptedControl, BotFacts, ManagedAgentProfile, NoOpAgentSessionNameGenerator, NoOpRealtime,
-    NoOpTurnObserver, NoopLifecyclePublisher, OpenExternalAgentSession, QueuedControl,
+    NoOpTurnObserver, NoopLifecyclePublisher, OpenExternalAgentSession, OpenManagedSession,
+    QueuedControl, RequestedExternalSession,
 };
 use crate::domain::service::AgentSessionServiceImpl;
 use crate::testing::{InMemoryAgentSessionRepo, test_agent_session};
@@ -254,6 +255,8 @@ impl Fixture {
 
     fn prepare(&self) -> PrepareRoutineSession {
         PrepareRoutineSession {
+            repo_url: None,
+            repo_branch: None,
             selection: self.selection(),
             session_id: self.session.id,
         }
@@ -572,4 +575,49 @@ fn commands_reject_malformed_owner_and_ids_at_deserialization() {
     let mut value = serde_json::to_value(&command).unwrap();
     value["session_id"] = serde_json::json!("not-a-uuid");
     assert!(serde_json::from_value::<RoutineSessionAction>(value).is_err());
+}
+
+#[tokio::test]
+async fn preparation_forwards_repository_selection_through_the_shared_launch_path() {
+    let fx = Fixture::new(true);
+    let mut command = fx.prepare();
+    command.repo_url = Some("https://github.com/example/product".into());
+    command.repo_branch = Some("feature/fix".into());
+    fx.service.prepare(command).await.unwrap();
+    let requests = fx.openings.managed.lock().unwrap();
+    assert_eq!(
+        requests[0].repo_url.as_deref(),
+        Some("https://github.com/example/product")
+    );
+    assert_eq!(
+        requests[0].repo_branch.as_ref().unwrap().as_str(),
+        "feature/fix"
+    );
+}
+
+#[tokio::test]
+async fn external_preparation_rejects_unsupported_branch_before_requesting_runtime() {
+    let fx = Fixture::new(false);
+    let mut command = fx.prepare();
+    command.repo_url = Some("https://github.com/example/product".into());
+    command.repo_branch = Some("feature/fix".into());
+    assert_eq!(
+        fx.service.prepare(command).await,
+        Err(RoutineSessionError::InvalidRepositorySelection)
+    );
+    assert!(fx.openings.external.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn external_preparation_forwards_repository_for_its_supported_base_branch() {
+    let fx = Fixture::new(false);
+    let mut command = fx.prepare();
+    command.repo_url = Some("https://github.com/example/product".into());
+    command.repo_branch = Some("main".into());
+    fx.service.prepare(command).await.unwrap();
+    assert_eq!(
+        fx.openings.external.lock().unwrap()[0].repo_url.as_deref(),
+        Some("https://github.com/example/product")
+    );
+    assert!(fx.openings.managed.lock().unwrap().is_empty());
 }

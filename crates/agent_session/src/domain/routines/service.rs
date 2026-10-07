@@ -9,8 +9,8 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::{AgentSession, AgentSessionId};
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenManagedSession, RequestedExternalSession,
-    SelectedPersona, SessionOpener, persona_for_owner,
+    ExternalSessionRequester, ManagedPersonaError, SelectedPersona, SessionOpener,
+    persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 
@@ -126,37 +126,44 @@ where
         command: PrepareRoutineSession,
     ) -> Result<PreparedRoutineSession, RoutineSessionError> {
         validate_session_id(command.session_id)?;
-        let persona = self.select(&command.selection).await?;
         let selection = command.selection;
-        let owner = Owner::User(selection.owner.clone());
-        let session = match persona {
-            SelectedPersona::Managed(profile) => {
-                self.opener
-                    .open_managed_session(OpenManagedSession {
-                        id: Some(command.session_id),
-                        repo_url: None,
-                        repo_branch: None,
-                        owner: owner.clone(),
-                        prompt: None,
-                        profile: Some(profile),
-                        instructions: None,
-                        model: selection.model.clone(),
-                    })
-                    .await
-            }
-            SelectedPersona::External { bot_id } => {
-                self.external
-                    .request(RequestedExternalSession {
-                        session_id: command.session_id,
-                        bot_id,
-                        owner: selection.owner,
-                        repo_url: None,
-                        model: selection.model.clone(),
-                    })
-                    .await
-            }
+        if selection
+            .model
+            .as_ref()
+            .is_some_and(|model| model.trim().is_empty())
+        {
+            return Err(RoutineSessionError::InvalidCommand);
         }
-        .map_err(session_error)?;
+        let owner = Owner::User(selection.owner.clone());
+        let session = crate::domain::launch::launch_session(
+            &self.bots,
+            &self.opener,
+            &self.external,
+            crate::domain::launch::LaunchSession {
+                id: Some(command.session_id),
+                owner: owner.clone(),
+                bot_id: Some(selection.bot_id),
+                prompt: None,
+                instructions: None,
+                model: selection.model.clone(),
+                repo_url: command.repo_url,
+                repo_branch: command.repo_branch,
+            },
+        )
+        .await
+        .map_err(|error| match error {
+            crate::domain::launch::LaunchSessionError::Persona(error) => match error {
+                ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
+                    RoutineSessionError::Forbidden
+                }
+                ManagedPersonaError::Lookup(error) => session_error(error),
+                _ => RoutineSessionError::PersonaUnavailable,
+            },
+            crate::domain::launch::LaunchSessionError::ExternalPrompt => {
+                RoutineSessionError::InvalidCommand
+            }
+            crate::domain::launch::LaunchSessionError::Session(error) => session_error(error),
+        })?;
         if session.id != command.session_id
             || session.bot_id != selection.bot_id
             || session.owner_id != owner
@@ -287,6 +294,9 @@ fn session_error(error: AgentSessionError) -> RoutineSessionError {
         AgentSessionError::Forbidden
         | AgentSessionError::UnknownOwner
         | AgentSessionError::OwnerNotUser(_) => RoutineSessionError::Forbidden,
+        AgentSessionError::InvalidRepositorySelection(_) => {
+            RoutineSessionError::InvalidRepositorySelection
+        }
         AgentSessionError::SessionIdTaken(_) => RoutineSessionError::Conflict,
         AgentSessionError::RuntimeUnavailable(_) | AgentSessionError::Disconnected(_) => {
             RoutineSessionError::RuntimeUnavailable

@@ -112,9 +112,9 @@ impl CodingAgentsClient {
         }
         if let Ok(error) = serde_json::from_slice::<CodingAgentError>(&body) {
             let valid_status = match &error {
-                CodingAgentError::InvalidCommand | CodingAgentError::InvalidPrompt => {
-                    status == StatusCode::BAD_REQUEST
-                }
+                CodingAgentError::InvalidCommand
+                | CodingAgentError::InvalidPrompt
+                | CodingAgentError::AmbiguousAgent => status == StatusCode::BAD_REQUEST,
                 CodingAgentError::Forbidden => status == StatusCode::FORBIDDEN,
                 CodingAgentError::Unavailable => status == StatusCode::NOT_FOUND,
                 CodingAgentError::OperationFailed => {

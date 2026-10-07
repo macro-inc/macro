@@ -1,10 +1,10 @@
-//! Delegating repository work to the user's available coding personas.
+//! Starting named, coding, and in-memory agent sessions.
 
 use crate::types::StaticPrompt;
 
 /// Selection and handoff guidance, included only where the tools are available.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
-    "Coding agents",
+    "Agent sessions",
     include_str!("coding_agents.txt"),
-    "Select an available coding persona and start a session for repository work.",
+    "Start a session with a named agent, integration, or model.",
 );

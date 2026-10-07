@@ -40,6 +40,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DeleteTag: (whose) => `delete tags in ${whose} workspace`,
   DescribeDatabase: (whose) => `read ${whose} databases`,
   DisplayResults: (whose) => `show results from ${whose} workspace`,
+  StartAgentSession: (whose) => `start an agent session with ${whose} access`,
   DispatchCodingAgent: (whose) => `start a coding agent with ${whose} access`,
   EditBookingLink: (whose) => `edit ${whose} booking links`,
   EditDocument: (whose) => `edit ${whose} documents`,

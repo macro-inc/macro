@@ -54,8 +54,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession,
-    RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread, persona_for_owner,
+    ExternalSessionRequester, ManagedPersonaError, OpenExternalAgentSession, SessionOpener,
+    SessionThread,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -2028,97 +2028,40 @@ pub async fn create_agent_session_handler<
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None, state.non_user_owners)?;
-        let profile = if let Some(bot_id) = request.bot_id {
-            let selected =
-                persona_for_owner(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
-                    .await
-                    .map_err(|error| match error {
-                        ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
-                        ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
-                        ManagedPersonaError::UnmanagedSystemBot => {
-                            CreateSessionApiError::UnmanagedSystemBot
-                        }
-                        ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
-                        ManagedPersonaError::OwnerNotUser(owner_type) => {
-                            CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(
-                                owner_type,
-                            ))
-                        }
-                        ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
-                    })?;
-            match selected {
-                SelectedPersona::Managed(persona) => Some(persona),
-                // The persona's runtime is its operator's, so it opens the
-                // session itself, exactly as it does for a mention: the
-                // request goes out as a trigger and the runtime creates the
-                // session under the id we hand it. Nothing is announced,
-                // there being no thread, and no prompt travels with it - the
-                // caller delivers its first prompt through the control
-                // endpoint once this answers, as it does for a managed one.
-                SelectedPersona::External { bot_id } => {
-                    let repo_url = crate::domain::ports::external_repository(
-                        request.repo_url,
-                        request.repo_branch.as_deref(),
-                    )?;
-                    // Refused rather than dropped: nothing delivers it, and a
-                    // caller that sent one would otherwise never learn it was
-                    // ignored. A model is different - it is applied when the
-                    // session binds, like the persona's own.
-                    if request.prompt.is_some() {
-                        return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
-                    }
-                    let owner = owner
-                        .as_user()
-                        .cloned()
-                        .ok_or(CreateSessionApiError::OwnerRequired)?;
-                    let session = state
-                        .requests
-                        .request(RequestedExternalSession {
-                            // The caller's id when it minted one, so the
-                            // surface it already opened is the session the
-                            // runtime creates.
-                            session_id: request
-                                .id
-                                .map(AgentSessionId::new_from_uuid)
-                                .unwrap_or_else(AgentSessionId::new),
-                            bot_id,
-                            repo_url,
-                            owner,
-                            model: request.model.filter(|model| !model.trim().is_empty()),
-                        })
-                        .await?;
-                    return Ok((
-                        StatusCode::CREATED,
-                        Json(CreateAgentSessionResponse {
-                            session: AgentSessionResponse::new(session, true),
-                        }),
-                    ));
-                }
-            }
-        } else {
-            None
-        };
-        let session = state
-            .opener
-            .open_managed_session(OpenManagedSession {
+        let session = crate::domain::launch::launch_session(
+            state.bots.as_ref(),
+            state.opener.as_ref(),
+            state.requests.as_ref(),
+            crate::domain::launch::LaunchSession {
                 id: request.id.map(AgentSessionId::new_from_uuid),
-                repo_url: request.repo_url,
-                repo_branch: request
-                    .repo_branch
-                    .map(crate::domain::repository_branch::RepositoryBranch::parse)
-                    .transpose()
-                    .map_err(|reason| {
-                        CreateSessionApiError::Domain(
-                            AgentSessionError::InvalidRepositorySelection(reason),
-                        )
-                    })?,
                 owner,
+                bot_id: request.bot_id.map(BotId::new_from_uuid),
                 prompt: request.prompt,
-                profile,
                 instructions,
-                model: request.model.filter(|model| !model.trim().is_empty()),
-            })
-            .await?;
+                model: request.model,
+                repo_url: request.repo_url,
+                repo_branch: request.repo_branch,
+            },
+        )
+        .await
+        .map_err(|error| match error {
+            crate::domain::launch::LaunchSessionError::Persona(error) => match error {
+                ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
+                ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
+                ManagedPersonaError::UnmanagedSystemBot => {
+                    CreateSessionApiError::UnmanagedSystemBot
+                }
+                ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                ManagedPersonaError::OwnerNotUser(owner_type) => {
+                    CreateSessionApiError::Domain(AgentSessionError::OwnerNotUser(owner_type))
+                }
+                ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
+            },
+            crate::domain::launch::LaunchSessionError::ExternalPrompt => {
+                CreateSessionApiError::ExternalPersonaUnsupported("prompt")
+            }
+            crate::domain::launch::LaunchSessionError::Session(error) => error.into(),
+        })?;
         return Ok((
             StatusCode::CREATED,
             Json(CreateAgentSessionResponse {

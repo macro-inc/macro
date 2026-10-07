@@ -98,9 +98,9 @@ impl From<JsonRejection> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = match self.0 {
-            CodingAgentError::InvalidCommand | CodingAgentError::InvalidPrompt => {
-                StatusCode::BAD_REQUEST
-            }
+            CodingAgentError::InvalidCommand
+            | CodingAgentError::InvalidPrompt
+            | CodingAgentError::AmbiguousAgent => StatusCode::BAD_REQUEST,
             CodingAgentError::Forbidden => StatusCode::FORBIDDEN,
             CodingAgentError::Unavailable => StatusCode::NOT_FOUND,
             CodingAgentError::DispatchFailed { .. } | CodingAgentError::DispatchDeliveryUnknown => {

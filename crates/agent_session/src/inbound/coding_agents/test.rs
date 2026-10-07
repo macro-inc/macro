@@ -59,7 +59,7 @@ impl CodingAgentService for ServiceSpy {
             }
             Ok(DispatchedCodingAgent {
                 agent_session_id: Uuid::now_v7(),
-                agent_id: command.agent_id,
+                agent_id: command.agent_id.unwrap(),
                 agent_name: "Coding agent".into(),
             })
         })

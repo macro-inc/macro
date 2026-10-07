@@ -1,4 +1,4 @@
-//! Compose coding-agent discovery and dispatch from the owning domain services.
+//! Compose agent discovery and session launch from the owning domain services.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -101,6 +101,7 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
             false
         };
         let mut candidates = vec![CodingAgentCandidate {
+            handle: Some("cursor".into()),
             agent: CodingAgent {
                 id: bot_id::CURSOR_BOT_ID.as_uuid(),
                 name: bot_id::CURSOR_NAME.into(),
@@ -123,6 +124,7 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
         candidates.extend(agents.into_iter().map(|agent| {
             let available = connections.available(&agent.harness, agent.harness_id);
             CodingAgentCandidate {
+                handle: Some(agent.bot.handle),
                 agent: CodingAgent {
                     id: agent.bot.id.as_uuid(),
                     name: agent.bot.name,

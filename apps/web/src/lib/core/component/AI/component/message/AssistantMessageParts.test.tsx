@@ -647,7 +647,7 @@ describe('AssistantMessageParts streaming identity', () => {
 });
 
 describe('standalone tool presentation', () => {
-  it.each(['GenerateImage', 'DispatchCodingAgent'])(
+  it.each(['GenerateImage', 'DispatchCodingAgent', 'StartAgentSession'])(
     'keeps %s outside the activity group with adjacent tools',
     (name) => {
       const parts: AssistantMessagePart[] = [

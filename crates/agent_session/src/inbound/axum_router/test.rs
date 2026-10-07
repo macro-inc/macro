@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::model::{SessionStatus, session_owner_user};
+use crate::domain::ports::{OpenManagedSession, RequestedExternalSession};
 use axum::body::Body;
 use axum::http::{Request, header};
 use chrono::Utc;

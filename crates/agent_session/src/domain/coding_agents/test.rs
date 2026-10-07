@@ -94,6 +94,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn candidate(is_coding: bool, available: bool) -> CodingAgentCandidate {
     CodingAgentCandidate {
+        handle: Some("repo-maintainer".into()),
         agent: CodingAgent {
             id: macro_uuid::generate_uuid_v7(),
             name: "Repository maintainer".into(),
@@ -127,22 +128,30 @@ fn fixture() -> (
 
 fn command(agent_id: Uuid) -> DispatchCodingAgentRequest {
     DispatchCodingAgentRequest {
+        agent_name: None,
+        model: None,
+        repo_url: None,
+        repo_branch: None,
         user_id: user(),
-        agent_id,
+        agent_id: Some(agent_id),
         prompt: "In owner/product, fix the login bug and add regression coverage.".into(),
     }
 }
 
 #[tokio::test]
-async fn discovery_only_returns_available_coding_personas_for_the_caller() {
+async fn discovery_returns_available_chat_and_coding_personas_for_the_caller() {
     let (service, directory, _, agent) = fixture();
+    let chat = candidate(false, true);
     directory.candidates.lock().unwrap().extend([
-        candidate(false, true),
+        chat.clone(),
         candidate(true, false),
         candidate(false, false),
     ]);
 
-    assert_eq!(service.list(user()).await.unwrap(), vec![agent.agent]);
+    assert_eq!(
+        service.list(user()).await.unwrap(),
+        vec![agent.agent, chat.agent]
+    );
     assert_eq!(*directory.callers.lock().unwrap(), vec![user()]);
 }
 
@@ -185,9 +194,9 @@ async fn discovery_does_not_authorize_a_later_dispatch() {
 }
 
 #[tokio::test]
-async fn chat_and_unavailable_personas_cannot_be_dispatched_by_id() {
+async fn unavailable_personas_cannot_be_dispatched_by_id() {
     let (service, directory, sessions, _) = fixture();
-    for rejected in [candidate(false, true), candidate(true, false)] {
+    for rejected in [candidate(false, false), candidate(true, false)] {
         *directory.candidates.lock().unwrap() = vec![rejected.clone()];
         assert_eq!(
             service.dispatch(command(rejected.agent.id)).await,
@@ -272,4 +281,124 @@ async fn a_different_accepted_action_does_not_report_dispatch_success() {
         })
     ));
     assert_eq!(sessions.prompted.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn named_chat_agent_uses_its_persona_and_explicit_model() {
+    let (service, directory, sessions, _) = fixture();
+    let mut grungus = candidate(false, true);
+    grungus.agent.name = "Grungus".into();
+    *directory.candidates.lock().unwrap() = vec![grungus.clone()];
+    let mut request = command(grungus.agent.id);
+    request.agent_id = None;
+    request.agent_name = Some("grungus".into());
+    request.model = Some("selected-model".into());
+    let response = service.dispatch(request).await.unwrap();
+    assert_eq!(response.agent_id, grungus.agent.id);
+    let prepared = sessions.prepared.lock().unwrap();
+    assert_eq!(
+        prepared[0].selection.model.as_deref(),
+        Some("selected-model")
+    );
+    assert_eq!(prepared[0].selection.bot_id.as_uuid(), grungus.agent.id);
+}
+
+#[tokio::test]
+async fn model_only_session_does_not_require_a_connected_coding_provider() {
+    let (service, directory, sessions, _) = fixture();
+    directory.candidates.lock().unwrap().clear();
+    let mut request = command(Uuid::nil());
+    request.agent_id = None;
+    request.model = Some("selected-model".into());
+    let response = service.dispatch(request).await.unwrap();
+    assert_eq!(response.agent_id, bot_id::MACRO_NEW_BOT_ID.as_uuid());
+    assert!(directory.callers.lock().unwrap().is_empty());
+    assert_eq!(sessions.prompted.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn cursor_receives_repository_and_branch_as_launch_options() {
+    let (service, directory, sessions, _) = fixture();
+    let mut cursor = candidate(true, true);
+    cursor.agent.id = bot_id::CURSOR_BOT_ID.as_uuid();
+    cursor.agent.name = "Cursor".into();
+    cursor.agent.harness = "cursor".into();
+    *directory.candidates.lock().unwrap() = vec![cursor];
+    let mut request = command(bot_id::CURSOR_BOT_ID.as_uuid());
+    request.agent_id = None;
+    request.agent_name = Some("cursor".into());
+    request.repo_url = Some("https://github.com/example/product".into());
+    request.repo_branch = Some("feature/fix".into());
+    service.dispatch(request.clone()).await.unwrap();
+    let prepared = sessions.prepared.lock().unwrap();
+    assert_eq!(prepared[0].repo_url, request.repo_url);
+    assert_eq!(prepared[0].repo_branch, request.repo_branch);
+}
+
+#[tokio::test]
+async fn ambiguous_names_fail_without_starting_either_agent() {
+    let (service, directory, sessions, agent) = fixture();
+    directory
+        .candidates
+        .lock()
+        .unwrap()
+        .push(candidate(false, true));
+    let mut request = command(agent.agent.id);
+    request.agent_id = None;
+    request.agent_name = Some(agent.agent.name);
+    assert_eq!(
+        service.dispatch(request).await,
+        Err(CodingAgentError::AmbiguousAgent)
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn conflicting_selectors_and_blank_models_fail_before_provisioning() {
+    let (service, _, sessions, agent) = fixture();
+    let mut request = command(agent.agent.id);
+    request.agent_name = Some(agent.agent.name);
+    assert_eq!(
+        service.dispatch(request).await,
+        Err(CodingAgentError::InvalidCommand)
+    );
+    let mut request = command(agent.agent.id);
+    request.model = Some(" ".into());
+    assert_eq!(
+        service.dispatch(request).await,
+        Err(CodingAgentError::InvalidCommand)
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn disconnected_duplicate_name_does_not_silently_select_another_agent() {
+    let (service, directory, sessions, agent) = fixture();
+    directory
+        .candidates
+        .lock()
+        .unwrap()
+        .push(candidate(false, false));
+    let mut request = command(agent.agent.id);
+    request.agent_id = None;
+    request.agent_name = Some(agent.agent.name);
+    assert_eq!(
+        service.dispatch(request).await,
+        Err(CodingAgentError::AmbiguousAgent)
+    );
+    assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn mention_handle_resolves_the_saved_persona() {
+    let (service, directory, sessions, agent) = fixture();
+    directory.candidates.lock().unwrap()[0].handle = Some("grungus".into());
+    let mut request = command(agent.agent.id);
+    request.agent_id = None;
+    request.agent_name = Some("@grungus".into());
+    assert_eq!(
+        service.dispatch(request).await.unwrap().agent_id,
+        agent.agent.id
+    );
+    assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
 }

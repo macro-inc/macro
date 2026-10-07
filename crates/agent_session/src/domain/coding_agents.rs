@@ -1,4 +1,5 @@
-//! Discover authorized coding personas and start their first session turn.
+//! Discover authorized personas and start their first session turn.
+//! The internal coding-agents transport name is retained for rolling deployments.
 
 use std::pin::Pin;
 
@@ -17,7 +18,7 @@ use super::routines::{
 #[cfg(test)]
 mod test;
 
-/// Information used to choose a coding persona for a task.
+/// Information used to choose a persona for a task.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 pub struct CodingAgent {
@@ -40,6 +41,8 @@ pub struct CodingAgent {
 pub struct CodingAgentCandidate {
     /// Information safe for the authorized caller to see.
     pub agent: CodingAgent,
+    /// Stable mention handle, when supplied by the persona directory.
+    pub handle: Option<String>,
     /// Whether the persona is configured for coding work.
     pub is_coding: bool,
     /// Whether its required runtime connection or provider credentials exist.
@@ -61,7 +64,19 @@ pub struct DispatchCodingAgentRequest {
     /// Verified tool caller; never supplied as an AI tool argument.
     pub user_id: MacroUserIdStr<'static>,
     /// Persona selected from the discovery result.
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
+    /// Exact display name or mention handle, resolved among the caller's agents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_name: Option<String>,
+    /// Model override; omitted uses the selected persona's default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Repository selection for runtimes that support it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
+    /// Starting branch of the selected repository.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_branch: Option<String>,
     /// Self-contained task and repository context for the coding agent.
     pub prompt: String,
 }
@@ -83,22 +98,27 @@ pub struct DispatchedCodingAgent {
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum CodingAgentError {
     /// The internal command is malformed.
-    #[error("invalid coding agent command")]
+    #[error("invalid agent session command")]
     InvalidCommand,
     /// Empty tasks cannot start sessions.
-    #[error("provide a non-empty coding task")]
+    #[error("provide a non-empty task")]
     InvalidPrompt,
-    /// Deleted, inaccessible, non-coding, or disconnected persona.
-    #[error("this coding agent is unavailable; list available coding agents again")]
+    /// Deleted, inaccessible, or disconnected persona.
+    #[error(
+        "this agent is unavailable; use ListAgents to choose an accessible agent or connect its runtime"
+    )]
     Unavailable,
+    /// Multiple accessible personas have the requested display name.
+    #[error("multiple agents have that name; use ListAgents and select an agent by id")]
+    AmbiguousAgent,
     /// The caller cannot use the requested capability.
-    #[error("you do not have permission to dispatch this coding agent")]
+    #[error("you do not have permission to start this agent")]
     Forbidden,
     /// A dependency failed without a safely attributable session.
-    #[error("coding agent operation failed")]
+    #[error("agent session operation failed")]
     OperationFailed,
     /// Transport failed after dispatch may already have admitted work.
-    #[error("the coding agent may already have started; do not retry this task automatically")]
+    #[error("the agent session may already have started; do not retry this task automatically")]
     DispatchDeliveryUnknown,
     /// Opening or prompting may have had an effect; never automatically replay.
     #[error(
@@ -112,9 +132,9 @@ pub enum CodingAgentError {
     },
 }
 
-/// Owner-authorized coding delegation shared by tool and transport adapters.
+/// Owner-authorized session delegation shared by tool and transport adapters.
 pub trait CodingAgentService: Send + Sync + 'static {
-    /// List the caller's configured, available coding personas.
+    /// List the caller's configured, available personas.
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -158,7 +178,7 @@ where
                 .candidates(user_id)
                 .await?
                 .into_iter()
-                .filter(|candidate| candidate.is_coding && candidate.available)
+                .filter(|candidate| candidate.available)
                 .map(|candidate| candidate.agent)
                 .collect())
         })
@@ -173,14 +193,53 @@ where
             if command.prompt.trim().is_empty() {
                 return Err(CodingAgentError::InvalidPrompt);
             }
-            // Re-read visibility and configuration at dispatch time. A saved tool
-            // result is not authority to use a removed or reconfigured persona.
-            let agent = self
-                .list(command.user_id.clone())
-                .await?
-                .into_iter()
-                .find(|agent| agent.id == command.agent_id)
-                .ok_or(CodingAgentError::Unavailable)?;
+            if (command.agent_id.is_some() && command.agent_name.is_some())
+                || command
+                    .model
+                    .as_ref()
+                    .is_some_and(|model| model.trim().is_empty())
+                || command
+                    .agent_name
+                    .as_ref()
+                    .is_some_and(|name| name.trim().is_empty())
+            {
+                return Err(CodingAgentError::InvalidCommand);
+            }
+            // Re-read visibility at launch time. Discovery is never authority.
+            // Model-only sessions need no provider-directory calls.
+            let agent = if command.agent_id.is_none() && command.agent_name.is_none() {
+                CodingAgent {
+                    id: bot_id::MACRO_NEW_BOT_ID.as_uuid(),
+                    name: "Macro".into(),
+                    description: None,
+                    instructions: String::new(),
+                    harness: "macro-inmem".into(),
+                    model: None,
+                }
+            } else {
+                let candidates = self.directory.candidates(command.user_id.clone()).await?;
+                let mut matches = candidates.into_iter().filter(|candidate| {
+                    let agent = &candidate.agent;
+                    command.agent_id == Some(agent.id)
+                        || command.agent_name.as_ref().is_some_and(|name| {
+                            let name = name.trim();
+                            agent.name.eq_ignore_ascii_case(name)
+                                || candidate.handle.as_ref().is_some_and(|handle| {
+                                    handle.eq_ignore_ascii_case(
+                                        name.strip_prefix('@').unwrap_or(name),
+                                    )
+                                })
+                        })
+                });
+                let candidate = matches.next().ok_or(CodingAgentError::Unavailable)?;
+                if matches.next().is_some() {
+                    return Err(CodingAgentError::AmbiguousAgent);
+                }
+                if !candidate.available {
+                    return Err(CodingAgentError::Unavailable);
+                }
+                candidate.agent
+            };
             let session_id = AgentSessionId::new();
             let bot_id = BotId::new_from_uuid(agent.id);
             let failed = |reason| CodingAgentError::DispatchFailed {
@@ -190,10 +249,12 @@ where
             let prepared = self
                 .sessions
                 .prepare(PrepareRoutineSession {
+                    repo_url: command.repo_url,
+                    repo_branch: command.repo_branch,
                     selection: ValidateRoutineSession {
                         owner: command.user_id.clone(),
                         bot_id,
-                        model: None,
+                        model: command.model,
                     },
                     session_id,
                 })

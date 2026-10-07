@@ -6,6 +6,7 @@ pub mod connection;
 pub mod control;
 pub mod error;
 pub mod events;
+pub mod launch;
 pub mod lifecycle;
 pub mod model;
 #[cfg(feature = "admission")]
