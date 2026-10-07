@@ -32,9 +32,9 @@ decides who may respond.
 
 ## The form page
 
-Editors see three tabs, kept per split (a split opened with
-`params.view` `responses` or `share` starts there), with the status at the right ("Accepting responses · closes Oct 3",
-"Closed", "Table deleted"). Viewers (respondents) land on the respond page
+Editors see **Build**, **Responses** (with its count), and **Settings** in the
+shared pill tab selector beside the form title in the top bar, kept per split (a split opened with
+`params.view` `responses` or `share` starts there). Viewers (respondents) land on the respond page
 instead. The header's primary button, for owners, is **Publish** (opens sharing)
 until someone responds or the form is shared (public, a channel, the team),
 then **Open form** (respond view in a new split); other editors always see
@@ -42,23 +42,25 @@ then **Open form** (respond view in a new split); other editors always see
 
 ### Build
 
-A banner at the top contains the editable form name, description, and a link
-to its database. Below, a centered column of sections holds the question rows,
-with a numbered **Outline** panel on the left and an **Add question** panel on
-the right. The outline marks the selected section or question. Question types
-use two columns of buttons, grouped as **Text & files**, **Choices**,
-**Numbers & dates**, and **Linked items**. **From database** reuses existing
-fields; **Form flow** separately holds Section, Screener, and Booking. Medium
-splits keep the palette beside the canvas. On mobile and narrow splits, a compact
-**Add question** dropdown below the canvas includes question types, existing
-database fields, and the Section, Screener, and Booking actions. Database row
-and Booking choices open dialogs that fit within the screen.
+Build uses the same centered 768px content column as a Markdown document.
+The editable title sits above a linked-database property pill and a read-only
+status pill ("Accepting responses", "Closed", or "Table deleted"), then the
+description.
+A compact document-style outline rail on the left previews sections and questions
+on hover and navigates to them on click. It marks the selected section or question.
+Each question section ends with a large **Add question** menu. It appends a new
+question or existing database field to that section, regardless of the current
+selection. Three visible actions sit below the canvas: **Add section** adds a
+question section directly, **Add gate** adds a screener with its inline rule editor
+open, and **Add meeting link** opens the booking-link picker (when scheduling is
+available). Hover a question boundary to reveal a plus that inserts a question
+at that position. Hover between sections to insert a **Section** or **Gate**.
+These controls also appear on keyboard focus and stay visible while their menus
+are open. Meeting links can only be added at the end; adding other sections later
+keeps the meeting link last. Start an empty form by adding a section, then its questions.
 
-- Click a question type in the right panel to add it after the selected
-  question, or drag the button to an insertion line in the canvas. A drop creates
-  exactly one question; Escape or dropping outside the canvas creates nothing.
-  **Database row** asks which table to use before adding the question. An empty
-  form accepts a question directly and creates its first section.
+- **Database row** asks which table to use before adding the question.
+  Existing questions and sections can still be reordered with their drag handles.
 - After **Section** (or
   focusing a section's title, which outlines it) it goes to the end of that
   section. An empty section has its own **Add question** menu.
@@ -86,9 +88,6 @@ and Booking choices open dialogs that fit within the screen.
   Rules are sent to respondents' browsers, so keep confidential criteria out.
   A gate whose rule tests a question that is gone shows **Remove broken
   rules**.
-- The right panel's **Section** and **Screener** controls can also be dragged directly
-  into the canvas. The insertion line shows where the new section will go;
-  dropping outside the canvas or pressing Escape leaves the form unchanged.
 - "N columns not on this form" at the bottom lists table columns that are not
   questions; **Add** puts one on the form.
 - Layout edits collaborate live through Loro. Other editors' selections appear
@@ -99,13 +98,15 @@ and Booking choices open dialogs that fit within the screen.
   question**: a new column gets the answers that convert and the question
   moves to it; the old column stays (listed under columns not on the form).
 - **Preview** opens a new tab with the respondent experience after pending
-  question and Share settings edits are saved, including edits started before
+  question and form settings edits are saved, including edits started before
   switching tabs. Fill it, try the screeners, and return to the builder. Preview
   creates no response rows, file uploads or bookings.
   On touch devices, Preview, Publish (or Open form), and Share are in the
   floating header above the editor.
-- **Booking** in the right panel selects an existing booking link from **Booking links**
-  settings. It is always the last step. **Change** selects another link;
+- **Add meeting link** selects an existing booking link from **Booking links**
+  settings, or opens settings to create one. It is always the last step. Once added,
+  the action becomes **View meeting link** and focuses the existing step rather than
+  adding a duplicate. **Change** selects another link;
   **Remove booking step** leaves the link itself intact. A form's screeners
   control when its respondents see the link; the native link still works directly.
 - New standalone forms share their name with the database they create. Rename
@@ -113,8 +114,7 @@ and Booking choices open dialogs that fit within the screen.
 
 ### Responses
 
-The linked table's grid, embedded and live, with **Open database**, **Export
-CSV** and tiles: Responses, Stopped submissions (per screener in its hint), Rows in
+The linked table's grid, embedded and live, with summary tiles: Responses, Stopped submissions (per screener in its hint), Rows in
 the table, and (owners, when posted in channels) People in its channels (the
 owner excluded; a dash for public forms). Every row of the table shows,
 including rows added in the grid. Stopped submissions counts signed-in respondents
@@ -122,7 +122,7 @@ whose latest recorded result is stopped. Retrying does not add another count;
 a successful submission clears that stop. Anonymous attempts and stops before
 submitting are not recorded; answers stay in the browser until Submit.
 
-### Share
+### Settings
 
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
@@ -152,7 +152,10 @@ while still checking, or when the check failed, instead of saying nothing).
 it inside the app shell (sidebar, command menu); anonymous visitors get a
 focused page, so a public form never hits login. Signed in, a respondent
 keeps their identity on either audience and can edit their response while the
-form is open; anonymous visitors cannot. One section per screen with
+form is open; anonymous visitors cannot. The response page has no top bar:
+it uses the builder’s centered 768px content column, plain title and description,
+and questions grouped within a single section card. Public sign-in guidance
+sits below the form. One section per screen with
 **Back / Next**, **Submit** on the last. Required fields keep their asterisks;
 the legend and response-editing guidance sit below the questions. Next checks required answers and any
 gate locally; a failing gate shows "This form can't take your response" with

@@ -2,7 +2,15 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { ok, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import type { FormTab } from '../components/form-tabs';
 import { FormProvider, type FormWriteFailure } from '../context/form-context';
 import type { FormDetail } from '../core/form-model';
@@ -11,10 +19,27 @@ import { createMockFormContext } from '../tests/mock-context';
 import { FormPageView } from './form-page-view';
 
 beforeAll(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   Element.prototype.scrollIntoView = () => {};
   window.scrollTo = () => {};
 });
-afterEach(cleanup);
+let animationStyle: HTMLStyleElement;
+beforeEach(() => {
+  animationStyle = document.createElement('style');
+  animationStyle.textContent = '* { animation-name: none !important; }';
+  document.head.append(animationStyle);
+});
+afterEach(() => {
+  cleanup();
+  animationStyle.remove();
+});
 
 const detail: FormDetail = {
   form: {
@@ -52,7 +77,7 @@ const detail: FormDetail = {
 };
 
 describe('form editor preview', () => {
-  it('waits for a confirmation message saved on blur before opening Preview from Share', async () => {
+  it('waits for a confirmation message saved on blur before opening Preview from Settings', async () => {
     const user = userEvent.setup();
     let finishSave!: (result: Result<void, FormWriteFailure>) => void;
     const saving = new ResultAsync(
@@ -177,8 +202,11 @@ describe('form editor preview', () => {
         </FormProvider>
       );
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Short answer' }));
-    await user.click(screen.getByRole('tab', { name: 'Share' }));
+    await user.click(
+      screen.getAllByRole('button', { name: 'Add question' }).at(-1)!
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Short answer' }));
+    await user.click(screen.getByRole('tab', { name: 'Settings' }));
     expect(mock.shared.selections.at(-1)).toBeUndefined();
     await user.click(screen.getByRole('button', { name: 'Preview' }));
     expect(preview.opening()).toBe(true);
