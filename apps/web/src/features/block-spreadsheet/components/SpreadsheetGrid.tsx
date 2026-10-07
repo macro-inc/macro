@@ -1139,8 +1139,14 @@ export function SpreadsheetGrid(props: {
               return;
             }
             const previous = props.selection.focus;
+            const selectsAll =
+              (event.metaKey || event.ctrlKey) &&
+              event.key.toLowerCase() === 'a';
             props.onKeyDown(event);
+            // Select all ends at the last cell; revealing it would scroll away
+            // from the cells the user is looking at.
             if (
+              !selectsAll &&
               !props.editing &&
               (previous.row !== props.selection.focus.row ||
                 previous.column !== props.selection.focus.column)

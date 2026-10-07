@@ -53,6 +53,24 @@ test('selected cells own typing and arrow keys before app capture-phase shortcut
   ).toBe(1);
 });
 
+test('select all keeps the viewport where it is', async ({ page }) => {
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  await page.locator('[data-address="C3"]').click();
+  await grid.evaluate((element) => {
+    element.scrollTop = 300;
+  });
+  await page.locator('[data-address="C20"]').click();
+  const scroll = () =>
+    grid.evaluate((element) => [element.scrollTop, element.scrollLeft]);
+  const before = await scroll();
+  await grid.press('ControlOrMeta+a');
+  await expect(page.getByRole('textbox', { name: 'Go to cell' })).toHaveValue(
+    'A1:Z200'
+  );
+  await page.waitForTimeout(200);
+  expect(await scroll()).toEqual(before);
+});
+
 test('selects multiple rows and columns by dragging and shift-clicking headers', async ({
   page,
 }) => {
