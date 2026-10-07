@@ -57,6 +57,7 @@ export function useVisibleCalendarsQuery(
         staleTime: Infinity,
         networkMode: 'offlineFirst' as const,
         enabled: options?.().enabled !== false,
+        placeholderData: (previous: VisibleCalendar[] | undefined) => previous,
       };
     }
     return {
@@ -64,6 +65,7 @@ export function useVisibleCalendarsQuery(
       queryFn: listCalendars,
       staleTime: CALENDAR_LIST_STALE_TIME,
       enabled: options?.().enabled !== false,
+      placeholderData: (previous: VisibleCalendar[] | undefined) => previous,
     };
   });
 }

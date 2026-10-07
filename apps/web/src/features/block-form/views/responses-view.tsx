@@ -1,8 +1,4 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import ClipboardText from '@phosphor/clipboard-text.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { StatTiles } from '../components/responses/stat-tiles';
 import { useFormContext } from '../context/form-context';
 import type { FormDetail } from '../core/form-model';
@@ -14,16 +10,9 @@ import { type ChannelReach, responseTiles } from '../core/response-stats';
  * the ledger's counts above it. Every row of the table shows, not only this
  * form's: filtering would hide data from the people who own it.
  */
-export function ResponsesView(props: {
-  detail: FormDetail;
-  onOpenDatabase: (databaseId: string) => void;
-}) {
+export function ResponsesView(props: { detail: FormDetail }) {
   const context = useFormContext();
   const form = () => props.detail.form;
-  const table = context.createTableSource(
-    () => props.detail.form.databaseId,
-    () => props.detail.form.tableId
-  );
   const summary = context.responses.createSummary(
     () => props.detail.form.id,
     () => props.detail.access !== 'view'
@@ -41,54 +30,9 @@ export function ResponsesView(props: {
     if (people === null) return 'none';
     return people === undefined ? 'unknown' : people;
   };
-  const [exporting, setExporting] = createSignal(false);
-
-  async function exportCsv() {
-    if (exporting()) return;
-    setExporting(true);
-    const exported = await context.responses.exportCsv(
-      form().databaseId,
-      form().tableId
-    );
-    setExporting(false);
-    if (exported.isErr())
-      context.notify.failure(
-        `The CSV couldn’t be exported: ${exported.error.message}`
-      );
-  }
-
   return (
     <div class="@container/responses flex size-full min-h-0 flex-col bg-canvas-base">
-      <div class="flex flex-col gap-3 border-b border-edge-divider px-4 pt-4 pb-3 @2xl/responses:px-6">
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 class="text-base font-semibold text-ink">
-            {table.tableName() ?? 'Responses'}
-          </h2>
-          <span class="inline-flex items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 py-0.5 text-xs text-ink-muted">
-            <ClipboardText class="size-3.5 text-violet" aria-hidden="true" />
-            Linked to {form().name}
-          </span>
-          <div class="ml-auto flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => props.onOpenDatabase(form().databaseId)}
-            >
-              <ArrowSquareOut class="size-3.5" />
-              Open database
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={exporting()}
-              aria-busy={exporting()}
-              onClick={() => void exportCsv()}
-            >
-              <DownloadSimple class="size-3.5" />
-              Export CSV
-            </Button>
-          </div>
-        </div>
+      <div class="flex flex-col gap-3 px-4 pt-4 pb-3 @2xl/responses:px-6">
         <Show
           when={!summary.failure()}
           fallback={

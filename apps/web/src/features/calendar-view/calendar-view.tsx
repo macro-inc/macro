@@ -176,11 +176,7 @@ export function CalendarView(props: CalendarViewProps) {
   );
   const focusTarget = createMemo(() => {
     const request = targetRequest();
-    if (
-      !request ||
-      !occurrencesQuery.isSuccess ||
-      occurrencesQuery.isPlaceholderData
-    ) {
+    if (!request || !occurrencesQuery.isSuccess) {
       return undefined;
     }
     return resolveCalendarTarget(occurrencesQuery.data?.items ?? [], request);

@@ -1208,7 +1208,13 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+pill. On a cold reload, the first event paint waits for calendar metadata so events
+appear in their configured colors. A REST/GraphQL handoff for the same user and
+date range keeps the visible events and calendar list while the new reader loads;
+changing the user or date range must not retain the old events. Verify both handoff
+directions with delayed responses and delay calendar metadata past occurrences.
+If metadata fails, events remain usable with the default calendar presentation.
+Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 Errors retain the separate retry state. Verify delayed occurrence

@@ -1,14 +1,7 @@
-import { HoverCard } from '@core/component/HoverCard';
+import { DocumentOutline } from '@app/components/DocumentOutline';
 import { $isHeadingNode } from '@lexical/rich-text';
 import { $getRoot, type LexicalEditor } from 'lexical';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 type OutlineHeading = {
   key: string;
@@ -138,7 +131,6 @@ export function MarkdownOutline(props: {
   const [visibleHeadingKeys, setVisibleHeadingKeys] = createSignal<Set<string>>(
     new Set()
   );
-  const [hoveredIndex, setHoveredIndex] = createSignal<number>();
   const [viewportCenter, setViewportCenter] = createSignal(0);
 
   createEffect(() => {
@@ -249,88 +241,18 @@ export function MarkdownOutline(props: {
   };
 
   return (
-    <nav
-      aria-label="Document outline"
-      class="pointer-events-auto sticky z-1 w-7 -translate-y-1/2"
-      style={{ top: `${viewportCenter()}px` }}
-    >
-      <div
-        class="flex w-7 flex-col items-start overflow-y-auto py-1"
-        style={{ 'max-height': `${Math.max(0, viewportCenter() * 2 - 32)}px` }}
-      >
-        <For each={props.outline.headings()}>
-          {(heading, index) => {
-            const active = () => visibleHeadingKeys().has(heading.key);
-            const distance = () =>
-              Math.abs(index() - (hoveredIndex() ?? Number.POSITIVE_INFINITY));
-            const width = () => [26, 20, 14, 10][distance()] ?? 6;
-            const emphasized = () =>
-              hoveredIndex() === undefined ? active() : distance() === 0;
-
-            return (
-              <HoverCard
-                closeDelay={80}
-                closeOnScroll={false}
-                keepOpenOnTriggerPress
-                openDelay={0}
-                open={hoveredIndex() === index()}
-                onOpenChange={(open) => {
-                  setHoveredIndex((current) =>
-                    open ? index() : current === index() ? undefined : current
-                  );
-                }}
-                content={
-                  <div class="w-80 max-w-[calc(100vw-3rem)] rounded-xl border border-edge bg-surface px-3 py-2 shadow-menu">
-                    <div class="truncate text-sm font-medium text-ink">
-                      {heading.text}
-                    </div>
-                    <Show when={heading.preview}>
-                      <p class="mt-1 line-clamp-3 text-sm leading-relaxed text-ink-muted">
-                        {heading.preview}
-                      </p>
-                    </Show>
-                  </div>
-                }
-                contentZIndexClass="z-item-options-menu"
-                gutter={10}
-                // The preview covers the text column's left edge, including the
-                // checkbox markers, so it must not take the pointer that is on
-                // its way to one.
-                passThroughPointerEvents
-                placement="right"
-                portalMount={props.portalMount()}
-                trigger={
-                  <button
-                    type="button"
-                    aria-label={heading.text}
-                    aria-current={active() ? 'location' : undefined}
-                    class="flex h-2.5 w-7 items-center outline-none focus-visible:rounded-sm focus-visible:ring-1 focus-visible:ring-ink"
-                    onFocus={() => setHoveredIndex(index())}
-                    onBlur={() =>
-                      setHoveredIndex((current) =>
-                        current === index() ? undefined : current
-                      )
-                    }
-                    onClick={() => scrollToHeading(heading)}
-                  >
-                    <span
-                      aria-hidden="true"
-                      class="h-0.5 shrink-0 transition-[width,background-color] duration-150 ease-out motion-reduce:transition-none"
-                      classList={{
-                        'bg-ink': emphasized(),
-                        'bg-ink/20': !emphasized(),
-                      }}
-                      style={{ width: `${width()}px` }}
-                    />
-                  </button>
-                }
-                triggerClass="block w-7"
-                triggerTabIndex={-1}
-              />
-            );
-          }}
-        </For>
-      </div>
-    </nav>
+    <DocumentOutline
+      label="Document outline"
+      items={props.outline.headings()}
+      activeKeys={visibleHeadingKeys()}
+      viewportHeight={viewportCenter() * 2}
+      portalMount={props.portalMount()}
+      onSelect={(key) => {
+        const heading = props.outline
+          .headings()
+          .find((heading) => heading.key === key);
+        if (heading) scrollToHeading(heading);
+      }}
+    />
   );
 }
