@@ -38,6 +38,7 @@ import {
 import { refetchSoupEntity } from '@queries/soup/normalized-cache';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
+  AgentAction,
   CreateAgentSessionRequest,
   PromptAttachment,
 } from '@service-agent-harness/generated/schemas';
@@ -143,6 +144,26 @@ export function startPendingSession(
           },
         })
       : undefined;
+  const firstPrompt: AgentAction | undefined = trace
+    ? {
+        type: 'prompt',
+        prompt,
+        ...(options.attachments?.length
+          ? { attachments: options.attachments }
+          : {}),
+      }
+    : undefined;
+  // The default persona takes its first prompt on the create, so the agent
+  // hears it one round trip sooner. An effort or speed must be applied before
+  // the prompt, and another persona may run on its operator's machine, where
+  // the create cannot deliver one: those send it once the session exists.
+  const promptActionId =
+    firstPrompt &&
+    !options.botId &&
+    !options.effortOverride &&
+    !options.speedOverride
+      ? uuidv7()
+      : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
   let navigation: AgentSession | undefined;
@@ -183,6 +204,15 @@ export function startPendingSession(
       ...(options.botId ? { botId: options.botId } : {}),
       ...(options.modelOverride ? { model: options.modelOverride } : {}),
       ...(options.instructions ? { instructions: options.instructions } : {}),
+      ...(promptActionId
+        ? {
+            prompt,
+            promptActionId,
+            ...(options.attachments?.length
+              ? { promptAttachments: options.attachments }
+              : {}),
+          }
+        : {}),
       ...(options.repoUrl
         ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
         : {}),
@@ -234,12 +264,7 @@ export function startPendingSession(
           // an effort holds the block in preflight. Then adopt the session before
           // issuing the first prompt so that prompt is folded speculatively while
           // its POST is in flight.
-          if (
-            options.effortOverride ||
-            options.speedOverride ||
-            prompt ||
-            options.attachments?.length
-          ) {
+          if (options.effortOverride || options.speedOverride || firstPrompt) {
             const session = AgentSession.acquire(created);
             try {
               if (options.effortOverride || options.speedOverride) {
@@ -265,20 +290,19 @@ export function startPendingSession(
               // fast POST cannot destroy the fold before that view mounts.
               if (!disposed) navigation = AgentSession.acquire(created);
               setSessionId(created);
-              if (prompt || options.attachments?.length) {
+              const userId = options.userId ?? result.value.session.ownerId;
+              if (promptActionId && firstPrompt && trace) {
+                trace.accepted(promptActionId, false);
+                session.adoptPrompt(promptActionId, firstPrompt, {
+                  userId,
+                  trace,
+                });
+                options.onDelivered?.();
+              } else if (firstPrompt) {
                 const delivered = await issueSessionAction(
                   session,
-                  {
-                    type: 'prompt',
-                    prompt,
-                    ...(options.attachments?.length
-                      ? { attachments: options.attachments }
-                      : {}),
-                  },
-                  {
-                    userId: options.userId ?? result.value.session.ownerId,
-                    trace,
-                  }
+                  firstPrompt,
+                  { userId, trace }
                 );
                 if (delivered.isErr()) {
                   fail(
