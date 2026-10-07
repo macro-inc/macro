@@ -254,7 +254,7 @@ export const ListNav = (props: ListNavProps) => {
             <span
               aria-hidden="true"
               data-sidebar-badge
-              class="pointer-events-none absolute -bottom-[1.5px] left-1/2 -translate-x-1/2 rounded-full bg-accent px-1 text-[7.2px] font-semibold leading-3 text-surface ring-2 ring-panel"
+              class="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-accent px-1 text-[9px] font-semibold leading-3 text-surface ring-2 ring-panel"
             >
               {badge()}
             </span>
