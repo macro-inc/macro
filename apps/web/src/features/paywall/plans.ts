@@ -29,6 +29,17 @@ export function formatPlanPrice(cents: number | undefined): string | undefined {
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
+const UPGRADE_PLANS: Record<PlanTier, readonly PaidPlanTier[]> = {
+  free: ['premium', 'max'],
+  premium: ['max'],
+  max: [],
+};
+
+/** The paywall offers only tiers above the current plan. */
+export function getUpgradePlans(tier: PlanTier): readonly PaidPlanTier[] {
+  return UPGRADE_PLANS[tier];
+}
+
 const FREE_PLAN = {
   tier: 'free',
   name: 'Free',

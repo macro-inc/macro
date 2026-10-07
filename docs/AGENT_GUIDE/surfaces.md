@@ -2261,20 +2261,26 @@ on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
 own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
 still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
-The Pro upgrade modal and Billing use the same plan benefits list, including
-the same flag-gated AI usage label.
+The upgrade modal and Billing use the same plan cards and benefits, including
+the same flag-gated AI usage label and responsive card layout. The modal offers
+Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
+Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
+`Manage plan` closes the modal and opens Billing settings, where checkout and
+plan changes take place. Team-paid members see a message
+to contact their team owner. Plan options wait for the billing summary and team
+lookup; failed lookups show `Try again` rather than guessed upgrade options.
 
-On a local HMR dev server, `Preview billing states` opens an opt-in preview in
+On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
 Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
 and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
 billing summary status, billing permission, active/trialing license, AI usage
 flag, and pending plan actions. The preview uses the real Billing UI with local
 fixtures; checkout, plan changes, Manage, and Team settings only show preview
-status messages. `Reset preview` restores Solo/Free; `Exit preview` restores
+status messages. `Preview paywall` opens the same modal for the selected state,
+without developer controls inside it. Dismissing the modal returns to Billing
+with the selection preserved. `Manage plan` returns to the selected Billing preview.
+`Reset preview` restores Solo/Free; `Exit preview` restores
 the signed-in account. State is not persisted and resets on leaving Billing.
-Alongside `Preview billing states`, `Open paywall` opens the real Pro upgrade
-modal using the signed-in account. Its checkout and Manage actions keep their
-normal behavior; the billing preview fixtures do not affect this modal.
 These controls are excluded from deployed builds, including dev.macro.com.
 
 `Team` (members list; on a paid team each row shows the seat's plan,
