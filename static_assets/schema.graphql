@@ -1788,8 +1788,10 @@ type GraphqlCalendarMutationPayload {
 	"""
 	event: GraphqlCalendarEvent
 	"""
-	Every visible occurrence of the event after the write. Clients replace
-	everything they hold for the event with these.
+	Every visible occurrence of the event after the write, then each
+	occurrence the write removed, returned with `isCancelled: true` so a
+	normalized cache hides it as the response lands. Clients replace
+	everything they hold for the event with the uncancelled ones.
 	"""
 	occurrences: [GraphqlCalendarOccurrence!]!
 	"""

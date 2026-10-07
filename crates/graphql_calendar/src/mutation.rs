@@ -1,5 +1,5 @@
 use async_graphql::{Context, ErrorExtensions, Object};
-use calendar_events::domain::ports::CalendarMutationError;
+use calendar_events::domain::{changes::CalendarEventChange, ports::CalendarMutationError};
 use graphql_common::require_authenticated_user;
 use uuid::Uuid;
 
@@ -48,7 +48,7 @@ impl CalendarMutationRoot {
             )
             .await
             .map_err(mutation_error)?;
-        committed_state(writes.as_ref(), viewer, event.id).await
+        committed_state(writes.as_ref(), viewer, event.id, None).await
     }
 
     /// Patch an event, the whole series or one occurrence.
@@ -61,6 +61,7 @@ impl CalendarMutationRoot {
         let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
         let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
         let request = input.into_request().map_err(invalid_input)?;
+        let before = state_before(writes.as_ref(), viewer.clone(), request.event_id).await;
         writes
             .update_event(
                 viewer.clone(),
@@ -71,7 +72,7 @@ impl CalendarMutationRoot {
             )
             .await
             .map_err(mutation_error)?;
-        committed_state(writes.as_ref(), viewer, request.event_id).await
+        committed_state(writes.as_ref(), viewer, request.event_id, before).await
     }
 
     /// Delete an event, one occurrence, or an occurrence onward.
@@ -84,6 +85,7 @@ impl CalendarMutationRoot {
         let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
         let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
         let request = input.into_request().map_err(invalid_input)?;
+        let before = state_before(writes.as_ref(), viewer.clone(), request.event_id).await;
         writes
             .delete_event(
                 viewer.clone(),
@@ -93,7 +95,7 @@ impl CalendarMutationRoot {
             )
             .await
             .map_err(mutation_error)?;
-        committed_state(writes.as_ref(), viewer, request.event_id).await
+        committed_state(writes.as_ref(), viewer, request.event_id, before).await
     }
 
     /// Set the viewer's RSVP on an event, the whole series or one occurrence.
@@ -106,6 +108,7 @@ impl CalendarMutationRoot {
         let viewer = require_authenticated_user(ctx)?.as_ref().to_owned();
         let writes = &ctx.data::<CalendarGraphqlMutationContext>()?.writes;
         let request = input.into_request().map_err(invalid_input)?;
+        let before = state_before(writes.as_ref(), viewer.clone(), request.event_id).await;
         writes
             .respond_to_event(
                 viewer.clone(),
@@ -117,8 +120,26 @@ impl CalendarMutationRoot {
             )
             .await
             .map_err(mutation_error)?;
-        committed_state(writes.as_ref(), viewer, request.event_id).await
+        committed_state(writes.as_ref(), viewer, request.event_id, before).await
     }
+}
+
+/// The event as it stood before a write, so the answer can name the
+/// occurrences the write removed. Best effort: without it the answer still
+/// carries the committed state, and the change log removes the rest.
+async fn state_before(
+    writes: &dyn CalendarGraphqlWrites,
+    viewer: String,
+    event_id: Uuid,
+) -> Option<CalendarEventChange> {
+    writes
+        .event_change(viewer, event_id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, %event_id, "failed to read a calendar event before writing it");
+        })
+        .ok()
+        .flatten()
 }
 
 /// Read the event back from the primary database once the write committed.
@@ -128,14 +149,15 @@ async fn committed_state(
     writes: &dyn CalendarGraphqlWrites,
     viewer: String,
     event_id: Uuid,
+    before: Option<CalendarEventChange>,
 ) -> async_graphql::Result<GraphqlCalendarMutationPayload> {
-    let change = writes
+    let after = writes
         .event_change(viewer, event_id)
         .await
         .map_err(|error| {
             mutation_error(CalendarMutationError::PersistFailed(format!("{error:?}")))
         })?;
-    Ok(GraphqlCalendarMutationPayload::new(event_id, change))
+    Ok(GraphqlCalendarMutationPayload::new(event_id, before, after))
 }
 
 /// Map a mutation failure to the REST error's message and snake_case `code`.

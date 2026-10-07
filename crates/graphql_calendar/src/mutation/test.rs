@@ -134,6 +134,8 @@ impl CalendarMutationService for FakeMutations {
 #[derive(Default)]
 struct FakeCommitted {
     change: Option<CalendarEventChange>,
+    /// Answers for successive reads, before falling back to `change`.
+    sequence: Mutex<std::collections::VecDeque<Option<CalendarEventChange>>>,
     fail: bool,
     reads: Mutex<Vec<(String, Uuid)>>,
 }
@@ -163,12 +165,21 @@ impl CalendarChangeQueryService for FakeCommitted {
         if self.fail {
             return Err(rootcause::report!("replica db-3 unreachable").into());
         }
-        Ok(self.change.clone())
+        Ok(self
+            .sequence
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(|| self.change.clone()))
     }
 }
 
 fn committed_change() -> CalendarEventChange {
-    let listing = timed_listing(6);
+    change_on(6)
+}
+
+fn change_on(day: u32) -> CalendarEventChange {
+    let listing = timed_listing(day);
     CalendarEventChange {
         event: listing.event,
         link_id: LINK_ID,
@@ -603,4 +614,71 @@ async fn malformed_times_are_invalid_input() {
 
     assert_eq!(error_extensions(&response).1, Value::from("invalid_input"));
     assert!(mutations.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn occurrences_a_write_removed_come_back_cancelled() {
+    let mutations = Arc::new(FakeMutations::default());
+    let committed = Arc::new(FakeCommitted {
+        sequence: Mutex::new([Some(change_on(6)), Some(change_on(9))].into()),
+        ..Default::default()
+    });
+
+    let response = execute(
+        Arc::clone(&mutations),
+        Arc::clone(&committed),
+        &format!(
+            r#"mutation {{ updateCalendarEvent(input: {{
+                eventId: "{EVENT_ID}",
+                time: {{ timed: {{ startsAt: "2026-10-09T15:00:00Z", endsAt: "2026-10-09T15:30:00Z" }} }}
+            }}) {{ event {{ id }} occurrences {{ id isCancelled }} deletedEventId }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["updateCalendarEvent"]["occurrences"],
+        serde_json::json!([
+            { "id": format!("{EVENT_ID}:2026-10-09T15:00:00+00:00"), "isCancelled": false },
+            { "id": format!("{EVENT_ID}:2026-10-06T15:00:00+00:00"), "isCancelled": true },
+        ])
+    );
+    assert_eq!(
+        committed.reads.lock().unwrap().len(),
+        2,
+        "read before and after"
+    );
+}
+
+#[tokio::test]
+async fn deleting_returns_every_removed_occurrence_cancelled() {
+    let committed = Arc::new(FakeCommitted {
+        sequence: Mutex::new([Some(change_on(6)), None].into()),
+        ..Default::default()
+    });
+
+    let response = execute(
+        Arc::new(FakeMutations::default()),
+        committed,
+        &format!(
+            r#"mutation {{ deleteCalendarEvent(input: {{ eventId: "{EVENT_ID}" }}) {{
+                event {{ id }} occurrences {{ id isCancelled event {{ id }} }} deletedEventId
+            }} }}"#
+        ),
+        true,
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let payload = &response.data.into_json().unwrap()["deleteCalendarEvent"];
+    assert_eq!(payload["event"], Value::Null);
+    assert_eq!(payload["deletedEventId"], EVENT_ID.to_string());
+    assert_eq!(payload["occurrences"][0]["isCancelled"], true);
+    assert_eq!(
+        payload["occurrences"][0]["event"]["id"],
+        EVENT_ID.to_string()
+    );
 }
