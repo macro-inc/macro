@@ -166,10 +166,20 @@ export function normalizedCacheResultMetadata(
       ? { cacheEffectsApplied }
       : {}),
     ...(isCacheRevision(revision) ? { revision } : {}),
-    ...(persistence instanceof Promise
+    ...(isThenable(persistence)
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
       : {}),
   };
+}
+
+// zone.js replaces the global Promise, so a native async function's promise
+// fails `instanceof Promise` in the app.
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function withResultMetadata(
@@ -1282,6 +1292,7 @@ export function normalizedCacheExchange(
           revalidations: optimistic.revalidations,
           identityBindings: optimistic.identityBindings,
           clientMetadata: optimistic.clientMetadata,
+          uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
         const now = Date.now();
         const claim = {

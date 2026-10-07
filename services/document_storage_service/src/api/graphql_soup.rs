@@ -171,7 +171,10 @@ fn insert_graphql_context_data(
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
+    data.insert(state.graphql_calendar_context.clone());
+    data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_initiative_entity_loader.clone());
+    data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(graphql_initiative::initiative_detail_loader(
         state.graphql_initiative_context.clone(),
         macro_user_id.clone(),
@@ -193,12 +196,12 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
         state.readonly_db.0.clone(),
     )));
+    // Read right after the session is created and after its subscription
+    // starts, so the log must hold every committed row: the primary.
     data.insert(complete_graph::agent_session_log_loader(
         PgAgentSessionRepo::new(
-            state.readonly_db.0.clone(),
-            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(
-                state.readonly_db.0.clone(),
-            ))),
+            state.db.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
         ),
     ));
     data.insert(complete_graph::entity_properties_loader(

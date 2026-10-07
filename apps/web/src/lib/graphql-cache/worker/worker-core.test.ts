@@ -556,6 +556,124 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('keeps a calendar commit behind the hydration it covers and fans out its deletions', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const range = {
+      kind: 'range' as const,
+      revision: '1',
+      occurrenceKeys: [],
+      gaps: [],
+      freshness: 'fresh' as const,
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: null,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return {
+            revision: '1',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            data: null,
+          };
+        }),
+        calendarRange: vi.fn(async () => {
+          order.push('calendar-range');
+          return range;
+        }),
+        calendarCommit: vi.fn(async () => {
+          order.push('calendar-commit');
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarOccurrence:e1:k'],
+            affectedOps: ['client:7'],
+            reset: false,
+            searchChangedBuckets: [],
+          };
+        }),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query CalendarOccurrences { occurrences }',
+      data: { occurrences: [] },
+    });
+    const commit = core.handleRequest(port, {
+      id: 4,
+      kind: 'calendar-commit',
+      commit: {
+        coverage: [{ kind: 'timed', start: 0, end: 10 }],
+        deletedEventKeys: ['GraphqlCalendarEvent:e1'],
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 5,
+      kind: 'calendar-range',
+      request: { startMs: 0, endMs: 10, startDay: 0, endDay: 1 },
+    });
+    releaseBlocker();
+    await Promise.all([running, hydration, commit, read]);
+
+    expect(order).toEqual([
+      'read',
+      'calendar-range',
+      'hydrate',
+      'calendar-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 5, ok: true, result: range });
+    expect(messages).toContainEqual({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlCalendarOccurrence:e1:k'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 4,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlCalendarOccurrence:e1:k'],
+      },
+    });
+  });
+
   it('does not let stale hydration overwrite a newer queued write', async () => {
     let releaseBlocker!: () => void;
     let markBlockerStarted!: () => void;

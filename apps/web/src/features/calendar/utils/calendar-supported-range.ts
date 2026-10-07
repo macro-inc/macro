@@ -9,7 +9,9 @@ interface CalendarSupportedRange {
 }
 
 /** Returns a safely inset version of the backend's rolling materialized range. */
-function getCalendarSupportedRange(now = new Date()): CalendarSupportedRange {
+export function getCalendarSupportedRange(
+  now = new Date()
+): CalendarSupportedRange {
   const start = new Date(now);
   start.setDate(start.getDate() - CALENDAR_HISTORY_DAYS);
   start.setHours(0, 0, 0, 0);

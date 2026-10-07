@@ -65,9 +65,9 @@ describe('spreadsheet store', () => {
     doc.free();
   });
 
-  it('shifts cells in a connected shared workbook and keeps inserted columns', async () => {
+  it('shifts coordinates in a connected workbook and keeps inserted columns', async () => {
     const doc = new LoroDoc();
-    writeSpreadsheetCells(doc, { A1: { value: 'Keep me' } });
+    writeSpreadsheetCells(doc, { A1: { value: 'Name' }, B1: { value: '=A1' } });
     let dispose = () => {};
     const store = createRoot((cleanup) => {
       dispose = cleanup;
@@ -86,20 +86,20 @@ describe('spreadsheet store', () => {
     await Promise.resolve();
     expect(store.canChangeStructure()).toBe(true);
     const before = structuredClone(store.workbook());
+    const columns = before[0].layout.columnCount;
     const next = before.map((sheet) => ({
       ...sheet,
-      cells: { B1: sheet.cells.A1 },
-      layout: { ...sheet.layout, columnCount: sheet.layout.columnCount + 1 },
+      cells: { B1: sheet.cells.A1, C1: { ...sheet.cells.B1, value: '=B1' } },
+      layout: { ...sheet.layout, columnCount: columns + 1 },
     }));
     store.applyStructure(before, next, store.revision());
-    expect(store.cells()).toEqual({ B1: before[0].cells.A1 });
-    expect(store.columnCount()).toBe(before[0].layout.columnCount + 1);
-    expect(readSpreadsheetLayout(doc).columnCount).toBe(
-      before[0].layout.columnCount + 1
-    );
+    expect(store.cells().A1).toBeUndefined();
+    expect(store.cells().B1.value).toBe('Name');
+    expect(store.cells().C1.value).toBe('=B1');
+    expect(readSpreadsheetLayout(doc).columnCount).toBe(columns + 1);
     store.undo();
-    expect(store.cells()).toEqual(before[0].cells);
-    expect(store.columnCount()).toBe(before[0].layout.columnCount);
+    expect(store.cells().A1.value).toBe('Name');
+    expect(readSpreadsheetLayout(doc).columnCount).toBe(columns);
     dispose();
     doc.free();
   });

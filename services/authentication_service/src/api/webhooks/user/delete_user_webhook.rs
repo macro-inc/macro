@@ -232,7 +232,7 @@ async fn delete_user(
         .iter()
         .map(|id| MacroUserIdStr::try_from(id.clone()))
         .collect::<Result<Vec<_>, _>>()?;
-    authentication_service::service::user::delete_user::delete_user_data(
+    crate::service::user::delete_user::delete_user_data(
         ctx.user_deletion.as_ref(),
         &macro_user.id,
         &users,

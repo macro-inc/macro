@@ -1309,6 +1309,7 @@ async fn an_external_open_carries_its_instructions() {
     );
 }
 
+mod owned_purge;
 mod read;
 mod user_cleanup;
 

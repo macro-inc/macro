@@ -16,6 +16,7 @@ import { ChartDialog } from '../components/ChartDialog';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
+import { SpreadsheetGoalSeekDialog } from '../components/SpreadsheetGoalSeekDialog';
 import {
   renderedSelectionCell,
   SpreadsheetGrid,
@@ -62,6 +63,7 @@ import { CSV_MAX_BYTES } from '../core/workbook-file-types';
 import { createCalculation } from '../primitives/create-calculation';
 import { createCalculationStatus } from '../primitives/create-calculation-status';
 import { createDrawingActions } from '../primitives/create-drawing-actions';
+import { createGoalSeek } from '../primitives/create-goal-seek';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createSheetActions } from '../primitives/create-sheet-actions';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -235,6 +237,45 @@ export function SpreadsheetEditor(props: {
     gridElement
       ?.querySelector(`[data-address="${cellAddress(grid.selection().focus)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const goalSeek = createGoalSeek({
+    sheets: () =>
+      props.store.workbook().map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+      })),
+    activeSheetId: props.store.activeSheetId,
+    activeAddress: grid.activeAddress,
+    cell: (sheetId, address) =>
+      props.store.workbook().find((sheet) => sheet.id === sheetId)?.cells[
+        address
+      ],
+    canEdit: editable,
+    revision: props.store.revision,
+    seek: (request) => calculation.goalSeek(request),
+    apply: (sheetId, address, value) => {
+      const sheet = props.store
+        .workbook()
+        .find((entry) => entry.id === sheetId);
+      if (!sheet) return 'That sheet is no longer in the workbook.';
+      const outcome = validateInput(
+        validationAt(sheet.metadata?.validations, address),
+        value,
+        rangeValues(sheetId),
+        definedNames(sheetId)
+      );
+      if (!outcome.valid && outcome.style === 'stop') return outcome.message;
+      props.store.setSheetCells(sheetId, { [address]: { value } });
+    },
+    select: (sheetId, address) => {
+      const position = positionFromAddress(address);
+      if (!position) return;
+      props.store.setActiveSheet(sheetId);
+      queueMicrotask(() => {
+        grid.select(position);
+        revealSelection();
+      });
+    },
+  });
   // Comment links drive the imperative grid selection and scroll without moving
   // keyboard focus out of the comment composer.
   createEffect(
@@ -272,6 +313,7 @@ export function SpreadsheetEditor(props: {
     }
     if (
       actions.findOpen() ||
+      goalSeek.open() ||
       workbookActions.preview() ||
       workbookActions.sheetDialog()
     )
@@ -383,6 +425,17 @@ export function SpreadsheetEditor(props: {
       .with('fill-right', () => grid.fillDirection('right'))
       .with('select-all', actions.selectAll)
       .with('find', () => actions.setFindOpen(true))
+      .with('goal-seek', () => {
+        if (calculation.busy() || calculation.error()) {
+          actions.setNotice(
+            calculation.error()
+              ? 'Fix the calculation error before using Goal Seek.'
+              : 'Wait for the sheet to finish calculating, then try Goal Seek again.'
+          );
+          return;
+        }
+        goalSeek.show();
+      })
       .with('export-csv', exportCsv)
       .with('import', () => importInput.click())
       .with('export-xlsx', () => {
@@ -746,6 +799,7 @@ export function SpreadsheetEditor(props: {
           editing={!!grid.editing()}
           complete={calculation.complete}
           selectionRequest={grid.editorSelection()}
+          references={grid.draftReferences()}
           pickingReference={
             grid.pickingReference() ||
             (isTouchDevice() && !!grid.referenceSelection())
@@ -867,6 +921,8 @@ export function SpreadsheetEditor(props: {
           }
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
+          referenceHighlights={grid.referenceHighlights()}
+          draftReferences={grid.draftReferences()}
           pickingReference={grid.pickingReference()}
           onTextSelection={grid.setTextSelection}
           onReferenceStart={grid.beginReference}
@@ -919,7 +975,14 @@ export function SpreadsheetEditor(props: {
           onClear={grid.clear}
           onGridReady={(element) => {
             gridElement = element;
-            if (props.autoFocus) focusGrid();
+            // The sheet loads asynchronously; never take focus from a dialog
+            // or control the user reached in the meantime.
+            const active = document.activeElement;
+            if (
+              props.autoFocus &&
+              (!active || active === document.body || active.contains(element))
+            )
+              focusGrid();
           }}
         />
       </Show>
@@ -1146,6 +1209,28 @@ export function SpreadsheetEditor(props: {
         progress={workbookActions.importProgress()}
         onConfirm={workbookActions.confirmImport}
         onClose={workbookActions.closePreview}
+      />
+      <SpreadsheetGoalSeekDialog
+        onRestoreFocus={() => {
+          focusGrid();
+          revealSelection();
+        }}
+        open={goalSeek.open()}
+        onClose={goalSeek.close}
+        setCell={goalSeek.setCell()}
+        onSetCell={goalSeek.setSetCell}
+        goal={goalSeek.goal()}
+        onGoal={goalSeek.setGoal}
+        changingCell={goalSeek.changingCell()}
+        onChangingCell={goalSeek.setChangingCell}
+        seeking={goalSeek.seeking()}
+        solution={goalSeek.solution()}
+        message={goalSeek.message()}
+        onSeek={() => {
+          void goalSeek.seek();
+        }}
+        onApply={goalSeek.apply}
+        onEdit={goalSeek.clearSolution}
       />
       <SpreadsheetFindDialog
         onRestoreFocus={() => {

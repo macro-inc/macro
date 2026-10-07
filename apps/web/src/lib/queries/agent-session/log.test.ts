@@ -121,6 +121,35 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('says why the cache missed', async () => {
+    const hit = watchAgentSessionLog(SESSION);
+    query.next(fromCache(logData([1])));
+    query.next(fromNetwork(logData([1])));
+    await hit.cached;
+    expect(hit.cacheMiss()).toBeUndefined();
+
+    const networkFirst = watchAgentSessionLog(SESSION);
+    query.next(fromNetwork(logData([1])));
+    expect(await networkFirst.cached).toBeUndefined();
+    expect(networkFirst.cacheMiss()).toBe('network_first');
+
+    const empty = watchAgentSessionLog(SESSION);
+    query.next(fromCache({ user: { id: 'user-1', agentSession: null } }));
+    query.next(fromNetwork(logData([1])));
+    await empty.cached;
+    expect(empty.cacheMiss()).toBe('empty');
+
+    const networkOnly = watchAgentSessionLog(SESSION, 'network-only');
+    query.next(fromNetwork(logData([1])));
+    await networkOnly.cached;
+    expect(networkOnly.cacheMiss()).toBe('network_only');
+
+    const stopped = watchAgentSessionLog(SESSION);
+    stopped.stop();
+    await stopped.cached;
+    expect(stopped.cacheMiss()).toBe('stopped');
+  });
+
   it('answers from the cache, then the network', async () => {
     const watch = watchAgentSessionLog(SESSION);
     query.next(fromCache(logData([1])));

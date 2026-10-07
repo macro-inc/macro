@@ -224,13 +224,18 @@ where
     let next_cursor = has_more
         .then(|| occurrences.last())
         .flatten()
-        .map(|(_, occurrence)| {
-            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(occurrence))
-                .type_erase()
+        .map(|listing| {
+            Base64Str::encode_json(CalendarOccurrenceCursor::from_occurrence(
+                &listing.occurrence,
+            ))
+            .type_erase()
         });
     let items = occurrences
         .into_iter()
-        .map(|(event, occurrence)| CalendarOccurrenceItem { event, occurrence })
+        .map(|listing| {
+            let (event, occurrence) = listing.into_occurrence_event();
+            CalendarOccurrenceItem { event, occurrence }
+        })
         .collect();
 
     Ok(Json(CalendarOccurrenceResponse {

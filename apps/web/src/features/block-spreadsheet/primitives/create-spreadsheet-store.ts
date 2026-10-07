@@ -459,10 +459,9 @@ export function createSpreadsheetStore(options: {
   );
 
   const editable = () => options.source.ready() && options.canEdit();
-  // Moving cells rewrites their addresses. Edits collaborators made at the old
-  // addresses while this client was disconnected would merge into the wrong
-  // cells, so shared workbooks shift cells only while connected.
-  const structureSynced = () =>
+  // A structural edit rewrites cells at new coordinates. Offline, it could
+  // merge long after collaborators kept editing the old ones.
+  const canShiftCoordinates = () =>
     options.source.status() === 'local' ||
     options.source.status() === 'connected';
 
@@ -637,7 +636,7 @@ export function createSpreadsheetStore(options: {
       doc.commit({ origin: 'spreadsheet-layout' });
       refresh();
     },
-    canChangeStructure: () => editable() && structureSynced(),
+    canChangeStructure: () => editable() && canShiftCoordinates(),
     applyStructure(
       expected: SpreadsheetWorkbookSheet[],
       next: SpreadsheetWorkbookSheet[],
@@ -646,8 +645,8 @@ export function createSpreadsheetStore(options: {
       const doc = options.source.doc();
       if (!doc || !editable())
         throw new Error('This spreadsheet is view only.');
-      if (!structureSynced())
-        throw new Error('Reconnect to insert or delete rows and columns.');
+      if (!canShiftCoordinates())
+        throw new Error('Reconnect to insert or delete rows or columns.');
       if (revision() !== expectedRevision)
         throw new Error(
           'The workbook changed while moving cells. No changes were applied; try again.'

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     Json,
     extract::{Query, State},
@@ -11,9 +12,9 @@ use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    oauth2::OAuthState,
+use crate::{
+    account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
+    api::context::{ApiContext, AuthorizationService},
 };
 
 pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
@@ -172,12 +173,15 @@ pub async fn init_github_link_handler(
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Json<InitGithubLinkResponse>, InitGithubLinkError> {
     let Query(InitGithubLinkQueryParams { original_url }) = query;
+    let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
+    let initiator =
+        macro_uuid::string_to_uuid(fusion_user_id).context("fusion user id must be a uuid")?;
     // TODO: this should probably be a middleware or extractor
     // Check count of in-progress links
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &authorization.authorization.user.user_context.fusion_user_id,
+            fusion_user_id,
         )
         .await?;
 
@@ -188,7 +192,7 @@ pub async fn init_github_link_handler(
     // Create in-progress link
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_user_link(
         &ctx.db,
-        &authorization.authorization.user.user_context.fusion_user_id,
+        fusion_user_id,
     )
     .await?;
 
@@ -199,20 +203,25 @@ pub async fn init_github_link_handler(
         .await
         .map_err(|_| InitGithubLinkError::IdentityProviderNotFound)?;
 
-    // Build OAuth state
-    let state = OAuthState {
-        identity_provider_id: github_idp_id.clone(),
-        link_id: Some(link_id),
-        original_url: original_url.map(|x| x.0.to_string()),
-        is_mobile: None,
-    };
+    // Build the signed OAuth state. The callback refuses state it did not sign,
+    // state issued for another provider, and state whose pending link belongs
+    // to a different user.
+    let state = AccountLinkState::new(
+        LinkProvider::Github,
+        github_idp_id.clone(),
+        link_id,
+        initiator,
+        original_url.map(|x| x.0.to_string()),
+    );
+    let state = sign_account_link_state(&state, &ctx.account_link_state_key)
+        .context("failed to sign OAuth state")?;
 
     // Build Github OAuth URL
-    let redirect_uri = crate::api::oauth2::format_redirect_uri("github");
+    let redirect_uri = crate::api::oauth2::format_redirect_uri(LinkProvider::Github.as_str());
 
     let authorization_url = ctx
         .github_link_service
-        .construct_oauth_url(&redirect_uri, state)
+        .construct_oauth_url(&redirect_uri, &state)
         .map_err(InitGithubLinkError::GithubServiceError)?;
 
     Ok(Json(InitGithubLinkResponse {

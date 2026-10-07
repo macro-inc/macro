@@ -76,7 +76,7 @@ impl CalendarRepository for FakeRepo {
         _range: OccurrenceRange,
         _cursor: Option<CalendarOccurrenceCursor>,
         _limit: u16,
-    ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report> {
+    ) -> Result<Vec<crate::domain::models::OccurrenceListing>, Report> {
         Ok(Vec::new())
     }
 

@@ -114,6 +114,7 @@ export function TasksHeader(props: TasksHeaderProps) {
         }
       >
         <TasksMobileTabs />
+        <TasksControls />
       </Show>
     </div>
   );

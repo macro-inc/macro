@@ -128,6 +128,9 @@ async fn main() -> anyhow::Result<()> {
         calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
             PgCalendarRepository::new(db.clone()),
         ),
+        calendar_events::domain::changes::CalendarChangeLogRetention::new(
+            PgCalendarRepository::new(db.clone()),
+        ),
         config.calendar_sync_enabled,
         worker_cancellation_token.clone(),
     ));

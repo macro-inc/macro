@@ -24,6 +24,7 @@ import type {
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
+  PullRequestsSessionsResponse,
   SandboxSize,
   SandboxSizeBody,
   SessionPullRequestsResponse,
@@ -353,6 +354,21 @@ export const agentHarnessServiceClient = {
       `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
       { method: 'DELETE', errorResponseHandler: sessionError }
     ).then((result) => result.map(() => undefined));
+  },
+
+  /**
+   * The sessions linked to each pull request in `urls` (at most 100) that the
+   * caller can view, with the thread each session was started from.
+   */
+  sessionsForPullRequests(urls: string[]) {
+    return fetchWithToken<PullRequestsSessionsResponse>(
+      `${agentHarnessHost}/agent-sessions/by-pull-requests`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      }
+    );
   },
 
   /** The sessions linked to the pull request at `url` that the caller can view. */

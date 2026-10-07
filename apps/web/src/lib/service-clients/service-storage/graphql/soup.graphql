@@ -194,6 +194,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		inboxVisible
 		linkId
 		latestInboundMessageTs
+		reminderReturnedAt
 		mailDraftState @cacheOnly { ...EmailDraftStateFields }
         mailAllPreview @cacheOnly { ...MailPreviewFields }
 		mailDraftPreview @cacheOnly { ...MailPreviewFields }

@@ -104,6 +104,19 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
+    /// Highest grant on a CRM pipeline.
+    fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// All pipeline grants for the caller's current sharing sources.
+    fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a database.
     fn get_database_access(
         &self,
@@ -132,6 +145,23 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         row_ids: &[Uuid],
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a form: their grants, plus
+    /// View for anyone (signed in or not) while the form's audience is public
+    /// and it is not trashed.
+    fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a user's grants hold on every live form they
+    /// reach, ordered by form id. A public audience alone never lists a form,
+    /// and trashed forms are left out.
+    fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 
     /// Get the access level a user has for a reminder.
     ///
@@ -564,6 +594,19 @@ pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }
 
+/// Enumerates the forms a user can reach through grants. Kept apart from
+/// [`EntityAccessService`], which answers for one entity at a time: only the
+/// forms catalog needs every grant at once.
+pub trait AccessibleForms: Clone + Send + Sync + 'static {
+    /// The highest access level the user's grants hold on every live form,
+    /// ordered by form id. Public forms the user holds no grant on are not
+    /// listed, and neither are trashed forms.
+    fn accessible_forms(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
 /// No-op [`EntityAccessService`] for binaries that need to satisfy the
 /// bound but never check access — e.g. schema-only GraphQL SDL export.
 /// `get_user_team` reports no membership; every other method errors.
@@ -686,4 +729,13 @@ impl EntityAccessService for NoOpEntityAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(None)
     }
+}
+
+/// Directory of pipeline grants for CRM navigation.
+pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
+    /// Highest effective grant on each accessible pipeline.
+    fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }

@@ -16,7 +16,7 @@ use crate::domain::event_runs::{
     EventRunRepository, FinalizationResult, FinalizeEventRun, PageSize, PendingEventRun,
 };
 use crate::domain::event_trigger::{ActionTrigger, EventReference};
-use crate::domain::models::{MAX_ACTION_TIME, ScheduledAction};
+use crate::domain::models::{ActionExecutionRecord, MAX_ACTION_TIME, ScheduledAction};
 
 #[cfg(test)]
 mod test;
@@ -494,6 +494,73 @@ impl EventRunRepository for PgEventRunRepo {
             key.event_id.as_uuid(),
             revision.get(),
             serde_json::to_value(EventRunOutcome::Cancelled { reason })?,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn skip_pending(
+        &self,
+        key: EventRunKey,
+        revision: ConfigurationRevision,
+        reason: CancellationReason,
+        record: ActionExecutionRecord,
+    ) -> Result<(), Report> {
+        if record.action_id != key.action_id {
+            bail!("execution record belongs to another action");
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query_scalar!(
+            "SELECT id FROM scheduled_action WHERE id = $1 FOR UPDATE",
+            key.action_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let skipped = sqlx::query_scalar!(
+            r#"
+            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4
+            WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
+            RETURNING event_id
+            "#,
+            key.action_id,
+            key.event_id.as_uuid(),
+            revision.get(),
+            serde_json::to_value(EventRunOutcome::Cancelled { reason })?,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        if skipped.is_none() {
+            tx.rollback().await?;
+            return Ok(());
+        }
+        let id = generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO action_execution_record
+                (id, action_id, resource_id, start_time, end_time, is_success, result, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "#,
+            id,
+            key.action_id,
+            record.resource_id,
+            record.start_time,
+            record.end_time,
+            record.is_success,
+            record.result,
+            record.created_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            r#"
+            UPDATE scheduled_action_event_run SET execution_record_id = $3
+            WHERE action_id = $1 AND event_id = $2
+            "#,
+            key.action_id,
+            key.event_id.as_uuid(),
+            id,
         )
         .execute(&mut *tx)
         .await?;

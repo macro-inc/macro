@@ -14,6 +14,10 @@ import type {
   CachedQueryVariantWire,
   CacheReadPriority,
   CacheRevision,
+  CalendarCommitArgs,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -80,6 +84,12 @@ export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
+  /**
+   * `GraphqlCalendarEvent` keys whose occurrence set this mutation cannot
+   * predict (for example a recurrence edit); calendar ranges report them
+   * until the mutation settles.
+   */
+  uncertainCalendarEventKeys?: string[];
 }
 
 /** Lease request used for the claim attempted immediately after enqueue. */
@@ -125,6 +135,12 @@ export interface CacheHost {
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
+  /** Answers a calendar viewport from the local range index. */
+  calendarRange(
+    args: CalendarRangeCacheArgs
+  ): Promise<CalendarRangeCacheResult>;
+  /** Atomically applies calendar coverage, deletions, and sync state. */
+  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked

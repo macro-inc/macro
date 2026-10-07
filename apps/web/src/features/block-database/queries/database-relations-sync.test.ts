@@ -3,16 +3,14 @@ import { expect, it, vi } from 'vitest';
 import { useRelatedDatabaseSync } from './database-relations-sync';
 
 const mock = vi.hoisted(() => ({
-  event: undefined as
-    | ((message: { type: string; data: unknown }) => void)
-    | undefined,
+  events: [] as ((message: { type: string; data: unknown }) => void)[],
   refresh: undefined as (() => void) | undefined,
   subscribe: vi.fn(),
   invalidateDatabase: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({
-  createConnectionWebsocketEffect: (handler: typeof mock.event) => {
-    mock.event = handler;
+  createConnectionWebsocketEffect: (handler: (typeof mock.events)[number]) => {
+    mock.events.push(handler);
   },
 }));
 vi.mock('@service-connection/client', () => ({
@@ -35,15 +33,17 @@ it('subscribes to an external related database, re-reads its schema on gateway c
     entity_type: 'database',
     entity_id: 'crm-db',
   });
-  mock.event?.({
-    type: 'database_table_changed',
-    data: { databaseId: 'support-db', tableId: 'tickets', version: 3 },
-  });
+  for (const handler of mock.events)
+    handler({
+      type: 'database_table_changed',
+      data: { databaseId: 'support-db', tableId: 'tickets', version: 3 },
+    });
   expect(mock.invalidateDatabase).not.toHaveBeenCalled();
-  mock.event?.({
-    type: 'database_table_changed',
-    data: { databaseId: 'crm-db', tableId: 'customers', version: 4 },
-  });
+  for (const handler of mock.events)
+    handler({
+      type: 'database_table_changed',
+      data: { databaseId: 'crm-db', tableId: 'customers', version: 4 },
+    });
   expect(mock.invalidateDatabase).toHaveBeenCalledWith('crm-db');
   expect(refreshRows).not.toHaveBeenCalled();
   mock.refresh?.();

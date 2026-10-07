@@ -6,6 +6,8 @@ use sqlx::{Pool, Postgres, Row};
 use super::*;
 use crate::domain::model::SeatPlan;
 
+mod delete_team;
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
@@ -940,7 +942,9 @@ async fn test_delete_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     .execute(&pool)
     .await?;
 
-    team_repo.delete_team(&team_id).await?;
+    team_repo
+        .delete_team(&ClearedTeam::assume_cleared(team_id, Vec::new()))
+        .await?;
 
     let team = sqlx::query!(
         r#"
