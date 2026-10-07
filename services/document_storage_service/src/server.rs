@@ -510,7 +510,7 @@ pub async fn run() -> anyhow::Result<()> {
         config.docx_document_upload_bucket.as_ref(),
     );
     let markdown_initializer =
-        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::detached(
             lexical_client.as_ref().clone(),
             sync_service_client.as_ref().clone(),
         );
