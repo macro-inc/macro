@@ -669,10 +669,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    return Err(sync_normalization_error(
-                        rootcause::report!("Google Calendar returned a malformed changed series")
-                            .into(),
-                    ));
+                    return Err(sync_normalization_error(rootcause::report!(
+                        "Google Calendar returned a malformed changed series"
+                    )));
                 }
             }
         }
@@ -795,12 +794,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    return Err(sync_normalization_error(
-                        rootcause::report!(
-                            "Google Calendar returned a malformed series in the coverage tail"
-                        )
-                        .into(),
-                    ));
+                    return Err(sync_normalization_error(rootcause::report!(
+                        "Google Calendar returned a malformed series in the coverage tail"
+                    )));
                 }
             }
         }

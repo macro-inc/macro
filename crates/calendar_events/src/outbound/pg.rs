@@ -2386,8 +2386,10 @@ async fn upsert_calendar_tx(
     });
     let anchor_zone = calendar.time_zone.clone();
     // Provider ACL changes and pre-migration snapshots need a full refresh
-    // even when no event's sequence changed. Old source snapshots remain
-    // ineligible for team reads until fetched under the current role.
+    // even when no event's sequence changed or the calendar has no sources.
+    // The migration preserves old workers' incremental state; this strict
+    // worker invalidates it before requesting the verified snapshot.
+    // Old sources remain ineligible for team reads until verified.
     let access_changed = previous.as_ref().is_some_and(|previous| {
         previous.access_role != calendar.access_role || previous.needs_verification
     });

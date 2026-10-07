@@ -108,6 +108,7 @@
               "AI/mcp/tools/get-bot-webhooks",
               "AI/mcp/tools/get-company",
               "AI/mcp/tools/get-entity-properties",
+              "AI/mcp/tools/get-team-availability",
               "AI/mcp/tools/get-thread",
               "AI/mcp/tools/import-notion-page",
               "AI/mcp/tools/issue-bot-credential",

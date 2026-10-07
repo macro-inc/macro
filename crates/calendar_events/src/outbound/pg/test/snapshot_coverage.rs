@@ -53,8 +53,10 @@ async fn empty_calendars_require_strict_full_verification_and_old_writes_revoke_
         .await
         .unwrap()
     };
-    // A legacy empty snapshot has no source row whose role could demand a
-    // rebuild. Its calendar certificate must independently require one.
+    // The migration preserves a legacy worker's token and coverage while its
+    // certificate remains zero. This empty snapshot has no source row whose
+    // role could demand a rebuild: strict calendar upsert must independently
+    // invalidate that preserved incremental state before provider sync.
     sqlx::query!("UPDATE calendars SET sync_token='legacy',synced_at=now(),materialized_starts_at='2026-07-01',materialized_ends_at='2026-08-01',materialized_start_date='2026-07-01',materialized_end_date='2026-08-01' WHERE id=$1", calendar_id).execute(&pool).await.unwrap();
     assert_eq!(version().await, 0);
     let stored = repo
@@ -63,6 +65,12 @@ async fn empty_calendars_require_strict_full_verification_and_old_writes_revoke_
         .unwrap();
     assert!(stored.sync_token.is_none());
     assert!(stored.materialized_range.is_none());
+    assert!(stored.synced_at.is_none());
+    assert_eq!(
+        version().await,
+        0,
+        "invalidating preserved state cannot itself certify an empty calendar"
+    );
     let full = GoogleCalendarSyncSnapshot {
         calendar_id,
         next_sync_token: "strict-full".to_owned(),

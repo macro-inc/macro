@@ -1,6 +1,9 @@
 -- Earlier normalizers could omit malformed masters or instances while marking
 -- coverage complete, including calendars with no retained source rows. Require
 -- a strict snapshot once for every existing calendar before team activation.
+-- Preserve existing sync state here so old workers can continue incremental
+-- polling. A strict worker clears that state when it observes version 0 during
+-- calendar upsert, then certifies only a successful full snapshot.
 ALTER TABLE calendars
     ADD COLUMN snapshot_normalization_version integer NOT NULL DEFAULT 0;
 
@@ -32,15 +35,3 @@ WHEN (
     OR OLD.materialized_end_date IS DISTINCT FROM NEW.materialized_end_date
 )
 EXECUTE FUNCTION calendar_invalidate_snapshot_normalization();
-
--- This causes a one-time full provider resync. Keep team sharing disabled
--- throughout the mixed-worker rollout and wait for verified coverage.
-UPDATE calendars
-SET sync_token = NULL,
-    materialized_starts_at = NULL,
-    materialized_ends_at = NULL,
-    materialized_start_date = NULL,
-    materialized_end_date = NULL,
-    synced_at = NULL,
-    updated_at = now()
-WHERE NOT is_deleted;

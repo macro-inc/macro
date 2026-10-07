@@ -201,10 +201,12 @@ boundary. Keep the existing calendar sync gate enabled for accounts participatin
 in the rollout.
 
 1. Apply the migrations, regenerate SQLx metadata, and deploy the server
-   code with the team-sharing gate disabled. The coverage-reset migration clears
-   sync tokens and materialized coverage for every live existing calendar,
-   including empty calendars that may contain previously skipped provider data.
-   This requires a one-time full resync. The normalization version and database
+   code with the team-sharing gate disabled. The migration marks existing
+   calendars unverified while preserving their sync tokens and materialized
+   coverage, so old workers can continue incremental polling. A new strict worker
+   clears that state when it first observes an unverified calendar, including
+   empty calendars that may contain previously skipped provider data, and requires
+   a full resync. The normalization version and database
    invalidation trigger prevent legacy worker writes from certifying strict
    coverage. Drain all old calendar workers before activation and confirm the
    new workers have reconciled the calendars participating in release checks.
