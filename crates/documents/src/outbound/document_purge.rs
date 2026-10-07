@@ -2,7 +2,9 @@
 
 use super::super::domain::{
     models::DocumentError,
-    purge::{DocumentPurgeQueue, DocumentPurgeRepository, DocxPartReferences, PurgeTarget},
+    purge::{
+        DocumentPurgeQueue, DocumentPurgeRepository, DocxPartReferences, PurgeTarget, PurgedRows,
+    },
 };
 use model_owner::Owner;
 use std::sync::Arc;
@@ -32,16 +34,22 @@ impl DocumentPurgeRepository for LegacyDocumentPurgeRepository {
         }
     }
 
-    #[tracing::instrument(skip(self), err)]
-    async fn docx_part_shas(&self, document_id: &str) -> Result<Vec<String>, DocumentError> {
-        let parts = macro_db_client::document::get_bom_parts(&self.pool, document_id)
-            .await
-            .map_err(DocumentError::Internal)?;
-        Ok(parts.into_iter().map(|part| part.sha).collect())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn purge_rows(&self, document_id: &str) -> Result<(), DocumentError> {
+    #[tracing::instrument(skip(self, target), fields(file_type = ?target.file_type), err)]
+    async fn purge_rows(
+        &self,
+        document_id: &str,
+        target: &PurgeTarget,
+    ) -> Result<PurgedRows, DocumentError> {
+        let docx_part_shas = if target.file_type.as_deref() == Some("docx") {
+            macro_db_client::document::get_bom_parts(&self.pool, document_id)
+                .await
+                .map_err(DocumentError::Internal)?
+                .into_iter()
+                .map(|part| part.sha)
+                .collect()
+        } else {
+            Vec::new()
+        };
         macro_db_client::document::delete_document(&self.pool, document_id)
             .await
             .map_err(DocumentError::Internal)?;
@@ -54,7 +62,7 @@ impl DocumentPurgeRepository for LegacyDocumentPurgeRepository {
             tracing::error!(?error, %document_id, "unable to delete outgoing document mentions");
         })
         .ok();
-        Ok(())
+        Ok(PurgedRows { docx_part_shas })
     }
 }
 

@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::{
     DocumentPurgeQueue, DocumentPurgeRepository, DocumentPurgeService, DocumentPurger,
-    DocxPartReferences, PurgeTarget,
+    DocxPartReferences, PurgeTarget, PurgedRows,
 };
 use crate::domain::models::DocumentError;
 
@@ -95,12 +95,11 @@ impl DocumentPurgeRepository for Arc<State> {
         Ok(self.document.lock().unwrap().clone())
     }
 
-    async fn docx_part_shas(&self, document_id: &str) -> Result<Vec<String>, DocumentError> {
-        self.record("part_shas", document_id);
-        Ok(self.part_shas.clone())
-    }
-
-    async fn purge_rows(&self, document_id: &str) -> Result<(), DocumentError> {
+    async fn purge_rows(
+        &self,
+        document_id: &str,
+        target: &PurgeTarget,
+    ) -> Result<PurgedRows, DocumentError> {
         self.record("rows", document_id);
         if self.fail_rows.load(Ordering::SeqCst) {
             return Err(DocumentError::Internal(anyhow::anyhow!(
@@ -108,7 +107,12 @@ impl DocumentPurgeRepository for Arc<State> {
             )));
         }
         self.document.lock().unwrap().take();
-        Ok(())
+        let docx_part_shas = if target.file_type.as_deref() == Some("docx") {
+            self.part_shas.clone()
+        } else {
+            Vec::new()
+        };
+        Ok(PurgedRows { docx_part_shas })
     }
 }
 
@@ -269,7 +273,7 @@ async fn docx_parts_are_released_after_the_rows_are_gone() {
     let state = Arc::new(State::docx(&["b", "a", "b"]));
     let id = Uuid::now_v7();
     purger(&state).purge(id).await.unwrap();
-    let mut expected = steps(id, &["find", "part_shas", "queue", "broker", "rows"]);
+    let mut expected = steps(id, &["find", "queue", "broker", "rows"]);
     expected.push(("release", "b,a,b".to_owned()));
     assert_eq!(state.steps(), expected);
 }
@@ -289,16 +293,7 @@ async fn docx_parts_are_released_once_across_a_failed_attempt_and_its_retry() {
     let mut expected = steps(
         id,
         &[
-            "find",
-            "part_shas",
-            "queue",
-            "broker",
-            "rows",
-            "find",
-            "part_shas",
-            "queue",
-            "broker",
-            "rows",
+            "find", "queue", "broker", "rows", "find", "queue", "broker", "rows",
         ],
     );
     expected.push(("release", "a".to_owned()));

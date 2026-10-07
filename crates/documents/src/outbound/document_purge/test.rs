@@ -24,7 +24,6 @@ struct CapturingQueue {
 
 impl DocumentPurgeQueue for Arc<CapturingQueue> {
     async fn enqueue(&self, document_id: String, owner: Owner) -> Result<(), DocumentError> {
-        // The rows outlive the enqueue, so a purge that fails later can be retried.
         let stored = macro_db_client::document::get_deleted_document_info(&self.pool, &document_id)
             .await
             .unwrap();

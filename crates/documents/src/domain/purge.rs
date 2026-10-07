@@ -30,6 +30,14 @@ pub struct PurgeTarget {
     pub file_type: Option<String>,
 }
 
+/// What a row delete removed that other stores still hold.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PurgedRows {
+    /// The SHA of each stored docx part the rows referenced, one entry per
+    /// reference. Empty for every other file type.
+    pub docx_part_shas: Vec<String>,
+}
+
 /// Permanent document persistence cleanup.
 pub trait DocumentPurgeRepository: Send + Sync + 'static {
     /// The document, live or trashed. `None` if it does not exist.
@@ -38,18 +46,14 @@ pub trait DocumentPurgeRepository: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = Result<Option<PurgeTarget>, DocumentError>> + Send;
 
-    /// The SHA of each stored part of a docx, one entry per reference.
-    fn docx_part_shas(
-        &self,
-        document_id: &str,
-    ) -> impl Future<Output = Result<Vec<String>, DocumentError>> + Send;
-
-    /// Delete the document's rows, its access rows, and its registry row. A
-    /// document that is already gone is not an error.
+    /// Delete the document's rows, its access rows, and its registry row, and
+    /// report what those rows referenced elsewhere. A document that is already
+    /// gone is not an error.
     fn purge_rows(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<(), DocumentError>> + Send;
+        target: &PurgeTarget,
+    ) -> impl Future<Output = Result<PurgedRows, DocumentError>> + Send;
 }
 
 /// Existing background content-deletion queue.
@@ -99,19 +103,15 @@ where
     B: MacroEventBroker + 'static,
 {
     /// Every failure before the row delete leaves the document findable, so
-    /// the caller can retry the whole purge.
+    /// the caller can retry the whole purge. Part references are released
+    /// from what the row delete reports, so a retry cannot release them twice.
     async fn purge_found(
         &self,
         document_id: String,
         target: PurgeTarget,
     ) -> Result<(), DocumentError> {
-        let part_shas = if target.file_type.as_deref() == Some("docx") {
-            self.repository.docx_part_shas(&document_id).await?
-        } else {
-            Vec::new()
-        };
         self.queue
-            .enqueue(document_id.clone(), target.owner)
+            .enqueue(document_id.clone(), target.owner.clone())
             .await?;
         let event = DocumentMacroEvent::purged(
             document_id.clone(),
@@ -125,12 +125,9 @@ where
             .await
             .map_err(|error| DocumentError::Internal(error.into()))?
             .map_err(|error| DocumentError::Internal(error.into()))?;
-        self.repository.purge_rows(&document_id).await?;
-        // Released only after the rows are gone, so a retry finds no document
-        // and cannot release twice and collect parts other documents still
-        // use. A failure here leaks references instead.
-        if !part_shas.is_empty()
-            && let Err(error) = self.part_references.release(part_shas).await
+        let purged = self.repository.purge_rows(&document_id, &target).await?;
+        if !purged.docx_part_shas.is_empty()
+            && let Err(error) = self.part_references.release(purged.docx_part_shas).await
         {
             tracing::error!(?error, %document_id, "unable to release docx part references");
         }
