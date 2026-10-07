@@ -11,7 +11,7 @@ spreadsheet, then choose **Import…**.
 The document title sits above a compact formatting ribbon. **Paste special** offers
 paste and values-only paste; **View options** toggles gridlines, the formula bar,
 and formula display. **Functions** inserts formulas, while **Format and data**
-contains sorting, whitespace trimming, fill, and clear actions. **Find and replace**
+contains sorting, whitespace trimming, Goal Seek, fill, and clear actions. **Find and replace**
 is a direct ribbon button. The footer's **Import and export** button also contains
 Excel and CSV downloads and stays visible beside horizontally scrolling sheet tabs.
 
@@ -320,6 +320,9 @@ compare formula, error, and formatting behavior before replacing it.
   dialog changes a chart's type, title, legend and data. Edited charts are
   exported as Macro writes them, without the part Excel saved. Ctrl+Alt+5
   selects a drawing from the grid and Tab moves between them.
+- **Format and data → Goal Seek…** finds the number that makes a formula cell
+  reach a typed value, then writes it when confirmed. The search runs on a copy
+  of the calculated workbook, so cancel leaves every cell as it was.
 - Filters, editing named ranges, automatic spill expansion, and drag
   auto-scroll remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when

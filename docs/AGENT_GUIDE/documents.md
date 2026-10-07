@@ -249,7 +249,10 @@ case-sensitive and whole-cell matching. Find next selects each result. Formula r
 but replacements preserve the formulas unless **Search within formulas** is checked.
 **Format and data** sorts the selected rectangle by its active column, keeping each
 row's values, styles, and relative formulas together, or trims whitespace in text
-cells. The same menu offers fill down/right, clear formatting, and clear values.
+cells. **Goal Seek…** in that menu finds the number to put in one cell so a formula
+cell reaches a value you type: set the formula cell, the goal, and the number cell
+to change, then confirm to write that number. Cancel leaves the sheet unchanged.
+The same menu offers fill down/right, clear formatting, and clear values.
 Select data without its header when sorting. A concurrent edit cancels a pending
 sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
 
