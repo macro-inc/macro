@@ -746,6 +746,7 @@ export function SpreadsheetEditor(props: {
           editing={!!grid.editing()}
           complete={calculation.complete}
           selectionRequest={grid.editorSelection()}
+          references={grid.draftReferences()}
           pickingReference={
             grid.pickingReference() ||
             (isTouchDevice() && !!grid.referenceSelection())
@@ -867,6 +868,8 @@ export function SpreadsheetEditor(props: {
           }
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
+          referenceHighlights={grid.referenceHighlights()}
+          draftReferences={grid.draftReferences()}
           pickingReference={grid.pickingReference()}
           onTextSelection={grid.setTextSelection}
           onReferenceStart={grid.beginReference}

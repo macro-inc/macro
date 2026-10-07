@@ -169,6 +169,11 @@ click its tab while the formula is awaiting a reference, then click or drag the
 source cells. The draft stays in the formula bar; Enter commits it to the original
 sheet and cell. Names with spaces are quoted automatically. Escape cancels and
 returns to the original sheet.
+While a formula is being edited, each cell or range it refers to, including whole
+columns or rows such as `D:D`, is outlined in its own color on the grid, and the
+reference text in both editors uses the same color. A repeated reference keeps
+its color. Only references to the sheet being shown are outlined; the colors
+disappear when the edit is committed or cancelled.
 On touch screens, tap a cell while editing a formula, then drag **Move reference
 start** or **Move reference end** to extend its reference. Tapping a suggestion or
 adjusting a reference should keep the input focused and the software keyboard open.

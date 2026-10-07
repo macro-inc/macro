@@ -27,7 +27,11 @@ import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comme
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { SPREADSHEET_CLIPBOARD_TYPE } from '../core/cell-copy';
 import type { ChartData } from '../core/chart-data';
-import type { FormulaTextSelection } from '../core/formula-reference';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+  ReferenceHighlight,
+} from '../core/formula-reference';
 import {
   type CellPosition,
   type CellSelection,
@@ -213,6 +217,10 @@ export function SpreadsheetGrid(props: {
   formulaEditing?: boolean;
   editorSelection?: FormulaTextSelection;
   referenceSelection?: CellSelection;
+  /** The colored ranges of the references in the formula being edited. */
+  referenceHighlights?: ReferenceHighlight[];
+  /** Colored spans of the formula draft's reference text. */
+  draftReferences?: FormulaReferenceSpan[];
   pickingReference?: boolean;
   onTextSelection?: (start: number, end: number) => void;
   onReferenceStart?: (position: CellPosition) => boolean;
@@ -1766,6 +1774,7 @@ export function SpreadsheetGrid(props: {
                               complete={props.complete}
                               readonly={props.readonly}
                               selectionRequest={props.editorSelection}
+                              references={props.draftReferences}
                               pickingReference={
                                 props.pickingReference ||
                                 (isTouchDevice() && !!props.referenceSelection)
@@ -1995,6 +2004,20 @@ export function SpreadsheetGrid(props: {
                 </Show>
               </div>
             </Show>
+            <For each={props.referenceHighlights}>
+              {(highlight) => (
+                <div
+                  aria-hidden="true"
+                  data-formula-highlight
+                  class="pointer-events-none absolute z-[3] border-2"
+                  style={{
+                    ...rangeStyle(highlight.bounds),
+                    'border-color': highlight.color,
+                    background: `color-mix(in srgb, ${highlight.color} 10%, transparent)`,
+                  }}
+                />
+              )}
+            </For>
             <Show when={props.referenceSelection}>
               {(range) => (
                 <div

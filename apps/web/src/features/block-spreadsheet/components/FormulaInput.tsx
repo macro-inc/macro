@@ -24,7 +24,10 @@ import {
   formulaFunctions,
   functionSummary,
 } from '../core/formula-completion';
-import type { FormulaTextSelection } from '../core/formula-reference';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+} from '../core/formula-reference';
 import {
   type CompleteFormula,
   createFormulaAssistance,
@@ -42,6 +45,8 @@ export type FormulaInputProps = {
   placeholder?: string;
   complete?: CompleteFormula;
   selectionRequest?: FormulaTextSelection;
+  /** Spans of `value` to draw in their reference's color. */
+  references?: FormulaReferenceSpan[];
   pickingReference?: boolean;
   onSelectionChange?: (start: number, end: number) => void;
   onFocus?: () => void;
@@ -176,6 +181,11 @@ function FormulaTextarea(props: FormulaInputProps) {
         maxLength={10_000}
         placeholder={props.placeholder}
         class={`${props.class} touch:text-[max(16px,1rem)]`}
+        style={
+          props.references?.length
+            ? { color: 'transparent', 'caret-color': 'var(--color-ink)' }
+            : undefined
+        }
         value={props.value}
         onFocus={() => {
           props.onFocus?.();
@@ -209,6 +219,15 @@ function FormulaTextarea(props: FormulaInputProps) {
           props.onBlur();
         }}
       />
+      <Show when={props.references?.length ? props.references : undefined}>
+        {(references) => (
+          <ReferenceMirror
+            input={input}
+            value={props.value}
+            references={references()}
+          />
+        )}
+      </Show>
       <Show when={popupVisible()}>
         <Portal>
           <FormulaPopup
@@ -303,6 +322,93 @@ function FormulaTextarea(props: FormulaInputProps) {
         </Portal>
       </Show>
     </>
+  );
+}
+
+/**
+ * Draws the textarea's text over it, with references in their colors. A
+ * textarea cannot style part of its text, so it keeps the caret and selection
+ * while its own text is transparent.
+ */
+function ReferenceMirror(props: {
+  input: HTMLTextAreaElement;
+  value: string;
+  references: FormulaReferenceSpan[];
+}) {
+  let mirror!: HTMLDivElement;
+  let text!: HTMLSpanElement;
+  const segments = () => {
+    const parts: { text: string; color?: string }[] = [];
+    let at = 0;
+    for (const reference of props.references) {
+      if (reference.start < at || reference.end > props.value.length) continue;
+      parts.push({ text: props.value.slice(at, reference.start) });
+      parts.push({
+        text: props.value.slice(reference.start, reference.end),
+        color: reference.color,
+      });
+      at = reference.end;
+    }
+    parts.push({ text: props.value.slice(at) });
+    return parts;
+  };
+  const sync = () => {
+    const { input } = props;
+    const style = getComputedStyle(input);
+    Object.assign(mirror.style, {
+      left: `${input.offsetLeft}px`,
+      top: `${input.offsetTop}px`,
+      width: `${input.offsetWidth}px`,
+      height: `${input.offsetHeight}px`,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontStyle: style.fontStyle,
+      letterSpacing: style.letterSpacing,
+      lineHeight: style.lineHeight,
+      textAlign: style.textAlign,
+      paddingTop: style.paddingTop,
+      paddingRight: style.paddingRight,
+      paddingBottom: style.paddingBottom,
+      paddingLeft: style.paddingLeft,
+      borderTopWidth: style.borderTopWidth,
+      borderRightWidth: style.borderRightWidth,
+      borderBottomWidth: style.borderBottomWidth,
+      borderLeftWidth: style.borderLeftWidth,
+    });
+    text.style.transform = `translate(${-input.scrollLeft}px, ${-input.scrollTop}px)`;
+  };
+  onMount(() => {
+    sync();
+    props.input.addEventListener('scroll', sync);
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(sync);
+    observer?.observe(props.input);
+    onCleanup(() => {
+      props.input.removeEventListener('scroll', sync);
+      observer?.disconnect();
+    });
+  });
+  createEffect(on(() => props.value, sync, { defer: true }));
+  return (
+    <div
+      ref={mirror}
+      aria-hidden="true"
+      data-formula-mirror
+      class="pointer-events-none absolute box-border overflow-hidden whitespace-pre border-solid border-transparent text-ink"
+    >
+      <span ref={text} class="block">
+        <For each={segments()}>
+          {(segment) => (
+            <span style={segment.color ? { color: segment.color } : undefined}>
+              {segment.text}
+            </span>
+          )}
+        </For>
+      </span>
+    </div>
   );
 }
 

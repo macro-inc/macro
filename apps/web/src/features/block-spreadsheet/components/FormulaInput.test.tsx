@@ -131,3 +131,31 @@ it('commits on blur after starting a formula without a mention adapter', () => {
   input.blur();
   expect(blur).toHaveBeenCalledOnce();
 });
+
+it('colors reference text while the textarea keeps the caret', () => {
+  const view = render(() => (
+    <FormulaInput
+      label="Formula"
+      value="=A1+B2"
+      class=""
+      references={[
+        { start: 1, end: 3, color: 'var(--color-blue)' },
+        { start: 4, end: 6, color: 'var(--color-red)' },
+      ]}
+      onInput={vi.fn()}
+      onKeyDown={vi.fn()}
+      onBlur={vi.fn()}
+    />
+  ));
+  const input = view.getByRole('textbox', { name: 'Formula' });
+  expect(input.style.color).toBe('transparent');
+  const mirror = view.container.querySelector('[data-formula-mirror]')!;
+  expect(mirror.textContent).toBe('=A1+B2');
+  const colored = [...mirror.querySelectorAll<HTMLSpanElement>('span span')]
+    .filter((span) => span.style.color)
+    .map((span) => [span.textContent, span.style.color]);
+  expect(colored).toEqual([
+    ['A1', 'var(--color-blue)'],
+    ['B2', 'var(--color-red)'],
+  ]);
+});
