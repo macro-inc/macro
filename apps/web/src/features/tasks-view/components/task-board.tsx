@@ -423,7 +423,7 @@ function TaskBoardLane(props: {
       >
         <div
           aria-hidden="true"
-          class="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-lg bg-accent/10 text-sm font-medium text-ink"
+          class="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-lg bg-surface-0/95 p-4 text-center text-sm font-medium text-ink"
         >
           Board sorted by {props.board.sortLabel}
         </div>
@@ -539,13 +539,13 @@ function TaskBoardCard(props: {
         props.board.onOpen(props.task, event);
       }}
     >
-      <div class="flex items-center gap-1 p-3 pb-2">
+      <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2 p-3 pb-2">
         <div data-kanban-no-drag class="flex shrink-0 items-center">
           {props.board.renderLeadingTitleProperty?.(task, readOnly)}
         </div>
         <button
           type="button"
-          class="min-w-0 flex-1 break-words text-left text-sm font-medium text-ink hover:underline"
+          class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
           onClick={(event) => {
             if (event.detail > 1) {
               return;
