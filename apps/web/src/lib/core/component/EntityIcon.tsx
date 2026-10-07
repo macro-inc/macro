@@ -380,8 +380,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   emailRead: {
     icon: EmailRead,
     boldIcon: EmailReadBold,
-    foreground: 'text-email',
-    background: 'bg-email/20',
+    foreground: 'text-ink-extra-muted',
+    background: 'bg-ink-extra-muted/20',
     prettyName: 'Read Email',
   },
   emailInvite: {

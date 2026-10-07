@@ -135,7 +135,7 @@ export function LauncherDetails(props: {
             {(item) => (
               <section
                 aria-label={`${item().label} details`}
-                class="flex min-h-full flex-col px-5 pt-6 pb-2 sm:px-8"
+                class="flex min-h-full flex-col px-6 pt-6 pb-2"
               >
                 <div
                   class={cn(
