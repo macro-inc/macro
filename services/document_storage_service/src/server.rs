@@ -1456,10 +1456,11 @@ pub async fn run() -> anyhow::Result<()> {
         collab_surface_service.clone(),
     ));
 
-    // Individual initiative reads preserve read-after-write consistency when a
-    // newly created project opens immediately. Lists retain the replica reader.
-    // Reuse Soup hydration so detail and mutation metadata include viewer history.
-    let initiative_entity_soup = Arc::new(
+    // Individual initiative and agent-session reads preserve read-after-write
+    // consistency when a newly created entity opens immediately. Lists retain
+    // the replica reader. Reuse Soup hydration so detail and mutation metadata
+    // include viewer history.
+    let primary_entity_soup = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
             frecency_service.clone(),
@@ -1871,7 +1872,13 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader(
-            graphql_soup::soup_item_loader(initiative_entity_soup, Arc::new(email_service.clone())),
+            graphql_soup::soup_item_loader(
+                primary_entity_soup.clone(),
+                Arc::new(email_service.clone()),
+            ),
+        ),
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+            graphql_soup::soup_item_loader(primary_entity_soup, Arc::new(email_service.clone())),
         ),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
