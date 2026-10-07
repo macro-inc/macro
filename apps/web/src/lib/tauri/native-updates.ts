@@ -43,7 +43,6 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   const [status, setStatus] = createSignal<NativeUpdateStatus>({
     status: 'Disabled',
   });
-  let notifiedVersion: string | undefined;
   let disposed = false;
   let unsubscribe = () => {};
 
@@ -82,18 +81,6 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   function receive(next: NativeUpdateStatus) {
     if (disposed) return;
     setStatus(next);
-    if (next.status !== 'Ready' || notifiedVersion === next.data.version)
-      return;
-    notifiedVersion = next.data.version;
-    toast.custom(
-      {
-        title: 'A Macro app update is ready',
-        actions: [
-          { label: 'Restart to update', onClick: () => void restart() },
-        ],
-      },
-      { persistent: true }
-    );
   }
 
   async function initialize() {

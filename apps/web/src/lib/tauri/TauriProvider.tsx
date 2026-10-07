@@ -50,6 +50,7 @@ interface TauriContextValue {
   os: OsType;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
   nativeUpdateStatus: Accessor<NativeUpdateStatus>;
+  nativeUpdatePreparing: Accessor<boolean>;
   restartNativeUpdate: () => Promise<void>;
   registerNativeUpdatePreparation: (save: () => Promise<void>) => () => void;
 }
@@ -111,6 +112,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     os: osType(),
     bundleUpdateStatus,
     nativeUpdateStatus: nativeUpdates.status,
+    nativeUpdatePreparing: nativeUpdates.preparing,
     restartNativeUpdate: nativeUpdates.restart,
     registerNativeUpdatePreparation: nativeUpdates.registerPreparation,
   };
