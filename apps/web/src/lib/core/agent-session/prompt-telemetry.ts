@@ -298,8 +298,7 @@ export class PromptTrace {
     this.#set('agent.prompt.renderer_attached', this.#renderers.size > 0);
     for (const stop of this.#renderers) stop();
     this.#renderers.clear();
-    this.#resourceObserver?.disconnect();
-    this.#resourceObserver = undefined;
+    this.#stopWatchingResponses();
     if (outcome === 'hidden') this.#set('agent.prompt.hidden', true);
     this.#set('agent.prompt.outcome', outcome);
     this.#set(
@@ -405,20 +404,37 @@ export class PromptTrace {
       if (typeof PerformanceObserver === 'undefined') return;
       this.#responses.push({ stage, path, after: performance.now() });
       if (this.#resourceObserver) return;
-      this.#resourceObserver = new PerformanceObserver((list) => {
-        try {
-          this.#observeResources(list.getEntries());
-        } catch {
-          // See the module comment.
-        }
-      });
+      this.#resourceObserver = new PerformanceObserver((list) =>
+        this.#observeResources(list.getEntries())
+      );
       this.#resourceObserver.observe({ type: 'resource' });
     } catch {
       // See the module comment.
     }
   }
 
+  /** Read entries already delivered but not yet called back, then stop. */
+  #stopWatchingResponses(): void {
+    const observer = this.#resourceObserver;
+    if (!observer) return;
+    this.#resourceObserver = undefined;
+    try {
+      this.#matchResponses(observer.takeRecords());
+      observer.disconnect();
+    } catch {
+      // See the module comment.
+    }
+  }
+
   #observeResources(entries: PerformanceEntryList): void {
+    try {
+      this.#matchResponses(entries);
+    } catch {
+      // See the module comment.
+    }
+  }
+
+  #matchResponses(entries: PerformanceEntryList): void {
     for (const entry of entries) {
       if (!isFetchTiming(entry) || entry.responseEnd === 0) continue;
       const pathname = new URL(entry.name, location.href).pathname;

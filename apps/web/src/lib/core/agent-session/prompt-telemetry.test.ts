@@ -234,6 +234,9 @@ describe('PromptTrace', () => {
           );
         }
         observe() {}
+        takeRecords() {
+          return [];
+        }
         disconnect() {}
       }
     );
@@ -264,6 +267,35 @@ describe('PromptTrace', () => {
       'agent.prompt.created_response_end_at_ms': 49,
       'agent.prompt.accepted_response_end_at_ms': 300,
     });
+  });
+
+  it('reads a response end still buffered when the span ends', () => {
+    const buffered: PerformanceEntry[] = [];
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        observe() {}
+        takeRecords() {
+          return buffered.splice(0);
+        }
+        disconnect() {
+          buffered.length = 0;
+        }
+      }
+    );
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const trace = new PromptTrace(SESSION, { newSession: true });
+    buffered.push({
+      entryType: 'resource',
+      initiatorType: 'fetch',
+      name: 'https://harness.test/agent-sessions',
+      startTime: 1005,
+      responseEnd: 1049,
+    } as PerformanceResourceTiming);
+    trace.end('failed');
+    expect(
+      telemetry.spans[0].attributes['agent.prompt.created_response_end_at_ms']
+    ).toBe(49);
   });
 
   it.each([
