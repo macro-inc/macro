@@ -133,7 +133,7 @@ async fn enabled_admission_preserves_allowance_decisions() {
         for feature in [
             AiFeature::Chat,
             AiFeature::AiEditing,
-            AiFeature::ChatRename,
+            AiFeature::Automation,
             AiFeature::AgentRepositoryChoice,
         ] {
             let result = admission.admit(&user(), feature).await;
