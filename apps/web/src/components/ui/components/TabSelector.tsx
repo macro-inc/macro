@@ -17,8 +17,15 @@ import { Button } from './Button';
 import { Dropdown } from './Dropdown';
 import { Layer } from './Layer';
 
-/** Inset navigation with a scrollable track and a fixed, independently focused add menu. */
-export function TabSelector(props: ParentProps<{ class?: string }>) {
+export type TabSelectorProps = ParentProps<{ class?: string }>;
+
+/**
+ * Inset navigation with a scrollable track and a fixed, independently focused add menu.
+ * @do Compose List and Tab inside Kobalte Tabs to retain keyboard navigation and selection semantics.
+ * @do Give List an accessible label and provide tooltips for truncated tab names.
+ * @dont Put AddMenu inside the tab collection; keep it beside Tabs so it remains independently focusable.
+ */
+export function TabSelector(props: TabSelectorProps) {
   return (
     <Layer depth={0}>
       <div
