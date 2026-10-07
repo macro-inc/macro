@@ -1924,6 +1924,13 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+
+Every top-level checklist shows a completed count and progress meter on a thin
+line above its items, left-aligned with the checkboxes. Checklists containing
+an actual task mention additionally get a filter menu (status, priority,
+assignee, due date) that reveals on hover and stays while filters are active;
+filters dim unmatched items in place and persist with the document. Plain
+checkbox lists have no filter, and removing the last task mention removes it.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu
