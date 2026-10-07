@@ -85,7 +85,9 @@ export class TaskListNode extends ListNode {
       bar.className = TASK_LIST_BAR_CLASS;
       bar.contentEditable = 'false';
       setDOMUnmanaged(bar);
-      element.prepend(bar);
+      // insertBefore rather than prepend: Cloudflare's HTMLRewriter types
+      // (ambient in lexical-service) merge an incompatible Element#prepend.
+      element.insertBefore(bar, element.firstChild);
     }
     return element;
   }
