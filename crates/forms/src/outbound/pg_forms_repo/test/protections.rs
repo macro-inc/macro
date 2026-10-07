@@ -1,6 +1,11 @@
 use super::*;
 use crate::domain::models::FormCreation;
 
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). This test replays migrations itself, so it
+/// starts from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn managed_column_cannot_be_deleted_while_its_form_exists(pool: PgPool) {
     let table = insert_table(&pool).await;
@@ -245,6 +250,10 @@ async fn protection_upgrade_refuses_legacy_retyped_metadata_without_freezing_it(
         ),
         ..sqlx::migrate::Migrator::DEFAULT
     };
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA)
+        .execute(&pool)
+        .await
+        .unwrap();
     before_protections.run(&pool).await.unwrap();
     let table = insert_table(&pool).await;
     let form = form_over(&table);
