@@ -707,6 +707,7 @@ pub async fn run() -> anyhow::Result<()> {
         Some(channels_connection_gateway.as_ref().clone()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
         macro_service_urls::AppServiceUrl::new()?.to_string(),
+        config.ai_editing_worker_url.clone(),
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {

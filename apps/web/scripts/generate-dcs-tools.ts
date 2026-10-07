@@ -102,7 +102,6 @@ function stripOptionalDefaults(node: unknown, seen = new WeakSet<object>()): voi
     for (const child of node) stripOptionalDefaults(child, seen);
     return;
   }
-  if (!node || typeof node !== 'object') return;
   const obj = node as Record<string, unknown>;
   const properties = obj.properties;
   if (properties && typeof properties === 'object') {

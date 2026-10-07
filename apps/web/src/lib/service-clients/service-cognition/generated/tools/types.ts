@@ -777,7 +777,7 @@ export type Audience = 'members' | 'public';
  */
 export type FormStatus = 'open' | 'closed';
 /**
- * Opaque server-retained authoring baseline, scoped to actor and form.
+ * Content fingerprint for sharing review, scoped to actor and form.
  */
 export type AuthoringRevisionId = string;
 /**
@@ -878,7 +878,6 @@ export type Code =
   | 'Unavailable'
   | 'InvalidDraft'
   | 'IdempotencyConflict'
-  | 'ExpiredRevision'
   | 'PendingOperation'
   | 'PartiallyApplied'
   | 'InvalidAccess'
@@ -7407,12 +7406,11 @@ export interface EditDocumentResponse {
   clarification?: string | null;
 }
 /**
- * Edit a form using typed targeted operations and the baseRevision from ReadForm. Unrelated human edits are preserved; conflicting fields or dependencies are refused, not overwritten. Changes can add or move questions/sections, edit requiredness/help/screeners and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep screeners after the questions they test and booking last. Reuse requestId only for identical retries; read actual partial/pending outcomes before proceeding. Opening and sharing require SetFormAccess.
+ * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/screeners and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep screeners after the questions they test and booking last. Reuse requestId only for identical retries; read actual partial/pending outcomes before proceeding. Opening and sharing require SetFormAccess.
  */
 export interface EditForm {
   requestId: AuthoringRequestId;
   formId: FormId;
-  baseRevision: AuthoringRevisionId;
   /**
    * At most 100 targeted operations; omitted fields survive.
    */
@@ -9176,7 +9174,7 @@ export interface ListEntitiesResponse {
   summary: string;
 }
 /**
- * Find forms the user has an explicit or inherited grant to. Filter by name query, status, minimum access or backing database. Returns up to 50 recent matches and a total; narrow filters when truncated. This does not enumerate all public forms or read response cells. Use ReadForm for an authoring baseline before editing.
+ * Find forms the user has an explicit or inherited grant to. Filter by name query, status, minimum access or backing database. Returns up to 50 recent matches and a total; narrow filters when truncated. This does not enumerate all public forms or read response cells. Use ReadForm for current content and stable IDs before editing.
  */
 export interface ListForms {
   /**

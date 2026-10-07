@@ -11,7 +11,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(
     title = "ListForms",
-    description = "Find forms the user has an explicit or inherited grant to. Filter by name query, status, minimum access or backing database. Returns up to 50 recent matches and a total; narrow filters when truncated. This does not enumerate all public forms or read response cells. Use ReadForm for an authoring baseline before editing."
+    description = "Find forms the user has an explicit or inherited grant to. Filter by name query, status, minimum access or backing database. Returns up to 50 recent matches and a total; narrow filters when truncated. This does not enumerate all public forms or read response cells. Use ReadForm for current content and stable IDs before editing."
 )]
 pub struct ListForms {
     /// Flat workflow arguments shared with the domain service.

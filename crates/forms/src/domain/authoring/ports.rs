@@ -35,7 +35,13 @@ pub trait AuthoringCore: FormsService {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<Snapshot, FormError>> + Send;
-    /// Validate and commit only at the exact Loro version observed by the planner.
+    /// Merge the same granular Loro update into the live document, validating each merged candidate.
+    fn apply_authoring_update(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        update: Vec<u8>,
+    ) -> impl Future<Output = Result<Snapshot, super::AuthoringError>> + Send;
+    /// Validate and commit creation's initial layout at its observed version.
     fn save_authoring_layout(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -58,7 +64,7 @@ pub trait FormsAuthoringService: Send + Sync + 'static {
         actor: Viewer,
         intent: super::Read,
     ) -> impl Future<Output = Result<super::ReadResult, super::AuthoringError>> + Send;
-    /// Preserve untouched human edits and refuse changes of the same field.
+    /// Apply targeted CRDT edits while preserving unrelated concurrent changes.
     fn edit_form(
         &self,
         actor: Viewer,
@@ -111,4 +117,14 @@ impl AuthoringBooking for () {
             "Booking target validation is unavailable on this host.",
         ))
     }
+}
+
+/// Editing technology supplied by the AI editing worker; no persistence or policy.
+pub trait AuthoringEditor: Send + Sync + 'static {
+    /// Produce one granular CRDT delta from an authorized snapshot and validated layout.
+    fn prepare_edit(
+        &self,
+        snapshot: &[u8],
+        layout: &FormLayout,
+    ) -> impl Future<Output = Result<Vec<u8>, super::AuthoringError>> + Send;
 }

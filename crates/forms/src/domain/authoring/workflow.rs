@@ -5,7 +5,9 @@ mod edit;
 mod read;
 use super::{
     journal::{AuthoringJournal, Claim, Intent, Operation},
-    ports::{AuthoringAccess, AuthoringBooking, AuthoringCore, FormsAuthoringService},
+    ports::{
+        AuthoringAccess, AuthoringBooking, AuthoringCore, AuthoringEditor, FormsAuthoringService,
+    },
     *,
 };
 use crate::domain::collaboration::revision_matches;
@@ -23,36 +25,27 @@ use models_forms::{FormAccess, FormId, FormLayout};
 use std::sync::Arc;
 
 /// Dependencies supplied by the composition root. Permissions are checked on every call.
-pub struct AuthoringWorkflow<Core, Databases, Journal, Booking, Access> {
+pub struct AuthoringWorkflow<Core, Databases, Journal, Booking, Access, Editor> {
     /// Authoritative shared Forms document.
     pub core: Arc<Core>,
     /// Owning service for schema mutations.
     pub databases: Arc<Databases>,
-    /// Actor-scoped durable retries and revisions.
+    /// Actor-scoped durable operation retries.
     pub journal: Journal,
     /// Scheduling readiness and access validation.
     pub booking: Booking,
     /// Existing entity authorization boundary.
     pub access: Access,
+    /// Shared worker that generates collaborative edit deltas.
+    pub editor: Editor,
     /// Public app origin for canonical links.
     pub app_origin: String,
 }
 fn failure(error: impl std::fmt::Display) -> AuthoringError {
     AuthoringError::new(Code::Unavailable, "form", error.to_string())
 }
-fn form_failure(error: crate::domain::models::FormError) -> AuthoringError {
-    use crate::domain::models::FormError;
-    let code = match &error {
-        FormError::Conflict => Code::ConcurrentFieldChange,
-        FormError::NotFound | FormError::TableGone => Code::FormNotFound,
-        FormError::TableAlreadyHasForm => Code::TableAlreadyHasForm,
-        FormError::OwnerOnly | FormError::SignInRequired => Code::Forbidden,
-        FormError::InvalidName(_) => Code::InvalidName,
-        FormError::InvalidLayout(_) | FormError::WidgetMismatch { .. } => Code::InvalidDraft,
-        FormError::FileUploadNeedsSignIn | FormError::InvalidSharing(_) => Code::InvalidAccess,
-        _ => Code::Unavailable,
-    };
-    AuthoringError::new(code, "form", error.to_string())
+pub(crate) fn form_failure(error: crate::domain::models::FormError) -> AuthoringError {
+    error.into()
 }
 fn stale(path: &str) -> AuthoringError {
     AuthoringError::new(
@@ -82,7 +75,8 @@ impl<
     J: AuthoringJournal,
     B: AuthoringBooking,
     A: AuthoringAccess,
-> AuthoringWorkflow<C, D, J, B, A>
+    E: AuthoringEditor,
+> AuthoringWorkflow<C, D, J, B, A, E>
 {
     async fn receipt<L: RequiredPermission>(
         &self,
@@ -216,23 +210,6 @@ impl<
         // claimant. Reconciliation is returned, not persisted or replayed.
         Ok(result)
     }
-    async fn baseline(
-        &self,
-        actor: &Viewer,
-        form: FormId,
-        revision: AuthoringRevisionId,
-    ) -> Result<Snapshot, AuthoringError> {
-        self.journal
-            .baseline(&actor.user_id, form, revision)
-            .await?
-            .ok_or_else(|| {
-                AuthoringError::new(
-                    Code::ExpiredRevision,
-                    "baseRevision",
-                    "ReadForm again: this baseline expired or belongs to another form or actor.",
-                )
-            })
-    }
     async fn saved(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -241,7 +218,7 @@ impl<
         if snapshot.access == FormAccess::Owner {
             snapshot.grants = self.journal.grants(snapshot.form.id).await?;
         }
-        let revision = self.journal.retain(user, &snapshot).await?;
+        let revision = review_revision(user, &snapshot)?;
         let id = snapshot.form.id;
         Ok(SavedForm {
             revision,
@@ -323,4 +300,30 @@ impl<
             .map_err(failure)?;
         Ok(())
     }
+}
+
+/// A review is tied to content, metadata, schema and recipients, not respondent row traffic.
+/// This is a freshness check, never an authorization capability.
+fn review_revision(
+    user: &MacroUserIdStr<'_>,
+    snapshot: &Snapshot,
+) -> Result<AuthoringRevisionId, AuthoringError> {
+    let mut grants = snapshot.grants.clone();
+    grants.sort_by_key(|grant| grant.channel_id);
+    let mut columns = snapshot.columns.clone();
+    columns.sort_by_key(|column| column.id);
+    let content = serde_json::to_vec(&(
+        user.as_ref(),
+        &snapshot.form,
+        &snapshot.layout,
+        columns,
+        grants,
+        snapshot.access,
+        snapshot.projected,
+    ))
+    .map_err(failure)?;
+    Ok(AuthoringRevisionId::from_uuid(uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_OID,
+        &content,
+    )))
 }

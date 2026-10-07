@@ -1,4 +1,4 @@
-//! Durable retry identity and actor-scoped authoring baselines.
+//! Durable mutation retry identity and atomic settings changes.
 use super::{validate::Prepared, *};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_forms::FormId;
@@ -62,19 +62,6 @@ pub trait AuthoringJournal: Send + Sync + 'static {
         actor: &MacroUserIdStr<'_>,
         id: AuthoringOperationId,
     ) -> impl Future<Output = Result<Option<Operation>, AuthoringError>> + Send;
-    /// Retain a baseline for 24 hours, scoped to this actor and form.
-    fn retain(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        snapshot: &Snapshot,
-    ) -> impl Future<Output = Result<AuthoringRevisionId, AuthoringError>> + Send;
-    /// Read an unexpired baseline; never accept caller-provided preimages.
-    fn baseline(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        form: FormId,
-        revision: AuthoringRevisionId,
-    ) -> impl Future<Output = Result<Option<Snapshot>, AuthoringError>> + Send;
     /// Read direct recipients after the workflow proves Owner.
     fn grants(
         &self,

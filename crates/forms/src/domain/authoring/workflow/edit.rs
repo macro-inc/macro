@@ -7,7 +7,8 @@ impl<
     J: AuthoringJournal,
     B: AuthoringBooking,
     A: AuthoringAccess,
-> AuthoringWorkflow<C, D, J, B, A>
+    E: AuthoringEditor,
+> AuthoringWorkflow<C, D, J, B, A, E>
 {
     pub(super) async fn edit(
         &self,
@@ -17,7 +18,7 @@ impl<
         let receipt = self
             .receipt::<EditAccessLevel>(&actor, intent.form_id)
             .await?;
-        // Retry lookup precedes baseline expiry and comparisons: a completed
+        // Retry lookup precedes edits to the current document: a completed
         // request must return its recorded result even after its own writes.
         if let Some(operation) = self
             .journal
@@ -36,37 +37,18 @@ impl<
             }
             return Ok(operation.result);
         }
-        let baseline = self
-            .baseline(&actor, intent.form_id, intent.base_revision)
-            .await?;
         let latest = self
             .core
             .authoring_snapshot(receipt.clone())
             .await
             .map_err(form_failure)?;
-        let dependencies = schema_dependencies(&baseline.layout, &intent.changes);
-        for id in &dependencies {
-            if baseline.columns.iter().find(|c| c.id == *id)
-                != latest.columns.iter().find(|c| c.id == *id)
-            {
-                return Err(stale("columns"));
-            }
-        }
-        if intent.description.is_some() && baseline.form.description != latest.form.description {
-            return Err(stale("description"));
-        }
-        if intent.confirmation_message.is_some()
-            && baseline.form.confirmation_message != latest.form.confirmation_message
-        {
-            return Err(stale("confirmationMessage"));
-        }
         if let Some(text) = &intent.description {
             validate::text(text, 10_000, "description")?;
         }
         if let Some(text) = &intent.confirmation_message {
             validate::text(text, 10_000, "confirmationMessage")?;
         }
-        let layout = super::super::edit::apply(&baseline.layout, &latest.layout, &intent.changes)?;
+        let layout = super::super::edit::apply(&latest.layout, &intent.changes)?;
         let added = validate::additions(&intent.new_columns, &latest.columns)?;
         let mut columns = latest.columns.clone();
         columns.extend(added.clone());
@@ -86,22 +68,27 @@ impl<
                 }
             }
         }
-        // Scheduling checks may await remote services. Recheck the facts this
-        // edit depends on immediately before claiming and applying its writes.
+        let update = self.editor.prepare_edit(&latest.document, &layout).await?;
+        let prepared = crate::domain::collaboration::merged_layout(&latest.document, &update)
+            .map_err(failure)?;
+        if prepared.layout != layout {
+            return Err(failure(
+                "The AI editing worker returned a different layout.",
+            ));
+        }
+        // Column schema is not CRDT state. Recheck touched dependencies after
+        // remote booking checks; concurrent layout changes merge below.
         let checked = self
             .core
             .authoring_snapshot(receipt.clone())
             .await
             .map_err(form_failure)?;
-        for id in &dependencies {
-            if latest.columns.iter().find(|c| c.id == *id)
-                != checked.columns.iter().find(|c| c.id == *id)
+        for id in schema_dependencies(&latest.layout, &intent.changes) {
+            if latest.columns.iter().find(|column| column.id == id)
+                != checked.columns.iter().find(|column| column.id == id)
             {
                 return Err(stale("columns"));
             }
-        }
-        if !revision_matches(&checked.revision, &latest.revision).map_err(failure)? {
-            return Err(stale("baseRevision"));
         }
         let operation = Self::operation(
             Intent::Edit(intent.clone()),
@@ -122,21 +109,20 @@ impl<
                 .await?;
             let snapshot = self
                 .core
-                .save_authoring_layout(receipt.clone(), latest.revision, layout)
-                .await
-                .map_err(form_failure)?;
+                .apply_authoring_update(receipt.clone(), update)
+                .await?;
             self.phase(&actor, &mut operation, OperationPhase::DraftSaved)
                 .await?;
             if intent.description.is_some() || intent.confirmation_message.is_some() {
                 // Recheck metadata after the collaborative write, so a human
                 // metadata edit during that write is preserved.
                 if intent.description.is_some()
-                    && baseline.form.description != snapshot.form.description
+                    && latest.form.description != snapshot.form.description
                 {
                     return Err(stale("description"));
                 }
                 if intent.confirmation_message.is_some()
-                    && baseline.form.confirmation_message != snapshot.form.confirmation_message
+                    && latest.form.confirmation_message != snapshot.form.confirmation_message
                 {
                     return Err(stale("confirmationMessage"));
                 }

@@ -252,13 +252,15 @@ impl AuthoringError {
         }
     }
 }
-/// An authoring snapshot retained server-side for field comparisons.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Current authorized form state, held only for this tool invocation.
+#[derive(Debug, Clone)]
 pub struct Snapshot {
     /// Form metadata at read time.
     pub form: Form,
     /// Actual durable content, including an invalid draft.
     pub layout: FormLayout,
+    /// Durable Loro document used to produce a granular edit. Never stored in the journal.
+    pub document: Vec<u8>,
     /// Loro version vector.
     pub revision: Vec<u8>,
     /// Relevant table schema.
@@ -269,8 +271,7 @@ pub struct Snapshot {
     pub projected: bool,
     /// Proven access level.
     pub access: FormAccess,
-    /// Owner-only direct grants included in the retained baseline.
-    #[serde(default)]
+    /// Owner-only direct grants used by the sharing review.
     pub grants: Vec<Grant>,
 }
 /// Explicit widget edit; omission leaves the widget unchanged.
@@ -389,7 +390,7 @@ pub struct NewColumnDraft {
     #[serde(default)]
     pub options: Vec<QuestionOption>,
 }
-/// Edit one form against a server-retained baseline.
+/// Apply targeted changes to the live collaborative form.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Edit {
@@ -397,8 +398,6 @@ pub struct Edit {
     pub request_id: AuthoringRequestId,
     /// Target form.
     pub form_id: models_forms::FormId,
-    /// Opaque authoring revision returned by ReadForm/CreateForm/EditForm.
-    pub base_revision: AuthoringRevisionId,
     /// At most 100 targeted operations; omitted fields survive.
     pub changes: Vec<Change>,
     /// Additive schema operations, applied through DatabasesService. No column deletion/retyping.
@@ -434,7 +433,7 @@ authoring_id!(/// Stable identity of one authoring mutation and its recovery rec
     AuthoringRequestId);
 authoring_id!(/// Durable identity of an operation, distinct from its client retry key.
     AuthoringOperationId);
-authoring_id!(/// Opaque server-retained authoring baseline, scoped to actor and form.
+authoring_id!(/// Content fingerprint for sharing review, scoped to actor and form.
     AuthoringRevisionId);
 
 /// Closed set of actionable authoring refusals.
@@ -498,8 +497,6 @@ pub enum Code {
     InvalidDraft,
     /// IdempotencyConflict: see the accompanying path and corrective message.
     IdempotencyConflict,
-    /// ExpiredRevision: see the accompanying path and corrective message.
-    ExpiredRevision,
     /// PendingOperation: see the accompanying path and corrective message.
     PendingOperation,
     /// A durable phase was dispatched; inspect the operation before retrying.
@@ -524,4 +521,21 @@ pub struct Grant {
     pub channel_id: Uuid,
     /// Direct role.
     pub access: super::contracts::GrantAccess,
+}
+
+impl From<crate::domain::models::FormError> for AuthoringError {
+    fn from(error: crate::domain::models::FormError) -> Self {
+        use crate::domain::models::FormError;
+        let code = match &error {
+            FormError::Conflict => Code::ConcurrentFieldChange,
+            FormError::NotFound | FormError::TableGone => Code::FormNotFound,
+            FormError::TableAlreadyHasForm => Code::TableAlreadyHasForm,
+            FormError::OwnerOnly | FormError::SignInRequired => Code::Forbidden,
+            FormError::InvalidName(_) => Code::InvalidName,
+            FormError::InvalidLayout(_) | FormError::WidgetMismatch { .. } => Code::InvalidDraft,
+            FormError::FileUploadNeedsSignIn | FormError::InvalidSharing(_) => Code::InvalidAccess,
+            _ => Code::Unavailable,
+        };
+        AuthoringError::new(code, "form", error.to_string())
+    }
 }

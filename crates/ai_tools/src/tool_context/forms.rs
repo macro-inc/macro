@@ -45,6 +45,7 @@ pub type ToolFormsService = AuthoringWorkflow<
     PgAuthoringJournal,
     SchedulingTargets<PostgresRepository, Calendars, Directory>,
     EntityAuthoringAccess<ToolEntityAccessService>,
+    ::forms::outbound::authoring_editor::WorkerFormEditor,
 >;
 /// Forms tool context for every AI host.
 pub type ToolFormsToolContext = ::forms::inbound::toolset::FormsToolContext<ToolFormsService>;
@@ -58,6 +59,7 @@ pub fn build_forms_tool_context(
     gateway: Option<ConnectionGatewayClient>,
     broker: MaybeToolEventBroker,
     app_origin: String,
+    editing_worker_url: String,
 ) -> ToolFormsToolContext {
     let surfaces = Arc::new(pg_collab_surface_service(
         pool.clone(),
@@ -89,6 +91,10 @@ pub fn build_forms_tool_context(
             journal: PgAuthoringJournal::new(pool),
             booking: SchedulingTargets(scheduling),
             access: EntityAuthoringAccess(databases.entity_access_service.clone()),
+            editor: ::forms::outbound::authoring_editor::WorkerFormEditor::new(
+                reqwest::Client::new(),
+                editing_worker_url,
+            ),
             app_origin,
         }),
         actor: databases.actor,

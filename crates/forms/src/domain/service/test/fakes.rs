@@ -49,6 +49,8 @@ pub(crate) struct World {
     pub(crate) draft_states: HashMap<FormId, crate::domain::drafts::LayoutDraftState>,
     pub(crate) retired_drafts: Vec<FormId>,
     pub(crate) fail_drafts: bool,
+    /// A human CRDT update landing between validation and the next conditional write.
+    pub(crate) draft_update_before_next_write: Option<Vec<u8>>,
     /// Owner grants the repository wrote with each new form.
     pub(crate) owner_grants: Vec<(FormId, String)>,
     pub(crate) ledger: Vec<LedgerEntry>,
@@ -106,6 +108,7 @@ impl World {
             draft_states: HashMap::new(),
             retired_drafts: vec![],
             fail_drafts: false,
+            draft_update_before_next_write: None,
             owner_grants: vec![],
             ledger: vec![],
             channel_grants: HashMap::new(),

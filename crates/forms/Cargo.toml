@@ -24,12 +24,15 @@ inbound = [
 # Liveness pings through the connection gateway.
 gateway = ["dep:anyhow", "dep:connection_gateway_client", "dep:serde_json", "outbound"]
 # Driven adapters share the port contracts.
-outbound = ["dep:collab_surface", "ports"]
+outbound = ["dep:collab_surface", "dep:reqwest", "dep:base64", "dep:macro_tower_layers", "ports"]
 ports = ["dep:schemars", "models_forms/schema", "models_databases/schema", "databases/ports", "dep:entity_access", "dep:tracing", "dep:loro", "dep:serde_json"]
 # Postgres persistence for forms, layouts and the submission ledger.
 postgres = ["dep:entity_access_db_utils", "dep:serde_json", "dep:sqlx", "outbound"]
 
 [dependencies]
+base64 = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 calendar_scheduling = { path = "../calendar_scheduling", optional = true }
 ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }

@@ -219,14 +219,15 @@ selected table whose database you own. Give questions and sections distinct loca
 keys; gates refer to earlier question keys and choice rules can refer to their
 option keys. The result maps these keys to saved identities. New forms start
 **closed and members-only**. A successful create returns the actual saved draft,
-its builder and respondent URLs, and an opaque revision for subsequent changes.
+its builder and respondent URLs, and a content fingerprint for sharing review.
 A respondent URL alone does not mean the form accepts responses.
 
 Use `ReadForm` in authoring mode before changing an existing form. It reads the
 shared durable editor document, including a draft that has not reached the
-respondent page. `EditForm` changes only named fields or placements against that
-revision, preserving unrelated human edits. A change to the same field or a
-referenced dependency requires a fresh read and a revised intent. There is no
+respondent page. `EditForm` applies named fields or placements to the current
+Loro document without a read-time baseline or a separate snapshot table. Changes
+arriving during the write merge as CRDT operations, including concurrent text
+edits. The merged layout must still pass Forms validation. There is no
 staged release: valid edits to an open form can become visible immediately.
 Question removal retains the response column and its existing answers. Submitted
 and Respondent remain protected. Additive columns are supported; column cleanup,
@@ -264,7 +265,7 @@ Reuse a request ID only for an exact retry of that mutation. The workflow record
 its operation identity and last acknowledged phase. A partial or pending result
 is not a completed form: use `ReadForm` with the returned form and operation IDs
 before attempting repair. Do not create another form to retry an interrupted
-request. Expired revisions require a fresh authoring read. Forms authoring and
+request. A changed sharing fingerprint requires a fresh authoring read. Forms authoring and
 review UI follow the existing `enable-forms` feature flag; server execution uses
 the same authenticated user/delegated-agent permissions as the rest of Forms.
 

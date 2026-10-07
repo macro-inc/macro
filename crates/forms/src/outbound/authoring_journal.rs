@@ -1,4 +1,4 @@
-//! Forms-owned operation identity, expiring baselines and atomic settings CAS.
+//! Forms-owned operation identity and atomic settings CAS.
 use crate::domain::authoring::{
     journal::{AuthoringJournal, Claim, Operation},
     *,
@@ -92,35 +92,6 @@ impl AuthoringJournal for PgAuthoringJournal {
     ) -> Result<Option<Operation>, AuthoringError> {
         let row = sqlx::query!("SELECT operation FROM form_authoring_operations WHERE user_id = $1 AND request_id = $2", actor.as_ref(), id.into_uuid()).fetch_optional(&self.pool).await.map_err(failed)?;
         row.map(|row| serde_json::from_value(row.operation).map_err(failed))
-            .transpose()
-    }
-    async fn retain(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        snapshot: &Snapshot,
-    ) -> Result<AuthoringRevisionId, AuthoringError> {
-        let id = AuthoringRevisionId::new();
-        let data = serde_json::to_value(snapshot).map_err(failed)?;
-        let mut tx = self.pool.begin().await.map_err(failed)?;
-        sqlx::query!(
-            "DELETE FROM form_authoring_baselines WHERE user_id = $1 AND expires_at <= now()",
-            actor.as_ref()
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(failed)?;
-        sqlx::query!("INSERT INTO form_authoring_baselines (user_id, revision_id, form_id, snapshot) VALUES ($1, $2, $3, $4)", actor.as_ref(), id.into_uuid(), snapshot.form.id.into_uuid(), data).execute(&mut *tx).await.map_err(failed)?;
-        tx.commit().await.map_err(failed)?;
-        Ok(id)
-    }
-    async fn baseline(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        form: FormId,
-        id: AuthoringRevisionId,
-    ) -> Result<Option<Snapshot>, AuthoringError> {
-        let row = sqlx::query!("SELECT snapshot FROM form_authoring_baselines WHERE user_id = $1 AND revision_id = $2 AND form_id = $3 AND expires_at > now()", actor.as_ref(), id.into_uuid(), form.into_uuid()).fetch_optional(&self.pool).await.map_err(failed)?;
-        row.map(|row| serde_json::from_value(row.snapshot).map_err(failed))
             .transpose()
     }
     async fn grants(&self, form: FormId) -> Result<Vec<Grant>, AuthoringError> {

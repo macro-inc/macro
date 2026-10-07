@@ -17,3 +17,6 @@ pub mod authoring_access;
 /// Authorized scheduling destination adapter.
 #[cfg(feature = "scheduling")]
 pub mod authoring_booking;
+
+/// Shared AI editing worker adapter.
+pub mod authoring_editor;

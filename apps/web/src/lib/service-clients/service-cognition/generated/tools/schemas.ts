@@ -3530,7 +3530,6 @@ export const MutationResult = z.object({
           z.literal('Unavailable'),
           z.literal('InvalidDraft'),
           z.literal('IdempotencyConflict'),
-          z.literal('ExpiredRevision'),
           z.literal('PendingOperation'),
           z.literal('PartiallyApplied'),
           z.literal('InvalidAccess'),
@@ -4137,7 +4136,6 @@ export const EditDocumentResponse = z.object({
 export const EditForm = z.object({
   requestId: z.string().uuid(),
   formId: z.string().uuid(),
-  baseRevision: z.string().uuid(),
   changes: z.array(
     z.any().superRefine((x, ctx) => {
       const schemas = [
@@ -11543,7 +11541,6 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
                 z.literal('Unavailable'),
                 z.literal('InvalidDraft'),
                 z.literal('IdempotencyConflict'),
-                z.literal('ExpiredRevision'),
                 z.literal('PendingOperation'),
                 z.literal('PartiallyApplied'),
                 z.literal('InvalidAccess'),
@@ -12893,7 +12890,6 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
                     z.literal('Unavailable'),
                     z.literal('InvalidDraft'),
                     z.literal('IdempotencyConflict'),
-                    z.literal('ExpiredRevision'),
                     z.literal('PendingOperation'),
                     z.literal('PartiallyApplied'),
                     z.literal('InvalidAccess'),
@@ -15326,7 +15322,6 @@ export const UserToolResponseForMutationResult = z
                     z.literal('Unavailable'),
                     z.literal('InvalidDraft'),
                     z.literal('IdempotencyConflict'),
-                    z.literal('ExpiredRevision'),
                     z.literal('PendingOperation'),
                     z.literal('PartiallyApplied'),
                     z.literal('InvalidAccess'),

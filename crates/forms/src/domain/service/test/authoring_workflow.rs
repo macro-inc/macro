@@ -3,16 +3,16 @@ use super::*;
 use crate::domain::authoring::{Create, workflow::AuthoringWorkflow};
 use crate::domain::authoring::{
     journal::{AuthoringJournal, Claim, Operation},
-    ports::{AuthoringAccess, FormsAuthoringService},
+    ports::{AuthoringAccess, AuthoringCore, FormsAuthoringService},
     *,
 };
+use crate::domain::collaboration;
 use serde_json::json;
 use std::collections::HashMap;
 
 #[derive(Default)]
 struct Records {
     operations: HashMap<(String, AuthoringRequestId), Operation>,
-    baselines: HashMap<(String, AuthoringRevisionId), Snapshot>,
 }
 struct Journal {
     records: Mutex<Records>,
@@ -64,34 +64,6 @@ impl AuthoringJournal for Journal {
                 actor.to_string(),
                 AuthoringRequestId::from_uuid(id.into_uuid()),
             ))
-            .cloned())
-    }
-    async fn retain(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        snapshot: &Snapshot,
-    ) -> Result<AuthoringRevisionId, AuthoringError> {
-        let id = AuthoringRevisionId::new();
-        self.records
-            .lock()
-            .unwrap()
-            .baselines
-            .insert((actor.to_string(), id), snapshot.clone());
-        Ok(id)
-    }
-    async fn baseline(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        form: FormId,
-        id: AuthoringRevisionId,
-    ) -> Result<Option<Snapshot>, AuthoringError> {
-        Ok(self
-            .records
-            .lock()
-            .unwrap()
-            .baselines
-            .get(&(actor.to_string(), id))
-            .filter(|s| s.form.id == form)
             .cloned())
     }
     async fn grants(&self, _: FormId) -> Result<Vec<Grant>, AuthoringError> {
@@ -201,6 +173,7 @@ async fn complete_creation_stays_closed_and_retries_do_not_duplicate_the_databas
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let intent: Create = serde_json::from_value(json!({
@@ -250,6 +223,7 @@ async fn existing_table_requires_owner_before_provisioning() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let intent: Create = serde_json::from_value(json!({
@@ -275,6 +249,7 @@ async fn authoring_preserves_human_edits_then_opens_the_reviewed_form_without_re
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let intent: Create = serde_json::from_value(json!({
@@ -298,7 +273,6 @@ async fn authoring_preserves_human_edits_then_opens_the_reviewed_form_without_re
     let edit = Edit {
         request_id: AuthoringRequestId::new(),
         form_id: id,
-        base_revision: saved.revision,
         changes: vec![Change::SetQuestion {
             question_id: question,
             help_text: Some("Your registered company name".into()),
@@ -448,6 +422,7 @@ async fn interrupted_creation_reports_partial_and_never_provisions_again_on_retr
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let intent: Create = serde_json::from_value(json!({"requestId":"0199bfee-1000-7000-8000-000000000004", "name":"Interrupted", "source":{"kind":"new"}, "draft":{"sections":[]}})).unwrap();
@@ -493,6 +468,7 @@ async fn existing_table_creation_retries_before_schema_preflight_and_protects_ma
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let managed: Create = serde_json::from_value(json!({ "requestId":AuthoringRequestId::new(), "name":"Managed", "source":{"kind":"table","databaseId":RSVP_DATABASE,"tableId":RSVP_TABLE}, "draft":{"sections":[{"kind":"questions","key":"section","questions":[{"key":"submitted","column":{"kind":"existing","columnId":SUBMITTED}}]}]} })).unwrap();
@@ -535,6 +511,7 @@ async fn a_managed_name_is_rejected_before_new_database_creation() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let create: Create = serde_json::from_value(json!({ "requestId":AuthoringRequestId::new(), "name":"Invalid", "source":{"kind":"new"}, "draft":{"sections":[{"kind":"questions","key":"section","questions":[{"key":"submitted","column":{"kind":"new","name":"Submitted","type":{"type":"text"}}}]}]} })).unwrap();
@@ -562,9 +539,10 @@ async fn unrelated_schema_additions_do_not_block_targeted_help_edits() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
-    let ReadResult::Authoring { saved, .. } = workflow
+    let ReadResult::Authoring { .. } = workflow
         .read_form(
             viewer(OWNER),
             Read {
@@ -597,7 +575,6 @@ async fn unrelated_schema_additions_do_not_block_targeted_help_edits() {
             Edit {
                 request_id: AuthoringRequestId::new(),
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 changes: vec![Change::SetQuestion {
                     question_id: TEAM_QUESTION,
                     help_text: Some("Choose your team".into()),
@@ -633,6 +610,7 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     workflow
@@ -755,6 +733,7 @@ async fn sharing_rechecks_durable_draft_after_booking_readiness() {
         },
         booking: EditingBooking(world.clone()),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let ReadResult::Authoring { saved, .. } = workflow
@@ -816,6 +795,7 @@ async fn read_reconciles_saved_work_without_overwriting_an_inflight_claim() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let create: Create = serde_json::from_value(json!({"requestId":AuthoringRequestId::new(),"name":"Recoverable intake","source":{"kind":"new"},"draft":{"sections":[{"kind":"questions","key":"company","questions":[{"key":"name","column":{"kind":"new","name":"Company","type":{"type":"text"}}}]}]}})).unwrap();
@@ -895,9 +875,10 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
-    let ReadResult::Authoring { saved, .. } = workflow
+    let ReadResult::Authoring { .. } = workflow
         .read_form(
             viewer(EDITOR),
             Read {
@@ -918,7 +899,6 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
             Edit {
                 request_id: AuthoringRequestId::new(),
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 changes: vec![Change::SetQuestion {
                     question_id: TEAM_QUESTION,
                     help_text: Some("Your primary team".into()),
@@ -933,14 +913,13 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
         .await
         .expect("unrelated question edit does not reattach the existing destination");
     assert_eq!(result.state, MutationState::Completed);
-    let saved = result.saved.unwrap();
+    assert!(result.saved.is_some());
     let replacement = workflow
         .edit_form(
             viewer(EDITOR),
             Edit {
                 request_id: AuthoringRequestId::new(),
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 changes: vec![Change::SetBookingTarget {
                     section_id: booking_id,
                     target: models_forms::BookingTarget {
@@ -994,6 +973,7 @@ async fn edited_question_schema_is_rechecked_after_remote_booking_validation() {
         },
         booking: SchemaEditingBooking(world.clone()),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let ReadResult::Authoring { saved, .. } = workflow
@@ -1018,7 +998,6 @@ async fn edited_question_schema_is_rechecked_after_remote_booking_validation() {
             Edit {
                 request_id: AuthoringRequestId::new(),
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 changes: vec![
                     Change::SetQuestion {
                         question_id: TEAM_QUESTION,
@@ -1071,6 +1050,7 @@ async fn failed_ai_attachment_preserves_a_database_adopted_by_a_human() {
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let create: Create = serde_json::from_value(json!({"requestId":AuthoringRequestId::new(),"name":"Retain on failure","source":{"kind":"new"},"draft":{"sections":[{"kind":"questions","key":"company","questions":[{"key":"name","column":{"kind":"new","name":"Company","type":{"type":"text"}}}]}]}})).unwrap();
@@ -1146,6 +1126,7 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let ReadResult::Authoring { saved, .. } = workflow
@@ -1169,7 +1150,6 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
             Edit {
                 request_id: AuthoringRequestId::new(),
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 changes: vec![],
                 new_columns: vec![],
                 description: Some("Updated description".into()),
@@ -1242,6 +1222,7 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let ReadResult::Authoring { saved, .. } = workflow
@@ -1369,6 +1350,7 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
         },
         booking: (),
         access: Access(world.clone()),
+        editor: Editor,
         app_origin: "https://macro.test".into(),
     };
     let ReadResult::Authoring { saved, .. } = workflow
@@ -1387,17 +1369,6 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
         panic!("authoring read")
     };
     assert!(!saved.projected);
-    {
-        let mut records = workflow.journal.records.lock().unwrap();
-        let baseline = records
-            .baselines
-            .get_mut(&(OWNER.to_string(), saved.revision))
-            .unwrap();
-        let different_bytes = reorder_revision(&baseline.revision);
-        assert_ne!(baseline.revision, different_bytes);
-        assert!(collaboration::revision_matches(&baseline.revision, &different_bytes).unwrap());
-        baseline.revision = different_bytes;
-    }
     let closed = workflow
         .set_form_access(
             viewer(OWNER),
@@ -1439,4 +1410,436 @@ fn reorder_revision(revision: &[u8]) -> Vec<u8> {
         reordered.extend(entry);
     }
     reordered
+}
+
+#[tokio::test]
+async fn crdt_review_revision_is_stable_across_reads_without_retained_snapshots() {
+    let world = world();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let intent: Create = serde_json::from_value(json!({
+        "requestId":"0199bfee-1000-7000-8000-000000000099", "name":"Live editing", "source":{"kind":"new"},
+        "draft":{"sections":[{"kind":"questions","key":"intro","questions":[{"key":"name","column":{"kind":"new","name":"Name","type":{"type":"text"}},"helpText":"Original"}]}]}
+    })).unwrap();
+    let created = workflow.create_form(viewer(OWNER), intent).await.unwrap();
+    let saved = created.saved.unwrap();
+    let ReadResult::Authoring { saved: again, .. } = workflow
+        .read_form(
+            viewer(OWNER),
+            Read {
+                form_id: saved.form.id,
+                view: ReadView::Authoring,
+                include_summary: false,
+                operation_id: None,
+            },
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("authoring")
+    };
+    assert_eq!(
+        saved.revision, again.revision,
+        "review identity comes from current content, not a retained snapshot row"
+    );
+}
+
+#[tokio::test]
+async fn crdt_edit_uses_the_current_document_instead_of_a_read_time_baseline() {
+    let world = world();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let intent: Create = serde_json::from_value(json!({
+        "requestId":"0199bfee-1000-7000-8000-000000000099", "name":"Live editing", "source":{"kind":"new"},
+        "draft":{"sections":[{"kind":"questions","key":"intro","questions":[{"key":"name","column":{"kind":"new","name":"Name","type":{"type":"text"}},"helpText":"Original"}]}]}
+    })).unwrap();
+    let created = workflow.create_form(viewer(OWNER), intent).await.unwrap();
+    let saved = created.saved.unwrap();
+    let mut human = saved.layout.clone();
+    let FormSection::Questions { questions, .. } = &mut human.sections[0] else {
+        panic!("questions")
+    };
+    questions[0].help_text = "Human revision".into();
+    questions[0].required = true;
+    workflow
+        .core
+        .put_layout(
+            form_receipt(saved.form.id, OWNER, AccessLevel::Owner),
+            human,
+        )
+        .await
+        .unwrap();
+    let result = workflow
+        .edit_form(
+            viewer(OWNER),
+            Edit {
+                request_id: AuthoringRequestId::new(),
+                form_id: saved.form.id,
+                changes: vec![Change::SetQuestion {
+                    question_id: created.keys.questions["name"],
+                    help_text: Some("Updated help".into()),
+                    required: None,
+                    widget: None,
+                }],
+                new_columns: vec![],
+                description: None,
+                confirmation_message: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.state, MutationState::Completed);
+    let FormSection::Questions { questions, .. } = &result.saved.unwrap().layout.sections[0] else {
+        panic!("questions")
+    };
+    assert_eq!(questions[0].help_text, "Updated help");
+    assert!(questions[0].required);
+}
+
+#[tokio::test]
+async fn crdt_edit_merges_concurrent_characters_without_regenerating_the_ai_edit() {
+    let world = world();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let intent: Create = serde_json::from_value(json!({
+        "requestId":"0199bfee-1000-7000-8000-000000000099", "name":"Live editing", "source":{"kind":"new"},
+        "draft":{"sections":[{"kind":"questions","key":"intro","questions":[{"key":"name","column":{"kind":"new","name":"Name","type":{"type":"text"}},"helpText":"Original"}]}]}
+    })).unwrap();
+    let created = workflow.create_form(viewer(OWNER), intent).await.unwrap();
+    let saved = created.saved.unwrap();
+    let snapshot = workflow
+        .core
+        .authoring_snapshot(form_receipt(saved.form.id, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    let mut human = saved.layout.clone();
+    let FormSection::Questions { questions, .. } = &mut human.sections[0] else {
+        panic!("questions")
+    };
+    questions[0].help_text = "Human Original".into();
+    questions[0].required = true;
+    let change = collaboration::replace_layout(&snapshot.document, &human).unwrap();
+    world.lock().unwrap().draft_update_before_next_write = Some(change.update);
+    let intent = Edit {
+        request_id: AuthoringRequestId::new(),
+        form_id: saved.form.id,
+        changes: vec![Change::SetQuestion {
+            question_id: created.keys.questions["name"],
+            help_text: Some("Original AI".into()),
+            required: None,
+            widget: None,
+        }],
+        new_columns: vec![],
+        description: None,
+        confirmation_message: None,
+    };
+    let result = workflow
+        .edit_form(viewer(OWNER), intent.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        result.state,
+        MutationState::Completed,
+        "{:?}",
+        result.diagnostics
+    );
+    let FormSection::Questions { questions, .. } = &result.saved.unwrap().layout.sections[0] else {
+        panic!("questions")
+    };
+    assert_eq!(questions[0].help_text, "Human Original AI");
+    assert!(questions[0].required);
+    let repeated = workflow.edit_form(viewer(OWNER), intent).await.unwrap();
+    let FormSection::Questions { questions, .. } = &repeated.saved.unwrap().layout.sections[0]
+    else {
+        panic!("questions")
+    };
+    assert_eq!(
+        questions[0].help_text, "Human Original AI",
+        "a retry must not insert text again"
+    );
+}
+
+#[tokio::test]
+async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
+    let world = world();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let intent: Create = serde_json::from_value(json!({
+        "requestId":"0199bfee-1000-7000-8000-000000000099", "name":"Live editing", "source":{"kind":"new"},
+        "draft":{"sections":[{"kind":"questions","key":"intro","questions":[{"key":"name","column":{"kind":"new","name":"Name","type":{"type":"text"}},"helpText":"Original"}]}]}
+    })).unwrap();
+    let created = workflow.create_form(viewer(OWNER), intent).await.unwrap();
+    let saved = created.saved.unwrap();
+    let snapshot = workflow
+        .core
+        .authoring_snapshot(form_receipt(saved.form.id, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    let FormSection::Questions { questions, .. } = &saved.layout.sections[0] else {
+        panic!("questions")
+    };
+    let column = questions[0].column;
+    let mut human = saved.layout.clone();
+    human.sections.push(FormSection::Gate {
+        id: models_forms::FormSectionId::new(),
+        title: "Screening".into(),
+        description: String::new(),
+        message: "Name required".into(),
+        rules: models_databases::views::FilterGroup {
+            conjunction: models_databases::views::Conjunction::And,
+            conditions: vec![models_databases::views::FilterNode::Condition(
+                models_databases::views::FilterCondition {
+                    column,
+                    test: models_databases::views::FilterTest::Presence {
+                        operator: models_databases::views::PresenceOperator::IsNotEmpty,
+                    },
+                },
+            )],
+        },
+    });
+    world.lock().unwrap().draft_update_before_next_write = Some(
+        collaboration::replace_layout(&snapshot.document, &human)
+            .unwrap()
+            .update,
+    );
+    let result = workflow
+        .edit_form(
+            viewer(OWNER),
+            Edit {
+                request_id: AuthoringRequestId::new(),
+                form_id: saved.form.id,
+                changes: vec![Change::RemoveQuestion {
+                    question_id: created.keys.questions["name"],
+                }],
+                new_columns: vec![],
+                description: None,
+                confirmation_message: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_ne!(result.state, MutationState::Completed);
+    assert!(!result.diagnostics.is_empty());
+    let actual = workflow
+        .core
+        .authoring_snapshot(form_receipt(saved.form.id, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert_eq!(
+        actual.layout, human,
+        "the human's valid layout remains intact when merging would strand its gate"
+    );
+}
+
+/// Test codec; production uses the Cloudflare worker through the same port.
+struct Editor;
+impl crate::domain::authoring::ports::AuthoringEditor for Editor {
+    async fn prepare_edit(
+        &self,
+        snapshot: &[u8],
+        layout: &FormLayout,
+    ) -> Result<Vec<u8>, AuthoringError> {
+        Ok(collaboration::replace_layout(snapshot, layout)
+            .unwrap()
+            .update)
+    }
+}
+
+#[tokio::test]
+async fn crdt_merge_revalidates_authoring_limits_after_a_concurrent_addition() {
+    let world = world();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let sections: Vec<_> = (0..99)
+        .map(|n| json!({"kind":"questions", "key": format!("section{n}"), "questions":[]}))
+        .collect();
+    let intent: Create = serde_json::from_value(json!({
+        "requestId": AuthoringRequestId::new(), "name":"Concurrent limits", "source":{"kind":"new"}, "draft":{"sections":sections}
+    })).unwrap();
+    let result = workflow.create_form(viewer(OWNER), intent).await.unwrap();
+    let saved = result.saved.unwrap();
+    let receipt = form_receipt(saved.form.id, OWNER, AccessLevel::Owner);
+    let snapshot = workflow
+        .core
+        .authoring_snapshot(receipt.clone())
+        .await
+        .unwrap();
+    let section = || FormSection::Questions {
+        id: FormSectionId::new(),
+        title: String::new(),
+        description: String::new(),
+        questions: vec![],
+    };
+    let mut human = saved.layout.clone();
+    human.sections.push(section());
+    world.lock().unwrap().draft_update_before_next_write = Some(
+        collaboration::replace_layout(&snapshot.document, &human)
+            .unwrap()
+            .update,
+    );
+    let mut ai = saved.layout;
+    ai.sections.push(section());
+    let update = collaboration::replace_layout(&snapshot.document, &ai)
+        .unwrap()
+        .update;
+    let error = workflow
+        .core
+        .apply_authoring_update(receipt.clone(), update)
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, Code::TooManySections);
+    assert_eq!(
+        workflow
+            .core
+            .authoring_snapshot(receipt)
+            .await
+            .unwrap()
+            .layout,
+        human
+    );
+}
+
+struct InvalidEditor(Vec<u8>);
+impl crate::domain::authoring::ports::AuthoringEditor for InvalidEditor {
+    async fn prepare_edit(&self, _: &[u8], _: &FormLayout) -> Result<Vec<u8>, AuthoringError> {
+        Ok(self.0.clone())
+    }
+}
+
+#[tokio::test]
+async fn malformed_worker_updates_are_rejected_before_schema_mutations() {
+    for incomplete in [false, true] {
+        let world = world();
+        let workflow = AuthoringWorkflow {
+            core: Arc::new(service(&world)),
+            databases: Arc::new(FakeDatabases(world.clone())),
+            journal: Journal {
+                records: Mutex::default(),
+                world: world.clone(),
+            },
+            booking: (),
+            access: Access(world.clone()),
+            editor: Editor,
+            app_origin: "https://macro.test".into(),
+        };
+        let intent: Create = serde_json::from_value(json!({
+            "requestId":AuthoringRequestId::new(), "name":"Worker validation", "source":{"kind":"new"}, "draft":{"sections":[]}
+        })).unwrap();
+        let saved = workflow
+            .create_form(viewer(OWNER), intent)
+            .await
+            .unwrap()
+            .saved
+            .unwrap();
+        let receipt = form_receipt(saved.form.id, OWNER, AccessLevel::Owner);
+        let snapshot = workflow
+            .core
+            .authoring_snapshot(receipt.clone())
+            .await
+            .unwrap();
+        let response = if incomplete {
+            let doc = loro::LoroDoc::new();
+            doc.import(&snapshot.document).unwrap();
+            doc.get_map("extra").insert("first", true).unwrap();
+            doc.commit();
+            let version = doc.oplog_vv();
+            doc.get_map("extra").insert("second", true).unwrap();
+            doc.commit();
+            doc.export(loro::ExportMode::updates(&version)).unwrap()
+        } else {
+            snapshot.document.clone()
+        };
+        let workflow = AuthoringWorkflow {
+            editor: InvalidEditor(response),
+            core: workflow.core,
+            databases: workflow.databases,
+            journal: workflow.journal,
+            booking: workflow.booking,
+            access: workflow.access,
+            app_origin: workflow.app_origin,
+        };
+        let prior_records = workflow.journal.records.lock().unwrap().operations.len();
+        let result = workflow
+            .edit_form(
+                viewer(OWNER),
+                Edit {
+                    request_id: AuthoringRequestId::new(),
+                    form_id: saved.form.id,
+                    changes: vec![],
+                    new_columns: vec![NewColumnDraft {
+                        id: ColumnId::new(),
+                        name: "Must not exist".into(),
+                        kind: ColumnKind::Text,
+                        options: vec![],
+                    }],
+                    description: None,
+                    confirmation_message: None,
+                },
+            )
+            .await;
+        assert!(result.is_err(), "malformed update must fail preflight");
+        assert_eq!(
+            workflow
+                .core
+                .authoring_snapshot(receipt)
+                .await
+                .unwrap()
+                .columns,
+            snapshot.columns
+        );
+        assert_eq!(
+            workflow.journal.records.lock().unwrap().operations.len(),
+            prior_records
+        );
+    }
 }

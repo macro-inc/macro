@@ -68,7 +68,7 @@ async fn authoring_claim_is_exclusive_payload_checked_and_actor_scoped(pool: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn authoring_settings_refuse_stale_review_and_baselines_are_actor_scoped(pool: PgPool) {
+async fn authoring_settings_refuse_stale_review(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repository = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
@@ -89,6 +89,7 @@ async fn authoring_settings_refuse_stale_review_and_baselines_are_actor_scoped(p
     let snapshot = Snapshot {
         form: repository.form(form.id).await.unwrap().unwrap().form,
         layout,
+        document: vec![],
         revision: vec![1, 2],
         columns: vec![],
         table_version: 0,
@@ -108,21 +109,6 @@ async fn authoring_settings_refuse_stale_review_and_baselines_are_actor_scoped(p
         ..snapshot
     };
     let journal = PgAuthoringJournal::new(pool.clone());
-    let revision = journal.retain(&user(OWNER), &snapshot).await.unwrap();
-    assert!(
-        journal
-            .baseline(&user(OWNER), form.id, revision)
-            .await
-            .unwrap()
-            .is_some()
-    );
-    assert!(
-        journal
-            .baseline(&user(RESPONDENT), form.id, revision)
-            .await
-            .unwrap()
-            .is_none()
-    );
     journal
         .settings(
             &snapshot,
@@ -158,14 +144,6 @@ async fn authoring_settings_refuse_stale_review_and_baselines_are_actor_scoped(p
     let saved = repository.form(form.id).await.unwrap().unwrap().form;
     assert_eq!(saved.audience, Audience::Public);
     assert_eq!(saved.status, FormStatus::Closed);
-    sqlx::query!("UPDATE form_authoring_baselines SET expires_at = now() - interval '1 second' WHERE user_id = $1", OWNER).execute(&pool).await.unwrap();
-    assert!(
-        journal
-            .baseline(&user(OWNER), form.id, revision)
-            .await
-            .unwrap()
-            .is_none()
-    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -190,6 +168,7 @@ async fn closing_an_unprojected_draft_keeps_the_last_valid_projection(pool: PgPo
     let snapshot = Snapshot {
         form: repository.form(form.id).await.unwrap().unwrap().form,
         layout: layout.clone(),
+        document: vec![],
         revision: vec![3, 4],
         columns: vec![],
         table_version: sqlx::query_scalar!(
@@ -251,6 +230,7 @@ async fn review_regression_closing_after_row_traffic_keeps_the_last_valid_projec
     let snapshot = Snapshot {
         form: repository.form(form.id).await.unwrap().unwrap().form,
         layout: layout.clone(),
+        document: vec![],
         revision: vec![3, 4],
         columns: vec![],
         table_version: sqlx::query_scalar!(

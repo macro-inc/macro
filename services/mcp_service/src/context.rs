@@ -299,7 +299,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
-        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
+        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url.clone()),
         config.document_permission_jwt.to_string(),
         ai_tools::build_message_service_with_side_effects(
             db.clone(),
@@ -437,6 +437,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         Some(side_effect_clients.connection_gateway.as_ref().clone()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
         macro_service_urls::AppServiceUrl::new()?.to_string(),
+        ai_editing_worker_url,
     );
 
     let recorder =

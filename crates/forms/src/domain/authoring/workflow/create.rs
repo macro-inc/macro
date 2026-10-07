@@ -8,7 +8,8 @@ impl<
     J: AuthoringJournal,
     B: AuthoringBooking,
     A: AuthoringAccess,
-> AuthoringWorkflow<C, D, J, B, A>
+    E: AuthoringEditor,
+> AuthoringWorkflow<C, D, J, B, A, E>
 {
     pub(super) async fn create(
         &self,

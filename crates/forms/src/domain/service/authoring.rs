@@ -172,6 +172,7 @@ where
         Ok(Snapshot {
             form: self.live_form(form.id).await?,
             layout: draft.layout,
+            document: bytes,
             revision,
             columns,
             table_version: table.table.version.0,
@@ -179,6 +180,69 @@ where
             access: receipt_access(&receipt),
             grants: vec![],
         })
+    }
+
+    async fn apply_authoring_update(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        update: Vec<u8>,
+    ) -> Result<Snapshot, crate::domain::authoring::AuthoringError> {
+        let id = receipt_form_id(&receipt)?;
+        // Human edits arriving after the AI's snapshot merge with the same CRDT
+        // operations. CAS only ensures the validated candidate is the one saved.
+        for _ in 0..3 {
+            let form = self.live_form(id).await?;
+            let table = self.live_table_of(&form).await?;
+            let bytes = self
+                .drafts
+                .snapshot(id)
+                .await
+                .map_err(drafts::draft_error)?;
+            let current = collaboration::read_layout(&bytes)
+                .map_err(|e| FormError::Collaboration(rootcause::report!(e).into_dynamic()))?;
+            let merged = collaboration::merged_layout(&bytes, &update)
+                .map_err(|e| FormError::Collaboration(rootcause::report!(e).into_dynamic()))?;
+            let columns: Vec<Column> = layout::question_columns(&table)
+                .into_iter()
+                .map(|(id, c)| Column {
+                    id,
+                    name: c.name,
+                    kind: c.kind,
+                    options: c.options,
+                })
+                .collect();
+            let managed: Vec<_> = form
+                .submitted_column_id
+                .into_iter()
+                .chain(form.respondent_column_id)
+                .collect();
+            crate::domain::authoring::validate::canonical_preserving(
+                &merged.layout,
+                &columns,
+                &managed,
+                form.audience,
+                Some(&current.layout),
+            )?;
+            super::layout::validate_layout(&merged.layout, &form, &table)?;
+            if let Some(id) = self
+                .repository
+                .conflicting_layout_id(form.id, &merged.layout)
+                .await
+                .map_err(repository_error)?
+            {
+                return Err(FormError::from(models_forms::LayoutProblem::RepeatedId { id }).into());
+            }
+            match self
+                .drafts
+                .update(id, current.revision, update.clone())
+                .await
+            {
+                Ok(()) => return self.authoring_snapshot(receipt).await.map_err(Into::into),
+                Err(FormDraftError::Conflict) => continue,
+                Err(error) => return Err(drafts::draft_error(error).into()),
+            }
+        }
+        Err(FormError::Conflict.into())
     }
 
     async fn save_authoring_layout(

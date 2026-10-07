@@ -7,7 +7,8 @@ impl<
     J: AuthoringJournal,
     B: AuthoringBooking,
     A: AuthoringAccess,
-> AuthoringWorkflow<C, D, J, B, A>
+    E: AuthoringEditor,
+> AuthoringWorkflow<C, D, J, B, A, E>
 {
     pub(super) async fn set_access(
         &self,
@@ -34,9 +35,6 @@ impl<
             }
             return Ok(operation.result);
         }
-        let baseline = self
-            .baseline(&actor, intent.form_id, intent.base_revision)
-            .await?;
         let receipt = owner
             .try_into_requirement::<EditAccessLevel>()
             .map_err(failure)?;
@@ -46,12 +44,7 @@ impl<
             .await
             .map_err(form_failure)?;
         latest.grants = self.journal.grants(intent.form_id).await?;
-        if baseline.access != FormAccess::Owner
-            || baseline.form != latest.form
-            || !revision_matches(&baseline.revision, &latest.revision).map_err(failure)?
-            || baseline.columns != latest.columns
-            || baseline.grants != latest.grants
-        {
+        if review_revision(&actor.user_id, &latest)? != intent.base_revision {
             return Err(stale("baseRevision"));
         }
         if intent.draft.channel_grants.len() > 100 {

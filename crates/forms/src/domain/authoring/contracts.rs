@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ReadView {
-    /// Requires Edit and returns an opaque baseline for guarded edits.
+    /// Requires Edit and returns the live collaborative layout and a sharing-review fingerprint.
     #[default]
     Authoring,
     /// Requires View; omits booking destinations, draft state and response data.
@@ -146,7 +146,7 @@ pub struct Capabilities {
 pub struct SavedForm {
     /// Form metadata, including source and actual audience/status.
     pub form: Form,
-    /// Server-retained baseline for a subsequent guarded edit.
+    /// Content fingerprint for a subsequent sharing review; no snapshot is retained.
     pub revision: AuthoringRevisionId,
     /// Actual durable layout and stable question/section identities.
     pub layout: FormLayout,

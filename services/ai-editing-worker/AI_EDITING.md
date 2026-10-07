@@ -162,3 +162,19 @@ more than once with no occurrence chosen is refused with a 422 and the
 document is left untouched, so a mark is never guessed into place. The
 backend `CommentOnDocument` tool with `quote` places the mark first and then posts the
 thread anchored to it, removing the mark again if the post fails.
+
+## Forms
+
+`POST /forms` accepts a base64 Loro snapshot and a validated target layout, and
+returns a binary incremental update. It uses `@macro-inc/collaboration/forms/layout`,
+the same codec as the browser builder. This endpoint is a bounded, stateless
+transform: it cannot load or save entities and does not launch another model.
+
+The Forms authoring service authorizes the caller, validates the requested
+changes and database dependencies, calls this worker, and verifies its delta.
+It merges that same delta with fresh live snapshots, validates the merged layout,
+and saves through the existing collaboration port with bounded CAS retries.
+Human edits therefore merge at the CRDT field/text level. Metadata, database
+columns, booking policy and sharing remain with their owning domain services.
+No read-time baseline snapshots are retained in Postgres; the separate operation
+journal still prevents duplicate mutations on retries.

@@ -6,7 +6,8 @@ impl<
     J: AuthoringJournal,
     B: AuthoringBooking,
     A: AuthoringAccess,
-> FormsAuthoringService for AuthoringWorkflow<C, D, J, B, A>
+    E: AuthoringEditor,
+> FormsAuthoringService for AuthoringWorkflow<C, D, J, B, A, E>
 {
     async fn create_form(
         &self,
