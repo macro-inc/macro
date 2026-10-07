@@ -5,6 +5,7 @@ import {
   DragDropProvider,
   DragOverlay,
 } from '@thisbeyond/solid-dnd';
+import { cn } from '@ui';
 import {
   createContext,
   createSignal,
@@ -15,20 +16,37 @@ import {
 } from 'solid-js';
 import { cloneDragPreview } from '../drag-drop/drag-preview';
 import { DragSessionSensors } from '../drag-drop/drag-session-sensors';
+import { findKanbanCollision, LANE_INSERTION_INSET } from './kanban-collision';
+import { createKanbanPointerIntent } from './kanban-pointer-intent';
+import type { KanbanCrossColumnDrop, KanbanDrop } from './kanban-types';
 
-export type KanbanDrop = {
-  id: string;
-  fromLane: string;
-  toLane: string;
+export type { KanbanCrossColumnDrop, KanbanDrop } from './kanban-types';
+
+type KanbanProps = {
+  children: JSX.Element;
+  getViewport?: () => HTMLElement | undefined;
+  /** In cross-column mode, report pointer placement instead of host sorting. */
+  pointerPlacement?: boolean;
+  /** Gate entry to new columns above this pointer speed (pixels/second). */
+  targetActivationSpeed?: number;
 } & (
-  | { kind: 'lane'; edge: 'before' | 'after' }
-  | { kind: 'card'; beforeId?: string }
+  | {
+      mode?: 'ordered';
+      onDrop: (drop: KanbanDrop) => void;
+      canDropCard?: (drop: Extract<KanbanDrop, { kind: 'card' }>) => boolean;
+    }
+  | {
+      mode: 'cross-column';
+      onDrop: (drop: KanbanCrossColumnDrop) => void;
+      canDropCard?: (drop: KanbanCrossColumnDrop) => boolean;
+    }
 );
 
 const DragContext = createContext<{
   suppressClick: () => boolean;
   start: (event: MouseEvent) => void;
   target: () => KanbanDrop | undefined;
+  crossColumn: () => boolean;
 }>();
 
 const HandleContext = createContext<{
@@ -36,122 +54,143 @@ const HandleContext = createContext<{
   disabled: boolean;
 }>();
 
-const LANE_INSERTION_INSET = 10;
-
 /** Query-free drag surface. Its preview is a snapshot of the original at its exact size. */
-export function Kanban(props: {
-  children: JSX.Element;
-  onDrop: (drop: KanbanDrop) => void;
-  getViewport?: () => HTMLElement | undefined;
-  canDropCard?: (drop: Extract<KanbanDrop, { kind: 'card' }>) => boolean;
-}) {
+export function Kanban(props: KanbanProps) {
   const [preview, setPreview] = createSignal<HTMLElement>();
   const [target, setTarget] = createSignal<KanbanDrop>();
+
   let origin: { x: number; y: number } | undefined;
   let suppressClick = false;
   let cancelled = false;
-  const releaseClick = () =>
+  let reevaluate: (() => void) | undefined;
+  const intent = createKanbanPointerIntent({
+    speed: () => props.targetActivationSpeed,
+    settled: () => reevaluate?.(),
+  });
+  const clearIntent = () => {
+    intent.reset();
+    reevaluate = undefined;
+  };
+  onCleanup(clearIntent);
+
+  const canDropCard = (drop: Extract<KanbanDrop, { kind: 'card' }>) => {
+    if (props.mode !== 'cross-column') {
+      return props.canDropCard?.(drop) ?? true;
+    }
+
+    if (drop.fromLane === drop.toLane) {
+      return false;
+    }
+
+    return (
+      props.canDropCard?.({
+        kind: 'card',
+        id: drop.id,
+        fromLane: drop.fromLane,
+        toLane: drop.toLane,
+        ...(props.pointerPlacement ? { beforeId: drop.beforeId } : {}),
+      }) ?? true
+    );
+  };
+
+  const releaseClick = () => {
     setTimeout(() => {
       suppressClick = false;
     }, 0);
-  onCleanup(() => document.removeEventListener('mouseup', releaseClick));
+  };
+
+  const rejectCollision = () => {
+    setTarget(undefined);
+    return null;
+  };
+
   const collisionDetector: CollisionDetector = (draggable, droppables) => {
-    const reject = () => {
-      setTarget(undefined);
-      return null;
-    };
-    if (!origin || cancelled) return reject();
+    if (!origin || cancelled) {
+      return rejectCollision();
+    }
+
     const pointer = {
       x: origin.x + draggable.transform.x,
       y: origin.y + draggable.transform.y,
     };
-    const viewport = props.getViewport?.()?.getBoundingClientRect();
-    if (
-      viewport &&
-      (pointer.x < viewport.left ||
-        pointer.x > viewport.right ||
-        pointer.y < viewport.top ||
-        pointer.y > viewport.bottom)
-    )
-      return reject();
-    const lanes = droppables
-      .map((droppable) => ({
-        droppable,
-        rect: droppable.node.getBoundingClientRect(),
-      }))
-      .sort((a, b) => a.rect.left - b.rect.left);
-    if (
-      !lanes.length ||
-      pointer.x < lanes[0].rect.left ||
-      pointer.x > lanes[lanes.length - 1].rect.right ||
-      (!viewport &&
-        (pointer.y < Math.min(...lanes.map((lane) => lane.rect.top)) ||
-          pointer.y > Math.max(...lanes.map((lane) => lane.rect.bottom))))
-    )
-      return reject();
-    const lane = lanes.reduce((closest, lane) =>
-      Math.abs(pointer.x - (lane.rect.left + lane.rect.width / 2)) <
-      Math.abs(pointer.x - (closest.rect.left + closest.rect.width / 2))
-        ? lane
-        : closest
-    );
-    const { kind, itemId: id, laneId: fromLane } = draggable.data;
-    const toLane: unknown = lane.droppable.data.laneId;
-    if (
-      typeof id !== 'string' ||
-      typeof fromLane !== 'string' ||
-      typeof toLane !== 'string'
-    )
-      return reject();
-    if (kind === 'lane') {
-      if (fromLane === toLane) return reject();
-      const edge =
-        pointer.x < lane.rect.left + lane.rect.width / 2 ? 'before' : 'after';
-      const boundary =
-        edge === 'before'
-          ? lane.rect.left - LANE_INSERTION_INSET
-          : lane.rect.right + LANE_INSERTION_INSET;
-      if (viewport && (boundary < viewport.left || boundary > viewport.right))
-        return reject();
-      const originalIndex = lanes.findIndex(
-        (lane) => lane.droppable.data.laneId === fromLane
-      );
-      const remaining = lanes.filter(
-        (lane) => lane.droppable.data.laneId !== fromLane
-      );
-      const insertionIndex =
-        remaining.findIndex((lane) => lane.droppable.data.laneId === toLane) +
-        (edge === 'after' ? 1 : 0);
-      if (originalIndex < 0 || insertionIndex === originalIndex)
-        return reject();
-      setTarget({ kind, id, fromLane, toLane, edge });
-    } else if (kind === 'card') {
-      const cards = Array.from(
-        lane.droppable.node.querySelectorAll<HTMLElement>('[data-kanban-card]')
-      );
-      const remaining = cards.filter((card) => card.dataset.kanbanCard !== id);
-      const next = remaining.find((card) => {
-        const bounds = card.getBoundingClientRect();
-        return pointer.y < bounds.top + bounds.height / 2;
+    const resolve = () => {
+      const settled = intent.update(pointer);
+      const collision = findKanbanCollision(draggable, droppables, pointer, {
+        mode: props.mode ?? 'ordered',
+        viewport: props.getViewport?.()?.getBoundingClientRect(),
+        pointerPlacement: props.pointerPlacement,
       });
-      const insertion = next ? remaining.indexOf(next) : remaining.length;
-      if (
-        fromLane === toLane &&
-        insertion === cards.findIndex((card) => card.dataset.kanbanCard === id)
-      )
-        return reject();
-      const drop = {
-        kind,
-        id,
-        fromLane,
-        toLane,
-        beforeId: next?.dataset.kanbanCard,
-      };
-      if (props.canDropCard && !props.canDropCard(drop)) return reject();
+
+      if (!collision) {
+        return rejectCollision();
+      }
+
+      const { drop, droppable } = collision;
+
+      if (drop.kind === 'card' && !canDropCard(drop)) {
+        return rejectCollision();
+      }
+
+      const active = target();
+      const sameColumn =
+        active?.id === drop.id && active.toLane === drop.toLane;
+
+      if (!settled && !sameColumn) {
+        return rejectCollision();
+      }
       setTarget(drop);
-    } else return reject();
-    return lane.droppable;
+      return droppable;
+    };
+    reevaluate = resolve;
+
+    return resolve();
   };
+
+  const handleDragEnd = () => {
+    const drop = target();
+    clearIntent();
+
+    try {
+      if (cancelled) {
+        return;
+      }
+
+      releaseClick();
+
+      if (!drop) {
+        return;
+      }
+
+      if (drop.kind === 'card' && !canDropCard(drop)) {
+        return;
+      }
+
+      if (props.mode !== 'cross-column') {
+        props.onDrop(drop);
+        return;
+      }
+
+      if (drop.kind !== 'card') {
+        return;
+      }
+
+      // Let the host capture the placeholder layout before removing it.
+      props.onDrop({
+        kind: 'card',
+        id: drop.id,
+        fromLane: drop.fromLane,
+        toLane: drop.toLane,
+        ...(props.pointerPlacement ? { beforeId: drop.beforeId } : {}),
+      });
+    } finally {
+      origin = undefined;
+      setTarget(undefined);
+      setPreview(undefined);
+    }
+  };
+
+  onCleanup(() => document.removeEventListener('mouseup', releaseClick));
+
   return (
     <DragDropProvider
       collisionDetector={collisionDetector}
@@ -159,19 +198,22 @@ export function Kanban(props: {
         suppressClick = true;
         setPreview(cloneDragPreview(draggable.node, 'data-kanban-preview'));
       }}
-      onDragEnd={() => {
-        const drop = target();
-        setTarget(undefined);
-        setPreview(undefined);
-        if (!cancelled) releaseClick();
-        if (drop && !cancelled) props.onDrop(drop);
-      }}
+      onDragEnd={handleDragEnd}
     >
       <DragSessionSensors
         getViewport={() => props.getViewport?.()}
         axis="both"
+        nestedScroll={
+          props.mode === 'cross-column'
+            ? {
+                viewportSelector: '[data-kanban-scroll]',
+                horizontalOutside: true,
+              }
+            : undefined
+        }
         onCancel={() => {
           cancelled = true;
+          clearIntent();
           setTarget(undefined);
           document.addEventListener('mouseup', releaseClick, { once: true });
         }}
@@ -180,8 +222,11 @@ export function Kanban(props: {
         value={{
           suppressClick: () => suppressClick,
           target,
+          crossColumn: () => props.mode === 'cross-column',
           start: (event) => {
             origin = { x: event.clientX, y: event.clientY };
+            clearIntent();
+            intent.reset(origin);
             cancelled = false;
             setTarget(undefined);
           },
@@ -199,20 +244,32 @@ export function Kanban(props: {
   );
 }
 
+/** Read the validated destination without coupling consumers to drag sensor state. */
+export function useKanbanDropTarget() {
+  const drag = useContext(DragContext);
+  return () => drag?.target();
+}
 /** Place at the end of a relatively positioned card list; cards provide their own leading marker. */
 export function KanbanCardInsertion(props: {
   laneId: string;
   beforeId?: string;
 }) {
   const drag = useContext(DragContext);
+
   const active = () => {
+    if (drag?.crossColumn()) {
+      return false;
+    }
+
     const target = drag?.target();
-    return (
-      target?.kind === 'card' &&
-      target.toLane === props.laneId &&
-      target.beforeId === props.beforeId
-    );
+
+    if (target?.kind !== 'card' || target.toLane !== props.laneId) {
+      return false;
+    }
+
+    return target.beforeId === props.beforeId;
   };
+
   return (
     <Show when={active()}>
       <span
@@ -220,11 +277,10 @@ export function KanbanCardInsertion(props: {
         data-kanban-insertion="card"
         data-lane-id={props.laneId}
         data-before-row-id={props.beforeId}
-        class="pointer-events-none absolute -inset-x-2 z-10 h-0.5 rounded-full bg-accent"
-        classList={{
-          '-top-1.5': !!props.beforeId,
-          '-bottom-1.5': !props.beforeId,
-        }}
+        class={cn(
+          'pointer-events-none absolute -inset-x-2 z-10 h-0.5 rounded-full bg-accent',
+          props.beforeId ? '-top-1.5' : '-bottom-1.5'
+        )}
       >
         <span class="absolute top-1/2 left-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
         <span class="absolute top-1/2 right-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
@@ -237,22 +293,43 @@ export function KanbanLane(props: {
   id: string;
   label: string;
   canReorder?: boolean;
+  class?: string;
   onKeyDown?: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent>;
+  onPointerEnter?: JSX.EventHandlerUnion<HTMLElement, PointerEvent>;
+  onPointerLeave?: JSX.EventHandlerUnion<HTMLElement, PointerEvent>;
   children: JSX.Element;
 }) {
   const drag = useContext(DragContext);
+
   const edge = () => {
     const target = drag?.target();
-    return target?.kind === 'lane' && target.toLane === props.id
-      ? target.edge
-      : undefined;
+
+    if (target?.kind !== 'lane' || target.toLane !== props.id) {
+      return undefined;
+    }
+
+    return target.edge;
   };
+
+  const highlighted = () => {
+    if (!drag?.crossColumn()) {
+      return false;
+    }
+
+    const target = drag.target();
+
+    return target?.kind === 'card' && target.toLane === props.id;
+  };
+
+  const canReorder = () => props.canReorder && !drag?.crossColumn();
+
   const draggable = createDraggable(`lane:${props.id}`, {
     kind: 'lane',
     itemId: props.id,
     laneId: props.id,
   });
   const droppable = createDroppable(`lane:${props.id}`, { laneId: props.id });
+
   return (
     <HandleContext.Provider
       value={{
@@ -260,7 +337,7 @@ export function KanbanLane(props: {
           return draggable.dragActivators;
         },
         get disabled() {
-          return !props.canReorder;
+          return !canReorder();
         },
       }}
     >
@@ -269,18 +346,25 @@ export function KanbanLane(props: {
           draggable.ref(node);
           droppable.ref(node);
         }}
-        class="relative flex w-72 shrink-0 flex-col rounded-xl border border-transparent bg-surface-1 p-2 transition-colors"
-        classList={{
-          'opacity-35': draggable.isActiveDraggable,
-        }}
+        class={cn(
+          'relative flex w-72 shrink-0 flex-col rounded-xl border border-transparent bg-surface-1 p-2 transition-colors',
+          draggable.isActiveDraggable && 'opacity-35',
+          highlighted() && 'ring-2 ring-accent',
+          props.class
+        )}
+        data-kanban-drop-target={highlighted() ? 'column' : undefined}
         aria-label={props.label}
         data-kanban-lane={props.id}
         onKeyDown={props.onKeyDown}
+        onPointerEnter={props.onPointerEnter}
+        onPointerLeave={props.onPointerLeave}
         onMouseDown={(event) => {
-          if (props.canReorder && event.target === event.currentTarget) {
-            drag?.start(event);
-            draggable.dragActivators.onmousedown?.(event);
+          if (!canReorder() || event.target !== event.currentTarget) {
+            return;
           }
+
+          drag?.start(event);
+          draggable.dragActivators.onmousedown?.(event);
         }}
       >
         <Show when={edge()}>
@@ -308,6 +392,7 @@ export function KanbanCard(props: {
   laneId: string;
   canDrag: boolean;
   pending?: boolean;
+  onDblClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
   children: JSX.Element;
 }) {
   const drag = useContext(DragContext);
@@ -316,6 +401,7 @@ export function KanbanCard(props: {
     itemId: props.id,
     laneId: props.laneId,
   });
+
   return (
     <HandleContext.Provider
       value={{
@@ -329,26 +415,47 @@ export function KanbanCard(props: {
     >
       <article
         ref={draggable.ref}
-        class="group relative rounded-lg border border-edge-muted bg-surface-3 shadow-sm transition-shadow hover:border-edge hover:shadow-md"
-        classList={{
-          'opacity-35': draggable.isActiveDraggable,
-          'ring-1 ring-ink/20': !!props.pending,
-        }}
+        class={cn(
+          'group relative rounded-lg border border-edge-muted bg-surface-3 shadow-sm transition-shadow hover:border-edge hover:shadow-md',
+          draggable.isActiveDraggable && 'opacity-35',
+          props.pending && 'ring-1 ring-ink/20'
+        )}
         onMouseDown={(event) => {
-          if (props.canDrag && !event.target.closest('[data-kanban-no-drag]')) {
-            drag?.start(event);
-            draggable.dragActivators.onmousedown?.(event);
+          if (!event.currentTarget.contains(event.target)) {
+            return;
           }
+
+          if (!props.canDrag || event.target.closest('[data-kanban-no-drag]')) {
+            return;
+          }
+
+          drag?.start(event);
+          draggable.dragActivators.onmousedown?.(event);
         }}
         onDragStart={(event) => {
-          if (props.canDrag) event.preventDefault();
+          if (props.canDrag) {
+            event.preventDefault();
+          }
+        }}
+        onDblClick={(event) => {
+          if (!event.currentTarget.contains(event.target)) {
+            return;
+          }
+
+          if (drag?.suppressClick()) {
+            return;
+          }
+
+          props.onDblClick?.(event);
         }}
         on:click={{
           handleEvent(event: MouseEvent) {
-            if (drag?.suppressClick()) {
-              event.preventDefault();
-              event.stopPropagation();
+            if (!drag?.suppressClick()) {
+              return;
             }
+
+            event.preventDefault();
+            event.stopPropagation();
           },
           capture: true,
         }}
@@ -372,17 +479,22 @@ export function KanbanHandle(props: {
 }) {
   const drag = useContext(HandleContext);
   const board = useContext(DragContext);
-  if (!drag)
+
+  if (!drag) {
     throw new Error('KanbanHandle requires a KanbanLane or KanbanCard');
+  }
+
   return (
     <div
       class={props.class}
       onMouseDown={(event) => {
-        if (!drag.disabled && !event.target.closest('[data-kanban-no-drag]')) {
-          event.stopPropagation();
-          board?.start(event);
-          drag.activators.onmousedown?.(event);
+        if (drag.disabled || event.target.closest('[data-kanban-no-drag]')) {
+          return;
         }
+
+        event.stopPropagation();
+        board?.start(event);
+        drag.activators.onmousedown?.(event);
       }}
       aria-label={props.label}
       onKeyDown={props.onKeyDown}

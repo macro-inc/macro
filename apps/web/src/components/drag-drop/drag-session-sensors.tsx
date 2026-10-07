@@ -10,12 +10,17 @@ import { createDragAutoScroll } from './create-drag-auto-scroll';
 export function DragSessionSensors(props: {
   getViewport: () => HTMLElement | undefined;
   axis: 'x' | 'both';
+  nestedScroll?: { viewportSelector: string; horizontalOutside: boolean };
   onCancel: () => void;
 }) {
   const context = useDragDropContext();
   if (!context) throw new Error('DragSessionSensors requires DragDropProvider');
   const [state, actions] = context;
-  createDragAutoScroll({ getViewport: props.getViewport, axis: props.axis });
+  createDragAutoScroll({
+    getViewport: props.getViewport,
+    axis: props.axis,
+    nestedScroll: props.nestedScroll,
+  });
   const cancelDrag = () => {
     if (!state.active.draggable) return;
     props.onCancel();
@@ -29,8 +34,19 @@ export function DragSessionSensors(props: {
     cancelDrag();
   };
   const updateDrop = (event: Event) => {
-    if (event.target === props.getViewport() && state.active.draggable)
+    if (!state.active.draggable) return;
+
+    const viewport = props.getViewport();
+    if (event.target === viewport) {
       actions.detectCollisions();
+      return;
+    }
+
+    if (!props.nestedScroll || !(event.target instanceof Element)) return;
+    if (!viewport?.contains(event.target)) return;
+    if (!event.target.matches(props.nestedScroll.viewportSelector)) return;
+
+    actions.detectCollisions();
   };
   document.addEventListener('keydown', cancelOnEscape, true);
   document.addEventListener('scroll', updateDrop, true);
