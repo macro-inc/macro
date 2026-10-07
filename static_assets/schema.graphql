@@ -24,6 +24,34 @@ input ActivityOverviewInput {
 }
 
 """
+An all-day span with an exclusive end date.
+"""
+input AllDayEventTimeInput {
+	"""
+	Inclusive local start date (`YYYY-MM-DD`).
+	"""
+	startDate: String!
+	"""
+	Exclusive local end date (`YYYY-MM-DD`).
+	"""
+	endDate: String!
+}
+
+"""
+An attendee to invite.
+"""
+input CalendarAttendeeInput {
+	"""
+	Attendee email address.
+	"""
+	email: String!
+	"""
+	Whether attendance is optional.
+	"""
+	isOptional: Boolean! = false
+}
+
+"""
 A request for calendar changes after a watermark.
 """
 input CalendarChangesInput {
@@ -32,6 +60,20 @@ input CalendarChangesInput {
 	returns only the current watermark.
 	"""
 	since: [CalendarLinkWatermarkInput!]!
+}
+
+"""
+The time shape of an event.
+"""
+input CalendarEventTimeInput @oneOf {
+	"""
+	A span with absolute instants.
+	"""
+	timed: TimedEventTimeInput
+	"""
+	An all-day span.
+	"""
+	allDay: AllDayEventTimeInput
 }
 
 """
@@ -46,6 +88,21 @@ input CalendarLinkWatermarkInput {
 	Last applied sequence, as the decimal string the server returned.
 	"""
 	seq: String!
+}
+
+"""
+Out-of-office properties. Present to create or edit an out-of-office
+status event.
+"""
+input CalendarOutOfOfficeInput {
+	"""
+	How conflicting invitations are handled while the user is out.
+	"""
+	autoDeclineMode: GraphqlCalendarOutOfOfficeAutoDeclineMode! = DECLINE_NONE
+	"""
+	Message returned to organizers whose invitations are auto-declined.
+	"""
+	declineMessage: String
 }
 
 """
@@ -78,6 +135,34 @@ input CalendarRangeInput {
 	`endCursor` of the previous page.
 	"""
 	after: String
+}
+
+"""
+One reminder.
+"""
+input CalendarReminderOverrideInput {
+	"""
+	Delivery method (`popup` or `email`).
+	"""
+	method: String!
+	"""
+	Minutes before the start the reminder fires.
+	"""
+	minutes: Int!
+}
+
+"""
+An event's reminder configuration.
+"""
+input CalendarRemindersInput {
+	"""
+	Whether the calendar's default reminders apply.
+	"""
+	useDefault: Boolean!
+	"""
+	Explicit reminders, used when `useDefault` is false.
+	"""
+	overrides: [CalendarReminderOverrideInput!]! = []
 }
 
 """
@@ -228,6 +313,22 @@ type CompleteMutationRoot {
 	Delete an initiative after its owner capability has been verified.
 	"""
 	deleteInitiative(initiativeId: ID!): Boolean!
+	"""
+	Create an event on one of the viewer's writable calendars.
+	"""
+	createCalendarEvent(input: CreateCalendarEventInput!): GraphqlCalendarMutationPayload!
+	"""
+	Patch an event, the whole series or one occurrence.
+	"""
+	updateCalendarEvent(input: UpdateCalendarEventInput!): GraphqlCalendarMutationPayload!
+	"""
+	Delete an event, one occurrence, or an occurrence onward.
+	"""
+	deleteCalendarEvent(input: DeleteCalendarEventInput!): GraphqlCalendarMutationPayload!
+	"""
+	Set the viewer's RSVP on an event, the whole series or one occurrence.
+	"""
+	respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!
 }
 
 """
@@ -258,6 +359,71 @@ type CompleteSubscriptionRoot {
 }
 
 """
+Create an event on one of the viewer's writable calendars.
+"""
+input CreateCalendarEventInput {
+	"""
+	Stable retry identity, scoped to the authenticated organizer.
+	"""
+	idempotencyKey: ID
+	"""
+	Exact calendar to create the event on; takes precedence over the
+	inbox default.
+	"""
+	calendarId: ID
+	"""
+	Connected inbox whose primary calendar receives the event; defaults
+	to the viewer's primary inbox.
+	"""
+	emailLinkId: ID
+	"""
+	Display title.
+	"""
+	title: String!
+	"""
+	Optional event body.
+	"""
+	description: String
+	"""
+	Optional location label.
+	"""
+	location: String
+	"""
+	Timed or all-day shape.
+	"""
+	time: CalendarEventTimeInput!
+	"""
+	Invited attendees.
+	"""
+	attendees: [CalendarAttendeeInput!]! = []
+	"""
+	Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
+	"""
+	recurrenceLines: [String!]! = []
+	"""
+	Event visibility.
+	"""
+	visibility: GraphqlCalendarEventVisibility
+	"""
+	Availability behavior.
+	"""
+	transparency: GraphqlCalendarEventTransparency
+	"""
+	Reminder configuration; omit to keep the calendar defaults.
+	"""
+	reminders: CalendarRemindersInput
+	"""
+	Conference to attach; omit to create the event without one.
+	"""
+	conference: GraphqlCalendarConferenceChange
+	"""
+	Present to create an out-of-office status event (primary calendar
+	only, timed, no attendees).
+	"""
+	outOfOffice: CalendarOutOfOfficeInput
+}
+
+"""
 Create an initiative owned by the authenticated viewer.
 """
 input CreateInitiativeInput {
@@ -281,6 +447,29 @@ input CreateInitiativeInput {
 	Initial property values, set in the same create; a rejected value fails it.
 	"""
 	propertyValues: [InitialPropertyValueInput!]
+}
+
+"""
+Delete an event, one occurrence, or an occurrence onward.
+"""
+input DeleteCalendarEventInput {
+	"""
+	Event to delete.
+	"""
+	eventId: ID!
+	"""
+	Calendar whose copy of the event is deleted, for an event synced from
+	more than one calendar. Omit to delete the canonical copy.
+	"""
+	calendarId: ID
+	"""
+	Deletion scope; defaults to the entire event or series.
+	"""
+	scope: GraphqlCalendarDeletionScope! = ALL
+	"""
+	Original-start key of the occurrence a scoped deletion targets.
+	"""
+	recurrenceId: String
 }
 
 """
@@ -1158,6 +1347,20 @@ type GraphqlCalendarChanges {
 }
 
 """
+A change to an event's conference.
+"""
+enum GraphqlCalendarConferenceChange {
+	"""
+	Generate a new Google Meet conference and attach it.
+	"""
+	GOOGLE_MEET
+	"""
+	Detach whatever conference is currently attached.
+	"""
+	NONE
+}
+
+"""
 Conferencing system backing an event's join URL.
 """
 enum GraphqlCalendarConferenceProvider {
@@ -1169,6 +1372,24 @@ enum GraphqlCalendarConferenceProvider {
 	Any other conferencing system.
 	"""
 	OTHER
+}
+
+"""
+How much of a recurring series a deletion removes.
+"""
+enum GraphqlCalendarDeletionScope {
+	"""
+	The entire event or series.
+	"""
+	ALL
+	"""
+	One occurrence.
+	"""
+	THIS_EVENT
+	"""
+	One occurrence and everything after it.
+	"""
+	THIS_AND_FOLLOWING
 }
 
 """
@@ -1558,6 +1779,26 @@ type GraphqlCalendarLinkWatermark {
 }
 
 """
+An event's committed state after a calendar mutation.
+"""
+type GraphqlCalendarMutationPayload {
+	"""
+	The series event after the write; null when it no longer exists or
+	has no visible occurrence left.
+	"""
+	event: GraphqlCalendarEvent
+	"""
+	Every visible occurrence of the event after the write. Clients replace
+	everything they hold for the event with these.
+	"""
+	occurrences: [GraphqlCalendarOccurrence!]!
+	"""
+	Set to the event's id when the write removed it.
+	"""
+	deletedEventId: ID
+}
+
+"""
 One materialized instance of a calendar event.
 
 `eventId` and `linkId` repeat the event's identity as scalars so a client
@@ -1647,6 +1888,24 @@ type GraphqlCalendarOccurrencePage {
 }
 
 """
+How an out-of-office event answers conflicting invitations.
+"""
+enum GraphqlCalendarOutOfOfficeAutoDeclineMode {
+	"""
+	Leave conflicting invitations alone.
+	"""
+	DECLINE_NONE
+	"""
+	Decline every conflicting invitation, existing and new.
+	"""
+	DECLINE_ALL_CONFLICTING_INVITATIONS
+	"""
+	Decline only invitations that arrive after the event is created.
+	"""
+	DECLINE_ONLY_NEW_CONFLICTING_INVITATIONS
+}
+
+"""
 One reminder override.
 """
 type GraphqlCalendarReminderOverride {
@@ -1675,6 +1934,20 @@ type GraphqlCalendarReminders {
 }
 
 """
+How much of a recurring series an RSVP applies to.
+"""
+enum GraphqlCalendarRsvpScope {
+	"""
+	The entire series.
+	"""
+	ALL
+	"""
+	One occurrence.
+	"""
+	THIS_EVENT
+}
+
+"""
 Aggregate ingestion state across every calendar account visible to the
 viewer.
 """
@@ -1687,6 +1960,20 @@ enum GraphqlCalendarSyncStatus {
 	Every visible calendar account has finished its latest sync.
 	"""
 	READY
+}
+
+"""
+How much of a recurring series an update applies to.
+"""
+enum GraphqlCalendarUpdateScope {
+	"""
+	The entire event or series.
+	"""
+	ALL
+	"""
+	One occurrence.
+	"""
+	THIS_EVENT
 }
 
 """
@@ -8245,6 +8532,39 @@ input ReorderFavoritesInput {
 }
 
 """
+Set the viewer's RSVP on an event.
+"""
+input RespondToCalendarEventInput {
+	"""
+	Event to answer.
+	"""
+	eventId: ID!
+	"""
+	Calendar whose copy of the event is answered, for an event synced
+	from more than one calendar. Omit to answer on the canonical copy.
+	"""
+	calendarId: ID
+	"""
+	The response to record.
+	"""
+	response: GraphqlCalendarAttendeeResponseStatus!
+	"""
+	How much of a recurring series the response covers. Omit to let
+	`recurrenceId` decide: the identified occurrence alone when one is
+	supplied, otherwise the whole series.
+	"""
+	scope: GraphqlCalendarRsvpScope
+	"""
+	Original-start key of the occurrence the response targets.
+	"""
+	recurrenceId: String
+	"""
+	The owned connected address whose attendance is changed.
+	"""
+	respondingEmail: String
+}
+
+"""
 One recipient of an email draft.
 """
 input SaveEmailDraftContactInput {
@@ -8524,6 +8844,94 @@ type SoupUpdated {
 	The hydrated entity for this update.
 	"""
 	item: GraphqlSoupEntity!
+}
+
+"""
+A span with absolute instants.
+"""
+input TimedEventTimeInput {
+	"""
+	Inclusive start instant in RFC 3339 format.
+	"""
+	startsAt: String!
+	"""
+	Exclusive end instant in RFC 3339 format.
+	"""
+	endsAt: String!
+	"""
+	IANA time-zone identifier the event is anchored to.
+	"""
+	timeZone: String
+}
+
+"""
+Patch an event; omitted fields are left untouched.
+"""
+input UpdateCalendarEventInput {
+	"""
+	Event to patch.
+	"""
+	eventId: ID!
+	"""
+	Calendar whose copy of the event is patched, for an event synced from
+	more than one calendar. Omit to patch the canonical copy.
+	"""
+	calendarId: ID
+	"""
+	Replacement title; an empty string clears it.
+	"""
+	title: String
+	"""
+	Replacement description; an empty string clears it.
+	"""
+	description: String
+	"""
+	Replacement location; an empty string clears it.
+	"""
+	location: String
+	"""
+	Replacement time.
+	"""
+	time: CalendarEventTimeInput
+	"""
+	Replacement attendee list.
+	"""
+	attendees: [CalendarAttendeeInput!]
+	"""
+	Replacement recurrence properties; an empty list clears them.
+	"""
+	recurrenceLines: [String!]
+	"""
+	Replacement visibility.
+	"""
+	visibility: GraphqlCalendarEventVisibility
+	"""
+	Replacement transparency.
+	"""
+	transparency: GraphqlCalendarEventTransparency
+	"""
+	Replacement reminder configuration.
+	"""
+	reminders: CalendarRemindersInput
+	"""
+	Conference change; omit to leave the conference untouched.
+	"""
+	conference: GraphqlCalendarConferenceChange
+	"""
+	Replacement out-of-office properties, applied only to an event that is
+	already out-of-office.
+	"""
+	outOfOffice: CalendarOutOfOfficeInput
+	"""
+	How much of a recurring series the update covers. Omit to let
+	`recurrenceId` decide: the identified occurrence alone when one is
+	supplied, otherwise the whole event or series.
+	"""
+	scope: GraphqlCalendarUpdateScope
+	"""
+	Original-start key of the occurrence the update targets.
+	"""
+	recurrenceId: String
 }
 
 """

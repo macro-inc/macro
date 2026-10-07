@@ -90,13 +90,13 @@ fn page_size(first: Option<i32>) -> async_graphql::Result<u16> {
         .ok_or_else(|| bad_input("calendar page size must be between 1 and 2000"))
 }
 
-fn parse_instant(value: &str, field: &str) -> async_graphql::Result<DateTime<Utc>> {
+pub(crate) fn parse_instant(value: &str, field: &str) -> async_graphql::Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .map(|instant| instant.with_timezone(&Utc))
         .map_err(|_| bad_input(format!("{field} must be an RFC 3339 instant")))
 }
 
-fn parse_date(value: &str, field: &str) -> async_graphql::Result<NaiveDate> {
+pub(crate) fn parse_date(value: &str, field: &str) -> async_graphql::Result<NaiveDate> {
     NaiveDate::parse_from_str(value, "%Y-%m-%d")
         .map_err(|_| bad_input(format!("{field} must be a YYYY-MM-DD date")))
 }

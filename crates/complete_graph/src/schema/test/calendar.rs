@@ -146,6 +146,13 @@ impl CalendarChangeQueryService for RecordingCalendarReads {
             ..CalendarChangesPage::default()
         })
     }
+    async fn event_change(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<calendar_events::domain::changes::CalendarEventChange>, Report> {
+        Ok(None)
+    }
 }
 
 #[tokio::test]
@@ -211,4 +218,107 @@ async fn calendar_fields_fail_without_the_calendar_context() {
         .await;
 
     assert_eq!(response.errors.len(), 1);
+}
+
+#[derive(Default)]
+struct RecordingCalendarMutations {
+    deleted: Mutex<Vec<(String, Uuid)>>,
+}
+
+impl calendar_events::domain::ports::CalendarMutationService for RecordingCalendarMutations {
+    async fn create_event(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: calendar_events::domain::models::CalendarEventDraft,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<VisibleCalendar>, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn update_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _patch: calendar_events::domain::models::CalendarEventPatch,
+        _scope: calendar_events::domain::ports::CalendarUpdateScope,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn delete_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _scope: calendar_events::domain::ports::CalendarDeletionScope,
+    ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        self.deleted
+            .lock()
+            .unwrap()
+            .push((requester_id.to_owned(), event_id));
+        Ok(())
+    }
+
+    async fn respond_to_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        _response: calendar_events::domain::models::AttendeeResponseStatus,
+        _scope: calendar_events::domain::ports::CalendarRsvpScope,
+        _responding_email: Option<String>,
+    ) -> Result<CalendarEvent, calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+
+    async fn disconnect_calendar(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Uuid,
+    ) -> Result<(), calendar_events::domain::ports::CalendarMutationError> {
+        unreachable!("only deletion is exercised")
+    }
+}
+
+#[tokio::test]
+async fn calendar_mutations_run_for_the_authenticated_viewer() {
+    let harness = harness();
+    let mutations = Arc::new(RecordingCalendarMutations::default());
+    let reads = Arc::new(RecordingCalendarReads::default());
+    let context =
+        graphql_calendar::CalendarGraphqlMutationContext::new(Arc::clone(&mutations), reads);
+
+    let response = harness
+        .schema
+        .execute(
+            harness
+                .request(
+                    &format!(
+                        r#"mutation {{ deleteCalendarEvent(input: {{ eventId: "{EVENT_ID}" }}) {{ deletedEventId }} }}"#
+                    ),
+                    authenticated_parts(),
+                )
+                .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
+                .data(context),
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["deleteCalendarEvent"]["deletedEventId"],
+        EVENT_ID.to_string()
+    );
+    assert_eq!(
+        *mutations.deleted.lock().unwrap(),
+        vec![(VALID_USER_ID.to_owned(), EVENT_ID)]
+    );
 }

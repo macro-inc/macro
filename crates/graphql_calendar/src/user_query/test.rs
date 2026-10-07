@@ -130,6 +130,13 @@ impl CalendarChangeQueryService for FakeReads {
         self.fail()?;
         Ok(self.changes.clone())
     }
+    async fn event_change(
+        &self,
+        _viewer: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Option<CalendarEventChange>, Report> {
+        unreachable!("queries never read one event's committed state")
+    }
 }
 
 const VIEWER: &str = "macro|viewer@example.com";

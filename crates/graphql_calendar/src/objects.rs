@@ -624,6 +624,39 @@ impl From<CalendarEventChange> for GraphqlCalendarEventChange {
     }
 }
 
+/// An event's committed state after a calendar mutation.
+#[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
+pub struct GraphqlCalendarMutationPayload {
+    /// The series event after the write; null when it no longer exists or
+    /// has no visible occurrence left.
+    event: Option<Arc<GraphqlCalendarEvent>>,
+    /// Every visible occurrence of the event after the write. Clients replace
+    /// everything they hold for the event with these.
+    occurrences: Vec<GraphqlCalendarOccurrence>,
+    /// Set to the event's id when the write removed it.
+    deleted_event_id: Option<ID>,
+}
+
+impl GraphqlCalendarMutationPayload {
+    pub(crate) fn new(event_id: Uuid, change: Option<CalendarEventChange>) -> Self {
+        match change {
+            Some(change) => {
+                let GraphqlCalendarEventChange { event, occurrences } = change.into();
+                Self {
+                    event: Some(event),
+                    occurrences,
+                    deleted_event_id: None,
+                }
+            }
+            None => Self {
+                event: None,
+                occurrences: Vec::new(),
+                deleted_event_id: Some(id(event_id)),
+            },
+        }
+    }
+}
+
 /// One bounded page of calendar changes after a watermark.
 #[derive(SimpleObject, Clone, Debug, PartialEq, Eq)]
 pub struct GraphqlCalendarChanges {

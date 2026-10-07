@@ -21,7 +21,7 @@ use graphql_activity::{
     GraphqlActivityPage, NoOpActivityReader, NoOpActivitySubscriptionService,
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
 };
-use graphql_calendar::GraphqlCalendarQuery;
+use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -95,6 +95,7 @@ pub struct CompleteMutationRoot<
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    CalendarMutationRoot,
 );
 
 impl<
@@ -118,6 +119,7 @@ impl<
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             InitiativeMutationRoot::<E>::default(),
+            CalendarMutationRoot,
         )
     }
 }

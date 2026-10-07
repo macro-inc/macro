@@ -1735,6 +1735,23 @@ async fn run() -> anyhow::Result<()> {
     );
     let calendar_state =
         CalendarRouterState::new(calendar_read_service, authorization_state.clone());
+    // Calendar writes belong to calendar_service; each GraphQL mutation then
+    // answers from the primary so it reads the state its write committed.
+    let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
+        Arc::new(
+            calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
+                macro_service_urls::CalendarServiceUrl::new()
+                    .context("calendar service url")?
+                    .to_string(),
+                config.internal_api_key.to_string(),
+            ),
+        ),
+        Arc::new(
+            calendar_events::domain::changes::CalendarChangeService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            ),
+        ),
+    );
 
     // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
     // every minute; the sweep fans one message out per due firing, onto the
@@ -1880,6 +1897,7 @@ async fn run() -> anyhow::Result<()> {
             scheduled_action_read_service,
         ),
         graphql_calendar_context,
+        graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),

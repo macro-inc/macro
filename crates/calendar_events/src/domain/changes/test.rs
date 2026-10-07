@@ -484,6 +484,22 @@ async fn nothing_is_hydrated_when_no_event_was_upserted() {
     assert!(service.repository.loads.lock().unwrap().is_empty());
 }
 
+#[tokio::test]
+async fn one_event_is_read_with_the_viewers_attendee_flags() {
+    let service = CalendarChangeService::new(FakeChanges {
+        events: HashMap::from([(id(1), event_change(id(1), LINK_A, 2))]),
+        owned_inboxes: vec!["viewer@example.com".to_owned()],
+        ..Default::default()
+    });
+
+    let change = service.event_change(VIEWER, id(1)).await.unwrap().unwrap();
+    let missing = service.event_change(VIEWER, id(2)).await.unwrap();
+
+    assert_eq!(change.occurrences.len(), 2);
+    assert!(change.event.attendees[0].is_self);
+    assert_eq!(missing, None);
+}
+
 #[test]
 fn a_duplicated_link_keeps_its_lowest_position() {
     let watermark = since(&[(LINK_A, 7), (LINK_A, 3)]);

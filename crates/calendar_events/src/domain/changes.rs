@@ -241,6 +241,15 @@ pub trait CalendarChangeQueryService: Send + Sync + 'static {
         viewer: &str,
         since: CalendarWatermark,
     ) -> impl Future<Output = Result<CalendarChangesPage, Report>> + Send;
+
+    /// The current state of one event with its complete set of visible
+    /// occurrences, or `None` when the viewer cannot see it or it has no
+    /// visible occurrence left.
+    fn event_change(
+        &self,
+        viewer: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send;
 }
 
 /// Change-log reads with the delta policy applied.
@@ -341,15 +350,44 @@ impl<R: CalendarChangeRepository> CalendarChangeService<R> {
             ActorInboxes::from_owned(self.repository.owned_inbox_emails(viewer).await?)
         {
             for change in &mut page.events {
-                viewer.mark_attendees(&mut change.event.attendees);
-                for instance in &mut change.occurrences {
-                    if let Some(attendees) = &mut instance.exception.attendees {
-                        viewer.mark_attendees(attendees);
-                    }
-                }
+                mark_viewer_attendees(&viewer, change);
             }
         }
         Ok(page)
+    }
+
+    /// The current state of one event with its complete set of visible
+    /// occurrences.
+    #[tracing::instrument(skip(self, viewer), err)]
+    pub async fn event_change(
+        &self,
+        viewer: &str,
+        event_id: Uuid,
+    ) -> Result<Option<CalendarEventChange>, Report> {
+        let Some(mut change) = self
+            .repository
+            .load_event_changes(viewer, &[event_id], MAX_DELTA_OCCURRENCES)
+            .await?
+            .events
+            .pop()
+        else {
+            return Ok(None);
+        };
+        if let Some(viewer) =
+            ActorInboxes::from_owned(self.repository.owned_inbox_emails(viewer).await?)
+        {
+            mark_viewer_attendees(&viewer, &mut change);
+        }
+        Ok(Some(change))
+    }
+}
+
+fn mark_viewer_attendees(viewer: &ActorInboxes, change: &mut CalendarEventChange) {
+    viewer.mark_attendees(&mut change.event.attendees);
+    for instance in &mut change.occurrences {
+        if let Some(attendees) = &mut instance.exception.attendees {
+            viewer.mark_attendees(attendees);
+        }
     }
 }
 
@@ -367,6 +405,14 @@ impl<R: CalendarChangeRepository> CalendarChangeQueryService for CalendarChangeS
         since: CalendarWatermark,
     ) -> impl Future<Output = Result<CalendarChangesPage, Report>> + Send {
         CalendarChangeService::changes_since(self, viewer, since)
+    }
+
+    fn event_change(
+        &self,
+        viewer: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send {
+        CalendarChangeService::event_change(self, viewer, event_id)
     }
 }
 
