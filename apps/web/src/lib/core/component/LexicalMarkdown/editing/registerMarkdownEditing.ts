@@ -108,6 +108,11 @@ export type MarkdownEditingOptions = {
   peerId?: () => string;
   /** On iOS, keeps the caret visible inside this scroll container. */
   iosScrollContainer?: () => HTMLElement | undefined;
+  /**
+   * Give check lists the task-list control line (progress + filters).
+   * Document editors only — not chat inputs or other surfaces.
+   */
+  taskListControls?: boolean;
   slots?: MarkdownEditingSlots;
 };
 
@@ -239,23 +244,24 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
     );
   }
   useAll(slots?.beforeCode?.(accessories));
-  const checklistControls = createChecklistControls();
-  plugins
-    .use(
-      codePlugin({
-        accessories: accessoryStore,
-        setAccessories: setAccessoryStore,
-      })
-    )
-    .use(checklistControls.plugin)
-    .use(listToTablePlugin());
+  const checklistControls = options.taskListControls
+    ? createChecklistControls()
+    : undefined;
+  plugins.use(
+    codePlugin({
+      accessories: accessoryStore,
+      setAccessories: setAccessoryStore,
+    })
+  );
+  if (checklistControls) plugins.use(checklistControls.plugin);
+  plugins.use(listToTablePlugin());
 
   return {
     menus,
     dragInsert,
     draggableBlock,
     accessories,
-    checklistControls: checklistControls.data,
+    checklistControls: checklistControls?.data,
     /** Whether an inline menu owns the arrow and enter keys. */
     isInlineMenuOpen: () =>
       menus.mentions.isOpen() ||
