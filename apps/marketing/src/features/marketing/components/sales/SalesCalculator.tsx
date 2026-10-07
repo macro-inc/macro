@@ -167,8 +167,7 @@ export function SalesCalculator(props: { onBook: () => void }) {
       </div>
       <p class="sales-calc-note">
         Monthly per-seat prices, billed yearly, from each tool’s pricing page in{' '}
-        {PRICES_CHECKED}. Macro is $40 a seat per month for your first 5 seats,
-        then $80.
+        {PRICES_CHECKED}. Macro is priced at Pro, $40 a seat per month.
       </p>
     </div>
   );

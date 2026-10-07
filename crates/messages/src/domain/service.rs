@@ -715,6 +715,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 }
                 MessageReferenceKind::Automation => continue,
                 MessageReferenceKind::Document => EntityType::Document,
+                MessageReferenceKind::Form => EntityType::Form,
                 MessageReferenceKind::Channel => EntityType::Channel,
                 MessageReferenceKind::EmailThread => EntityType::EmailThread,
                 MessageReferenceKind::Call => EntityType::Call,

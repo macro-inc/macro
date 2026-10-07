@@ -778,3 +778,48 @@ it('moves from the active cell after whole-row or whole-column selections, not t
   key('ArrowRight');
   expect(grid.activeAddress()).toBe('B5');
 });
+
+it('highlights the draft references that fall on the sheet being shown', () => {
+  const view = createRoot((dispose) => {
+    cleanups.push(dispose);
+    const [sheetId, setSheetId] = createSignal('sheet1');
+    const grid = createGridController({
+      cells: () => ({}),
+      sheetId,
+      sheets: () => [
+        { id: 'sheet1', name: 'Sheet1' },
+        { id: 'sheet2', name: "Owner's budget" },
+      ],
+      setActiveSheet: setSheetId,
+      setSheetCells: vi.fn(),
+      canEdit: () => true,
+      rowCount: () => 20,
+      columnCount: () => 5,
+      setCells: vi.fn(),
+      undo: vi.fn(),
+      redo: vi.fn(),
+    });
+    return { grid, setSheetId };
+  });
+  const { grid } = view;
+  expect(grid.referenceHighlights()).toEqual([]);
+
+  grid.beginEdit('cell', "=SUM(A1:B2)+'Owner''s budget'!C3+D:D+$a$1:b2");
+  const [first, other, column, repeat] = grid.draftReferences();
+  expect(repeat.color).toBe(first.color);
+  expect(other.color).not.toBe(first.color);
+  expect(grid.referenceHighlights()).toEqual([
+    { color: first.color, bounds: { top: 0, bottom: 1, left: 0, right: 1 } },
+    { color: column.color, bounds: { top: 0, bottom: 19, left: 3, right: 3 } },
+    { color: first.color, bounds: { top: 0, bottom: 1, left: 0, right: 1 } },
+  ]);
+
+  grid.switchSheet('sheet2');
+  expect(grid.referenceHighlights()).toEqual([
+    { color: other.color, bounds: { top: 2, bottom: 2, left: 2, right: 2 } },
+  ]);
+
+  grid.cancel();
+  expect(grid.draftReferences()).toEqual([]);
+  expect(grid.referenceHighlights()).toEqual([]);
+});

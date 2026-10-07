@@ -53,6 +53,8 @@ export function ColumnTypeMenu(props: {
   onConvertToNewColumn?: (choice: DatabaseColumnConversionChoice) => void;
 }) {
   const [open, setOpen] = createSignal(false);
+  const protectedType = () =>
+    props.column.protections?.includes('change_type') ?? false;
   const casts = props.loadCasts?.(open);
   const castOf = (to: DatabaseColumnKind) =>
     casts ? castFor(casts(), to) : undefined;
@@ -97,7 +99,7 @@ export function ColumnTypeMenu(props: {
       offered({ type: 'relation', table: table.id })
     );
   const choose = (label: string, to: DatabaseColumnKind) => {
-    if (selected(to)) return;
+    if (protectedType() || selected(to)) return;
     const cast = castOf(to);
     if (misfits(cast)) {
       props.onConvertToNewColumn?.({ to, label, cast });
@@ -111,7 +113,10 @@ export function ColumnTypeMenu(props: {
   };
   return (
     <Dropdown.Sub open={open()} onOpenChange={setOpen}>
-      <Dropdown.SubTrigger>
+      <Dropdown.SubTrigger
+        disabled={protectedType()}
+        title={protectedType() ? 'This column’s type is protected.' : undefined}
+      >
         <PropertyIcon
           type={props.column.dataType}
           entityType={props.column.specificEntityType}

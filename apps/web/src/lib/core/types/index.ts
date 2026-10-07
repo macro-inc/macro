@@ -7,6 +7,8 @@ export const EntityType = {
   channel_message: 'channel_message',
   routine: 'routine',
   channel_thread: 'channel_thread',
+  // Until the connection service schema regenerates with `EntityType::Form`.
+  form: 'form',
 } as const;
 
 export type EntityType = (typeof EntityType)[keyof typeof EntityType];

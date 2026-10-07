@@ -22,9 +22,9 @@ use super::super::{
 use super::{ColumnCells, Place, Planner, refuse, refuse_taken, schema_refusal};
 use crate::domain::catalog::{self, ColumnEntry, PropertyType, TableEntry};
 use crate::domain::models::{
-    Column, ColumnConfig, ColumnId, ColumnReplacement, DatabaseError, DatabaseId, DatabaseView,
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId, Write,
-    grant_writes,
+    Column, ColumnConfig, ColumnId, ColumnProtection, ColumnReplacement, DatabaseError, DatabaseId,
+    DatabaseView, NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId,
+    Write, grant_writes,
 };
 
 impl Planner {
@@ -119,6 +119,7 @@ impl Planner {
             }
         };
         let column = Column {
+            protections: vec![],
             id,
             table_id: entry.table.id,
             property_definition_id: definition.definition.id,
@@ -190,6 +191,18 @@ impl Planner {
         column: &ColumnEntry,
     ) -> Result<Write, DatabaseError> {
         let column_id = place.column;
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::Delete)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::Delete,
+                }
+                .to_string(),
+            ));
+        }
         let now = self.now;
         let next_title = entry
             .columns
@@ -320,6 +333,18 @@ impl Planner {
         let views = views_without_tests_of(self.views_of(entry), column_id, now)
             .map_err(|reason| place.refuse(reason.to_string()))?;
         if let Some(previous) = self.restoration.rebinds.get(&place.op).copied() {
+            if column
+                .column
+                .protections
+                .contains(&ColumnProtection::ChangeType)
+            {
+                return Err(place.refuse(
+                    SchemaError::ColumnProtected {
+                        capability: ColumnProtection::ChangeType,
+                    }
+                    .to_string(),
+                ));
+            }
             return self.rebind(place, entry, column, previous, relation, views);
         }
         let current = PropertyType::of(&column.column, &column.definition);
@@ -335,6 +360,19 @@ impl Planner {
             return Ok(Write::Unchanged {
                 table_id: entry.table.id,
             });
+        }
+
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::ChangeType)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::ChangeType,
+                }
+                .to_string(),
+            ));
         }
 
         let stored = self

@@ -90,6 +90,7 @@ export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
       : {}),
     specificEntityType: column.definition.definition.specific_entity_type,
     inferType: column.column.infer_type,
+    protections: column.column.protections,
   };
 }
 

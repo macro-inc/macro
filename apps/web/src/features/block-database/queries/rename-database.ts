@@ -1,7 +1,11 @@
 import { queryClient } from '@queries/client';
+import { invalidatePreview } from '@queries/preview';
 import { invalidateDatabase } from '@queries/storage/databases';
-import { databasesKeys } from '@queries/storage/keys';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
+import type { Form } from '@service-storage/generated/schemas/form';
+import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
+import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import {
   RenameDatabaseDocument,
   type RenameDatabaseMutation,
@@ -24,6 +28,26 @@ export type RenameDatabaseClient = {
     }>;
   };
 };
+
+/** Every cached form over the database; previews carry no database id. */
+function cachedFormIdsOver(databaseId: string): Set<string> {
+  const forms = [
+    ...(queryClient.getQueryData<Form[]>(
+      formsKeys.forDatabase(databaseId).queryKey
+    ) ?? []),
+    ...(
+      queryClient.getQueryData<ListedForm[]>(formsKeys.list.queryKey) ?? []
+    ).map((listed) => listed.form),
+    ...queryClient
+      .getQueriesData<FormDetail>({ queryKey: formsKeys.detail._def })
+      .flatMap(([, detail]) => (detail ? [detail.form] : [])),
+  ];
+  return new Set(
+    forms
+      .filter((form) => form.databaseId === databaseId)
+      .map((form) => form.id)
+  );
+}
 
 export function renameDatabase(
   client: RenameDatabaseClient,
@@ -62,6 +86,21 @@ export function renameDatabase(
         // Qualified SQL names include the database name; open reads rerun
         // against the reloaded catalog.
         await invalidateDatabase(databaseId);
+        // Standalone forms read their name from this database. Refetch the
+        // server's names, previews included: forms attached to existing
+        // tables stay independent.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: formsKeys.detail._def }),
+          queryClient.invalidateQueries({
+            queryKey: formsKeys.forDatabase(databaseId).queryKey,
+          }),
+          queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey }),
+        ]);
+        await Promise.all(
+          [...cachedFormIdsOver(databaseId)].map((formId) =>
+            invalidatePreview(formId)
+          )
+        );
         return ok(undefined);
       })
       .exhaustive();

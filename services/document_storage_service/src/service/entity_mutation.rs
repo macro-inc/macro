@@ -156,7 +156,7 @@ where
 
 /// Unified entity mutation router wired from the domain services.
 #[derive(Clone)]
-pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, A, L> {
+pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L> {
     documents: Arc<D>,
     chats: Arc<H>,
     channels: Arc<C>,
@@ -164,12 +164,13 @@ pub struct DssEntityMutationService<D, H, C, K, E, P, Databases, A, L> {
     email: Arc<E>,
     projects: Arc<P>,
     databases: Arc<Databases>,
+    forms: Arc<Forms>,
     access: Arc<A>,
     lifecycle: Arc<L>,
 }
 
-impl<D, H, C, K, E, P, Databases, A, L>
-    DssEntityMutationService<D, H, C, K, E, P, Databases, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
 {
     /// Compose the unified mutation router from domain services.
     #[expect(
@@ -184,6 +185,7 @@ impl<D, H, C, K, E, P, Databases, A, L>
         email: Arc<E>,
         projects: Arc<P>,
         databases: Arc<Databases>,
+        forms: Arc<Forms>,
         access: Arc<A>,
         lifecycle: Arc<L>,
     ) -> Self {
@@ -195,13 +197,15 @@ impl<D, H, C, K, E, P, Databases, A, L>
             email,
             projects,
             databases,
+            forms,
             access,
             lifecycle,
         }
     }
 }
 
-impl<D, H, C, K, E, P, Databases, A, L> DssEntityMutationService<D, H, C, K, E, P, Databases, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L>
+    DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -229,6 +233,13 @@ where
         + DeleteEntityPermanently,
     Databases:
         DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Forms: RenameEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently
+        + Send
+        + Sync
+        + 'static,
     A: EntityAccessService,
     L: EntityLifecycleService,
 {
@@ -410,6 +421,10 @@ where
                 self.rename_with(&*self.databases, actor, &requested, display_name)
                     .await
             }
+            EntityType::Form => {
+                self.rename_with(&*self.forms, actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::ChannelMessage
@@ -476,6 +491,7 @@ where
             // A database is not filed into a project, so there is nowhere to
             // move it to (`EntityType::is_valid_entity_access_entity`).
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
@@ -530,6 +546,7 @@ where
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "share policy updates");
             }
@@ -569,6 +586,7 @@ where
             EntityType::Chat => self.trash_with(&*self.chats, actor, &requested).await,
             EntityType::Project => self.trash_with(&*self.projects, actor, &requested).await,
             EntityType::Database => self.trash_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.trash_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -603,6 +621,7 @@ where
             EntityType::Chat => self.restore_with(&*self.chats, actor, &requested).await,
             EntityType::Project => self.restore_with(&*self.projects, actor, &requested).await,
             EntityType::Database => self.restore_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.restore_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -659,6 +678,7 @@ where
             EntityType::Call => self.delete_with(&*self.calls, actor, &requested).await,
             EntityType::Project => self.delete_with(&*self.projects, actor, &requested).await,
             EntityType::Database => self.delete_with(&*self.databases, actor, &requested).await,
+            EntityType::Form => self.delete_with(&*self.forms, actor, &requested).await,
             EntityType::User
             | EntityType::Team
             | EntityType::ChannelMessage
@@ -738,6 +758,7 @@ where
             | EntityType::Initiative
             // Duplicating a database is unsupported.
             | EntityType::Database
+            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "duplication");
             }
@@ -746,8 +767,8 @@ where
     }
 }
 
-impl<D, H, C, K, E, P, Databases, A, L> EntityMutationService
-    for DssEntityMutationService<D, H, C, K, E, P, Databases, A, L>
+impl<D, H, C, K, E, P, Databases, Forms, A, L> EntityMutationService
+    for DssEntityMutationService<D, H, C, K, E, P, Databases, Forms, A, L>
 where
     D: DocumentService
         + RenameEntity
@@ -775,6 +796,13 @@ where
         + DeleteEntityPermanently,
     Databases:
         DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Forms: RenameEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently
+        + Send
+        + Sync
+        + 'static,
     A: EntityAccessService,
     L: EntityLifecycleService,
 {

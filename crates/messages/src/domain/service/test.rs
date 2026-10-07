@@ -765,6 +765,7 @@ impl MessageReferenceAccess for ReferenceAccess {
 #[tokio::test]
 async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
     for (tag, entity_type) in [
+        ("form", EntityType::Form),
         ("thread", EntityType::EmailThread),
         ("email", EntityType::EmailThread),
         ("email_thread", EntityType::EmailThread),

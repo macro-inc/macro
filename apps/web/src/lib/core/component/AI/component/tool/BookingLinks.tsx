@@ -1,14 +1,9 @@
 import Link from '@phosphor-icons/core/regular/link.svg';
 import type { BookingLinkResult } from '@service-cognition/generated/tools/types';
-import { createSignal, For, Match, Switch } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
-import { BookingChatCompose } from './booking-link/ChatCompose';
 import { Tool } from './Tool';
-import {
-  createToolRenderer,
-  type RenderContext,
-  useToolError,
-} from './ToolRenderer';
+import { createToolRenderer, type RenderContext } from './ToolRenderer';
 
 function LinkCard(props: {
   label: string;
@@ -83,56 +78,18 @@ function mutationHandler(name: 'CreateBookingLink' | 'EditBookingLink') {
   return createToolRenderer({
     name,
     render: (ctx) => {
-      const response = () => ctx.response?.data;
-      const error = () => useToolError();
-      const saved = () => {
-        const result = response();
-        return typeof result === 'object' &&
-          result !== null &&
-          'UserAction' in result
-          ? result.UserAction
-          : undefined;
-      };
-      const label =
-        name === 'CreateBookingLink'
-          ? 'Create booking link'
-          : 'Edit booking link';
+      const saved = () => ctx.response?.data;
       return (
-        <Switch
-          fallback={
-            <LinkCard
-              label={label}
-              renderContext={ctx.renderContext}
-              status={response() === 'Rejected' ? 'Cancelled' : undefined}
-            />
+        <LinkCard
+          label={
+            name === 'CreateBookingLink'
+              ? 'Create booking link'
+              : 'Edit booking link'
           }
-        >
-          <Match when={response() === 'PendingUserExecution' || error()}>
-            <p class="text-sm text-ink-muted">
-              {error()
-                ? 'The previous save failed. Review your draft and try again.'
-                : ''}
-            </p>
-            <BookingChatCompose
-              name={name}
-              chatId={ctx.chat_id}
-              messageId={ctx.message_id}
-              toolCallId={ctx.tool.id}
-              initialData={ctx.tool.data}
-              streamLocked={ctx.renderContext.isStreaming}
-            />
-          </Match>
-          <Match when={saved()}>
-            {(link) => (
-              <LinkCard
-                label={label}
-                links={[link()]}
-                status="Saved"
-                renderContext={ctx.renderContext}
-              />
-            )}
-          </Match>
-        </Switch>
+          links={saved() ? [saved()!] : undefined}
+          status={saved() ? 'Saved' : undefined}
+          renderContext={ctx.renderContext}
+        />
       );
     },
   });

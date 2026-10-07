@@ -408,6 +408,7 @@ fn a_column_create_is_undone_by_deleting_the_column() {
     };
     let write = Write::CreateColumn {
         column: Column {
+            protections: vec![],
             id: seats,
             table_id: GUESTS,
             property_definition_id: Uuid::from_u128(0xe9),
@@ -643,6 +644,7 @@ fn a_type_change_is_undone_by_the_old_type_with_the_old_definition_and_cells() {
         }),
         replacement: ColumnReplacement {
             column: Column {
+                protections: vec![],
                 id: PLUS_ONES,
                 table_id: GUESTS,
                 property_definition_id: PLUS_ONES_DEFINITION,
@@ -1218,6 +1220,7 @@ fn what_a_batch_creates_and_removes_again_needs_no_inverse() {
     let writes = [
         Write::CreateColumn {
             column: Column {
+                protections: vec![],
                 id: seats,
                 table_id: GUESTS,
                 property_definition_id: Uuid::from_u128(0xe9),

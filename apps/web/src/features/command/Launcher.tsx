@@ -26,6 +26,7 @@ import {
   enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
+  enableForms,
   enableProjects,
   enablePsdEditor,
   enableSnippets,
@@ -56,6 +57,7 @@ import ChatIcon from '@phosphor/chat.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createDatabase } from '@queries/storage/databases';
+import { createForm } from '@queries/storage/forms';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import { useNavigate } from '@solidjs/router';
@@ -462,6 +464,25 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'form':
+      if (!isFeatureEnabled(enableForms)) return;
+      createBlock({
+        blockName: 'form',
+        loading: true,
+        createFn: async () => {
+          const created = await createForm(
+            { name: 'Untitled form', source: { kind: 'new' } },
+            source
+          );
+          if (created.isErr()) {
+            toast.failure('Could not create the form');
+            return;
+          }
+          return created.value.form.id;
+        },
+        shouldInsert,
+      });
+      return;
     case 'code':
       createBlock({
         blockName: 'code',
@@ -609,6 +630,22 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     hotkey: 'l',
     keyDownHandler: () => {
       runCreateAction('database', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Form',
+    icon: getIconConfig('form').icon,
+    description: 'Create form',
+    launcherHint: 'Questions answered into a database',
+    keywords: ['new', 'make', 'add', 'form', 'survey', 'questionnaire', 'poll'],
+    blockName: 'form',
+    enabled: () => isFeatureEnabled(enableForms),
+    hotkeyToken: TOKENS.create.form,
+    altHotkeyToken: TOKENS.create.formNewSplit,
+    hotkey: 'q',
+    keyDownHandler: () => {
+      runCreateAction('form', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },
@@ -869,12 +906,14 @@ export function useCreateMenuBlocks(
   const psdFlag = useFeatureFlag(enablePsdEditor);
   const figFlag = useFeatureFlag(enableFigViewer);
   const aiFlag = useFeatureFlag(enableAiEditor);
+  const formsFlag = useFeatureFlag(enableForms);
   return createMemo(() => {
     agentsFlag();
     databasesFlag();
     psdFlag();
     figFlag();
     aiFlag();
+    formsFlag();
     return (source() ?? commands).filter((block) => {
       if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
