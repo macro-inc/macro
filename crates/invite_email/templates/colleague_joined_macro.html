@@ -10,7 +10,7 @@
     />
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
-    <title>{{ self.joined_display() }} joined Macro</title>
+    <title>A team has been created for your organization</title>
     <!--[if mso]>
       <noscript
         ><xml
@@ -53,7 +53,7 @@
         mso-hide: all;
       "
     >
-      Sign up with your work email to join {{ team_name }} on Macro.
+      {{ team_name }} is now on Macro. Sign up with your work email to join automatically.
     </div>
     <table
       role="presentation"
@@ -125,7 +125,7 @@
                     color: #222222;
                   "
                 >
-                  {{ team_name }} is on Macro.
+                  A team has been created for your organization.
                 </h1>
                 <p
                   style="
@@ -139,8 +139,9 @@
                   {{ name }} ({{ self.joined_email() }})
                   {%- else -%}
                   {{ self.joined_email() }}
-                  {%- endif %} joined Macro with the
-                  <strong>{{ team_name }}</strong> team.
+                  {%- endif %} set up the
+                  <strong>{{ team_name }}</strong> team on Macro for your
+                  organization.
                 </p>
                 <p
                   style="
@@ -200,6 +201,10 @@
                   color: #737373;
                 "
               >
+                You are receiving this one-time notice because your email
+                address belongs to your organization's domain. No action is
+                needed.
+                <br />
                 Need a hand?
                 <a
                   href="mailto:support@macro.com"

@@ -29,24 +29,29 @@ fn make_colleague_joined() -> ColleagueJoinedMacro {
     }
 }
 
+const COLLEAGUE_SUBJECT: &str = "A team has been created for your organization";
+
 #[test]
-fn colleague_joined_names_the_colleague_and_links_to_signup() {
+fn colleague_joined_is_an_organization_notice_that_links_to_signup() {
     let email = make_colleague_joined().format_email();
-    assert_eq!(email.subject, "Alice Example joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(
         email
             .body
-            .contains("Alice Example (alice@acme.com) joined Macro with the")
+            .contains("Alice Example (alice@acme.com) set up the")
     );
-    assert!(email.body.contains("<strong>Acme</strong> team."));
+    assert!(email.body.contains("<strong>Acme</strong> team on Macro"));
     assert!(
         email
             .body
             .contains("Sign up with <strong>bob@acme.com</strong>")
     );
+    assert!(email.body.contains("one-time notice"));
     assert!(email.body.contains("/app/signup\""));
     assert!(email.body.contains(">Join Acme</a"));
     assert!(!email.body.contains("referral_code"));
+    // The notice is not framed as someone signing up.
+    assert!(!email.body.contains("joined Macro"));
 }
 
 #[test]
@@ -57,8 +62,8 @@ fn colleague_joined_falls_back_to_the_email_without_a_usable_name() {
             ..make_colleague_joined()
         }
         .format_email();
-        assert_eq!(email.subject, "alice@acme.com joined Macro");
-        assert!(email.body.contains("alice@acme.com joined Macro with the"));
+        assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+        assert!(email.body.contains("alice@acme.com set up the"));
         assert!(!email.body.contains("(alice@acme.com)"));
     }
 }
@@ -70,9 +75,11 @@ fn colleague_joined_puts_long_multiline_names_on_one_capped_line() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(
-        email.subject,
-        format!("Alice Example {} joined Macro", "x".repeat(50))
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
+    assert!(
+        email
+            .body
+            .contains(&format!("Alice Example {} (alice@acme.com)", "x".repeat(50)))
     );
 }
 
@@ -83,7 +90,7 @@ fn colleague_joined_escapes_the_untrusted_name_in_the_body() {
         ..make_colleague_joined()
     }
     .format_email();
-    assert_eq!(email.subject, "<b>x</b> joined Macro");
+    assert_eq!(email.subject, COLLEAGUE_SUBJECT);
     assert!(!email.body.contains("<b>x</b>"));
     assert!(
         email
