@@ -1,8 +1,54 @@
+import { createHash } from 'node:crypto';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
+
+const MODULE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Directory for Vitest's filesystem module cache, which `--fsModuleCache`
+ * (the `test` script) turns on for every project. Cached transforms embed
+ * resolved import paths, so entries live under a key of the lockfile and
+ * tsconfig; key directories unused for a week are deleted. CI points
+ * `VITEST_MODULE_CACHE_DIR` at a cache volume that persists across jobs.
+ */
+function moduleCachePath(): string {
+  const root =
+    process.env.VITEST_MODULE_CACHE_DIR ??
+    fileURLToPath(new URL('./.cache/vitest-modules', import.meta.url));
+  const key = createHash('sha256')
+    .update(readFileSync(new URL('../../bun.lock', import.meta.url)))
+    .update(readFileSync(new URL('./tsconfig.json', import.meta.url)))
+    .digest('hex')
+    .slice(0, 16);
+  const dir = join(root, key);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, '.last-used'), '');
+  for (const entry of readdirSync(root)) {
+    if (entry === key) continue;
+    const stale = join(root, entry);
+    try {
+      const lastUsed = statSync(join(stale, '.last-used')).mtimeMs;
+      if (Date.now() - lastUsed > MODULE_CACHE_MAX_AGE_MS) {
+        rmSync(stale, { recursive: true, force: true });
+      }
+    } catch {
+      // Not a key directory, or another run removed it first.
+    }
+  }
+  return dir;
+}
 
 export default defineConfig({
   plugins: [
@@ -29,6 +75,8 @@ export default defineConfig({
   },
   test: {
     exclude: [...configDefaults.exclude],
+    // Projects without their own path fall back to the root's.
+    fsModuleCachePath: moduleCachePath(),
     projects: [
       {
         extends: './src/features/scheduling/vitest.config.ts',

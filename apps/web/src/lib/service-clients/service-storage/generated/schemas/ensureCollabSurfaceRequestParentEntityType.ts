@@ -29,4 +29,5 @@ export type EnsureCollabSurfaceRequestParentEntityType =
   | 'scheduled_action'
   | 'initiative'
   | 'database'
-  | 'database_row';
+  | 'database_row'
+  | 'form';

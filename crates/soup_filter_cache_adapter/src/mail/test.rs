@@ -11,9 +11,10 @@ use soup_filter_projection::{
 
 mod drafts;
 mod optimistic;
+mod reminders;
 
 const VIEWER: &str = "macro|mail@example.com";
-const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
+const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs reminderReturnedAt mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
 const PARTIAL: &str = r#"query Partial { user { id soup(input:{initial:{limit:1}}) { items { __typename id ... on GraphqlSoupEmailThread { isRead inboxVisible } } } } }"#;
 fn id(n: u128) -> String {
     uuid::Uuid::from_u128(n).to_string()
@@ -43,7 +44,7 @@ fn default_capsule(n: u128) -> String {
     capsule(n, n == 1 || n == 60 || (71..=74).contains(&n))
 }
 fn row(n: u128) -> Value {
-    let mut row = json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"cacheProjection":default_capsule(n),"latestInboundMessageTs":if n != 2 { Some("2025-01-02T00:00:00.000002Z") } else { None },"updatedAt":"2025-01-04T00:00:00.000004Z"});
+    let mut row = json!({"__typename":"GraphqlSoupEmailThread","id":id(n),"linkId":id(if n<=50 {1000}else if n<=70 {1001}else {9999}),"inboxVisible":n.is_multiple_of(2),"isRead":false,"isSignal":n.is_multiple_of(3),"cacheProjection":default_capsule(n),"reminderReturnedAt":null,"latestInboundMessageTs":if n != 2 { Some("2025-01-02T00:00:00.000002Z") } else { None },"updatedAt":"2025-01-04T00:00:00.000004Z"});
     row["ownerId"] = json!(if n <= 50 {
         VIEWER
     } else {
@@ -528,7 +529,7 @@ async fn cleared_inbox_timestamp<S: PredicateIndexStorage>(storage: S) {
 
     let partial = json!({"user":{"id":VIEWER,"soup":{"items":[{
         "__typename":TYPE,"id":id(4),"cacheProjection":capsule(4, false),
-        "latestInboundMessageTs":null
+        "reminderReturnedAt":null,"latestInboundMessageTs":null
     }]}}});
     let updates = projection_updates(engine.storage(), QUERY, None, &Map::new(), &partial)
         .await

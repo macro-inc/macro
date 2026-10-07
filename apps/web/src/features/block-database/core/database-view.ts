@@ -22,6 +22,8 @@ export type DatabaseViewColumn = {
   specificEntityType?: DatabaseEntityType | null;
   /** A new, empty Text column may adopt the type of its first entry. */
   inferType?: boolean;
+  /** Schema actions reserved by the feature using this column. */
+  protections?: ('delete' | 'change_type')[];
   /** The column's definition is used beyond this database, so its options change everywhere. */
   sharedOutsideDatabase?: boolean;
   /** A relationship points to rows in a table, independently of the property's scalar type. */

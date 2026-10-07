@@ -79,6 +79,8 @@ pub enum GraphqlEntityType {
     Database,
     /// Row of a Macro Database table.
     DatabaseRow,
+    /// Macro Form entity (a questionnaire answered into a database table).
+    Form,
 }
 
 impl GraphqlSoupEntityType {
@@ -113,7 +115,8 @@ impl GraphqlSoupEntityType {
             | EntityType::StaticFile
             | EntityType::Skill
             | EntityType::ScheduledAction
-            | EntityType::Database => return None,
+            | EntityType::Database
+            | EntityType::Form => return None,
         })
     }
 
@@ -163,6 +166,7 @@ impl GraphqlEntityType {
             EntityType::Initiative => Self::Initiative,
             EntityType::Database => Self::Database,
             EntityType::DatabaseRow => Self::DatabaseRow,
+            EntityType::Form => Self::Form,
         }
     }
 
@@ -195,6 +199,7 @@ impl GraphqlEntityType {
             Self::Initiative => EntityType::Initiative,
             Self::Database => EntityType::Database,
             Self::DatabaseRow => EntityType::DatabaseRow,
+            Self::Form => EntityType::Form,
         }
     }
 }
@@ -277,5 +282,17 @@ mod test {
         let graphql = GraphqlSoupEntityType::try_new(EntityType::DatabaseRow).unwrap();
         assert!(matches!(graphql, GraphqlSoupEntityType::DatabaseRow));
         assert_eq!(graphql.into_model(), EntityType::DatabaseRow);
+    }
+
+    #[test]
+    fn form_round_trips_through_graphql_entity_type() {
+        let graphql = GraphqlEntityType::new(EntityType::Form);
+        assert!(matches!(graphql, GraphqlEntityType::Form));
+        assert!(matches!(graphql.into_model(), EntityType::Form));
+    }
+
+    #[test]
+    fn form_is_not_a_soup_entity_type() {
+        assert!(GraphqlSoupEntityType::try_new(EntityType::Form).is_none());
     }
 }

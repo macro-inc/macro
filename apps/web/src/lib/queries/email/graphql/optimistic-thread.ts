@@ -79,6 +79,7 @@ export function createDraftThread(
     createdAt: draft.createdAt,
     updatedAt: draft.updatedAt,
     latestInboundMessageTs: draft.updatedAt,
+    reminderReturnedAt: null,
     viewedAt: null,
     frecencyScore: null,
     mailAllPreview: preview,

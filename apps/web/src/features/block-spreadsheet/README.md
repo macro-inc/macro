@@ -119,8 +119,12 @@ Rows and columns currently have fixed positions. Range sorting copies whole rows
 within a selected rectangle and translates their relative formulas through IronCalc.
 It validates that the sheet, selection, permission, and editing state have not changed
 before committing. Other formulas keep their A1 references; they do not follow moved
-records. Structural insertion/deletion still needs stable identities and formula
-reference transformation across concurrent operations.
+records. Inserting or deleting rows and columns rewrites the moved cells, references
+and layout in one commit, under the same revision check. Saved workbooks allow it
+only while connected, so an offline coordinate shift cannot merge later over
+collaborators' edits. Rows and columns have no stable identities: an edit that a
+collaborator commits to old coordinates after the shift arrives still lands at
+those coordinates.
 
 ### Workbook sheets
 
@@ -463,13 +467,15 @@ group, SmartArt and an EMF, as Excel writes them) and corpus workbooks. Exports 
 which draws the same charts (surface charts aside, which it cannot draw) and
 rebuilds pivot tables from edited data.
 
-`core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
-real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
-government statistics and open-source test suites; provenance and licenses are in
-its `manifest.json`). Its snapshot records counts, warnings, how many formulas
-recalculate to Excel's cached results, and the first round-trip difference, so a
-change in fidelity shows up in review. Set `XLSX_CORPUS_VERBOSE=1` to print
-mismatch examples.
+`core/xlsx-corpus-1.test.ts` through `core/xlsx-corpus-4.test.ts` import,
+recalculate, export and reimport the real-world workbooks in
+`core/xlsx-fixtures/real-world/` (finance models, government statistics and
+open-source test suites; provenance and licenses are in its `manifest.json`).
+Each file runs one slice of the corpus through `core/xlsx-corpus-suite.ts`, so
+the workbooks run on several Vitest workers. Their snapshots record counts,
+warnings, how many formulas recalculate to Excel's cached results, and the first
+round-trip difference, so a change in fidelity shows up in review. Set
+`XLSX_CORPUS_VERBOSE=1` to print mismatch examples.
 
 ## Verification
 
