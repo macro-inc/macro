@@ -51,7 +51,6 @@ pub async fn handler(
         false
     };
 
-    // TODO: once we deploy to prod, remove email being optional
     // validate email matches code
     if let Some(email) = params.get("email") {
         let email = urlencoding::decode(email).map_err(|e| {
@@ -71,6 +70,8 @@ pub async fn handler(
         if passwordless_code != code {
             return Err((StatusCode::UNAUTHORIZED, "invalid code").into_response());
         }
+    } else {
+        return Err((StatusCode::FORBIDDEN, "unauthenticated").into_response());
     }
 
     let passwordless_response = ctx
