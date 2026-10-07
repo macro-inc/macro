@@ -39,6 +39,7 @@ const group = (...labels: string[]): TestGroup => ({
 
 const viewContext: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
   senderBucket: undefined,
 };
 

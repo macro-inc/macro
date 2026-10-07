@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4\n            WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'\n            RETURNING event_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d4e5c358f8bdef259dbb3aa6d7f45ae1bd6b202c7fa8a65efb5a114c6aa0fd6f"
+}

@@ -53,6 +53,7 @@ export type UseTasksDataSourceOptions = {
   networkPaused?: Accessor<boolean>;
   /** Project lists drain all cursors instead of requiring per-group Load More. */
   loadAll?: boolean;
+  board?: Accessor<boolean>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
@@ -61,6 +62,11 @@ export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
   paginationError?: Accessor<unknown>;
   retryPagination?: () => void;
+  /** Uncollapsed rows for alternative layouts; the query owner is shared. */
+  boardRows?: Accessor<TasksDataSourceItem[]>;
+  boardSearching?: Accessor<boolean>;
+  boardLoading?: Accessor<boolean>;
+  groupError?: (groupId: string) => unknown;
 };
 
 type TaskGroupContinuationReader = {
@@ -106,6 +112,7 @@ export function useTasksDataSource(
       groupBy: state.groupBy,
       sort: state.sort,
       reference: options.reference?.(),
+      board: options.board?.(),
     });
 
   const scoped = Boolean(options.reference);
@@ -407,8 +414,40 @@ export function useTasksDataSource(
     await query.refresh();
   };
 
+  const boardRows = () => {
+    if (options.enabled?.() === false) {
+      return [];
+    }
+
+    if (search.isSearching()) {
+      return rows();
+    }
+
+    if (query.isPending || query.isPlaceholderData) {
+      return [];
+    }
+
+    return rows();
+  };
+
+  const boardLoading = () => {
+    if (search.isSearching()) {
+      return isLoading();
+    }
+
+    if (options.enabled?.() === false) {
+      return false;
+    }
+
+    return query.isPending || !facetOptionsReady();
+  };
+
   return {
     items,
+    boardRows,
+    boardLoading,
+    groupError: (id) => groupQueryFor(id)?.error(),
+    boardSearching: search.isSearching,
     isLoading,
     isFetching,
     error,

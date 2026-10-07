@@ -132,6 +132,9 @@ pub struct RestoredColumn {
     pub kind: Option<ColumnKind>,
     /// Whether the first value should still infer a type.
     pub infer_type: bool,
+    /// Whether this column permits absent values.
+    #[serde(default = "super::models::column_nullable_default")]
+    pub nullable: bool,
 }
 
 /// A row a delete removed: its id and place.
@@ -369,6 +372,8 @@ pub struct TableImage {
 pub struct ColumnImage {
     /// Whether a first value still determines the column's type.
     pub infer_type: bool,
+    /// Whether this column permits absent values.
+    pub nullable: bool,
     /// The column.
     pub id: ColumnId,
     /// Its table.

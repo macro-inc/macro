@@ -88,13 +88,7 @@ where
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> Result<
-        Vec<(
-            super::models::CalendarEvent,
-            super::models::CalendarOccurrence,
-        )>,
-        Report,
-    > {
+    ) -> Result<Vec<super::models::OccurrenceListing>, Report> {
         validate_query(&range, limit)?;
         let mut rows = self
             .repository
@@ -103,8 +97,11 @@ where
         if let Some(viewer) =
             ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
         {
-            for (event, _) in &mut rows {
-                viewer.mark_attendees(&mut event.attendees);
+            for listing in &mut rows {
+                viewer.mark_attendees(&mut listing.event.attendees);
+                if let Some(attendees) = &mut listing.exception.attendees {
+                    viewer.mark_attendees(attendees);
+                }
             }
         }
         Ok(rows)
@@ -151,6 +148,15 @@ where
         requester_id: &str,
     ) -> Result<super::models::CalendarSyncStatus, Report> {
         self.repository.sync_status(requester_id).await
+    }
+
+    /// List every calendar visible to the requester.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> Result<Vec<super::models::VisibleCalendar>, Report> {
+        self.repository.list_visible_calendars(requester_id).await
     }
 
     /// Resolve mentioned events to the requester's own projections.
@@ -210,15 +216,7 @@ where
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<
-        Output = Result<
-            Vec<(
-                super::models::CalendarEvent,
-                super::models::CalendarOccurrence,
-            )>,
-            Report,
-        >,
-    > + Send {
+    ) -> impl Future<Output = Result<Vec<super::models::OccurrenceListing>, Report>> + Send {
         CalendarService::list_occurrences(self, requester_id, range, cursor, limit)
     }
 
@@ -227,6 +225,13 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<super::models::CalendarSyncStatus, Report>> + Send {
         CalendarService::sync_status(self, requester_id)
+    }
+
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<super::models::VisibleCalendar>, Report>> + Send {
+        CalendarService::list_visible_calendars(self, requester_id)
     }
 
     fn mention_previews(
@@ -836,6 +841,7 @@ where
             // A provider-side deletion reaches search only here: the row is
             // gone once the commit lands, so nothing downstream can rediscover
             // it by re-reading Postgres.
+            report.events_retired += retired.len();
             self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
@@ -941,6 +947,7 @@ where
             .repository
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
+        report.events_retired += retired.len();
         self.publish_retirements(retired);
 
         Ok(())

@@ -494,7 +494,7 @@ impl DocumentSyncSession {
         let storage = get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
         if storage.has_snapshot().await? {
-            return Err(Error::from("snapshot already exists"));
+            return Response::error("snapshot already exists", 409);
         } else {
             debug!(document_id = document_id, "Initializing snapshot");
             let body_raw = req.bytes().await?;

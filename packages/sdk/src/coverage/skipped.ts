@@ -33,6 +33,8 @@ export const agentHarnessExcluded = [
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
+  // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
+  'agentSessionsForPullRequests',
   // Speculative page warm-up requires a signed-in user and is app-internal.
   'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
@@ -295,6 +297,8 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
+  'collaborateForm',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
   'cancelSlackImport',
   'completeSlackImportUploads',
@@ -389,6 +393,17 @@ export const storageBacklog = [
   'getEmailFollowup',
   'setEmailFollowup',
   'listEmailReminders',
+  // CRM pipelines fit the crm namespace but are not wrapped yet.
+  'createCrmPipeline',
+  'applyCrmPipelineOps',
+  'getCrmPipeline',
+  'getCrmPipelineRows',
+  'queryCrmPipelineRows',
+  'getCrmPipelineTable',
+  'listCrmPipelines',
+  'renameCrmPipeline',
+  'shareCrmPipeline',
+  'trashCrmPipeline',
   'approveHarnessPairing',
   'claimHarnessPairing',
   'createAgent',

@@ -8,7 +8,11 @@ import {
 } from '@app/features/crm/record-adapter';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { itemToSafeName } from '@core/constant/allBlocks';
-import { enableCrm, enableDatabases } from '@core/constant/featureFlags';
+import {
+  enableCrm,
+  enableDatabases,
+  enableForms,
+} from '@core/constant/featureFlags';
 import {
   useChannelsContext,
   useDmActivityByUserId,
@@ -24,6 +28,7 @@ import type {
   CrmCompanyEntity,
   CrmContactEntity,
   DatabaseEntity,
+  FormEntity,
   SkillEntity,
   SnippetEntity,
 } from '@entity';
@@ -41,6 +46,7 @@ import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
+import { useFormsQuery } from '@queries/storage/forms';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
@@ -49,8 +55,8 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
-  deduplicateContactItems,
   filterQuickAccessItems,
   searchQuickAccessItems,
 } from './entity-search';
@@ -279,12 +285,6 @@ function getCrmCompanyVersion(
   return `${company.name}|${domains}|${company.updatedAt}|${viewedAt}`;
 }
 
-function getCrmContactSearchText(contact: CrmContactEntity): string {
-  return contact.name === contact.email
-    ? contact.email
-    : `${contact.name} | ${contact.email}`;
-}
-
 function getCrmContactVersion(contact: CrmContactEntity): string {
   return `${contact.name}|${contact.email}|${contact.hidden}|${contact.updatedAt}|${contact.lastInteraction}`;
 }
@@ -356,6 +356,8 @@ const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
   agent_session: 'AgentSession',
   // Databases come from their REST list, not the Soup cache.
   database: 'Database',
+  // Forms come from their REST list too.
+  form: 'Form',
   initiative: 'GraphqlSoupInitiative',
 };
 
@@ -419,6 +421,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     useQuickAccessAgentSessionsQuery();
   const databasesQuery = useDatabasesQuery();
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsQuery = useFormsQuery();
+  const formsFlag = useFeatureFlag(enableForms);
   const { query: initiativesQuery, initiatives: initiativesAccessor } =
     useQuickAccessInitiativesQuery();
 
@@ -681,27 +685,16 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       if (contact.hidden || hidden.has(contact.id)) continue;
       const version = getCrmContactVersion(contact);
       const cached = itemCache.get(contact.id);
-      const sortTimestamp = toTimestamp(
-        contact.lastInteraction ?? contact.updatedAt
-      );
-      if (!cached || cached.version !== version) {
-        itemCache.set(contact.id, {
-          version,
-          item: {
-            kind: 'entity',
-            id: contact.id,
-            bucket: 'crm_contact',
-            searchText: getCrmContactSearchText(contact),
-            sortTimestamp,
-            timestamps: {
-              lastInteraction: contact.lastInteraction ?? contact.updatedAt,
-              createdAt: contact.createdAt,
-            },
-            data: contact,
-          },
-        });
-      }
-      allEntries.push({ id: contact.id, bucket: 'crm_contact', sortTimestamp });
+      const item =
+        cached && cached.version === version
+          ? cached.item
+          : toCrmContactItem(contact);
+      if (item !== cached?.item) itemCache.set(contact.id, { version, item });
+      allEntries.push({
+        id: contact.id,
+        bucket: 'crm_contact',
+        sortTimestamp: item.sortTimestamp,
+      });
     }
     return sortIndexEntries(allEntries);
   });
@@ -909,6 +902,44 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(entries);
   });
 
+  // Forms, like databases, have only a creation time to sort on.
+  const formEntries = createLazyMemo(() => {
+    if (!formsFlag().enabled) return [];
+    const hidden = hiddenIds();
+    const entries: IndexEntry[] = [];
+    const listed = formsQuery.isSuccess ? formsQuery.data : [];
+    for (const { form, access } of listed) {
+      if (hidden.has(form.id)) continue;
+      const sortTimestamp = toTimestamp(form.createdAt);
+      const entity: FormEntity = {
+        type: 'form',
+        id: form.id,
+        name: form.name,
+        ownerId: form.ownerId,
+        createdAt: form.createdAt,
+        access,
+      };
+      const version = JSON.stringify(entity);
+      const cached = itemCache.get(form.id);
+      if (!cached || cached.version !== version) {
+        itemCache.set(form.id, {
+          version,
+          item: {
+            kind: 'entity',
+            id: form.id,
+            bucket: 'form',
+            searchText: form.name,
+            sortTimestamp,
+            timestamps: { createdAt: form.createdAt },
+            data: entity,
+          },
+        });
+      }
+      entries.push({ id: form.id, bucket: 'form', sortTimestamp });
+    }
+    return sortIndexEntries(entries);
+  });
+
   const initiativeEntries = createLazyMemo(() => {
     const viewedAtMap = soupViewedAtMap();
     const hidden = hiddenIds();
@@ -955,6 +986,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       skillEntries(),
       agentSessionEntries(),
       databaseEntries(),
+      formEntries(),
       initiativeEntries(),
     ]);
     const seenIds = new Set(allEntries.map((entry) => entry.id));
@@ -1027,6 +1059,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         indices.get('chat') ?? [],
         indices.get('project') ?? [],
         indices.get('database') ?? [],
+        indices.get('form') ?? [],
         indices.get('initiative') ?? [],
       ]),
     };
@@ -1192,25 +1225,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   ];
                 }
                 const contact = contactsById.get(id);
-                if (contact) {
-                  return [
-                    {
-                      kind: 'entity',
-                      id,
-                      bucket: 'crm_contact',
-                      searchText: getCrmContactSearchText(contact),
-                      sortTimestamp: toTimestamp(
-                        contact.lastInteraction ?? contact.updatedAt
-                      ),
-                      timestamps: {
-                        lastInteraction:
-                          contact.lastInteraction ?? contact.updatedAt,
-                        createdAt: contact.createdAt,
-                      },
-                      data: contact,
-                    },
-                  ];
-                }
+                if (contact) return [toCrmContactItem(contact)];
                 const company = companiesById.get(id);
                 if (company) {
                   return [
@@ -1294,6 +1309,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     skillsQuery.refetch();
     void agentSessionsQuery.refetch();
     if (databasesFlag().enabled) void databasesQuery.refetch();
+    if (formsFlag().enabled) void formsQuery.refetch();
     initiativesQuery.refetch();
   };
 

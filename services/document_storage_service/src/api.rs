@@ -272,6 +272,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/forms",
+            forms::inbound::axum_router::forms_router(state.forms_state.clone()),
+        )
+        .nest(
             "/collab_surfaces",
             collab_surface::inbound::axum_router::collab_surface_router(
                 state.collab_surface_state.clone(),
@@ -308,7 +312,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/crm",
-            crm::inbound::axum_router::crm_router(state.crm_state.clone()),
+            crm::inbound::axum_router::crm_router(state.crm_state.clone()).nest(
+                "/pipelines",
+                crm::inbound::pipelines::router(state.pipeline_state.clone()),
+            ),
         )
         .merge(
             bots::inbound::channel_webhook_router::channel_bot_webhook_router(

@@ -78,25 +78,20 @@ pub struct MicrosoftUserInfo {
     pub email: String,
 }
 
-pub(crate) fn construct_authorize_url<T>(
+pub(crate) fn construct_authorize_url(
     client_id: &str,
     tenant_id: &str,
     redirect_uri: &str,
-    state: &T,
-) -> anyhow::Result<String>
-where
-    T: serde::Serialize + ?Sized,
-{
+    state: &str,
+) -> anyhow::Result<String> {
     let mut url = endpoint_url(tenant_id, "authorize")?;
-    let serialized_state =
-        serde_json::to_string(state).context("failed to serialize Microsoft OAuth state")?;
 
     url.query_pairs_mut()
         .append_pair("client_id", client_id)
         .append_pair("redirect_uri", redirect_uri)
         .append_pair("response_type", "code")
         .append_pair("scope", MICROSOFT_SCOPES)
-        .append_pair("state", &serialized_state)
+        .append_pair("state", state)
         .append_pair("prompt", "select_account");
 
     Ok(url.to_string())

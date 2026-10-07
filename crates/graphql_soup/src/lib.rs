@@ -20,8 +20,8 @@ mod resolvers;
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
-    EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
-    SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+    AgentSessionEntityLoader, EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader,
+    SoupItemLoader, SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
 };
 pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,

@@ -1,3 +1,7 @@
+use cache_core::calendar::{
+    CalendarCommit, CalendarCommitOutcome, CalendarRangeRequest, CalendarRangeSnapshot,
+    CalendarRangeStorage,
+};
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState,
@@ -256,5 +260,21 @@ impl PredicateIndexStorage for BrowserStorage {
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, Self::Error> {
         self.inner.query_predicate_index(query).await
+    }
+}
+
+impl CalendarRangeStorage for BrowserStorage {
+    async fn query_calendar_ranges(
+        &self,
+        request: &CalendarRangeRequest,
+    ) -> Result<CalendarRangeSnapshot, Self::Error> {
+        self.inner.query_calendar_ranges(request).await
+    }
+
+    async fn calendar_commit(
+        &mut self,
+        commit: &CalendarCommit,
+    ) -> Result<CalendarCommitOutcome, Self::Error> {
+        self.inner.calendar_commit(commit).await
     }
 }

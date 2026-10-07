@@ -22,6 +22,8 @@ export function createRetirableCacheHost(inner: CacheHost): CacheHost {
     readRecordsByKeys: (args) => current.readRecordsByKeys(args),
     search: (args) => current.search(args),
     entityFilter: (args) => current.entityFilter(args),
+    calendarRange: (args) => current.calendarRange(args),
+    calendarCommit: (args) => current.calendarCommit(args),
     writeQuery: (args) => current.writeQuery(args),
     hydrateQuery: (args) => current.hydrateQuery(args),
     enqueueOptimisticMutation: (args, claim) =>

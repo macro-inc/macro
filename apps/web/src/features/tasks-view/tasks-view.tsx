@@ -8,7 +8,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   createSignal,
   onMount,
@@ -23,7 +22,7 @@ import {
 } from './components/TasksHeader';
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
-import { TaskList } from './components/task-list/TaskList';
+import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';
@@ -32,14 +31,6 @@ export type TasksViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: TasksViewStateOptions;
 };
-
-function TasksListFallback() {
-  return (
-    <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading tasks" class="size-5 animate-spin" />
-    </div>
-  );
-}
 
 function TasksViewBreadcrumbs(props: ParentProps) {
   const { closeTask, selectedTask } = useTasksView();
@@ -107,9 +98,7 @@ function TasksViewRoot() {
       </ViewShell.Header>
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
-        <Suspense fallback={<TasksListFallback />}>
-          <TaskList ref={setListElement} />
-        </Suspense>
+        <TasksContent ref={setListElement} />
       </ViewShell.Content>
     </>
   );
@@ -127,7 +116,7 @@ function TasksViewRoot() {
             <TasksSidebar />
           </ViewShell.Aside>
           <ViewShell.Main>
-            <Suspense fallback={<TasksListFallback />}>
+            <Suspense fallback={<TasksLoading />}>
               <SplitRouter.Outlet
                 fallback={() => (
                   <Show

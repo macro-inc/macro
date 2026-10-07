@@ -245,6 +245,12 @@ impl IntoResponse for DeleteTeamError {
                     message: "internal server error".into(),
                 }),
             ),
+            DeleteTeamError::OwnedEntityCleanup(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to delete the team's content; the team was not deleted".into(),
+                }),
+            ),
         }
         .into_response()
     }

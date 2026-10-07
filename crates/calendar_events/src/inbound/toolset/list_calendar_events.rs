@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{CalendarToolContext, ToolEventAttendee, description_preview, time_fields};
 use crate::domain::{
-    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange},
+    models::{CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceListing, OccurrenceRange},
     ports::{CalendarMutationService, CalendarOccurrenceService},
     service::CalendarValidationError,
 };
@@ -184,10 +184,11 @@ where
             let full_page = rows.len() > usize::from(OCCURRENCES_MAX);
             cursor = rows
                 .last()
-                .map(|(_, occurrence)| CalendarOccurrenceCursor::from_occurrence(occurrence));
+                .map(|listing| CalendarOccurrenceCursor::from_occurrence(&listing.occurrence));
             occurrences.extend(
                 rows.into_iter()
-                    .filter(|(_, occurrence)| !occurrence.is_cancelled),
+                    .filter(|listing| !listing.occurrence.is_cancelled)
+                    .map(OccurrenceListing::into_occurrence_event),
             );
             if !full_page {
                 exhausted = true;

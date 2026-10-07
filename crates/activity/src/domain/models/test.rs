@@ -19,6 +19,7 @@ fn every_action_maps_to_stable_columns() {
         (Action::Deleted, "deleted", None),
         (Action::Messaged, "messaged", None),
         (Action::Sent, "sent", None),
+        (Action::Responded, "responded", None),
         (
             Action::TaskAdded(InitiativeTaskChange {
                 task_id: "task-1".into(),

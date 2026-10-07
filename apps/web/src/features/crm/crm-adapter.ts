@@ -34,6 +34,7 @@ import {
   copyCrmViewLink,
   createAppCrmNavigation,
 } from './navigation-adapter';
+import { PipelineDatabaseEditor, PipelineShare } from './pipeline-adapter';
 import {
   createClosedStageIds,
   createCrmPermissions,
@@ -57,6 +58,7 @@ import {
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
 import { useCrmPeopleQuery } from './queries/people';
+import { createPipelinesSource } from './queries/pipelines';
 import {
   useRecordCallsQuery,
   useRecordFilesQuery,
@@ -149,6 +151,9 @@ export function createAppCrmContext(): CrmContext {
   const userId = useUserId();
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    createPipelines: (teamId) => createPipelinesSource(deps, teamId),
+    PipelineEditor: PipelineDatabaseEditor,
+    PipelineSharing: PipelineShare,
     feedback: toast,
     downloadCsv: downloadCrmCsv,
     contactInitials: getInitialsFromName,

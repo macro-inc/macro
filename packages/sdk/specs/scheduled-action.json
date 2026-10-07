@@ -808,6 +808,38 @@
           }
         }
       },
+      "ConditionResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The triggering content answered the condition with no.",
+            "required": ["probability", "status"],
+            "properties": {
+              "probability": {
+                "type": "number",
+                "format": "float",
+                "description": "The classifier's probability, from 0 to 1, that the answer was yes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["not_met"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The condition could not be checked before the retry window closed.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["unavailable"]
+              }
+            }
+          }
+        ],
+        "description": "Why an event-triggered run was skipped before it started."
+      },
       "CreateScheduledAction": {
         "oneOf": [
           {
@@ -825,9 +857,14 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.",
         "required": ["events"],
         "properties": {
+          "condition": {
+            "type": ["string", "null"],
+            "description": "Yes/no question about the triggering content, e.g. \"Is this email an\ninvoice?\". The routine runs only when the answer is yes.",
+            "maxLength": 500
+          },
           "events": {
             "type": "array",
             "items": {
@@ -891,6 +928,17 @@
         "description": "Version 1 execution metadata stored in the existing JSON result column.\nNull/string column values predate this envelope and refer to legacy chats.",
         "required": ["version"],
         "properties": {
+          "condition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConditionResult",
+                "description": "Present when an event trigger's condition stopped the run from starting."
+              }
+            ]
+          },
           "error": {
             "type": ["string", "null"]
           },

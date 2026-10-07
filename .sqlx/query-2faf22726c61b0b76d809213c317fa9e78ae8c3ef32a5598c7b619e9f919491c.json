@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO form_responses (id, form_id, respondent_id, status, stopped_at_section, submitted_at, updated_at)\n        VALUES ($1, $2, $3, 'stopped', $4, $5, $5)\n        ON CONFLICT (form_id, respondent_id) WHERE respondent_id IS NOT NULL\n        DO UPDATE SET stopped_at_section = EXCLUDED.stopped_at_section,\n                      updated_at = EXCLUDED.updated_at\n        WHERE form_responses.status = 'stopped'\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2faf22726c61b0b76d809213c317fa9e78ae8c3ef32a5598c7b619e9f919491c"
+}

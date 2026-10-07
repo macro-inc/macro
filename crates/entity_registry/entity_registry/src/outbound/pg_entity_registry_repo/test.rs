@@ -230,6 +230,66 @@ async fn list_owned_by_orders_newest_created_first(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_all_owned_by_returns_live_and_trashed_rows_of_that_owner_newest_first(pool: PgPool) {
+    let owner = team_owner();
+    let live_chat = Uuid::from_u128(1);
+    let trashed_document = Uuid::from_u128(2);
+    let other_owners_trashed = Uuid::from_u128(3);
+    let old_ts = ts("2024-01-01T00:00:00Z");
+    let new_ts = ts("2024-06-01T00:00:00Z");
+    insert_committed(
+        &pool,
+        NewEntityRecord::new(live_chat, RegisteredEntityType::Chat, owner.clone())
+            .with_timestamps(old_ts, old_ts),
+    )
+    .await;
+    insert_committed(
+        &pool,
+        NewEntityRecord::new(
+            trashed_document,
+            RegisteredEntityType::Document,
+            owner.clone(),
+        )
+        .with_timestamps(new_ts, new_ts),
+    )
+    .await;
+    mark_deleted_committed(&pool, trashed_document, new_ts).await;
+    insert_committed(
+        &pool,
+        NewEntityRecord::new(
+            other_owners_trashed,
+            RegisteredEntityType::Document,
+            bot_owner(),
+        ),
+    )
+    .await;
+    mark_deleted_committed(&pool, other_owners_trashed, new_ts).await;
+
+    let repo = PgEntityRegistryRepository::new(pool);
+    let rows = repo.list_all_owned_by(&owner).await.unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.id, row.entity_type, row.owner.clone(), row.deleted_at))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                trashed_document,
+                RegisteredEntityType::Document,
+                owner.clone(),
+                Some(new_ts)
+            ),
+            (live_chat, RegisteredEntityType::Chat, owner.clone(), None),
+        ]
+    );
+
+    let live = repo.list_owned_by(&owner, None).await.unwrap();
+    assert_eq!(
+        live.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![live_chat]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn count_by_type_splits_live_and_deleted(pool: PgPool) {
     let owner = user_owner();
     insert_committed(

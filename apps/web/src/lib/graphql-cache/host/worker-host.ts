@@ -14,6 +14,10 @@ import {
   type CacheRequest,
   type CacheResponseErrorCode,
   type CacheRevision,
+  type CalendarCommitArgs,
+  type CalendarCommitCacheResult,
+  type CalendarRangeCacheArgs,
+  type CalendarRangeCacheResult,
   type ClaimedMutation,
   type CommitOptimisticWriteResult,
   type DeferOptimisticWriteResult,
@@ -951,6 +955,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
               msg.kind === 'entity-filter' ||
+              msg.kind === 'calendar-range' ||
               msg.kind === 'inspect-mutations' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
@@ -1216,6 +1221,24 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as EntityFilterCacheResult;
     },
 
+    async calendarRange(
+      args: CalendarRangeCacheArgs
+    ): Promise<CalendarRangeCacheResult> {
+      return (await initializedRequest({
+        kind: 'calendar-range',
+        request: args,
+      })) as CalendarRangeCacheResult;
+    },
+
+    async calendarCommit(
+      args: CalendarCommitArgs
+    ): Promise<CalendarCommitCacheResult> {
+      return (await initializedRequest({
+        kind: 'calendar-commit',
+        commit: args,
+      })) as CalendarCommitCacheResult;
+    },
+
     async writeQuery(args: CacheWriteArgs): Promise<WriteResult> {
       if (args.registerDependencies && args.opKey !== undefined) {
         trackActiveOperation(args.opKey);
@@ -1270,6 +1293,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         revalidations: args.revalidations,
         identityBindings: args.identityBindings,
         clientMetadata: args.clientMetadata,
+        uncertainCalendarEventKeys: args.uncertainCalendarEventKeys,
         createdAtMs: claim.nowMs,
         owner: claim.owner,
         nowMs: claim.nowMs,

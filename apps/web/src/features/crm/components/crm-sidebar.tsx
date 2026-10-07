@@ -10,12 +10,13 @@ import StackIcon from '@phosphor/stack.svg';
 import ImportIcon from '@phosphor/upload-simple.svg';
 import { Button, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { CRM_VIEWS } from '../core/navigation';
 import { COMPANIES_TOUR } from '../tour';
 
 export function CrmSidebar(props: {
   active: string;
+  pipelines?: JSX.Element;
   viewMode: 'board' | 'list';
   onViewModeChange: (mode: 'board' | 'list') => void;
   lists: { id: string; name: string; count: number }[];
@@ -110,6 +111,7 @@ export function CrmSidebar(props: {
             </ViewSidebar.Nav>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
+        {props.pipelines}
         <Show when={props.listsEnabled}>
           <CollapsibleSection.Root
             open={listsOpen()}
