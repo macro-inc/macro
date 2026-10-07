@@ -8,14 +8,13 @@ use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingError,
     BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS, CreditReloadStatus, Entitlement,
-    OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
-    OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatUsage, SubscriptionScope, UsageSnapshot,
+    OVERAGE_CHARGE_THRESHOLD_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger,
+    Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    OverageChargeRequest, PaymentGateway, PendingCharge, PendingReload, UsageReader,
+    PaymentGateway, PendingReload, UsageReader,
 };
 use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
@@ -79,7 +78,7 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
         self
     }
 
-    /// Configure settlement (credit consumption and overage collection) from
+    /// Configure settlement (credit consumption and automatic reloads) from
     /// the host's `ENABLE_AI_USAGE_BILLING` policy, independently of admission.
     pub fn with_billing(mut self, billing: AiUsageBilling) -> Self {
         self.billing = billing;
@@ -99,7 +98,7 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
 enum ReloadCheck {
     /// A closed period is settled from what is on hand.
     Skip,
-    /// The open period reloads credits before any overage is reserved.
+    /// The open period reloads credits before consuming them.
     Current,
 }
 
@@ -437,7 +436,7 @@ where
 
     /// Settle one period for a payer: top up credits when automatic reload
     /// asks for it, book uncovered usage from credits, then reserve and
-    /// collect an overage chunk.
+    /// consume prepaid credits. Direct usage charges are never collected.
     #[tracing::instrument(skip(self, entitlement), fields(payer = %entitlement.payer), err)]
     async fn settle_period(
         &self,
@@ -462,7 +461,7 @@ where
         let chargeable_customer_cents = self.pricing.extra_customer_cents(chargeable_cost);
         if reload == ReloadCheck::Current {
             // Before credits are consumed, so the top-up covers this usage
-            // instead of an overage chunk.
+            // from prepaid credits.
             self.reload_credits(entitlement, period.start, chargeable_customer_cents, now)
                 .await?;
         }
@@ -477,9 +476,8 @@ where
                 period.start,
                 chargeable_customer_cents,
                 SettlementPolicy {
-                    // The repo reads the live overage settings under its lock;
-                    // these two are the caller's contribution.
-                    overage_active: true,
+                    // Disable both new charges and retries of historical charges.
+                    overage_active: false,
                     overage_limit_cents: 0,
                     charge_threshold_cents: OVERAGE_CHARGE_THRESHOLD_CENTS,
                     period_ended: period.has_ended(now),
@@ -494,131 +492,14 @@ where
             );
         }
 
-        if let Some(charge) = outcome.pending_charge {
-            self.collect(entitlement, period, charge).await?;
-        }
         Ok(())
-    }
-
-    /// Collect a reserved overage charge: open its invoice (or pick up the
-    /// one an earlier attempt opened) and try to pay it. A provider failure
-    /// marks the charge failed and suspends overage until the payer re-enables
-    /// it. A recorded invoice continues covering usage because Stripe may
-    /// still collect it; re-enabling retries that same invoice.
-    async fn collect(
-        &self,
-        entitlement: &Entitlement,
-        period: BillingPeriod,
-        charge: PendingCharge,
-    ) -> Result<()> {
-        let payer = &entitlement.payer;
-        let scope = SubscriptionScope::from(&entitlement.scope);
-        let customer_id = match self.entitlements.stripe_customer_id(payer).await {
-            Ok(Some(customer_id)) => customer_id,
-            Ok(None) => {
-                tracing::warn!("overage charge reserved but payer has no stripe customer");
-                self.fail_charge(payer, charge.id).await?;
-                return Err(BillingError::NoStripeCustomer);
-            }
-            Err(e) => {
-                // Left pending, the charge would cover usage that is never
-                // invoiced. Fail it so the next settlement retries it.
-                self.fail_charge(payer, charge.id).await?;
-                return Err(e);
-            }
-        };
-
-        let invoice_id = match charge.stripe_invoice_id.clone() {
-            Some(invoice_id) => invoice_id,
-            None => {
-                let description = format!(
-                    "Macro AI usage beyond plan, {} to {}",
-                    period.start.format("%b %-d"),
-                    period.end.format("%b %-d, %Y")
-                );
-                match self
-                    .payments
-                    .open_overage_invoice(OverageChargeRequest {
-                        customer_id,
-                        charge_id: charge.id,
-                        amount_cents: charge.amount_cents,
-                        description,
-                        scope,
-                    })
-                    .await
-                {
-                    Ok(invoice_id) => invoice_id,
-                    Err(e) => {
-                        tracing::error!(
-                            error = ?e,
-                            cents = charge.amount_cents,
-                            "ai overage invoice could not be opened"
-                        );
-                        self.fail_charge(payer, charge.id).await?;
-                        return Err(e);
-                    }
-                }
-            }
-        };
-        // Record the invoice before collecting: if this process dies here the
-        // next settlement pays this invoice instead of opening another.
-        self.repo
-            .finish_overage_charge(charge.id, Some(&invoice_id), OverageChargeStatus::Pending)
-            .await?;
-
-        match self
-            .payments
-            .pay_overage_invoice(charge.id, &invoice_id, scope)
-            .await
-        {
-            Ok(true) => {
-                self.repo
-                    .finish_overage_charge(charge.id, Some(&invoice_id), OverageChargeStatus::Paid)
-                    .await?;
-                tracing::info!(
-                    cents = charge.amount_cents,
-                    invoice = %invoice_id,
-                    "collected ai overage"
-                );
-                Ok(())
-            }
-            Ok(false) => {
-                // Declined: the invoice stays open for Stripe's retries and
-                // the webhook reports the outcome either way.
-                tracing::info!(
-                    cents = charge.amount_cents,
-                    invoice = %invoice_id,
-                    "ai overage invoice awaiting payment"
-                );
-                Ok(())
-            }
-            Err(e) => {
-                tracing::error!(
-                    error = ?e,
-                    cents = charge.amount_cents,
-                    invoice = %invoice_id,
-                    "ai overage charge failed"
-                );
-                self.fail_charge(payer, charge.id).await?;
-                Err(e)
-            }
-        }
-    }
-
-    /// A charge that could not be collected: overage pauses until the payer
-    /// re-enables it. A recorded Stripe invoice continues covering usage.
-    async fn fail_charge(&self, payer: &MacroUserIdStr<'_>, charge_id: Uuid) -> Result<()> {
-        self.repo
-            .finish_overage_charge(charge_id, None, OverageChargeStatus::Failed)
-            .await?;
-        self.repo.suspend_overage(payer).await
     }
 
     /// Reserve and collect an automatic credit reload when the payer's
     /// balance, net of the usage this settlement is about to consume, is
     /// under their minimum. A card or customer problem is logged and left to
-    /// the webhook or the next attempt: it never blocks the overage fallback
-    /// or the summary read that triggered settlement.
+    /// the webhook or the next attempt: it leaves unfunded usage uncovered
+    /// and never blocks the summary read that triggered settlement.
     async fn reload_credits(
         &self,
         entitlement: &Entitlement,
@@ -643,7 +524,7 @@ where
             Err(e @ (BillingError::Payment(_) | BillingError::NoStripeCustomer)) => {
                 tracing::warn!(
                     error = ?e,
-                    "automatic credit reload failed; overage remains the fallback"
+                    "automatic credit reload failed; unfunded usage remains uncovered"
                 );
                 Ok(())
             }
@@ -754,7 +635,7 @@ where
     }
 
     /// A reload that could not be collected: automatic reloads pause until
-    /// the payer saves their settings again. Overage itself stays as it was.
+    /// the payer saves their settings again.
     async fn fail_reload(&self, payer: &MacroUserIdStr<'_>, reload_id: Uuid) -> Result<()> {
         self.repo
             .finish_credit_reload(reload_id, None, CreditReloadStatus::Failed)
@@ -855,24 +736,16 @@ where
         &self,
         user: &MacroUserIdStr<'_>,
         enabled: bool,
-        limit_cents: i64,
+        _limit_cents: i64,
     ) -> Result<UsageSnapshot> {
         let entitlement = self.entitlements.entitlement(user).await?;
         Self::require_payer(&entitlement, user)?;
-        if enabled && !(OVERAGE_LIMIT_MIN_CENTS..=OVERAGE_LIMIT_MAX_CENTS).contains(&limit_cents) {
-            return Err(BillingError::InvalidOverageLimit);
-        }
-        let limit_cents = if enabled { limit_cents } else { 0 };
-        self.repo
-            .update_overage(&entitlement.payer, enabled, limit_cents)
-            .await?;
         if enabled {
-            // Retry anything that was waiting on overage (or a failed charge);
-            // a collection failure re-suspends and is reported in the snapshot.
-            if let Err(e) = self.settle(user).await {
-                tracing::warn!(error = ?e, "settlement after enabling overage failed");
-            }
+            return Err(BillingError::DirectUsageBillingDisabled);
         }
+        self.repo
+            .update_overage(&entitlement.payer, false, 0)
+            .await?;
         self.snapshot(user).await
     }
 
@@ -892,24 +765,12 @@ where
             return self.snapshot(user).await;
         }
         thresholds.validate()?;
-        // The dialog has no overage cap of its own: the monthly spend limit
-        // doubles as the per-period cap. Validation keeps it at or above the
-        // cap minimum, so the clamp only ever lowers it.
-        let overage_limit_cents = thresholds
-            .monthly_limit_cents
-            .unwrap_or(OVERAGE_LIMIT_MAX_CENTS)
-            .clamp(OVERAGE_LIMIT_MIN_CENTS, OVERAGE_LIMIT_MAX_CENTS);
+        // Preserve the stored reload opt-in, without a direct-charge cap.
         self.repo
-            .update_auto_reload(
-                &entitlement.payer,
-                true,
-                overage_limit_cents,
-                Some(&thresholds),
-            )
+            .update_auto_reload(&entitlement.payer, true, 0, Some(&thresholds))
             .await?;
-        // A balance already under the minimum reloads now, and anything that
-        // was waiting on overage is retried; a collection failure re-suspends
-        // and is reported in the snapshot.
+        // A balance already under the minimum reloads now; a collection failure
+        // re-suspends reloads and is reported in the snapshot.
         if let Err(e) = self.settle(user).await {
             tracing::warn!(error = ?e, "settlement after enabling automatic reload failed");
         }

@@ -493,7 +493,8 @@ impl BillingRepo for PgBillingRepo {
             .map_err(funding_storage)?;
         let legacy_limit = legacy_cap_remaining(account.overage_limit_cents, committed_postpaid);
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
-        let overage_active = account.overage_enabled
+        let overage_active = policy.overage_active
+            && account.overage_enabled
             && account.overage_suspended_at.is_none()
             && account.overage_limit_cents > 0;
 
@@ -559,7 +560,9 @@ impl BillingRepo for PgBillingRepo {
         .fetch_all(&mut *tx)
         .await
         .map_err(storage)?;
-        let orphaned = owed.iter().find(|row| row.status == "pending");
+        let orphaned = owed
+            .iter()
+            .find(|row| policy.overage_active && row.status == "pending");
         let retryable = owed.iter().find(|row| {
             row.status == "failed"
                 && overage_active

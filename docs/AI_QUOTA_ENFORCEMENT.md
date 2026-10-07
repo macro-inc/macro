@@ -42,7 +42,7 @@ counted usage per UTC calendar month: past it, admission answers
 or overage. Model-access and resource permissions remain independent. Counting
 eligibility is not a claim that a particular user owes money; it does not
 special-case their plan. Existing paid allowance, per-seat usage, payer credits,
-overage opt-in/cap, and denial decisions remain in the legacy ledger.
+automatic reload opt-in, and denial decisions remain in the legacy ledger.
 
 ### Persistence
 
@@ -65,8 +65,9 @@ backfilled into counted usage or financial authorizations.
 ## Settlement: `ENABLE_AI_USAGE_BILLING`
 
 `ENABLE_AI_USAGE_BILLING` enables **legacy settlement of counted usage past a
-payer's allowance**: prepaid credits are consumed and opt-in overage is reserved
-and collected through Stripe. The [startup loader](../crates/ai_billing/src/config.rs)
+payer's allowance**: prepaid credits are consumed and optional automatic reloads
+purchase more credits through Stripe. Direct usage charges are disabled. The
+[startup loader](../crates/ai_billing/src/config.rs)
 parses it exactly like the enforcement flag (absent means false; only raw `true`
 or `false`; malformed present values fail startup) and hosts load it once. It is
 independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
@@ -81,7 +82,7 @@ hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
 (Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
 (Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
 the whole-percent markup over cost applied to paid usage beyond the allowance before
-credits are consumed or overage is charged. There is no default in code: a missing,
+credits are consumed. There is no default in code: a missing,
 malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
 `dev`, `prd`), which every participating service inherits except the authentication
 service, whose `dev` and `prd` configs carry them directly; the no-Doppler local
@@ -106,15 +107,15 @@ Every other host composes admission through
 settles regardless of configuration. The authentication service's policy is
 authoritative: a request from document cognition is a no-op there while its flag
 is false, and with document cognition false the authentication service still
-settles on summary reads, overage changes, and credit purchases. Enable both
+settles on summary reads, automatic reload changes, and credit purchases. Enable both
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
 Automatic credit reload is part of the same settlement. It fires only inside
 `BillingServiceImpl::settle`, so it shares the `ENABLE_AI_USAGE_BILLING` gate,
-and only for the current period, before an overage chunk is reserved: while
-overage is active (enabled, not suspended, cap above zero) and reloads are not
-reload-suspended, settlement compares the credit balance net of the period's
+and only for the current period, before prepaid credits are consumed: while
+automatic reload is enabled and not reload-suspended, settlement compares the
+credit balance net of the period's
 uncovered usage with the payer's minimum balance and, below it, reloads up to the
 target balance. The minimum, target, and optional monthly spend limit are stored
 per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
@@ -126,19 +127,22 @@ payer lock and collected as a one-off Stripe invoice stamped
 purchase, idempotent on the invoice id. A declined invoice stays pending, which
 blocks further reloads, until the Stripe webhook reports it paid (credits are
 booked) or failed (reloads are suspended). A provider failure marks the reload
-failed and sets `auto_reload_suspended_at`; overage remains the fallback until
-the payer saves their settings again. A failed reload whose invoice reached
+failed and sets `auto_reload_suspended_at` until the payer saves their settings
+again. Exhausted reload budgets, declined payments, and provider failures leave
+unfunded usage uncovered. There is no direct-charge fallback or headroom from a
+historical overage cap; when quota enforcement is enabled, exhausted allowance
+and prepaid credits block new AI requests. A failed reload whose invoice reached
 Stripe keeps that invoice, and the next reservation after reloads are re-enabled
 retries it rather than opening a second one. `PATCH /ai-billing/auto-reload`
-(payer on a paid plan only) is how overage is turned on: enabling validates and
-stores the thresholds, sets `overage_enabled`, uses the monthly limit as the
-per-period overage cap (the offered maximum when there is no limit), clears both
-suspensions, and settles at once; disabling behaves like turning overage off and
-keeps the stored thresholds. A monthly limit must be at least the overage cap
-minimum (`$5`) so the cap is never raised above what the payer entered. The
-monthly limit bounds reload purchases per calendar month; the overage cap it
-seeds bounds how far *over* credits usage may run per Stripe period. They are
-not a combined budget. `GET /ai-billing/summary`
+(payer on a paid plan only) enables automatic reloads: enabling validates and
+stores the thresholds, sets the legacy `overage_enabled` reload opt-in field,
+zeros the direct-charge cap, clears suspensions, and settles at once. Disabling
+keeps the stored thresholds. The monthly reload budget must be at least `$5`.
+`PATCH /ai-billing/overage` rejects attempts to enable direct billing; disabling
+remains supported for older clients. New V1 funding snapshots also disable
+postpaid authorization. Historical invoices retain their accounting and webhook
+handling, but settlement never creates or retries direct charges.
+`GET /ai-billing/summary`
 reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit

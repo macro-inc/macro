@@ -242,7 +242,9 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// overage policy is read inside the lock, with `charge_threshold_cents` and
     /// `period_ended` taken from `policy`.
     ///
-    /// A charge that was reserved earlier but never collected is handed back
+    /// When `policy.overage_active` is false, neither new nor historical charges
+    /// are returned. The service always selects this credit-only policy.
+    /// A legacy charge that was reserved earlier but never collected is handed back
     /// before anything new is reserved, so retries reuse its id (and so its
     /// Stripe idempotency keys and invoice) rather than billing the same
     /// usage twice:
@@ -289,7 +291,8 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<OverageChargeStatus>>> + Send;
 
-    /// Set overage on/off with the cap, and optionally the reload thresholds.
+    /// Set the stored reload opt-in and optionally its thresholds. The service
+    /// supplies zero for the retired direct-charge cap.
     /// `None` thresholds keep the stored ones. Clears both the overage and the
     /// reload suspension.
     fn update_auto_reload(
@@ -415,33 +418,26 @@ pub trait PaymentGateway: Send + Sync + 'static {
         request: CreditCheckoutRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Open a finalized invoice for exactly this overage chunk (and nothing
-    /// else pending on the customer). [`OverageChargeRequest::scope`] selects
-    /// the active or trialing subscription. Another scope is ignored. No
-    /// matching subscription fails unless an idempotent retry finds an invoice
-    /// that already stores its payment method. Distinct effective methods in
-    /// the selected scope fail with
-    /// [`BillingError::Payment`](super::BillingError::Payment).
-    /// Returns the invoice id. Idempotent on `charge_id`.
+    /// Retired direct usage billing capability. Adapters must reject opening
+    /// these invoices without creating payment-provider objects.
     fn open_overage_invoice(
         &self,
         request: OverageChargeRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Open a finalized invoice for exactly this credit reload, following the
-    /// same routing and payment-method rules as [`open_overage_invoice`]
-    /// (selected by [`CreditReloadRequest::scope`]). Returns the invoice id.
-    /// Idempotent on `reload_id`.
-    ///
-    /// [`open_overage_invoice`]: PaymentGateway::open_overage_invoice
+    /// Open a finalized invoice for exactly this credit reload, excluding other
+    /// pending items. [`CreditReloadRequest::scope`] selects the active or trialing
+    /// subscription. Ambiguous routing fails. Missing subscription routing fails
+    /// unless a retry finds an invoice with a stored payment method. Returns the invoice id;
+    /// idempotent on `reload_id`.
     fn open_credit_reload_invoice(
         &self,
         request: CreditReloadRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Attempt to collect now an open one-off invoice this crate opened (an
-    /// overage chunk or a credit reload). `charge_id` is the reserved charge
-    /// or reload id and only keeps the idempotency key unique. `scope` is the
+    /// Collect an automatic credit reload invoice. Historical direct usage
+    /// invoices must be rejected. `charge_id` is the reload id and only keeps
+    /// the idempotency key unique. `scope` is the
     /// payer's current subscription scope. A scope stamped on the invoice
     /// overrides it. Invoices without that stamp use `scope`. Distinct
     /// effective methods in the chosen scope fail with
@@ -516,14 +512,14 @@ pub trait BillingService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
     /// Book each seat's usage beyond its own allowance for the payer of `user`
-    /// (previous and current period) from shared credits and then shared
-    /// overage, collecting overage via the payment gateway. The previous
+    /// (previous and current period) from shared prepaid credits. Only the
+    /// current period may trigger an automatic credit reload. The previous
     /// period is settled against the per-seat allowances frozen while it was
     /// open, not the live plan or seat list.
     fn settle(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
 
-    /// Turn overage on/off with a per-period cap. Payer only. Re-enabling
-    /// retries collection.
+    /// Retired direct usage opt-in. Enabling is rejected; disabling remains
+    /// supported for older clients. Payer only.
     fn update_overage(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -531,9 +527,9 @@ pub trait BillingService: Send + Sync + 'static {
         limit_cents: i64,
     ) -> impl Future<Output = Result<UsageSnapshot>> + Send;
 
-    /// Turn automatic credit reloads, and with them overage, on with
+    /// Turn automatic credit reloads on with
     /// `thresholds` or off. Payer only. Enabling validates the thresholds,
-    /// derives the overage cap from the monthly spend limit, clears both
+    /// clears the retired direct-charge cap and both
     /// suspensions, and settles right away, so a balance already under the
     /// minimum reloads immediately. Disabling keeps the stored thresholds.
     fn update_auto_reload(

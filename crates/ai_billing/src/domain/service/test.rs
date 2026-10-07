@@ -1,10 +1,13 @@
 use super::*;
 use crate::domain::ledger::{ReloadState, plan_reload, plan_settlement};
 use crate::domain::models::{
-    AllowanceStore, AutoReloadThresholds, CreditReloadStatus, DenyReason, OpenPeriodStart,
-    PayerScope, PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
+    AllowanceStore, AutoReloadThresholds, CreditReloadStatus, DenyReason, OVERAGE_LIMIT_MIN_CENTS,
+    OpenPeriodStart, PayerScope, PeriodAllowance, PeriodLedger, PlanTier, SeatGeneration,
 };
-use crate::domain::ports::{CreditReloadRequest, PendingReload, ResolvedReload, SettlementOutcome};
+use crate::domain::ports::{
+    CreditReloadRequest, OverageChargeRequest, PendingCharge, PendingReload, ResolvedReload,
+    SettlementOutcome,
+};
 use chrono::TimeZone;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
@@ -398,8 +401,10 @@ impl BillingRepo for FakeRepo {
     ) -> Result<SettlementOutcome> {
         let mut s = self.state.lock().unwrap();
         let ledger = s.ledger(period_start);
-        let overage_active =
-            s.settings.overage_enabled && !s.suspended && s.settings.overage_limit_cents > 0;
+        let overage_active = policy.overage_active
+            && s.settings.overage_enabled
+            && !s.suspended
+            && s.settings.overage_limit_cents > 0;
         let plan = plan_settlement(
             crate::domain::ledger::SettlementState {
                 chargeable_customer_cents,
@@ -417,7 +422,8 @@ impl BillingRepo for FakeRepo {
         s.balance -= plan.consume_credits_cents;
 
         let owed = s.charges.iter().position(|c| {
-            c.period_start == period_start
+            policy.overage_active
+                && c.period_start == period_start
                 && ((c.status == OverageChargeStatus::Pending && c.invoice.is_none())
                     || (c.status == OverageChargeStatus::Failed
                         && overage_active
@@ -517,10 +523,7 @@ impl BillingRepo for FakeRepo {
         now: DateTime<Utc>,
     ) -> Result<Option<PendingReload>> {
         let mut s = self.state.lock().unwrap();
-        let active = s.settings.overage_enabled
-            && !s.suspended
-            && s.settings.overage_limit_cents > 0
-            && !s.auto_reload_suspended;
+        let active = s.settings.overage_enabled && !s.auto_reload_suspended;
         if !active {
             return Ok(None);
         }
@@ -1007,9 +1010,9 @@ async fn enabled_enforces_allowances_under_either_settlement_policy_without_sett
         *usage.cents.lock().unwrap() = 5_000;
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
-            AllowanceDecision::Deny(DenyReason::OverageLimitReached)
+            AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
         );
-        repo.state.lock().unwrap().suspended = true;
+        repo.state.lock().unwrap().auto_reload_suspended = true;
         assert_eq!(
             svc.check_allowance(&payer).await.unwrap(),
             AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
@@ -1066,7 +1069,7 @@ async fn disabled_settlement_preserves_credits_and_never_reserves_or_collects_ov
         1_000_000,
     );
 
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
     svc.apply_credit_purchase(&payer, 2_500, "cs_paused")
         .await
         .unwrap();
@@ -1088,11 +1091,10 @@ async fn disabled_settlement_preserves_credits_and_never_reserves_or_collects_ov
 }
 
 #[tokio::test]
-async fn disabled_settlement_does_not_retry_pending_or_failed_charges() {
+async fn enabled_settlement_does_not_retry_pending_or_failed_direct_charges() {
     for status in [OverageChargeStatus::Pending, OverageChargeStatus::Failed] {
         for invoice in [None, Some("in_existing".to_string())] {
-            let (svc, repo, payments, _) =
-                premium_service_with(AiUsageBilling::Disabled, 1_000_000);
+            let (svc, repo, payments, _) = premium_service_with(AiUsageBilling::Enabled, 1_000_000);
             let payer = user("payer@x.com");
             let period = BillingPeriod::current(None, Utc::now());
             repo.state.lock().unwrap().charges.push(FakeCharge {
@@ -1103,7 +1105,8 @@ async fn disabled_settlement_does_not_retry_pending_or_failed_charges() {
                 invoice: invoice.clone(),
             });
 
-            svc.update_overage(&payer, true, 10_000).await.unwrap();
+            repo.update_overage(&payer, true, 10_000).await.unwrap();
+            repo.pause_reloads();
             svc.settle(&payer).await.unwrap();
 
             let charges = repo.charges();
@@ -1231,188 +1234,37 @@ async fn credits_unblock_and_settlement_consumes_them() {
 }
 
 #[tokio::test]
-async fn overage_is_charged_in_chunks_and_respects_the_cap() {
-    let (svc, repo, payments, usage) = premium_service(2_500);
+async fn legacy_overage_opt_in_never_funds_or_charges_usage() {
+    let (svc, repo, payments, _) = premium_service(5_000);
     let payer = user("payer@x.com");
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
     repo.pause_reloads();
-
-    let snap = svc.update_overage(&payer, true, 2_000).await.unwrap();
-    assert!(snap.overage_enabled);
-    // 500 cost over is 525 owed: under the $10 chunk, nothing charged yet, and
-    // the 1_475 of room left pays for 1_404 more cost cents.
-    assert_eq!(snap.overage_charged_cents, 0);
-    assert_eq!(snap.remaining_cents, 1_404);
-
-    *usage.cents.lock().unwrap() = 3_200;
-    svc.settle(&payer).await.unwrap();
-    let opened = payments.opened();
-    assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].amount_cents, 1_260);
-    assert_eq!(opened[0].customer_id, "cus_123");
-    assert_eq!(opened[0].scope, SubscriptionScope::Personal);
-    let charges = repo.charges();
-    let charge = &charges[0];
-    assert_eq!(charge.status, OverageChargeStatus::Paid);
-    assert_eq!(
-        charge.invoice.as_deref(),
-        Some(format!("in_{}", charge.id).as_str())
-    );
-
-    // Past the cap: the last 740 of room is under the charge chunk, so it
-    // waits for period end, and the payer is blocked with the right reason.
-    *usage.cents.lock().unwrap() = 5_000;
+    repo.set_balance(500);
     svc.settle(&payer).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
-    assert_eq!(snap.overage_charged_cents, 1_260);
+    assert_eq!(snap.credits_consumed_cents, 500);
+    assert_eq!(snap.credit_balance_cents, 0);
+    assert_eq!(snap.uncovered_cents, 2_650);
     assert_eq!(snap.remaining_cents, 0);
-    assert_eq!(snap.blocked_reason, Some(DenyReason::OverageLimitReached));
-}
-
-#[tokio::test]
-async fn failed_overage_charge_suspends_overage_and_is_retried_not_duplicated() {
-    let (svc, repo, payments, _) = premium_service(3_500);
-    let payer = user("payer@x.com");
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Error);
-
-    // Enabling settles; the collection failure is swallowed into the snapshot.
-    let snap = svc.update_overage(&payer, true, 5_000).await.unwrap();
-    assert!(snap.overage_suspended);
     assert_eq!(snap.blocked_reason, Some(DenyReason::OveragePaymentFailed));
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].status, OverageChargeStatus::Failed);
-    // The invoice was recorded before the payment attempt.
-    let invoice = charges[0].invoice.clone().expect("invoice recorded");
-    assert_eq!(
-        svc.check_allowance(&payer).await.unwrap(),
-        AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
-    );
-
-    // Fixing the card and re-enabling retries the same charge: the existing
-    // invoice is paid, no second invoice is opened, no second row reserved.
-    payments.set_pay(PayOutcome::Paid);
-    let snap = svc.update_overage(&payer, true, 5_000).await.unwrap();
-    assert!(!snap.overage_suspended);
-    assert_eq!(snap.overage_charged_cents, 1_575);
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].status, OverageChargeStatus::Paid);
-    assert_eq!(payments.opened().len(), 1);
-    let paid = payments.payments();
-    assert_eq!(paid.len(), 2);
-    assert!(
-        paid.iter()
-            .all(|(id, inv)| *id == charges[0].id && *inv == invoice)
-    );
-}
-
-#[tokio::test]
-async fn opening_the_invoice_failing_marks_the_charge_failed() {
-    let (svc, repo, payments, _) = premium_service(3_500);
-    let payer = user("payer@x.com");
-    repo.pause_reloads();
-    *payments.fail_open.lock().unwrap() = true;
-
-    let snap = svc.update_overage(&payer, true, 5_000).await.unwrap();
-    assert!(snap.overage_suspended);
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].status, OverageChargeStatus::Failed);
-    assert!(charges[0].invoice.is_none());
-    assert!(payments.payments().is_empty());
-
-    // Once Stripe is back the retry opens the invoice for the same charge.
-    *payments.fail_open.lock().unwrap() = false;
-    svc.update_overage(&payer, true, 5_000).await.unwrap();
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].status, OverageChargeStatus::Paid);
-    assert_eq!(payments.opened()[0].charge_id, charges[0].id);
-}
-
-#[tokio::test]
-async fn a_failed_uninvoiced_charge_whose_usage_credits_covered_is_not_retried() {
-    let (svc, repo, payments, _) = premium_service(3_800);
-    let payer = user("payer@x.com");
-    repo.pause_reloads();
-    *payments.fail_open.lock().unwrap() = true;
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
-    assert_eq!(repo.charges()[0].status, OverageChargeStatus::Failed);
-    assert!(repo.charges()[0].invoice.is_none());
-
-    // Credits arrive and cover the 1_890 (1_800 cost, marked up) that was never invoiced.
-    *payments.fail_open.lock().unwrap() = false;
-    svc.apply_credit_purchase(&payer, 2_500, "cs_1")
-        .await
-        .unwrap();
-    let snap = svc.snapshot(&payer).await.unwrap();
-    assert_eq!(snap.credits_consumed_cents, 1_890);
-    assert_eq!(snap.uncovered_cents, 0);
-
-    // Re-enabling overage must not collect that stale charge.
-    let snap = svc.update_overage(&payer, true, 10_000).await.unwrap();
-    assert_eq!(snap.overage_charged_cents, 0);
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].status, OverageChargeStatus::Failed);
+    assert!(repo.charges().is_empty());
     assert!(payments.opened().is_empty());
     assert!(payments.payments().is_empty());
 }
 
 #[tokio::test]
-async fn failed_invoiced_charge_keeps_coverage_when_credits_are_bought() {
+async fn direct_usage_billing_cannot_be_enabled() {
     let (svc, repo, payments, _) = premium_service(5_000);
     let payer = user("payer@x.com");
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Error);
-
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
-    let first = repo.charges().into_iter().next().unwrap();
-    assert_eq!(first.amount_cents, 3_150);
-    assert_eq!(first.status, OverageChargeStatus::Failed);
-    assert!(first.invoice.is_some());
-
-    payments.set_pay(PayOutcome::Declined);
-    svc.apply_credit_purchase(&payer, 1_000, "cs_shrink")
-        .await
-        .unwrap();
-    let snap = svc.snapshot(&payer).await.unwrap();
-    assert_eq!(snap.credits_consumed_cents, 0);
-    assert_eq!(snap.credit_balance_cents, 1_000);
-    assert_eq!(snap.overage_charged_cents, 3_150);
-
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].id, first.id);
-    assert_eq!(charges[0].status, OverageChargeStatus::Pending);
-    assert_eq!(charges[0].amount_cents, 3_150);
-    assert_eq!(charges[0].invoice, first.invoice);
-    assert_eq!(payments.opened().len(), 1);
-    assert_eq!(payments.payments().len(), 2);
-}
-
-#[tokio::test]
-async fn a_declined_card_leaves_the_invoice_open_for_the_webhook() {
-    let (svc, repo, payments, _) = premium_service(3_500);
-    let payer = user("payer@x.com");
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Declined);
-
-    let snap = svc.update_overage(&payer, true, 5_000).await.unwrap();
-    // Not suspended yet: Stripe retries, the webhook decides.
-    assert!(!snap.overage_suspended);
-    assert_eq!(snap.overage_charged_cents, 1_575);
-    let charges = repo.charges();
-    assert_eq!(charges[0].status, OverageChargeStatus::Pending);
-    let invoice = charges[0].invoice.clone().unwrap();
-
-    svc.mark_overage_invoice(&invoice, false).await.unwrap();
-    let snap = svc.snapshot(&payer).await.unwrap();
-    assert!(snap.overage_suspended);
-    // Stripe may still retry the open invoice, so it remains coverage.
-    assert_eq!(snap.overage_charged_cents, 1_575);
+    for limit in [100, 5_000, 500_000] {
+        assert!(matches!(
+            svc.update_overage(&payer, true, limit).await,
+            Err(BillingError::DirectUsageBillingDisabled)
+        ));
+    }
+    assert!(!repo.settings(&payer).await.unwrap().overage_enabled);
+    assert!(repo.charges().is_empty());
+    assert!(payments.payments().is_empty());
 }
 
 #[tokio::test]
@@ -1462,7 +1314,7 @@ async fn only_the_payer_manages_billing_and_needs_a_paid_plan() {
     ));
     assert!(matches!(
         svc.update_overage(&owner, true, 100).await,
-        Err(BillingError::InvalidOverageLimit)
+        Err(BillingError::DirectUsageBillingDisabled)
     ));
     let url = svc
         .create_credit_checkout(&owner, 2_500, "s".into(), "c".into())
@@ -1539,12 +1391,16 @@ async fn team_seats_keep_allowances_separate_and_share_credits() {
 
 #[tokio::test]
 async fn overage_invoice_webhooks_update_suspension() {
-    let (svc, repo, payments, _) = premium_service(3_500);
+    let (svc, repo, _, _) = premium_service(3_500);
     let payer = user("payer@x.com");
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Declined);
-    svc.update_overage(&payer, true, 5_000).await.unwrap();
-    let invoice = repo.charges()[0].invoice.clone().unwrap();
+    let invoice = "in_legacy".to_string();
+    repo.state.lock().unwrap().charges.push(FakeCharge {
+        id: macro_uuid::generate_uuid_v7(),
+        period_start: BillingPeriod::current(None, Utc::now()).start,
+        amount_cents: 1_575,
+        status: OverageChargeStatus::Pending,
+        invoice: Some(invoice.clone()),
+    });
 
     svc.mark_overage_invoice(&invoice, false).await.unwrap();
     assert!(svc.snapshot(&payer).await.unwrap().overage_suspended);
@@ -1569,21 +1425,18 @@ async fn overage_invoice_webhooks_update_suspension() {
 
 #[tokio::test]
 async fn out_of_order_invoice_webhooks_follow_the_newest_charge() {
-    let (svc, repo, payments, usage) = premium_service(4_000);
+    let (svc, repo, _, _) = premium_service(5_500);
     let payer = user("payer@x.com");
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Declined);
-    // Charge A: 2_000 cost over, 2_100 owed, declined, awaiting Stripe.
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
-    // Charge B: another 1_500 cost, 1_575 owed, also declined.
-    *usage.cents.lock().unwrap() = 5_500;
-    svc.settle(&payer).await.unwrap();
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 2);
-    let (a, b) = (
-        charges[0].invoice.clone().unwrap(),
-        charges[1].invoice.clone().unwrap(),
-    );
+    let (a, b) = ("in_legacy_a".to_string(), "in_legacy_b".to_string());
+    for (invoice, amount) in [(&a, 2_100), (&b, 1_575)] {
+        repo.state.lock().unwrap().charges.push(FakeCharge {
+            id: macro_uuid::generate_uuid_v7(),
+            period_start: BillingPeriod::current(None, Utc::now()).start,
+            amount_cents: amount,
+            status: OverageChargeStatus::Pending,
+            invoice: Some(invoice.clone()),
+        });
+    }
 
     // B fails: suspended.
     svc.mark_overage_invoice(&b, false).await.unwrap();
@@ -1601,17 +1454,9 @@ async fn out_of_order_invoice_webhooks_follow_the_newest_charge() {
 
     // The mirror image: a late failure for an older invoice after the newest
     // charge went through does not re-suspend.
-    let (svc, repo, payments, usage) = premium_service(4_000);
-    repo.pause_reloads();
-    payments.set_pay(PayOutcome::Declined);
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
-    *usage.cents.lock().unwrap() = 5_500;
-    svc.settle(&payer).await.unwrap();
-    let charges = repo.charges();
-    let (a, b) = (
-        charges[0].invoice.clone().unwrap(),
-        charges[1].invoice.clone().unwrap(),
-    );
+    for charge in &mut repo.state.lock().unwrap().charges {
+        charge.status = OverageChargeStatus::Pending;
+    }
     svc.mark_overage_invoice(&b, true).await.unwrap();
     svc.mark_overage_invoice(&a, false).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
@@ -1728,7 +1573,7 @@ async fn reload_amount_covers_the_usage_about_to_be_consumed() {
 
 #[tokio::test]
 async fn monthly_spend_limit_caps_reloads() {
-    let (svc, repo, payments, _) = premium_service(0);
+    let (svc, repo, payments, usage) = premium_service(0);
     let payer = user("payer@x.com");
     repo.set_balance(500);
 
@@ -1742,15 +1587,22 @@ async fn monthly_spend_limit_caps_reloads() {
 
     // The month's limit is spent: draining the balance reloads nothing more.
     repo.set_balance(500);
+    *usage.cents.lock().unwrap() = 10_000;
     svc.settle(&payer).await.unwrap();
     assert_eq!(repo.reloads().len(), 1);
     assert_eq!(payments.opened_reloads().len(), 1);
-    assert_eq!(repo.state.lock().unwrap().balance, 500);
+    assert_eq!(repo.state.lock().unwrap().balance, 0);
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
+    assert_eq!(
+        svc.check_allowance(&payer).await.unwrap(),
+        AllowanceDecision::Deny(DenyReason::AllowanceExhausted)
+    );
 }
 
 #[tokio::test]
 async fn a_declined_reload_stays_pending_for_the_webhook() {
-    let (svc, repo, payments, _) = premium_service(0);
+    let (svc, repo, payments, _) = premium_service(3_500);
     let payer = user("payer@x.com");
     repo.set_balance(500);
     payments.set_pay(PayOutcome::Declined);
@@ -1762,7 +1614,11 @@ async fn a_declined_reload_stays_pending_for_the_webhook() {
     // Not suspended: Stripe retries, the webhook decides.
     assert!(snap.auto_reload.active);
     assert!(!snap.auto_reload.suspended);
-    assert_eq!(snap.credit_balance_cents, 500);
+    assert_eq!(snap.credit_balance_cents, 0);
+    assert_eq!(snap.uncovered_cents, 1_075);
+    assert_eq!(snap.remaining_cents, 0);
+    assert!(repo.charges().is_empty());
+    assert!(payments.opened().is_empty());
     let reloads = repo.reloads();
     assert_eq!(reloads.len(), 1);
     assert_eq!(reloads[0].status, CreditReloadStatus::Pending);
@@ -1775,51 +1631,31 @@ async fn a_declined_reload_stays_pending_for_the_webhook() {
 }
 
 #[tokio::test]
-async fn a_failed_reload_pauses_reloads_and_falls_back_to_overage() {
-    let (svc, repo, payments, _) = premium_service(3_500);
-    let payer = user("payer@x.com");
-    payments.set_pay(PayOutcome::Error);
-
-    // The reload fails first; the 1_575 owed still goes to an overage chunk,
-    // which fails on the same card. Neither failure fails the call.
-    let snap = svc
-        .update_auto_reload(&payer, true, AutoReloadThresholds::default())
-        .await
-        .unwrap();
-    let reloads = repo.reloads();
-    assert_eq!(reloads.len(), 1);
-    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
-    // The invoice stays on the row because Stripe may still collect it.
-    assert!(reloads[0].invoice.is_some());
-    assert!(snap.auto_reload.suspended);
-    assert!(!snap.auto_reload.active);
-    assert!(snap.overage_suspended);
-    let charges = repo.charges();
-    assert_eq!(charges.len(), 1);
-    assert_eq!(charges[0].amount_cents, 1_575);
-    assert_eq!(charges[0].status, OverageChargeStatus::Failed);
-    assert_eq!(payments.payments().len(), 2);
-
-    // Re-enabling overage alone retries the chunk but leaves reloads paused.
-    payments.set_pay(PayOutcome::Paid);
-    let snap = svc.update_overage(&payer, true, 10_000).await.unwrap();
-    assert_eq!(repo.charges()[0].status, OverageChargeStatus::Paid);
-    assert_eq!(snap.overage_charged_cents, 1_575);
-    assert!(snap.auto_reload.suspended);
-    assert_eq!(repo.reloads().len(), 1);
-    assert_eq!(payments.opened_reloads().len(), 1);
-
-    // Saving the reload settings clears the pause and reloads right away.
-    let snap = svc
-        .update_auto_reload(&payer, true, AutoReloadThresholds::default())
-        .await
-        .unwrap();
-    assert!(snap.auto_reload.active);
-    let reloads = repo.reloads();
-    assert_eq!(reloads.len(), 2);
-    assert_eq!(reloads[1].status, CreditReloadStatus::Paid);
-    assert_eq!(reloads[1].amount_cents, 10_000);
-    assert_eq!(snap.credit_balance_cents, 10_000);
+async fn a_failed_reload_blocks_unfunded_usage_without_a_direct_charge() {
+    for fail_open in [false, true] {
+        let (svc, repo, payments, _) = premium_service(3_500);
+        let payer = user("payer@x.com");
+        payments.set_pay(PayOutcome::Error);
+        *payments.fail_open.lock().unwrap() = fail_open;
+        let snap = svc
+            .update_auto_reload(&payer, true, AutoReloadThresholds::default())
+            .await
+            .unwrap();
+        assert_eq!(repo.reloads().len(), 1);
+        assert_eq!(repo.reloads()[0].status, CreditReloadStatus::Failed);
+        assert!(snap.auto_reload.suspended);
+        assert!(!snap.auto_reload.active);
+        assert_eq!(snap.uncovered_cents, 1_575);
+        assert_eq!(snap.remaining_cents, 0);
+        assert_eq!(
+            svc.check_allowance(&payer).await.unwrap(),
+            AllowanceDecision::Deny(DenyReason::OveragePaymentFailed)
+        );
+        svc.settle(&payer).await.unwrap();
+        assert!(repo.charges().is_empty());
+        assert!(payments.opened().is_empty());
+        assert_eq!(payments.payments().len(), usize::from(!fail_open));
+    }
 }
 
 #[tokio::test]
@@ -1860,7 +1696,7 @@ async fn enabling_auto_reload_validates_the_thresholds() {
 }
 
 #[tokio::test]
-async fn enabling_auto_reload_turns_overage_on_clears_suspensions_and_settles() {
+async fn enabling_auto_reload_clears_suspensions_and_settles_without_a_direct_charge_cap() {
     let (svc, repo, _, _) = premium_service(0);
     let payer = user("payer@x.com");
     repo.set_balance(500);
@@ -1870,7 +1706,7 @@ async fn enabling_auto_reload_turns_overage_on_clears_suspensions_and_settles() 
         state.auto_reload_suspended = true;
     }
 
-    // No monthly limit: the overage cap is the most the dialog allows.
+    // Reloads do not authorize a direct-charge cap, even without a monthly limit.
     let snap = svc
         .update_auto_reload(&payer, true, thresholds(2_000, 20_000, None))
         .await
@@ -1882,27 +1718,19 @@ async fn enabling_auto_reload_turns_overage_on_clears_suspensions_and_settles() 
     assert_eq!(snap.auto_reload.monthly_spend_limit_cents, None);
     assert!(!snap.auto_reload.suspended);
     assert!(snap.auto_reload.active);
-    assert_eq!(
-        repo.settings(&payer).await.unwrap().overage_limit_cents,
-        OVERAGE_LIMIT_MAX_CENTS
-    );
+    assert_eq!(repo.settings(&payer).await.unwrap().overage_limit_cents, 0);
     // Enabling settled, so the low balance reloaded at once.
     assert_eq!(repo.reloads().len(), 1);
     assert_eq!(repo.reloads()[0].amount_cents, 19_500);
     assert_eq!(snap.credit_balance_cents, 20_000);
 
-    // A monthly limit becomes the overage cap, within the offered range; one
-    // under the cap minimum is rejected rather than raised.
+    // The monthly limit applies only to reload purchases; keep the offered minimum.
     assert!(matches!(
         svc.update_auto_reload(&payer, true, thresholds(2_000, 20_000, Some(100)))
             .await,
         Err(BillingError::InvalidAutoReload(_))
     ));
-    for (monthly_limit, overage_limit) in [
-        (OVERAGE_LIMIT_MIN_CENTS, OVERAGE_LIMIT_MIN_CENTS),
-        (25_000, 25_000),
-        (1_000_000, OVERAGE_LIMIT_MAX_CENTS),
-    ] {
+    for monthly_limit in [OVERAGE_LIMIT_MIN_CENTS, 25_000, 1_000_000] {
         let snap = svc
             .update_auto_reload(&payer, true, thresholds(2_000, 20_000, Some(monthly_limit)))
             .await
@@ -1911,10 +1739,7 @@ async fn enabling_auto_reload_turns_overage_on_clears_suspensions_and_settles() 
             snap.auto_reload.monthly_spend_limit_cents,
             Some(monthly_limit)
         );
-        assert_eq!(
-            repo.settings(&payer).await.unwrap().overage_limit_cents,
-            overage_limit
-        );
+        assert_eq!(repo.settings(&payer).await.unwrap().overage_limit_cents, 0);
     }
     assert_eq!(repo.reloads().len(), 1);
 }
@@ -2041,12 +1866,12 @@ async fn snapshot_reports_whether_automatic_reload_is_active() {
         .unwrap();
     assert!(snap.auto_reload.active);
 
-    // Reloads ride on overage: an overage suspension stops them too.
+    // Historical overage suspensions do not stop automatic reloads.
     repo.suspend_overage(&payer).await.unwrap();
     let snap = svc.snapshot(&payer).await.unwrap();
     assert!(snap.overage_suspended);
     assert!(!snap.auto_reload.suspended);
-    assert!(!snap.auto_reload.active);
+    assert!(snap.auto_reload.active);
 
     svc.update_auto_reload(&payer, false, AutoReloadThresholds::default())
         .await
@@ -2170,9 +1995,10 @@ async fn snapshot_freezes_the_open_period_allowance_and_refreshes_it() {
 }
 
 #[tokio::test]
-async fn previous_period_overage_uses_the_frozen_allowance_not_the_live_one() {
+async fn previous_period_credits_use_the_frozen_allowance_not_the_live_one() {
     let (svc, repo, payments, usage, _, payer, previous, current) = anchored_premium(0);
     repo.pause_reloads();
+    repo.set_balance(10_000);
     svc.sync_period(&payer, current.start, current.end, None)
         .await
         .unwrap();
@@ -2186,16 +2012,15 @@ async fn previous_period_overage_uses_the_frozen_allowance_not_the_live_one() {
             }],
         },
     );
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
     usage.add(&payer, previous.start + chrono::Duration::days(2), 2_500);
 
     svc.settle(&payer).await.unwrap();
 
-    let opened = payments.opened();
-    assert_eq!(opened.len(), 1);
-    // 2_500 cost against the frozen 1_000, not the live 2_000: 1_500 over, 1_575 owed.
-    assert_eq!(opened[0].amount_cents, 1_575);
-    assert_eq!(repo.charges()[0].status, OverageChargeStatus::Paid);
+    // 2_500 cost against the frozen 1_000: 1_500 over, 1_575 prepaid credits.
+    assert_eq!(repo.state.lock().unwrap().consumed[&previous.start], 1_575);
+    assert!(payments.opened().is_empty());
+    assert!(repo.charges().is_empty());
     // The closed period keeps its freeze; the open one reflects the live allowance.
     assert_eq!(
         repo.allowance(previous.start).unwrap().seats[0].included_cents,
@@ -2224,7 +2049,7 @@ async fn previous_period_does_not_charge_usage_its_frozen_allowance_included() {
             }],
         },
     );
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
     // Over the live 2_000, but inside the frozen 5_000.
     usage.add(&payer, previous.start + chrono::Duration::days(2), 4_000);
 
@@ -2248,12 +2073,9 @@ async fn previous_period_usage_never_triggers_a_reload() {
         .await
         .unwrap();
 
-    // The closed period is collected as overage, not topped up with a
-    // reload; only the open period reloads, and only for its own usage.
-    let opened = payments.opened();
-    assert_eq!(opened.len(), 1);
-    assert_eq!(opened[0].amount_cents, 2_100);
-    assert_eq!(repo.charges()[0].period_start, previous.start);
+    // Unfunded closed-period usage stays uncovered; only the open period reloads.
+    assert!(payments.opened().is_empty());
+    assert!(repo.charges().is_empty());
     let reloads = repo.reloads();
     assert_eq!(reloads.len(), 1);
     assert_eq!(reloads[0].amount_cents, 10_000);
@@ -2325,17 +2147,17 @@ async fn previous_period_usage_uses_the_frozen_billed_users() {
     );
     ents.set(new_team);
     repo.pause_reloads();
-    svc.update_overage(&owner, true, 10_000).await.unwrap();
+    repo.set_balance(10_000);
+    repo.update_overage(&owner, true, 10_000).await.unwrap();
     svc.settle(&owner).await.unwrap();
 
-    let opened = payments.opened();
-    assert_eq!(opened.len(), 1);
+    assert!(payments.opened().is_empty());
+    assert!(repo.charges().is_empty());
     // Member A gets only their own $20 at-cost allowance, so 5_200 cost is
     // chargeable: 5_460 at the markup. The owner's unused allowance does not
     // offset it. Member B's usage is ignored because they were not a billed
     // user in that period.
-    assert_eq!(opened[0].amount_cents, 5_460);
-    assert_eq!(opened[0].scope, SubscriptionScope::Team { team_id });
+    assert_eq!(repo.state.lock().unwrap().consumed[&previous.start], 5_460);
 }
 
 #[tokio::test]
@@ -2355,7 +2177,7 @@ async fn current_period_uses_the_live_allowance_not_a_stale_freeze() {
             }],
         },
     );
-    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    repo.update_overage(&payer, true, 10_000).await.unwrap();
     // Current-period usage over the stale 1_000 but inside the live 2_000.
     *usage.cents.lock().unwrap() = 1_500;
     svc.settle(&payer).await.unwrap();

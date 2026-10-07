@@ -2212,16 +2212,19 @@ The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
 It contains Minimum balance (default `$10`), Target balance (default `$100`),
 optional Maximum monthly spend (`No limit`), a payment-method management link,
 and the automatic-charge warning. The dialog saves for paid payers:
-`Turn on auto-reload` enables usage billing with those thresholds (the monthly
-limit also caps usage billing per period), `Save` updates them while on, and
-`Turn off` disables usage billing. The **Automatic reload** switch reflects the
-saved state. Paid team members who are not the payer see
+`Turn on auto-reload` enables automatic credit purchases with those thresholds,
+`Save` updates them while on, and `Turn off` disables automatic reload. The monthly
+limit caps reload purchases per UTC calendar month. The **Automatic reload**
+switch reflects the saved state. Paid team members who are not the payer see
 `Only the account that pays for this plan can change automatic reload.` and
 cannot save. After a failed automatic reload the dialog shows `Your last
 automatic reload could not be charged. Update your payment method, then save to
-try again.`; saving retries. Existing postpaid usage billing is shown separately
-and can be turned off by the payer; while it is on, credits reload automatically
-when the balance drops below the minimum. Local **Developer tools** offer
+try again.`; saving retries. Extra usage is funded entirely by prepaid credits.
+If the reload budget runs out or payment fails, uncovered usage cannot trigger a
+direct usage charge; with quota enforcement enabled, exhausted credits and
+allowance block further AI requests. Historical direct-charge invoices are still
+recognized by webhooks, but settlement never creates or retries them. Local
+**Developer tools** offer
 `Preview Free plan` and `Preview paid plan` to display either Usage page with
 sample usage, regardless of the signed-in account's tier.
 `Open Free usage-limit dialog` and `Open paid usage-limit dialog` open the
