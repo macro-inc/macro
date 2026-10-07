@@ -1,5 +1,6 @@
 import ArrowDown from '@phosphor/arrow-down.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
+import CaretCircleDown from '@phosphor/caret-circle-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
 import Clipboard from '@phosphor/clipboard-text.svg';
@@ -217,6 +218,14 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
         >
           <TextAlignLeft class="size-4" />
           Trim whitespace
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
+          onSelect={() => props.onCommand('dropdown')}
+        >
+          <CaretCircleDown class="size-4" />
+          Dropdown…
         </Dropdown.Item>
       </Dropdown.Group>
       <Dropdown.Group>

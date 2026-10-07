@@ -102,8 +102,22 @@ You can also open a native spreadsheet and use the bottom-right **Import and exp
 
 Imported Excel workbooks keep conditional formatting, data validation and notes.
 Conditional formats recolor cells and draw data bars and icons, and they update as
-values change. A selected cell with a list rule shows an arrow at its right edge:
-click it or press Alt+Down to choose a value. Typing a value the rule does not allow
+values change.
+
+To add an in-cell dropdown, select the cells and choose **Format and data →
+Dropdown…** in the toolbar (sliders icon), or **Dropdown…** in the cell context
+menu. The **Dropdown** dialog takes **Type the choices** (one per line in
+**Choices, one per line**) or **Use the values of a range** (**Range of choices**,
+such as `A2:A10` or `'Sheet 2'!A2:A10`), and **Reject values that are not a
+choice** (on by default). **Save** replaces any validation on the selected cells;
+**Remove** clears it from them. Reopening the dialog on a dropdown cell shows its
+current choices. Agents add the same dropdowns with `EditSpreadsheet`'s
+`set_dropdown` operation and remove them with `clear_validation`.
+
+Every cell with a dropdown (from the dialog, an agent, or an Excel list rule) shows
+a small arrow at its right edge; clicking it selects the cell and opens its
+choices. The selected cell's arrow sits just outside its right edge (**Choose a
+value for B2**); click it or press Alt+Down. Typing a value the rule does not allow
 shows the rule's message in the footer, and a "stop" rule keeps the previous value.
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.

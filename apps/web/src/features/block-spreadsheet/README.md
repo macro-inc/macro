@@ -360,7 +360,12 @@ Import keeps what Excel calculates and shows:
   number, date, time and text-length rules that show an error alert: a stop alert
   rejects the entry, warnings and information accept it, and each shows the
   rule's message in the footer. List rules offer their values in a dropdown on the
-  active cell (Alt+Down). Input messages and notes show beside the active cell.
+  active cell (Alt+Down), and every cell they cover shows an arrow that opens it.
+  `components/DropdownDialog.tsx` (Format and data → Dropdown…, or the cell menu)
+  adds, edits and removes list rules on the selection through
+  `packages/spreadsheet/src/data-validation.ts`, which the AI `set_dropdown` and
+  `clear_validation` operations share: a new rule takes its range out of the rules
+  it overlaps, since a cell has one rule. Input messages and notes show beside the active cell.
   Inserting or deleting rows and columns moves rule ranges, rule formulas and
   notes.
 - Images and charts. `core/xlsx-drawings.ts` reads a sheet's drawing part

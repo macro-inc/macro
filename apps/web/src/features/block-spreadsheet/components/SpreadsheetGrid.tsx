@@ -10,6 +10,8 @@ import type {
   SheetChart,
   SheetDrawing,
 } from '@macro-inc/spreadsheet/sheet-drawings';
+import { sqrefBounds } from '@macro-inc/spreadsheet/sheet-rules';
+import CaretDown from '@phosphor/caret-down.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -193,6 +195,8 @@ export function SpreadsheetGrid(props: {
   /** The active cell's list of allowed values, offered in a dropdown. */
   listItems?: string[];
   onPickListItem?: (item: string) => void;
+  /** Ranges (Excel sqrefs) whose cells show a dropdown arrow. */
+  dropdownRanges?: string[];
   /** Images and charts over the sheet. */
   drawings?: SheetDrawing[];
   image?: (key: string) => string | undefined;
@@ -250,6 +254,22 @@ export function SpreadsheetGrid(props: {
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   // The cell whose list is open; moving the selection closes it.
   const [listOpenAt, setListOpenAt] = createSignal<string>();
+  const listButtonShown = () =>
+    !props.readonly &&
+    !props.editing &&
+    !props.formulaEditing &&
+    !!props.listItems?.length;
+  const dropdownBounds = createMemo(() =>
+    (props.dropdownRanges ?? []).flatMap(sqrefBounds)
+  );
+  const hasDropdown = (row: number, column: number) =>
+    dropdownBounds().some(
+      (bounds) =>
+        row >= bounds.top &&
+        row <= bounds.bottom &&
+        column >= bounds.left &&
+        column <= bounds.right
+    );
   const [selectedDrawing, setSelectedDrawing] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
@@ -1787,6 +1807,46 @@ export function SpreadsheetGrid(props: {
                               class="pointer-events-none absolute right-0 top-0 size-0 border-t-[6px] border-l-[6px] border-t-failure border-l-transparent"
                             />
                           </Show>
+                          <Show
+                            when={
+                              hasDropdown(row, column) &&
+                              !(active() && listButtonShown()) &&
+                              !(active() && props.editing)
+                            }
+                          >
+                            <Show
+                              when={!props.readonly}
+                              fallback={
+                                <span
+                                  aria-hidden="true"
+                                  data-dropdown-marker
+                                  class="pointer-events-none absolute right-0.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-ink-muted"
+                                >
+                                  <CaretDown class="size-3" />
+                                </span>
+                              }
+                            >
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                data-dropdown-marker
+                                aria-label={`Choose a value for ${address}`}
+                                class="absolute right-0.5 top-1/2 z-[2] flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-transparent p-0 text-ink-muted hover:bg-hover hover:text-ink touch:size-6"
+                                onPointerDown={(event) => {
+                                  if (event.button !== 0) return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  props.onCommit();
+                                  props.onSelect(position);
+                                  focusGrid();
+                                  queueMicrotask(() => setListOpenAt(address));
+                                }}
+                                onDblClick={(event) => event.stopPropagation()}
+                              >
+                                <CaretDown class="size-3" />
+                              </button>
+                            </Show>
+                          </Show>
                           <Show when={props.comments?.hasComment(address)}>
                             <button
                               type="button"
@@ -1916,15 +1976,7 @@ export function SpreadsheetGrid(props: {
               class="pointer-events-none absolute z-[2] border-2 border-accent"
               style={activeStyle()}
             />
-            <Show
-              when={
-                !props.readonly &&
-                !props.editing &&
-                !props.formulaEditing &&
-                !!props.listItems?.length &&
-                props.listItems
-              }
-            >
+            <Show when={listButtonShown() && props.listItems}>
               {(items) => {
                 const address = () => cellAddress(props.selection.anchor);
                 const size = () =>

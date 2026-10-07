@@ -41,6 +41,7 @@ function renderGrid(
     | 'sheetId'
     | 'onFill'
     | 'onResizeColumn'
+    | 'dropdownRanges'
   > & {
     values?: ComponentProps<typeof SpreadsheetGrid>['values'];
     readonly?: boolean;
@@ -108,6 +109,7 @@ function renderGrid(
           hiddenColumns={options.hiddenColumns}
           onFill={options.onFill}
           onResizeColumn={options.onResizeColumn}
+          dropdownRanges={options.dropdownRanges}
           values={options.values ?? {}}
           remoteCursors={[]}
           selection={controller.selection()}
@@ -196,6 +198,34 @@ function touchPointer(
   fireEvent(target, event);
   return event;
 }
+
+describe('spreadsheet dropdown cells', () => {
+  const marker = (view: ReturnType<typeof renderGrid>, address: string) =>
+    view.container.querySelector<HTMLElement>(
+      `[data-address="${address}"] [data-dropdown-marker]`
+    );
+
+  it('shows an arrow in each dropdown cell that selects the cell', () => {
+    const view = renderGrid({}, { dropdownRanges: ['B2:B3 D1'] });
+    expect(marker(view, 'B2')?.tagName).toBe('BUTTON');
+    expect(marker(view, 'B3')).not.toBeNull();
+    expect(marker(view, 'D1')).not.toBeNull();
+    expect(marker(view, 'B4')).toBeNull();
+    expect(marker(view, 'C2')).toBeNull();
+    // jsdom has no PointerEvent; a MouseEvent carries the pressed button.
+    fireEvent(
+      marker(view, 'B3')!,
+      new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+    );
+    expect(view.controller.activeAddress()).toBe('B3');
+  });
+
+  it('marks dropdown cells without a control in a view-only sheet', () => {
+    const view = renderGrid({}, { dropdownRanges: ['B2'], readonly: true });
+    expect(marker(view, 'B2')?.tagName).toBe('SPAN');
+    expect(marker(view, 'B2')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});
 
 describe('spreadsheet touch gestures', () => {
   it('waits for a tap and leaves swipes and cancelled gestures to native scrolling', () => {

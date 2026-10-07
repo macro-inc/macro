@@ -1,5 +1,12 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  type DropdownOptions,
+  dropdownRule,
+  overlappingValidations,
+  replaceValidations,
+  validationReference,
+} from '@macro-inc/spreadsheet/data-validation';
 import { parseChartReference } from '@macro-inc/spreadsheet/sheet-drawings';
 import { Button } from '@ui/components/Button';
 import {
@@ -13,6 +20,10 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ChartDialog } from '../components/ChartDialog';
+import {
+  DropdownDialog,
+  type DropdownDialogState,
+} from '../components/DropdownDialog';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
 import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
@@ -44,6 +55,7 @@ import {
 } from '../core/grid-selection';
 import { selectionToggleStyles } from '../core/selection-formatting';
 import {
+  dropdownOptions,
   listItems,
   type RangeValues,
   rangeAddresses,
@@ -176,6 +188,72 @@ export function SpreadsheetEditor(props: {
       ? { title: rule.promptTitle, message: rule.prompt ?? '' }
       : undefined;
   };
+  const dropdownRanges = createMemo(() =>
+    (props.store.activeSheet().metadata?.validations ?? [])
+      .filter((rule) => rule.type === 'list' && rule.dropdown !== false)
+      .map((rule) => rule.range)
+  );
+  const [dropdownDialog, setDropdownDialog] = createSignal<
+    DropdownDialogState & { sheetId: string }
+  >();
+  const [dropdownError, setDropdownError] = createSignal<string>();
+  const selectionRange = () => {
+    const bounds = selectionBounds(grid.selection());
+    const first = cellAddress({ row: bounds.top, column: bounds.left });
+    const last = cellAddress({ row: bounds.bottom, column: bounds.right });
+    return first === last ? first : `${first}:${last}`;
+  };
+  function openDropdownDialog() {
+    if (!editable()) return;
+    const range = selectionRange();
+    const validations = props.store.activeSheet().metadata?.validations;
+    setDropdownError(undefined);
+    setDropdownDialog({
+      sheetId: props.store.activeSheetId(),
+      range,
+      current: dropdownOptions(activeValidation()),
+      removable: overlappingValidations(validations, range).length > 0,
+    });
+  }
+  function changeDropdown(options?: DropdownOptions) {
+    const dialog = dropdownDialog();
+    if (
+      !dialog ||
+      !editable() ||
+      dialog.sheetId !== props.store.activeSheetId()
+    ) {
+      setDropdownDialog(undefined);
+      return;
+    }
+    try {
+      const sheet =
+        options && 'range' in options
+          ? validationReference(options.range)?.sheet
+          : undefined;
+      if (
+        sheet !== undefined &&
+        !props.store
+          .workbook()
+          .some((entry) => entry.name.toLowerCase() === sheet.toLowerCase())
+      )
+        throw new Error(`There is no sheet named “${sheet}”.`);
+      const metadata = props.store.activeSheet().metadata;
+      const validations = replaceValidations(
+        metadata?.validations,
+        dialog.range,
+        options && dropdownRule(options)
+      );
+      props.store.setMetadata({
+        ...metadata,
+        validations: validations.length ? validations : undefined,
+      });
+      setDropdownDialog(undefined);
+    } catch (error) {
+      setDropdownError(
+        error instanceof Error ? error.message : 'Unable to save the dropdown.'
+      );
+    }
+  }
   const workbookActions = createWorkbookActions({
     store: props.store,
     values: calculation.workbookValues,
@@ -273,7 +351,8 @@ export function SpreadsheetEditor(props: {
     if (
       actions.findOpen() ||
       workbookActions.preview() ||
-      workbookActions.sheetDialog()
+      workbookActions.sheetDialog() ||
+      dropdownDialog()
     )
       return;
     if (grid.editing() === 'cell') {
@@ -292,7 +371,8 @@ export function SpreadsheetEditor(props: {
   };
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
-    if (action.startsWith('insert-')) pendingMenuAction = action;
+    if (action.startsWith('insert-') || action === 'dropdown')
+      pendingMenuAction = action;
     else command(action);
   };
   const statisticsSelection = createDeferred(grid.selection, {
@@ -399,6 +479,7 @@ export function SpreadsheetEditor(props: {
         void actions.sort(true);
       })
       .with('trim-whitespace', actions.trimWhitespace)
+      .with('dropdown', openDropdownDialog)
       .with('border-all', () => actions.borders('all'))
       .with('border-outer', () => actions.borders('outer'))
       .with('border-none', () => actions.borders('none'))
@@ -843,6 +924,7 @@ export function SpreadsheetEditor(props: {
           revealDrawing={revealDrawing()}
           inputMessage={inputMessage()}
           listItems={activeList()}
+          dropdownRanges={dropdownRanges()}
           onPickListItem={(item) => {
             if (!editable()) return;
             grid.commit();
@@ -1118,6 +1200,14 @@ export function SpreadsheetEditor(props: {
           if (id) showDrawing(id);
           else focusGrid();
         }}
+      />
+      <DropdownDialog
+        dialog={dropdownDialog()}
+        error={dropdownError()}
+        onSave={changeDropdown}
+        onRemove={() => changeDropdown()}
+        onClose={() => setDropdownDialog(undefined)}
+        onRestoreFocus={focusGrid}
       />
       <SpreadsheetSheetDialog
         onRestoreFocus={() => {
