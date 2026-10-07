@@ -282,6 +282,31 @@ function Action(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   );
 }
 
+/**
+ * Classes for the prominent create surface, in the style of Drive's and
+ * Gmail's "New" button: a tall rounded tile with a lifted shadow.
+ */
+export const VIEW_SIDEBAR_BIG_ACTION_CLASS = cn(
+  'h-12 w-fit max-w-full min-w-0 justify-start gap-3 rounded-2xl bg-control pr-5 pl-4 text-left text-sm font-medium text-ink touch:h-14',
+  'shadow-[0_1px_2px_0_oklch(0.15_0_0/0.3),0_1px_3px_1px_oklch(0.15_0_0/0.15)]',
+  'not-touch:hover:shadow-[0_1px_3px_0_oklch(0.15_0_0/0.3),0_4px_8px_3px_oklch(0.15_0_0/0.15)]'
+);
+
+/** The big create tile, also usable as a menu trigger. */
+function BigAction(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <Button
+      type="button"
+      variant="strong"
+      {...rest}
+      class={cn(VIEW_SIDEBAR_BIG_ACTION_CLASS, local.class)}
+    >
+      {local.children}
+    </Button>
+  );
+}
+
 function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
@@ -313,5 +338,6 @@ export const ViewSidebar = Object.assign(Root, {
   TreeItem,
   Branch,
   Action,
+  BigAction,
   Footer,
 });

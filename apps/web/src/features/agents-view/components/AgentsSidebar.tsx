@@ -5,7 +5,7 @@ import {
   useViewControlHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarBigCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { changeSessionArchiveState } from '@app/features/block-agent/queries/change-session-archive-state';
 import {
   type EntityActionListState,
@@ -275,7 +275,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
 
         <Show when={!isTouchDevice()}>
           <div class="px-(--sidebar-gutter) pt-2">
-            <SidebarCreateButton
+            <SidebarBigCreateButton
               label="New conversation"
               onCreate={props.onNewConversation}
               ref={tourTarget(AGENTS_TOUR.newChat)}

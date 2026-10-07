@@ -371,10 +371,13 @@ offers both kinds. Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
-Home's inner rail starts with a full-width **New chat** plus button that returns
-to Home's starting pane without creating a chat. Email and Tasks use the same
-pill styling and top placement for **New email** and **New task**, replacing
-the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
+Every workspace sidebar leads with one large create tile, styled after Google
+Drive's and Gmail's **New** button (tall, rounded, lifted by a shadow, with an
+accent plus): **New chat** on Home, **New email** on Email, **New task** (or
+**New project**) on Tasks, **New conversation** on Agents, **New chat** on Chat,
+**New company** on Customers, and **New** menus on Drive and Calendar. Home's
+**New chat** returns to Home's starting pane without creating a chat. On
+touch layouts the tile is taller. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
 logical split has no sidebar close button; mobile chrome is unchanged.
 A lone non-list content split still shows a header X labeled **Return to list**,

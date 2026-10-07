@@ -106,7 +106,7 @@ vi.mock('@components/app/split-panel', () => ({
   SplitPanel: { CloseButton: () => null },
 }));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
-  SidebarCreateButton: (props: { label: string; onCreate: () => void }) => (
+  SidebarBigCreateButton: (props: { label: string; onCreate: () => void }) => (
     <button onClick={props.onCreate}>{props.label}</button>
   ),
 }));

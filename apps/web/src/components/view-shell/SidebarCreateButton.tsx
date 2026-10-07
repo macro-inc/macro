@@ -24,7 +24,7 @@ export function SidebarCreateHeader(props: {
         </ViewSidebar.Header>
       </Show>
       <ViewSidebar.Primary>
-        <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
+        <SidebarBigCreateButton label={props.label} onCreate={props.onCreate} />
       </ViewSidebar.Primary>
     </header>
   );
@@ -48,5 +48,25 @@ export function SidebarCreateButton(props: {
       </ViewSidebar.Icon>
       <span class="truncate">{props.label}</span>
     </ViewSidebar.Action>
+  );
+}
+
+/** The large "New" tile that tops a sidebar, so first-time users see how to create. */
+export function SidebarBigCreateButton(props: {
+  label: string;
+  onCreate: () => void;
+  ref?: (element: HTMLElement) => void;
+}) {
+  return (
+    <ViewSidebar.BigAction
+      ref={props.ref}
+      {...pressHandlers((event) => {
+        event.preventDefault();
+        props.onCreate();
+      })}
+    >
+      <PlusIcon class="size-6 text-accent" />
+      <span class="truncate">{props.label}</span>
+    </ViewSidebar.BigAction>
   );
 }

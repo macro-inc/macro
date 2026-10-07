@@ -1,5 +1,5 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
-import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarBigCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -134,13 +134,15 @@ export function EmailSidebar() {
         </ViewSidebar.Header>
       </Show>
 
-      <ViewSidebar.Content>
-        <EmailInboxList />
-
-        <SidebarCreateButton
+      <ViewSidebar.Primary>
+        <SidebarBigCreateButton
           label="New email"
           onCreate={() => composeEmail(openWithSplit, state.inboxIds)}
         />
+      </ViewSidebar.Primary>
+
+      <ViewSidebar.Content>
+        <EmailInboxList />
 
         <EmailNavigation />
 

@@ -1,4 +1,5 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { SidebarBigCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
@@ -394,6 +395,12 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
+      <ViewSidebar.Primary>
+        <SidebarBigCreateButton
+          label="New chat"
+          onCreate={() => runCreateAction('channel')}
+        />
+      </ViewSidebar.Primary>
       <ViewSidebar.Primary>
         <ViewSidebar.Toolbar>
           <Tabs

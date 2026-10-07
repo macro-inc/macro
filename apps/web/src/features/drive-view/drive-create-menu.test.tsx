@@ -22,7 +22,7 @@ vi.mock('@app/components/view-shell', () => {
   const Slot = (props: ParentProps) => <span>{props.children}</span>;
   return {
     ViewSidebar: {
-      Action: (props: ParentProps<Record<string, unknown>>) => (
+      BigAction: (props: ParentProps<Record<string, unknown>>) => (
         <button type="button" {...props} />
       ),
       Icon: Slot,

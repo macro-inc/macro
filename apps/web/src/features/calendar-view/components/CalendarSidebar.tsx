@@ -1,6 +1,7 @@
 import {
   CollapsibleSection,
   useViewShell,
+  VIEW_SIDEBAR_BIG_ACTION_CLASS,
   ViewSidebar,
 } from '@app/components/view-shell';
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
@@ -297,14 +298,12 @@ export function CalendarSidebar() {
       <ViewSidebar.Primary>
         <CalendarCreateMenu
           size="md"
-          class="h-(--sidebar-row-height) w-full min-w-0 justify-start gap-(--sidebar-label-gap) px-(--sidebar-item-inset) text-left touch:h-11"
-          contentClass="w-[var(--kb-popper-anchor-width)] min-w-40"
+          class={VIEW_SIDEBAR_BIG_ACTION_CLASS}
+          contentClass="min-w-40"
           trigger={
             <>
-              <ViewSidebar.Icon>
-                <PlusIcon class="size-4" />
-              </ViewSidebar.Icon>
-              <span class="min-w-0 flex-1 truncate">New</span>
+              <PlusIcon class="size-6 text-accent" />
+              <span class="min-w-0 truncate">New</span>
               <CaretDownIcon class="size-3.5 shrink-0" />
             </>
           }

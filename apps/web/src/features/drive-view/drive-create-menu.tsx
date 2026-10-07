@@ -89,16 +89,12 @@ export function DriveCreateMenu() {
     <>
       <Dropdown placement="bottom-start">
         <Dropdown.Trigger
-          as={ViewSidebar.Action}
+          as={ViewSidebar.BigAction}
           aria-label={`New file or folder in ${destination()}`}
         >
-          <ViewSidebar.Icon>
-            <PlusIcon class="size-4" />
-          </ViewSidebar.Icon>
+          <PlusIcon class="size-6 text-accent" />
           <span class="truncate">New</span>
-          <ViewSidebar.Trailing>
-            <CaretDownIcon class="size-3 shrink-0" />
-          </ViewSidebar.Trailing>
+          <CaretDownIcon class="size-3 shrink-0" />
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-48 max-w-72">
           <Dropdown.Group>

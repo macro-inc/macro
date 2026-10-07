@@ -47,7 +47,7 @@ export {
   type ViewShellLayout,
   type ViewShellRootProps,
 } from './ViewShell';
-export { ViewSidebar } from './ViewSidebar';
+export { VIEW_SIDEBAR_BIG_ACTION_CLASS, ViewSidebar } from './ViewSidebar';
 export {
   type AsideLayout,
   type AsideMode,
