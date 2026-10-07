@@ -4,7 +4,7 @@ import {
   type PlanTier,
   planBenefits,
 } from '@app/features/paywall/plans';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import type { BillingState } from '../core/billing-state';
