@@ -642,6 +642,9 @@ export async function executeGraphqlCreate(
     } as OptimisticResponse<CreateCalendarEventMutation>,
     {
       uuid: clientId,
+      // Registered as the queue installs the create, so a settlement that
+      // arrives before this call returns always clears it.
+      onEnqueued: () => pendingCreates.add(clientId),
       identityBindings: [
         {
           localKey: eventKey(clientId),
@@ -654,11 +657,17 @@ export async function executeGraphqlCreate(
         : {}),
     }
   ).toPromise();
-  const outcome = await settleCreate(result);
+  let outcome: CalendarMutationOutcome;
+  try {
+    outcome = await settleCreate(result);
+  } catch (error) {
+    pendingCreates.delete(clientId);
+    throw error;
+  }
   if (outcome.kind === 'queued') {
-    pendingCreates.add(clientId);
     return { outcome, event: mapCalendarEvent(event) };
   }
+  pendingCreates.delete(clientId);
   return {
     outcome,
     event: mapCalendarEvent(outcome.payload.event ?? event),

@@ -24,6 +24,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 
 const DISPOSITION = 'normalizedCacheMutationDisposition';
 const OPTIMISTIC = 'normalizedCacheOptimistic';
+const ENQUEUED = 'normalizedCacheOptimisticEnqueued';
 
 type Disposition = 'committed' | 'queued' | 'failed';
 
@@ -78,7 +79,8 @@ function fakeHost(
 
 function fakeClient(
   disposition: Disposition,
-  payload?: Partial<CalendarMutationPayloadFieldsFragment>
+  payload?: Partial<CalendarMutationPayloadFieldsFragment>,
+  beforeResult?: () => void
 ) {
   const calls: Array<{
     variables: { input: Record<string, unknown> };
@@ -91,6 +93,9 @@ function fakeClient(
       context: Record<string, OptimisticContext>
     ) => {
       calls.push({ variables, optimistic: context[OPTIMISTIC]! });
+      const enqueued = (context as Record<string, unknown>)[ENQUEUED];
+      if (typeof enqueued === 'function') enqueued();
+      beforeResult?.();
       const field = Object.keys(
         context[OPTIMISTIC]!.optimisticResponse
       )[0] as string;
@@ -581,5 +586,69 @@ describe('executeGraphqlCreate', () => {
       )
     ).resolves.toMatchObject({ kind: 'committed' });
     untrack();
+  });
+
+  it('releases a queued create the queue settled before the call returned', async () => {
+    let settle: ((settlement: { mutationUuid?: string }) => void) | undefined;
+    const untrack = trackCalendarCreateSettlements({
+      onMutationSettled: (callback) => {
+        settle = callback as typeof settle;
+        return () => {};
+      },
+    });
+    let clientId: string | undefined;
+    const { calls, client } = fakeClient('queued', undefined, () => {
+      clientId = calls[0]?.optimistic.uuid;
+      settle?.({ mutationUuid: clientId });
+    });
+
+    const { event } = await executeGraphqlCreate(
+      {
+        title: 'Settled early',
+        time: {
+          kind: 'allDay',
+          startDate: '2026-10-07',
+          endDate: '2026-10-08',
+        },
+      },
+      client
+    );
+
+    expect(event.id).toBe(clientId);
+    await expect(
+      executeGraphqlUpdate(
+        fakeHost(undefined, []),
+        { eventId: event.id, patch: { title: 'Renamed' } },
+        fakeClient('committed').client
+      )
+    ).resolves.toMatchObject({ kind: 'committed' });
+    untrack();
+  });
+
+  it('forgets a create the server rejected', async () => {
+    const { calls, client } = fakeClient('failed');
+
+    await expect(
+      executeGraphqlCreate(
+        {
+          title: 'Rejected',
+          time: {
+            kind: 'allDay',
+            startDate: '2026-10-07',
+            endDate: '2026-10-08',
+          },
+        },
+        client
+      )
+    ).rejects.toBeInstanceOf(CalendarMutationError);
+
+    const clientId = calls[0]?.optimistic.uuid ?? '';
+    await expect(
+      executeGraphqlUpdate(
+        fakeHost(undefined, []),
+        { eventId: clientId, patch: { title: 'Renamed' } },
+        fakeClient('committed').client
+      )
+    ).resolves.toMatchObject({ kind: 'committed' });
   });
 });
