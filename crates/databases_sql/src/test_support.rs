@@ -85,6 +85,9 @@ pub(crate) struct World {
     pub(crate) created: Vec<CreateDatabase>,
     pub(crate) guarded:
         Vec<std::collections::HashMap<TableId, databases::domain::models::TableVersion>>,
+    /// Concurrent changes committed after the catalog read, before the next write.
+    pub(crate) versions_before_apply:
+        std::collections::HashMap<TableId, databases::domain::models::TableVersion>,
     /// The filter of every Soup read, in order.
     pub(crate) soup_reads: Vec<EntityFilterAst>,
 }
@@ -200,7 +203,27 @@ impl DatabasesService for FakeDatabases {
         };
         let database = receipt.entity().entity_id.parse().expect("a database id");
         let mut world = self.0.lock().unwrap();
-        world.guarded.push(batch.base_versions);
+        for (table_id, version) in std::mem::take(&mut world.versions_before_apply) {
+            let table = world
+                .databases
+                .iter_mut()
+                .flat_map(|database| &mut database.tables)
+                .find(|detail| detail.table.id == table_id)
+                .expect("the concurrent edit names an existing table");
+            table.table.version = version;
+        }
+        world.guarded.push(batch.base_versions.clone());
+        for (table_id, expected) in batch.base_versions {
+            let table = world
+                .databases
+                .iter()
+                .flat_map(|database| &database.tables)
+                .find(|detail| detail.table.id == table_id)
+                .ok_or(DatabaseError::NotFound)?;
+            if table.table.version != expected {
+                return Err(DatabaseError::VersionConflict);
+            }
+        }
         world.applied.push(AppliedOps {
             database,
             level: *access_level,

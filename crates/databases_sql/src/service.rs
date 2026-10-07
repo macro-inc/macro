@@ -308,6 +308,7 @@ where
             databases: self.databases.as_ref(),
             receipt: write_receipt,
             viewer: &viewer,
+            base_versions: &request.base_versions,
             versions: Mutex::new(HashMap::new()),
         };
         let outcome = database_sql::run(catalog.catalog(), &request.sql, &source, &sink)

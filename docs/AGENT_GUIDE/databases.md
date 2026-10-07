@@ -378,6 +378,9 @@ has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
 `QueryDatabase` reads and changes rows and handles schema changes through SQL
 (`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
 editing and checks actual results before reporting success.
+When a write includes `baseVersions`, a concurrent change to a guarded table
+refuses the write with a version conflict. Read the table again before retrying;
+the concurrent edit stays intact.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and

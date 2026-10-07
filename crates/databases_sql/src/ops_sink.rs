@@ -20,6 +20,8 @@ pub(crate) struct ReceiptOpsSink<'statement, Databases> {
     /// before the statement ran; `None` for a read.
     pub(crate) receipt: Option<(DatabaseId, EntityAccessReceipt<EditAccessLevel>)>,
     pub(crate) viewer: &'statement Viewer,
+    /// Caller-supplied versions to check atomically for tables this statement writes.
+    pub(crate) base_versions: &'statement HashMap<TableId, TableVersion>,
     pub(crate) versions: Mutex<HashMap<TableId, TableVersion>>,
 }
 
@@ -53,9 +55,16 @@ where
             _ => return Err(ReceiptWriteError::UnauthorizedDatabase { database }),
         };
         let tables: Vec<Option<TableId>> = ops.iter().map(DatabaseOp::table).collect();
+        let base_versions = self
+            .base_versions
+            .iter()
+            .filter_map(|(table, version)| {
+                tables.contains(&Some(*table)).then_some((*table, *version))
+            })
+            .collect();
         let results = self
             .databases
-            .apply_ops(receipt, self.viewer.clone(), OpBatch::from(ops))
+            .apply_ops(receipt, self.viewer.clone(), OpBatch { ops, base_versions })
             .await?;
         // The lock only guards single inserts, so a poisoned map is still whole.
         let mut versions = self.versions.lock().unwrap_or_else(PoisonError::into_inner);

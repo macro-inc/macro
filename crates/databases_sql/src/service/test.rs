@@ -1,3 +1,5 @@
+mod versions;
+
 use chrono::{TimeZone, Utc};
 use databases::domain::models::{
     Column, ColumnConfig, ColumnDetail, Database, DatabaseDetail, Table, TableDetail,
