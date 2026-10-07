@@ -412,6 +412,13 @@ export type DatabaseEntity = EntityBase & {
   grant: AccessLevel;
 };
 
+/** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
+export type FormEntity = EntityBase & {
+  type: 'form';
+  /** What the viewer may do: view responds, edit builds and reads responses. */
+  access: 'view' | 'edit' | 'owner';
+};
+
 /** Normalized time shape of a calendar event soup row. */
 export type CalendarEventEntityTime =
   | { kind: 'timed'; startsAt: string; endsAt: string }
@@ -467,6 +474,7 @@ export type EntityData =
   | CrmCompanyEntity
   | CrmContactEntity
   | DatabaseEntity
+  | FormEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -485,6 +493,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_company',
   'crm_contact',
   'database',
+  'form',
   'routine',
   'calendar_event',
   'foreign',

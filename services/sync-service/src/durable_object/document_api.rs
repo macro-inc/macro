@@ -70,7 +70,16 @@ impl DocumentSyncSession {
         }
         if !is_update {
             let state = self.document_state().await?;
-            return match document::snapshot(&access, &state.loro_doc) {
+            let compact = req
+                .url()?
+                .query_pairs()
+                .any(|(key, value)| key == "shallow" && value == "true");
+            let snapshot = if compact {
+                document::shallow_snapshot(&access, &state.loro_doc)
+            } else {
+                document::snapshot(&access, &state.loro_doc)
+            };
+            return match snapshot {
                 Ok((snapshot, revision)) => Response::from_json(&SnapshotResponse {
                     snapshot: STANDARD.encode(snapshot),
                     revision: STANDARD.encode(revision),

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_event_run SET execution_record_id = $3\n            WHERE action_id = $1 AND event_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "43a47fd4c20fc00da4007c746f6f8d363c7d6e5a2833fecf13beaafe5433e7ad"
+}

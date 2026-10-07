@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FORMULA_REFERENCE_COLORS,
   formulaRangeReference,
   formulaReferenceSlot,
+  formulaReferences,
 } from './formula-reference';
+import { SPREADSHEET_MAX_ROWS } from './spreadsheet-document';
 
 describe('formula reference slots', () => {
   it.each(['=', '=SUM(', '=A1+', '=IF(A1>0, ', '=SUM(B1:B4,'])(
@@ -89,4 +92,62 @@ it('quotes cross-sheet ranges and replaces a complete sheet-qualified operand', 
   expect(
     formulaReferenceSlot('="Sheet2!A1"', { start: 8, end: 8 })
   ).toBeUndefined();
+});
+
+describe('formula references', () => {
+  const spans = (text: string) =>
+    formulaReferences(text).map((reference) =>
+      text.slice(reference.start, reference.end)
+    );
+
+  it('finds cells, ranges, and whole rows or columns with their bounds', () => {
+    const text = '=SUM($B4:c$8)+A1*COUNT(D:D)+SUM(2:3)';
+    expect(spans(text)).toEqual(['$B4:c$8', 'A1', 'D:D', '2:3']);
+    expect(formulaReferences(text).map((value) => value.bounds)).toEqual([
+      { top: 3, bottom: 7, left: 1, right: 2 },
+      { top: 0, bottom: 0, left: 0, right: 0 },
+      { top: 0, bottom: SPREADSHEET_MAX_ROWS - 1, left: 3, right: 3 },
+      expect.objectContaining({ top: 1, bottom: 2, left: 0 }),
+    ]);
+  });
+
+  it('colors each distinct reference in order and reuses a repeated one', () => {
+    const colors = formulaReferences('=A1+B2+$A$1+C3').map(
+      (value) => value.color
+    );
+    expect(colors).toEqual([
+      FORMULA_REFERENCE_COLORS[0],
+      FORMULA_REFERENCE_COLORS[1],
+      FORMULA_REFERENCE_COLORS[0],
+      FORMULA_REFERENCE_COLORS[2],
+    ]);
+  });
+
+  it('reads sheet names, quoted or not', () => {
+    const references = formulaReferences(
+      "='Owner''s budget'!A1:B4+Sheet2!C3+C3"
+    );
+    expect(references.map((value) => value.sheetName)).toEqual([
+      "Owner's budget",
+      'Sheet2',
+      undefined,
+    ]);
+    expect(references[1].color).not.toBe(references[2].color);
+  });
+
+  it.each([
+    'A1',
+    '="A1"&B2',
+    '=LOG10(2)',
+    '=ATAN2(1,2)',
+    "='My A1 sheet'!",
+    '=A1A',
+    '=XFE1',
+  ])('ignores text that only looks like a reference: %s', (text) => {
+    expect(spans(text).filter((span) => span !== 'B2')).toEqual([]);
+  });
+
+  it('keeps references outside strings that contain apostrophes', () => {
+    expect(spans(`="it's"&A2`)).toEqual(['A2']);
+  });
 });

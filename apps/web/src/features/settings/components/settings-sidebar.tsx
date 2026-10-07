@@ -26,11 +26,7 @@ export function SettingsSidebar(props: {
 }) {
   let root: HTMLDivElement | undefined;
   return (
-    <ViewSidebar.Root
-      ref={root}
-      aria-label="Settings navigation"
-      class="bg-[color-mix(in_srgb,var(--color-panel)_99%,var(--color-ink))]"
-    >
+    <ViewSidebar.Root ref={root} aria-label="Settings navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />

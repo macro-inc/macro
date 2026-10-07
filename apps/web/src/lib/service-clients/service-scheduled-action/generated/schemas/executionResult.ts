@@ -5,6 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { ExecutionResultCondition } from './executionResultCondition';
 import type { ExecutionResultError } from './executionResultError';
 import type { ExecutionResultResource } from './executionResultResource';
 
@@ -13,6 +14,7 @@ import type { ExecutionResultResource } from './executionResultResource';
 Null/string column values predate this envelope and refer to legacy chats.
  */
 export interface ExecutionResult {
+  condition?: ExecutionResultCondition;
   error?: ExecutionResultError;
   resource?: ExecutionResultResource;
   /** @minimum 0 */

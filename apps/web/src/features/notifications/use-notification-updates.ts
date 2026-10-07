@@ -3,6 +3,7 @@ import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
 import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
+import { refreshEmailFollowup } from '@queries/reminders/email-refresh';
 import {
   invalidateSoupEntity,
   refetchSoupEntity,
@@ -112,6 +113,14 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);
+    })
+    .with({ tag: 'reminder' }, async () => {
+      if (notification.entity_type !== 'email_thread') return;
+      try {
+        await refreshEmailFollowup(notification.entity_id);
+      } catch (error) {
+        console.warn('Failed to refresh delivered email reminder', error);
+      }
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();

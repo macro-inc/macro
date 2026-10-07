@@ -4,6 +4,7 @@
 
 import type { ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
+import { bookingLinkHistory } from '../../booking-link-history';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -38,7 +39,7 @@ type ToolParserMap = {
   };
   CreateBookingLink: {
     call: types.CreateBookingLink;
-    response: types.UserToolResponseForBookingLinkResult;
+    response: types.BookingLinkResult;
   };
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
@@ -103,7 +104,7 @@ type ToolParserMap = {
   };
   EditBookingLink: {
     call: types.EditBookingLink;
-    response: types.UserToolResponseForBookingLinkResult;
+    response: types.BookingLinkResult;
   };
   EditDocument: {
     call: types.EditDocument;
@@ -387,7 +388,7 @@ const toolParserMap = {
   },
   CreateBookingLink: {
     call: schemas.CreateBookingLink,
-    response: schemas.UserToolResponseForBookingLinkResult,
+    response: schemas.BookingLinkResult,
   },
   CreateBot: { call: schemas.CreateBot, response: schemas.CreateBotResponse },
   CreateCalendarEvent: {
@@ -452,7 +453,7 @@ const toolParserMap = {
   },
   EditBookingLink: {
     call: schemas.EditBookingLink,
-    response: schemas.UserToolResponseForBookingLinkResult,
+    response: schemas.BookingLinkResult,
   },
   EditDocument: {
     call: schemas.EditDocument,
@@ -777,7 +778,7 @@ type ToolDataMap = {
   };
   CreateBookingLink: {
     call: types.CreateBookingLink;
-    response: types.UserToolResponseForBookingLinkResult;
+    response: types.BookingLinkResult;
   };
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
@@ -842,7 +843,7 @@ type ToolDataMap = {
   };
   EditBookingLink: {
     call: types.EditBookingLink;
-    response: types.UserToolResponseForBookingLinkResult;
+    response: types.BookingLinkResult;
   };
   EditDocument: {
     call: types.EditDocument;
@@ -1114,7 +1115,9 @@ function deserializeTool<T extends NamedTool>(
     ]);
   }
   const parser = toolParserMap[tool.name as ToolName];
-  const maybeToolCall = parser[direction].safeParse(tool.json);
+  const maybeToolCall = parser[direction].safeParse(
+    bookingLinkHistory(tool.name, direction, tool.json)
+  );
   if (maybeToolCall.success) {
     return ok({
       id: tool.id,

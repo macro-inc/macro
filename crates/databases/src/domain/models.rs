@@ -64,6 +64,28 @@ pub struct Table {
     pub version: TableVersion,
 }
 
+/// A schema operation reserved by a feature using a column.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+    strum::Display,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ColumnProtection {
+    /// The column must remain present.
+    Delete,
+    /// The column's type and binding must remain stable.
+    ChangeType,
+}
+
 /// A column: the placement of a property definition on a table.
 ///
 /// The definition carries name, [`DataType`], multi-select flag, and options;
@@ -94,6 +116,9 @@ pub struct Column {
     #[serde(default)]
     #[schema(required = true)]
     pub infer_type: bool,
+    /// Schema operations reserved by a feature; ordinary edits cannot clear them.
+    #[serde(default)]
+    pub protections: Vec<ColumnProtection>,
 }
 
 impl Column {
@@ -654,6 +679,13 @@ pub enum WritesOutcome {
     MissingColumn {
         /// The write's index.
         write: usize,
+    },
+    /// A column became protected before the batch committed.
+    ColumnProtected {
+        /// The write's index.
+        write: usize,
+        /// The reserved operation.
+        capability: ColumnProtection,
     },
     /// A write relabeled a column that was relabeled meanwhile.
     ColumnRenamedElsewhere {

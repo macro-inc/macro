@@ -188,23 +188,26 @@ export function ChannelParticipantsTab(props: {
                   <ChannelJoinLinkButton channelId={props.channelId} />
                 </Show>
               </Panel.Header>
-              <Panel.Toolbar class="h-15.25 px-2">
-                <ParticipantsSearchInput
-                  value={searchQuery()}
-                  onInput={setSearchQuery}
-                />
+              <Panel.Toolbar class="h-auto flex-col items-stretch border-edge-muted p-0">
+                <Show when={isEditable()}>
+                  <div class="shrink-0 border-b border-edge-divider px-6 py-3">
+                    <ParticipantsAddPanel
+                      participants={participants}
+                      onAddParticipants={addParticipants}
+                    />
+                  </div>
+                </Show>
+                <div class="h-15.25 shrink-0">
+                  <ParticipantsSearchInput
+                    value={searchQuery()}
+                    onInput={setSearchQuery}
+                    embedded
+                  />
+                </div>
               </Panel.Toolbar>
               <Panel.Body>
                 <div class="flex h-full flex-col">
                   {teamSettings()}
-                  <Show when={isEditable()}>
-                    <div class="px-6 py-3 border-b border-edge-muted shrink-0">
-                      <ParticipantsAddPanel
-                        participants={participants}
-                        onAddParticipants={addParticipants}
-                      />
-                    </div>
-                  </Show>
                   <div class="relative min-h-0 flex-1">
                     <ParticipantsList
                       participants={filteredParticipants}

@@ -581,6 +581,15 @@ the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
 or delegated changes do not retrigger routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
 
+When `enable-routine-conditions` is on, every activity trigger panel has an
+**Only run if** box for an optional yes/no question about each event, such as
+**Is this email an invoice or a receipt?** Before a run starts, the event's
+content (the email, channel message, document, or task, read as the routine
+owner) is checked against it, and events answered no are skipped. The chip
+shows the question after **· if**. Saving a condition fails with "trigger
+conditions are not enabled" while the scheduled-action service has no
+`TYPESAFE_API_KEY`.
+
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
@@ -595,7 +604,10 @@ The **Run options** dropdown contains
 **Enable routine** / **Disable routine** and **Copy prompt**, which copies the
 current instructions, including unsaved edits. **Run History** uses full-width
 Soup rows for past agent sessions, with each run's
-outcome, duration, and time. Click a row or press Enter to open its session;
+outcome, duration, and time. Runs a trigger's condition skipped show
+**Condition not met** (hover for how likely the answer was yes) or **Condition
+couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
+**N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
 Shift opens it in another split. **Back to routines** returns to the list in the
 same pane.
 
