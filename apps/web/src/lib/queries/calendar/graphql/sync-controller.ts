@@ -8,6 +8,7 @@ import {
   CalendarsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { fetchCached } from './network';
+import { calendarCacheAnswered } from './readiness';
 
 export type CalendarChangesPage =
   CalendarChangesQuery['user']['calendarChanges'];
@@ -74,6 +75,11 @@ export class CalendarSyncController {
     this.fetchChanges = options.fetchChanges ?? fetchCalendarChanges;
     this.refetchCalendars = options.refetchCalendars ?? refetchCalendarList;
     this.debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+  }
+
+  /** Whether the cache has answered a calendar read, so a run cannot stall on cache startup. */
+  answering(): boolean {
+    return calendarCacheAnswered(this.host);
   }
 
   /** Schedules one debounced delta run. */

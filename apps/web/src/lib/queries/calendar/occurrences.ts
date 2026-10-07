@@ -150,9 +150,9 @@ export function useCalendarOccurrencesQuery(
           if (!range) {
             throw new Error('Calendar occurrence range is unavailable');
           }
-          const cached = await readCalendarRange(host, range, { signal });
-          if (cached) return cached;
-          markCalendarCacheUnsupported(host);
+          const read = await readCalendarRange(host, range, { signal });
+          if (read.kind === 'range') return read.data;
+          if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
           return fetchCalendarOccurrences(range, signal);
         },
         enabled,
@@ -190,11 +190,12 @@ export function useCalendarOccurrencesQuery(
 /**
  * Refetches every mounted occurrence viewport. With calendar reads on the
  * cache, the delta runs first so the viewports see the change that prompted
- * the refresh rather than the cache from before it.
+ * the refresh rather than the cache from before it. A cache still starting
+ * would hold the delta, so the viewports refetch without it.
  */
 export async function invalidateCalendarOccurrences() {
   const controller = activeCalendarSyncController();
-  if (controller) {
+  if (controller?.answering()) {
     await controller.runDelta().catch((error) => {
       console.warn('Calendar delta sync failed', error);
     });

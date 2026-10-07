@@ -1215,7 +1215,10 @@ coming online, or returning to the tab runs one `CalendarChanges` delta that
 applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
-apps whose engine lacks the calendar cache commands keep the REST path.
+apps whose engine lacks the calendar cache commands keep the REST path. Until the
+cache answers its first calendar read, viewports wait at most a second and then
+read from REST, and writes use REST, so a cache that is slow to start or fails
+("Local cache unavailable") never leaves the calendar on skeletons.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

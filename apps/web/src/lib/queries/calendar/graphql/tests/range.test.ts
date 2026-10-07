@@ -14,6 +14,7 @@ import {
   recordCalendarSyncStatus,
   toCalendarRangeArgs,
 } from '../range';
+import { calendarCacheAnswered } from '../readiness';
 import { graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -74,6 +75,12 @@ function fakeHost(results: CalendarRangeCacheResult[]) {
   };
 }
 
+async function readData(...args: Parameters<typeof readCalendarRange>) {
+  const read = await readCalendarRange(...args);
+  if (read.kind !== 'range') throw new Error(`expected a range: ${read.kind}`);
+  return read.data;
+}
+
 describe('readCalendarRange', () => {
   beforeEach(() =>
     recordCalendarSyncStatus(
@@ -89,7 +96,7 @@ describe('readCalendarRange', () => {
       }),
     ]);
     const fetchPage = vi.fn();
-    const data = await readCalendarRange(host, week, { fetchPage });
+    const data = await readData(host, week, { fetchPage });
     expect(fetchPage).not.toHaveBeenCalled();
     expect(host.calendarCommit).not.toHaveBeenCalled();
     expect(host.calendarRange).toHaveBeenCalledWith(toCalendarRangeArgs(week));
@@ -132,7 +139,7 @@ describe('readCalendarRange', () => {
         })
       );
 
-    const data = await readCalendarRange(host, week, { fetchPage });
+    const data = await readData(host, week, { fetchPage });
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(fetchPage.mock.calls[0]?.[0]).toEqual({
@@ -182,7 +189,50 @@ describe('readCalendarRange', () => {
 
   it('reports an unsupported host so the caller reads from REST', async () => {
     const host = fakeHost([{ kind: 'unsupported' }]);
-    await expect(readCalendarRange(host, week)).resolves.toBeUndefined();
+    await expect(readCalendarRange(host, week)).resolves.toEqual({
+      kind: 'unsupported',
+    });
+  });
+
+  it('sends viewports to REST while a starting cache has not answered', async () => {
+    let answer: (result: CalendarRangeCacheResult) => void = () => {};
+    const host = fakeHost([
+      range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
+    ]);
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+
+    await expect(
+      readCalendarRange(host, week, { headStartMs: 5 })
+    ).resolves.toEqual({ kind: 'not-ready' });
+    await expect(
+      readCalendarRange(host, week, { headStartMs: 5 })
+    ).resolves.toEqual({ kind: 'not-ready' });
+    expect(host.calendarRange).toHaveBeenCalledTimes(1);
+    expect(calendarCacheAnswered(host)).toBe(false);
+
+    answer(range({}));
+    await vi.waitFor(() => expect(calendarCacheAnswered(host)).toBe(true));
+    const data = await readData(host, week, { headStartMs: 5 });
+    expect(data.items).toHaveLength(1);
+  });
+
+  it('asks again after a starting cache fails its first read', async () => {
+    const host = fakeHost([
+      range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
+    ]);
+    host.calendarRange.mockRejectedValueOnce(new Error('cache worker timeout'));
+
+    await expect(readCalendarRange(host, week)).rejects.toThrow(
+      'cache worker timeout'
+    );
+    const data = await readData(host, week);
+    expect(data.items).toHaveLength(1);
+    expect(calendarCacheAnswered(host)).toBe(true);
   });
 });
 
