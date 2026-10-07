@@ -19,6 +19,7 @@ cd apps/web && PORT=3003 bun run dev   # any free port in 3000-3009
 
 `import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` through Vite’s same-origin development proxy. Sign in on the development hostname; existing `.macro.com` cookies are separate. Vite prints `https://<hostname>:<port>/app/`; `https://localhost:<port>/app/` also works. Trust `infra/local/certs/ca.pem` once in the visiting browser (see `infra/local/certs/README.md`). `MACRO_DEV_HTTPS=false` restores HTTP for workflows that require it. Notes:
 
+- On a remote devbox, open the app through Tailscale Serve rather than `https://<hostname>:<port>`. Vite drops to HTTP/1.1 while its development proxy is on, so the browser fetches the ~7k dev modules six at a time and pays a round trip for each (about 45 s at 30 ms). Run `sudo tailscale serve --bg --https=443 https+insecure://localhost:<port>` on the devbox and open `https://<devbox>.<tailnet>.ts.net/app/`, which serves HTTP/2 with a trusted certificate. Sign in again there. Serve offers HTTPS ports 443, 8443, and 10000.
 - Never assume port 3000 or 3002 is yours. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN -t` and confirm the owner's worktree via `lsof -p <pid> | awk '$4=="cwd"'`. Take a free port instead of killing another session's server, and reuse one only if its cwd is this worktree.
 - The `.cursor/*.sh` scripts and the `run-app` skill are **Cursor Cloud** entry points. On a local machine they prompt for sudo and are the wrong tool. Only backend (Rust) changes need the local stack.
 
