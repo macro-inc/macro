@@ -22,6 +22,10 @@ import type { KanbanCrossColumnDrop, KanbanDrop } from './kanban-types';
 
 export type { KanbanCrossColumnDrop, KanbanDrop } from './kanban-types';
 
+export type KanbanDropVisual = {
+  element: HTMLElement;
+  rect: DOMRectReadOnly;
+};
 type KanbanProps = {
   children: JSX.Element;
   getViewport?: () => HTMLElement | undefined;
@@ -37,7 +41,7 @@ type KanbanProps = {
     }
   | {
       mode: 'cross-column';
-      onDrop: (drop: KanbanCrossColumnDrop) => void;
+      onDrop: (drop: KanbanCrossColumnDrop, visual?: KanbanDropVisual) => void;
       canDropCard?: (drop: KanbanCrossColumnDrop) => boolean;
     }
 );
@@ -63,6 +67,7 @@ export function Kanban(props: KanbanProps) {
   let suppressClick = false;
   let cancelled = false;
   let reevaluate: (() => void) | undefined;
+  let dropVisual: KanbanDropVisual | undefined;
   const intent = createKanbanPointerIntent({
     speed: () => props.targetActivationSpeed,
     settled: () => reevaluate?.(),
@@ -107,6 +112,16 @@ export function Kanban(props: KanbanProps) {
   const collisionDetector: CollisionDetector = (draggable, droppables) => {
     if (!origin || cancelled) {
       return rejectCollision();
+    }
+
+    const element = preview();
+    if (element && props.mode === 'cross-column') {
+      // The overlay detaches and its transform resets before onDragEnd runs.
+      const rect = draggable.transformed;
+      dropVisual = {
+        element,
+        rect: new DOMRect(rect.left, rect.top, rect.width, rect.height),
+      };
     }
 
     const pointer = {
@@ -175,17 +190,21 @@ export function Kanban(props: KanbanProps) {
       }
 
       // Let the host capture the placeholder layout before removing it.
-      props.onDrop({
-        kind: 'card',
-        id: drop.id,
-        fromLane: drop.fromLane,
-        toLane: drop.toLane,
-        ...(props.pointerPlacement ? { beforeId: drop.beforeId } : {}),
-      });
+      props.onDrop(
+        {
+          kind: 'card',
+          id: drop.id,
+          fromLane: drop.fromLane,
+          toLane: drop.toLane,
+          ...(props.pointerPlacement ? { beforeId: drop.beforeId } : {}),
+        },
+        dropVisual
+      );
     } finally {
       origin = undefined;
       setTarget(undefined);
       setPreview(undefined);
+      dropVisual = undefined;
     }
   };
 
@@ -197,6 +216,7 @@ export function Kanban(props: KanbanProps) {
       onDragStart={({ draggable }) => {
         suppressClick = true;
         setPreview(cloneDragPreview(draggable.node, 'data-kanban-preview'));
+        dropVisual = undefined;
       }}
       onDragEnd={handleDragEnd}
     >
@@ -229,6 +249,7 @@ export function Kanban(props: KanbanProps) {
             clearIntent();
             intent.reset(origin);
             cancelled = false;
+            dropVisual = undefined;
             setTarget(undefined);
           },
         }}
@@ -293,6 +314,7 @@ export function KanbanCardInsertion(props: {
 export function KanbanLane(props: {
   id: string;
   label: string;
+  'aria-labelledby'?: string;
   canReorder?: boolean;
   class?: string;
   onKeyDown?: JSX.EventHandlerUnion<HTMLElement, KeyboardEvent>;
@@ -355,6 +377,7 @@ export function KanbanLane(props: {
         )}
         data-kanban-drop-target={highlighted() ? 'column' : undefined}
         aria-label={props.label}
+        aria-labelledby={props['aria-labelledby']}
         data-kanban-lane={props.id}
         onKeyDown={props.onKeyDown}
         onPointerEnter={props.onPointerEnter}

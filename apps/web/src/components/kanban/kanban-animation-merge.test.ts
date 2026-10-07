@@ -90,10 +90,15 @@ async function frame() {
 
 it('animates a removed assignee placement into an existing destination placement', async () => {
   const board = fixture();
-  const alice = board.placement('alice:task', 0);
+  const alice = board.placement('alice:task', 0, 'alice');
   const bob = board.placement('bob:task', 300, 'bob');
   const carol = board.placement('carol:task', 600, 'carol');
-  const finish = board.motion.begin('task', 'bob');
+  const finish = board.motion.begin('task', 'bob', {
+    key: alice.key,
+    element: alice.element,
+    rect: new DOMRect(280, 50, 100, 80),
+    parentKey: 'alice',
+  });
   alice.remove();
   await frame();
 
@@ -103,6 +108,8 @@ it('animates a removed assignee placement into an existing destination placement
   expect(ghost).not.toBeNull();
   expect(ghost?.textContent).toBe('alice:task');
   expect(ghost?.inert).toBe(true);
+  expect(ghost?.style.left).toBe('280px');
+  expect(ghost?.style.top).toBe('50px');
   expect(board.animate.mock.contexts).toContain(bob.element);
   expect(board.animate.mock.contexts).not.toContain(carol.element);
   finish();

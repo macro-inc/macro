@@ -10,9 +10,18 @@ export type KanbanAnimationItem = {
   layout: HTMLElement;
 };
 
+export type KanbanAnimationOrigin = {
+  /** Placement identity survives source virtualization at drag release. */
+  key: string;
+  element: HTMLElement;
+  rect: DOMRectReadOnly;
+  parentKey: string;
+};
+
 type Snapshot = KanbanAnimationItem & {
   rect: DOMRect;
   clone?: HTMLElement;
+  dragOrigin?: boolean;
 };
 
 const DURATION = 200;
@@ -28,6 +37,7 @@ export function createKanbanAnimation(options: {
 }) {
   let snapshots = new Map<string, Snapshot>();
   let observer: MutationObserver | undefined;
+  let observedViewport: HTMLElement | undefined;
   let frame: number | undefined;
   let moves = 0;
   let hovering = false;
@@ -176,20 +186,24 @@ export function createKanbanAnimation(options: {
     const animation = element.animate(keyframes, TIMING);
     animations.add(animation);
     activeElements.set(element, animation);
-    animation.finished.then(
-      () => {
+    const finish = async () => {
+      try {
+        await animation.finished;
+      } catch {
+        // Cancellation rejects finished; both paths release the visual state.
+      } finally {
         animations.delete(animation);
-        if (activeElements.get(element) === animation)
+        if (activeElements.get(element) === animation) {
           activeElements.delete(element);
+        }
         done?.();
-      },
-      () => {
-        animations.delete(animation);
-        if (activeElements.get(element) === animation)
-          activeElements.delete(element);
-        done?.();
+
+        if (!observer && !hovering && moves === 0 && animations.size === 0) {
+          detachViewport();
+        }
       }
-    );
+    };
+    void finish();
   }
 
   function fly(
@@ -226,16 +240,14 @@ export function createKanbanAnimation(options: {
     });
     document.body.append(ghost);
     ghosts.add(ghost);
-    if (placeholder) {
-      flights.set(to.key, ghost);
-    }
+    flights.set(to.key, ghost);
     animate(
       ghost,
       [
         { transform: 'translate(0, 0)', opacity: Number(opacity) },
         {
           transform: `translate(${to.rect.left - rect.left}px, ${to.rect.top - rect.top}px)`,
-          opacity: 0,
+          opacity: placeholder ? 0 : 1,
         },
       ],
       () => {
@@ -246,7 +258,8 @@ export function createKanbanAnimation(options: {
         }
       }
     );
-    animate(to.element, [{ opacity: 0 }, { opacity: 1 }]);
+    // Cards hand off at landing instead of showing two cross-fading copies.
+    animate(to.element, [{ opacity: 0 }, { opacity: placeholder ? 1 : 0 }]);
   }
 
   function play() {
@@ -312,8 +325,13 @@ export function createKanbanAnimation(options: {
 
       for (const item of next.values()) {
         const previous = snapshots.get(item.key);
-        if (item.placeholder && previous && flightStarts.has(item.key)) {
-          fly(previous, item, flightStarts.get(item.key), true);
+        if (previous && flightStarts.has(item.key)) {
+          fly(previous, item, flightStarts.get(item.key), !!item.placeholder);
+          continue;
+        }
+
+        if (previous?.dragOrigin) {
+          fly(previous, item);
           continue;
         }
 
@@ -340,7 +358,7 @@ export function createKanbanAnimation(options: {
             (!destinations.has(item.identity!) ||
               item.parentKey === destinations.get(item.identity!))
           ) {
-            fly(source, item);
+            fly(source, item, flightStarts.get(source.key));
             used.add(source);
           }
           continue;
@@ -383,7 +401,7 @@ export function createKanbanAnimation(options: {
             item.parentKey === destinationKey
         );
         if (target) {
-          fly(source, target);
+          fly(source, target, flightStarts.get(source.key));
           used.add(source);
         }
       }
@@ -409,6 +427,7 @@ export function createKanbanAnimation(options: {
     }
 
     clearAnimations();
+    if (!observer && !hovering && moves === 0) detachViewport();
     snapshots.clear();
     schedule();
   }
@@ -416,9 +435,14 @@ export function createKanbanAnimation(options: {
   function disconnect() {
     observer?.disconnect();
     observer = undefined;
-    const viewport = options.viewport();
-    viewport?.removeEventListener('scroll', resetLayout, true);
-    viewport?.removeEventListener('pointerdown', resetLayout, true);
+    // A completed save can still have a flying card when reveal scrolling runs.
+    if (animations.size === 0) detachViewport();
+  }
+
+  function detachViewport() {
+    observedViewport?.removeEventListener('scroll', resetLayout, true);
+    observedViewport?.removeEventListener('pointerdown', resetLayout, true);
+    observedViewport = undefined;
   }
 
   function cancel() {
@@ -432,6 +456,7 @@ export function createKanbanAnimation(options: {
     }
 
     clearAnimations();
+    detachViewport();
     snapshots.clear();
     movingIdentities.clear();
     destinations.clear();
@@ -439,6 +464,8 @@ export function createKanbanAnimation(options: {
   }
 
   function observe(viewport: HTMLElement) {
+    detachViewport();
+    observedViewport = viewport;
     observer = new MutationObserver(schedule);
     observer.observe(viewport, {
       subtree: true,
@@ -469,7 +496,11 @@ export function createKanbanAnimation(options: {
     };
   }
 
-  function begin(identity: string, destinationParentKey?: string) {
+  function begin(
+    identity: string,
+    destinationParentKey?: string,
+    origin?: KanbanAnimationOrigin
+  ) {
     const viewport = options.viewport();
 
     if (!viewport || reducedMotion()) {
@@ -495,6 +526,19 @@ export function createKanbanAnimation(options: {
       }
     }
 
+    if (origin && origin.rect.width > 0 && origin.rect.height > 0) {
+      const { key, element, rect, parentKey } = origin;
+      snapshots.set(key, {
+        key,
+        identity,
+        parentKey,
+        element,
+        layout: element,
+        rect: new DOMRect(rect.left, rect.top, rect.width, rect.height),
+        clone: element.cloneNode(true) as HTMLElement,
+        dragOrigin: true,
+      });
+    }
     if (destinationParentKey) {
       destinations.set(identity, destinationParentKey);
     }
