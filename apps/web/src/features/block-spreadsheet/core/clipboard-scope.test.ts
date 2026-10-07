@@ -12,7 +12,7 @@ function layout(html: string) {
 }
 
 describe('clipboardTargetInScope', () => {
-  it('claims the block, its chrome, its focused wrappers, and the body', () => {
+  it('claims the block, its chrome, and its focused wrappers', () => {
     const get = layout(`
       <div id="panel" tabindex="-1">
         <div id="preview" tabindex="-1">
@@ -29,22 +29,30 @@ describe('clipboardTargetInScope', () => {
     };
     for (const id of ['block', 'tab', 'tool', 'preview', 'panel'])
       expect(clipboardTargetInScope(get(id)!, scope)).toBe(true);
-    expect(clipboardTargetInScope(document.body, scope)).toBe(true);
     expect(clipboardTargetInScope(get('row')!, scope)).toBe(false);
     expect(clipboardTargetInScope(null, scope)).toBe(false);
   });
 
-  it('claims the whole split panel when the sheet is its main content', () => {
+  it('claims the split panel and the body when the sheet is its main content', () => {
     const get = layout(`
       <div id="panel"><button id="close"></button><div id="block"></div></div>
     `);
+    const scope = { block: get('block'), panel: get('panel'), chrome: [] };
+    expect(clipboardTargetInScope(get('close')!, scope)).toBe(true);
+    expect(clipboardTargetInScope(document.body, scope)).toBe(true);
+  });
+
+  it('leaves the body to the host when the sheet is an inline preview', () => {
+    const get = layout(`
+      <div><div id="block" data-block-type="spreadsheet"></div></div>
+    `);
     expect(
-      clipboardTargetInScope(get('close')!, {
+      clipboardTargetInScope(document.body, {
         block: get('block'),
-        panel: get('panel'),
+        panel: undefined,
         chrome: [],
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('leaves a host block that embeds the sheet in charge of its clipboard', () => {

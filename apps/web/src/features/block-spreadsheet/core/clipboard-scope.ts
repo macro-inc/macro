@@ -10,14 +10,17 @@ export type ClipboardScope = {
 /**
  * Whether a clipboard event fired from `target` belongs to the sheet: from its
  * block, its header or toolbar controls, a container wrapping it (such as a
- * focused panel), or the body after focus was dropped.
+ * focused panel), or the body after focus was dropped when the sheet is the
+ * panel's main content.
  */
 export function clipboardTargetInScope(
   target: EventTarget | null,
   scope: ClipboardScope
 ): boolean {
   if (!(target instanceof Element)) return false;
-  if (target === target.ownerDocument.body) return true;
+  // Body focus can't tell an inline preview from its host's content, so only
+  // a sheet that is the panel's main content claims it.
+  if (target === target.ownerDocument.body) return !!scope.panel;
   if (scope.block?.contains(target)) return true;
   if (scope.panel?.contains(target)) return true;
   if (scope.chrome.some((slot) => slot?.contains(target))) return true;
