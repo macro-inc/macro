@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -7,7 +6,6 @@ import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
   DEV_MODE_ENV,
   ENABLE_MARKDOWN_COMMENTS,
-  enableInlineAiEditing,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
@@ -34,7 +32,6 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { DocumentAiEditBar } from './DocumentAiEditBar';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -101,13 +98,11 @@ export function Notebook(props: {
   hotkeyScope: string | undefined;
   autoFocus: boolean;
 }) {
-  const { element: blockElement, permissions, state } = useMarkdownDocument();
-  const canEdit = permissions.canEdit;
+  const { element: blockElement, state } = useMarkdownDocument();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
-  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
@@ -371,11 +366,6 @@ export function Notebook(props: {
               setShowLexicalStateDebugger(false)
             }
           />
-          <Show when={inlineAiEditing().enabled && canEdit() && !isMobile()}>
-            <div class="mb-2">
-              <DocumentAiEditBar documentId={props.documentId} />
-            </div>
-          </Show>
           <DocumentDiscussion editorHasFocus={editorHasFocus()} />
         </ParamsProvider>
       </div>

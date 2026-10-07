@@ -46,8 +46,12 @@ use connection::{
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
 use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
+use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
+use documents_hex::outbound::document_purge::{
+    LegacyDocumentPurgeRepository, RedisDocxPartReferences, SqsDocumentPurgeQueue,
+};
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
 use documents_hex::outbound::s3_upload_url::S3UploadUrlAdapter;
 use dynamodb_client::DynamodbClient;
@@ -348,6 +352,14 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     sync_service_client::SyncServiceClient,
 >;
 
+/// Permanent document purge wired into DSS.
+pub(crate) type DssDocumentPurger = DocumentPurger<
+    LegacyDocumentPurgeRepository,
+    SqsDocumentPurgeQueue,
+    RedisDocxPartReferences,
+    DssEventBroker,
+>;
+
 /// Type alias for the authorization service.
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
@@ -484,6 +496,20 @@ pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
     (),
     EntityAccessManagementService,
 >;
+
+/// Chat service for owner-checked permanent deletes. Unlike
+/// [`DssChatMutationService`] it publishes chat events, which is how search
+/// and activity learn a chat is gone.
+pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
+    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+    (),
+    EntityAccessManagementService,
+    DssEventBroker,
+>;
+
+/// State of `DELETE /internal/owned/{entity_type}/{entity_id}`.
+pub(crate) type DssOwnedPurgeState =
+    super::internal::OwnedPurgeState<DssDocumentPurger, DssChatPurgeService, ProjectService>;
 
 /// Concrete unified entity mutation service wired into GraphQL.
 pub(crate) type DssEntityMutationService =
@@ -799,6 +825,7 @@ pub(crate) struct ApiContext {
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
     pub sqs_client: Arc<sqs_client::SQS>,
+    pub document_purger: Arc<DssDocumentPurger>,
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
@@ -836,6 +863,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub owned_purge_state: DssOwnedPurgeState,
 }
 
 env_var! {

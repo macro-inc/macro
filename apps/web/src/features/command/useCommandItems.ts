@@ -12,6 +12,7 @@ import {
 // QuickAccessProvider, which cycles back here, and `exclude` runs at module
 // evaluation time below.
 import { exclude } from '@core/context/quickAccess/types';
+import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
@@ -22,7 +23,9 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand } from '@core/hotkey/types';
 import type { TimestampedItem } from '@core/util/freshSort';
 import { mergeSortedArrays } from '@core/util/list';
+import type { CrmContactEntity } from '@entity';
 import { type Accessor, createMemo } from 'solid-js';
+import { contactCommandItems } from './contact-items';
 import {
   type CreateProjectCommandItem,
   newProjectCommand,
@@ -83,6 +86,12 @@ export type PaginationControls = {
   hasMore: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
+};
+
+/** CRM contacts matching a typed query, beyond those Quick Access holds. */
+export type CommandContactSource = PaginationControls & {
+  contacts: Accessor<CrmContactEntity[]>;
+  isLoading: Accessor<boolean>;
 };
 
 function isCommandItem(item: CommandMenuItem): item is CommandItem {
@@ -347,7 +356,7 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
 > = {
   // Projects come from the command menu's own server search. CRM contacts
   // have no view history, so a no-query list would surface the whole team's
-  // contacts; they are reached through their company instead.
+  // contacts; typed queries find them through contact discovery instead.
   all: exclude('person', 'initiative', 'crm_contact'),
   channels: ['channel'],
   dms: ['dm'],
@@ -357,6 +366,13 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
 
   people: ['person'],
 };
+
+/** Categories listing people, where a typed query also finds CRM contacts. */
+const CONTACT_CATEGORIES: ReadonlySet<CategoryFilter> = new Set([
+  'all',
+  'dms',
+  'people',
+]);
 
 /** Creates only the Quick Access list needed by the active category. */
 function useQuickAccessCategory(
@@ -425,6 +441,11 @@ export function useCommandItems(
     commandScopeCommands?: Accessor<CommandWithInfo[]>;
     /** Whether this menu should drive cache-backed Quick Access search. */
     searchActive?: Accessor<boolean>;
+    /** Finds CRM contacts for typed People and All queries. */
+    contactDiscovery?: (
+      search: Accessor<string>,
+      active: Accessor<boolean>
+    ) => CommandContactSource;
   }
 ) {
   const showSearchRow = options?.showSearchRow ?? true;
@@ -445,15 +466,55 @@ export function useCommandItems(
     !CommandState.isEntityActionMode() &&
     (categoryFilter() === 'all' || categoryFilter() === 'projects');
   const projects = useProjectCommandItems(scopedSearchTerm, projectEnabled);
-  const categoryItems = () => [
-    ...category.items(),
-    ...projects.items(),
-    // All/Commands already include the registered Create project command.
-    // The Projects category excludes general commands, so keep its shortcut.
-    ...(projects.enabled() && categoryFilter() === 'projects'
-      ? [newProjectCommand]
-      : []),
-  ];
+  const contactsActive = () =>
+    searchActive() &&
+    commandScopeCommands().length === 0 &&
+    !CommandState.isEntityActionMode() &&
+    CONTACT_CATEGORIES.has(categoryFilter()) &&
+    query().trim().length > 0;
+  const contacts = options?.contactDiscovery?.(
+    scopedSearchTerm,
+    contactsActive
+  );
+  const contactPeople = contacts
+    ? {
+        users: quickAccess.useList('person').items,
+        directMessages: quickAccess.useList('dm').items,
+        viewerId: useUserId(),
+      }
+    : undefined;
+  const contactItems = createMemo((): CommandMenuItem[] =>
+    contacts && contactPeople && contactsActive()
+      ? contactCommandItems({
+          contacts: contacts.contacts(),
+          users: contactPeople.users(),
+          directMessages: contactPeople.directMessages(),
+          viewerId: contactPeople.viewerId(),
+        })
+      : []
+  );
+  const contactItemIds = createMemo(
+    () => new Set(contactItems().map((item) => item.id))
+  );
+  const categoryItems = () => {
+    const items = [
+      ...category.items(),
+      ...projects.items(),
+      // All/Commands already include the registered Create project command.
+      // The Projects category excludes general commands, so keep its shortcut.
+      ...(projects.enabled() && categoryFilter() === 'projects'
+        ? [newProjectCommand]
+        : []),
+    ];
+    // A contact's row keeps its CRM name searchable, so it replaces the same
+    // conversation listed under its own name.
+    const contactIds = contactItemIds();
+    if (contactIds.size === 0) return items;
+    return [
+      ...items.filter((item) => !contactIds.has(item.id)),
+      ...contactItems(),
+    ];
+  };
 
   const rankItems = (
     items: CommandMenuItem[],
@@ -463,6 +524,7 @@ export function useCommandItems(
     return rankCommandSearchItems(items, queryText, {
       preserveAdditionalEntityMatches:
         quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),
+      preservedIds: contactItemIds(),
     });
   };
 
@@ -519,15 +581,23 @@ export function useCommandItems(
   return {
     items: filteredItems,
     isLoadingEntities: () =>
-      category.isLoadingEntities() || projects.isLoading(),
+      category.isLoadingEntities() ||
+      projects.isLoading() ||
+      (contacts?.isLoading() ?? false),
     pagination: {
-      hasMore: () => category.pagination.hasMore() || projects.hasMore(),
+      hasMore: () =>
+        category.pagination.hasMore() ||
+        projects.hasMore() ||
+        (contacts?.hasMore() ?? false),
       isLoadingMore: () =>
-        category.pagination.isLoadingMore() || projects.isLoadingMore(),
+        category.pagination.isLoadingMore() ||
+        projects.isLoadingMore() ||
+        (contacts?.isLoadingMore() ?? false),
       loadMore: async () => {
         await Promise.all([
           category.pagination.loadMore(),
           projects.loadMore(),
+          contacts?.loadMore(),
         ]);
       },
     },

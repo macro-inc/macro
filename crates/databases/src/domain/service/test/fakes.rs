@@ -117,6 +117,7 @@ impl DatabasesRepo for FakeRepo {
         world.databases.push(database.clone());
         world.columns.push(Column {
             protections: vec![],
+            nullable: true,
             id: ColumnId::new(),
             table_id: table.id,
             property_definition_id: title.definition.id,

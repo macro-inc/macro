@@ -55,6 +55,7 @@ model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 model_owner = { path = "../model_owner" }
 notification = { path = "../notification" }
+shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
 messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }

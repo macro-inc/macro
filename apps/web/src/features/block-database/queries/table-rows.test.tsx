@@ -29,11 +29,11 @@ import { err, errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { empty, fromValue, mergeMap, pipe } from 'wonka';
-import type { DatabaseRowsSource } from '../context/table-source';
-import type { DatabaseRowMutation } from '../core/table';
-import { allRecordsView } from '../core/views';
-import { createDraftRows } from '../primitives/draft-rows';
-import { createTableController } from '../primitives/table-controller';
+import type { DatabaseRowsSource } from '../../database/context/table-source';
+import type { DatabaseRowMutation } from '../../database/core/table';
+import { allRecordsView } from '../../database/core/views';
+import { createDraftRows } from '../../database/primitives/draft-rows';
+import { createTableController } from '../../database/primitives/table-controller';
 import { createDatabaseColumn } from './columns';
 
 function renameDatabaseColumn(params: {

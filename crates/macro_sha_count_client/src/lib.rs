@@ -1,6 +1,10 @@
 mod decrement_count;
 mod exists;
 mod increment_count;
+#[cfg(test)]
+mod test;
+
+use std::collections::BTreeMap;
 
 use model::document::SaveBomPart;
 
@@ -26,6 +30,12 @@ impl Redis {
         decrement_count::decrement_counts(&self.inner, SHA_DELETE_BUCKET, shas).await
     }
 
+    /// Release one reference per entry in `shas`, such as the BOM of a deleted
+    /// docx. A SHA listed twice loses two references.
+    pub async fn release_shas(&self, shas: Vec<String>) -> anyhow::Result<()> {
+        self.decrement_counts(&reference_counts(shas)).await
+    }
+
     pub async fn find_non_existing_shas(
         &self,
         bom_parts: &Vec<SaveBomPart>,
@@ -47,4 +57,12 @@ impl Redis {
         )
         .await
     }
+}
+
+fn reference_counts(shas: Vec<String>) -> Vec<(String, i64)> {
+    let mut counts = BTreeMap::<String, i64>::new();
+    for sha in shas {
+        *counts.entry(sha).or_default() += 1;
+    }
+    counts.into_iter().collect()
 }
