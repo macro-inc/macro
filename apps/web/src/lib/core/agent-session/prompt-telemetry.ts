@@ -14,6 +14,7 @@
 
 import type { Span } from '@macro-inc/observability';
 import { Telemetry } from '@macro-inc/observability';
+import type { WarmClaim } from '@queries/agent-session/warm';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
@@ -111,10 +112,36 @@ export type PromptSubmitSurface =
   | 'agent_session'
   | 'other';
 
+/** How a new session was asked for, to tell its slower paths apart. */
+export type PromptCreate = {
+  warmClaim: WarmClaim;
+  /** A model was named for the create. */
+  modelOverride: boolean;
+  /**
+   * The model catalog was still loading, so the create silently ran on the
+   * persona's default instead of the composer's choice.
+   */
+  modelFallback: boolean;
+  /** The effort confirmed before the prompt; this path loads and configures serially. */
+  effort: string | undefined;
+};
+
 type PromptTraceOptions = {
   newSession: boolean;
   submitSurface?: PromptSubmitSurface;
+  create?: PromptCreate;
 };
+
+/** A request whose resource-timing `responseEnd` is recorded beside its stage. */
+type ResponseWatch = {
+  stage: 'created' | 'accepted';
+  path: RegExp;
+  /** Ignore requests that started before this `performance.now()`. */
+  after: number;
+};
+
+const CREATE_PATH = /\/agent-sessions$/;
+const CONTROL_PATH = /\/agent-sessions\/[^/]+\/control$/;
 
 export class PromptTrace {
   readonly #span: Span | undefined;
@@ -132,10 +159,14 @@ export class PromptTrace {
   #mounted = false;
   #rendered = false;
   readonly #renderers = new Set<() => void>();
+  #responses: ResponseWatch[] = [];
+  #resourceObserver: PerformanceObserver | undefined;
 
   constructor(sessionId: string, options: PromptTraceOptions) {
     this.#sessionId = sessionId;
     this.#span = start(sessionId, options);
+    this.#recordInputDelay();
+    if (options.newSession) this.#watchResponse('created', CREATE_PATH);
     this.#stallTimer = setTimeout(
       () => this.end('stalled'),
       STALL_THRESHOLD_MS
@@ -227,6 +258,7 @@ export class PromptTrace {
   /** The control will be sent under `actionId`; its confirmation may name it. */
   expect(actionId: string): void {
     this.#actionIds.add(actionId);
+    this.#watchResponse('accepted', CONTROL_PATH);
   }
 
   /** The control POST answered with the id the harness accepted it under. */
@@ -266,6 +298,8 @@ export class PromptTrace {
     this.#set('agent.prompt.renderer_attached', this.#renderers.size > 0);
     for (const stop of this.#renderers) stop();
     this.#renderers.clear();
+    this.#resourceObserver?.disconnect();
+    this.#resourceObserver = undefined;
     if (outcome === 'hidden') this.#set('agent.prompt.hidden', true);
     this.#set('agent.prompt.outcome', outcome);
     this.#set(
@@ -337,6 +371,76 @@ export class PromptTrace {
     );
   }
 
+  /**
+   * Record when the triggering keyboard or pointer event happened. The span
+   * itself starts here, in the handler; the gap is main-thread input delay.
+   */
+  #recordInputDelay(): void {
+    try {
+      const event = typeof window === 'undefined' ? undefined : window.event;
+      const kind =
+        event instanceof KeyboardEvent
+          ? 'keyboard'
+          : event instanceof MouseEvent
+            ? 'pointer'
+            : undefined;
+      if (!event || !kind) return;
+      this.#set('agent.prompt.input_kind', kind);
+      this.#set(
+        'agent.prompt.input_delay_ms',
+        Math.max(0, Math.round(this.#startedAt - event.timeStamp))
+      );
+    } catch {
+      // See the module comment.
+    }
+  }
+
+  /**
+   * Record when the request's response finished arriving, from resource
+   * timing. Against `<stage>_at_ms`, when its promise resolved, the gap is
+   * main-thread stall. The first matching request wins.
+   */
+  #watchResponse(stage: ResponseWatch['stage'], path: RegExp): void {
+    try {
+      if (typeof PerformanceObserver === 'undefined') return;
+      this.#responses.push({ stage, path, after: performance.now() });
+      if (this.#resourceObserver) return;
+      this.#resourceObserver = new PerformanceObserver((list) => {
+        try {
+          this.#observeResources(list.getEntries());
+        } catch {
+          // See the module comment.
+        }
+      });
+      this.#resourceObserver.observe({ type: 'resource' });
+    } catch {
+      // See the module comment.
+    }
+  }
+
+  #observeResources(entries: PerformanceEntryList): void {
+    for (const entry of entries) {
+      if (!isFetchTiming(entry) || entry.responseEnd === 0) continue;
+      const pathname = new URL(entry.name, location.href).pathname;
+      const watch = this.#responses.find(
+        (candidate) =>
+          entry.startTime >= candidate.after && candidate.path.test(pathname)
+      );
+      if (!watch) continue;
+      this.#responses = this.#responses.filter(
+        (candidate) => candidate !== watch
+      );
+      this.#set(
+        `agent.prompt.${watch.stage}_response_end_at_ms`,
+        Math.round(entry.responseEnd - this.#startedAt)
+      );
+    }
+    if (this.#responses.length === 0) {
+      this.#resourceObserver?.disconnect();
+      this.#resourceObserver = undefined;
+    }
+  }
+
   #set(name: string, value: string | number | boolean): void {
     if (this.#ended) return;
     try {
@@ -345,6 +449,15 @@ export class PromptTrace {
       // See the module comment.
     }
   }
+}
+
+function isFetchTiming(
+  entry: PerformanceEntry
+): entry is PerformanceResourceTiming {
+  return (
+    entry.entryType === 'resource' &&
+    (entry as PerformanceResourceTiming).initiatorType === 'fetch'
+  );
 }
 
 function documentHidden(): boolean {
@@ -375,6 +488,15 @@ function start(
       'agent.prompt.submit_surface',
       options.submitSurface ?? submitSurface(options.newSession)
     );
+    if (options.create) {
+      const { warmClaim, modelOverride, modelFallback, effort } =
+        options.create;
+      span.setAttr('agent.prompt.warm_claim', warmClaim);
+      span.setAttr('agent.prompt.model_override_set', modelOverride);
+      span.setAttr('agent.prompt.model_fallback', modelFallback);
+      span.setAttr('agent.prompt.effort_override', effort !== undefined);
+      if (effort !== undefined) span.setAttr('agent.prompt.effort', effort);
+    }
     return span;
   } catch {
     return undefined;

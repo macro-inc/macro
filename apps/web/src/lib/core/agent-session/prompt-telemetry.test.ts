@@ -176,6 +176,96 @@ describe('PromptTrace', () => {
     );
   });
 
+  it('records how a new session was asked for', () => {
+    const trace = new PromptTrace(SESSION, {
+      newSession: true,
+      create: {
+        warmClaim: 'miss_model',
+        modelOverride: true,
+        modelFallback: false,
+        effort: 'high',
+      },
+    });
+    trace.end('released');
+    expect(telemetry.spans[0].attributes).toMatchObject({
+      'agent.prompt.warm_claim': 'miss_model',
+      'agent.prompt.model_override_set': true,
+      'agent.prompt.model_fallback': false,
+      'agent.prompt.effort_override': true,
+      'agent.prompt.effort': 'high',
+    });
+  });
+
+  it('records the input delay of the event that sent the prompt', () => {
+    const button = document.createElement('button');
+    let trace: PromptTrace | undefined;
+    button.addEventListener('click', () => {
+      trace = new PromptTrace(SESSION, { newSession: false });
+    });
+    const click = new MouseEvent('click');
+    Object.defineProperty(click, 'timeStamp', {
+      value: performance.now() - 40,
+    });
+    button.dispatchEvent(click);
+    trace?.end('released');
+    expect(telemetry.spans[0].attributes['agent.prompt.input_kind']).toBe(
+      'pointer'
+    );
+    expect(
+      telemetry.spans[0].attributes['agent.prompt.input_delay_ms']
+    ).toBeGreaterThanOrEqual(40);
+
+    new PromptTrace(SESSION, { newSession: false }).end('released');
+    expect(telemetry.spans[1].attributes).not.toHaveProperty(
+      'agent.prompt.input_delay_ms'
+    );
+  });
+
+  it('records when the create and prompt responses arrived, apart from when they were handled', () => {
+    const observers: ((entries: PerformanceEntry[]) => void)[] = [];
+    vi.stubGlobal(
+      'PerformanceObserver',
+      class {
+        constructor(callback: (list: PerformanceObserverEntryList) => void) {
+          observers.push((entries) =>
+            callback({
+              getEntries: () => entries,
+            } as PerformanceObserverEntryList)
+          );
+        }
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const fetched = (path: string, startTime: number, responseEnd: number) =>
+      ({
+        entryType: 'resource',
+        initiatorType: 'fetch',
+        name: `https://harness.test${path}`,
+        startTime,
+        responseEnd,
+      }) as PerformanceResourceTiming;
+    const trace = new PromptTrace(SESSION, { newSession: true });
+    expect(observers).toHaveLength(1);
+    const [deliver] = observers;
+    deliver([
+      fetched('/agent-sessions/warm', 990, 1020),
+      fetched('/agent-sessions', 1005, 1049),
+      fetched(`/agent-sessions/${SESSION}/log`, 1050, 1100),
+    ]);
+    // The effort path's configure control left before the prompt's.
+    deliver([fetched(`/agent-sessions/${SESSION}/control`, 1060, 1090)]);
+    now.mockReturnValue(1100);
+    trace.expect(ACTION);
+    deliver([fetched(`/agent-sessions/${SESSION}/control`, 1101, 1300)]);
+    trace.end('released');
+    expect(telemetry.spans[0].attributes).toMatchObject({
+      'agent.prompt.created_response_end_at_ms': 49,
+      'agent.prompt.accepted_response_end_at_ms': 300,
+    });
+  });
+
   it.each([
     ['/app/md/private-document-id', 'document'],
     ['/app/drive/md/private-document-id', 'document'],
