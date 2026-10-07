@@ -676,11 +676,13 @@ usual recency lists without contacts. A contact whose email belongs to a Macro u
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
 direct message. Other contacts show their email and open the contact page; Enter and
-click open in place, Shift+Enter in a new split. Search for… from People opens the
-unscoped All search, the only Search scope that lists contacts. Verify a contact
-outside the cached rows, an email-only query, rapid query changes (rows from an
-earlier query must disappear unless they still match), scrolling or Down past the
-last row to load more, and that Files/Tasks/Channels/Agents never show contacts.
+click open in place, Shift+Enter in a new split. A server match that arrives after
+typing takes the default selection from the Search for… row. Global Search does not
+list CRM contacts; Search for… from People still opens the Channels search. Verify
+a contact outside the cached rows, an email-only query, rapid query changes (rows
+from an earlier query must disappear unless they still match), scrolling or Down
+past the last row to load more, and that Files/Tasks/Channels/Agents never show
+contacts.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update

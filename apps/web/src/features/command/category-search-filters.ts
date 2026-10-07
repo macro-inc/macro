@@ -12,11 +12,13 @@ type CategorySearchFilters = {
 };
 
 // Each Cmd+K category maps to a search-view index type so the resulting
-// Type: chip behaves the same as one picked from the filter row. People
-// (`dms`) lists conversations and CRM contacts; only the unscoped All search
-// covers both, so it keeps the search preset rather than an index.
+// Type: chip behaves the same as one picked from the filter row. Cmd+K DMs
+// maps to the same channels index as Channels for now; channelType-based
+// narrowing (DMs vs non-DMs) is left for a follow-up once the search
+// backend honors it.
 const CATEGORY_TO_INDEX: Partial<Record<CategoryFilter, SearchIndexId>> = {
   channels: 'channels',
+  dms: 'channels',
   documents: 'document-or-file',
   tasks: 'task',
   chats: 'agent',

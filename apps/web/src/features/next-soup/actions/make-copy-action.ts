@@ -14,7 +14,6 @@ export const makeCopyAction = () => {
       entity.type !== 'email' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
-      entity.type !== 'crm_contact' &&
       entity.type !== 'foreign' &&
       entity.type !== 'routine'
     );
