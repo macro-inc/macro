@@ -135,11 +135,35 @@ const wwwRedirectFn = new aws.cloudfront.Function(
   }
 );
 
-const SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL =
-  '78ba335f-4e54-45a3-85d5-1d9933b1363d';
 const SHARED_ARRAY_RESPONSE_HEADERS_NO_CACHE_CONTROL =
   'c9d6f215-ca3d-4c29-8eb4-41ee30fb2129';
 const CACHING_DISABLED = '4135ea2d-6df8-44a3-9df3-4b5a84be39ad';
+
+// Policies run before viewer-response functions, including on origin errors
+// for which CloudFront does not invoke the function. Default to no-store;
+// the function opts only successful hashed assets into immutable caching.
+const appResponseHeaders = new aws.cloudfront.ResponseHeadersPolicy(
+  `app-response-headers-${stack}`,
+  {
+    customHeadersConfig: {
+      items: [
+        { header: 'Cache-Control', value: 'no-store', override: true },
+        {
+          header: 'Cross-Origin-Opener-Policy',
+          value: 'same-origin-allow-popups',
+          override: true,
+        },
+      ],
+    },
+  }
+);
+const appCacheHeaders = new aws.cloudfront.Function(
+  `app-cache-headers-${stack}`,
+  {
+    runtime: 'cloudfront-js-2.0',
+    code: fs.readFileSync('./appCache/handler.js', 'utf8'),
+  }
+);
 
 const securityHeadersPolicy = new aws.cloudfront.ResponseHeadersPolicy(
   `security-headers-${stack}`,
@@ -192,6 +216,13 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
   enabled: true,
   webAclId,
   tags,
+  // Response-header policies affect browser caches, not CloudFront's error
+  // cache. S3 missing-file responses have no origin Cache-Control header, so
+  // zero TTL lets a retry reach an asset that has since finished uploading.
+  customErrorResponses: [
+    { errorCode: 403, errorCachingMinTtl: 0 },
+    { errorCode: 404, errorCachingMinTtl: 0 },
+  ],
   loggingConfig: {
     bucket: 'macro-cloudfront-logging.s3.amazonaws.com',
     includeCookies: false,
@@ -293,15 +324,37 @@ const cdn = new aws.cloudfront.Distribution(`cdn-${stack}`, {
       cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
     },
     {
+      pathPattern: '/app/index.html',
+      targetOriginId: macroWebAppBucketArn,
+      cachePolicyId: CACHING_DISABLED,
+      responseHeadersPolicyId: appResponseHeaders.id,
+      viewerProtocolPolicy: 'redirect-to-https',
+      allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      compress: true,
+    },
+    {
+      pathPattern: '/app/sw.js',
+      targetOriginId: macroWebAppBucketArn,
+      cachePolicyId: CACHING_DISABLED,
+      responseHeadersPolicyId: appResponseHeaders.id,
+      viewerProtocolPolicy: 'redirect-to-https',
+      allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      compress: true,
+    },
+    {
       pathPattern: '/app/*.*',
-      responseHeadersPolicyId:
-        SHARED_ARRAY_RESPONSE_HEADERS_MAX_AGE_CACHE_CONTROL,
+      responseHeadersPolicyId: appResponseHeaders.id,
       targetOriginId: macroWebAppBucketArn,
       viewerProtocolPolicy: 'redirect-to-https',
       allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
       cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
       cachePolicyId: compressibleCachePolicy.id,
       compress: true,
+      functionAssociations: [
+        { eventType: 'viewer-response', functionArn: appCacheHeaders.arn },
+      ],
     },
     {
       pathPattern: '/app',

@@ -107,7 +107,7 @@ async function refreshShell(request) {
   await Promise.all(
     assets.map(async (path) => {
       if (await assetCache.match(path)) return;
-      const assetResponse = await fetch(path);
+      const assetResponse = await fetchAsset(path);
       if (!assetResponse.ok) throw new Error(`Failed to cache ${path}`);
       await assetCache.put(path, tagged(assetResponse, build));
     })
@@ -160,11 +160,22 @@ async function serveAsset(request) {
   const cache = await caches.open(ASSET_CACHE);
   const hit = await cache.match(request, { ignoreVary: true });
   if (hit) return hit;
-  const response = await fetch(request);
+  const response = await fetchAsset(request);
   if (response.ok && response.type === 'basic') {
     const shell = await (await caches.open(SHELL_CACHE)).match(SHELL_KEY);
     const build = shell?.headers.get(BUILD_HEADER) ?? '';
     cache.put(request, tagged(response.clone(), build)).catch(() => {});
+  }
+  return response;
+}
+
+/** Recover errors left in the HTTP cache by older CDN cache headers. */
+async function fetchAsset(request) {
+  const response = await fetch(request);
+  if (response.status === 403 || response.status === 404) {
+    // A service worker's fetch can reuse disk-cached errors even after the page
+    // reloads. Bypass that cache once, and replace it if the file now exists.
+    return fetch(request, { cache: 'reload' });
   }
   return response;
 }

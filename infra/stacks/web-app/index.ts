@@ -68,7 +68,7 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 // only, so their archive copy removes the sidecar before FileArchive snapshots it.
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
-const cacheWasmRetentionDays = 7;
+const assetRetentionDays = 7;
 const shellQuote = (value: string): string =>
   "'" + value.split("'").join("'\\''") + "'";
 execSync('rm -rf ./output', { stdio: 'inherit' });
@@ -110,48 +110,13 @@ execSync(
 const syncAssetsCommand = new command.local.Command(
   'sync-assets-command',
   {
-    // Source maps are intentionally public in production; the web client is open source.
-    // Cache WASM is over CloudFront's automatic-compression size limit. Keep
-    // raw bytes in dist/archive for Tauri and local preview, but exclude both
-    // raw and sidecar from generic sync. The targeted uploader stores Brotli
-    // bytes at the original .wasm key with application/wasm + Content-Encoding br.
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/upload-brotli-to-s3.sh ./output/app s3://${webAppAssets.bucket}/app public-read && aws s3 sync ./output s3://${webAppAssets.bucket} --acl public-read --delete --exclude "app/app-archive.zip" --exclude "app-archive/*" --exclude "*cache_wasm_bg*.wasm" --exclude "*cache_wasm_bg*.wasm.br"`,
+    // The publisher uploads assets first, then index.html and sw.js. It keeps
+    // previous chunks so open tabs can finish loading their original build.
+    create: pulumi.interpolate`bash ../../../apps/web/scripts/deploy/publish-to-s3.sh ./output/app s3://${webAppAssets.bucket}/app`,
     triggers: [Date.now()],
   },
   {
     dependsOn: [webAppAssets, ownershipControls, publicAccessBlock],
-    replaceOnChanges: ['*'],
-  }
-);
-
-// Using the bucket ID we will now update the index.html object metadata to include correct no-store header to disable caching
-// Use randomValue as part of the command so it's considered new on every deployment.
-const updateIndexHtmlObjectMetadataCommand = webAppAssets.id.apply(
-  (bucketName) => {
-    const object = `s3://${bucketName}/app/index.html`;
-    return pulumi.interpolate`aws s3 cp ${object} ${object} --metadata-directive REPLACE --content-type "text/html" --cache-control "no-store" --acl public-read && echo "${Date.now()}"`;
-  }
-);
-
-// Run the command to update the index.html object metadata
-const indexHtmlObjectMetadataCommand = new command.local.Command(
-  'index-html-object-metadata-command',
-  {
-    create: updateIndexHtmlObjectMetadataCommand,
-  },
-  { dependsOn: [webAppAssets, syncAssetsCommand], replaceOnChanges: ['*'] }
-);
-
-// Prune only after the current WASM, generic assets, index content, and index
-// metadata have all published. Any earlier failure preserves all prior keys.
-new command.local.Command(
-  'prune-old-cache-wasm-command',
-  {
-    create: pulumi.interpolate`bash ../../../apps/web/scripts/cache-wasm/prune-old-brotli-from-s3.sh ./output/app s3://${webAppAssets.bucket}/app ${cacheWasmRetentionDays}`,
-    triggers: [Date.now()],
-  },
-  {
-    dependsOn: [indexHtmlObjectMetadataCommand],
     replaceOnChanges: ['*'],
   }
 );
@@ -185,21 +150,38 @@ const encodingLambdaEdgeFunction = new aws.lambda.Function(
 const encodingLambdaVersion: pulumi.Output<String> =
   encodingLambdaEdgeFunction.version.apply((v: string) => v);
 
-const appRouteLambda = new aws.lambda.Function('app-route-lambda', {
-  code: new pulumi.asset.FileArchive('./appRouteLambda'),
-  role: lambdaRole.arn,
-  handler: 'index.handler',
-  runtime: Runtime.NodeJS22dX,
-  name: `app-route-lambda-${stack}`,
-  // do not throttle prod
-  reservedConcurrentExecutions: stack === 'prod' ? undefined : 100,
-  publish: true,
-  environment: {
-    variables: {
-      PREVIEW_URL: `https://${stack === 'dev' ? 'dev-' : ''}gateway.macro.com/dss/documents/preview`,
+const appRouteLambda = new aws.lambda.Function(
+  'app-route-lambda',
+  {
+    code: new pulumi.asset.FileArchive('./appRouteLambda'),
+    role: lambdaRole.arn,
+    handler: 'index.handler',
+    runtime: Runtime.NodeJS22dX,
+    name: `app-route-lambda-${stack}`,
+    // do not throttle prod
+    reservedConcurrentExecutions: stack === 'prod' ? undefined : 100,
+    publish: true,
+    environment: {
+      variables: {
+        PREVIEW_URL: `https://${stack === 'dev' ? 'dev-' : ''}gateway.macro.com/dss/documents/preview`,
+      },
     },
   },
-});
+  { dependsOn: [syncAssetsCommand] }
+);
+
+// Both HTML entry points must publish successfully before retiring any asset.
+new command.local.Command(
+  'prune-retired-assets-command',
+  {
+    create: pulumi.interpolate`bun ../../../apps/web/scripts/deploy/prune-retired-assets.ts ./output/app s3://${webAppAssets.bucket}/app ${assetRetentionDays}`,
+    triggers: [Date.now()],
+  },
+  {
+    dependsOn: [syncAssetsCommand, appRouteLambda],
+    replaceOnChanges: ['*'],
+  }
+);
 
 const appRouteFunctionUrl = new aws.lambda.FunctionUrl('app-route-lambda-url', {
   functionName: appRouteLambda.name,

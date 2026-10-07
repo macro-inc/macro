@@ -20,33 +20,15 @@ afterEach(() => {
 });
 
 describe('cache WASM S3 upload', () => {
-  it('production generic sync excludes cache raw/sidecar but not unrelated WASM', () => {
-    const infrastructure = readFileSync(
-      resolve(import.meta.dirname, '../../../../infra/stacks/web-app/index.ts'),
+  it('generic publication excludes only cache WASM and its sidecar', () => {
+    const publisher = readFileSync(
+      resolve(import.meta.dirname, '../deploy/publish-to-s3.sh'),
       'utf8'
     );
-    expect(infrastructure).toContain(
+    expect(publisher).toContain(
       '--exclude "*cache_wasm_bg*.wasm" --exclude "*cache_wasm_bg*.wasm.br"'
     );
-    expect(infrastructure).not.toContain('--exclude "*.wasm"');
-    const uploadIndex = infrastructure.indexOf('upload-brotli-to-s3.sh');
-    const syncIndex = infrastructure.indexOf('aws s3 sync ./output');
-    const indexPublishIndex = infrastructure.indexOf(
-      'index-html-object-metadata-command'
-    );
-    const pruneIndex = infrastructure.indexOf(
-      'prune-old-brotli-from-s3.sh'
-    );
-    expect(uploadIndex).toBeLessThan(syncIndex);
-    expect(syncIndex).toBeLessThan(indexPublishIndex);
-    expect(indexPublishIndex).toBeLessThan(pruneIndex);
-    expect(infrastructure.slice(uploadIndex, syncIndex)).toContain('&&');
-    expect(infrastructure).toContain(
-      'dependsOn: [webAppAssets, syncAssetsCommand]'
-    );
-    expect(infrastructure).toContain(
-      'dependsOn: [indexHtmlObjectMetadataCommand]'
-    );
+    expect(publisher).not.toContain('--exclude "*.wasm"');
   });
 
   it('keeps sidecars in web delivery but excludes them from native/OTA packaging', () => {
@@ -68,7 +50,7 @@ describe('cache WASM S3 upload', () => {
     expect(infrastructure).toContain(
       `find ${'${shellQuote(appArchiveOutputPath)}'} -type f -name 'cache_wasm_bg*.wasm.br' -delete`
     );
-    expect(infrastructure).toContain('--exclude "app-archive/*"');
+    expect(infrastructure).toContain('publish-to-s3.sh ./output/app');
   });
 
   it('uploads only sidecar bytes at the original WASM key with exact metadata', () => {
@@ -178,10 +160,7 @@ describe('cache WASM S3 upload', () => {
     mkdirSync(bin);
     const rawPath = join(assets, 'cache_wasm_bg-current.wasm');
     writeFileSync(rawPath, Buffer.from('current cache wasm'.repeat(100)));
-    writeFileSync(
-      `${rawPath}.br`,
-      brotliCompressSync(readFileSync(rawPath))
-    );
+    writeFileSync(`${rawPath}.br`, brotliCompressSync(readFileSync(rawPath)));
     const argumentsPath = join(directory, 'aws-arguments.txt');
     const fakeAws = join(bin, 'aws');
     writeFileSync(

@@ -6,6 +6,7 @@
 !**/appRouteLambda/**/*.js
 !**/contentEncodingLambda/**/*.js
 !stacks/website/wwwRedirect/handler.js
+!stacks/website/appCache/handler.js
 package-lock.json
 local/generated
 
