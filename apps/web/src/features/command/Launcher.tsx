@@ -58,7 +58,6 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createDatabase } from '@queries/storage/databases';
 import { createForm } from '@queries/storage/forms';
-import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import { useNavigate } from '@solidjs/router';
 import {
@@ -266,7 +265,12 @@ const createComponent = async (spec: {
 
 export function runCreateAction(
   blockName: CreatableName,
-  options: { shouldInsert?: boolean; source?: string; projectId?: string } = {}
+  options: {
+    shouldInsert?: boolean;
+    source?: string;
+    projectId?: string;
+    destination?: string;
+  } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
   // Creation analytics fire at the data-layer chokepoints (create.ts /
@@ -434,15 +438,14 @@ export function runCreateAction(
       });
       return;
     case 'project':
-      createBlock({
-        blockName: 'project',
-        createFn: () =>
-          createProject({
-            name: 'New Folder',
-            source,
-            parentId: options.projectId,
-          }),
-        shouldInsert,
+      createComponent({
+        componentId: 'folder-compose',
+        asPopover: true,
+        params: {
+          parentId: options.projectId,
+          destination: options.destination,
+          source,
+        },
       });
       return;
     case 'database':

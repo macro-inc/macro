@@ -1139,7 +1139,16 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. In a folder
+The New menu and drag/drop uploads target the selected folder. **New → Folder**
+and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
+choose **Add tags**, and stage files or nested folders in the large drop area
+(or use **Add files** / **Add folder**). Staged items can be removed before
+**Create Folder** (Cmd/Ctrl+Enter); nothing uploads until submission. Confirmation
+closes the composer immediately while creation and uploads finish in the background.
+Expanding into a split keeps the draft. Creation preserves the current location
+and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
+action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft
+without submitting when verifying against hosted dev data. In a folder
 opened in its own split or an inline preview, drop files from the computer onto
 the empty state or file list, then reopen the folder to verify membership.
 Check both one file and multiple files; the nested list drop target must retain
