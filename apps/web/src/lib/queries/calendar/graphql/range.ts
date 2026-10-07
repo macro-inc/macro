@@ -38,14 +38,32 @@ export interface CalendarFetchWindow {
 }
 
 let latestSyncStatus: CalendarSyncStatus = CalendarSyncStatus.ready;
+let startedSyncStatusSamples = 0;
+let recordedSyncStatusSample = 0;
 
 /** The last ingestion state the server reported; ready until a page says otherwise. */
 export function latestCalendarSyncStatus(): CalendarSyncStatus {
   return latestSyncStatus;
 }
 
-export function recordCalendarSyncStatus(status: CalendarSyncStatus): void {
+/**
+ * Starts sampling the viewer-wide sync status. Requests can finish out of
+ * order, so a status records only if no later-started sample already did.
+ */
+export function beginCalendarSyncStatusSample(): number {
+  startedSyncStatusSamples += 1;
+  return startedSyncStatusSamples;
+}
+
+/** Records a sampled status; returns false when a newer sample superseded it. */
+export function recordCalendarSyncStatus(
+  status: CalendarSyncStatus,
+  sample: number
+): boolean {
+  if (sample < recordedSyncStatusSample) return false;
+  recordedSyncStatusSample = sample;
   latestSyncStatus = status;
+  return true;
 }
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -190,6 +208,7 @@ export async function fetchCalendarWindow(
   signal?: AbortSignal
 ): Promise<void> {
   const watermarks: CalendarLinkWatermarkWire[][] = [];
+  const sample = beginCalendarSyncStatusSample();
   let syncStatus: CalendarSyncStatus = CalendarSyncStatus.ready;
   let after: string | undefined;
   const seenCursors = new Set<string>();
@@ -215,7 +234,7 @@ export async function fetchCalendarWindow(
     seenCursors.add(page.endCursor);
     after = page.endCursor;
   }
-  recordCalendarSyncStatus(syncStatus);
+  recordCalendarSyncStatus(syncStatus, sample);
   await host.calendarCommit({
     coverage: window.coverage,
     watermark: { kind: 'merge', links: lowestWatermark(watermarks) },
