@@ -24,6 +24,7 @@ export type SpreadsheetCommand =
   | 'sort-asc'
   | 'sort-desc'
   | 'trim-whitespace'
+  | 'goal-seek'
   | 'border-all'
   | 'border-outer'
   | 'border-none'

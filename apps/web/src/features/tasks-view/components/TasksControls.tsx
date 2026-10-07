@@ -3,16 +3,18 @@ import {
   ListGroupDropdown,
   ListSortDropdown,
   useViewControlHotkeys,
+  ViewLayoutDropdown,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 
 export function TasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState } = useTasksView();
+  const { state, setPrimarySort, setState, projectsEnabled } = useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
@@ -50,22 +52,50 @@ export function TasksControls() {
   });
 
   const primarySort = () => state.sort[0]?.id ?? 'updated_at';
+  const isBoardSearch = () => state.layout === 'board' && !!state.search.trim();
+
+  const groupOptions = () => {
+    if (state.layout !== 'board') {
+      return TASK_GROUP_OPTIONS;
+    }
+
+    return TASK_BOARD_GROUP_OPTIONS.filter((option) => {
+      return option.id !== 'project' || projectsEnabled();
+    });
+  };
 
   return (
-    <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
-      <ListSortDropdown
-        label="Sort tasks"
-        value={primarySort()}
-        options={TASK_SORT_OPTIONS}
-        open={openMenu() === 'sort'}
-        onChange={setPrimarySort}
-        onOpenChange={handleMenuOpenChange('sort')}
-        triggerRef={(element) => (sortTrigger = element)}
+    <div class="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
+      <ViewLayoutDropdown
+        label="Task layout"
+        value={state.layout}
+        onChange={(layout) => setState('layout', layout)}
       />
+      <Show
+        when={!isBoardSearch()}
+        fallback={
+          <span
+            class="text-xs text-ink-muted"
+            title="Search results are ranked by relevance. Clear search to sort the board."
+          >
+            Relevance
+          </span>
+        }
+      >
+        <ListSortDropdown
+          label="Sort tasks"
+          value={primarySort()}
+          options={TASK_SORT_OPTIONS}
+          open={openMenu() === 'sort'}
+          onChange={setPrimarySort}
+          onOpenChange={handleMenuOpenChange('sort')}
+          triggerRef={(element) => (sortTrigger = element)}
+        />
+      </Show>
       <ListGroupDropdown
-        label="Group tasks"
+        label="Group by"
         value={state.groupBy}
-        options={TASK_GROUP_OPTIONS}
+        options={groupOptions()}
         onChange={(groupBy) => setState('groupBy', groupBy)}
       />
       <div class="relative shrink-0">

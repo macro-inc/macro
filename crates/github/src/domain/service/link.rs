@@ -195,11 +195,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     for GithubLinkServiceImpl<R, U, F, E>
 {
     #[tracing::instrument(skip(self), err)]
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
-        &self,
-        redirect_uri: &str,
-        state: T,
-    ) -> Result<String, GithubError> {
+    fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError> {
         self.oauth
             .construct_oauth_url(&self.config.client_id, redirect_uri, state)
             .map_err(|e| GithubError::Internal(e.into()))

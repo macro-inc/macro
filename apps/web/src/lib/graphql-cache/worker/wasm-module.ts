@@ -16,6 +16,9 @@ import type {
   CachedQueryVariantWire,
   CacheRevision,
   CacheRevisionResult,
+  CalendarCommitArgs,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -95,6 +98,11 @@ export interface CacheEngine {
   entityFilter(
     request: EntityFilterCacheArgs
   ): Promise<EntityFilterCacheResult>;
+  calendarRange(
+    request: CalendarRangeCacheArgs
+  ): Promise<CalendarRangeCacheResult>;
+  /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
+  calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
   writeQuery(
     context: {
       originOpId?: string;
@@ -131,7 +139,8 @@ export interface CacheEngine {
     leaseOwner: string,
     nowMs: number,
     leaseExpiresAtMs: number,
-    clientMetadata?: Record<string, unknown>
+    clientMetadata?: Record<string, unknown>,
+    uncertainCalendarEventKeys?: string[]
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,

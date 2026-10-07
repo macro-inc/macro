@@ -450,7 +450,9 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::ScheduledAction
         | EntityType::Initiative
         | EntityType::Database
-        | EntityType::DatabaseRow => {}
+        | EntityType::CrmPipeline
+        | EntityType::DatabaseRow
+        | EntityType::Form => {}
     }
 }
 
@@ -478,6 +480,7 @@ fn rankable_entity_types() -> Vec<String> {
         EntityType::Initiative,
         EntityType::Database,
         EntityType::DatabaseRow,
+        EntityType::Form,
     ]
     .into_iter()
     .map(|entity_type| entity_type.as_ref().to_owned())

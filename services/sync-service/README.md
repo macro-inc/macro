@@ -122,7 +122,9 @@ and D1 database
 ### Atomic document updates
 
 `GET /document/:id/state` returns JSON `{snapshot, revision}`.
-Both fields use standard base64: `snapshot` is a full Loro snapshot and `revision`
+Add `?shallow=true` to return current state without prior edit history; its revision
+and subsequent edits are identical to a full snapshot. Both fields use standard
+base64: `snapshot` is a Loro snapshot and `revision`
 is an encoded Loro version vector from that same state. Requests require a signed
 Bearer document permission token. An internal API key does not replace this token.
 

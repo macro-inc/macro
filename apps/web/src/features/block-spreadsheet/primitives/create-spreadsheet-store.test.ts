@@ -67,7 +67,46 @@ describe('spreadsheet store', () => {
     doc.free();
   });
 
-  it.each(['connected', 'connecting', 'offline'] as const)(
+  it('shifts coordinates in a connected workbook and keeps inserted columns', async () => {
+    const doc = new LoroDoc();
+    writeSpreadsheetCells(doc, { A1: { value: 'Name' }, B1: { value: '=A1' } });
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'connected',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    expect(store.canChangeStructure()).toBe(true);
+    const before = structuredClone(store.workbook());
+    const columns = before[0].layout.columnCount;
+    const next = before.map((sheet) => ({
+      ...sheet,
+      cells: { B1: sheet.cells.A1, C1: { ...sheet.cells.B1, value: '=B1' } },
+      layout: { ...sheet.layout, columnCount: columns + 1 },
+    }));
+    store.applyStructure(before, next, store.revision());
+    expect(store.cells().A1).toBeUndefined();
+    expect(store.cells().B1.value).toBe('Name');
+    expect(store.cells().C1.value).toBe('=B1');
+    expect(readSpreadsheetLayout(doc).columnCount).toBe(columns + 1);
+    store.undo();
+    expect(store.cells().A1.value).toBe('Name');
+    expect(readSpreadsheetLayout(doc).columnCount).toBe(columns);
+    dispose();
+    doc.free();
+  });
+
+  it.each(['connecting', 'offline'] as const)(
     'rejects coordinate shifts for a %s collaborative source',
     async (status) => {
       const doc = new LoroDoc();
@@ -93,7 +132,7 @@ describe('spreadsheet store', () => {
       expect(store.canChangeStructure()).toBe(false);
       expect(() =>
         store.applyStructure(before, before, store.revision())
-      ).toThrow('shared workbooks');
+      ).toThrow('Reconnect');
       expect(doc.version().toJSON()).toEqual(version);
       dispose();
       doc.free();

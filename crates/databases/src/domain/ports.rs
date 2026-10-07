@@ -181,6 +181,14 @@ pub trait DatabaseStorage: Send + Sync + 'static {
     /// Allocate an empty core database without creating an app entity or grants.
     fn create_storage(&self) -> impl Future<Output = Result<DatabaseId, Self::Error>> + Send;
 
+    /// A bounded page of identities from a host-authorized storage table.
+    fn storage_row_page(
+        &self,
+        table: TableId,
+        after: Option<RowId>,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<RowRef>, Self::Error>> + Send;
+
     /// Delete unbound storage, its tables, cells, definitions and journal.
     /// An attached app entity prevents deletion through its foreign key.
     fn delete_storage(
@@ -227,7 +235,8 @@ pub trait CellStore: Send + Sync + 'static {
     /// live and at its expected version, each new definition created before
     /// any column binds it, each updated or deleted row checked to belong to
     /// its table, each related row to its target table, each changed option
-    /// or column to its definition, and each changed table's version bumped
+    /// or column to its definition, all affected required cells checked in the final
+    /// batch state, and each changed table's version bumped
     /// once. Anything but [`WritesOutcome::Applied`] wrote nothing.
     fn apply_writes(
         &self,
@@ -307,10 +316,16 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionId>, Self::Error>> + Send;
 }
 
-/// Liveness: tell open clients a table changed.
+/// Liveness: tell open clients a database or table changed.
 pub trait TableEventPublisher: Send + Sync + 'static {
     /// The error type returned by the publisher.
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Announce changed database metadata so viewers re-read it as themselves.
+    fn database_changed(
+        &self,
+        database_id: DatabaseId,
+    ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
     /// Announce a table's new version.
     fn table_changed(
@@ -497,4 +512,50 @@ pub trait DatabasesService: Send + Sync + 'static {
         viewer: Viewer,
         id: QueryId,
     ) -> impl Future<Output = Result<SavedQuery, SavedQueryError>> + Send;
+}
+
+/// Plain reads of a table's cells for a domain that decides access itself
+/// (forms, for a respondent's own answers and a poll's tallies), so it
+/// never reaches a databases adapter. A port of its own, like sharing, so
+/// the many `DatabasesService` stand-ins need not grow reads they never use.
+pub trait DatabaseRowReads: Send + Sync + 'static {
+    /// The cells of those of `rows` that belong to the table, each as the
+    /// op writing it would name it, in column order; a row of the table with
+    /// no cells maps to none, and a row not in the table is left out.
+    fn cells_of_rows(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        rows: &[RowId],
+    ) -> impl Future<
+        Output = Result<HashMap<RowId, Vec<models_databases::CellWrite>>, DatabaseError>,
+    > + Send;
+
+    /// One column's nonempty cells, by row, across the whole table.
+    fn column_cells(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        column_id: ColumnId,
+    ) -> impl Future<Output = Result<HashMap<RowId, models_databases::CellValue>, DatabaseError>> + Send;
+
+    /// How many rows the table has.
+    fn row_count(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+    ) -> impl Future<Output = Result<u64, DatabaseError>> + Send;
+}
+
+/// A database's own facts, for a domain that decides access itself and
+/// names something after a database (forms, for a form that created its own
+/// database). A port of its own, like [`DatabaseRowReads`], so the many
+/// `DatabasesService` stand-ins need not grow it.
+pub trait DatabaseMetadataReads: Send + Sync + 'static {
+    /// The receipt's database, in the trash or not: what it is called
+    /// outlives its tables being readable.
+    fn database_metadata(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
 }

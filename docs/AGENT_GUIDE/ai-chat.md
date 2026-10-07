@@ -12,8 +12,10 @@ Repeat with the default model and with an explicit model/effort selection.
 The first visible output and the first answer text should appear as they arrive;
 later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
-Selected model and effort must be confirmed before the first prompt; settings
-already confirmed by the runtime do not need another control request.
+A model selected before the first prompt is part of the create request, and the
+runtime starts on it; no model change appears in the new session's transcript.
+A selected effort is confirmed before the first prompt; settings the runtime
+already reports do not need another control request.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
@@ -597,7 +599,7 @@ protocol error with a stable `code` and `retryable` flag, not an HTTP status.
 A direct AI tool/MCP or AI-edit refusal is a failed tool result even if the outer
 transport succeeds. No worker/provider edit should happen after refusal. Ordinary
 manual editing, deterministic tools/imports, and the exempt Memory, AiProjection,
-CallSummary, and Dictation features are not blocked by quota. Optional naming or
+CallSummary, Dictation, and ChatRename features are not blocked by quota. Optional naming or
 trigger inference may be skipped without blocking successful primary work; it
 must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
@@ -1032,10 +1034,13 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
-the owner can change or remove a conversation's access. **Link sharing** offers
+the owner can change or remove a conversation's access. When that list holds
+nobody but the owner — what a participant who cannot read the other grants
+sees — the section is titled **Owner** instead. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
-People, and Link tabs. View and Comment allow reading; Edit also allows
+People, and Link tabs, and the People tab is likewise named Owner when only the
+owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
@@ -1490,22 +1495,17 @@ Ask the AI to find or reuse an existing booking link before creating another.
 shareable URLs (including paused links). It also supplies the revision used to
 protect edits from concurrent settings changes.
 
-`CreateBookingLink` and `EditBookingLink` open the same native booking review form
-in chat and in an agent session's elicitation. Edit title, slug, duration, location
-or Google Meet, enabled state, weekly hours, time zone, date overrides, buffers,
-notice, booking window, daily limit, questions and team hosts directly in the
-card. Create/Save accepts the complete edited draft; no extra confirmation is
-required. Cancel declines without saving. Link creation itself sends no calendar
-invitations. Guests receive an invitation only when they book through the normal
-booking page.
+Booking links are confirmed in conversation, with no special booking form. The AI
+first explains the proposed meeting details, ownership and named hosts, time zone,
+availability and date exceptions, booking rules, guest questions and whether the
+link accepts bookings. It asks whether to proceed and waits for your reply before
+calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a
+link is not approval of the proposal. IDs and revisions are discovered through
+tools; you should never be asked to enter a team ID, host ID or JSON.
 
-A successful result shows the actual saved URL and whether the link accepts
-bookings. Editing hours affects only that link, preserving other links and personal
-default availability. If another settings edit made the revision stale, ask the AI
-to read the latest link and propose the edit again rather than retrying the stale
-revision. A network/save error preserves the review for retry; repeating an
-identical successful create or edit does not create another link.
-
-For isolated UI checks, `/src/features/scheduling/browser-test/booking-ai.html`
-mounts the actual review controls with the agent elicitation sink and no remote
-writes. It includes create/edit modes and simulated save failures.
+A successful result returns the saved URL. Link creation itself sends no calendar
+invitations; guests receive an invitation when they book. Editing hours affects
+only that link. If another edit makes the revision stale, the AI reads the latest
+settings and confirms a fresh proposal. Identical retries reuse the saved link.
+Old pending booking review requests can be dismissed so the agent can resume with
+conversational confirmation.

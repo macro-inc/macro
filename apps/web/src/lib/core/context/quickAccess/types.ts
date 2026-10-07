@@ -10,6 +10,7 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  FormEntity,
   InitiativeEntity,
   ProjectEntity,
   SkillEntity,
@@ -39,7 +40,8 @@ export type Bucket =
   | 'crm_contact'
   | 'agent_session'
   | 'initiative'
-  | 'database';
+  | 'database'
+  | 'form';
 
 export type EntityBucket = Exclude<Bucket, 'person'>;
 
@@ -59,6 +61,7 @@ const ALL_BUCKETS: Bucket[] = [
   'crm_contact',
   'agent_session',
   'database',
+  'form',
   'initiative',
 ];
 
@@ -76,6 +79,7 @@ export const BUCKET_COMBINATIONS: Record<BucketCombination, Bucket[]> = {
     'chat',
     'project',
     'database',
+    'form',
     'initiative',
   ],
 };
@@ -149,6 +153,7 @@ export type BucketItemMap = {
   crm_contact: EntityItem<CrmContactEntity>;
   agent_session: EntityItem<AgentSessionEntity>;
   database: EntityItem<DatabaseEntity>;
+  form: EntityItem<FormEntity>;
   initiative: EntityItem<InitiativeEntity>;
   person: UserItem;
 };

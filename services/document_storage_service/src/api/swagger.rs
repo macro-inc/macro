@@ -211,6 +211,7 @@ use utoipa::OpenApi;
     info(
         terms_of_service = "https://macro.com/terms",
     ),
+    modifiers(&FormsApiAddon),
     paths(
         dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
@@ -245,6 +246,7 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_branch_name::get_branch_name_handler,
         documents_hex::inbound::axum_router::get_github_pull_requests::get_github_pull_requests_handler,
+        documents_hex::inbound::axum_router::get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
         documents_hex::inbound::axum_router::get_short_id::get_short_id_handler,
         documents::simple_save::handler,
         documents::initialize_user_documents::handler,
@@ -499,6 +501,16 @@ use utoipa::OpenApi;
         sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
 
         // /crm
+        crm::inbound::pipelines::create,
+        crm::inbound::pipelines::list,
+        crm::inbound::pipelines::read,
+        crm::inbound::pipelines::table,
+        crm::inbound::pipelines::rows,
+        crm::inbound::pipelines::query_rows,
+        crm::inbound::pipelines::apply_ops,
+        crm::inbound::pipelines::rename,
+        crm::inbound::pipelines::share,
+        crm::inbound::pipelines::trash,
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
@@ -947,6 +959,9 @@ use utoipa::OpenApi;
             documents_hex::domain::models::GithubPullRequestCheckRun,
             documents_hex::domain::models::GithubPullRequestComment,
             documents_hex::domain::models::GithubPullRequestsResponse,
+            documents_hex::domain::models::GithubPullRequestTasksRequest,
+            documents_hex::domain::models::GithubPullRequestTasks,
+            documents_hex::domain::models::GithubPullRequestTasksResponse,
 
             // Sync service
             sync_service_hex::domain::models::BulkWakeupRequest,
@@ -977,6 +992,14 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+struct FormsApiAddon;
+
+impl utoipa::Modify for FormsApiAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.merge(forms::inbound::axum_router::FormsApi::openapi());
+    }
+}
 
 #[cfg(test)]
 mod test;

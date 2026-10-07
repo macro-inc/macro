@@ -796,6 +796,23 @@ async fn get_missing_session_errors(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_answers_none_only_for_a_missing_session(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let stored = create_session(&repo, new_session(bot_id, None, None)).await;
+
+    let found = AgentSessionRepo::find(&repo, stored.id)
+        .await
+        .expect("find a stored session");
+    let missing = AgentSessionRepo::find(&repo, AgentSessionId::new())
+        .await
+        .expect("find a missing session");
+
+    assert_eq!(found.map(|session| session.id), Some(stored.id));
+    assert!(missing.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_removes_session(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;
@@ -2353,6 +2370,51 @@ async fn pull_request_links_keep_the_pull_request_the_agent_opened(pool: PgPool)
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn links_for_pull_requests_returns_every_link_to_the_requested_keys(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    use crate::domain::pull_request_links::{PullRequestLinkSource, SessionPullRequestLinkRepo};
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let first = create_session(&repo, new_session(bot, None, None)).await;
+    let second = create_session(&repo, new_session(bot, None, None)).await;
+    let owner = first.owner_user().unwrap();
+
+    repo.record_pull_request(first.id, owner, "https://github.com/Org/repo/pull/7", None)
+        .await
+        .unwrap();
+    repo.link_pull_request(second.id, "org/repo/pull/7", owner)
+        .await
+        .unwrap();
+    repo.link_pull_request(second.id, "org/repo/pull/9", owner)
+        .await
+        .unwrap();
+
+    let rows = repo
+        .links_for_pull_requests(&["org/repo/pull/7".to_owned(), "org/repo/pull/8".to_owned()])
+        .await
+        .unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|row| (row.github_key.to_lowercase(), row.session, row.source))
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                "org/repo/pull/7".to_owned(),
+                first.id,
+                PullRequestLinkSource::Agent
+            ),
+            (
+                "org/repo/pull/7".to_owned(),
+                second.id,
+                PullRequestLinkSource::User
+            ),
+        ]
+    );
+    assert!(rows.iter().all(|row| row.thread_parent.is_none()));
+    assert!(repo.links_for_pull_requests(&[]).await.unwrap().is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

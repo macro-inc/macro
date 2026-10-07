@@ -1,7 +1,7 @@
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import { useQuery } from '@tanstack/solid-query';
+import { useQueries, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { entityKeys } from './keys';
 
@@ -38,13 +38,34 @@ export function useDocumentMetadataQuery(documentId: Accessor<string>) {
   }));
 }
 
-/** Loads the current user's access level for a document. */
-export function useDocumentAccessLevelQuery(documentId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: entityKeys.documentAccessLevel(documentId()).queryKey,
-    queryFn: () => fetchDocumentAccessLevel(documentId()),
+/** Shared options keep single-document and collection access checks on the same cache key. */
+export function documentAccessLevelQueryOptions(documentId: string) {
+  return {
+    queryKey: entityKeys.documentAccessLevel(documentId).queryKey,
+    queryFn: () => fetchDocumentAccessLevel(documentId),
     staleTime: STALE_TIME,
     gcTime: GC_TIME,
-    enabled: !!documentId(),
-  }));
+    enabled: !!documentId,
+  };
+}
+
+/** Loads the current user's access level for a document. */
+export function useDocumentAccessLevelQuery(documentId: Accessor<string>) {
+  return useQuery(() => documentAccessLevelQueryOptions(documentId()));
+}
+
+/** One shared query per unique document, even when a board renders several occurrences. */
+export function useDocumentAccessLevelsQuery(
+  documentIds: Accessor<readonly string[]>
+) {
+  return useQueries(() => {
+    const uniqueDocumentIds = [...new Set(documentIds())];
+
+    return {
+      queries: uniqueDocumentIds.map((documentId) => ({
+        ...documentAccessLevelQueryOptions(documentId),
+        select: (accessLevel: AccessLevel) => ({ documentId, accessLevel }),
+      })),
+    };
+  });
 }

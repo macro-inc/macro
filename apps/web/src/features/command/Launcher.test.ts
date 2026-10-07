@@ -38,6 +38,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableChatV3Agents: 'agents',
   enableDatabases: 'databases',
   enableFigViewer: 'fig',
+  enableForms: 'forms',
   enableProjects: 'projects',
   enablePsdEditor: 'psd',
   enableReminders: 'reminders',
@@ -51,6 +52,7 @@ vi.mock('@core/mobile/isMobile', () => ({}));
 vi.mock('@core/util/create', () => ({}));
 vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@queries/storage/databases', () => ({}));
+vi.mock('@queries/storage/forms', () => ({}));
 vi.mock('@queries/storage/projects', () => ({}));
 vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));

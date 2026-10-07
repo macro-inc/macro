@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
-import { enableDatabases } from '@core/constant/featureFlags';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -12,6 +12,7 @@ import {
   getBotDisplayName,
 } from '@queries/messages/message-sender';
 import { useDatabasesQuery } from '@queries/storage/databases';
+import { useFormDetailQuery } from '@queries/storage/forms';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
@@ -109,6 +110,7 @@ function appActivityContext(): ActivityContext {
   const databasesQuery = () =>
     (databases ??= runWithOwner(owner, useDatabasesQuery));
   const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
   return {
     graphql: () => getGraphqlSoupClient(),
     currentUserId: () => userId() ?? '',
@@ -127,12 +129,14 @@ function appActivityContext(): ActivityContext {
       return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
     entityTypeShown: (entityType) =>
-      entityType !== 'database' || databasesFlag().enabled,
+      (entityType !== 'database' || databasesFlag().enabled) &&
+      (entityType !== 'form' || formsFlag().enabled),
     entityDisplay: (entityId, entityType) => {
       const type = entityType();
       if (type === 'DATABASE') {
         return databaseEntityDisplay(entityId, databasesQuery);
       }
+      if (type === 'FORM') return formEntityDisplay(entityId);
       return usePropertyEntityDisplay(entityId, () => type);
     },
     propertyDefinition: (propertyId) => {
@@ -142,6 +146,21 @@ function appActivityContext(): ActivityContext {
         return id ? definitions().find((def) => def.id === id) : undefined;
       };
     },
+  };
+}
+
+/** A form's name from its own detail, which any respondent can read. */
+function formEntityDisplay(entityId: Accessor<string>): EntityDisplay {
+  const detail = useFormDetailQuery(entityId);
+  return {
+    name: () => {
+      if (detail.isPending) return 'Loading...';
+      return detail.isSuccess ? detail.data.form.name : 'Form unavailable';
+    },
+    icon: () => <CoreEntityIcon targetType="form" size="xs" />,
+    isLoading: () => detail.isPending,
+    blockOrFileType: () => 'form',
+    linkParams: () => undefined,
   };
 }
 

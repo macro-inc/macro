@@ -9,6 +9,8 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -71,6 +73,8 @@ function SpreadsheetBlockContent(props: { share?: string }) {
   const canEdit = useCanEdit();
   const userId = useUserId();
   const permissions = useGetPermissions();
+  const canAutofocus = useCanAutofocusSplitContent();
+  const { navigatedFromJK } = useNavigatedFromJK();
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'spreadsheet',
@@ -173,6 +177,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
                 <SpreadsheetComments documentId={documentId} store={store}>
                   {(commentLocation, comments) => (
                     <SpreadsheetEditor
+                      autoFocus={canAutofocus && !navigatedFromJK()}
                       commentLocation={commentLocation()}
                       comments={comments}
                       mentions={spreadsheetMentions}

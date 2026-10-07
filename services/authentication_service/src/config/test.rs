@@ -1,4 +1,4 @@
-use authentication_service::service::signup_policy::SignupPolicyDenial;
+use crate::service::signup_policy::SignupPolicyDenial;
 
 use super::*;
 
@@ -24,6 +24,7 @@ fn config_values() -> serde_json::Value {
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GITHUB_IDP_ID",
+        "ACCOUNT_LINK_STATE_SECRET",
         "STRIPE_PRICE_ID",
         "INTERNAL_API_KEY",
         "KAFKA_BROKERS",
@@ -120,6 +121,32 @@ fn billing_settlement_config_defaults_off_and_requires_a_boolean() {
     }
     values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!("invalid");
     assert!(serde_json::from_value::<Config>(values).is_err());
+}
+
+#[test]
+fn account_link_state_secret_is_mandatory_and_must_be_long_enough() {
+    let mut values = config_values();
+    values
+        .as_object_mut()
+        .unwrap()
+        .remove("ACCOUNT_LINK_STATE_SECRET");
+    assert!(
+        serde_json::from_value::<Config>(values).is_err(),
+        "ACCOUNT_LINK_STATE_SECRET must be mandatory"
+    );
+
+    // The placeholder value every other key uses is far too short to sign with.
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    let error = config
+        .validate_account_link_state_secret()
+        .expect_err("a short signing secret must be rejected");
+    assert!(error.to_string().contains("ACCOUNT_LINK_STATE_SECRET"));
+
+    let mut values = config_values();
+    values["ACCOUNT_LINK_STATE_SECRET"] = serde_json::json!("x".repeat(32));
+    let config: Config = serde_json::from_value(values).unwrap();
+    config.validate_account_link_state_secret().unwrap();
+    config.account_link_state_key().unwrap();
 }
 
 #[test]

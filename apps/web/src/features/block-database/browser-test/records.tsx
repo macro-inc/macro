@@ -5,10 +5,10 @@ import { render } from 'solid-js/web';
 import type {
   DatabaseRowsSnapshot,
   DatabaseRowsSource,
-} from '../context/table-source';
-import type { DatabaseViewColumn } from '../core/database-view';
-import { optimisticRows } from '../core/table';
-import { DatabaseRecordsView } from '../views/database-records-view';
+} from '../../database/context/table-source';
+import type { DatabaseViewColumn } from '../../database/core/database-view';
+import { optimisticRows } from '../../database/core/table';
+import { DatabaseRecordsView } from '../../database/views/database-records-view';
 
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {

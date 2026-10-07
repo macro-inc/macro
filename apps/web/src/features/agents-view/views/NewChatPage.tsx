@@ -44,6 +44,8 @@ export type StartConversation = {
   repoUrl?: string;
   repoBranch?: string;
   modelOverride?: string;
+  /** The catalog was still loading, so an in-memory agent runs its persona default. */
+  modelFallback?: boolean;
   effortOverride?: { configId: string; value: string };
 };
 
@@ -219,6 +221,8 @@ export function NewChatPage(props: {
     const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
     const model = composerModelOverride();
+    const inMemory =
+      persona.harness === 'macro-inmem' || persona.harness === 'in-memory';
     props.onStart({
       prompt,
       ...(attachments.length > 0
@@ -228,6 +232,9 @@ export function NewChatPage(props: {
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
+      ...(inMemory && !model && selectedCatalog.pending()
+        ? { modelFallback: true }
+        : {}),
       effortOverride: effortOverride(),
     });
     attachmentTracker.clearAttachments();

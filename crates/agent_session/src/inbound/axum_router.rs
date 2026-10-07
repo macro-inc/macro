@@ -69,6 +69,8 @@ pub mod sharing;
 /// Routes associating pull requests with sessions.
 pub mod pull_requests;
 
+mod owned_purge;
+
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
 pub struct AgentSessionRouterState<T, Access, Auth> {
@@ -229,6 +231,10 @@ where
             delete(delete_user_sessions_handler::<R, Access, Auth>),
         )
         .route(
+            "/internal/{session_id}",
+            delete(owned_purge::purge_owned_session_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/control",
             post(control_agent_session_handler::<R, Access, Auth>),
         )
@@ -385,6 +391,7 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(
                 error @ (AgentSessionError::TooManyPreviewIds(_)
+                | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
             Self::Domain(error @ AgentSessionError::Archived(_)) => {

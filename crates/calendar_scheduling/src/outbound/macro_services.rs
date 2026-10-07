@@ -86,10 +86,10 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
-            events.extend(
-                rows.into_iter()
-                    .map(|(event, occurrence)| (host.clone(), event, occurrence)),
-            );
+            events.extend(rows.into_iter().map(|listing| {
+                let (event, occurrence) = listing.into_occurrence_event();
+                (host.clone(), event, occurrence)
+            }));
         }
         let excluded_uid = events
             .iter()

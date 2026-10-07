@@ -20,7 +20,7 @@ use models_databases::{
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
 use super::*;
-use crate::domain::catalog::ColumnEntry;
+use crate::domain::catalog::{ColumnEntry, StorageTable};
 use crate::domain::journal::{JournalPlan, Restoration};
 use crate::domain::models::{AppliedOps, CommittedChange};
 use crate::domain::models::{
@@ -33,7 +33,7 @@ use chrono::DateTime;
 const MAX_WRITTEN_ROWS: usize = 10_000;
 /// How often a batch is planned again when a table whose schema it changes
 /// moves between its planning and its locks.
-const MAX_PLANNING_ATTEMPTS: usize = 3;
+pub(super) const MAX_PLANNING_ATTEMPTS: usize = 3;
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
@@ -87,17 +87,64 @@ where
         batch: &OpBatch,
         restoration: &Restoration,
     ) -> Result<Option<AppliedOps>, DatabaseError> {
-        let OpBatch { ops, base_versions } = batch;
-        let ops = ops.as_slice();
         let database_id = receipt_database_id(receipt)?;
         let grant = receipt_grant(receipt, AccessLevel::Edit);
-        let entries = self
+        let entries: Vec<StorageTable> = self
             .entries_for(&HashMap::from([(database_id, grant)]))
-            .await?;
-        let Some(database) = entries.first().map(|entry| entry.database.clone()) else {
+            .await?
+            .into_iter()
+            .map(StorageTable::from)
+            .collect();
+        if entries.is_empty() {
             return Err(DatabaseError::NotFound);
-        };
-        refuse_foreign_tables(&entries, ops)?;
+        }
+        let attribution = receipt_attribution(receipt);
+        let ops = batch.ops.as_slice();
+        let (writes, planner) = self
+            .prepare_storage_batch(database_id, &entries, viewer, batch, restoration)
+            .await?;
+        let outcome = self
+            .cells
+            .apply_writes(&writes)
+            .await
+            .map_err(repository_error)?;
+        if let WritesOutcome::SchemaMoved(_) = outcome {
+            return Ok(None);
+        }
+        let committed = applied(outcome, ops, &planner.related)?;
+
+        let mut changes: Vec<(DatabaseId, TableId, TableVersion)> = committed
+            .table_versions
+            .iter()
+            .map(|(table, version)| {
+                let database = related_database(&writes, *table).unwrap_or(database_id);
+                (database, *table, *version)
+            })
+            .collect();
+        changes.extend(writes.writes.iter().filter_map(|write| match write {
+            Write::DeleteTable { table_id, version } => Some((database_id, *table_id, *version)),
+            _ => None,
+        }));
+        self.publish(attribution, &changes).await;
+        let journaled = committed.changes.clone();
+        Ok(Some(AppliedOps {
+            results: op_results(&entries, ops, &writes, committed)?,
+            changes: journaled,
+        }))
+    }
+
+    pub(super) async fn prepare_storage_batch(
+        &self,
+        database_id: DatabaseId,
+        entries: &[StorageTable],
+        viewer: &Viewer,
+        batch: &OpBatch,
+        restoration: &Restoration,
+    ) -> Result<(Writes, Planner), DatabaseError> {
+        let OpBatch { ops, base_versions } = batch;
+        let ops = ops.as_slice();
+        let grant = AccessLevel::Edit;
+        refuse_foreign_tables(entries, ops)?;
         for (table, version) in base_versions {
             let entry = entries
                 .iter()
@@ -107,9 +154,8 @@ where
                 return Err(DatabaseError::VersionConflict);
             }
         }
-        let attribution = receipt_attribution(receipt);
 
-        let mut found = self.found_for(&entries, viewer, ops).await?;
+        let mut found = self.found_for(database_id, entries, viewer, ops).await?;
         let rebound: Vec<PropertyDefinitionId> = restoration.rebinds.values().copied().collect();
         if !rebound.is_empty() {
             found.rebound = self
@@ -122,12 +168,12 @@ where
                 .collect();
         }
         let editable = self
-            .editable_shared_definitions(&entries, &found, database_id, viewer, ops)
+            .editable_shared_definitions(entries, &found, database_id, viewer, ops)
             .await?;
-        let boards = self.boards_moved_by(&entries, ops).await?;
+        let boards = self.boards_moved_by(entries, ops).await?;
         let mut planner = Planner {
             entries: entries.iter().cloned().map(Arc::new).collect(),
-            database,
+            database_id,
             grant,
             editable,
             found,
@@ -162,38 +208,15 @@ where
                 .collect(),
             journal: JournalPlan {
                 ops: ops.to_vec(),
-                schema: catalog::schema_image(&entries),
+                schema: catalog::storage_schema_image(
+                    entries
+                        .iter()
+                        .map(|e| (&e.table, e.columns.as_slice(), e.views.as_slice())),
+                ),
                 acting_bot: viewer.acting_bot,
             },
         };
-        let outcome = self
-            .cells
-            .apply_writes(&writes)
-            .await
-            .map_err(repository_error)?;
-        if let WritesOutcome::SchemaMoved(_) = outcome {
-            return Ok(None);
-        }
-        let committed = applied(outcome, ops, &planner.related)?;
-
-        let mut changes: Vec<(DatabaseId, TableId, TableVersion)> = committed
-            .table_versions
-            .iter()
-            .map(|(table, version)| {
-                let database = related_database(&writes, *table).unwrap_or(database_id);
-                (database, *table, *version)
-            })
-            .collect();
-        changes.extend(writes.writes.iter().filter_map(|write| match write {
-            Write::DeleteTable { table_id, version } => Some((database_id, *table_id, *version)),
-            _ => None,
-        }));
-        self.publish(attribution, &changes).await;
-        let journaled = committed.changes.clone();
-        Ok(Some(AppliedOps {
-            results: op_results(&entries, ops, &writes, committed)?,
-            changes: journaled,
-        }))
+        Ok((writes, planner))
     }
 
     /// What the batch's ops need read before they are planned: the
@@ -201,14 +224,11 @@ where
     /// database, and the cells of every column it retypes.
     async fn found_for(
         &self,
-        entries: &[TableEntry],
+        database_id: DatabaseId,
+        entries: &[StorageTable],
         viewer: &Viewer,
         ops: &[DatabaseOp],
     ) -> Result<Found, DatabaseError> {
-        let database_id = entries
-            .first()
-            .map(|entry| entry.database.id)
-            .ok_or(DatabaseError::NotFound)?;
         let mut found = Found::default();
         for op in ops {
             let DatabaseOp::Column {
@@ -317,7 +337,7 @@ where
     /// now, so the planner can place each move among them.
     async fn boards_moved_by(
         &self,
-        entries: &[TableEntry],
+        entries: &[StorageTable],
         ops: &[DatabaseOp],
     ) -> Result<HashMap<ViewId, views::Board>, DatabaseError> {
         let mut boards = HashMap::new();
@@ -384,7 +404,7 @@ where
     /// not enough on its own.
     async fn editable_shared_definitions(
         &self,
-        entries: &[TableEntry],
+        entries: &[StorageTable],
         found: &Found,
         database_id: DatabaseId,
         viewer: &Viewer,
@@ -466,7 +486,10 @@ fn option_columns(op: &DatabaseOp) -> Option<(TableId, Vec<ColumnId>)> {
 
 /// Refuse a batch naming a table that is neither in the receipt's database
 /// nor created by an earlier op of the batch.
-fn refuse_foreign_tables(entries: &[TableEntry], ops: &[DatabaseOp]) -> Result<(), DatabaseError> {
+fn refuse_foreign_tables(
+    entries: &[StorageTable],
+    ops: &[DatabaseOp],
+) -> Result<(), DatabaseError> {
     let mut created: Vec<TableId> = Vec::new();
     for (index, op) in ops.iter().enumerate() {
         if let DatabaseOp::Table {
@@ -522,6 +545,12 @@ fn applied(
             table_versions,
             changes,
         }),
+        WritesOutcome::MissingRequiredCell { write, column, row } => Err(refuse(
+            write,
+            row_index(&ops[write], row),
+            Some(column),
+            "the required column needs a value",
+        )),
         WritesOutcome::SchemaMoved(_) => Err(DatabaseError::VersionConflict),
         WritesOutcome::TableNotFound(_) => Err(DatabaseError::NotFound),
         WritesOutcome::VersionConflict(_) | WritesOutcome::TablesChanged { .. } => {
@@ -551,6 +580,12 @@ fn applied(
             None,
             column_of(write),
             "the column was removed or changed by someone else; refresh and try again",
+        )),
+        WritesOutcome::ColumnProtected { write, capability } => Err(refuse(
+            write,
+            None,
+            column_of(write),
+            SchemaError::ColumnProtected { capability }.to_string(),
         )),
         WritesOutcome::ColumnRenamedElsewhere { write } => Err(refuse(
             write,
@@ -618,7 +653,7 @@ fn applied(
 
 /// One result per op, in order, from what its write committed.
 fn op_results(
-    entries: &[TableEntry],
+    entries: &[StorageTable],
     ops: &[DatabaseOp],
     writes: &Writes,
     committed: Committed,
@@ -863,10 +898,10 @@ struct Found {
 /// Turns ops into writes against one database's catalog, as the ops before
 /// each leave it, collecting the options they create and the rows their
 /// relation cells point at.
-struct Planner {
+pub(super) struct Planner {
     /// The database's tables as the ops so far leave them, in tab order.
-    entries: Vec<Arc<TableEntry>>,
-    database: Database,
+    entries: Vec<Arc<StorageTable>>,
+    database_id: DatabaseId,
     grant: AccessLevel,
     /// The shared definitions whose options the viewer may change.
     editable: Vec<PropertyDefinitionId>,
@@ -909,6 +944,23 @@ impl Place {
 }
 
 impl Planner {
+    pub(super) fn finish(
+        &self,
+        entries: &[StorageTable],
+        batch: &OpBatch,
+        writes: &Writes,
+        outcome: WritesOutcome,
+    ) -> Result<AppliedOps, DatabaseError> {
+        let committed = applied(outcome, &batch.ops, &self.related)?;
+        let changes = committed.changes.clone();
+        Ok(AppliedOps {
+            results: op_results(entries, &batch.ops, writes, committed)?,
+            changes,
+        })
+    }
+}
+
+impl Planner {
     /// The write one op makes: its target (the table, column or view) is
     /// resolved once, and its change planned against it.
     fn write(&mut self, index: usize, op: &DatabaseOp) -> Result<Write, DatabaseError> {
@@ -947,7 +999,7 @@ impl Planner {
         &mut self,
         index: usize,
         table: TableId,
-        entry: Result<Arc<TableEntry>, DatabaseError>,
+        entry: Result<Arc<StorageTable>, DatabaseError>,
         change: &TableChange,
     ) -> Result<Write, DatabaseError> {
         match change {
@@ -967,7 +1019,7 @@ impl Planner {
     fn column_write(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: ColumnId,
         change: &ColumnChange,
     ) -> Result<Write, DatabaseError> {
@@ -1013,7 +1065,7 @@ impl Planner {
     }
 
     /// The table an op names, as the ops so far leave it.
-    fn entry(&self, index: usize, table: TableId) -> Result<Arc<TableEntry>, DatabaseError> {
+    fn entry(&self, index: usize, table: TableId) -> Result<Arc<StorageTable>, DatabaseError> {
         self.entries
             .iter()
             .find(|entry| entry.table.id == table)
@@ -1022,7 +1074,7 @@ impl Planner {
     }
 
     /// The table an op changes, to change it in place.
-    fn entry_mut(&mut self, table: TableId) -> Option<&mut TableEntry> {
+    fn entry_mut(&mut self, table: TableId) -> Option<&mut StorageTable> {
         self.entries
             .iter_mut()
             .find(|entry| entry.table.id == table)
@@ -1046,7 +1098,7 @@ impl Planner {
     /// Refuse a change to the options of a property shared beyond the
     /// database unless the viewer may edit that property.
     fn may_change_options(&self, place: Place, column: &ColumnEntry) -> Result<(), DatabaseError> {
-        if column.shared_outside(self.database.id)
+        if column.shared_outside(self.database_id)
             && !self.editable.contains(&column.definition.definition.id)
         {
             return Err(place.refuse(

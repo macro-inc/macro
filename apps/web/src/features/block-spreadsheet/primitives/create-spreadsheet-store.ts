@@ -460,6 +460,11 @@ export function createSpreadsheetStore(options: {
   );
 
   const editable = () => options.source.ready() && options.canEdit();
+  // A structural edit rewrites cells at new coordinates. Offline, it could
+  // merge long after collaborators kept editing the old ones.
+  const canShiftCoordinates = () =>
+    options.source.status() === 'local' ||
+    options.source.status() === 'connected';
 
   function setActiveSheet(id: string) {
     if (!workbook().some((sheet) => sheet.id === id)) return;
@@ -638,7 +643,7 @@ export function createSpreadsheetStore(options: {
       doc.commit({ origin: 'spreadsheet-layout' });
       refresh();
     },
-    canChangeStructure: () => editable() && options.source.status() === 'local',
+    canChangeStructure: () => editable() && canShiftCoordinates(),
     applyStructure(
       expected: SpreadsheetWorkbookSheet[],
       next: SpreadsheetWorkbookSheet[],
@@ -647,10 +652,8 @@ export function createSpreadsheetStore(options: {
       const doc = options.source.doc();
       if (!doc || !editable())
         throw new Error('This spreadsheet is view only.');
-      if (options.source.status() !== 'local')
-        throw new Error(
-          'Inserting and deleting rows or columns is not yet available in shared workbooks.'
-        );
+      if (!canShiftCoordinates())
+        throw new Error('Reconnect to insert or delete rows or columns.');
       if (revision() !== expectedRevision)
         throw new Error(
           'The workbook changed while moving cells. No changes were applied; try again.'
@@ -703,11 +706,23 @@ export function createSpreadsheetStore(options: {
               false
             );
         }
-        const addition = sheet.layout.rowCount - previous.layout.rowCount;
-        if (addition > 0)
-          doc
-            .getMap('spreadsheetRowAdditions')
-            .set(spreadsheetSheetKey(crypto.randomUUID(), sheet.id), addition);
+        for (const [map, addition] of [
+          [
+            'spreadsheetRowAdditions',
+            sheet.layout.rowCount - previous.layout.rowCount,
+          ],
+          [
+            'spreadsheetColumnAdditions',
+            sheet.layout.columnCount - previous.layout.columnCount,
+          ],
+        ] as const)
+          if (addition > 0)
+            doc
+              .getMap(map)
+              .set(
+                spreadsheetSheetKey(crypto.randomUUID(), sheet.id),
+                addition
+              );
       }
       doc.commit({ origin: 'spreadsheet-axis-change' });
       refresh();
