@@ -14,11 +14,13 @@ use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
 use url::Url;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
-    oauth2::OAuthState,
-    permissions_extractor::DbPermissionsExtractor,
+use crate::{
+    account_link_state::{AccountLinkState, LinkProvider, sign_account_link_state},
+    api::{
+        context::{ApiContext, AuthorizationService},
+        link::github::REAUTHENTICATION_REQUIRED_MESSAGE,
+        permissions_extractor::DbPermissionsExtractor,
+    },
 };
 
 #[cfg(test)]
@@ -134,6 +136,9 @@ pub async fn init_gmail_link_handler(
         scopes,
     }) = query;
     let authorization = &db_permissions.authorization;
+    let fusion_user_id = &authorization.authorization.user.user_context.fusion_user_id;
+    let initiator =
+        macro_uuid::string_to_uuid(fusion_user_id).context("fusion user id must be a uuid")?;
 
     enforce_inbox_paywall(
         db_permissions
@@ -146,7 +151,7 @@ pub async fn init_gmail_link_handler(
     let count =
         macro_db_client::in_progress_user_link::count_existing_in_progress_user_links_for_user(
             &ctx.db,
-            &authorization.authorization.user.user_context.fusion_user_id,
+            fusion_user_id,
         )
         .await?;
 
@@ -161,7 +166,7 @@ pub async fn init_gmail_link_handler(
         .collect();
     let link_id = macro_db_client::in_progress_user_link::create_in_progress_google_link(
         &ctx.db,
-        &authorization.authorization.user.user_context.fusion_user_id,
+        fusion_user_id,
         &requested_google_scopes,
     )
     .await?;
@@ -172,15 +177,20 @@ pub async fn init_gmail_link_handler(
         .await
         .map_err(|_| InitGmailLinkError::IdentityProviderNotFound)?;
 
-    let state = OAuthState {
-        identity_provider_id: gmail_idp_id,
-        link_id: Some(link_id),
-        original_url: original_url.map(|x| x.0.to_string()),
-        is_mobile: None,
-    };
+    // The state is signed and bound to this user, this link, and the Google
+    // callback: the callback refuses anything else, so the authorization URL
+    // cannot be rewritten to point another user's consent at this link.
+    let state = AccountLinkState::new(
+        LinkProvider::Google,
+        gmail_idp_id,
+        link_id,
+        initiator,
+        original_url.map(|x| x.0.to_string()),
+    );
 
-    let redirect_uri = crate::api::oauth2::format_redirect_uri("google");
-    let state_str = serde_json::to_string(&state).context("failed to serialize OAuth state")?;
+    let redirect_uri = crate::api::oauth2::format_redirect_uri(LinkProvider::Google.as_str());
+    let state_str = sign_account_link_state(&state, &ctx.account_link_state_key)
+        .context("failed to sign OAuth state")?;
 
     let authorization_url = google_authorization_url(
         ctx.auth_client.google_client_id(),

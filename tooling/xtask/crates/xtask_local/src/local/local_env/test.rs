@@ -82,6 +82,7 @@ fn emits_required_keys() {
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GITHUB_IDP_ID",
+        "ACCOUNT_LINK_STATE_SECRET",
         "STRIPE_SECRET_KEY",
         "STRIPE_PRICE_ID",
         "STRIPE_WEBHOOK_SECRET_KEY",

@@ -712,6 +712,12 @@ impl BootStubEnv {
             "local-github-client-secret".into(),
         );
         env.insert("GITHUB_IDP_ID".into(), identity::GITHUB_IDP_ID.into());
+        // HMAC key for signed account-link OAuth state; the loader rejects
+        // anything under 32 bytes.
+        env.insert(
+            "ACCOUNT_LINK_STATE_SECRET".into(),
+            "local-account-link-state-secret-0123456789".into(),
+        );
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(

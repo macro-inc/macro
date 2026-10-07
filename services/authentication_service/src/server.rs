@@ -453,6 +453,8 @@ pub async fn run() -> anyhow::Result<()> {
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
 
+    let account_link_state_key = config.account_link_state_key()?;
+
     let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
@@ -597,6 +599,7 @@ pub async fn run() -> anyhow::Result<()> {
             signup_policy,
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
+            account_link_state_key,
             jwt_args,
             authorization_state,
             token_context: MacroApiTokenContext {

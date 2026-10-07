@@ -93,6 +93,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "outbound",
   "service",
 ] }
+hmac = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
@@ -157,6 +158,7 @@ serde_json = { workspace = true }
 serde_utils = { path = "../../crates/serde_utils", features = ["urlencode"] }
 ses_client = { path = "../../crates/ses_client" }
 sha1 = "0.10.6"
+sha2 = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "email",
