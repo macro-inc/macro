@@ -16,6 +16,7 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 
 const toastAlert = vi.hoisted(() => vi.fn());
+const toastFailure = vi.hoisted(() => vi.fn());
 const fetchChannelNotifications = vi.hoisted(() => vi.fn());
 vi.mock('@service-storage/graphql-notifications', async (importOriginal) => ({
   ...(await importOriginal<
@@ -24,7 +25,7 @@ vi.mock('@service-storage/graphql-notifications', async (importOriginal) => ({
   fetchGraphqlEntityNotifications: fetchChannelNotifications,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { alert: toastAlert },
+  toast: { alert: toastAlert, failure: toastFailure },
 }));
 
 const operationMocks = vi.hoisted(() => {
@@ -152,7 +153,12 @@ import type {
   OpenWithSplitOptions,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
-import { type ChannelEntityTarget, type EntityData, queryKeys } from '@entity';
+import {
+  type ChannelEntity,
+  type ChannelEntityTarget,
+  type EntityData,
+  queryKeys,
+} from '@entity';
 import type { NotificationSource, UnifiedNotification } from '@notifications';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import {
@@ -369,6 +375,185 @@ const channelThreadRow = (opts?: {
     ...(opts?.target ? { target: opts.target } : {}),
     ...(opts?.notifications ? { notifications: () => opts.notifications } : {}),
   }) as unknown as EntityData;
+
+describe('non-blocking latest channel opens', () => {
+  function setup(status = 'opened') {
+    const channel: ChannelEntity = {
+      type: 'channel',
+      id: 'channel-1',
+      name: 'Channel',
+      ownerId: 'owner',
+      channelType: 'private',
+      isParticipant: true,
+      unreadNotifications: [],
+    };
+    const bulkMarkAsRead = vi.fn(async () => {});
+    const notificationsByEntity = vi.fn(() => ({
+      'channel@channel-1': [sendNotification('stale-global', 'message')],
+    }));
+    const source = {
+      ...notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      notificationsByEntity,
+      withLocalOverrides: (notification: UnifiedNotification) => notification,
+    };
+    const isActive = vi.fn(() => true);
+    const findOpenView = vi.fn(() => ({
+      owner: 'channel-pane',
+      topLevelSplit: { isActive },
+    }));
+    const openWithSplit = vi.fn(
+      (_content: unknown, _options?: OpenWithSplitOptions) => ({ status })
+    );
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: () => ({
+        getBlockHandle: vi.fn(async () => undefined),
+      }),
+      findOpenView,
+      openWithSplit,
+    } as unknown as SplitManager);
+    const open = () =>
+      openEntityInSplitFromUnifiedList(channel, {
+        referredFrom: 'channels',
+        channelNavigation: 'latest',
+        channelReadScope: 'top-level',
+        notificationSource: source,
+      });
+    return {
+      channel,
+      source,
+      open,
+      openWithSplit,
+      bulkMarkAsRead,
+      notificationsByEntity,
+      findOpenView,
+      isActive,
+    };
+  }
+
+  it('opens before hydration settles, then marks only full-edge top-level unreads', async () => {
+    const test = setup();
+    let resolve!: (notifications: UnifiedNotification[]) => void;
+    fetchChannelNotifications.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
+    const opening = test.open();
+    expect(test.openWithSplit).toHaveBeenCalledOnce();
+    expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+    // Opening itself completes while the notification request is still pending.
+    await opening;
+    expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+    const root = sendNotification('root', 'message');
+    resolve([
+      root,
+      asRead(sendNotification('seen', 'seen-message')),
+      replyNotification('reply', 'reply-message', 'message'),
+    ]);
+    await vi.waitFor(() =>
+      expect(test.bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([root])
+    );
+    expect(test.notificationsByEntity).not.toHaveBeenCalled();
+    expect(test.openWithSplit).toHaveBeenCalledOnce();
+    expect(toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('keeps the channel open and leaves unread state untouched when hydration fails', async () => {
+    const test = setup();
+    const error = new Error('Conversation notifications are unavailable');
+    fetchChannelNotifications.mockRejectedValueOnce(error);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await test.open();
+      await vi.waitFor(() =>
+        expect(log).toHaveBeenCalledWith(
+          'Failed to load conversation notifications after opening',
+          { channelId: 'channel-1', error }
+        )
+      );
+      expect(test.openWithSplit).toHaveBeenCalledOnce();
+      expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+      expect(test.notificationsByEntity).not.toHaveBeenCalled();
+      expect(toastFailure).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it.each(['unavailable', 'navigating'])(
+    'does not hydrate or mark notifications before an accepted open (%s)',
+    async (status) => {
+      const test = setup(status);
+      await test.open();
+      expect(fetchChannelNotifications).not.toHaveBeenCalled();
+      expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+    }
+  );
+
+  it('hydrates once after deferred navigation applies and keeps the pre-navigation identity', async () => {
+    const test = setup('navigating');
+    const root = sendNotification('root', 'message');
+    fetchChannelNotifications.mockResolvedValueOnce([root]);
+    await test.open();
+    test.channel.id = 'replacement-row';
+    const onApplied = test.openWithSplit.mock.calls[0][1]?.onApplied;
+    expect(onApplied).toBeDefined();
+    onApplied!();
+    onApplied!();
+    await vi.waitFor(() =>
+      expect(test.bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([root])
+    );
+    expect(fetchChannelNotifications).toHaveBeenCalledOnce();
+    expect(fetchChannelNotifications.mock.calls[0][1]).toBe('channel-1');
+  });
+
+  it('does not mark a mobile channel read after the user leaves it', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const test = setup();
+    let resolve!: (notifications: UnifiedNotification[]) => void;
+    fetchChannelNotifications.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
+    await test.open();
+    test.isActive.mockReturnValue(false);
+    resolve([sendNotification('root', 'message')]);
+    await vi.waitFor(() => expect(test.isActive).toHaveBeenCalled());
+    expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+    expect(test.openWithSplit).toHaveBeenCalledOnce();
+  });
+
+  it('preserves membership gating before starting background hydration', async () => {
+    const test = setup();
+    test.channel.isParticipant = false;
+    await test.open();
+    expect(test.openWithSplit).not.toHaveBeenCalled();
+    expect(fetchChannelNotifications).not.toHaveBeenCalled();
+    expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+  });
+
+  it('keeps notification-targeted inbox opens waiting for their full edge', async () => {
+    const test = setup();
+    let resolve!: (notifications: UnifiedNotification[]) => void;
+    fetchChannelNotifications.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
+    const opening = openEntityInSplitFromUnifiedList(test.channel, {
+      notificationSource: test.source,
+    });
+    expect(test.openWithSplit).not.toHaveBeenCalled();
+    resolve([sendNotification('root', 'message')]);
+    await opening;
+    expect(test.openWithSplit).toHaveBeenCalledOnce();
+    expect(targetSearch(test.openWithSplit, 'channels')).toMatchObject({
+      messageId: ['message'],
+    });
+  });
+});
 
 describe('channel unread clicks', () => {
   const newer = {
