@@ -10,6 +10,7 @@ import { runCalendarBackfill } from './backfill';
 import { useGraphqlCalendarHost } from './flag';
 import { mapCalendarSyncStatus } from './map';
 import {
+  beginCalendarSyncStatusSample,
   fetchCalendarOccurrencePage,
   latestCalendarSyncStatus,
   recordCalendarSyncStatus,
@@ -30,10 +31,11 @@ async function refreshSyncStatus(): Promise<void> {
     new Date(now),
     new Date(now + DAY_MS)
   );
+  const sample = beginCalendarSyncStatusSample();
   const page = await fetchCalendarOccurrencePage({ ...range, first: 1 });
   const status = mapCalendarSyncStatus(page.syncStatus);
-  if (status === latestCalendarSyncStatus()) return;
-  recordCalendarSyncStatus(status);
+  const previous = latestCalendarSyncStatus();
+  if (!recordCalendarSyncStatus(status, sample) || status === previous) return;
   await queryClient.invalidateQueries({
     queryKey: calendarKeys.occurrences._def,
   });

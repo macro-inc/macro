@@ -3,9 +3,11 @@ import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarS
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCalendarOccurrenceQueryRange } from '../../occurrences';
 import {
+  beginCalendarSyncStatusSample,
   type CalendarOccurrencePage,
   calendarGapWindows,
   epochDay,
+  fetchCalendarWindow,
   latestCalendarSyncStatus,
   lowestWatermark,
   readCalendarRange,
@@ -73,7 +75,12 @@ function fakeHost(results: CalendarRangeCacheResult[]) {
 }
 
 describe('readCalendarRange', () => {
-  beforeEach(() => recordCalendarSyncStatus(CalendarSyncStatus.ready));
+  beforeEach(() =>
+    recordCalendarSyncStatus(
+      CalendarSyncStatus.ready,
+      beginCalendarSyncStatusSample()
+    )
+  );
 
   it('answers a covered viewport without the network', async () => {
     const host = fakeHost([
@@ -250,5 +257,28 @@ describe('lowestWatermark', () => {
       { linkId: 'a', seq: '9' },
       { linkId: 'b', seq: '3' },
     ]);
+  });
+});
+
+describe('fetchCalendarWindow', () => {
+  it('keeps the status of the later request when an earlier one finishes last', async () => {
+    const host = fakeHost([]);
+    const window = calendarGapWindows([
+      { kind: 'timed', start: weekStart.getTime(), end: weekEnd.getTime() },
+    ])[0]!;
+    let finishEarlier!: () => void;
+    const earlierDone = new Promise<void>((resolve) => {
+      finishEarlier = resolve;
+    });
+    const earlier = fetchCalendarWindow(host, window, async () => {
+      await earlierDone;
+      return page({ syncStatus: 'READY' });
+    });
+    await fetchCalendarWindow(host, window, async () =>
+      page({ syncStatus: 'SYNCING' })
+    );
+    finishEarlier();
+    await earlier;
+    expect(latestCalendarSyncStatus()).toBe(CalendarSyncStatus.syncing);
   });
 });
