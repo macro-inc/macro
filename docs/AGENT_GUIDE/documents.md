@@ -115,17 +115,23 @@ shows the rule's message in the footer, and a "stop" rule keeps the previous val
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
-Images and charts (column, bar, line, area, pie, doughnut, scatter, radar,
-bubble, stock and surface, drawn as a contour) are drawn over their cells and
-move with them; charts redraw as the cells they read change. Each is a `figure`
-named after the chart title ("Chart: Revenue") or the image description. The
-toolbar's **Insert chart or image** menu (chart icon) adds a chart of the
-selected cells — or, from one cell, of the table around it, placed beside it —
-or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the active cell.
-Its **More charts** submenu holds Radar, Filled radar, Bubble, Stock and
-Contour; a stock chart needs three or four series (high, low, close, with open
-first for up-down bars), and a bubble chart reads x values from the first
-column, then values and sizes in pairs. Imported shapes, text boxes, lines,
+Images and charts (column, bar, line and area, each clustered, stacked or
+100% stacked, plus pie, doughnut, scatter, combo, radar, bubble, stock and
+surface, drawn as a contour) are drawn over their cells and move with them;
+charts redraw as the cells they read change. A 100% stacked chart fills each
+category to 100% of its positive values and to 100% of its negative values.
+Scatter charts plot markers without connecting lines. A combo chart draws
+every series but the last as columns and the last series as a line on a second
+axis. Each is a `figure` named after the chart title ("Chart: Revenue") or the
+image description. The toolbar's **Insert chart or image** menu (chart icon)
+adds a chart of the selected cells — or, from one cell, of the table around
+it, placed beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to
+2 MB) at the active cell. Its **More charts** submenu holds Radar, Filled
+radar, Bubble, Stock and Contour. Edit chart's type list also offers 100%
+stacked bar, stacked line, 100% stacked line, 100% stacked area and Combo. A
+stock chart needs three or four series (high, low, close, with open first for
+up-down bars), a bubble chart reads x values from the first column, then
+values and sizes in pairs, and a combo chart needs at least two series. Imported shapes, text boxes, lines,
 groups and SmartArt are drawn too, as `figure`s named after their text (or
 their name, such as "Straight Connector 2"); a shape linked to a cell shows the
 cell's value. They move, size and delete like images, and download as Excel

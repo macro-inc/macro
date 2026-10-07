@@ -38,6 +38,8 @@ Imported conditional formatting, validation lists and notes, imported charts
 and images (drawn over their cells, following edits, deleted and restored with
 undo, and kept in the download), radar, bubble, stock and contour charts
 (imported, redrawn after edits, inserted from More charts and downloaded),
+100% stacked columns from the insert menu and combo charts chosen in
+Edit chart,
 shapes, text boxes, groups, SmartArt and an EMF logo (drawn, a linked text box
 following its cell, moved and downloaded), GETPIVOTDATA formulas of an imported
 pivot table (calculated, following an edit to the table and downloaded), pivot
