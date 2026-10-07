@@ -35,28 +35,29 @@ import {
   ResultAsync,
 } from 'neverthrow';
 import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
-import { match, P } from 'ts-pattern';
-import { v7 as uuidv7 } from 'uuid';
 import type {
   DatabaseRowsSource,
   DatabaseWriteResult,
-} from '../context/table-source';
-import { missingOptionLabels, mutationOp } from '../core/cell-ops';
+} from '../../database/context/table-source';
 import {
   type DatabaseColumnType,
   inferDatabaseNumber,
-} from '../core/column-inference';
+} from '../../database/core/column-inference';
 import type {
   DatabaseCellValue,
   DatabaseViewColumn,
-} from '../core/database-view';
-import { gridRows } from '../core/grid-cells';
-import type { DatabaseRow, DatabaseRowMutation } from '../core/table';
+} from '../../database/core/database-view';
+import { gridRows } from '../../database/core/grid-cells';
+import { writeDatabaseRow } from '../../database/core/row-write';
+import type {
+  DatabaseRow,
+  DatabaseRowMutation,
+} from '../../database/core/table';
 import type {
   DatabaseCellFailure,
   DatabaseReadFailure,
   DatabaseWriteFailure,
-} from '../core/write-failure';
+} from '../../database/core/write-failure';
 import { rowsByIdStatement } from '../sql';
 import { patchTableColumn } from './detail-cache';
 import {
@@ -102,23 +103,6 @@ function isStaleSchema(
     failure.kind === 'engine' ||
     (failure.kind === 'ops' && failure.error.code === 'INVALID_OP')
   );
-}
-
-/** The service answered and refused: the write certainly did not land. */
-function isDefiniteRefusal(error: DatabaseOpsError): boolean {
-  return match(error.code)
-    .with(
-      P.union(
-        'INVALID_OP',
-        'UNAUTHORIZED',
-        'FORBIDDEN',
-        'NOT_FOUND',
-        'CONFLICT',
-        'GONE'
-      ),
-      () => true
-    )
-    .otherwise(() => false);
 }
 
 const TABLE_UNAVAILABLE = { kind: 'table-unavailable' } as const;
@@ -427,15 +411,6 @@ export function createDatabaseRowsSource(props: {
     return column?.writable ? ok(column) : err({ kind: 'read-only-column' });
   }
 
-  function optionLabelsOf(table: TableDetail, columnId: string): string[] {
-    const column = table.columns.find(
-      (column) => column.column.id === columnId
-    );
-    return (column?.definition.property_options ?? []).map((option) =>
-      String(option.value.value)
-    );
-  }
-
   /** The base a new column's type is settled against, past the settlements this writer made from it. */
   function latestInferenceBase(
     inferenceBaseVersion: number | undefined
@@ -610,35 +585,19 @@ export function createDatabaseRowsSource(props: {
     // Read the refreshed cache directly; Solid props may notify after fetchQuery resolves.
     const table = currentTable();
     if (!table) return err(TABLE_UNAVAILABLE);
-    const op = mutationOp(tableId, prepared.value, (columnId) =>
-      columnForWrite(table, columnId)
+    const written = await writeDatabaseRow(
+      {
+        tableId,
+        columns: table.columns.map(toViewColumn),
+        applyOps: ({ ops }) =>
+          props.applyOps(ops).map((results) => ({ results })),
+      },
+      prepared.value,
+      createOptions
     );
-    if (op.isErr()) return err(op.error);
-    // A label the column lacks becomes an option in the same batch, ahead of the write.
-    const newOptions: DatabaseOp[] = createOptions
-      ? missingOptionLabels(op.value, (columnId) =>
-          optionLabelsOf(table, columnId)
-        ).map(({ column, labels }) => ({
-          kind: 'column',
-          table: tableId,
-          column,
-          change: {
-            kind: 'add_options',
-            options: labels.map((label) => ({ id: uuidv7(), label })),
-          },
-        }))
-      : [];
-    const applied = await props.applyOps([...newOptions, op.value]);
-    if (applied.isErr())
-      return err(
-        mutation.kind === 'create' && !isDefiniteRefusal(applied.error)
-          ? { kind: 'outcome-unknown' }
-          : { kind: 'ops', error: applied.error }
-      );
-    const written = applied.value.at(-1);
-    if (written?.kind !== 'rows') return err({ kind: 'unexpected-result' });
-    writtenVersion = Math.max(writtenVersion, written.tableVersion);
-    props.applyVersions({ [tableId]: written.tableVersion });
+    if (written.isErr()) return written;
+    writtenVersion = Math.max(writtenVersion, written.value.version);
+    props.applyVersions({ [tableId]: written.value.version });
     // New options live in the schema; read it again in the background
     // so they show as options without suspending the grid.
     if (createOptions)
@@ -646,13 +605,7 @@ export function createDatabaseRowsSource(props: {
         queryKey: detailKey,
         exact: true,
       });
-    return ok({
-      insertedRowIds: match(written.change)
-        .with({ kind: 'inserted' }, ({ rows }) => rows)
-        .with({ kind: 'updated' }, { kind: 'deleted' }, () => [])
-        .exhaustive(),
-      version: written.tableVersion,
-    });
+    return written;
   }
 
   async function write(

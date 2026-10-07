@@ -2,9 +2,10 @@
  * App adapter: a gate's rules, edited with the database grid's own filter
  * editor over the questions before the gate (RFC 02 §3).
  */
-import { FilterPanel } from '@block-database/components/database-view-filters';
-import type { DatabaseViewColumn } from '@block-database/core/database-view';
+
 import { match } from 'ts-pattern';
+import { FilterPanel } from '../database/components/database-view-filters';
+import type { DatabaseViewColumn } from '../database/core/database-view';
 import type { ConditionEditorProps } from './context/form-context';
 import type { FormColumn } from './core/form-model';
 

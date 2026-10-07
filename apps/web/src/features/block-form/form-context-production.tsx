@@ -6,7 +6,6 @@
  */
 import { createPublicBookingSource } from '@app/features/scheduling/queries/public';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type { DatabaseRelatedDestination } from '@block-database/core/database-relations';
 import { DatabaseMentionValue } from '@block-database/database-mentions';
 import { exportDatabaseTableCsv } from '@block-database/queries/transfer';
 import { toast } from '@core/component/Toast/Toast';
@@ -22,6 +21,7 @@ import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { confirmDialog } from '@ui';
 import { errAsync, ResultAsync } from 'neverthrow';
+import type { DatabaseRelatedDestination } from '../database/core/database-relations';
 import type { FormContext, FormWriteFailure } from './context/form-context';
 import { FormConditionEditor } from './form-condition-editor';
 import { FormEditors } from './form-editors';

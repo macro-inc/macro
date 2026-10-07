@@ -3,7 +3,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { TableChanges } from '@service-storage/generated/schemas/tableChanges';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { keyHintChunks, refreshPlan } from '../core/refresh-plan';
+import { keyHintChunks, refreshPlan } from '../../database/core/refresh-plan';
 
 /** What an incremental refresh needs of the journal and the row cache. */
 export type TableChangesCapabilities = {

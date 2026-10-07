@@ -8,7 +8,7 @@ import {
   Show,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DatabaseMentionPickerProps } from './component/GridCell';
+import type { DatabaseMentionPickerProps } from '../database/components/grid-cell';
 import {
   databaseMentionFromItem,
   databaseMentionScope,
