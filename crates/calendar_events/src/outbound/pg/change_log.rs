@@ -156,7 +156,7 @@ impl CalendarChangeLogPruner for PgCalendarRepository {
                 SELECT link_id, seq
                 FROM calendar_change_log
                 WHERE created_at < $1
-                ORDER BY created_at
+                ORDER BY created_at, link_id, seq
                 LIMIT $2
             )
             DELETE FROM calendar_change_log log
