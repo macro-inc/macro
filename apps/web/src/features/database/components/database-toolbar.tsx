@@ -1,8 +1,10 @@
 import { ContextMenu } from '@kobalte/core/context-menu';
+import CheckIcon from '@phosphor/check.svg';
 import FunnelIcon from '@phosphor/funnel.svg';
 import KanbanIcon from '@phosphor/kanban.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SortAscendingIcon from '@phosphor/sort-ascending.svg';
+import StackIcon from '@phosphor/stack.svg';
 import TableIcon from '@phosphor/table.svg';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { Key } from '@solid-primitives/keyed';
@@ -15,6 +17,7 @@ import {
 } from '@thisbeyond/solid-dnd';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
+import { Dropdown } from '@ui/components/Dropdown';
 import { Tooltip } from '@ui/components/Tooltip';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -25,6 +28,8 @@ import {
 } from '../../../lib/core/component/ContextMenu';
 import type { BoardGrouping } from '../core/board-grouping';
 import type { DatabaseViewColumn } from '../core/database-view';
+import { isDatabaseNameTaken } from '../core/property-creation';
+import type { NewView } from '../core/view-creation';
 import type { ViewChange } from '../core/view-state';
 import { boardGroupColumns, movedViewOrder } from '../core/views';
 import {
@@ -33,11 +38,6 @@ import {
 } from '../core/write-failure';
 import { FilterPanel, filterConditionCount } from './database-view-filters';
 import { createInlineRename } from './inline-rename';
-import {
-  type NewFormChoice,
-  type NewView,
-  NewViewDialog,
-} from './new-view-dialog';
 import { SortPanel } from './sort-panel';
 import { ToolbarPopover } from './view-control-popover';
 
@@ -74,13 +74,11 @@ type DatabaseToolbarProps = {
   onCreateRecord?: () => void;
   canCreateRecord?: boolean;
   creating?: boolean;
-  /** A form over this table, offered in the new-view dialog when given. */
-  newForm?: NewFormChoice;
 };
 
 /** View controls contain no data fetching or mutation implementation. */
 export function DatabaseToolbar(props: DatabaseToolbarProps) {
-  const [creating, setCreating] = createSignal<HTMLElement>();
+  const [creating, setCreating] = createSignal(false);
   const [deleting, setDeleting] = createSignal<{ view: DatabaseView }>();
   let renameInput: HTMLInputElement | undefined;
   let allRecordsButton: HTMLButtonElement | undefined;
@@ -108,6 +106,33 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   });
   const viewError = viewRename.error;
   const setViewError = viewRename.setError;
+  const groupColumns = () => boardGroupColumns(props.columns);
+  const createView = async (kind: 'table' | 'board') => {
+    if (creating() || !props.canEdit) return;
+    const base = kind === 'table' ? 'Table view' : 'Board view';
+    const names = props.views.map((view) => view.name);
+    let name = base;
+    for (let suffix = 2; isDatabaseNameTaken(name, names); suffix += 1)
+      name = `${base} ${suffix}`;
+    const column = groupColumns()[0];
+    const view: NewView =
+      kind === 'table'
+        ? { name, layout: 'table' }
+        : {
+            name,
+            layout: 'board',
+            groupBy: column
+              ? { kind: 'column', columnId: column.id }
+              : { kind: 'new-status' },
+          };
+    setCreating(true);
+    setViewError('');
+    const created = await props.onCreateView(view);
+    setCreating(false);
+    created.mapErr((failure) =>
+      setViewError(databaseOpMessage(failure, 'this view'))
+    );
+  };
   function reorder(id: string, targetId: string) {
     const order = props.views.map((view) => view.id);
     const moved = movedViewOrder(order, id, targetId);
@@ -116,14 +141,11 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
   }
   return (
     <div
-      class="@container/view-toolbar shrink-0 border-b border-edge-muted bg-canvas-base [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+      class="@container/view-toolbar shrink-0 bg-canvas-base [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
       data-database-toolbar
     >
-      <div class="flex items-center gap-2 px-3 py-1.5 @max-[520px]/view-toolbar:flex-wrap @min-[640px]/view-toolbar:px-4">
+      <div class="flex items-center gap-2 px-4 py-1.5 @max-[520px]/view-toolbar:flex-wrap">
         <div class="flex min-w-0 flex-1 items-center gap-0.5 @max-[520px]/view-toolbar:basis-full">
-          <span class="mr-1.5 shrink-0 text-[10px] text-ink-placeholder @max-[640px]/view-toolbar:sr-only">
-            Views
-          </span>
           <div
             ref={viewRail}
             class="flex min-w-0 items-center gap-0.5 overflow-x-auto"
@@ -134,12 +156,8 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
               type="button"
               aria-pressed={!props.selectedViewId}
               onClick={() => props.onSelectView()}
-              class="flex h-8 max-w-40 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-ink-muted outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-              classList={{
-                'bg-hover font-medium text-ink': !props.selectedViewId,
-              }}
+              class="flex h-8 max-w-40 shrink-0 items-center gap-1.5 rounded-full border border-transparent aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink px-4 text-xs font-medium text-ink-extra-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus transition-colors duration-120 motion-reduce:transition-none"
             >
-              <TableIcon class="size-3.5" />
               <span class="truncate">All records</span>
             </button>
             <DragDropProvider
@@ -194,18 +212,79 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
             </DragDropProvider>
           </div>
           <Show when={props.canEdit}>
-            <Button
-              size="icon-sm"
-              label="New view"
-              class="shrink-0"
-              onClick={(event) => setCreating(event.currentTarget)}
-            >
-              <PlusIcon class="size-3.5" />
-            </Button>
+            <Dropdown placement="bottom-start">
+              <Dropdown.Trigger
+                size="icon-sm"
+                variant="ghost"
+                aria-label="New view"
+                class="ml-2 shrink-0"
+                disabled={creating()}
+              >
+                <PlusIcon class="size-3.5" />
+              </Dropdown.Trigger>
+              <Dropdown.Content class="min-w-40">
+                <Dropdown.Item
+                  onSelect={() => void createView('table')}
+                  disabled={creating()}
+                >
+                  <TableIcon class="size-4" />
+                  Table
+                </Dropdown.Item>
+                <Dropdown.Item
+                  onSelect={() => void createView('board')}
+                  disabled={creating()}
+                >
+                  <KanbanIcon class="size-4" />
+                  Board
+                </Dropdown.Item>
+              </Dropdown.Content>
+            </Dropdown>
           </Show>
         </div>
         <div class="flex shrink-0 items-center gap-0.5 @max-[520px]/view-toolbar:w-full @max-[520px]/view-toolbar:justify-end">
           <Show when={canChangeView()}>
+            <Show when={board()}>
+              {(current) => (
+                <Dropdown placement="bottom-start">
+                  <Dropdown.Trigger
+                    aria-label="Group board by"
+                    title="Group by"
+                    size="icon-md"
+                    variant="ghost"
+                    class="h-8 w-auto rounded-md px-2 text-ink-muted hover:bg-hover data-expanded:bg-hover"
+                  >
+                    <StackIcon class="size-3.5" />
+                  </Dropdown.Trigger>
+                  <Dropdown.Content class="min-w-48">
+                    <Dropdown.RadioGroup
+                      value={current().groupBy}
+                      onChange={(columnId) => {
+                        if (columnId !== current().groupBy)
+                          props.onChangeView({
+                            layout: {
+                              ...current(),
+                              groupBy: columnId,
+                              lanes: [],
+                            },
+                          });
+                      }}
+                    >
+                      <For each={groupColumns()}>
+                        {(column) => (
+                          <Dropdown.RadioItem closeOnSelect value={column.id}>
+                            <span class="flex-1">{column.name}</span>
+                            <Dropdown.ItemIndicator>
+                              <CheckIcon class="size-3.5 text-accent" />
+                            </Dropdown.ItemIndicator>
+                          </Dropdown.RadioItem>
+                        )}
+                      </For>
+                    </Dropdown.RadioGroup>
+                  </Dropdown.Content>
+                </Dropdown>
+              )}
+            </Show>
+
             <ToolbarPopover
               label="Filter"
               compact
@@ -259,19 +338,6 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
         <p role="alert" class="px-4 pb-2 text-xs text-failure">
           {viewError()}
         </p>
-      </Show>
-      <Show when={creating()} keyed>
-        {(origin) => (
-          <NewViewDialog
-            initialName="Table view"
-            columns={props.columns}
-            form={props.newForm}
-            returnFocus={origin}
-            returnFocusFallback={allRecordsButton}
-            onClose={() => setCreating(undefined)}
-            onSubmit={props.onCreateView}
-          />
-        )}
       </Show>
       <DeleteDialog
         open={!!deleting()}
@@ -384,15 +450,8 @@ function ViewTab(props: {
                   props.onRename();
                 }
               }}
-              class="flex h-8 max-w-40 items-center gap-1.5 rounded-md px-2 text-xs text-ink-muted outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-              classList={{ 'bg-hover font-medium text-ink': props.selected }}
+              class="flex h-8 max-w-40 items-center gap-1.5 rounded-full border border-transparent aria-pressed:border-edge-frame aria-pressed:bg-active aria-pressed:text-ink px-4 text-xs font-medium text-ink-extra-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus transition-colors duration-120 motion-reduce:transition-none"
             >
-              <Show
-                when={props.view.layout.kind === 'board'}
-                fallback={<TableIcon class="size-3.5 shrink-0" />}
-              >
-                <KanbanIcon class="size-3.5 shrink-0" />
-              </Show>
               <span class="truncate">{props.view.name}</span>
             </ContextMenu.Trigger>
           </Tooltip>

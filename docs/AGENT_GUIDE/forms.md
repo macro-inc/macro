@@ -16,10 +16,9 @@ decides who may respond.
 - **Create → Form** (shortcut **C → Q**, **Shift** opens it in a new split)
   creates "Untitled form" with a new database whose table is "Responses",
   and opens the builder at `/app/form/<uuid>`.
-- On a database page you own, **+ view** offers **Form** beside Table and
-  Board while no form writes to the current table, and the control after the
-  table tabs is **+ Form**; both make a form with a question per existing
-  column. Each table has at most one form; the control opens that form once created.
+- On a database page you own, **+ → New form** in the table selector makes
+  a form with a question per existing column while no form writes to the current
+  table. Each table has at most one form; the control opens that form once created.
   A trashed form reserves its table until restored or permanently deleted.
   Creating over an existing table needs
   database Owner: editors and viewers see the existing forms only.

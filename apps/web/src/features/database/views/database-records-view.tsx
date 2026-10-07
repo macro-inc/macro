@@ -1,6 +1,7 @@
 import { until } from '@solid-primitives/promise';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
+import { cn } from '@ui/utils/classname';
 import {
   type Accessor,
   type JSX,
@@ -90,6 +91,8 @@ export type RelationCellProps = GridCellEditorOptions & {
 
 /** A table's records in the view's layout — a grid or a board — with the record panel over them. */
 export type DatabaseRecordsViewProps = {
+  /** Host framing for the records area, below the toolbar. */
+  contentClass?: string;
   name: string;
   source: DatabaseRowsSource;
   canEdit: boolean;
@@ -355,7 +358,12 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     <>
       {/* Rendered once: the toolbar's own props keep it current, and a rerun would close its open popovers. */}
       {untrack(() => props.renderToolbar?.(actions))}
-      <div class="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        class={cn(
+          'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden',
+          props.contentClass
+        )}
+      >
         <Show when={columnLayout.schemaError()}>
           {(message) => <SchemaErrorNotice message={message()} />}
         </Show>

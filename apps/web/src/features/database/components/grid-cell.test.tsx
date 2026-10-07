@@ -140,6 +140,42 @@ describe('grid cell', () => {
     }
   );
 
+  it('toggles the shared checkbox with pointer and keyboard and keeps grid Tab navigation', async () => {
+    const [value, setValue] = createSignal<DatabaseCellValue>(0);
+    const write = vi.fn(async (next: DatabaseCellValue) => {
+      setValue(next);
+      return true;
+    });
+    const navigate = vi.fn(() => true);
+    let control: GridCellControl | undefined;
+    render(() => (
+      <GridCell
+        column={{ ...column, dataType: 'BOOLEAN' }}
+        value={value()}
+        canEdit
+        onWrite={write}
+        onNavigate={navigate}
+        onAddOption={vi.fn(async () => true)}
+        onReady={(ready) => {
+          control = ready;
+        }}
+      />
+    ));
+    const checkbox = screen.getByRole('checkbox', {
+      name: 'Name',
+    }) as HTMLInputElement;
+    await userEvent.click(screen.getByText('Name', { selector: 'label' }));
+    expect(write).toHaveBeenLastCalledWith(1);
+    expect(checkbox.checked).toBe(true);
+    control?.focus();
+    expect(document.activeElement).toBe(checkbox);
+    await userEvent.keyboard(' ');
+    expect(write).toHaveBeenLastCalledWith(0);
+    expect(checkbox.checked).toBe(false);
+    await userEvent.tab();
+    expect(navigate).toHaveBeenCalledWith(1);
+  });
+
   it('focuses the read-only boolean wrapper without enabling its checkbox', () => {
     let control: GridCellControl | undefined;
     const onWrite = vi.fn(async () => true);

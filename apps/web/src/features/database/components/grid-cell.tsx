@@ -1,6 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
+import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
 import {
   createMemo,
@@ -432,27 +433,31 @@ function BooleanCell(props: {
   onNavigate?: (direction: 1 | -1) => boolean;
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
 }) {
+  let wrapper: HTMLDivElement | undefined;
+  onMount(() => {
+    const input = wrapper?.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]'
+    );
+    if (input) props.inputRef(input);
+  });
   return (
-    <div
-      ref={props.wrapperRef}
+    <Checkbox
+      ref={(element: HTMLDivElement) => {
+        wrapper = element;
+        props.wrapperRef(element);
+      }}
       tabindex={props.editable ? undefined : -1}
       class="flex min-h-9 items-center px-3 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
+      checked={Boolean(props.value)}
+      disabled={!props.editable}
+      onChange={(checked) => void props.onWrite(checked ? 1 : 0)}
+      onKeyDown={(event: KeyboardEvent) => {
+        if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
+      }}
     >
-      <input
-        ref={props.inputRef}
-        type="checkbox"
-        checked={Boolean(props.value)}
-        disabled={!props.editable}
-        aria-label={props.column.name}
-        class="size-3.5 rounded border-edge-muted accent-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/50 disabled:opacity-50"
-        onChange={(event) =>
-          void props.onWrite(event.currentTarget.checked ? 1 : 0)
-        }
-        onKeyDown={(event) => {
-          if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
-        }}
-      />
-    </div>
+      <Checkbox.Control />
+      <Checkbox.Label class="sr-only">{props.column.name}</Checkbox.Label>
+    </Checkbox>
   );
 }
 
