@@ -5,6 +5,11 @@ import {
 } from '@app/constants/hotkeys';
 import { type CategoryFilter, CommandState } from '@app/features/command';
 import {
+  CREATE_MENU_VARIANTS,
+  createMenuVariant,
+  setCreateMenuVariant,
+} from '@app/features/command/create-menu-variants/variant-state';
+import {
   createMenuOpen,
   setCreateMenuOpen,
   useCreateCommands,
@@ -373,6 +378,43 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
     displayPriority: 9,
     tags: ['mcp', 'model context protocol', 'setup', 'connect macro'],
+  });
+
+  // Trial create-menu layouts, for comparing them while they are evaluated.
+  const createMenuVariantScope = registerHotkey({
+    scopeId: 'global',
+    description: 'Create menu variant',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    runWithInputFocused: true,
+    icon: Plus,
+    keywords: ['create', 'menu', 'launcher', 'layout', 'variant', 'design'],
+  });
+
+  CREATE_MENU_VARIANTS.forEach((variant) => {
+    registerHotkey({
+      scopeId: createMenuVariantScope.commandScopeId,
+      description: `Create menu: ${variant.label}`,
+      keyDownHandler: () => {
+        setCreateMenuVariant(variant.id);
+        // Open it straight away so layouts can be compared back to back; the
+        // command menu finishes closing and restoring focus first.
+        setTimeout(() => setCreateMenuOpen(true), 50);
+        return true;
+      },
+      runWithInputFocused: true,
+      displayComponent: () => (
+        <div class="flex items-center gap-2">
+          <span>{variant.label}</span>
+          <span class="text-ink-extra-muted">{variant.description}</span>
+          <Show when={createMenuVariant() === variant.id}>
+            <span class="text-xs text-accent">Current</span>
+          </Show>
+        </div>
+      ),
+    });
   });
 
   const setThemeScope = registerHotkey({

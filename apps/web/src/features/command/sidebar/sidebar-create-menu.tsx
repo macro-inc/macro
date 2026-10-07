@@ -1,5 +1,8 @@
 import { CREATE_MENU_COMMAND_SCOPE } from '@app/constants/hotkeys';
-import { useCreateMenuBlocks } from '@app/features/command/Launcher';
+import {
+  setCreateMenuOpen,
+  useCreateMenuBlocks,
+} from '@app/features/command/Launcher';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
@@ -17,6 +20,7 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { createMenuVariant } from '../create-menu-variants/variant-state';
 import { APP_TOUR } from './tour';
 
 export type SidebarCreateMenuProps = {
@@ -35,7 +39,81 @@ export type SidebarCreateMenuProps = {
   onMenuOpenChange?: (open: boolean) => void;
 };
 
-export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
+/**
+ * With an experimental create-menu variant chosen, the sidebar trigger opens
+ * the centered launcher instead of its own dropdown, so both entry points
+ * show the layout under test.
+ */
+export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => (
+  <Show
+    when={createMenuVariant() === 'list'}
+    fallback={<SidebarCreateLauncherTrigger {...props} />}
+  >
+    <SidebarCreateDropdown {...props} />
+  </Show>
+);
+
+const SidebarCreateLauncherTrigger = (props: SidebarCreateMenuProps) => {
+  const analytics = useAnalytics();
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
+  const openLauncher = () => {
+    analytics.track('create_menu_open', { from: 'sidebar' });
+    setCreateMenuOpen(true);
+  };
+
+  return (
+    <Show
+      when={props.trigger}
+      fallback={
+        <Show
+          when={props.variant === 'icon'}
+          fallback={
+            <NavRow
+              ref={createMenuTarget}
+              class="center h-8 bg-ink/4 text-[13px]"
+              fullWidth
+              tooltipPlacement="right"
+              tooltipDisabled={!(props.isSlim?.() ?? false)}
+              label="Create"
+              hotkey={TOKENS.global.createCommand}
+              onClick={openLauncher}
+            >
+              <div class="size-4 shrink-0">
+                <PlusIcon class="size-4" />
+              </div>
+              <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
+                Create
+              </span>
+            </NavRow>
+          }
+        >
+          <Button
+            ref={createMenuTarget}
+            variant="outline"
+            size="icon-sm"
+            depth={1}
+            class="size-[26px] bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+            label="Create"
+            hotkey={TOKENS.global.createCommand}
+            onClick={openLauncher}
+          >
+            <CreateIcon />
+          </Button>
+        </Show>
+      }
+    >
+      {(trigger) => (
+        <Dynamic
+          component={trigger()}
+          ref={createMenuTarget}
+          onClick={openLauncher}
+        />
+      )}
+    </Show>
+  );
+};
+
+const SidebarCreateDropdown = (props: SidebarCreateMenuProps) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const blocks = useCreateMenuBlocks();
