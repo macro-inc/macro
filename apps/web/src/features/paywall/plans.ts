@@ -81,6 +81,47 @@ export const PLAN_USAGE_LABELS: Record<PlanTier, string> = {
   max: '10× usage',
 };
 
+const PLAN_BENEFITS: Record<PlanTier, (usage: string | undefined) => string[]> =
+  {
+    free: (usage) => [
+      'Access to Haiku',
+      ...(usage ? [usage] : []),
+      'MCP access',
+      '2 connected email accounts',
+      '5 GB storage',
+    ],
+    premium: (usage) => [
+      'All agents',
+      'All models',
+      ...(usage ? [usage] : []),
+      'No email watermark',
+      'AI projections',
+      'Unlimited connected email accounts',
+      'Calls',
+      'Teams',
+      'Team-level memory',
+      '100 GB storage',
+    ],
+    max: () => [
+      'Everything in Pro',
+      '10x more AI usage than Pro',
+      'Unlimited connected email accounts',
+      'Team-level memory',
+      '1 TB storage',
+      'Priority support',
+    ],
+  };
+
+/** Shared Billing/paywall bullets; only Free and Pro usage labels require the flag. */
+export function planBenefits(
+  tier: PlanTier,
+  aiUsageBilling: boolean
+): string[] {
+  return PLAN_BENEFITS[tier](
+    aiUsageBilling ? PLAN_USAGE_LABELS[tier] : undefined
+  );
+}
+
 const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
     label: 'AI Agent',

@@ -2261,6 +2261,8 @@ on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
 own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
 still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+The Pro upgrade modal and Billing use the same plan benefits list, including
+the same flag-gated AI usage label.
 
 On a local HMR dev server, `Preview billing states` opens an opt-in preview in
 Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,

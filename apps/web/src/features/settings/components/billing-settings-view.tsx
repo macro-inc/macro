@@ -1,8 +1,8 @@
 import {
   type PaidPlanTier,
   PLAN_BY_TIER,
-  PLAN_USAGE_LABELS,
   type PlanTier,
+  planBenefits,
 } from '@app/features/paywall/plans';
 import { plural } from '@core/util/string';
 import CheckIcon from '@phosphor/check.svg';
@@ -12,48 +12,9 @@ import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { type BillingState, describeSeatPlans } from '../core/billing-state';
 import { SettingsCard, SettingsPage } from '../primitives';
 
-/**
- * Plan bullet points. Free and Pro allowance labels require AI usage billing;
- * Max always explains its larger allowance relative to Pro.
- */
-const BILLING_PLAN_FEATURES: Record<
-  PlanTier,
-  (usage: string | undefined) => string[]
-> = {
-  free: (usage) => [
-    'Access to Haiku',
-    ...(usage ? [usage] : []),
-    'MCP access',
-    '2 connected email accounts',
-    '5 GB storage',
-  ],
-  premium: (usage) => [
-    'All agents',
-    'All models',
-    ...(usage ? [usage] : []),
-    'No email watermark',
-    'AI projections',
-    'Unlimited connected email accounts',
-    'Calls',
-    'Teams',
-    'Team-level memory',
-    '100 GB storage',
-  ],
-  max: () => [
-    'Everything in Pro',
-    '10x more AI usage than Pro',
-    'Unlimited connected email accounts',
-    'Team-level memory',
-    '1 TB storage',
-    'Priority support',
-  ],
-};
-
 const PlanFeatures = (props: { tier: PlanTier; aiUsageEnabled: boolean }) => {
-  const allowance = () =>
-    props.aiUsageEnabled ? PLAN_USAGE_LABELS[props.tier] : undefined;
   return (
-    <For each={BILLING_PLAN_FEATURES[props.tier](allowance())}>
+    <For each={planBenefits(props.tier, props.aiUsageEnabled)}>
       {(label) => (
         <li class="flex items-center gap-2">
           <CheckIcon class="size-3 text-success" />

@@ -1,5 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useHasPaidAccess } from '@core/auth';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import { type PaywallKey, PaywallMessages } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
@@ -10,7 +12,7 @@ import { useCurrentTeamQuery } from '@queries/team/teams';
 import { stripeServiceClient } from '@service-stripe/client';
 import { Button, Tooltip } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-import { PLAN_BY_TIER } from './plans';
+import { PLAN_BY_TIER, planBenefits } from './plans';
 
 export interface PaywallProps {
   cb: () => Promise<void> | void;
@@ -21,20 +23,9 @@ export interface PaywallProps {
   hideCloseButton?: boolean;
 }
 
-const PAYWALL_PREMIUM_FEATURES = [
-  'All agents',
-  'All models',
-  'No watermark',
-  'AI projections',
-  'Multiple email inboxes',
-  'Calls',
-  'Teams',
-  '100 GB storage',
-];
-
-const PremiumFeatures = () => (
+const PremiumFeatures = (props: { aiUsageEnabled: boolean }) => (
   <ul class="grid grid-cols-1 gap-x-4 gap-y-3 text-sm text-ink-muted sm:grid-cols-3">
-    <For each={PAYWALL_PREMIUM_FEATURES}>
+    <For each={planBenefits('premium', props.aiUsageEnabled)}>
       {(label) => (
         <li class="flex items-center gap-2">
           <CheckIcon class="size-3 text-success" />
@@ -49,6 +40,7 @@ const PaywallComponent = (props: PaywallProps) => {
   const analytics = useAnalytics();
   const hasPaid = useHasPaidAccess();
   const userId = useUserId();
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
 
   const team = useCurrentTeamQuery();
 
@@ -137,7 +129,7 @@ const PaywallComponent = (props: PaywallProps) => {
             <div class="flex flex-col">
               <h3 class="text-sm text-ink">Pro features</h3>
             </div>
-            <PremiumFeatures />
+            <PremiumFeatures aiUsageEnabled={aiUsageBilling().enabled} />
           </div>
         </section>
       </div>
