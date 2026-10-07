@@ -96,8 +96,7 @@ export function filterTaskBoardColumns(
 export function taskBoardColumns(
   rows: readonly TasksDataSourceItem[],
   grouping: TaskBoardGrouping,
-  searching: boolean,
-  facets: FacetSelection = {}
+  searching: boolean
 ): TaskBoardColumn[] {
   const columns = new Map<
     string,
@@ -105,18 +104,23 @@ export function taskBoardColumns(
   >();
 
   const addColumn = (id: string, label: string) => {
-    if (!columns.has(id)) {
-      columns.set(id, {
-        id,
-        label,
-        tasks: [],
-        count: searching ? undefined : 0,
-        hasMore: false,
-        loadingMore: false,
-      });
+    let column = columns.get(id);
+
+    if (column) {
+      return column;
     }
 
-    return columns.get(id);
+    column = {
+      id,
+      label,
+      tasks: [],
+      count: searching ? undefined : 0,
+      hasMore: false,
+      loadingMore: false,
+    };
+    columns.set(id, column);
+
+    return column;
   };
 
   const options = {
@@ -147,9 +151,7 @@ export function taskBoardColumns(
 
     const column = addColumn(row.groupId, row.label);
 
-    if (column) {
-      column.count = row.count;
-    }
+    column.count = row.count;
   }
 
   const seen = new Map<string, Set<string>>();
@@ -177,10 +179,6 @@ export function taskBoardColumns(
     for (const key of keys) {
       const column = addColumn(key, key || 'Not set');
 
-      if (!column) {
-        continue;
-      }
-
       const ids = seen.get(key) ?? new Set<string>();
       seen.set(key, ids);
 
@@ -193,15 +191,13 @@ export function taskBoardColumns(
     }
   }
 
-  const result = [...columns.values()].map((column) => ({
+  return [...columns.values()].map((column) => ({
     ...column,
     count:
       column.count === undefined
         ? undefined
         : Math.max(column.count, column.tasks.length),
   }));
-
-  return filterTaskBoardColumns(result, grouping, facets);
 }
 
 /** Preserve untouched assignees and their wire reference types. */

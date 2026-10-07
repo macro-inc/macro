@@ -76,7 +76,6 @@ function useColumnContext() {
 function Root(props: {
   columns: readonly TaskBoardColumn[];
   animationScope?: string;
-  targetActivationSpeed?: number;
   canMove(move: TaskBoardMove): boolean;
   onMove(move: TaskBoardMove): Promise<boolean>;
   ref?: (element: HTMLDivElement) => void;
@@ -194,7 +193,7 @@ function Root(props: {
         getViewport={() => viewport}
         canDropCard={props.canMove}
         mode="cross-column"
-        targetActivationSpeed={props.targetActivationSpeed ?? 600}
+        targetActivationSpeed={600}
         onDrop={(drop, visual) => {
           if (!props.canMove(drop)) {
             return;

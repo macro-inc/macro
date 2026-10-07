@@ -72,12 +72,6 @@ const tasksListStateSchemaWithDefaults = z.object({
 
 type TasksListEntryState = z.infer<typeof tasksListStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_LIST_ENTRY_STATE = {
-  version: 1,
-  focusKey: undefined,
-  scrollOffset: 0,
-} satisfies TasksListEntryState;
-
 export type TasksListStateSnapshot = {
   focusKey: TasksListEntryState['focusKey'];
   scrollOffset: TasksListEntryState['scrollOffset'];
@@ -142,9 +136,7 @@ export function createTasksListEntryStorage(
       : TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       const result = tasksListStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success
-        ? result.data
-        : DEFAULT_TASKS_LIST_ENTRY_STATE;
+      const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
         ...current,

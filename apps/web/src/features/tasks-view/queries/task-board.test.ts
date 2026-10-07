@@ -7,7 +7,11 @@ import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { describe, expect, it } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
-import { taskBoardColumns, taskBoardMoveValue } from './task-board';
+import {
+  filterTaskBoardColumns,
+  taskBoardColumns,
+  taskBoardMoveValue,
+} from './task-board';
 
 describe('board query projection', () => {
   it('restricts server groups and pagination to selected statuses', () => {
@@ -31,9 +35,11 @@ describe('board query projection', () => {
       }),
     ];
 
-    const columns = taskBoardColumns(rows, 'status', false, {
-      status: ['in-progress'],
-    });
+    const columns = filterTaskBoardColumns(
+      taskBoardColumns(rows, 'status', false),
+      'status',
+      { status: ['in-progress'] }
+    );
 
     expect(columns.map((column) => column.id)).toEqual([allowed]);
     expect(columns[0]).toMatchObject({
@@ -76,9 +82,9 @@ describe('board query projection', () => {
       tasks: [{ id: 'first' }, { id: 'second' }],
     });
     expect(
-      taskBoardColumns(rows, 'assignee', true, { assignees: ['bob'] }).map(
-        (column) => column.id
-      )
+      filterTaskBoardColumns(columns, 'assignee', {
+        assignees: ['bob'],
+      }).map((column) => column.id)
     ).toEqual(['bob']);
   });
 });
