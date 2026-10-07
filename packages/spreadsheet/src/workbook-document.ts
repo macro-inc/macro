@@ -38,6 +38,7 @@ import {
 } from './spreadsheet-document';
 
 import {
+  readOrderedSheets,
   readSpreadsheetSheets,
   retainSpreadsheetSheets,
   reviveSpreadsheetFallback,
@@ -171,6 +172,47 @@ export function renameSpreadsheetSheet(
   }
   retainSpreadsheetSheets(doc, sheetId);
   doc.commit({ origin: 'spreadsheet-sheet-rename' });
+}
+
+/**
+ * Move a sheet to `index` among the visible sheets. Only the moved sheet's
+ * order changes, to a value between its new neighbors, so concurrent moves of
+ * different sheets compose; neighbors without a gap are renumbered.
+ */
+export function moveSpreadsheetSheet(
+  doc: LoroDoc,
+  sheetId: string,
+  index: number
+) {
+  const sheets = readOrderedSheets(doc);
+  const from = sheets.findIndex((sheet) => sheet.id === sheetId);
+  if (from < 0) throw new Error('This sheet no longer exists.');
+  const to = Math.max(0, Math.min(sheets.length - 1, Math.trunc(index)));
+  if (to === from) return;
+  const others = sheets.filter((sheet) => sheet.id !== sheetId);
+  const before = others[to - 1]?.order;
+  const after = others[to]?.order;
+  const order =
+    before === undefined
+      ? after! - 1
+      : after === undefined
+        ? before + 1
+        : before + (after - before) / 2;
+  reviveSpreadsheetFallback(doc, sheetId);
+  const orders = doc.getMap('spreadsheetSheetOrder');
+  if (
+    Number.isFinite(order) &&
+    (before === undefined || order > before) &&
+    (after === undefined || order < after)
+  )
+    orders.set(sheetId, order);
+  else {
+    others.splice(to, 0, sheets[from]);
+    for (const [position, sheet] of others.entries())
+      if (orders.get(sheet.id) !== position) orders.set(sheet.id, position);
+  }
+  retainSpreadsheetSheets(doc, sheetId);
+  doc.commit({ origin: 'spreadsheet-sheet-move' });
 }
 
 /**

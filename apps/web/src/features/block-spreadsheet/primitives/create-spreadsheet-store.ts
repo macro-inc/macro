@@ -55,6 +55,7 @@ import {
   addSpreadsheetSheet,
   deleteSpreadsheetSheet,
   duplicateSpreadsheetSheet,
+  moveSpreadsheetSheet,
   prepareSpreadsheetImport,
   readSpreadsheetImages,
   readSpreadsheetWorkbook,
@@ -553,6 +554,12 @@ export function createSpreadsheetStore(options: {
       const doc = options.source.doc();
       if (!doc || !editable()) return;
       renameSpreadsheetSheet(doc, id, name);
+      refresh();
+    },
+    moveSheet(id: string, index: number) {
+      const doc = options.source.doc();
+      if (!doc || !editable()) return;
+      moveSpreadsheetSheet(doc, id, index);
       refresh();
     },
     duplicateSheet(id: string) {

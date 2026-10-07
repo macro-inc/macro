@@ -292,8 +292,11 @@ calculated values. Clipboard menu actions use the browser clipboard; if access i
 unavailable, use Cmd/Ctrl+V or Cmd/Ctrl+Shift+V in the grid.
 
 Use **+** in the footer to add a sheet, select its tab to switch, and open the
-adjacent sheet menu to rename, duplicate, or delete. Double-click a tab to rename it,
-or right-click any tab for its Rename, Duplicate, and Delete actions. Sheet operations can be undone;
+adjacent sheet menu to rename, duplicate, move, or delete. Double-click a tab to rename it,
+or right-click any tab for its Rename, Duplicate, Move left, Move right, and Delete actions.
+Drag a tab with the mouse to reorder sheets; a vertical accent bar marks where it will
+land, and the dragged sheet becomes active. Touch drags scroll the tab strip instead,
+so use Move left/right there. Sheet operations can be undone;
 the last sheet cannot be deleted. Each sheet remembers its selection. Tab navigation
 supports Left/Right and Home/End; a view-only user can switch tabs and copy cells.
 Adding or duplicating a sheet focuses its grid so typing immediately edits the new sheet.

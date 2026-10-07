@@ -1,6 +1,8 @@
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import ArrowLeft from '@phosphor/arrow-left.svg';
+import ArrowRight from '@phosphor/arrow-right.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import Copy from '@phosphor/copy.svg';
 import Pencil from '@phosphor/pencil-simple.svg';
@@ -9,7 +11,12 @@ import Trash from '@phosphor/trash-simple.svg';
 import { Button } from '@ui/components/Button';
 import { Dropdown } from '@ui/components/Dropdown';
 import { Tooltip } from '@ui/components/Tooltip';
-import { createEffect, For, on, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
+
+/** Pointer travel before a press on a tab becomes a drag. */
+const DRAG_THRESHOLD = 4;
+/** Distance from the tab strip's edge that scrolls it during a drag. */
+const DRAG_SCROLL_EDGE = 24;
 
 export type SpreadsheetSheetTabsProps = {
   sheets: { id: string; name: string }[];
@@ -22,6 +29,8 @@ export type SpreadsheetSheetTabsProps = {
   onRename: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  /** Move a sheet to `index` in `sheets`. */
+  onMove: (id: string, index: number) => void;
   onAddRows?: () => void;
   addRowsLabel?: string;
 };
@@ -29,7 +38,14 @@ export type SpreadsheetSheetTabsProps = {
 function SheetActions(props: SpreadsheetSheetTabsProps) {
   const active = () =>
     props.sheets.find((sheet) => sheet.id === props.activeSheetId);
+  const activeIndex = () =>
+    props.sheets.findIndex((sheet) => sheet.id === props.activeSheetId);
   let pendingAction: (() => void) | undefined;
+  function move(offset: number) {
+    const sheet = active();
+    if (sheet && !props.readonly)
+      props.onMove(sheet.id, activeIndex() + offset);
+  }
 
   function defer(action: (id: string) => void) {
     const sheet = active();
@@ -78,6 +94,28 @@ function SheetActions(props: SpreadsheetSheetTabsProps) {
             Duplicate
           </Dropdown.Item>
         </Dropdown.Group>
+        <Dropdown.Group>
+          <Dropdown.Item
+            closeOnSelect
+            disabled={props.readonly || activeIndex() <= 0}
+            onSelect={() => move(-1)}
+          >
+            <ArrowLeft class="size-4" />
+            Move left
+          </Dropdown.Item>
+          <Dropdown.Item
+            closeOnSelect
+            disabled={
+              props.readonly ||
+              activeIndex() < 0 ||
+              activeIndex() >= props.sheets.length - 1
+            }
+            onSelect={() => move(1)}
+          >
+            <ArrowRight class="size-4" />
+            Move right
+          </Dropdown.Item>
+        </Dropdown.Group>
         <Show when={props.onAddRows && isMobileWidth()}>
           <Dropdown.Group>
             <Dropdown.Item
@@ -111,6 +149,95 @@ function SheetActions(props: SpreadsheetSheetTabsProps) {
 /** Workbook navigation stays local; the owner supplies mutations and dialogs. */
 export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
   const buttons = new Map<string, HTMLButtonElement>();
+  let list: HTMLDivElement | undefined;
+  const [dragging, setDragging] = createSignal<string>();
+  /** Insertion point among the tabs, from 0 to `sheets.length`. */
+  const [dropAt, setDropAt] = createSignal<number>();
+  let endDrag: (() => void) | undefined;
+  onCleanup(() => endDrag?.());
+
+  const indexOf = (id: string) =>
+    props.sheets.findIndex((sheet) => sheet.id === id);
+  /** The moved sheet's resulting index, or undefined when it stays put. */
+  const target = (id: string, at: number) => {
+    const from = indexOf(id);
+    if (from < 0) return;
+    const to = at > from ? at - 1 : at;
+    return to === from ? undefined : to;
+  };
+  const showDrop = (at: number) => {
+    const id = dragging();
+    return id !== undefined && dropAt() === at && target(id, at) !== undefined;
+  };
+
+  function move(id: string, index: number) {
+    if (props.readonly) return;
+    props.onMove(id, index);
+    const button = buttons.get(id);
+    button?.focus({ preventScroll: true });
+    button?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function insertionPoint(clientX: number) {
+    const index = props.sheets.findIndex((sheet) => {
+      const rect = buttons.get(sheet.id)?.getBoundingClientRect();
+      return rect && clientX < rect.left + rect.width / 2;
+    });
+    return index < 0 ? props.sheets.length : index;
+  }
+
+  /** Mouse and pen presses drag; touch keeps scrolling the strip. Window
+   * listeners survive the tab remounting while it is dragged. */
+  function startDrag(event: PointerEvent, id: string) {
+    if (
+      event.button !== 0 ||
+      event.pointerType === 'touch' ||
+      props.readonly ||
+      props.preserveEditorFocus ||
+      props.sheets.length < 2
+    )
+      return;
+    endDrag?.();
+    const startX = event.clientX;
+    const pointerId = event.pointerId;
+    const onMove = (moved: PointerEvent) => {
+      if (moved.pointerId !== pointerId) return;
+      if (!dragging()) {
+        if (Math.abs(moved.clientX - startX) < DRAG_THRESHOLD) return;
+        setDragging(id);
+      }
+      moved.preventDefault();
+      if (list) {
+        const rect = list.getBoundingClientRect();
+        if (moved.clientX < rect.left + DRAG_SCROLL_EDGE)
+          list.scrollLeft -= DRAG_SCROLL_EDGE / 2;
+        else if (moved.clientX > rect.right - DRAG_SCROLL_EDGE)
+          list.scrollLeft += DRAG_SCROLL_EDGE / 2;
+      }
+      setDropAt(insertionPoint(moved.clientX));
+    };
+    const onUp = (released: PointerEvent) => {
+      if (released.pointerId !== pointerId) return;
+      const at = dragging() === undefined ? undefined : dropAt();
+      finish();
+      if (at === undefined) return;
+      const to = target(id, at);
+      if (to !== undefined) props.onMove(id, to);
+      props.onSelect(id);
+    };
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', finish);
+      setDragging();
+      setDropAt();
+      endDrag = undefined;
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', finish);
+    endDrag = finish;
+  }
 
   createEffect(
     on(
@@ -153,13 +280,14 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
         <Plus class="size-4" />
       </Button>
       <div
+        ref={list}
         role="tablist"
         aria-label="Workbook sheets"
         aria-orientation="horizontal"
         class="flex h-full min-w-0 flex-1 items-stretch overflow-x-auto overflow-y-hidden overscroll-x-contain touch:touch-pan-x"
       >
         <For each={props.sheets}>
-          {(sheet) => {
+          {(sheet, index) => {
             let pendingAction: (() => void) | undefined;
             const defer = (action: (id: string) => void) => {
               if (props.readonly) return;
@@ -191,16 +319,18 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
                     role="tab"
                     aria-selected={props.activeSheetId === sheet.id}
                     tabIndex={props.activeSheetId === sheet.id ? 0 : -1}
-                    class="h-full max-w-44 shrink-0 touch:min-w-[44px] truncate border-b-2 px-3 text-[13px] outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent"
+                    class="relative h-full max-w-44 shrink-0 touch:min-w-[44px] truncate border-b-2 px-3 text-[13px] outline-none hover:bg-hover focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent"
                     classList={{
                       'border-accent bg-accent-bg text-accent':
                         props.activeSheetId === sheet.id,
                       'border-transparent text-ink-muted':
                         props.activeSheetId !== sheet.id,
+                      'opacity-60': dragging() === sheet.id,
                     }}
                     onPointerDown={(event) => {
                       if (props.preserveEditorFocus && event.button === 0)
                         event.preventDefault();
+                      startDrag(event, sheet.id);
                     }}
                     onMouseDown={(event) => {
                       if (props.preserveEditorFocus && event.button === 0)
@@ -213,6 +343,23 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
                     onKeyDown={(event) => navigate(event, sheet.id)}
                   >
                     {sheet.name}
+                    <Show when={showDrop(index())}>
+                      <span
+                        data-sheet-drop-indicator
+                        class="absolute inset-y-1 left-0 w-0.5 rounded bg-accent"
+                      />
+                    </Show>
+                    <Show
+                      when={
+                        index() === props.sheets.length - 1 &&
+                        showDrop(props.sheets.length)
+                      }
+                    >
+                      <span
+                        data-sheet-drop-indicator
+                        class="absolute inset-y-1 right-0 w-0.5 rounded bg-accent"
+                      />
+                    </Show>
                   </ContextMenu.Trigger>
                 </Tooltip>
                 <ContextMenu.Portal>
@@ -239,6 +386,23 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
                       disabled={props.readonly || !props.canAdd}
                       closeOnSelect
                       onClick={() => defer(props.onDuplicate)}
+                    />
+                    <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
+                    <MenuItem
+                      text="Move left"
+                      icon={ArrowLeft}
+                      disabled={props.readonly || index() <= 0}
+                      closeOnSelect
+                      onClick={() => defer((id) => move(id, indexOf(id) - 1))}
+                    />
+                    <MenuItem
+                      text="Move right"
+                      icon={ArrowRight}
+                      disabled={
+                        props.readonly || index() >= props.sheets.length - 1
+                      }
+                      closeOnSelect
+                      onClick={() => defer((id) => move(id, indexOf(id) + 1))}
                     />
                     <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
                     <MenuItem

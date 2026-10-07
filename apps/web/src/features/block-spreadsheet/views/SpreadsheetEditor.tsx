@@ -956,6 +956,7 @@ export function SpreadsheetEditor(props: {
             });
           }}
           onDelete={(id) => workbookActions.openSheetDialog('delete', id)}
+          onMove={workbookActions.moveSheet}
           onAddRows={
             editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS
               ? () => {
