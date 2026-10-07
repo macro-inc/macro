@@ -5,6 +5,8 @@ import {
   useViewControlHotkeys,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import CalendarIcon from '@phosphor/calendar.svg';
+import { Button, Dropdown, Input } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { useTaskFilters } from '../filters/use-task-filters';
@@ -12,11 +14,14 @@ import { useTasksView } from '../tasks-view-context';
 
 export function TasksControls() {
   const panel = useSplitPanelOrThrow();
-  const { state, setPrimarySort, setState } = useTasksView();
+  const { state, setPrimarySort, setState, setDueDate } = useTasksView();
   const filters = useTaskFilters();
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
   let filterTrigger: HTMLButtonElement | undefined;
   let sortTrigger: HTMLButtonElement | undefined;
+
+  const hasDueDateFilter = () =>
+    Boolean(state.dueDate.after || state.dueDate.before);
 
   const handleMenuOpenChange =
     (menu: 'filters' | 'sort') => (open: boolean) => {
@@ -86,6 +91,58 @@ export function TasksControls() {
         <Show when={filters.activeCount() > 0}>
           <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
             {filters.activeCount()}
+          </span>
+        </Show>
+      </div>
+      <div class="relative shrink-0">
+        <Dropdown>
+          <Dropdown.Trigger
+            variant="outline"
+            size="md"
+            square
+            depth={2}
+            class="rounded-lg bg-surface"
+            label="Filter due date"
+          >
+            <CalendarIcon />
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <div class="flex flex-col gap-3 p-2">
+              <label class="flex flex-col gap-1 text-xs">
+                From
+                <Input
+                  type="date"
+                  value={state.dueDate.after ?? ''}
+                  onInput={(event) =>
+                    setDueDate({
+                      ...state.dueDate,
+                      after: event.currentTarget.value || undefined,
+                    })
+                  }
+                />
+              </label>
+              <label class="flex flex-col gap-1 text-xs">
+                Through
+                <Input
+                  type="date"
+                  value={state.dueDate.before ?? ''}
+                  onInput={(event) =>
+                    setDueDate({
+                      ...state.dueDate,
+                      before: event.currentTarget.value || undefined,
+                    })
+                  }
+                />
+              </label>
+              <Button size="sm" onClick={() => setDueDate({})}>
+                Clear dates
+              </Button>
+            </div>
+          </Dropdown.Content>
+        </Dropdown>
+        <Show when={hasDueDateFilter()}>
+          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
+            1
           </span>
         </Show>
       </div>

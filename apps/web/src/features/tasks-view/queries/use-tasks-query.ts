@@ -39,7 +39,7 @@ import { buildTaskSearchRequest } from './task-search';
 
 export type TasksDataSourceInput = Pick<
   TasksViewState,
-  'tab' | 'search' | 'groupBy' | 'sort' | 'facets'
+  'tab' | 'search' | 'groupBy' | 'sort' | 'facets' | 'dueDate'
 >;
 
 export type UseTasksDataSourceOptions = {
@@ -106,6 +106,7 @@ export function useTasksDataSource(
       groupBy: state.groupBy,
       sort: state.sort,
       reference: options.reference?.(),
+      dueDate: state.dueDate,
     });
 
   const scoped = Boolean(options.reference);

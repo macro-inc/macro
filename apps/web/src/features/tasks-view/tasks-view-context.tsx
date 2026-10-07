@@ -113,6 +113,7 @@ export type TasksViewContext = {
   closeTask: () => void;
   setTab: (tab: TasksTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
+  setDueDate: (dueDate: TasksViewState['dueDate']) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -154,6 +155,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         facets: normalizeFacetSelection(
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
+        dueDate: initial.dueDate ?? {},
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -199,6 +201,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           draft.tab = tab;
           draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
           draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+          draft.dueDate = {};
           draft.collapsedGroupIds = [];
         })
       );
@@ -348,6 +351,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.tab = tab;
         draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
         draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+        draft.dueDate = {};
         draft.collapsedGroupIds = [];
       })
     );
@@ -357,6 +361,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const setFacets = (facets: TasksViewState['facets']) => {
     closeTask();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
+  };
+
+  const setDueDate = (dueDate: TasksViewState['dueDate']) => {
+    closeTask();
+    setState('dueDate', reconcile(dueDate));
   };
 
   const setPrimarySort = (id: TaskSortId) => {
@@ -388,6 +397,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     closeTask,
     setTab,
     setFacets,
+    setDueDate,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

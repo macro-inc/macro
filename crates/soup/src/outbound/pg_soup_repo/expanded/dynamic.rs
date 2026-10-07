@@ -811,6 +811,26 @@ fn build_task_include_cbm_atm_nc_clause() -> String {
     )
 }
 
+/// Generates a clause to filter tasks by their due date property.
+/// Tasks are documents with sub_type='task', and their due date is stored
+/// in the entity_properties table with the DUE_DATE property definition.
+fn task_due_date_filter(operator: &str, date: &DateTime<Utc>) -> String {
+    format!(
+        r#"(
+        EXISTS (SELECT 1 FROM document_sub_type dst_due WHERE dst_due.document_id = d.id AND dst_due.sub_type = 'task')
+        AND EXISTS (
+            SELECT 1 FROM entity_properties ep_due
+            WHERE ep_due.entity_id = d.id
+            AND ep_due.entity_type = 'TASK'
+            AND ep_due.property_definition_id = '{due_date_uuid}'
+            AND (ep_due.values->>'value')::timestamptz {operator} '{date}'::timestamptz
+        )
+    )"#,
+        due_date_uuid = SystemPropertyKey::DUE_DATE_UUID,
+        date = date.to_rfc3339()
+    )
+}
+
 /// NULL-safe equality for nullable columns: FALSE (not UNKNOWN) on NULL, so
 /// `NOT` includes NULL rows — e.g. root projects under a negated `pid` filter.
 fn nullable_eq(col: &str, val: impl std::fmt::Display) -> String {
@@ -912,6 +932,12 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::EmailAttachmentParticipant(email)) => {
             email_attachment_participant_predicate(&email, "d.id")
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::TaskDueBefore(date)) => {
+            task_due_date_filter("<=", date)
+        }
+        filter_ast::ExprFrame::Literal(DocumentLiteral::TaskDueAfter(date)) => {
+            task_due_date_filter(">=", date)
         }
     });
     if formatting.is_empty() {

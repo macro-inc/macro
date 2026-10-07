@@ -16,6 +16,7 @@ import {
   type TaskFacetContext,
 } from '../filters/task-facets';
 import type {
+  TaskDueDateFilter,
   TaskGroupBy,
   TaskReferenceScope,
   TaskSortId,
@@ -23,6 +24,14 @@ import type {
 } from '../types';
 
 type TaskAst = BackendAstNode;
+
+/** Convert a local date string (YYYY-MM-DD) to an ISO datetime at start of day (UTC). */
+const toStartOfDayISO = (dateStr: string): string =>
+  new Date(`${dateStr}T00:00:00Z`).toISOString();
+
+/** Convert a local date string (YYYY-MM-DD) to an ISO datetime at end of day (UTC). */
+const toEndOfDayISO = (dateStr: string): string =>
+  new Date(`${dateStr}T23:59:59.999Z`).toISOString();
 
 const entityPropertyLiteral = (
   definitionId: string,
@@ -113,6 +122,8 @@ export type BuildTaskQueryOptions = {
   sort: SortSelection<TaskSortId>[];
   /** Only tasks whose property references this entity. */
   reference?: TaskReferenceScope;
+  /** Due date range filter. */
+  dueDate?: TaskDueDateFilter;
 };
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
@@ -141,9 +152,19 @@ export function buildTaskQuery(
 
   const taskDocuments = documentScope(options.tab, options.userId);
 
-  const documents: TaskAst = compiledFacets.df
-    ? { '&': [taskDocuments, compiledFacets.df] }
-    : taskDocuments;
+  const dueDateFilters: TaskAst[] = [];
+  if (options.dueDate?.after) {
+    dueDateFilters.push({ l: { tda: toStartOfDayISO(options.dueDate.after) } });
+  }
+  if (options.dueDate?.before) {
+    dueDateFilters.push({ l: { tdb: toEndOfDayISO(options.dueDate.before) } });
+  }
+
+  const documentFilters: TaskAst[] = [taskDocuments];
+  if (compiledFacets.df) documentFilters.push(compiledFacets.df);
+  if (dueDateFilters.length > 0) documentFilters.push(...dueDateFilters);
+
+  const documents = combine('&', documentFilters) ?? taskDocuments;
 
   const body: SoupAstBody = {
     ...nonTaskTargets,

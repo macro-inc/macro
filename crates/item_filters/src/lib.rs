@@ -65,12 +65,20 @@ pub struct TaskFilters {
     /// even when they do not match other document filters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include_cbm_atm_nc: Option<bool>,
+    /// Inclusive upper due-date bound. Filters tasks with a due date at or before this timestamp.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_before: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive lower due-date bound. Filters tasks with a due date at or on/after this timestamp.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub due_after: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl IsEmpty for TaskFilters {
     fn is_empty(&self) -> bool {
         // false is equivalent to "disabled" and should not affect filtering.
         self.include_cbm_atm_nc != Some(true)
+            && self.due_before.is_none()
+            && self.due_after.is_none()
     }
 }
 

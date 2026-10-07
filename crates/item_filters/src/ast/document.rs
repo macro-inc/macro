@@ -65,6 +65,14 @@ pub enum DocumentLiteral {
     /// sent by, or addressed to, a matching email address or domain
     #[serde(rename = "eap")]
     EmailAttachmentParticipant(Email),
+    /// Inclusive upper due-date bound for tasks. Filters tasks with a due date
+    /// at or before this timestamp.
+    #[serde(rename = "tdb")]
+    TaskDueBefore(chrono::DateTime<chrono::Utc>),
+    /// Inclusive lower due-date bound for tasks. Filters tasks with a due date
+    /// at or after this timestamp.
+    #[serde(rename = "tda")]
+    TaskDueAfter(chrono::DateTime<chrono::Utc>),
 }
 
 fn prefix(s: &str) -> IResult<&str, &str> {
@@ -233,6 +241,13 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
         let is_email_attachment_node =
             is_email_attachment.map(|v| Expr::Literal(DocumentLiteral::IsEmailAttachment(v)));
 
+        let task_due_before_node = task_filters
+            .due_before
+            .map(|v| Expr::val(DocumentLiteral::TaskDueBefore(v)));
+        let task_due_after_node = task_filters
+            .due_after
+            .map(|v| Expr::val(DocumentLiteral::TaskDueAfter(v)));
+
         let normal_expr = [
             file_types_node,
             document_id_nodes,
@@ -242,6 +257,8 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             notification_state_node,
             sub_types_node,
             is_email_attachment_node,
+            task_due_before_node,
+            task_due_after_node,
         ]
         .into_iter()
         .fold_with(Expr::and);

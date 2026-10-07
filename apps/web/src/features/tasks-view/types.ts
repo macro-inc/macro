@@ -24,12 +24,22 @@ export type TaskDetailTarget = {
   fallbackName?: string;
 };
 
+/** Due date filter with ISO date strings (YYYY-MM-DD). */
+export type TaskDueDateFilter = {
+  /** Tasks due on or after this date (inclusive). */
+  after?: string;
+  /** Tasks due on or before this date (inclusive). */
+  before?: string;
+};
+
 export type TasksViewState = {
   tab: TasksTab;
   search: string;
   groupBy: TaskGroupBy;
   sort: SortSelection<TaskSortId>[];
   facets: FacetSelection;
+  /** Due date range filter for tasks. */
+  dueDate: TaskDueDateFilter;
   collapsedGroupIds: string[];
   collapsedSidebarSectionIds: string[];
 };

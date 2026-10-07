@@ -55,6 +55,7 @@ it('scopes tasks to the Project property and disables the shared source immediat
           search: '',
           sort: [],
           facets: {},
+          dueDate: {},
         },
         {
           userId: () => 'user',
