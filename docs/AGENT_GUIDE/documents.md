@@ -95,7 +95,10 @@ use a green grid icon in file lists and search. The grid fills
 the panel beneath the formatting and formula bars. While a workbook opens, a
 shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
 formula cells show a short shimmer bar until their first results arrive; wait for
-real cell text before reading values. They have the `.spreadsheet` file type; uploading an
+real cell text before reading values. Once it loads, the grid takes keyboard focus
+with A1 selected, so typing immediately edits A1 and arrow keys move the selection;
+it does not take focus from a dialog or control reached while loading, nor in an
+inline preview or when the sheet was opened by J/K list navigation. They have the `.spreadsheet` file type; uploading an
 Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.

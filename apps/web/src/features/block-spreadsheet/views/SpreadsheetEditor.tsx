@@ -919,7 +919,14 @@ export function SpreadsheetEditor(props: {
           onClear={grid.clear}
           onGridReady={(element) => {
             gridElement = element;
-            if (props.autoFocus) focusGrid();
+            // The sheet loads asynchronously; never take focus from a dialog
+            // or control the user reached in the meantime.
+            const active = document.activeElement;
+            if (
+              props.autoFocus &&
+              (!active || active === document.body || active.contains(element))
+            )
+              focusGrid();
           }}
         />
       </Show>
