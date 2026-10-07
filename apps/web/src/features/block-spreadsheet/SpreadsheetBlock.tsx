@@ -9,6 +9,7 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -71,6 +72,16 @@ function SpreadsheetBlockContent(props: { share?: string }) {
   const canEdit = useCanEdit();
   const userId = useUserId();
   const permissions = useGetPermissions();
+  const splitPanel = useSplitPanel();
+  const ownsClipboard = (event: ClipboardEvent) => {
+    if (!splitPanel?.isPanelActive() || splitPanel.isInlinePreview)
+      return false;
+    const target = event.target;
+    return (
+      target === document.body ||
+      (target instanceof Node && !!splitPanel.panelRef()?.contains(target))
+    );
+  };
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'spreadsheet',
@@ -175,6 +186,7 @@ function SpreadsheetBlockContent(props: { share?: string }) {
                     <SpreadsheetEditor
                       commentLocation={commentLocation()}
                       comments={comments}
+                      ownsClipboard={ownsClipboard}
                       mentions={spreadsheetMentions}
                       store={store}
                       name={name()}

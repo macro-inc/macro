@@ -230,6 +230,8 @@ export function SpreadsheetGrid(props: {
   onKeyDown: (event: KeyboardEvent) => void;
   onCopy: (cut?: boolean) => string;
   onPaste: (text: string, metadata?: string) => void;
+  /** Whether a clipboard shortcut fired outside the grid is meant for it. */
+  ownsClipboard?: (event: ClipboardEvent) => boolean;
   onClear: () => void;
   onGridReady: (element: HTMLDivElement) => void;
 }) {
@@ -952,17 +954,97 @@ export function SpreadsheetGrid(props: {
     }
   }
 
+  function copyCells(event: ClipboardEvent) {
+    event.preventDefault();
+    event.clipboardData?.setData('text/plain', props.onCopy());
+    if (props.onCopyMetadata)
+      event.clipboardData?.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata()
+      );
+  }
+  function cutCells(event: ClipboardEvent) {
+    if (!event.clipboardData) return;
+    event.preventDefault();
+    // A viewer can copy with the cut shortcut, but no cells move. Mark its
+    // metadata as a copy so formulas still translate on a later paste.
+    const cut = !props.readonly;
+    event.clipboardData.setData('text/plain', props.onCopy(cut));
+    if (props.onCopyMetadata)
+      event.clipboardData.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata(cut)
+      );
+    if (cut) props.onClear();
+  }
+  function pasteCells(event: ClipboardEvent) {
+    event.preventDefault();
+    if (!props.readonly && event.clipboardData?.types.includes('text/plain'))
+      props.onPaste(
+        event.clipboardData.getData('text/plain'),
+        event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) || undefined
+      );
+  }
+  // Focus often rests on the toolbar, sheet tabs, split chrome, or the body
+  // while the sheet is the active block; the shortcut still targets cells.
+  function claimsClipboard(event: ClipboardEvent) {
+    const target = event.target;
+    if (
+      event.defaultPrevented ||
+      props.editing ||
+      !(target instanceof Element) ||
+      grid.contains(target) ||
+      isInput(target) ||
+      target.closest('[role="dialog"], [role="menu"], [role="listbox"]')
+    )
+      return false;
+    // Leave a text selection outside the grid to the browser's own copy.
+    const selection = document.getSelection();
+    if (
+      !event.type.endsWith('paste') &&
+      selection &&
+      !selection.isCollapsed &&
+      !grid.contains(selection.anchorNode)
+    )
+      return false;
+    return props.ownsClipboard?.(event) ?? false;
+  }
+  const onDocumentClipboard = (event: ClipboardEvent) => {
+    if (!claimsClipboard(event)) return;
+    if (event.type === 'copy') copyCells(event);
+    else if (event.type === 'cut') cutCells(event);
+    else if (event.type === 'paste') pasteCells(event);
+    // WebKit only dispatches the clipboard event from a non-editable focus
+    // when its before* event is cancelled.
+    else event.preventDefault();
+  };
+  const clipboardEvents = [
+    'beforecopy',
+    'beforecut',
+    'beforepaste',
+    'copy',
+    'cut',
+    'paste',
+  ] as const;
+
   onMount(() => {
     props.onGridReady(grid);
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointermove', movePointer, { passive: false });
     window.addEventListener('pointercancel', cancelPointer);
     window.addEventListener('blur', cancelPointer);
+    for (const type of clipboardEvents)
+      document.addEventListener(type, onDocumentClipboard as EventListener);
     onCleanup(() => {
       window.removeEventListener('pointerup', endPointer);
       window.removeEventListener('pointermove', movePointer);
       window.removeEventListener('pointercancel', cancelPointer);
       window.removeEventListener('blur', cancelPointer);
+      for (const type of clipboardEvents)
+        document.removeEventListener(
+          type,
+          onDocumentClipboard as EventListener
+        );
       stopTouchGesture();
     });
   });
@@ -1148,42 +1230,13 @@ export function SpreadsheetGrid(props: {
               revealSelection();
           }}
           onCopy={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            event.clipboardData?.setData('text/plain', props.onCopy());
-            if (props.onCopyMetadata)
-              event.clipboardData?.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata()
-              );
+            if (!isInput(event.target)) copyCells(event);
           }}
           onCut={(event) => {
-            if (isInput(event.target)) return;
-            if (!event.clipboardData) return;
-            event.preventDefault();
-            // A viewer can copy with the cut shortcut, but no cells move. Mark its
-            // metadata as a copy so formulas still translate on a later paste.
-            const cut = !props.readonly;
-            event.clipboardData.setData('text/plain', props.onCopy(cut));
-            if (props.onCopyMetadata)
-              event.clipboardData.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata(cut)
-              );
-            if (cut) props.onClear();
+            if (!isInput(event.target)) cutCells(event);
           }}
           onPaste={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            if (
-              !props.readonly &&
-              event.clipboardData?.types.includes('text/plain')
-            )
-              props.onPaste(
-                event.clipboardData.getData('text/plain'),
-                event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) ||
-                  undefined
-              );
+            if (!isInput(event.target)) pasteCells(event);
           }}
         >
           <div

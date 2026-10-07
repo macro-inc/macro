@@ -41,6 +41,7 @@ function renderGrid(
     | 'sheetId'
     | 'onFill'
     | 'onResizeColumn'
+    | 'ownsClipboard'
   > & {
     values?: ComponentProps<typeof SpreadsheetGrid>['values'];
     readonly?: boolean;
@@ -133,6 +134,7 @@ function renderGrid(
           onCopy={onCopy}
           onCopyMetadata={onCopyMetadata}
           onPaste={onPaste}
+          ownsClipboard={options.ownsClipboard}
           onClear={onClear}
           onGridReady={() => {}}
         />
@@ -161,10 +163,10 @@ function renderGrid(
 }
 
 function clipboardEvent(
-  type: 'paste' | 'cut',
+  type: 'paste' | 'cut' | 'copy' | 'beforecopy',
   data: {
     types: string[];
-    getData: () => string;
+    getData: (format: string) => string;
     setData?: (format: string, value: string) => void;
   } | null
 ): Event {
@@ -560,6 +562,90 @@ describe('spreadsheet grid clipboard and editing', () => {
     );
     expect(view.onPaste).toHaveBeenCalledWith('', undefined);
     expect(view.cells().A1.value).toBe('');
+  });
+
+  it('handles clipboard shortcuts while focus rests outside the grid in its block', () => {
+    const toolbarButton = document.createElement('button');
+    document.body.append(toolbarButton);
+    const view = renderGrid(
+      { A1: { value: 'copied' } },
+      { ownsClipboard: (event) => event.target === toolbarButton }
+    );
+    const setData = vi.fn();
+    const copy = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData,
+    });
+    fireEvent(toolbarButton, copy);
+    expect(copy.defaultPrevented).toBe(true);
+    expect(view.onCopy).toHaveBeenCalledTimes(1);
+    expect(setData).toHaveBeenCalledWith('text/plain', 'copied');
+
+    const beforeCopy = clipboardEvent('beforecopy', null);
+    fireEvent(toolbarButton, beforeCopy);
+    expect(beforeCopy.defaultPrevented).toBe(true);
+
+    fireEvent(
+      toolbarButton,
+      clipboardEvent('paste', {
+        types: ['text/plain'],
+        getData: (format: string) => (format === 'text/plain' ? 'pasted' : ''),
+      })
+    );
+    expect(view.onPaste).toHaveBeenCalledWith('pasted', undefined);
+    expect(view.cells().A1.value).toBe('pasted');
+
+    // Another block's focus, or an event the grid already handled, is left alone.
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    const foreign = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData,
+    });
+    fireEvent(elsewhere, foreign);
+    expect(foreign.defaultPrevented).toBe(false);
+    fireEvent(
+      view.element,
+      clipboardEvent('copy', { types: [], getData: () => '', setData })
+    );
+    expect(view.onCopy).toHaveBeenCalledTimes(2);
+    toolbarButton.remove();
+    elsewhere.remove();
+  });
+
+  it('leaves outside inputs and text selections to the browser', () => {
+    const host = document.createElement('div');
+    const input = document.createElement('input');
+    const text = document.createElement('p');
+    text.textContent = 'selectable text';
+    host.append(input, text);
+    document.body.append(host);
+    const view = renderGrid(
+      { A1: { value: 'keep' } },
+      { ownsClipboard: () => true }
+    );
+    const paste = clipboardEvent('paste', {
+      types: ['text/plain'],
+      getData: () => 'typed',
+    });
+    fireEvent(input, paste);
+    expect(paste.defaultPrevented).toBe(false);
+    expect(view.onPaste).not.toHaveBeenCalled();
+
+    const selection = document.getSelection()!;
+    selection.selectAllChildren(text);
+    const copy = clipboardEvent('copy', {
+      types: [],
+      getData: () => '',
+      setData: vi.fn(),
+    });
+    fireEvent(text, copy);
+    expect(copy.defaultPrevented).toBe(false);
+    expect(view.onCopy).not.toHaveBeenCalled();
+    selection.removeAllRanges();
+    host.remove();
   });
 
   it('preserves multiline input and focus while editing, then commits on Enter', () => {
