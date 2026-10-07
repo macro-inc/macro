@@ -1,4 +1,4 @@
-use authentication_service::service::subscription_checkout::CheckoutRequest;
+use crate::service::subscription_checkout::CheckoutRequest;
 use axum::{Json, extract::State};
 use entity_access::domain::models::OwnerTeamRole;
 use entity_access::domain::ports::EntityAccessService;

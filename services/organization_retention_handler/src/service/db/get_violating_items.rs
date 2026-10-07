@@ -85,7 +85,10 @@ pub async fn get_violating_chats(
 mod tests {
     use super::*;
 
-    #[sqlx::test(fixtures(path = "../../../fixtures", scripts("testing")))]
+    #[sqlx::test(
+        migrations = false,
+        fixtures(path = "../../../fixtures", scripts("schema", "testing"))
+    )]
     async fn test_get_violating_items(db: sqlx::Pool<sqlx::Postgres>) -> anyhow::Result<()> {
         let mut result = get_violating_items(&db, 1, 2).await?;
         result.sort();

@@ -133,6 +133,23 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
 
+    /// Get the highest access level a user has for a form: their grants, plus
+    /// View for anyone (signed in or not) while the form's audience is public
+    /// and it is not trashed.
+    fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a user's grants hold on every live form they
+    /// reach, ordered by form id. A public audience alone never lists a form,
+    /// and trashed forms are left out.
+    fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
     /// Get the access level a user has for a reminder.
     ///
     /// A reminder is never shared, so this is ownership and nothing else:
@@ -559,6 +576,19 @@ pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
     /// The highest access level the user has on every database they can
     /// reach, ordered by database id. Trashed databases are still listed.
     fn accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
+/// Enumerates the forms a user can reach through grants. Kept apart from
+/// [`EntityAccessService`], which answers for one entity at a time: only the
+/// forms catalog needs every grant at once.
+pub trait AccessibleForms: Clone + Send + Sync + 'static {
+    /// The highest access level the user's grants hold on every live form,
+    /// ordered by form id. Public forms the user holds no grant on are not
+    /// listed, and neither are trashed forms.
+    fn accessible_forms(
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;

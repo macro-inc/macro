@@ -497,6 +497,49 @@ async fn pruning_raises_the_floor_and_forces_stale_clients_to_reset(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_prune_batch_inside_a_timestamp_tie_removes_the_lowest_sequences(pool: PgPool) {
+    let owner_id = "macro|changes-prune-tie@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, link_id).await;
+    for n in 0..3 {
+        repo.upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            &format!("prune-tie-{n}@example.com"),
+            "Pruned",
+            1,
+        ))
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE calendar_change_log SET created_at = now() - interval '40 days' WHERE link_id = $1",
+        link_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let removed = repo
+        .prune_change_log(Utc::now() - Duration::days(30), 2)
+        .await
+        .unwrap();
+
+    assert_eq!(removed, 2);
+    assert_eq!(
+        logged(&pool, link_id)
+            .await
+            .into_iter()
+            .map(|(seq, _)| seq)
+            .collect::<Vec<_>>(),
+        vec![3, 4],
+        "the retained log stays a contiguous suffix"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn pruning_drops_counters_of_deleted_links(pool: PgPool) {
     let owner_id = "macro|changes-orphan@example.com";
     let link_id = insert_link(&pool, owner_id).await;

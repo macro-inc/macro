@@ -34,6 +34,7 @@ pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
 pub mod foreign_entity_access;
+pub mod form_access;
 pub mod initiative_access;
 pub mod project_access;
 pub mod scheduled_action_access;

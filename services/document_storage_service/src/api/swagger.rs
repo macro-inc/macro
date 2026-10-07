@@ -211,6 +211,7 @@ use utoipa::OpenApi;
     info(
         terms_of_service = "https://macro.com/terms",
     ),
+    modifiers(&FormsApiAddon),
     paths(
         dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
@@ -977,6 +978,14 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+struct FormsApiAddon;
+
+impl utoipa::Modify for FormsApiAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.merge(forms::inbound::axum_router::FormsApi::openapi());
+    }
+}
 
 #[cfg(test)]
 mod test;

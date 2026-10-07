@@ -2,6 +2,7 @@ import {
   type Accessor,
   batch,
   createEffect,
+  createMemo,
   createSignal,
   on,
   onCleanup,
@@ -18,6 +19,7 @@ import {
   type FormulaTextSelection,
   formulaRangeReference,
   formulaReferenceSlot,
+  formulaReferences,
 } from '../core/formula-reference';
 import {
   type CellPosition,
@@ -146,6 +148,37 @@ export function createGridController(source: GridSource) {
   const editingAddress = () => editTarget?.address ?? activeAddress();
   const canPickReference = () =>
     !!editing() && !!formulaReferenceSlot(draft(), textSelection);
+  const draftReferences = createMemo(() =>
+    editing() ? formulaReferences(draft()) : []
+  );
+  /** The draft's references that fall on the sheet being shown. */
+  const referenceHighlights = createMemo(() => {
+    const sheets = source.sheets?.() ?? [];
+    const shown = source.sheetId?.();
+    const shownName = sheets
+      .find((sheet) => sheet.id === shown)
+      ?.name.toUpperCase();
+    const ownSheet = editTarget?.sheetId ?? shown;
+    return draftReferences().flatMap((reference) => {
+      const onShownSheet = reference.sheetName
+        ? reference.sheetName.toUpperCase() === shownName
+        : ownSheet === shown;
+      const { top, left } = reference.bounds;
+      if (!onShownSheet || top >= rowCount() || left >= columnCount())
+        return [];
+      return [
+        {
+          color: reference.color,
+          bounds: {
+            top,
+            left,
+            bottom: Math.min(reference.bounds.bottom, rowCount() - 1),
+            right: Math.min(reference.bounds.right, columnCount() - 1),
+          },
+        },
+      ];
+    });
+  });
 
   // Remote deletion and local tab changes invalidate drafts and async fills.
   // An explicit reference-picking tab switch keeps the origin draft. Remote
@@ -706,6 +739,8 @@ export function createGridController(source: GridSource) {
         ? referenceSelection()
         : undefined,
     pickingReference,
+    draftReferences,
+    referenceHighlights,
     beginReference,
     updateReference,
     endReference,
