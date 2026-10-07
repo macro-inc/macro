@@ -1,3 +1,4 @@
+import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor } from 'solid-js';
 import type {
   TaskBoardColumn,
@@ -17,10 +18,17 @@ export type TaskBoardData = {
   /** Known excluded columns; dynamic groupings can contain additional unloaded columns. */
   hiddenColumnCount: Accessor<number>;
   task(id: string): TaskBoardTask | undefined;
+  /** Instantiate under the mounted column label's owner. */
+  createAssigneeName(id: Accessor<string>): Accessor<string | undefined>;
   compareTasks?: (left: string, right: string) => number;
   actions: TaskBoardActions;
-  statusLabel(id: string | undefined): string | undefined;
-  priorityLabel(id: string | undefined): string | undefined;
+  property(taskId: string, propertyId: string): Property | undefined;
+  canEditProperty(taskId: string, propertyId: string): boolean;
+  saveProperty(
+    taskId: string,
+    property: Property,
+    values: PropertyApiValues
+  ): Promise<void>;
   definitionError: Accessor<boolean>;
   retryDefinitions(): Promise<void>;
 };

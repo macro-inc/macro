@@ -1,4 +1,5 @@
 import { match } from 'ts-pattern';
+import type { TaskGroupBy } from '../types';
 
 export type TaskBoardGrouping = 'status' | 'priority' | 'assignee' | 'project';
 
@@ -11,6 +12,14 @@ export const TASK_BOARD_GROUP_OPTIONS: {
   { id: 'assignee', label: 'Assignee' },
   { id: 'project', label: 'Project' },
 ];
+
+/** List-only groupings display Status columns in the board layout. */
+export function toTaskBoardGrouping(groupBy: TaskGroupBy): TaskBoardGrouping {
+  return match(groupBy)
+    .with('none', 'date', () => 'status' as const)
+    .with('status', 'priority', 'assignee', 'project', (grouping) => grouping)
+    .exhaustive();
+}
 
 export type TaskBoardTask = {
   id: string;

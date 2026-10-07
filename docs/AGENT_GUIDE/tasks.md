@@ -3,7 +3,7 @@
 ## Surface
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
-The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
+The desktop toolbar contains search (`Ctrl+F`), an icon-only `Task layout` dropdown, `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
@@ -74,10 +74,12 @@ instead. Keyboard list navigation only moves focus; press Enter to open the focu
 
 ## Board layout
 
-Choose **Board** in the Tasks toolbar to switch from the list. **Group board**
+Open the icon-only **Task layout** dropdown in the toolbar and choose **Board**
+(or **List** to switch back). Its icon reflects the current layout. **Group by**
 offers Status, Priority, Assignee, and (when Projects is enabled) Project.
-The layout and board grouping restore with the Tasks navigation entry. Switching
-back to List retains its previous grouping and collapsed groups.
+Both layouts share one grouping, which restores with the Tasks navigation entry.
+List-only None and Date groupings display Status columns in Board; switching
+back to List retains those selections and collapsed groups until grouping changes.
 
 Click a card's body or title to open the task. Move at least 10 pixels with the
 mouse button held to start dragging to another column; holding still does not
@@ -88,10 +90,10 @@ A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
 using the active sort label. The drop does not choose a pointer insertion slot:
 its card takes its place in the current sort (or search relevance order).
 Same-column moves and column reordering remain disabled.
-Primary sort, sort direction, list grouping, and board grouping are reflected in
-`tasks.sort`, `tasks.sortReversed`, `tasks.groupBy`, and `tasks.boardGroupBy` search
-parameters. Explicit URL values override saved preferences; back/forward navigation
-restores the corresponding controls.
+Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
+`tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
+Explicit URL values override saved preferences; back/forward navigation
+restores the corresponding controls, including the layout.
 Columns are 336px wide. Each column pages independently with **Load more tasks**.
 Use the horizontal scrollbar to reach more columns. Vertical wheel input over
 empty board background or gaps also scrolls horizontally. A wheel gesture stays
@@ -141,13 +143,17 @@ failed writes use the shared property mutation's rollback and show an error.
 A valid destination highlights and shows the sort overlay only while dragging
 inside that column, not in gaps or outside the board. Drops move the card
 immediately while the save is pending; failures restore its prior membership.
-After a successful save, the board scrolls both horizontally and vertically to
-reveal the card in its destination, including virtualized columns and rows. It
-does not scroll after a cancelled or failed drop, or when the current board
+After a successful save, the board scrolls only as needed to reveal the destination
+card, including virtualized columns and rows; already visible cards stay in place.
+It does not scroll after a cancelled or failed drop, or when the current board
 scope changes during the save. Successful moves show no notification.
+A cross-column drop settles one opaque visual copy from the card's release position
+into its sorted destination; the real card appears when the copy lands. The release
+snapshot survives source unmounting after edge scrolling. Sorting updates retarget
+an in-flight copy without restarting from the source column.
 Visible placements animate during moves and rollback without animating ordinary
-scrolling or paging. In Assignee grouping, moving to an already assigned
-person reveals the existing card rather than creating a duplicate.
+scrolling or paging. In Assignee grouping, moving to an already assigned person
+reveals the existing card rather than creating a duplicate.
 Reduced-motion preferences disable these transitions.
 Filters remain active: completing a task or removing yourself as assignee can
 hide the card from the current view. Click its title to open the task; modified
@@ -396,8 +402,14 @@ set only on tasks. Setting it needs edit access to the task and the project;
 removing it needs edit access to the task. The project's Tasks tab lists the
 tasks whose Project property names the project.
 
-The project's Tasks tab starts with the task search, controls, and unified list;
-the project title and property pills appear only on Overview. Use
+The project's Tasks tab starts with task search, controls, and the selected List or
+Board layout; the project title and property pills appear only on Overview.
+Use the same icon-only **Task layout** dropdown to choose a layout. Both layouts
+show only tasks linked to the current project and use the same filters and editors.
+Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.sort`,
+`projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent
+of the main Tasks view's controls. Saved project entry state remains the fallback
+when URL parameters are absent. Use
 `New task` to create a task in the project: the composer opens with its Project
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears

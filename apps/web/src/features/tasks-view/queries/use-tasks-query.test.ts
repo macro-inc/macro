@@ -125,7 +125,7 @@ it.each([false, true])(
   }
 );
 
-it('retains cached rows while a referenced list refetches and hides them when disabled', () => {
+it('retains referenced list rows but hides stale board groups and inaccessible tasks', () => {
   const [placeholder, setPlaceholder] = createSignal(false);
   const [enabled, setEnabled] = createSignal(true);
   const task = {
@@ -177,13 +177,16 @@ it('retains cached rows while a referenced list refetches and hides them when di
         }
       );
       expect(source.items()).toHaveLength(1);
+      expect(source.boardRows?.()).toHaveLength(1);
       expect(source.isLoading()).toBe(false);
       setPlaceholder(true);
       expect(source.items()).toHaveLength(1);
+      expect(source.boardRows?.()).toEqual([]);
       expect(source.isLoading()).toBe(false);
       setPlaceholder(false);
       setEnabled(false);
       expect(source.items()).toEqual([]);
+      expect(source.boardRows?.()).toEqual([]);
       expect(source.isLoading()).toBe(false);
     } finally {
       dispose();
@@ -191,92 +194,95 @@ it('retains cached rows while a referenced list refetches and hides them when di
   });
 });
 
-it('scopes grouped load-more pages to the referenced entity', () => {
-  const companies = 'companies-definition';
-  const task = (id: string, companyId: string) =>
-    ({
-      type: 'document',
-      fileType: 'md',
-      id,
-      name: id,
-      ownerId: 'viewer',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      subType: { type: 'task', is_completed: false },
-      properties: [
-        {
-          definition: { id: companies },
-          value: {
-            type: 'EntityReference',
-            value: [{ entity_type: 'COMPANY', entity_id: companyId }],
+it.each([false, true])(
+  'scopes grouped continuation rows to the referenced entity (board: %s)',
+  (board) => {
+    const companies = 'companies-definition';
+    const task = (id: string, companyId: string) =>
+      ({
+        type: 'document',
+        fileType: 'md',
+        id,
+        name: id,
+        ownerId: 'viewer',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        subType: { type: 'task', is_completed: false },
+        properties: [
+          {
+            definition: { id: companies },
+            value: {
+              type: 'EntityReference',
+              value: [{ entity_type: 'COMPANY', entity_id: companyId }],
+            },
           },
-        },
-      ],
-    }) as unknown as TaskEntityWithProperties;
-  fixture.query = {
-    isLoading: false,
-    isPlaceholderData: false,
-    data: {
-      entities: [],
-      itemsById: {},
-      groups: [
-        {
-          key: 'todo',
-          label: 'To do',
-          displayOrder: 0,
-          totalCount: 2,
-          itemIds: [],
-          nextCursor: 'next',
-        },
-      ],
-    },
-  };
-  // A "Load more" page holding one task that no longer references Acme.
-  fixture.groupQueries = new Map([
-    [
-      'todo',
-      {
-        data: () => ({
-          entities: [task('linked', 'acme'), task('unlinked', 'globex')],
-        }),
-        hasNextPage: () => false,
-        isFetchingNextPage: () => false,
-        fetchNextPage: async () => {},
+        ],
+      }) as unknown as TaskEntityWithProperties;
+    fixture.query = {
+      isLoading: false,
+      isPlaceholderData: false,
+      data: {
+        entities: [],
+        itemsById: {},
+        groups: [
+          {
+            key: 'todo',
+            label: 'To do',
+            displayOrder: 0,
+            totalCount: 2,
+            itemIds: [],
+            nextCursor: 'next',
+          },
+        ],
       },
-    ],
-  ]);
-  createRoot((dispose) => {
-    try {
-      const source = useTasksDataSource(
+    };
+    // A "Load more" page holding one task that no longer references Acme.
+    fixture.groupQueries = new Map([
+      [
+        'todo',
         {
-          tab: 'team-tasks',
-          search: '',
-          facets: {},
-          groupBy: 'status',
-          sort: [],
-        },
-        {
-          userId: () => 'viewer',
-          tagSets: () => [],
-          tagSetsReady: () => true,
-          isGroupExpanded: () => true,
-          reference: () => ({
-            propertyDefinitionId: companies,
-            entityId: 'acme',
+          data: () => ({
+            entities: [task('linked', 'acme'), task('unlinked', 'globex')],
           }),
-        }
-      );
-      expect(
-        source
-          .items()
-          .flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
-      ).toEqual(['linked']);
-    } finally {
-      dispose();
-      fixture.groupQueries = new Map();
-    }
-  });
-});
+          hasNextPage: () => false,
+          isFetchingNextPage: () => false,
+          fetchNextPage: async () => {},
+        },
+      ],
+    ]);
+    createRoot((dispose) => {
+      try {
+        const source = useTasksDataSource(
+          {
+            tab: 'team-tasks',
+            search: '',
+            facets: {},
+            groupBy: 'status',
+            sort: [],
+          },
+          {
+            userId: () => 'viewer',
+            tagSets: () => [],
+            tagSetsReady: () => true,
+            isGroupExpanded: () => !board,
+            board: () => board,
+            reference: () => ({
+              propertyDefinitionId: companies,
+              entityId: 'acme',
+            }),
+          }
+        );
+        const rows = board ? source.boardRows?.() : source.items();
+        expect(
+          rows?.flatMap((row) => (row.kind === 'entity' ? [row.entity.id] : []))
+        ).toEqual(['linked']);
+      } finally {
+        dispose();
+        fixture.groupQueries = new Map();
+      }
+    });
+  }
+);
 
 it('exposes uncollapsed board rows and hides stale groups during query changes', () => {
   const [pending, setPending] = createSignal(false);

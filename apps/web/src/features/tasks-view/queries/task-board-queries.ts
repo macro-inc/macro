@@ -33,7 +33,6 @@ export function createTaskBoardQueries(options: {
   searching: Accessor<boolean>;
   userId: Accessor<string | undefined>;
   projectsEnabled: Accessor<boolean>;
-  assigneeName?: (id: string) => string | undefined;
   facets?: Accessor<FacetSelection>;
   sort?: Accessor<SortSelection<TaskSortId>[]>;
 }) {
@@ -155,10 +154,6 @@ export function createTaskBoardQueries(options: {
 
     if (options.grouping() === 'project') {
       return projectMap().get(column.id)?.name ?? 'Unavailable project';
-    }
-
-    if (options.grouping() === 'assignee') {
-      return options.assigneeName?.(column.id) || column.label;
     }
 
     return column.label;
@@ -330,18 +325,6 @@ export function createTaskBoardQueries(options: {
     }
   };
 
-  const label = (grouping: 'status' | 'priority', id: string | undefined) => {
-    if (!id) {
-      return undefined;
-    }
-
-    const option = properties()
-      .get(taskBoardPropertyId(grouping))
-      ?.options?.find((option) => option.id === id);
-
-    return option?.value.type === 'string' ? option.value.value : undefined;
-  };
-
   return {
     actions,
     columns,
@@ -365,8 +348,6 @@ export function createTaskBoardQueries(options: {
 
       return !definition.isMetadata;
     },
-    statusLabel: (id: string | undefined) => label('status', id),
-    priorityLabel: (id: string | undefined) => label('priority', id),
     definitionError: () => definitions.isError,
     retryDefinitions: async () => {
       await definitions.refetch();
