@@ -175,7 +175,7 @@ function TeamOooUpcomingList() {
         </Match>
         <Match when={windows().length === 0}>
           <span class="px-2 py-1 text-xs text-ink-muted">
-            No time off in the next 90 days
+            No shared time off in the next 90 days
           </span>
         </Match>
         <Match when={windows().length > 0}>

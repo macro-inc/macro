@@ -1384,6 +1384,9 @@ the sharer's name and open read-only details. Copy-event links, guest-email
 actions, RSVP, editing, and deletion are unavailable on team projections.
 A directly accessible copy retains its own actions; another person's projection
 of the same meeting may appear separately, with its sharing provenance.
+Team projections and availability use server-confirmed copies. An offline queued
+edit appears in the editor's own calendar, but reaches teammates only after the
+server commits the provider-backed change and their shared projection refreshes.
 An unavailable team fetch displays a warning and removes stale shared details.
 Sharing-change notifications clear open shared details before refetching;
 focus/reconnect and a 30-second refresh provide a fallback. Shared details also

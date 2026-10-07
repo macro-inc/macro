@@ -73,6 +73,12 @@ actions. A team view does not expand calendar search or generic event-detail
 authorization. Attendee `self` flags in detailed projections describe the viewer,
 not the source calendar account.
 
+Team projections and availability use server-confirmed source copies. An offline
+edit can appear immediately in the editor's own calendar through the mutation
+queue, but does not change what teammates see or their availability results until
+the server commits the provider-backed change and the shared projection refreshes.
+Queued local edits never enter the team projection cache.
+
 ## Personal availability
 
 Browsing and availability answer different questions. The availability tool
