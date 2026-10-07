@@ -631,13 +631,13 @@ async fn save_email_draft_does_not_return_a_message_when_attachment_loading_fail
             .as_ref()
             .unwrap()
             .get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
+        None
     );
     assert!(response.data.into_json().unwrap().is_null());
 }
 
 #[tokio::test]
-async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
+async fn save_email_draft_reports_internal_error_when_the_post_save_thread_reload_fails() {
     let service = Arc::new(CapturingEmailMutationService {
         thread_load_fails: true,
         ..Default::default()
@@ -656,10 +656,7 @@ async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
         extensions.get("code"),
         Some(&async_graphql::Value::from("INTERNAL"))
     );
-    assert_eq!(
-        extensions.get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
-    );
+    assert_eq!(extensions.get("retryable"), None);
     assert!(response.data.into_json().unwrap().is_null());
 }
 

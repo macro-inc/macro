@@ -102,6 +102,12 @@ databases = { path = "../../crates/databases", features = [
   "inbound",
   "postgres",
 ] }
+forms = { path = "../../crates/forms", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }

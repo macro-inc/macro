@@ -132,6 +132,59 @@ describe('routine trigger mapping', () => {
   });
 });
 
+describe('trigger conditions', () => {
+  it('round trips a condition with its filter', () => {
+    const config = {
+      type: 'events' as const,
+      filters: [
+        {
+          events: ['email.message_received' as const],
+          condition: 'Is this email an invoice?',
+        },
+      ],
+    };
+    const triggers = parseRoutineTriggers(config)!;
+    expect(triggers[0]).toMatchObject({
+      kind: 'event',
+      condition: 'Is this email an invoice?',
+    });
+    expect(routineTriggerSchema.safeParse(triggers[0]).success).toBe(true);
+    expect(serializeTriggers(triggers)).toEqual(config);
+  });
+
+  it('trims conditions and drops blank ones', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['task.created' as const],
+    };
+    expect(
+      serializeTriggers([{ ...trigger, condition: '  Is it a bug?  ' }])
+    ).toEqual({
+      type: 'events',
+      filters: [{ events: ['task.created'], condition: 'Is it a bug?' }],
+    });
+    expect(serializeTriggers([{ ...trigger, condition: '   ' }])).toEqual({
+      type: 'events',
+      filters: [{ events: ['task.created'] }],
+    });
+  });
+
+  it('rejects conditions longer than the backend accepts', () => {
+    const trigger = {
+      id: 'trigger',
+      kind: 'event' as const,
+      events: ['task.created' as const],
+    };
+    expect(
+      validateTriggers([{ ...trigger, condition: 'é'.repeat(500) }])
+    ).toBeNull();
+    expect(
+      validateTriggers([{ ...trigger, condition: 'é'.repeat(501) }])
+    ).toMatch(/500 characters/);
+  });
+});
+
 describe('completed routine classification', () => {
   it('recognizes exhausted multiple and custom schedules, but not Macro events', async () => {
     const { hasOnlyScheduledTriggers } = await import(

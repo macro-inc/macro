@@ -12,8 +12,10 @@ Repeat with the default model and with an explicit model/effort selection.
 The first visible output and the first answer text should appear as they arrive;
 later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
-Selected model and effort must be confirmed before the first prompt; settings
-already confirmed by the runtime do not need another control request.
+A model selected before the first prompt is part of the create request, and the
+runtime starts on it; no model change appears in the new session's transcript.
+A selected effort is confirmed before the first prompt; settings the runtime
+already reports do not need another control request.
 
 Repeat from a fresh tab using Home, Agents, and a document's Chat action.
 Focusing an agent composer prepares its transcript renderer locally; focus alone
@@ -620,7 +622,8 @@ answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
 `You've used this month's free AI`; it says `Subscribe to a paid plan to keep
 going.` and offers `View plans`, which opens Billing. This upgrade path remains
 available while the usage summary loads or fails. Free users cannot buy credits
-or enable Auto-Reload. The cap resets with the UTC calendar month.
+or enable Auto-Reload. Enabling Auto-Reload is how paid payers turn on usage
+billing. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 
@@ -720,10 +723,11 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
-  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+- Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`,
+  and `Gemini 3.8 Flash`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
-  On the free plan everything but `Haiku 4.5` is
+  On the free plan everything but `Gemini 3.8 Flash` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
@@ -840,9 +844,9 @@ reads `Waiting for approval`. The agent's hidden context names the owner and the
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
 the classic in-channel reply; with it, the same mention opens an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
-`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
-mention menu; which of the two answers is the rollout's decision, not a second choice in
-the menu.
+`@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
+suggestions. There is only ever one Macro entry in the mention menu; which of the
+two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
 
@@ -1464,3 +1468,41 @@ navigation, so mounting the next surface joins that request instead of warming
 another server session.
 Empty or failed warm responses do not trigger a refill loop, and mismatched
 agent settings leave a usable reservation available for the default agent.
+
+
+### Free-plan models in the new Macro agent
+
+The in-memory Macro runtime uses the session owner's current permissions.
+Free users see only Gemini 3.8 Flash in model discovery and the live session
+picker. New and resumed sessions replace an inaccessible saved model with Gemini.
+A direct request to select a paid model is rejected, and each prompt rechecks
+permissions before inference, including after a plan downgrade. Permission
+lookup failures prevent inference. Paid users retain the full supported catalog.
+Cursor, Claude Cloud, and paired external runtimes keep their own model rules.
+
+To verify, start a Macro conversation as a free user with a previously saved
+paid-model preference: the composer should show Gemini and send that model.
+In a live session, confirm the model options contain only Gemini. Backend tests
+also exercise direct ACP model-change requests, downgrade, and resume.
+
+## Booking links
+
+Ask the AI to find or reuse an existing booking link before creating another.
+`ListBookingLinks` returns personal links, current team IDs, full settings and
+shareable URLs (including paused links). It also supplies the revision used to
+protect edits from concurrent settings changes.
+
+Booking links are confirmed in conversation, with no special booking form. The AI
+first explains the proposed meeting details, ownership and named hosts, time zone,
+availability and date exceptions, booking rules, guest questions and whether the
+link accepts bookings. It asks whether to proceed and waits for your reply before
+calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a
+link is not approval of the proposal. IDs and revisions are discovered through
+tools; you should never be asked to enter a team ID, host ID or JSON.
+
+A successful result returns the saved URL. Link creation itself sends no calendar
+invitations; guests receive an invitation when they book. Editing hours affects
+only that link. If another edit makes the revision stale, the AI reads the latest
+settings and confirms a fresh proposal. Identical retries reuse the saved link.
+Old pending booking review requests can be dismissed so the agent can resume with
+conversational confirmation.

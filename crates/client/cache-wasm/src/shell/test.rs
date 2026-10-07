@@ -41,6 +41,10 @@ fn read_response_conversion_preserves_json_and_revision_strings() {
     let records = JsRecordSelectionResult {
         revision: u64::MAX.to_string(),
         records: vec![cache_core::record_selection::SelectedRecord {
+            identity: cache_core::identity::IdentityStatus {
+                mutation_uuid: None,
+                pending: false,
+            },
             record_key: EntityKey("Thing:one".into()),
             record: data,
         }],
@@ -1387,14 +1391,29 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
             js(optimistic_document_data(DOCUMENT_ID)),
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
             1.0,
             "optimistic-filter-runner".into(),
             0.0,
             100.0,
+            js(serde_json::json!({"draftRevision": 10})),
         ))
         .await,
     );
     assert_eq!(enqueue["initialClaim"]["kind"], "claimed");
+    assert_eq!(
+        enqueue["initialClaim"]["mutation"]["clientMetadata"],
+        serde_json::json!({"draftRevision": 10})
+    );
+    let inspected: serde_json::Value = from_js(resolved(engine.inspect_mutations()).await);
+    assert_eq!(
+        inspected[0]["clientMetadata"],
+        serde_json::json!({"draftRevision": 10})
+    );
+    assert!(inspected[0].get("leaseGeneration").is_none());
+    let blocked: serde_json::Value =
+        from_js(resolved(engine.claim_next_mutation("another-runner".into(), 20.0, 100.0)).await);
+    assert!(blocked.is_null());
     let transaction_id = enqueue["transactionId"].as_str().unwrap().to_owned();
     let generation = enqueue["initialClaim"]["mutation"]["leaseGeneration"]
         .as_str()
@@ -1515,10 +1534,12 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             })),
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
             1.0,
             "first-owner".into(),
             0.0,
             50.0,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1536,10 +1557,12 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             })),
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
             2.0,
             "second-owner".into(),
             0.0,
             50.0,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1639,10 +1662,12 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             })),
             JsValue::UNDEFINED,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
             123.0,
             "runner".into(),
             10.0,
             1_000.0,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1737,10 +1762,12 @@ async fn destroy_recovery_wipes_records_and_queue() {
         })),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         1.0,
         "destroy-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
     ))
     .await;
     resolved(engine.close()).await;
@@ -1953,10 +1980,12 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         })),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         1.0,
         "nested-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
     ))
     .await;
     assert_reset_required(engine.bound_identity()).await;
@@ -2065,10 +2094,12 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         })),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         1.0,
         "reset-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
     ))
     .await;
 
@@ -2184,10 +2215,12 @@ async fn every_method_rejects_after_consuming_close() {
         })),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         1.0,
         "closed".into(),
         1.0,
         2.0,
+        JsValue::UNDEFINED,
     ))
     .await;
     assert_closed(engine.inspect_query_variants(
@@ -2210,6 +2243,7 @@ async fn every_method_rejects_after_consuming_close() {
         "1".into(),
         2.0,
         "closed".into(),
+        false,
     ))
     .await;
     assert_closed(engine.commit_optimistic_write(
@@ -2533,10 +2567,12 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         })),
         JsValue::UNDEFINED,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
         1.0,
         "stale-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
     ))
     .await;
 }

@@ -4,7 +4,6 @@ import type { EventEditorInitialValues } from '@app/features/calendar/components
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
-import { REMINDER_DETAIL_COMPONENT_ID } from '@app/features/reminders/reminder-navigation';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
@@ -93,14 +92,6 @@ const ProjectsListView = lazyNamed(
 const ProjectView = lazyNamed(
   () => import('@app/features/projects/project-view'),
   'ProjectView'
-);
-const ReminderEditorSplit = lazyNamed(
-  () => import('@app/features/reminders/ReminderEditorSplit'),
-  'ReminderEditorSplit'
-);
-const RemindersRouteView = lazyNamed(
-  () => import('@app/features/reminders/route-views'),
-  'RemindersRouteView'
 );
 const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
@@ -313,7 +304,6 @@ registerComponent(
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
-registerComponent('reminders', () => <RemindersRouteView />);
 registerComponent(
   'routines',
   () => <AgentsRouteView />,
@@ -453,10 +443,7 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
-registerComponent(REMINDER_DETAIL_COMPONENT_ID, (params) => {
-  usePageViewTracking('reminder');
-  return <ReminderEditorSplit reminderId={params.reminderId as string} />;
-});
+
 registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))

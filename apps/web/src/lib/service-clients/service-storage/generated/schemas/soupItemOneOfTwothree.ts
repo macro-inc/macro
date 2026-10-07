@@ -4,15 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { SoupForeignEntity } from './soupForeignEntity';
 import type { SoupItemOneOfTwothreeTag } from './soupItemOneOfTwothreeTag';
-import type { SoupReminderSoupPropertiesField } from './soupReminderSoupPropertiesField';
 
 /**
- * Reminder item.
+ * Foreign entity item.
  */
 export type SoupItemOneOfTwothree = {
-  /** Reminder item. */
-  data: SoupReminderSoupPropertiesField;
+  /** Foreign entity item. */
+  data: SoupForeignEntity;
   tag: SoupItemOneOfTwothreeTag;
 };

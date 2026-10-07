@@ -1,9 +1,9 @@
 use crate::api::context::ApiContext;
+use crate::util::process_pre_insert::sfs_map;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email_service::util::process_pre_insert::sfs_map;
 use email_utils::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;

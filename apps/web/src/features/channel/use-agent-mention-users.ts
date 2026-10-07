@@ -12,7 +12,6 @@ import {
   isMacroAiId,
   isMacroCoderId,
   isMacroNewId,
-  macroCoderMentionUser,
   macroMentionUser,
 } from './macroAi';
 import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
@@ -37,16 +36,15 @@ export function useAgentMentionUsers(
   const canUseAgents = useChatV3AgentsFlag();
 
   return () => {
-    if (!enabled()) return users();
-    const base = users().filter(
+    // Old participants and saved bot rows must not restore the retired coder.
+    const mentionable = users().filter((user) => !isMacroCoderId(user.id));
+    if (!enabled()) return mentionable;
+    const base = mentionable.filter(
       (user) =>
         (canUseCursor() || !isCursorBotId(user.id)) &&
         !isMacroAiId(user.id) &&
         !isMacroNewId(user.id)
     );
-    if (canUseAgents() && !base.some((user) => isMacroCoderId(user.id))) {
-      base.unshift(macroCoderMentionUser());
-    }
     if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
     }

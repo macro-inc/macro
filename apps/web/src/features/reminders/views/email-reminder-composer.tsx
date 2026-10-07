@@ -1,5 +1,4 @@
-import { toast } from '@core/component/Toast/Toast';
-import type { EntityData } from '@entity';
+import type { EmailEntity } from '@entity';
 import {
   executeEmailFollowup,
   useEmailFollowupQuery,
@@ -7,22 +6,17 @@ import {
 import { useMutationUndoContext } from '@queries/undo';
 import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from '@service-storage/generated/schemas/emailFollowupCommand';
-import { ActionDialogShell, Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
-import {
-  type EmailReminderCondition,
-  EmailReminderForm,
-} from '../components/email-reminder-form';
-import {
-  closeReminderComposer,
-  showReminderEntityPicker,
-  takeReminderCreatedHandler,
-} from '../reminder-composer';
+import type { ManagedDialogProps } from '@ui';
+import { createSignal } from 'solid-js';
+import type { EmailReminderCondition } from '../core/email-reminder';
+import { EmailReminderMenu } from './email-reminder-menu';
 
-export function EmailReminderComposer(props: {
-  entity: EntityData;
-  onPending: (pending: boolean) => void;
-}) {
+export function EmailReminderComposer(
+  props: ManagedDialogProps & {
+    entity: Pick<EmailEntity, 'id' | 'name' | 'type'>;
+    onCreated?: () => void | Promise<void>;
+  }
+) {
   const query = useEmailFollowupQuery(() => props.entity.id);
   const undo = useMutationUndoContext();
   const [pending, setPending] = createSignal(false);
@@ -36,9 +30,8 @@ export function EmailReminderComposer(props: {
   const active = () =>
     current()?.state === 'pending' || current()?.state === 'archiving';
   const submit = async (command: EmailFollowupCommand) => {
-    if (pending()) return;
+    if (pending() || !query.isSuccess) return;
     setPending(true);
-    props.onPending(true);
     setError(undefined);
     if (operationSnapshot?.operationId !== command.operationId) {
       operationSnapshot = {
@@ -61,7 +54,7 @@ export function EmailReminderComposer(props: {
             previous?.state !== 'pending' &&
             previous?.state !== 'archiving'
           ) {
-            await takeReminderCreatedHandler()?.();
+            await props.onCreated?.();
           }
         }
       );
@@ -70,39 +63,25 @@ export function EmailReminderComposer(props: {
         'Couldn’t confirm the change. Your time is still here; retrying this request is safe.'
       );
       setPending(false);
-      props.onPending(false);
       return;
     }
-    takeReminderCreatedHandler();
     const threadId = props.entity.id;
     setPending(false);
-    props.onPending(false);
-    closeReminderComposer();
-    const showUndo = (message: string, undoCommand: EmailFollowupCommand) => {
-      const handle = undo.pushUndo({
+    if (command.type === 'set' && result.state !== 'pending') {
+      setError('The reminder was not set. The conversation has been restored.');
+      return;
+    }
+    props.onOpenChange(false);
+    const saveUndo = (undoCommand: EmailFollowupCommand) => {
+      undo.pushUndo({
         label: 'Email reminder',
         undo: async () => {
           await executeEmailFollowup(threadId, undoCommand);
         },
       });
-      toast.success(message, {
-        actions: [
-          {
-            label: 'Undo',
-            onClick: () =>
-              void handle.undo({
-                onError: () =>
-                  toast.failure(
-                    'The reminder changed. Open it to make changes.'
-                  ),
-              }),
-          },
-        ],
-      });
     };
     if (command.type === 'set' && result.state === 'pending') {
-      showUndo(
-        'Email reminder set',
+      saveUndo(
         previous?.state === 'pending'
           ? {
               type: 'set',
@@ -123,25 +102,13 @@ export function EmailReminderComposer(props: {
       result.state === 'removed' &&
       previous?.state === 'pending'
     ) {
-      showUndo('Email reminder removed', {
+      saveUndo({
         type: 'set',
         operationId: crypto.randomUUID(),
         expectedRevision: null,
         remindAt: previous.remindAt,
         condition: previous.condition,
       });
-    } else if (command.type === 'remove') {
-      toast.success('Email reminder removed');
-    } else if (result.state === 'removed') {
-      toast.failure(
-        'The reminder was not set. The conversation has been restored.'
-      );
-    } else if (result.state === 'returned') {
-      toast.success(
-        'The reminder has already returned this conversation to the inbox'
-      );
-    } else {
-      toast.success('Email reminder cancelled');
     }
   };
   const save = (at: Date, condition: EmailReminderCondition) => {
@@ -165,72 +132,41 @@ export function EmailReminderComposer(props: {
     void submit(lastCommand);
   };
   return (
-    <Show
-      when={query.isSuccess}
-      fallback={
-        <ActionDialogShell.Body>
-          <ActionDialogShell.Title>Remind me</ActionDialogShell.Title>
-          <p role="status">
-            {query.isError
-              ? 'Couldn’t load this email reminder.'
-              : 'Loading reminder…'}
-          </p>
-          <Show when={query.isError}>
-            <Button onClick={() => void query.refetch()}>Retry</Button>
-          </Show>
-          <Button onClick={closeReminderComposer}>Cancel</Button>
-        </ActionDialogShell.Body>
-      }
-    >
-      <EmailReminderForm
-        autofocus
-        header={
-          <ActionDialogShell.Header>
-            <div class="flex items-center justify-between gap-3">
-              <ActionDialogShell.Title>Remind me</ActionDialogShell.Title>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={pending()}
-                onClick={showReminderEntityPicker}
-              >
-                Change item
-              </Button>
-            </div>
-            <ActionDialogShell.Description>
-              Move this conversation out of the inbox until the selected time.
-            </ActionDialogShell.Description>
-          </ActionDialogShell.Header>
-        }
-        subject={props.entity.name}
-        initialTime={active() ? current()?.remindAt : undefined}
-        initialCondition={active() ? current()?.condition : undefined}
-        pending={pending()}
-        error={error()}
-        onSave={save}
-        onCancel={closeReminderComposer}
-        onRemove={
-          active()
-            ? () => {
-                const revision = current()?.revision;
-                if (!revision) return;
-                if (
-                  !lastCommand ||
-                  lastCommand.type !== 'remove' ||
-                  (lastCommand.expectedRevision !== revision &&
-                    revision !== lastCommand.operationId)
-                )
-                  lastCommand = {
-                    type: 'remove',
-                    operationId: crypto.randomUUID(),
-                    expectedRevision: revision,
-                    undo: false,
-                  };
-                void submit(lastCommand);
+    <EmailReminderMenu
+      open={props.open}
+      onOpenChange={(open) => {
+        if (!pending()) props.onOpenChange(open);
+      }}
+      subject={props.entity.name}
+      initialTime={active() ? current()?.remindAt : undefined}
+      initialCondition={active() ? current()?.condition : undefined}
+      pending={pending()}
+      ready={query.isSuccess}
+      error={query.isError ? 'Couldn’t load this email reminder.' : error()}
+      onRetry={query.isError ? () => void query.refetch() : undefined}
+      onSave={save}
+      onRemove={
+        active()
+          ? () => {
+              const revision = current()?.revision;
+              if (!revision) return;
+              if (
+                !lastCommand ||
+                lastCommand.type !== 'remove' ||
+                (lastCommand.expectedRevision !== revision &&
+                  revision !== lastCommand.operationId)
+              ) {
+                lastCommand = {
+                  type: 'remove',
+                  operationId: crypto.randomUUID(),
+                  expectedRevision: revision,
+                  undo: false,
+                };
               }
-            : undefined
-        }
-      />
-    </Show>
+              void submit(lastCommand);
+            }
+          : undefined
+      }
+    />
   );
 }

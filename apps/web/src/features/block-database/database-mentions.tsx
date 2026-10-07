@@ -49,6 +49,7 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
           menu={operations}
           anchor={anchor()}
           {...databaseMentionScope(props.specificEntityType)}
+          includeContacts={false}
           showOpenTabs={false}
           includeGroups={false}
           onPick={(item) => {

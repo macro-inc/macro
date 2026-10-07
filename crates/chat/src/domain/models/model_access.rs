@@ -16,10 +16,11 @@ pub const CHAT_MODELS: &[&str] = &[
     "openai/gpt-5.6-mini",
     "openai/gpt-5.5",
     "openai/gpt-5-mini",
+    "google/gemini-3.8-flash",
 ];
 
 /// The default model for professional (paid) users.
 pub const PAID_DEFAULT_MODEL: &str = "anthropic/claude-sonnet-5-5";
 
 /// The only model available to free (non-professional) users.
-pub const FREE_MODEL: &str = "anthropic/claude-haiku-4-5";
+pub const FREE_MODEL: &str = "google/gemini-3.8-flash";

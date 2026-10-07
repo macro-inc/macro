@@ -526,6 +526,7 @@ export function operationCategoryForRequest(
       'teardown',
       'clear',
       'current-storage-generation',
+      'inspect-mutations',
       () => 'lifecycle' as const
     )
     .exhaustive();

@@ -247,6 +247,9 @@ impl Calendars for Arc<Calendar> {
 }
 struct Members;
 impl Directory for Members {
+    async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+        Ok(vec![])
+    }
     async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(vec![
             TeamMember {
@@ -555,6 +558,9 @@ async fn visitor_time_zone_uses_the_visitors_local_date() {
 async fn approval_rechecks_assigned_hosts_even_after_link_removal() {
     struct ChangingMembers(Arc<Mutex<Vec<TeamMember>>>);
     impl Directory for ChangingMembers {
+        async fn user_teams(&self, _: &str) -> Result<Vec<Uuid>, Error> {
+            Ok(vec![])
+        }
         async fn members(&self, _: Uuid) -> Result<Vec<TeamMember>, Error> {
             Ok(self.0.lock().unwrap().clone())
         }
@@ -1135,3 +1141,5 @@ async fn stale_team_events_can_be_repaired_one_at_a_time() {
         Err(Error::Invalid(_))
     ));
 }
+
+mod booking_links;

@@ -47,6 +47,7 @@ use super::*;
 mod database_activity;
 mod database_row;
 mod email_archive;
+mod form_activity;
 mod initiative;
 mod scheduled_actions;
 mod soup_patches;
@@ -922,21 +923,28 @@ impl EntityAccessService for CountingEntityAccessService {
         entity_id: &str,
         entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        // The viewer can see exactly one database and no other.
-        if entity_type == EntityType::Database {
-            if entity_id != database_activity::VIEWABLE_DATABASE_ID {
-                return Err(AccessError::Unauthorized);
-            }
+        // The viewer views exactly one database, responds to one form (View),
+        // edits another, and reaches nothing else. A level the grant does not
+        // satisfy is refused as the real service refuses it.
+        let grant = match (entity_type, entity_id) {
+            (EntityType::Database, database_activity::VIEWABLE_DATABASE_ID)
+            | (EntityType::Form, form_activity::RESPONDED_FORM_ID) => Some(AccessLevel::View),
+            (EntityType::Form, form_activity::EDITABLE_FORM_ID) => Some(AccessLevel::Edit),
+            (EntityType::Database | EntityType::Form, _) => None,
+            _ => return Err(AccessError::internal("test access failure")),
+        };
+        if let Some(access_level) = grant {
             return EntityAccessReceipt::try_new_authenticated_user(
                 MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
                 entity_access::domain::models::Entity {
                     entity_id: entity_id.to_owned(),
                     entity_type,
                 },
-                EntityPermission::AccessLevel {
-                    access_level: AccessLevel::View,
-                },
+                EntityPermission::AccessLevel { access_level },
             );
+        }
+        if matches!(entity_type, EntityType::Database | EntityType::Form) {
+            return Err(AccessError::Unauthorized);
         }
         Err(AccessError::internal("test access failure"))
     }

@@ -33,6 +33,10 @@ files:
   - apps/web/src/features/channel/Call/chat/primitives/**
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
+  - apps/web/src/features/block-ai/queries/**
+  - apps/web/src/features/block-ai/primitives/**
+  - apps/web/src/features/block-psd/queries/**
+  - apps/web/src/features/block-psd/primitives/**
   - apps/web/src/features/meetings/queries/**
   - apps/web/src/features/meetings/primitives/**
   - apps/web/src/features/block-spreadsheet/queries/**
@@ -57,6 +61,8 @@ files:
   - apps/web/src/features/onboarding/primitives/**
   - apps/web/src/features/auth/primitives/**
   - apps/web/src/features/auth/queries/**
+  - apps/web/src/features/block-form/queries/**
+  - apps/web/src/features/block-form/primitives/**
 rule:
   kind: string
   regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))

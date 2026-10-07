@@ -29,6 +29,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => mocks.database,
 }));
+// Forms are off in these cases; their list never loads.
+vi.mock('@queries/storage/forms', () => ({
+  useFormsQuery: () => ({
+    isSuccess: false,
+    isPending: true,
+    error: null,
+    data: undefined,
+    refetch: async () => {},
+  }),
+}));
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => mocks.soup,
 }));
@@ -94,6 +104,7 @@ function setup() {
     const source = createDriveDataSource({
       selection,
       databasesEnabled: enabled,
+      formsEnabled: () => false,
       userId: () => 'me',
       tagSets: () => [],
       tagSetsReady: () => true,

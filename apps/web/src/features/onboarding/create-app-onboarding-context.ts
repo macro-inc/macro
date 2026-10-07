@@ -8,7 +8,10 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import { idToDisplayName, idToEmail } from '@core/user/util';
-import { useCreateCheckoutSessionMutation } from '@queries/auth';
+import {
+  useAiBillingPlansQuery,
+  useCreateCheckoutSessionMutation,
+} from '@queries/auth';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { useContactsQuery } from '@queries/contacts/contacts';
@@ -189,6 +192,15 @@ export function createAppOnboardingContext(): OnboardingContext {
     createInviteOffer: () => {
       const query = useGtmInviteOfferQuery({ enabled: needsOnboarding });
       return () => loadableQuery(query, (offer) => offer ?? null);
+    },
+    createPlanCatalog: () => {
+      const query = useAiBillingPlansQuery();
+      return {
+        catalog: () => loadableQuery(query, (data) => data),
+        retry: () => {
+          void query.refetch();
+        },
+      };
     },
     startCheckout: (tier, terms) =>
       checkout.mutateAsync(

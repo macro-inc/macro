@@ -265,7 +265,6 @@ pub async fn build_tool_service_context_from_env(
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -361,7 +360,9 @@ pub async fn build_tool_service_context_from_env(
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
-    .with_design_files(Arc::new(document_files));
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     let properties_tool_context = crate::tool_context::build_properties_tool_context(
         properties_service.clone(),
@@ -501,12 +502,11 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         calendar_tool_context,
-        notification_tool_context,
-        reminders_tool_context: crate::tool_context::build_reminders_tool_context(
+        booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
             pool.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
+            environment,
         ),
+        notification_tool_context,
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),

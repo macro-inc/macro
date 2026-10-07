@@ -1,3 +1,4 @@
+import type { MutationInspection } from '../protocol';
 /**
  * Browser CacheHost: routes cache RPC through the SharedWorker coordinator to
  * the currently elected dedicated cache engine. Unsupported browsers receive
@@ -950,6 +951,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
               msg.kind === 'read-records-by-keys' ||
               msg.kind === 'search' ||
               msg.kind === 'entity-filter' ||
+              msg.kind === 'inspect-mutations' ||
               msg.kind === 'inspect-query' ||
               msg.kind === 'inspect-query-variants'
             ? requestTimeoutMs
@@ -1267,6 +1269,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         linkPatches: args.linkPatches,
         revalidations: args.revalidations,
         identityBindings: args.identityBindings,
+        clientMetadata: args.clientMetadata,
         createdAtMs: claim.nowMs,
         owner: claim.owner,
         nowMs: claim.nowMs,
@@ -1297,6 +1300,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       })) as CachedQueryInstanceWire[];
     },
 
+    async inspectMutations() {
+      return (await initializedRequest({
+        kind: 'inspect-mutations',
+      })) as MutationInspection[];
+    },
     async claimNextMutation(
       owner: string,
       nowMs: number,
@@ -1314,7 +1322,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       transactionId: string,
       claim: MutationClaim,
       nextAttemptAtMs: number,
-      error: string
+      error: string,
+      serverFailure = false
     ) {
       return (await initializedRequest({
         kind: 'defer-optimistic-write',
@@ -1323,6 +1332,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         leaseGeneration: claim.generation,
         nextAttemptAtMs,
         error,
+        serverFailure,
       })) as DeferOptimisticWriteResult;
     },
 

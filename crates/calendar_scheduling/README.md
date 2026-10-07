@@ -74,3 +74,26 @@ provider calendar invitations. Shared PostgreSQL budgets cap public availability
 requests per profile; all booking changes use a monotonic revision to prevent stale edits.
 See `docs/CALENDAR_SCHEDULING_V1.md` for rollout, rollback and monitoring queries.
 It does not deploy the backend or apply migrations to shared databases.
+
+## AI booking-link workflows
+
+`ListBookingLinks` discovers personal links, current team IDs, reusable schedules and
+full editable drafts. Pass a returned team ID to discover that team's links. Both
+active and paused links include their shareable URL and profile revision.
+`CreateBookingLink` and `EditBookingLink` execute directly in every host after
+conversational confirmation. The agent explains the complete proposal, waits for
+the user's approval, then passes that reply verbatim in required `userConfirmation`.
+Missing or blank confirmation is rejected before calling the scheduling service.
+As with confirmed email/calendar tools, the quote is not verified against conversation
+history. There is no booking review card, elicitation, or deferred user-tool result.
+The agent discovers internal identities through tools instead of asking users for IDs.
+
+The scheduling service owns authorization and validates the complete draft. Edits
+replace only the chosen event type; changed hours use a separate schedule to
+preserve other links and personal default availability. All writes retain the
+profile's compare-and-swap fence. An identical create at an existing slug or an
+identical edit is a no-op; a conflicting slug or stale edited revision fails and
+requires reading and reviewing the current state. Creation returns actual saved
+identities and URLs. Paused links cannot accept bookings, and creating a link never
+sends invitations. Guest booking still uses the normal calendar-readiness and
+availability checks. This workflow has no Forms dependencies.

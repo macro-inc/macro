@@ -124,10 +124,14 @@ pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
 }
 
 /// Whether documents of a file type have their content indexed by the search
-/// processing service: the searchable associations, and Figma designs (whose
-/// pages are indexed, while other vector files are not).
+/// processing service: the searchable associations, and the design files the
+/// native engines read - Figma designs, Photoshop documents, and Illustrator
+/// documents - while other vector files are not.
 pub fn is_searchable_file_type(file_type: &FileType) -> bool {
-    *file_type == FileType::Fig || is_searchable_association(&file_type.macro_app_path())
+    matches!(
+        file_type,
+        FileType::Fig | FileType::Psd | FileType::Psb | FileType::Ai
+    ) || is_searchable_association(&file_type.macro_app_path())
 }
 
 /// Converted entity filters for the search service.

@@ -15,7 +15,7 @@ jobs:
     runs-on: namespace-profile-linux-tiny-no-cache
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      api_changed: ${{ steps.filter.outputs.api_changed }}
+      codegen_changed: ${{ steps.filter.outputs.codegen_changed }}
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -45,20 +45,62 @@ jobs:
             - 'services/lexical-service/**'
             - 'crates/ai_tools/src/display_results/schema.generated.json'
             - '.github/actions/setup-reqs-web/**'
-          api_changed:
+          codegen_changed:
             - 'crates/**/*.rs'
             - 'services/**/*.rs'
             - 'Cargo.toml'
             - 'Cargo.lock'
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
+            - 'packages/sdk/**'
+            - 'apps/docs/**'
             - '.github/actions/setup-reqs-web/**'
   typescript:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' || needs.path-check.outputs.api_changed == 'true'
+    if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: /home/runner/.bun/install/cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Setup Prereqs
+      uses: './.github/actions/setup-reqs-web'
+    - name: Check Dynamic UI Schema
+      run: bun run check-dynamic-ui-schema
+      working-directory: apps/web
+    - name: Check Types
+      run: bun run type-check
+      working-directory: apps/web
+    - name: Check Collaboration Package Types
+      run: bun run type-check
+      working-directory: packages/collaboration
+    - name: Check Lexical Service Types
+      run: bun run check
+      working-directory: services/lexical-service
+    - name: Test Lexical Service Endpoints
+      run: bun test src
+      working-directory: services/lexical-service
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  generated-code:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.codegen_changed == 'true'
+    name: Generated Code Check
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -76,7 +118,7 @@ jobs:
     - name: Setup Prereqs
       uses: './.github/actions/setup-reqs-web'
     - name: Configure Namespace remote sccache
-      if: ((github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository) && (needs.path-check.outputs.api_changed == 'true')
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
       run: |-
         set -euo pipefail
         env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
@@ -103,12 +145,40 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Build schema binaries
+      run: |
+        set -euo pipefail
+        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas
     - name: Generate API Types
-      if: needs.path-check.outputs.api_changed == 'true'
       run: bun run gen-api -- --check
       working-directory: apps/web
+    - name: Regenerate SDK code
+      run: |
+        bun install --frozen-lockfile
+        bun run sync-specs
+        bun run generate
+      working-directory: packages/sdk
+    - name: Verify SDK generated code is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
+          echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
+          git status --porcelain -- packages/sdk
+          git diff -- packages/sdk | head -200
+          exit 1
+        fi
+    - name: Regenerate MCP tool pages
+      run: bun run generate:tools
+      working-directory: apps/docs
+    - name: Verify docs tool reference is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
+          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
+          git status --porcelain -- apps/docs
+          git diff -- apps/docs | head -200
+          exit 1
+        fi
     - name: Check Specta Types
-      if: needs.path-check.outputs.api_changed == 'true'
       run: |
         just gen-agent-fold-types
         just gen-database-sql-types
@@ -118,23 +188,8 @@ jobs:
         fi
       working-directory: apps/web
     - name: show sccache stats
-      if: always() && needs.path-check.outputs.api_changed == 'true'
+      if: always()
       run: sccache --show-stats || true
-    - name: Check Dynamic UI Schema
-      run: bun run check-dynamic-ui-schema
-      working-directory: apps/web
-    - name: Check Types
-      run: bun run --bun --silent tsc --project ./tsconfig.json
-      working-directory: apps/web
-    - name: Check Collaboration Package Types
-      run: bun run type-check
-      working-directory: packages/collaboration
-    - name: Check Lexical Service Types
-      run: bun run check
-      working-directory: services/lexical-service
-    - name: Test Lexical Service Endpoints
-      run: bun test src
-      working-directory: services/lexical-service
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -172,7 +227,7 @@ jobs:
     - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test
-    runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -180,7 +235,9 @@ jobs:
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
         cache: nix
-        path: /home/runner/.bun/install/cache
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cache/vitest-modules
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -188,8 +245,14 @@ jobs:
       uses: './.github/actions/setup-reqs-web'
       with:
         playwright: 'true'
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      timeout-minutes: 15
+      working-directory: apps/web
     - name: Test
-      run: bunx vitest
+      run: bun run test
+      env:
+        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
     - name: Sign-up Browser Tests
       run: just test-signup-browser
@@ -242,6 +305,7 @@ jobs:
           /home/runner/.cargo/registry
           /home/runner/.cargo/git
           /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -279,6 +343,8 @@ jobs:
       run: sccache --start-server
     - name: Build
       run: just build-dev
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
     - name: show sccache stats
       if: always()
@@ -290,6 +356,7 @@ jobs:
     needs:
     - path-check
     - typescript
+    - generated-code
     - biome-check
     - test
     - cycles
@@ -302,6 +369,7 @@ jobs:
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
+        echo "generated-code: ${{ needs.generated-code.result }}"
         echo "biome-check: ${{ needs.biome-check.result }}"
         echo "test: ${{ needs.test.result }}"
         echo "cycles: ${{ needs.cycles.result }}"
@@ -310,6 +378,7 @@ jobs:
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
+           [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]] || \
            [[ "${{ needs.cycles.result }}" == "failure" ]] || \

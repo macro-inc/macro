@@ -4,7 +4,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
 import ArrowRight from '@phosphor/arrow-right.svg';
 import Check from '@phosphor/check.svg';
-import { useIncludedAiCentsByTier } from '@queries/auth';
 import type { GtmInviteOffer } from '@service-auth/generated/schemas/gtmInviteOffer';
 import { Button } from '@ui';
 import { Index, onMount } from 'solid-js';
@@ -14,7 +13,7 @@ const PREMIUM = PLANS[1];
 
 /**
  * Replaces the free/paid plan picker for an account that signed up through a
- * GTM invite link: Premium's first month is free, checkout still collects a
+ * GTM invite link: Pro's first month is free, checkout still collects a
  * card, and the promotion is applied server-side when the session is created.
  */
 export function InviteOfferPanel(props: {
@@ -25,7 +24,6 @@ export function InviteOfferPanel(props: {
 }) {
   const analytics = useAnalytics();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const includedAi = useIncludedAiCentsByTier();
 
   onMount(() => {
     analytics.track('gtm_invite_offer_viewed', {
@@ -59,7 +57,7 @@ export function InviteOfferPanel(props: {
           </span>
         </div>
         <ul class="flex flex-col gap-2">
-          <Index each={planFeatures(aiUsageBilling().enabled, includedAi())}>
+          <Index each={planFeatures(aiUsageBilling().enabled)}>
             {(feature) => (
               <li class="flex items-center justify-between gap-2 text-xs">
                 <span class="flex items-center gap-1.5 text-ink-muted">
@@ -76,7 +74,7 @@ export function InviteOfferPanel(props: {
       </div>
 
       <p class="text-xs leading-relaxed text-ink-muted">
-        You'll add a card at checkout so Premium keeps going after your{' '}
+        You'll add a card at checkout so Pro keeps going after your{' '}
         {freePeriod()}. Nothing is charged until then, and you can cancel
         anytime before.
       </p>
@@ -98,7 +96,7 @@ export function InviteOfferPanel(props: {
           disabled={props.finishing}
           onClick={() => props.onContinueFree()}
         >
-          Continue as Guest instead
+          Continue with Free instead
         </Button>
       </div>
     </div>

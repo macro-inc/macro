@@ -35,6 +35,7 @@ pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTarge
     grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
+    conditions_enabled: bool,
     targets: Targets,
 }
 
@@ -52,6 +53,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             grants,
             dispatcher_tx,
             event_management_enabled: false,
+            conditions_enabled: false,
             targets: ModelOnlyTargets,
         }
     }
@@ -70,12 +72,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
             event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
             targets,
         }
     }
 
     pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
         self.event_management_enabled = enabled;
+        self
+    }
+
+    /// Accept trigger conditions only when dispatch can check them.
+    pub fn with_conditions_enabled(mut self, enabled: bool) -> Self {
+        self.conditions_enabled = enabled;
         self
     }
 
@@ -108,6 +117,17 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         Ok(())
     }
 
+    fn check_conditions(&self, trigger: &ActionTrigger) -> Result<()> {
+        if trigger
+            .event_filters()
+            .is_some_and(|filters| filters.has_conditions())
+            && !self.conditions_enabled
+        {
+            return Err(ActionPolicyError::ConditionsDisabled.into());
+        }
+        Ok(())
+    }
+
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
@@ -128,6 +148,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         if !disable_only {
             self.check_event_management(&action.trigger)?;
             self.check_event_management(&input.trigger)?;
+            self.check_conditions(&input.trigger)?;
         }
         let now = Utc::now();
         if claim_blocks_replacement(&action, now) && !disable_only {
@@ -280,6 +301,7 @@ where
         })?;
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
+        self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;

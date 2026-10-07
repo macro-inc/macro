@@ -106,6 +106,7 @@ fn fully_populated_queued() -> NewQueuedMutation {
                 identity: Some("identity-witness".into()),
             },
             attempt_count: 7,
+            server_failure_count: 3,
             next_attempt_at_ms: Some(-2),
             lease_owner: Some("expired-owner".into()),
             lease_generation: 11,
@@ -343,7 +344,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
     let absent = token("absent", 1);
     assert!(
         !storage
-            .defer_mutation(999, absent.clone(), 2, "absent".into())
+            .defer_mutation(999, absent.clone(), 2, "absent".into(), true)
             .await
             .unwrap()
     );
@@ -397,6 +398,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-a", first_claim.lease_generation),
                 20,
                 "stale".into(),
+                true,
             )
             .await
             .unwrap()
@@ -414,6 +416,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-b", expired_reclaim.lease_generation),
                 20,
                 "retry".into(),
+                true,
             )
             .await
             .unwrap()
@@ -471,6 +474,7 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
                 token("runner-d", second_claim.lease_generation),
                 30,
                 "second retry".into(),
+                false,
             )
             .await
             .unwrap()
@@ -527,6 +531,58 @@ async fn queue_contract<S: Storage>(storage: &mut S) {
     );
 }
 
+async fn retry_budget_contract<F: BackendFactory>(
+    factory: &mut F,
+    mut storage: F::Backend,
+) -> F::Backend {
+    let id = storage
+        .enqueue_mutation(queued("RetryBudget"))
+        .await
+        .unwrap();
+    for (index, (server_failure, expected_count)) in
+        [(true, 1), (false, 1), (true, 2)].into_iter().enumerate()
+    {
+        let now = index as i64;
+        let claimed = storage
+            .claim_next_mutation(claim_request("runner", now, now + 1))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, id);
+        assert_eq!(claimed.queued.mutation.attempt_count, index as u32 + 1);
+        let claim = token("runner", claimed.lease_generation);
+        assert!(
+            storage
+                .defer_mutation(id, claim.clone(), now + 1, "retry".into(), server_failure)
+                .await
+                .unwrap()
+        );
+        // A duplicate result must not charge the same attempt twice.
+        assert!(
+            !storage
+                .defer_mutation(id, claim, now + 1, "duplicate".into(), true)
+                .await
+                .unwrap()
+        );
+        storage = factory.reopen(storage);
+        let queue = storage.load_mutation_queue().await.unwrap();
+        assert_eq!(queue[0].mutation.server_failure_count, expected_count);
+    }
+    let claimed = storage
+        .claim_next_mutation(claim_request("next-tab", 3, 4))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(claimed.queued.mutation.server_failure_count, 2);
+    assert!(
+        storage
+            .discard_mutation(id, token("next-tab", claimed.lease_generation))
+            .await
+            .unwrap()
+    );
+    storage
+}
+
 async fn clear_contract<S: Storage>(storage: &mut S) {
     let before_clear = storage.enqueue_mutation(queued("Clear")).await.unwrap();
     storage.clear().await.unwrap();
@@ -570,6 +626,7 @@ async fn common_contract<F: BackendFactory>(
     search_projection_contract(&mut storage).await;
     let mut storage = reopen_contract(factory, storage).await;
     queue_contract(&mut storage).await;
+    let mut storage = retry_budget_contract(factory, storage).await;
     clear_contract(&mut storage).await;
     storage
 }

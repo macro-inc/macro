@@ -36,17 +36,18 @@ function host() {
 const input = { initial: { emailView: 'ALL' as const } };
 
 describe('Shared Mail scope refresh', () => {
-  it('continues Shared hydration when an OTA frontend runs on a native binary without entity filtering', async () => {
+  it('continues Shared hydration when native entity filtering is unavailable', async () => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'graphql_cache_init') return null;
+      if (command === 'graphql_cache_inspect_mutations') return [];
       if (command === 'graphql_cache_read')
         return { kind: 'hit', data: { user: { id: 'viewer' } } };
       if (command === 'graphql_cache_entity_filter')
         throw new Error('Command graphql_cache_entity_filter not found');
       throw new Error(`Unexpected native command: ${command}`);
     });
-    const cache = createTauriCacheHost({ scope: 'legacy-ios' });
+    const cache = createTauriCacheHost({ scope: 'no-entity-filter' });
     const fetch = vi
       .fn()
       .mockResolvedValueOnce({

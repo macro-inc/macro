@@ -15,6 +15,7 @@ impl DocumentStorageServiceClient {
         user_id: String,
         root_folder_name: String,
         content: Vec<FolderItem>,
+        folders: Vec<String>,
         upload_request_id: String,
         parent_id: Option<String>,
     ) -> anyhow::Result<UploadFolderResponseData> {
@@ -25,6 +26,7 @@ impl DocumentStorageServiceClient {
             root_folder_name,
             upload_request_id,
             parent_id,
+            folders,
         };
 
         let response = self

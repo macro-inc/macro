@@ -1,4 +1,5 @@
 import type { PaidPlanTier } from '@app/features/paywall/plans';
+import type { AiPlanCatalog } from '@service-auth/ai-billing-types';
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
@@ -32,6 +33,7 @@ export type FakeOnboardingWorld = {
   connectedTools: string[];
   githubStars: number | undefined;
   inviteOffer: InviteOffer | null;
+  planCatalog: AiPlanCatalog;
   /** License refreshes left before the Stripe webhook lands; undefined when none is pending. */
   webhookPollsRemaining: number | undefined;
   /** How many refreshes a checkout's webhook takes to land. */
@@ -45,6 +47,7 @@ export type FakeOnboardingWorld = {
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
+      | 'planCatalog'
       | 'checkout'
       | 'completion',
       string
@@ -76,6 +79,31 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     connectedTools: [],
     githubStars: 12_345,
     inviteOffer: null,
+    planCatalog: {
+      plans: [
+        {
+          tier: 'free',
+          monthly_price_cents: 0,
+          included_ai_cents_per_seat: 100,
+          purchasable: false,
+        },
+        {
+          tier: 'premium',
+          monthly_price_cents: 4000,
+          included_ai_cents_per_seat: 2000,
+          purchasable: true,
+        },
+        {
+          tier: 'max',
+          monthly_price_cents: 20000,
+          included_ai_cents_per_seat: 10000,
+          purchasable: true,
+        },
+      ],
+      credit_packs_cents: [],
+      overage_limit_min_cents: 0,
+      overage_limit_max_cents: 0,
+    },
     webhookPollsRemaining: undefined,
     webhookDelayPolls: 1,
     accent: undefined,
@@ -225,6 +253,10 @@ export function createFakeOnboarding(
       });
     },
     createInviteOffer: () => () => ({ t: 'ready', value: world.inviteOffer }),
+    createPlanCatalog: () => ({
+      catalog: () => loadable('planCatalog', () => world.planCatalog),
+      retry: () => call('retryPlanCatalog'),
+    }),
     startCheckout: async (tier, terms) => {
       call(`startCheckout:${tier}:${terms}`);
       fail('checkout');

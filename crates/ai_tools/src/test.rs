@@ -130,6 +130,39 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
     }
 }
 
+/// Every host reads the design files the native engines open, and its
+/// prompt says which tool reads which format.
+#[test]
+fn design_file_readers_are_available_in_every_host_with_their_guidance() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        for name in [
+            "ReadDesign",
+            "ReadPhotoshopDocument",
+            "ReadIllustratorDocument",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(prompt.contains(name), "{host:?}: {name}");
+        }
+    }
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadPhotoshopDocument")
+    );
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadIllustratorDocument")
+    );
+}
+
 /// Document answers get the one SQL tool, not a read-only twin: the access
 /// they run over refuses the writes (see `databases_sql`'s view-only tests).
 #[test]
@@ -394,3 +427,22 @@ fn every_eager_tool_exists() {
         );
     }
 }
+
+#[test]
+fn booking_link_mutations_execute_without_a_review_on_every_host() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host).toolset;
+        assert!(tools.tools.contains_key("ListBookingLinks"));
+        for name in ["CreateBookingLink", "EditBookingLink"] {
+            assert!(tools.tools.contains_key(name));
+            assert!(!tools.user_tools.contains_key(name));
+        }
+    }
+}
+
+mod booking_links;

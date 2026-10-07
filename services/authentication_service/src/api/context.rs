@@ -58,7 +58,7 @@ use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
 
 use crate::microsoft_token_cipher::MicrosoftTokenCipher;
-use authentication_service::service::signup_policy::SignupPolicy;
+use crate::service::signup_policy::SignupPolicy;
 use cursor_api_key::cipher::CursorApiKeyCipher;
 
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -105,7 +105,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     >,
     AuthenticationEventBroker,
     AiBillingServiceType,
-    authentication_service::outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter<
+    crate::outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter<
         bots::outbound::pg_bots_repo::PgBotsRepo,
         entity_registry::EntityRegistryServiceImpl<entity_registry::PgEntityRegistryRepository>,
     >,
@@ -152,16 +152,18 @@ pub(crate) struct ApiContext {
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub subscription_checkout: Arc<
-        authentication_service::service::subscription_checkout::CheckoutService<
-            authentication_service::outbound::subscription_checkout::StripeCheckoutGateway<
-                GtmInviteServiceType,
-            >,
+        crate::service::subscription_checkout::CheckoutService<
+            crate::outbound::subscription_checkout::StripeCheckoutGateway<GtmInviteServiceType>,
         >,
     >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
-    pub user_deletion:
-        Arc<authentication_service::outbound::user_deletion::UserDeletionAdapter<TeamsServiceType>>,
+    pub user_deletion: Arc<
+        crate::outbound::user_deletion::UserDeletionAdapter<
+            TeamsServiceType,
+            onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+        >,
+    >,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,
     pub ses_client: Arc<ses_client::Ses>,
     pub notification_ingress_service: Arc<NotificationIngressType>,

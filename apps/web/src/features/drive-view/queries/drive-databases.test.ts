@@ -121,11 +121,18 @@ describe('disabled database filters', () => {
       rootOpen: true,
       tagsOpen: false,
     };
-    expect(availableDriveState(state, false).facets).toEqual({
+    expect(availableDriveState(state, false, true).facets).toEqual({
       type: ['doc-markdown'],
       tags: ['urgent'],
     });
-    expect(availableDriveState(state, true)).toBe(state);
+    expect(availableDriveState(state, true, true)).toBe(state);
+    expect(
+      availableDriveState(
+        { ...state, facets: { type: ['form', 'doc-markdown'], tags: [] } },
+        true,
+        false
+      ).facets.type
+    ).toEqual(['doc-markdown']);
     expect(state.facets.type).toEqual(['database', 'doc-markdown']);
   });
 });

@@ -17,7 +17,6 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   enableCalendarUi,
   enableInboxNotifiedSort,
-  enableReminders,
   enableSnippets,
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
@@ -29,7 +28,7 @@ import {
   isSnippetEntity,
   type WithNotification,
 } from '@entity';
-import { notificationIsRead } from '@entity/utils/notification';
+import { unreadFilterFn } from '@entity/utils/filter';
 import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
@@ -39,7 +38,6 @@ import {
   noiseFilter,
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
-import { scheduledRemindersFilter } from '../../next-soup/filters/predicates';
 import { HOME_FACETS, type HomeFacetContext } from '../home-facets';
 import type { HomeTab, HomeViewState } from '../types';
 import { homeClock, homeTimestamp } from './home-date-buckets';
@@ -75,7 +73,6 @@ function matchesCapabilities(
 ): boolean {
   if (entity.type === 'calendar_event') return capabilities.calendar;
   if (entity.type === 'foreign') return capabilities.foreignEntities;
-  if (entity.type === 'reminder') return capabilities.reminders;
   if (isSnippetEntity(entity)) return capabilities.snippets;
 
   return true;
@@ -109,7 +106,6 @@ function matchesTab(
       );
     })
     .with('noise', () => noiseFilter(entity) && notDone())
-    .with('reminders', () => scheduledRemindersFilter(entity))
     .exhaustive();
 }
 
@@ -129,7 +125,6 @@ export function useHomeEntitiesQuery(
     calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    reminders: isFeatureEnabled(enableReminders),
     snippets: isFeatureEnabled(enableSnippets),
   });
 
@@ -182,11 +177,7 @@ export function useHomeEntitiesQuery(
       let snapshot: UnifiedNotification[] | undefined;
       const notifications = () => (snapshot ??= scopedNotifications(entity));
       if (!matchesTab(entity, context.tab, notifications)) return false;
-      return entity.type === 'email'
-        ? !entity.isRead
-        : notifications().some(
-            (notification) => !notificationIsRead(notification)
-          );
+      return unreadFilterFn({ ...entity, notifications });
     });
   };
 

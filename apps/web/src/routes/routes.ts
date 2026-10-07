@@ -20,10 +20,6 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
-import {
-  HOME_REMINDER_DETAIL_ROUTE_ID,
-  REMINDER_DETAIL_ROUTE_ID,
-} from '@app/features/reminders/reminder-navigation';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -63,6 +59,13 @@ export const baseRoute = defineRoute({
 export const publicBookingRoute = defineRoute({
   id: 'public-booking',
   path: 'book/:profile/:slug?',
+  externalSearch: '*',
+});
+
+/** A form's respond page, outside the split layout so public forms skip login. */
+export const formRespondRoute = defineRoute({
+  id: 'form-respond',
+  path: 'form/:formId/respond',
   externalSearch: '*',
 });
 
@@ -377,14 +380,6 @@ export const homeDocumentRoute = defineRoute({
     `${homeBaseBlockType(documentType)}:${documentId}`,
 });
 
-export const homeReminderRoute = defineRoute({
-  id: HOME_REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
-});
-
 export const homePreviewRoute = defineRoute({
   id: 'home-preview',
   path: ':blockType/:previewId',
@@ -439,22 +434,6 @@ export const activityRoute = defineRoute({
   path: 'activity',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'activity' }),
-});
-
-/** Lightweight standalone reminder detail at `/app/reminder/:reminderId`. */
-export const reminderDetailRoute = defineRoute({
-  id: REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
-});
-
-export const remindersRoute = defineRoute({
-  id: 'view-reminders',
-  path: 'reminders',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'reminders' }),
 });
 
 export const routinesRoute = defineRoute({

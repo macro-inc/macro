@@ -70,6 +70,21 @@ async fn with_admission<Engine: TurnEngine, Out>(
     admission: Arc<dyn AiAdmissionService>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
+    with_model_access(
+        engine,
+        admission,
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        scenario,
+    )
+    .await
+}
+
+async fn with_model_access<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn InMemModelAccess>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
@@ -83,6 +98,7 @@ async fn with_admission<Engine: TurnEngine, Out>(
         ),
         engine,
         admission,
+        model_access,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -419,7 +435,8 @@ async fn new_session_advertises_the_engine_supported_models() {
             .collect::<Vec<_>>(),
         vec![
             ("anthropic/claude-sonnet-5-5", "anthropic/claude-sonnet-5-5"),
-            ("other-model", "other-model")
+            ("other-model", "other-model"),
+            (chat::domain::models::FREE_MODEL, "Gemini 3.8 Flash")
         ]
     );
 
@@ -935,6 +952,7 @@ async fn serve_with_mcp(
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -990,6 +1008,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -1078,6 +1097,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         ),
         engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -1181,6 +1201,7 @@ where
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -1813,4 +1834,109 @@ async fn effort_is_validated_and_model_changes_return_complete_options() {
         );
     })
     .await;
+}
+
+#[tokio::test]
+async fn free_session_defaults_to_gemini_and_rejects_paid_model_changes() {
+    use crate::domain::model_access::ModelAccess;
+    use chat::domain::models::FREE_MODEL;
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    let access = Arc::new(crate::testing::TestModelAccess::new(ModelAccess::Free));
+    let (_, config, ()) = with_model_access(
+        engine.clone(),
+        Arc::new(DisabledAiAdmissionService),
+        access.clone(),
+        async |connection, session, state| {
+            assert_eq!(
+                state.store.get(&state.session_id).unwrap().model,
+                FREE_MODEL
+            );
+            let error = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await
+                .unwrap_err();
+            assert_eq!(
+                serde_json::to_value(error).unwrap()["data"]["code"],
+                "model_access_denied"
+            );
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .unwrap();
+            assert_eq!(engine.requests()[0].model, FREE_MODEL);
+            assert!(
+                access
+                    .owners
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|owner| owner == &state.owner)
+            );
+        },
+    )
+    .await;
+    let selection = agent_fold::domain::model_selection::model_selection(&config).unwrap();
+    assert_eq!(selection.options.len(), 1);
+}
+
+#[tokio::test]
+async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
+    use crate::domain::model_access::{ModelAccess, ModelAccessError};
+    for failure in [Ok(ModelAccess::Free), Err(ModelAccessError::Unavailable)] {
+        let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+        let access = Arc::new(crate::testing::TestModelAccess::paid());
+        with_model_access(
+            engine.clone(),
+            Arc::new(DisabledAiAdmissionService),
+            access.clone(),
+            async |connection, session, state| {
+                *access.result.lock().unwrap() = failure;
+                let error = connection
+                    .send_request(text_prompt(&session, "blocked"))
+                    .block_task()
+                    .await
+                    .unwrap_err();
+                let code = if failure.is_ok() {
+                    "model_access_denied"
+                } else {
+                    "model_access_unavailable"
+                };
+                assert_eq!(serde_json::to_value(error).unwrap()["data"]["code"], code);
+                assert!(engine.requests().is_empty());
+                assert!(
+                    state
+                        .store
+                        .get(&state.session_id)
+                        .unwrap()
+                        .history
+                        .is_empty()
+                );
+                if failure.is_ok() {
+                    let restored = connection
+                        .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    let selection = agent_fold::domain::model_selection::model_selection(
+                        restored.config_options.as_deref().unwrap(),
+                    )
+                    .unwrap();
+                    assert_eq!(selection.options.len(), 1);
+                    connection
+                        .send_request(text_prompt(&session, "resumed"))
+                        .block_task()
+                        .await
+                        .unwrap();
+                    assert_eq!(engine.requests()[0].model, chat::domain::models::FREE_MODEL);
+                }
+            },
+        )
+        .await;
+    }
 }

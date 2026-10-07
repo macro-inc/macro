@@ -134,8 +134,7 @@ use properties::{
 };
 use readonly_pool::ReadOnlyPool;
 use reminders::{
-    domain::service::RemindersServiceImpl, inbound::axum_router::RemindersRouterState,
-    outbound::pg_reminders_repo::PgRemindersRepo,
+    inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,
 };
 use search_service::SearchHandlerState;
 use soup::{
@@ -203,7 +202,6 @@ pub(crate) type DssSoupService = SoupImpl<
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
     GithubPullRequestServiceType,
-    RemindersServiceType,
 >;
 
 type DssSoupState =
@@ -523,6 +521,7 @@ pub(crate) type DssEntityMutationService =
         DssEmailService,
         ProjectService,
         DatabasesServiceType,
+        FormsServiceType,
         EntityAccessService,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
@@ -559,6 +558,22 @@ pub(crate) type DatabasesServiceType =
 /// Type alias for the databases router state.
 pub(crate) type DssDatabasesState =
     DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
+
+/// Forms compose the databases domain service, so row writes retain its validation and events.
+pub(crate) type FormsServiceType = forms::wiring::PgFormsService<
+    DatabasesServiceType,
+    EntityAccessService,
+    forms::outbound::gateway_event_publisher::GatewayFormEventPublisher,
+    DssEventBroker,
+    CollabSurfaceServiceType,
+>;
+
+/// Forms use the same authentication and entity-access services as databases.
+pub(crate) type DssFormsState = forms::inbound::axum_router::FormsRouterState<
+    FormsServiceType,
+    EntityAccessService,
+    AuthorizationService,
+>;
 
 /// Database onboarding composes transaction-capable owning domain adapters.
 pub(crate) type DssDatabaseStarterState =
@@ -649,7 +664,6 @@ pub(crate) type DssSlackState = slack_integration::inbound::axum_router::SlackRo
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType =
     reminders::domain::email_followup::reminder_service::EmailRemindersService<
-        RemindersServiceImpl<PgRemindersRepo>,
         PgRemindersRepo,
         DssEmailService,
         reminders::domain::ports::SystemClock,
@@ -673,7 +687,11 @@ pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the collab-surface service.
-pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService;
+pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
+    forms::outbound::collaborative_layout::RepositoryFormIds<
+        forms::outbound::pg_forms_repo::PgFormsRepo,
+    >,
+>;
 
 /// Type alias for the collab-surface router state.
 pub(crate) type DssCollabSurfaceState =
@@ -799,6 +817,7 @@ pub(crate) struct ApiContext {
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub databases_state: DssDatabasesState,
+    pub forms_state: DssFormsState,
     pub database_starter_state: DssDatabaseStarterState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,

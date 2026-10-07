@@ -53,11 +53,11 @@ import {
   emailSplitRoute,
   emailThreadRoute,
   foldersRoute,
+  formRespondRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
   homePreviewRoute,
-  homeReminderRoute,
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
@@ -74,8 +74,6 @@ import {
   projectTaskRoute,
   publicBookingRoute,
   recentRoute,
-  reminderDetailRoute,
-  remindersRoute,
   reviewsPrRoute,
   reviewsSplitRoute,
   routineCreateRoute,
@@ -171,10 +169,6 @@ const HomeEntityDetailRouteView = lazyNamed(
   () => import('@app/features/home/components/HomeEntityDetailRouteView'),
   'HomeEntityDetailRouteView'
 );
-const HomeReminderDetailRouteView = lazyNamed(
-  () => import('@app/features/home/components/HomeReminderDetailRouteView'),
-  'HomeReminderDetailRouteView'
-);
 const MeetingRouter = lazyNamed(
   () => import('@app/features/meetings/meeting-router'),
   'MeetingRouter'
@@ -194,14 +188,6 @@ const RecentRouteView = lazyNamed(
 const SearchRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'SearchRouteView'
-);
-const ReminderDetailRouteView = lazyNamed(
-  () => import('@app/features/reminders/route-views'),
-  'ReminderDetailRouteView'
-);
-const RemindersRouteView = lazyNamed(
-  () => import('@app/features/reminders/route-views'),
-  'RemindersRouteView'
 );
 const ReviewsPrDetailRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
@@ -242,6 +228,10 @@ const TeamInviteAcceptance = lazyNamed(
 const BookingReceiptRoutePage = lazyNamed(
   () => import('./pages'),
   'BookingReceiptRoutePage'
+);
+const FormRespondRoutePage = lazyNamed(
+  () => import('./pages'),
+  'FormRespondRoutePage'
 );
 const EmailCallback = lazyNamed(() => import('./pages'), 'EmailCallback');
 const EmailLinkCallback = lazyNamed(
@@ -351,6 +341,7 @@ export function AppRouterView() {
         definition={bookingReceiptRoute}
         component={BookingReceiptRoutePage}
       />
+      <Route definition={formRespondRoute} component={FormRespondRoutePage} />
       <Route definition={meetRoute} component={MeetingRouter} />
       <Route definition={taskSlugRoute} component={TaskSlugPage} />
       <Route definition={signupRoute} component={SignupPage} />
@@ -423,21 +414,12 @@ export function AppRouterView() {
             component={HomeEntityDetailRouteView}
           />
           <Route
-            definition={homeReminderRoute}
-            component={HomeReminderDetailRouteView}
-          />
-          <Route
             definition={homePreviewRoute}
             component={HomeDetailRouteView}
           />
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
-        <Route
-          definition={reminderDetailRoute}
-          component={ReminderDetailRouteView}
-        />
-        <Route definition={remindersRoute} component={RemindersRouteView} />
         <Route definition={agentsViewRoute} component={AgentsRouteView} />
         <Route definition={emailSplitRoute} component={MailRouteView}>
           <Route

@@ -209,7 +209,6 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -309,7 +308,9 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
-    .with_design_files(Arc::new(document_files));
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),
@@ -447,17 +448,16 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            db.clone(),
+            config.environment,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
             CalendarServiceUrl::new()?,
             config.internal_api_key.to_string(),
         ),
         notification_tool_context,
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            db.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),

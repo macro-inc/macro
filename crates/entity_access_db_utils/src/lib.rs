@@ -439,6 +439,7 @@ pub async fn update_entity_access_channel_share_permissions(
                 .await?;
             }
             EntityType::Database
+            | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document
@@ -557,6 +558,7 @@ pub async fn update_entity_access_channel_share_permissions(
                 }
             }
             EntityType::Database
+            | EntityType::Form
             | EntityType::AgentSession
             | EntityType::Chat
             | EntityType::Document

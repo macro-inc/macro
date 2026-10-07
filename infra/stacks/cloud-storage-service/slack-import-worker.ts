@@ -19,11 +19,6 @@ interface SlackImportWorkerArgs {
     privateSubnetIds: pulumi.Input<string[]>;
   };
   workerPolicyArn: pulumi.Input<string>;
-  stagingBucketName: pulumi.Input<string>;
-  queueName: pulumi.Input<string>;
-  dlqName: pulumi.Input<string>;
-  gatewayUrl: pulumi.Input<string>;
-  searchProcessingUrl: pulumi.Input<string>;
   tags: { [key: string]: string };
 }
 
@@ -102,18 +97,13 @@ export class SlackImportWorker extends pulumi.ComponentResource {
       },
       child
     );
-    const doppler = new DopplerEcsEnvironment(SERVICE_NAME, { tags }, child);
-    // Select keys from the shared Doppler sync instead of injecting APP_SECRETS_JSON:
-    // MacroConfig gives that JSON precedence over infrastructure-owned env values.
-    const secrets = [
-      'DATABASE_URL',
-      'INTERNAL_API_KEY',
-      'SLACK_IMPORT_ENABLED',
-      'SLACK_IMPORT_CONCURRENCY',
-    ].map((key) => ({
-      name: key,
-      valueFrom: pulumi.interpolate`${doppler.containerSecrets[0].valueFrom}:${key}::`,
-    }));
+
+    const dopplerEcsEnvironment = new DopplerEcsEnvironment(
+      SERVICE_NAME,
+      { tags },
+      child
+    );
+
     this.service = new awsx.ecs.FargateService(
       SERVICE_NAME,
       {
@@ -130,7 +120,7 @@ export class SlackImportWorker extends pulumi.ComponentResource {
           cpu: '1024',
           memory: '2048',
           taskRole: { roleArn: this.role.arn },
-          executionRole: { roleArn: doppler.executionRole.arn },
+          executionRole: { roleArn: dopplerEcsEnvironment.executionRole.arn },
           runtimePlatform: {
             operatingSystemFamily: 'LINUX',
             cpuArchitecture: 'X86_64',
@@ -149,30 +139,9 @@ export class SlackImportWorker extends pulumi.ComponentResource {
               essential: true,
               memory: 1536,
               stopTimeout: 120,
-              secrets,
+              secrets: [...dopplerEcsEnvironment.containerSecrets],
               environment: [
                 { name: 'ENVIRONMENT', value: stack },
-                {
-                  name: 'UPLOAD_STAGING_BUCKET',
-                  value: args.stagingBucketName,
-                },
-                { name: 'OVERRIDE_SLACK_IMPORT_QUEUE', value: args.queueName },
-                { name: 'OVERRIDE_SLACK_IMPORT_DLQ', value: args.dlqName },
-                {
-                  name: 'OVERRIDE_CONNECTION_GATEWAY_URL',
-                  value: args.gatewayUrl,
-                },
-                {
-                  name: 'OVERRIDE_SEARCH_PROCESSING_SERVICE_URL',
-                  value: args.searchProcessingUrl,
-                },
-                {
-                  name: 'SLACK_IMPORT_JOIN_EMAIL_ENABLED',
-                  value: String(
-                    config.getBoolean('slack_import_join_email_enabled') ??
-                      false
-                  ),
-                },
                 { name: 'DD_SERVICE', value: SERVICE_NAME },
                 { name: 'DD_ENV', value: stack },
               ],

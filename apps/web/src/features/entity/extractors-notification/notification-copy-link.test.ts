@@ -32,9 +32,10 @@ beforeEach(() => {
   vi.stubGlobal('navigator', { clipboard: { writeText: mocks.writeText } });
 });
 
-it('copies the canonical reminder detail URL', async () => {
+it('copies the original email URL', async () => {
   const notification = {
-    entity_id: 'reminder-1',
+    entity_id: 'thread-1',
+    entity_type: 'email_thread',
     notification_metadata: {
       tag: 'reminder',
       content: {
@@ -47,15 +48,15 @@ it('copies the canonical reminder detail URL', async () => {
   await copyNotificationLink(notification);
 
   expect(mocks.writeText).toHaveBeenCalledExactlyOnceWith(
-    'https://macro.com/app/reminder/reminder-1'
+    'https://macro.com/app/email/thread-1'
   );
   expect(mocks.success).toHaveBeenCalledWith('Link copied to clipboard');
 });
 
-it('does not expose a reminder detail URL while reminders are disabled', async () => {
-  mocks.remindersEnabled = false;
+it('does not expose a legacy generic reminder URL', async () => {
   const notification = {
     entity_id: 'reminder-1',
+    entity_type: 'reminder',
     notification_metadata: {
       tag: 'reminder',
       content: {

@@ -11,6 +11,7 @@ import {
 } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AgentKind } from '../core/agent-kind';
 import {
   buildAgentRoster,
   type PersistedAgentLike,
@@ -21,6 +22,7 @@ import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   touch: false,
+  freePlan: false,
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -126,6 +128,13 @@ vi.mock('@queries/agents/models', () => ({
     get data() {
       if (!enabled()) throw new Error('Pending resource must not be read');
       const harness = target().harness;
+      if (harness === 'in-memory' && mocks.freePlan) {
+        return {
+          status: 'available',
+          currentModel: 'google/gemini-3.8-flash',
+          models: [{ id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' }],
+        };
+      }
       return {
         status: 'available',
         currentModel: harness === 'cursor' ? 'cursor-default' : 'chat-default',
@@ -203,12 +212,14 @@ function page(
   connected = true,
   agents: PersistedAgentLike[] = [],
   availabilityLoading = false,
-  runtimes: RuntimeLike[] = []
+  runtimes: RuntimeLike[] = [],
+  kind?: AgentKind
 ) {
   const onStart = vi.fn();
   render(() => (
     <NewChatPage
       compact={mocks.touch}
+      kind={kind}
       roster={buildAgentRoster({
         agents,
         runtimes,
@@ -262,6 +273,7 @@ describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
     mocks.capabilitiesPending = false;
+    mocks.freePlan = false;
     mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
@@ -356,6 +368,7 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
+      modelOverride: 'chat-default',
     });
   });
   it('selects a coding agent, keeps the draft, and only sends the repository to coding agents', async () => {
@@ -397,6 +410,45 @@ describe('agent-led new conversation', () => {
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
     });
+  });
+  it('offers only chat agents in Work and keeps the composer compact', async () => {
+    const send = page(true, [], false, [], 'agent');
+    expect(
+      screen.getByRole('heading', { name: 'What should we work on?' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
+    openAgents();
+    expect(
+      screen.getByRole('menuitem', { name: /^Chat default$/ })
+    ).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /Cursor/ })).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith({
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelOverride: 'chat-default',
+    });
+  });
+  it('offers only coding agents in Code and opens the repository drawer', async () => {
+    const send = page(true, [], false, [], 'coder');
+    expect(
+      screen.getByRole('heading', { name: 'What should we build?' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+    openAgents();
+    expect(screen.getByRole('menuitem', { name: /Cursor/ })).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: /^Chat default$/ })
+    ).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'Prompt', botId: CURSOR_BOT_ID })
+    );
   });
   it('restores an unsent draft after the page remounts', () => {
     page();
@@ -461,7 +513,8 @@ describe('agent-led new conversation', () => {
       repoBranch: 'feature/other',
     });
   });
-  it('uses a saved agent without sending a per-session model override', async () => {
+  it('uses Gemini for a free user starting a saved in-memory agent', async () => {
+    mocks.freePlan = true;
     const send = page(true, [
       {
         bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
@@ -475,8 +528,8 @@ describe('agent-led new conversation', () => {
       prompt: 'Prompt',
       botId: 'saved-agent',
       repoUrl: undefined,
+      modelOverride: 'google/gemini-3.8-flash',
     });
-    expect(send.mock.calls[0][0]).not.toHaveProperty('modelOverride');
   });
   it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
     'shows the drawer for a saved %s coding agent without forwarding unsupported repository overrides',
@@ -761,6 +814,27 @@ describe('agent-led new conversation', () => {
     page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5.5'
+    );
+  });
+  it('uses the free catalog default instead of a persisted paid model', async () => {
+    mocks.freePlan = true;
+    mocks.preferredInmemModel = 'anthropic/claude-sonnet-5-5';
+    const send = page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Gemini 3.8 Flash'
+    );
+    openAgents();
+    await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy());
+    expect(screen.queryByTitle('Sonnet 5.5')).toBeNull();
+    expect(
+      within(screen.getByRole('menu')).getByTitle('Gemini 3.8 Flash')
+    ).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'google/gemini-3.8-flash',
+      })
     );
   });
   it('restores the most recently used supported agent', async () => {

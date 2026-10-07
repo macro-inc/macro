@@ -33,10 +33,6 @@ import type {
   ConsolidatedFilter,
   FilterValue,
 } from './consolidated-filter-chip';
-import {
-  setReminderCompletionFilter,
-  toggleReminderCompletionFilter,
-} from './reminder-completion-filter';
 import type { SearchableOption } from './searchable-multi-select';
 import { useTagFilter } from './tag-filter';
 import {
@@ -480,11 +476,6 @@ export function useFilterRefinements() {
           multiple: group.multiple,
           isValueActive: (id) => soup.predicates.isActive(id),
           onToggleValue: (id) => {
-            if (
-              currentView() === 'reminders' &&
-              toggleReminderCompletionFilter(id, soup.predicates, queryFilters)
-            )
-              return;
             const filterId = id as FilterID;
             const wasActive = soup.predicates.isActive(filterId);
             const isInboxTypeFilter =
@@ -530,14 +521,6 @@ export function useFilterRefinements() {
             });
           },
           onRemoveAll: () => {
-            if (currentView() === 'reminders' && categoryId === 'completion') {
-              setReminderCompletionFilter(
-                undefined,
-                soup.predicates,
-                queryFilters
-              );
-              return;
-            }
             const categoryOptionIds = new Set(
               group.allOptions
                 .filter((option) => !TAB_ONLY_FILTERS.has(option.id))

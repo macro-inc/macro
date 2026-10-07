@@ -49,8 +49,7 @@ are pills and the leading sliders button opens one drawer containing Sort, Group
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
 
-**Keyboard:** Focus one task and press **H** to set or edit its reminder, even
-inside an expanded group. **←** collapses the focused item or its parent group.
+**Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
 does nothing. Typing H in a text field remains ordinary input.
 
@@ -244,12 +243,12 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks in the
-bubble-tab row below that top bar. In Tasks, an outlined circular search button
-to the right of the tabs expands into a focused `Search in <project name>` field. Close or Escape
-clears the query and restores focus to the button. The row stays the same height
-and scrolls horizontally in narrow splits, keeping list controls, Add existing
-tasks, and New task accessible. Opening an associated task extends the breadcrumb trail; choose
+and side-panel controls as task detail. Choose Overview or Tasks using the inset
+tabs in that top bar. In Tasks, an outlined circular search button expands into
+a focused `Search in <project name>` field. Close or Escape clears the query and
+restores focus to the button. The task toolbar stays the same height and scrolls
+horizontally in narrow splits, keeping list controls, Add existing tasks, and New
+task accessible. Opening an associated task extends the breadcrumb trail; choose
 the project breadcrumb to return, or Projects to restore the collection and its
 filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).

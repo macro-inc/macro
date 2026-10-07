@@ -13,8 +13,10 @@ export function AutoReloadView(props: {
   const notice = () => {
     if (props.context.autoReload.preview())
       return 'Developer preview. These settings only change this preview and will not charge your card.';
-    if (!props.context.autoReload.available())
-      return 'Automatic reload is not available yet. You can buy usage credits manually.';
+    if (props.context.summary()?.billingAccess === 'team-member')
+      return 'Only the account that pays for this plan can change automatic reload.';
+    if (props.context.autoReload.suspended())
+      return 'Your last automatic reload could not be charged. Update your payment method, then save to try again.';
   };
   const save = async (enabled: boolean) => {
     const settings = enabled

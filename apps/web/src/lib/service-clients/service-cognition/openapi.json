@@ -3158,7 +3158,8 @@
           "scheduled_action",
           "initiative",
           "database",
-          "database_row"
+          "database_row",
+          "form"
         ]
       },
       "ErrorBody": {
@@ -3600,7 +3601,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -3623,6 +3626,8 @@
           "dxf",
           "dwg",
           "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",

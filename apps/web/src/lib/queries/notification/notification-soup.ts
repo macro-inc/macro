@@ -20,12 +20,12 @@ function notificationEntityTypeToSoupTag(
     .with('project', () => 'project' as const)
     .with('email_thread', () => 'emailThread' as const)
     .with('foreign_entity', () => 'foreignEntity' as const)
-    .with('reminder', () => 'reminder' as const)
     .with('calendar_event', () => 'calendarEvent' as const)
     .with('agent_session', () => 'agentSession' as const)
     .with(
       P.union(
         'user',
+        'reminder',
         'team',
         'call',
         'channel_message',
@@ -35,6 +35,7 @@ function notificationEntityTypeToSoupTag(
         'skill',
         'database',
         'database_row',
+        'form',
         'scheduled_action',
         'initiative'
       ),

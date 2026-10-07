@@ -1290,3 +1290,92 @@ async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
         .unwrap();
     assert_eq!(updated.next_run_at, None);
 }
+
+fn conditional_configuration() -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(json!({
+            "type": "events",
+            "filters": [{"events": ["email.message_received"], "condition": "Is this an invoice?"}]
+        }))
+        .unwrap(),
+        ..configuration(true)
+    }
+}
+
+#[tokio::test]
+async fn conditions_are_rejected_unless_the_host_can_check_them() {
+    let without = service(true);
+    assert_policy(
+        without
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(conditional_configuration()),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+    let plain = without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    assert_policy(
+        without
+            .update_action(
+                edit_receipt(plain.id.unwrap()),
+                update(conditional_configuration()),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+
+    let with = TestService::new(
+        without.repo.clone(),
+        without.executor.clone(),
+        without.dispatcher_tx.clone(),
+        grants(&without.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_conditions_enabled(true);
+    let created = with
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(conditional_configuration()),
+        )
+        .await
+        .unwrap();
+    let filters = created.trigger.event_filters().unwrap();
+    assert_eq!(
+        filters.as_slice()[0].condition().map(|c| c.as_str()),
+        Some("Is this an invoice?")
+    );
+}
+
+#[test]
+fn conditions_are_trimmed_bounded_and_round_trip() {
+    let filters: crate::domain::event_trigger::EventFilters = serde_json::from_value(json!([
+        {"events": ["email.message_received"], "condition": "  Is this urgent?  "}
+    ]))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&filters).unwrap(),
+        json!([{"events": ["email.message_received"], "condition": "Is this urgent?"}])
+    );
+    for condition in [json!(""), json!("   "), json!("x".repeat(501)), json!(3)] {
+        assert!(
+            serde_json::from_value::<crate::domain::event_trigger::EventFilters>(json!([
+                {"events": ["email.message_received"], "condition": condition}
+            ]))
+            .is_err(),
+            "{condition}"
+        );
+    }
+    let unconditional: crate::domain::event_trigger::EventFilters =
+        serde_json::from_value(json!([{"events": ["document.created"]}])).unwrap();
+    assert_eq!(
+        serde_json::to_value(&unconditional).unwrap(),
+        json!([{"events": ["document.created"]}])
+    );
+}

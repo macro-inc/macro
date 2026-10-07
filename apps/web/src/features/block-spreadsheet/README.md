@@ -463,13 +463,15 @@ group, SmartArt and an EMF, as Excel writes them) and corpus workbooks. Exports 
 which draws the same charts (surface charts aside, which it cannot draw) and
 rebuilds pivot tables from edited data.
 
-`core/xlsx-corpus.test.ts` imports, recalculates, exports and reimports the
-real-world workbooks in `core/xlsx-fixtures/real-world/` (finance models,
-government statistics and open-source test suites; provenance and licenses are in
-its `manifest.json`). Its snapshot records counts, warnings, how many formulas
-recalculate to Excel's cached results, and the first round-trip difference, so a
-change in fidelity shows up in review. Set `XLSX_CORPUS_VERBOSE=1` to print
-mismatch examples.
+`core/xlsx-corpus-1.test.ts` through `core/xlsx-corpus-4.test.ts` import,
+recalculate, export and reimport the real-world workbooks in
+`core/xlsx-fixtures/real-world/` (finance models, government statistics and
+open-source test suites; provenance and licenses are in its `manifest.json`).
+Each file runs one slice of the corpus through `core/xlsx-corpus-suite.ts`, so
+the workbooks run on several Vitest workers. Their snapshots record counts,
+warnings, how many formulas recalculate to Excel's cached results, and the first
+round-trip difference, so a change in fidelity shows up in review. Set
+`XLSX_CORPUS_VERBOSE=1` to print mismatch examples.
 
 ## Verification
 

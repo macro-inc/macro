@@ -111,7 +111,13 @@ export function OptionPicker(props: {
   const move = (step: 1 | -1) => {
     const count = rows().length;
     if (!count) return;
-    setActive((current) => (current + step + count) % count);
+    setActive((current) =>
+      current < 0
+        ? step === 1
+          ? 0
+          : count - 1
+        : (current + step + count) % count
+    );
   };
   return (
     <div class="flex w-56 flex-col">
