@@ -1253,6 +1253,24 @@ describe('normalizedCacheExchange', () => {
     }
   });
 
+  it('keeps the persistence acknowledgement when the global Promise is patched', async () => {
+    const { ops, results } = harness(host);
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    class PatchedPromise<T> extends Promise<T> {}
+    vi.stubGlobal('Promise', PatchedPromise);
+    let metadata: ReturnType<typeof normalizedCacheResultMetadata>;
+    try {
+      metadata = normalizedCacheResultMetadata(results[0]!);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source !== 'live-network') return;
+    expect(metadata.persistence).toBeDefined();
+    await expect(metadata.persistence).resolves.toBe(INITIAL_CACHE_REVISION);
+  });
+
   it('settles persistence even when its diagnostic callback throws', async () => {
     host.writeQuery = vi.fn().mockRejectedValue(new Error('disk full'));
     const { ops, results } = harness(host, undefined, {
