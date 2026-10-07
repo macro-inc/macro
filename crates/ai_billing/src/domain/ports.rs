@@ -344,6 +344,8 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// amount when the invoice was one of ours *and* the status changed.
     /// `Paid` is terminal: a late or duplicate failure event never un-pays a
     /// reload, and re-reporting the current status is a no-op.
+    /// A transition to `Paid` atomically books the purchased credits, deduplicated
+    /// by invoice, so a failed credit write leaves the status retryable.
     fn resolve_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,

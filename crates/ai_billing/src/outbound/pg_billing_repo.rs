@@ -54,6 +54,30 @@ fn invalid_payer(e: impl std::fmt::Display) -> BillingError {
     BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}"))
 }
 
+async fn book_credit_reload(
+    conn: &mut sqlx::PgConnection,
+    payer: &MacroUserIdStr<'_>,
+    amount_cents: i64,
+    stripe_invoice_id: &str,
+) -> Result<bool> {
+    let id = macro_uuid::generate_uuid_v7();
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)
+        VALUES ($1, $2, 'purchase', $3, $4, 'Automatic reload')
+        ON CONFLICT (stripe_reference) WHERE stripe_reference IS NOT NULL DO NOTHING
+        "#,
+        id,
+        payer.as_ref(),
+        amount_cents,
+        stripe_invoice_id,
+    )
+    .execute(conn)
+    .await
+    .map_err(storage)?;
+    Ok(result.rows_affected() == 1)
+}
+
 impl BillingRepo for PgBillingRepo {
     async fn legacy_seats(
         &self,
@@ -958,27 +982,13 @@ impl BillingRepo for PgBillingRepo {
         amount_cents: i64,
         stripe_invoice_id: &str,
     ) -> Result<bool> {
-        let id = macro_uuid::generate_uuid_v7();
         let mut tx = self.pool.begin().await.map_err(storage)?;
         lock_payer(&mut tx, payer.as_ref())
             .await
             .map_err(funding_storage)?;
-        let result = sqlx::query!(
-            r#"
-            INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)
-            VALUES ($1, $2, 'purchase', $3, $4, 'Automatic reload')
-            ON CONFLICT (stripe_reference) WHERE stripe_reference IS NOT NULL DO NOTHING
-            "#,
-            id,
-            payer.as_ref(),
-            amount_cents,
-            stripe_invoice_id,
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(storage)?;
+        let booked = book_credit_reload(&mut tx, payer, amount_cents, stripe_invoice_id).await?;
         tx.commit().await.map_err(storage)?;
-        Ok(result.rows_affected() == 1)
+        Ok(booked)
     }
 
     async fn resolve_credit_reload_invoice(
@@ -986,10 +996,26 @@ impl BillingRepo for PgBillingRepo {
         stripe_invoice_id: &str,
         status: CreditReloadStatus,
     ) -> Result<Option<ResolvedReload>> {
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        let Some(payer) = sqlx::query_scalar!(
+            "SELECT user_id FROM ai_credit_reload WHERE stripe_invoice_id = $1",
+            stripe_invoice_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(storage)?
+        else {
+            return Ok(None);
+        };
+        let payer = MacroUserIdStr::try_from(payer).map_err(invalid_payer)?;
+        // Match the account-before-reload lock order used by reload reservation.
+        lock_payer(&mut tx, payer.as_ref())
+            .await
+            .map_err(funding_storage)?;
         // `paid` is terminal and re-reporting the current status changes
         // nothing, so a late or duplicate webhook cannot un-pay a reload or
         // book its credits twice.
-        let row = sqlx::query!(
+        let Some(row) = sqlx::query!(
             r#"
             UPDATE ai_credit_reload
             SET status = ($2::text)::ai_credit_reload_status, updated_at = NOW()
@@ -1001,16 +1027,27 @@ impl BillingRepo for PgBillingRepo {
             stripe_invoice_id,
             status.to_string(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
-        .map_err(storage)?;
-        row.map(|r| {
-            Ok(ResolvedReload {
-                payer: MacroUserIdStr::try_from(r.user_id).map_err(invalid_payer)?,
-                amount_cents: r.amount_cents,
-            })
-        })
-        .transpose()
+        .map_err(storage)?
+        else {
+            return Ok(None);
+        };
+        let resolved = ResolvedReload {
+            payer: MacroUserIdStr::try_from(row.user_id).map_err(invalid_payer)?,
+            amount_cents: row.amount_cents,
+        };
+        if status == CreditReloadStatus::Paid {
+            book_credit_reload(
+                &mut tx,
+                &resolved.payer,
+                resolved.amount_cents,
+                stripe_invoice_id,
+            )
+            .await?;
+        }
+        tx.commit().await.map_err(storage)?;
+        Ok(Some(resolved))
     }
 
     async fn suspend_auto_reload(&self, payer: &MacroUserIdStr<'_>) -> Result<()> {

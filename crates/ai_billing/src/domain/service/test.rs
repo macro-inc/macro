@@ -618,13 +618,21 @@ impl BillingRepo for FakeRepo {
                 && r.status != CreditReloadStatus::Paid
                 && r.status != status
         });
-        Ok(found.map(|r| {
+        let resolved = found.map(|r| {
             r.status = status;
             ResolvedReload {
                 payer: user("payer@x.com"),
                 amount_cents: r.amount_cents,
             }
-        }))
+        });
+        if let Some(resolved) = &resolved
+            && status == CreditReloadStatus::Paid
+            && !s.purchases.iter().any(|r| r == stripe_invoice_id)
+        {
+            s.purchases.push(stripe_invoice_id.to_string());
+            s.balance += resolved.amount_cents;
+        }
+        Ok(resolved)
     }
     async fn suspend_auto_reload(&self, _payer: &MacroUserIdStr<'_>) -> Result<()> {
         self.state.lock().unwrap().auto_reload_suspended = true;

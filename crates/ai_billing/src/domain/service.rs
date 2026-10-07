@@ -1040,11 +1040,7 @@ where
         if !paid {
             return self.repo.suspend_auto_reload(&resolved.payer).await;
         }
-        // Idempotent on the invoice: the collector may have booked these
-        // credits before the webhook arrived.
-        self.repo
-            .record_credit_reload(&resolved.payer, resolved.amount_cents, stripe_invoice_id)
-            .await?;
+        // Resolving a paid reload atomically books its credits with the status.
         // The reloaded credits cover any usage that was waiting on them.
         if let Err(e) = self.settle(&resolved.payer).await {
             tracing::warn!(error = ?e, "settlement after credit reload failed");

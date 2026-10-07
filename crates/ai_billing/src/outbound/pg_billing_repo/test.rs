@@ -1013,6 +1013,7 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
         .expect("status changed");
     assert_eq!(paid.payer.as_ref(), payer().as_ref());
     assert_eq!(paid.amount_cents, 10_000);
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     assert!(
         repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
             .await
@@ -1025,6 +1026,98 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
             .await
             .unwrap()
             .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reserved.id, Some("in_retry"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+
+    // Force the ledger INSERT to fail after the paid-status UPDATE executes.
+    sqlx::query!(
+        "ALTER TABLE ai_credit_ledger ADD CONSTRAINT reject_test_reload
+         CHECK (stripe_reference <> 'in_retry')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 0);
+    let status = sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_credit_reload WHERE stripe_invoice_id = $1"#,
+        "in_retry",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "pending");
+
+    sqlx::query!("ALTER TABLE ai_credit_ledger DROP CONSTRAINT reject_test_reload")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+    // Re-delivery cannot issue the purchased credits twice.
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_webhook_deduplicates_credits_booked_by_collector(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(
+        reserved.id,
+        Some("in_collector"),
+        CreditReloadStatus::Pending,
+    )
+    .await
+    .unwrap();
+    repo.record_credit_reload(&payer(), reserved.amount_cents, "in_collector")
+        .await
+        .unwrap();
+
+    assert!(
+        repo.resolve_credit_reload_invoice("in_collector", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        repo.credit_balance_cents(&payer()).await.unwrap(),
+        reserved.amount_cents
     );
 }
 
