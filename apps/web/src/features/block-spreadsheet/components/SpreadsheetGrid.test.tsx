@@ -6,7 +6,15 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { type Accessor, type ComponentProps, createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 import type { SpreadsheetCells } from '../core/spreadsheet-document';
 import {
   createGridController,
@@ -694,6 +702,26 @@ it('keeps a constant number of selection overlays as ranges grow, with accurate 
   expect(
     view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
   ).toHaveLength(rendered.length);
+});
+
+it('selects every cell with Cmd+A without scrolling to the last cell', () => {
+  const scroll = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    writable: true,
+    value: scroll,
+  });
+  onTestFinished(() => {
+    delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
+  });
+  const view = renderGrid({}, { rowCount: 200 });
+  fireEvent.keyDown(view.element, { key: 'a', metaKey: true });
+  expect(view.controller.selection()).toEqual({
+    anchor: { row: 0, column: 0 },
+    focus: { row: 199, column: 25 },
+  });
+  expect(view.container.querySelector('[data-address="Z200"]')).not.toBeNull();
+  expect(scroll).not.toHaveBeenCalled();
 });
 
 describe('spreadsheet presentation', () => {

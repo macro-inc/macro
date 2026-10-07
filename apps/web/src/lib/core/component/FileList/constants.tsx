@@ -73,6 +73,7 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   call: defaultFileColor,
   calendar: defaultFileColor,
   database: defaultFileColor,
+  form: 'bg-violet/20 group/item',
   contact: defaultFileColor,
   company: defaultFileColor,
   default: defaultFileColor,

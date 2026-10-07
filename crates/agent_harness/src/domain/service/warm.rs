@@ -94,7 +94,8 @@ where
         };
         // A caller's pick outranks the persona's: choosing a model on the way
         // in is choosing what this session runs on, for its whole life.
-        let model = request.model.unwrap_or(model);
+        let requested_model = request.model;
+        let model = requested_model.clone().unwrap_or(model);
         let kind = AgentKind::for_session(bot_id, &harness);
         let harness = kind.harness_slug().map_or(harness, str::to_owned);
         tracing::Span::current().record("agent.harness", &harness);
@@ -295,14 +296,16 @@ where
                 tracing::info_span!("agent.init.permissions", agent.session.id = %session_id),
             )
             .await;
+        let attachment = container
+            .mcp_servers(mcp_servers.clone())
+            .permission_policy(permission_policy);
+        let attachment = match requested_model {
+            Some(model) if !kind.starts_on_session_model() => attachment.initial_model(model),
+            _ => attachment,
+        };
         self.inner
             .sessions
-            .attach_session(
-                session.id,
-                container
-                    .mcp_servers(mcp_servers.clone())
-                    .permission_policy(permission_policy),
-            )
+            .attach_session(session.id, attachment)
             .instrument(tracing::info_span!("agent.init.attach", agent.session.id = %session_id))
             .await?;
 

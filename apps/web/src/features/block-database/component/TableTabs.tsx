@@ -4,8 +4,10 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { ResultAsync } from 'neverthrow';
 import { TableNavigation } from '../components/table-navigation';
 import { tableDeleteMessage, tableOrderMessage } from '../core/column-schema';
+import { tableDeleteConsequence } from '../core/forms-usage';
 import { createTableWithName } from '../queries/create-table';
 import { patchDetail, patchTable } from '../queries/detail-cache';
+import { useFormsOverTables } from '../queries/forms-usage';
 import { reorderDatabaseTables } from '../queries/reorder-tables';
 
 export function TableTabs(props: {
@@ -15,8 +17,12 @@ export function TableTabs(props: {
   canEdit: boolean;
   onSelect: (tableId: string) => void;
 }) {
+  const formsOver = useFormsOverTables(() => props.databaseId);
   return (
     <TableNavigation
+      deleteConsequence={(tableId) =>
+        tableDeleteConsequence(formsOver(tableId))
+      }
       tables={props.tables.map((table) => ({
         id: table.table.id,
         name: table.table.name,

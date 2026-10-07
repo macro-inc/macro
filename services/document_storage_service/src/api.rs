@@ -272,6 +272,10 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/forms",
+            forms::inbound::axum_router::forms_router(state.forms_state.clone()),
+        )
+        .nest(
             "/collab_surfaces",
             collab_surface::inbound::axum_router::collab_surface_router(
                 state.collab_surface_state.clone(),

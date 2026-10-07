@@ -44,6 +44,7 @@ export function describeAction(action: ActivityAction, count = 1): string {
       .with({ kind: 'participant-added' }, () => 'added a participant')
       .with({ kind: 'participant-removed' }, () => 'removed a participant')
       .with({ kind: 'call-started' }, () => 'started a call')
+      .with({ kind: 'responded' }, () => 'responded')
       .with({ kind: 'unknown' }, (unknown) => unknown.tag.replaceAll('_', ' '))
       .exhaustive();
   }
@@ -63,6 +64,7 @@ export function describeAction(action: ActivityAction, count = 1): string {
       () => `removed ${count} participants`
     )
     .with({ kind: 'call-started' }, () => `started ${count} calls`)
+    .with({ kind: 'responded' }, () => `responded ${count} times`)
     .with(
       { kind: 'unknown' },
       (unknown) => `${unknown.tag.replaceAll('_', ' ')} ${count} times`
@@ -121,6 +123,7 @@ export function describeActionForEntity(action: ActivityAction): {
       verb: 'started a call',
       connector: 'in',
     }))
+    .with({ kind: 'responded' }, () => ({ verb: 'responded', connector: 'to' }))
     .with({ kind: 'unknown' }, (unknown) => ({
       verb: unknown.tag.replaceAll('_', ' '),
       connector: 'on',

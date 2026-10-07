@@ -8,6 +8,14 @@ use super::PropertyDefinitionId;
 /// A refused schema change. The messages are shown to users and agents.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SchemaError {
+    /// A feature reserves this operation on the column.
+    #[error(
+        "This column is protected against this schema change. Remove the feature using it first."
+    )]
+    ColumnProtected {
+        /// The reserved schema operation.
+        capability: super::ColumnProtection,
+    },
     /// A database, table, column or view name is blank.
     #[error("name must not be empty")]
     EmptyName,

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   sendToUsers: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
+  shareOptions: vi.fn(),
   recipients: [] as { kind: 'channel' | 'user'; id: string }[],
 }));
 
@@ -48,7 +49,10 @@ vi.mock('@core/component/RecipientSelector', () => ({
   ),
 }));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
-  ShareOptions: () => null,
+  ShareOptions: (props: { allowedAccessLevels?: readonly string[] }) => {
+    mocks.shareOptions(props.allowedAccessLevels);
+    return null;
+  },
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (name: string) =>
@@ -136,6 +140,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('forwarding with selected access', () => {
+  it('limits the desktop form invitation to responding or editing', () => {
+    render(() => (
+      <ForwardToChannel
+        name="Workshop booking request"
+        blockName="form"
+        blockId="01a10d51-874a-7b22-9204-41f537bb2572"
+        allowedAccessLevels={['view', 'edit']}
+        onSubmit={vi.fn()}
+        refetch={vi.fn()}
+        submitPermissionInfo={{
+          userPermissions: Permissions.OWNER,
+          setChannelPermissions: vi.fn().mockResolvedValue(true),
+        }}
+      />
+    ));
+
+    expect(mocks.shareOptions).toHaveBeenCalledWith(['view', 'edit']);
+  });
+
   it.each(['md', 'task', 'snippet', 'skill'] as const)(
     'retains the edit default for %s sharing',
     async (blockName) => {

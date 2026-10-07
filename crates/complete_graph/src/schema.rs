@@ -20,6 +20,7 @@ use graphql_activity::{
     ActivitySubscriptionService, GraphqlActivityEvent, GraphqlActivityOverview,
     GraphqlActivityPage, NoOpActivityReader, NoOpActivitySubscriptionService,
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
+    resolve_form_activity,
 };
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
@@ -765,6 +766,19 @@ where
         let access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
         resolve_database_activity::<AcR, EAS>(ctx, &*access, &self.user_id, database_id, limit)
             .await
+    }
+
+    /// The newest activity on a form the authenticated user can edit, newest
+    /// first. Forms are not Soup items, so this stands in for the `activity`
+    /// edge Soup entities carry.
+    async fn form_activity(
+        &self,
+        ctx: &Context<'_>,
+        form_id: ID,
+        limit: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlActivityEvent>> {
+        let access = Arc::<EAS>::from_ref(ctx.data::<St>()?);
+        resolve_form_activity::<AcR, EAS>(ctx, &*access, &self.user_id, form_id, limit).await
     }
 
     /// The authenticated user's activity over the trailing year, bucketed

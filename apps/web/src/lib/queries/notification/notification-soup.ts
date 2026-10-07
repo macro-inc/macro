@@ -35,6 +35,7 @@ function notificationEntityTypeToSoupTag(
         'skill',
         'database',
         'database_row',
+        'form',
         'scheduled_action',
         'initiative'
       ),

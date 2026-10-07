@@ -168,6 +168,7 @@ async fn rename_validates_the_name_and_writes_it() {
         .unwrap();
     assert_eq!(renamed.name, "Winter Offsite");
     assert_eq!(world.lock().unwrap().databases[0].name, "Winter Offsite");
+    assert_eq!(world.lock().unwrap().metadata_changes, vec![db]);
 
     let err = svc
         .rename_database(

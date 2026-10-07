@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import {
   SplitHeaderLeft,
@@ -12,6 +13,7 @@ import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { enableForms } from '@core/constant/featureFlags';
 import { useGetPermissions } from '@core/signal/permissions';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
@@ -19,7 +21,7 @@ import type { TableDetail } from '@service-storage/generated/schemas/tableDetail
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { Button } from '@ui';
 import type { ResultAsync } from 'neverthrow';
-import { Show } from 'solid-js';
+import { lazy, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../components/database-title';
 import {
   type DatabaseEntityFailure,
@@ -28,6 +30,16 @@ import {
 import { renameDatabase } from '../queries/rename-database';
 import { DatabasePageActions } from '../views/database-page-actions';
 import { TableTabs } from './TableTabs';
+
+// Forms load only when the flag is on, and only through this boundary.
+const DatabaseFormsEntry = lazy(async () => ({
+  default: (await import('@app/features/block-form/database-forms-entry'))
+    .DatabaseFormsEntry,
+}));
+const DatabaseFormEditors = lazy(async () => ({
+  default: (await import('@app/features/block-form/database-forms-entry'))
+    .DatabaseFormEditors,
+}));
 
 export function TopBar(props: {
   databaseId: string;
@@ -44,6 +56,7 @@ export function TopBar(props: {
 }) {
   const databaseId = props.databaseId;
   const permissions = useGetPermissions();
+  const formsFlag = useFeatureFlag(enableForms);
   let editTitle: (() => void) | undefined;
   const name = () => props.detail?.database.name ?? 'Database';
   const openShare = useShareModal(() => {
@@ -56,6 +69,14 @@ export function TopBar(props: {
       name: detail.database.name,
       owner: detail.database.owner_id,
       userPermissions: permissions(),
+      // Form editors hold Edit here through their form: say so, and where.
+      audience: formsFlag().enabled
+        ? () => (
+            <Suspense>
+              <DatabaseFormEditors databaseId={databaseId} />
+            </Suspense>
+          )
+        : undefined,
     };
   });
   const rename = (next: string) =>
@@ -100,6 +121,17 @@ export function TopBar(props: {
                 canEdit={props.canEdit}
                 onSelect={props.onSelectTable}
               />
+              <Show when={formsFlag().enabled}>
+                <Suspense>
+                  <DatabaseFormsEntry
+                    databaseId={databaseId}
+                    tableId={props.activeTable?.table.id}
+                    tableName={props.activeTable?.table.name}
+                    canCreate={props.detail?.grant === 'owner'}
+                    enabled
+                  />
+                </Suspense>
+              </Show>
             </SplitToolbarLeft>
             <SplitToolbarRight>
               <DatabasePageActions

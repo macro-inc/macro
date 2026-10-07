@@ -21,6 +21,72 @@ use crate::domain::ports::{DatabasesRepo, DatabasesService};
 use crate::outbound::pg_definition_store::PgDefinitionStore;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn protected_schema_ops_are_refused_and_stale_writes_are_rechecked(pool: PgPool) {
+    let guests = guests(&pool).await;
+    // A write planned before the protection was registered must also be refused.
+    let planned = Writes {
+        database_id: guests.database_id,
+        created_by: viewer().user_id,
+        writes: vec![Write::DeleteColumn {
+            table_id: guests.table_id,
+            column_id: guests.name,
+            definition_id: guests.name_definition,
+            views: vec![],
+            related: None,
+        }],
+        related_rows: vec![],
+        expected_versions: vec![],
+        journal: crate::domain::journal::JournalPlan::default(),
+    };
+    sqlx::query!(
+        "INSERT INTO database_column_protections (column_id, capability) VALUES ($1, 'delete'), ($1, 'change_type')",
+        guests.name.into_uuid()
+    ).execute(&pool).await.unwrap();
+    let before = version(&pool, guests.table_id).await;
+    for change in [
+        ColumnChange::Delete,
+        ColumnChange::ChangeType {
+            to: ColumnKind::Number,
+        },
+    ] {
+        let result = service(&pool)
+            .apply_ops(
+                edit(guests.database_id),
+                viewer(),
+                vec![DatabaseOp::Column {
+                    table: guests.table_id,
+                    column: guests.name,
+                    change,
+                }]
+                .into(),
+            )
+            .await;
+        assert!(
+            matches!(result, Err(DatabaseError::InvalidOp(ref refusal)) if refusal.reason.contains("protected")),
+            "{result:?}"
+        );
+    }
+    let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    assert_eq!(
+        store.apply_writes(&planned).await.unwrap(),
+        WritesOutcome::ColumnProtected {
+            write: 0,
+            capability: crate::domain::models::ColumnProtection::Delete,
+        }
+    );
+    assert_eq!(version(&pool, guests.table_id).await, before);
+    let repository = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
+    assert!(
+        repository
+            .columns_for_tables(&[guests.table_id])
+            .await
+            .unwrap()
+            .iter()
+            .any(|column| column.id == guests.name)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(pool: PgPool) {
     let guests = guests(&pool).await;
     let before = version(&pool, guests.table_id).await;

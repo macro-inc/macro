@@ -746,6 +746,7 @@ export function SpreadsheetEditor(props: {
           editing={!!grid.editing()}
           complete={calculation.complete}
           selectionRequest={grid.editorSelection()}
+          references={grid.draftReferences()}
           pickingReference={
             grid.pickingReference() ||
             (isTouchDevice() && !!grid.referenceSelection())
@@ -867,6 +868,8 @@ export function SpreadsheetEditor(props: {
           }
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
+          referenceHighlights={grid.referenceHighlights()}
+          draftReferences={grid.draftReferences()}
           pickingReference={grid.pickingReference()}
           onTextSelection={grid.setTextSelection}
           onReferenceStart={grid.beginReference}
@@ -919,7 +922,14 @@ export function SpreadsheetEditor(props: {
           onClear={grid.clear}
           onGridReady={(element) => {
             gridElement = element;
-            if (props.autoFocus) focusGrid();
+            // The sheet loads asynchronously; never take focus from a dialog
+            // or control the user reached in the meantime.
+            const active = document.activeElement;
+            if (
+              props.autoFocus &&
+              (!active || active === document.body || active.contains(element))
+            )
+              focusGrid();
           }}
         />
       </Show>

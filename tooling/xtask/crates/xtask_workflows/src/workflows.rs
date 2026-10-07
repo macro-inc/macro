@@ -34,7 +34,6 @@ mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
-mod docs_check;
 mod ensure_daytona_snapshot;
 mod ios_preview;
 mod path_validation;
@@ -324,11 +323,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
-    },
-    WorkflowFile {
-        slug: "docs_check",
-        file_name: "docs-check.yml",
-        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

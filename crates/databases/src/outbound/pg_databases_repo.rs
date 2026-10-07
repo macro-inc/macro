@@ -524,7 +524,8 @@ where
     async fn columns_for_tables(&self, table_ids: &[TableId]) -> Result<Vec<Column>, Self::Error> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type
+            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type,
+                   ARRAY(SELECT capability FROM database_column_protections p WHERE p.column_id = database_columns.id ORDER BY capability) AS "protections!"
             FROM database_columns
             WHERE table_id = ANY($1)
             ORDER BY table_id, position
@@ -536,6 +537,14 @@ where
         rows.into_iter()
             .map(|row| {
                 Ok(Column {
+                    protections: row
+                        .protections
+                        .iter()
+                        .map(|value| value.parse())
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| {
+                            sqlx::Error::Decode("unknown database column protection".into())
+                        })?,
                     id: ColumnId::from_uuid(row.id),
                     table_id: TableId::from_uuid(row.table_id),
                     property_definition_id: row.property_definition_id,
