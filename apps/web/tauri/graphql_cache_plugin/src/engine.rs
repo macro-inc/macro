@@ -430,10 +430,22 @@ impl EngineHandle {
     /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
     /// unset (engine default).
     pub fn new(storage: TursoStorage, hot_capacity: Option<u32>) -> Self {
-        let engine = match hot_capacity.filter(|c| *c > 0) {
-            Some(cap) => Engine::with_capacity(storage, cap as usize),
-            None => Engine::new(storage),
-        };
+        Self::with_schema(storage, hot_capacity, cache_core::meta::bundled_schema())
+    }
+
+    /// Constructs the native engine with metadata loaded from its frontend bundle.
+    pub fn with_schema(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+    ) -> Self {
+        let engine = Engine::with_schema(
+            storage,
+            hot_capacity
+                .filter(|c| *c > 0)
+                .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+            schema,
+        );
         EngineHandle {
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(Mutex::new(EngineState {
@@ -478,6 +490,25 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
+    /// Validates and persists compatible metadata before publishing it to native operations.
+    pub async fn install_schema(
+        &self,
+        schema: &cache_core::meta::Schema,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let mut state = self.inner.lock().await;
+        let merged = state
+            .engine
+            .schema()
+            .merge(schema)
+            .map_err(|e| e.to_string())?;
+        persist_schema(path, &merged)?;
+        state
+            .engine
+            .install_schema(&merged)
+            .map_err(|e| e.to_string())
+    }
+
     /// Cache read; registers `op_id` as active when given.
     pub async fn read(
         &self,
@@ -514,9 +545,10 @@ impl EngineHandle {
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
         let mut state = self.inner.lock().await;
+        let schema = state.engine.schema_snapshot();
         let selection = state
             .selections
-            .get(document, fragment_name)
+            .get(&schema, document, fragment_name)
             .map_err(|error| error.to_string())?;
         let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
         state
@@ -987,3 +1019,25 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
+
+/// Atomically persists metadata separately from user records; no database reset occurs.
+pub(crate) fn persist_schema(
+    path: &std::path::Path,
+    schema: &cache_core::meta::Schema,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
+    let temporary = path.with_extension("json.tmp");
+    use std::io::Write;
+    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    drop(file);
+    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        std::fs::File::open(parent)
+            .and_then(|dir| dir.sync_all())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

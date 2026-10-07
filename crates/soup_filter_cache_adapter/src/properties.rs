@@ -114,6 +114,7 @@ fn extend_document(
 /// An absent property snapshot cannot establish completeness; it may only retain
 /// same-identity property proof already present in the current profile.
 pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStorage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -123,6 +124,7 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
     let changes = prepare(
+        schema,
         storage,
         query,
         operation,

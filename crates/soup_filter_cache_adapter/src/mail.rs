@@ -216,6 +216,7 @@ struct DraftState {
 /// Apply complete draft contributions without fabricating server capsules.
 /// This is shared by browser and desktop and independent of cached query pages.
 pub async fn draft_optimistic_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -244,7 +245,7 @@ pub async fn draft_optimistic_updates<S: Storage>(
     let record_key = RecordKey::new(key.to_string()).map_err(error)?;
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
-    let records = normalize(op, variables, data).map_err(error)?;
+    let records = normalize(schema, op, variables, data).map_err(error)?;
     let Some(record) = records.get(&key).filter(|record| {
         FIELDS
             .iter()
@@ -323,13 +324,14 @@ pub enum ProjectionError<S: std::error::Error + 'static> {
 /// Canonical preview edges are independent of the source query's view/filter.
 /// A missing v2 field cannot borrow completeness from an older projection.
 pub async fn projection_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
     variables: &Map<String, Value>,
     data: &Value,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
-    projection_updates_for_write(storage, query, operation, variables, data, true).await
+    projection_updates_for_write(schema, storage, query, operation, variables, data, true).await
 }
 
 /// Prepare Mail facts without consulting the old user's records when the write
@@ -337,6 +339,7 @@ pub async fn projection_updates<S: Storage>(
 /// partial incoming rows remain incomplete instead of borrowing old metadata.
 /// The cache engine, not this adapter, performs the actual identity reset.
 pub async fn projection_updates_for_write<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -370,7 +373,7 @@ pub async fn projection_updates_for_write<S: Storage>(
     }
     let parsed = Document::parse(query).map_err(error)?;
     let op = parsed.operation(operation).map_err(error)?;
-    let updates = normalize(op, variables, data)
+    let updates = normalize(schema, op, variables, data)
         .map_err(error)?
         .into_iter()
         .filter(|(key, record)| {

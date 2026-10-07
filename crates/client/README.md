@@ -18,6 +18,38 @@ pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
 `cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
 Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
+## Runtime GraphQL schema
+
+Desktop and mobile keep the cache engine and Turso storage in the native binary.
+The frontend bundle now supplies schema metadata as data, not executable code or
+WASM. Browser workers receive the same artifact through `configureCacheSchema`.
+
+`bun run gen-cache-runtime-schema` in `apps/web` validates
+`static_assets/schema.graphql` and generates `src/lib/graphql-cache/schema-artifact.json`.
+Frontend dev/build and GraphQL generation run it automatically; `bun run
+check-cache-runtime-schema` checks the committed artifact. Rust tests compare it
+with the independently validated SDL metadata to catch generator drift.
+
+Native startup calls `graphql_cache_init_with_schema`. This requires one native
+release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
+command. Older native binaries cannot accept runtime metadata. The frontend does
+not fall back to the old initialization command.
+
+An engine owns a validated schema snapshot; there is no mutable global schema.
+Compatible additions are merged under the native engine lock, including when an
+OTA reload leaves the process alive. Validated fragment caches include schema
+identity in their keys. Native `graphql-cache/schema.json` retains the compatible
+superset across restarts and rollbacks, so older windows and pending mutations can
+still reference earlier definitions. Schema installation neither resets records
+nor discards queued mutations or changes the durable storage generation.
+
+Metadata format/compatibility epochs must be supported by the installed engine.
+Conflicting field shapes, root types, or entity identities are rejected before
+publishing metadata or opening storage. These changes need an explicit migration;
+a native rebuild alone does not migrate the persisted metadata. Removed definitions
+are deliberately retained. Schema-driven normalization can accept new types, but
+handwritten search/filter projections and new IPC commands still need native code.
+
 ## Startup and integrity checks
 
 Normal opens validate schema, scope/version metadata, and pending mutation/optimistic

@@ -699,3 +699,78 @@ fn bad_transaction_id_is_an_error() {
     .unwrap_err();
     assert!(error.contains("invalid optimistic transaction id"));
 }
+
+#[test]
+fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_loss() {
+    block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("schema.json");
+        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+        let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+        let generation = handle.current_storage_generation().await.unwrap();
+        let mut artifact = cache_core::meta::bundled_schema().artifact().clone();
+        artifact
+            .types
+            .iter_mut()
+            .find(|t| t.name == "GraphqlUser")
+            .unwrap()
+            .fields
+            .push(cache_core::meta::OwnedFieldMeta {
+                name: "runtimeLabel".into(),
+                ty: cache_core::meta::OwnedFieldType {
+                    name: "String".into(),
+                    kind: cache_core::meta::FieldKind::Leaf,
+                    nullable: true,
+                    list: false,
+                    item_nullable: false,
+                },
+            });
+        let schema = cache_core::meta::Schema::from_artifact(artifact.clone()).unwrap();
+        handle.install_schema(&schema, &path).await.unwrap();
+        let query = "query { user { id runtimeLabel } }";
+        let data = serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}});
+        handle
+            .write(WriteRequest {
+                origin_op_id: None,
+                registration: None,
+                query: query.into(),
+                operation_name: None,
+                variables: Variables::new(),
+                data: data.clone(),
+                identity: None,
+            })
+            .await
+            .unwrap();
+        // Older windows/bundles may initialize again without downgrading metadata.
+        handle
+            .install_schema(&cache_core::meta::bundled_schema(), &path)
+            .await
+            .unwrap();
+        let persisted = std::fs::read_to_string(&path).unwrap();
+        let field = artifact
+            .types
+            .iter_mut()
+            .find(|t| t.name == "GraphqlUser")
+            .unwrap()
+            .fields
+            .iter_mut()
+            .find(|f| f.name == "runtimeLabel")
+            .unwrap();
+        field.ty.list = true;
+        let conflict = cache_core::meta::Schema::from_artifact(artifact).unwrap();
+        assert!(handle.install_schema(&conflict, &path).await.is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), persisted);
+        handle.shutdown().unwrap();
+        let schema = cache_core::meta::Schema::from_json(&persisted).unwrap();
+        let reopened =
+            EngineHandle::with_schema(database.open_or_reset("scope-1").unwrap(), None, schema);
+        assert_eq!(
+            reopened.current_storage_generation().await.unwrap(),
+            generation
+        );
+        assert!(
+            matches!(reopened.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: actual } if actual == data)
+        );
+        reopened.shutdown().unwrap();
+    });
+}

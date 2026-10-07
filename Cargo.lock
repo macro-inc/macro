@@ -3450,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.41"
+version = "0.6.42"
 dependencies = [
  "async-lock",
  "cache-core",

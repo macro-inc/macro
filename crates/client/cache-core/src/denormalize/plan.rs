@@ -16,11 +16,11 @@ pub(super) enum FieldSource<'a> {
     Missing(Cow<'a, str>),
     Stored {
         key: Cow<'a, str>,
-        ty: meta::FieldType,
+        ty: meta::FieldType<'a>,
     },
     Entity {
         key: EntityKey<'static>,
-        ty: meta::FieldType,
+        ty: meta::FieldType<'a>,
         storage_key: Cow<'a, str>,
     },
 }
@@ -39,6 +39,7 @@ pub(crate) struct ReadPlans<'a> {
 impl<'a> ReadPlans<'a> {
     pub(super) fn fields(
         &mut self,
+        schema: &'a crate::meta::Schema,
         selections: &'a [Selection],
         concrete: &str,
         variables: &serde_json::Map<String, Json>,
@@ -52,10 +53,10 @@ impl<'a> ReadPlans<'a> {
             return Ok(Arc::clone(fields));
         }
         let mut nodes = Vec::new();
-        collect_fields(selections, concrete, &mut nodes);
+        collect_fields(schema, selections, concrete, &mut nodes);
         let fields = nodes
             .into_iter()
-            .map(|node| compile_field(node, concrete, variables, entity_resolvers))
+            .map(|node| compile_field(schema, node, concrete, variables, entity_resolvers))
             .collect::<Result<Arc<[_]>, _>>()?;
         types.insert(concrete.to_owned(), Arc::clone(&fields));
         Ok(fields)
@@ -63,6 +64,7 @@ impl<'a> ReadPlans<'a> {
 }
 
 fn compile_field<'a>(
+    schema: &'a crate::meta::Schema,
     node: &'a FieldNode,
     concrete: &str,
     variables: &serde_json::Map<String, Json>,
@@ -75,10 +77,12 @@ fn compile_field<'a>(
         });
     }
     let metadata =
-        meta::field_meta(concrete, &node.name).ok_or_else(|| DenormalizeError::UnknownField {
-            type_name: concrete.to_owned(),
-            field: node.name.clone(),
-        })?;
+        schema
+            .field_meta(concrete, &node.name)
+            .ok_or_else(|| DenormalizeError::UnknownField {
+                type_name: concrete.to_owned(),
+                field: node.name.clone(),
+            })?;
     let resolver = entity_resolvers.get(concrete, &node.name);
     let arguments = match resolve_args(node, variables) {
         Ok(arguments) => arguments,
@@ -91,7 +95,7 @@ fn compile_field<'a>(
         Err(error) => return Err(error.into()),
     };
     let storage_key = match resolved_args_key(node, &arguments) {
-        Some(args) => Cow::Owned(field_key(&node.name, Some(&args))),
+        Some(args) => Cow::Owned(field_key(&node.name.as_str(), Some(&args))),
         None => Cow::Borrowed(node.name.as_str()),
     };
     let source = match resolver {
@@ -100,9 +104,11 @@ fn compile_field<'a>(
                 key,
                 storage_key,
                 ty: meta::FieldType {
-                    name: meta::type_meta(&resolver.target_type)
+                    name: schema
+                        .type_meta(&resolver.target_type)
                         .expect("compiled resolver target exists")
-                        .name,
+                        .name
+                        .as_str(),
                     ..metadata.ty
                 },
             },

@@ -1,7 +1,7 @@
-//! Build-time schema metadata codegen.
+//! Validated embedded schema for legacy Rust callers and generator parity tests.
 //!
 //! Parses the in-repo SDL schema and emits `$OUT_DIR/schema_meta.rs`: static
-//! lookup tables consumed by `src/meta.rs`.
+//! metadata consumed by `src/meta.rs`. Production hosts load bundle metadata.
 //!
 //! Key policy is the **presence-of-id convention**: an output object type
 //! with an `id: ID!` field is a normalized entity keyed by
@@ -110,7 +110,7 @@ fn main() {
                 let possible: Vec<String> = u.members.iter().map(|m| m.name.to_string()).collect();
                 entries.push((
                     name.clone(),
-                    type_meta_literal(&name, "Union", "None", "&[]", &possible),
+                    type_meta_literal(&name, "Union", "None", "vec![]", &possible),
                 ));
             }
             // Scalars, enums and input objects need no TypeMeta: field kinds
@@ -152,12 +152,12 @@ fn main() {
         .unwrap(),
     }
     writeln!(out, "pub static SCHEMA_HASH: &str = {schema_hash:?};").unwrap();
-    writeln!(out, "pub static TYPES: &[TypeMeta] = &[").unwrap();
+    writeln!(out, "static BUNDLED_SCHEMA: LazyLock<Arc<Schema>> = LazyLock::new(|| Schema::from_artifact(SchemaArtifact {{ format_version: 1, compatibility_epoch: crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH, query_root: QUERY_ROOT_TYPE.into(), mutation_root: MUTATION_ROOT_TYPE.map(str::to_owned), subscription_root: SUBSCRIPTION_ROOT_TYPE.map(str::to_owned), types: vec![").unwrap();
     for (_, literal) in &entries {
         writeln!(out, "    {literal},").unwrap();
     }
-    writeln!(out, "];").unwrap();
 
+    writeln!(out, "] }}).expect(\"valid bundled schema\"));").unwrap();
     let out_path = Path::new(&std::env::var("OUT_DIR").unwrap()).join("schema_meta.rs");
     std::fs::write(out_path, out).unwrap();
 }
@@ -186,7 +186,7 @@ fn key_literal<'a>(
         return "None".into();
     }
     match flatten_type(&fdef.ty) {
-        Ok((named, false, false, _)) if named == "ID" => r#"Some(&["id"])"#.into(),
+        Ok((named, false, false, _)) if named == "ID" => r#"Some(vec!["id".into()])"#.into(),
         _ => {
             errors.push(format!(
                 "`{name}.id` must be `ID!` (non-null, non-list) to satisfy the presence-of-id convention; rename it if it is not this object's identity"
@@ -205,11 +205,11 @@ fn type_meta_literal(
 ) -> String {
     let possible_list = possible
         .iter()
-        .map(|p| format!("{p:?}"))
+        .map(|p| format!("{p:?}.into()"))
         .collect::<Vec<_>>()
         .join(", ");
     format!(
-        "TypeMeta {{ name: {name:?}, kind: TypeKind::{kind}, key_fields: {key_literal}, fields: {fields_literal}, possible_types: &[{possible_list}] }}"
+        "TypeMeta {{ name: {name:?}.into(), kind: TypeKind::{kind}, key_fields: {key_literal}, fields: {fields_literal}, possible_types: vec![{possible_list}] }}"
     )
 }
 
@@ -253,12 +253,12 @@ fn fields_literal<'a>(
             }
         };
         parts.push(format!(
-            "FieldMeta {{ name: {:?}, ty: FieldType {{ name: {:?}, kind: FieldKind::{kind}, nullable: {nullable}, list: {list}, item_nullable: {item_nullable} }} }}",
+            "OwnedFieldMeta {{ name: {:?}.into(), ty: OwnedFieldType {{ name: {:?}.into(), kind: FieldKind::{kind}, nullable: {nullable}, list: {list}, item_nullable: {item_nullable} }} }}",
             fname.to_string(),
             named,
         ));
     }
-    format!("&[{}]", parts.join(", "))
+    format!("vec![{}]", parts.join(", "))
 }
 
 /// Flattens GraphQL type wrapping to (named, nullable, list, item_nullable).

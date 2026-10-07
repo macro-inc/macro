@@ -55,33 +55,68 @@ pub async fn graphql_cache_init<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
 ) -> Result<(), String> {
-    let mut guard = state
-        .0
-        .lock()
-        .map_err(|_| "graphql cache state poisoned".to_string())?;
-    if let Some(existing) = guard.as_ref() {
-        if existing.scope == scope {
-            return Ok(());
-        }
-        return Err(format!(
-            "graphql cache already initialized for scope {}, got {}",
-            existing.scope, scope
-        ));
-    }
+    // A pre-runtime-schema bundle may return after an OTA rollback. Retain
+    // persisted definitions needed by queued work instead of reverting to only
+    // the metadata embedded in the binary.
+    let schema_json = serde_json::to_string(cache_core::meta::bundled_schema().artifact())
+        .map_err(|error| error.to_string())?;
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_json).await
+}
+
+/// Loads bundle metadata while retaining native cache execution and native Turso storage.
+/// The dedicated command prevents old binaries from silently ignoring the schema payload.
+#[tauri::command]
+pub async fn graphql_cache_init_with_schema<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, CacheState>,
+    scope: String,
+    hot_capacity: Option<u32>,
+    schema_json: String,
+) -> Result<(), String> {
+    let incoming = cache_core::meta::Schema::from_json(&schema_json).map_err(|e| e.to_string())?;
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("graphql-cache");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let database =
-        TursoFileDatabase::new(dir.join("cache.turso")).map_err(|error| error.to_string())?;
-    let storage = database
-        .open_or_reset(&scope)
-        .map_err(|error| error.to_string())?;
-    let handle = EngineHandle::new(storage, hot_capacity);
-    *guard = Some(InitializedCache { scope, handle });
-    Ok(())
+    let schema_path = dir.join("schema.json");
+    let handle = {
+        let mut guard = state
+            .0
+            .lock()
+            .map_err(|_| "graphql cache state poisoned".to_string())?;
+        if let Some(existing) = guard.as_ref() {
+            if existing.scope != scope {
+                return Err("graphql cache scope mismatch".into());
+            }
+            existing.handle.clone()
+        } else {
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let schema = match std::fs::read_to_string(&schema_path) {
+                Ok(json) => cache_core::meta::Schema::from_json(&json)
+                    .and_then(|old| old.merge(&incoming))
+                    .map_err(|e| e.to_string())?,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    cache_core::meta::bundled_schema()
+                        .merge(&incoming)
+                        .map_err(|e| e.to_string())?
+                }
+                Err(error) => return Err(error.to_string()),
+            };
+            // Validate persisted metadata before opening or modifying user storage.
+            crate::engine::persist_schema(&schema_path, &schema)?;
+            let database =
+                TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
+            let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
+            let handle = EngineHandle::with_schema(storage, hot_capacity, schema);
+            *guard = Some(InitializedCache {
+                scope,
+                handle: handle.clone(),
+            });
+            handle
+        }
+    };
+    handle.install_schema(&incoming, &schema_path).await
 }
 
 /// Returns the current in-memory cache revision as a decimal string.
