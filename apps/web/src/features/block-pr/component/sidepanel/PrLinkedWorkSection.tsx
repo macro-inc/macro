@@ -11,7 +11,7 @@ import {
   type PrLinks,
   priorityTaskName,
 } from '../../data/pr-links';
-import { prLinksTarget, usePrLinksQuery } from '../../data/pr-links-query';
+import { prLinksTarget, usePrLinksQuery } from '../../queries/pr-links-query';
 import { PrPriorityIcon } from '../PrLinks';
 
 function LinkRow(props: {

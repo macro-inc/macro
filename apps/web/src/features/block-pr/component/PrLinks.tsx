@@ -107,8 +107,6 @@ function LinkPill(props: {
   class?: string;
 }) {
   const first = () => props.items[0];
-  const pillClass =
-    'inline-flex h-6 min-w-0 max-w-40 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
   const body = () => (
     <>
       <props.icon class="size-3 shrink-0" />
@@ -135,7 +133,10 @@ function LinkPill(props: {
             >
               <button
                 type="button"
-                class={cn(pillClass, props.class)}
+                class={cn(
+                  'inline-flex h-6 min-w-0 max-w-40 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  props.class
+                )}
                 aria-label={`Open linked ${props.kind.toLowerCase()}`}
                 {...isolate}
                 onClick={(event) => {
@@ -150,7 +151,10 @@ function LinkPill(props: {
         >
           <Popover placement="bottom-end" gutter={4} flip>
             <Popover.Trigger
-              class={cn(pillClass, props.class)}
+              class={cn(
+                'inline-flex h-6 min-w-0 max-w-40 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                props.class
+              )}
               aria-label={`${props.items.length} linked ${props.kind.toLowerCase()}s`}
               {...isolate}
               onClick={(event: MouseEvent) => event.stopPropagation()}

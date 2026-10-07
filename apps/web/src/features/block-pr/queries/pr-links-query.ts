@@ -20,7 +20,6 @@ import type { MessageParent } from '@service-agent-harness/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
-import { prHtmlUrl, toGithubKey } from '../util/prKey';
 import {
   buildPrLinks,
   type PrLinkSession,
@@ -28,7 +27,8 @@ import {
   type PrLinks,
   type PrLinkTask,
   type PrPriorityId,
-} from './pr-links';
+} from '../data/pr-links';
+import { prHtmlUrl, toGithubKey } from '../util/prKey';
 
 /** The batch endpoints answer at most one Reviews page at a time. */
 const LINKS_CHUNK_SIZE = 100;

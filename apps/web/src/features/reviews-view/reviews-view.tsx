@@ -10,7 +10,10 @@ import {
   useParams,
 } from '@app/lib/split-router';
 import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
-import { prLinksTarget, usePrLinksQuery } from '@block-pr/data/pr-links-query';
+import {
+  prLinksTarget,
+  usePrLinksQuery,
+} from '@block-pr/queries/pr-links-query';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
@@ -175,6 +178,10 @@ function ReviewsRoot() {
   );
   // Link filters cannot match rows before their links arrive, so an empty
   // result waits for them instead of claiming nothing matches.
+  // A failed link batch can hide every row under a link filter, so the list
+  // then reports it with a retry instead of an empty result.
+  const linkFilterFailed = () =>
+    hasLinkFilters(activeFilters()) && links.isError();
   const listSource = {
     ...source,
     isLoading: () =>
@@ -182,6 +189,15 @@ function ReviewsRoot() {
       (hasLinkFilters(activeFilters()) &&
         links.isLoading() &&
         reviews().length === 0),
+    error: () =>
+      source.error() ??
+      (linkFilterFailed() && reviews().length === 0
+        ? new Error('Pull request links couldn’t be loaded')
+        : undefined),
+    retry: () => {
+      if (links.isError()) void links.retry();
+      return source.retry();
+    },
   };
   const openLink = (content: SplitContent, newSplit: boolean) =>
     layout.openWithSplit(content, { preferNewSplit: newSplit });
