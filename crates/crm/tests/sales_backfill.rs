@@ -1,6 +1,10 @@
 //! Migration coverage with real source properties, database constraints and access.
 #![cfg(feature = "outbound")]
 
+use databases::{
+    domain::storage::DatabaseStorageService,
+    outbound::gateway_event_publisher::NoOpTableEventPublisher, wiring::build_service,
+};
 use entity_access::{
     domain::{
         models::{EntityType as AccessEntityType, ViewAccessLevel},
@@ -10,11 +14,14 @@ use entity_access::{
     outbound::PgAccessRepository,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_databases::{DatabaseId, TableId};
 use models_properties::{EntityReference, EntityType, service::property_value::PropertyValue};
 use properties::{PropertiesPgRepo, domain::database_cell_writer::DatabaseCellWriter};
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::Arc;
 use system_properties::{StageOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -254,6 +261,36 @@ async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) 
             "core storage must not grant database app access"
         );
     }
+}
+
+#[sqlx::test(migrations = false)]
+async fn copied_pipelines_open_with_their_columns_in_order(pool: PgPool) {
+    let team = fixture(&pool).await;
+    company(&pool, team, false).await;
+    migrate(&pool).await.unwrap();
+    let (_, database, table) = pipeline(&pool, team).await;
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let tables = build_service(
+        pool.clone(),
+        access,
+        NoOpTableEventPublisher,
+        NoopMacroEventBroker,
+    )
+    .storage_tables(DatabaseId::from_uuid(database))
+    .await
+    .unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].table.id, TableId::from_uuid(table));
+    assert_eq!(
+        tables[0]
+            .columns
+            .iter()
+            .map(|column| column.definition.definition.display_name.as_str())
+            .collect::<Vec<_>>(),
+        ["Company", "Stage", "Owner", "Revenue"]
+    );
 }
 
 #[sqlx::test(migrations = false)]
