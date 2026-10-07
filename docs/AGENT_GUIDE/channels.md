@@ -1024,4 +1024,8 @@ reconnecting.
 Members see the picture without editing controls. One-to-one direct messages
 continue to show the other person's user picture.
 
+Opening the slash menu with `/` lists Normal Text, headings, and the other
+Markdown options before Database. Typing `/database` filters to the Database
+action.
+
 When Databases is enabled, type `/database` in a channel message or thread reply and choose **Database** to insert a live question. Ask with Enter or the Ask button, then accept the answer before sending the message. Enter in the question box belongs to the question and must not send the channel draft. Recipients can read the live answer subject to their database access.

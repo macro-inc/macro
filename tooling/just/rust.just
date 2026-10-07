@@ -133,3 +133,10 @@ setup_macrodb:
     just crates/macro_db_client/migrate_db
 
 initialize_dbs: setup_macrodb
+
+# Migrate template1 so each `#[sqlx::test]` database starts with the macrodb schema:
+# Postgres clones template1 for every CREATE DATABASE, which leaves the test migrator
+# nothing to apply. Every database created on this server afterwards gets the schema
+# too, so only run it against a Postgres dedicated to one checkout, such as CI's.
+setup_test_template:
+    cd crates/macro_db_client && sqlx migrate run --database-url {{ replace(DATABASE_URL, "/macrodb", "/template1") }}

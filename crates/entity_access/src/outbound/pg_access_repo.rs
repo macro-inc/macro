@@ -333,6 +333,32 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::list_form_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let form_uuid = form_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid form ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_row_access(
         &self,
         row_id: &str,
@@ -518,6 +544,9 @@ impl AccessRepository for PgAccessRepository {
                     &source_ids,
                 )
                 .await
+            }
+            EntityType::Form => {
+                queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await
             }
             EntityType::User
             | EntityType::Channel

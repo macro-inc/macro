@@ -21,6 +21,7 @@ import BracketsCurly from '@phosphor/brackets-curly.svg';
 import Building from '@phosphor/building.svg';
 import BuildingOffice from '@phosphor/building-office.svg';
 import Calendar from '@phosphor/calendar.svg';
+import ClipboardText from '@phosphor/clipboard-text.svg';
 import ClockClockwise from '@phosphor/clock-clockwise.svg';
 import Code from '@phosphor/code.svg';
 import Database from '@phosphor/database.svg';
@@ -60,6 +61,7 @@ import BracketsCurlyBold from '@phosphor-icons/core/bold/brackets-curly-bold.svg
 import BuildingBold from '@phosphor-icons/core/bold/building-bold.svg';
 import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.svg';
 import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
+import ClipboardTextBold from '@phosphor-icons/core/bold/clipboard-text-bold.svg';
 import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
 import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
 import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
@@ -206,6 +208,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'Database',
+  },
+  form: {
+    icon: ClipboardText,
+    boldIcon: ClipboardTextBold,
+    foreground: 'text-violet',
+    background: 'bg-violet/20',
+    prettyName: 'Form',
   },
   html: {
     icon: FileHtml,
@@ -682,6 +691,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_company' }, () => 'crm_company')
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
+    .with({ type: 'form' }, () => 'form')
     .exhaustive();
 }
 

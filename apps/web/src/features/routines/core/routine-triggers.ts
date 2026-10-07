@@ -1,4 +1,5 @@
 import { getDefaultTimezone } from '@core/util/cron';
+import { match } from 'ts-pattern';
 import { z } from 'zod';
 
 export const scheduleTriggerSchema = z.object({
@@ -37,6 +38,8 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
       )
       .min(1),
     ids: z.array(z.string().uuid()).optional(),
+    /** Yes/no question the event's content must answer with yes. */
+    condition: z.string().optional(),
   }),
 ]);
 export type ScheduleTriggerDraft = z.infer<typeof scheduleTriggerSchema>;
@@ -138,6 +141,17 @@ export function eventScopeKind(trigger: EventTriggerDraft) {
   return 'CHANNEL';
 }
 
+export const MAX_CONDITION_CHARS = 500;
+
+export function conditionPlaceholder(trigger: EventTriggerDraft) {
+  return match(eventScopeKind(trigger))
+    .with('THREAD', () => 'Is this email an invoice or a receipt?')
+    .with('TASK', () => 'Is this task a bug report?')
+    .with('DOCUMENT', () => 'Is this document meeting notes?')
+    .with('CHANNEL', () => 'Is someone asking for help?')
+    .exhaustive();
+}
+
 export function isGlobalEvent(events: readonly RoutineEventName[]) {
   return events.every(
     (event) => event.endsWith('.created') || event === 'email.message_received'
@@ -179,6 +193,19 @@ export function newScheduleTrigger(
     cron: '0 0 9 * * *',
   };
 }
+function validateEventTrigger(
+  trigger: EventTriggerDraft,
+  creating: boolean
+): string | null {
+  if (!trigger.events.length) return 'Choose an activity event.';
+  if (creating && trigger.ids?.length === 0)
+    return 'Choose at least one item for this event trigger.';
+  if ((trigger.ids?.length ?? 0) > 100)
+    return 'Choose up to 100 items per event trigger.';
+  if ([...(trigger.condition?.trim() ?? '')].length > MAX_CONDITION_CHARS)
+    return `Keep the condition under ${MAX_CONDITION_CHARS} characters.`;
+  return null;
+}
 export function validateTriggers(
   triggers: RoutineTriggerDraft[],
   creating = false
@@ -193,11 +220,8 @@ export function validateTriggers(
     return 'A routine can have up to 32 activity filters.';
   for (const trigger of triggers) {
     if (trigger.kind === 'event') {
-      if (!trigger.events.length) return 'Choose an activity event.';
-      if (creating && trigger.ids?.length === 0)
-        return 'Choose at least one item for this event trigger.';
-      if ((trigger.ids?.length ?? 0) > 100)
-        return 'Choose up to 100 items per event trigger.';
+      const error = validateEventTrigger(trigger, creating);
+      if (error) return error;
       continue;
     }
     if (trigger.frequency === 'once') {

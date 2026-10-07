@@ -2271,6 +2271,21 @@ session were not exercised by that UI check.
 
 ## Notifications
 
+In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
+controls system notification delivery for this installation. When the Notifications
+page is disabled by its feature flag, the existing **Account → Notifications**
+switch controls the same preference.
+Turning it off takes effect immediately and persists across app restarts; turning
+it on requests permission and resumes delivery when authorized. On macOS the
+switch reads the actual system authorization, and enabling it requests macOS
+permission if it has not been decided. If macOS reports denial, enabling the switch
+shows directions to **System Settings → Notifications → Macro → Allow notifications**
+without requesting permission again; returning to Macro refreshes the switch.
+It does not change inbox items or other devices. Focus and presentation settings
+can still suppress alerts even when authorization is granted.
+Verify off/on and persistence after restarting; on the Notifications page, a failed
+toggle should show an error toast and allow retry.
+
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel
 must be enabled. Remote push owns system notification display after registration,

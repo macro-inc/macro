@@ -1,4 +1,4 @@
-import { databasesKeys } from '@queries/storage/keys';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,8 +7,11 @@ import { type RenameDatabaseClient, renameDatabase } from './rename-database';
 const cache = vi.hoisted(() => ({
   setQueryData: vi.fn(),
   invalidateQueries: vi.fn(async () => undefined),
+  getQueryData: vi.fn(() => undefined),
+  getQueriesData: vi.fn(() => []),
 }));
 vi.mock('@queries/client', () => ({ queryClient: cache }));
+vi.mock('@queries/preview', () => ({ invalidatePreview: vi.fn() }));
 beforeEach(() => vi.clearAllMocks());
 
 describe('rename database', () => {
@@ -40,6 +43,15 @@ describe('rename database', () => {
     });
     expect(cache.invalidateQueries).toHaveBeenCalledWith({
       queryKey: databasesKeys.detail('db').queryKey,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.detail._def,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.forDatabase('db').queryKey,
+    });
+    expect(cache.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: formsKeys.list.queryKey,
     });
   });
 

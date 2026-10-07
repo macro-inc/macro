@@ -23,7 +23,7 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::SoupItemDataLoader,
+    loaders::{AgentSessionEntityLoader, SoupItemDataLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
         SoupEntityEdges, SoupPage, SoupPatch,
@@ -125,9 +125,10 @@ where
     }
 }
 
-/// Fetch one agent session the viewer can see, through the same access-
-/// filtered loader the Soup list uses, so a session outside their grants
-/// reads as absent rather than as an error.
+/// Fetch one agent session the viewer can see, through the same access
+/// filter the Soup list uses, so a session outside their grants reads as
+/// absent rather than as an error. Reads the primary: see
+/// [`AgentSessionEntityLoader`].
 pub async fn resolve_soup_agent_session<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -136,7 +137,7 @@ pub async fn resolve_soup_agent_session<Edges>(
 where
     Edges: SoupEntityEdges,
 {
-    let loader = ctx.data::<SoupItemDataLoader>()?;
+    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
     let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
     let Some(item) = loader.load_one((user_id, entity)).await? else {
         return Ok(None);

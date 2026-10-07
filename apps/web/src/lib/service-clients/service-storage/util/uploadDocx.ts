@@ -1,4 +1,5 @@
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
+import type { MinimalWebSocket } from '@macro-inc/collaboration/websocket/platform/minimal-websocket';
 import {
   createWebsocketPromiseChain,
   JobTypeEnum,
@@ -7,7 +8,7 @@ import {
 
 const PROMISE_TIMEOUT_MS = 15000; // 15 seconds
 
-export function uploadDocx(ws: WebSocket) {
+export function uploadDocx(ws: MinimalWebSocket) {
   const websocketChain = createWebsocketPromiseChain(
     {
       jobType: JobTypeEnum.DocxUpload,
