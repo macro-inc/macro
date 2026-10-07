@@ -52,6 +52,47 @@ test('completes formulas and inserts a pointer-selected range without losing the
   await expect(page.locator('[data-address="C2"]')).toHaveText('30');
 });
 
+test('color-codes the referenced ranges and their formula text while editing', async ({
+  page,
+}) => {
+  await page.locator('[data-address="C2"]').dblclick();
+  const input = page.getByRole('textbox', { name: 'Edit C2' });
+  await input.fill('=B2+SUM(B2:B3)*$b$2');
+  const highlights = page.locator('[data-formula-highlight]');
+  await expect(highlights).toHaveCount(3);
+  const colors = await highlights.evaluateAll((elements) =>
+    elements.map((element) => getComputedStyle(element).borderTopColor)
+  );
+  expect(colors[0]).toBe(colors[2]);
+  expect(colors[1]).not.toBe(colors[0]);
+  const cell = await page.locator('[data-address="B2"]').boundingBox();
+  const box = await highlights.first().boundingBox();
+  expect(Math.abs((box?.x ?? 0) - (cell?.x ?? 0))).toBeLessThan(2);
+  expect(Math.abs((box?.y ?? 0) - (cell?.y ?? 0))).toBeLessThan(2);
+
+  const formulaBar = page.getByRole('textbox', { name: 'Formula bar' });
+  for (const editor of [input, formulaBar]) {
+    const mirror = editor.locator(
+      'xpath=following-sibling::*[@data-formula-mirror]'
+    );
+    await expect(mirror).toHaveText('=B2+SUM(B2:B3)*$b$2');
+    const coloredText = await mirror
+      .locator('span span')
+      .evaluateAll((spans) =>
+        spans
+          .filter((span) => (span as HTMLElement).style.color)
+          .map((span) => [span.textContent, getComputedStyle(span).color])
+      );
+    expect(coloredText.map(([text]) => text)).toEqual(['B2', 'B2:B3', '$b$2']);
+    expect(coloredText.map(([, color]) => color)).toEqual(colors);
+    expect(await mirror.boundingBox()).toEqual(await editor.boundingBox());
+  }
+
+  await input.press('Enter');
+  await expect(highlights).toHaveCount(0);
+  await expect(page.locator('[data-formula-mirror]')).toHaveCount(0);
+});
+
 test('keeps function insertion, find, and paste menu focus usable from the ribbon', async ({
   page,
 }) => {

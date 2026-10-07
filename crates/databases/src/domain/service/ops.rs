@@ -552,6 +552,12 @@ fn applied(
             column_of(write),
             "the column was removed or changed by someone else; refresh and try again",
         )),
+        WritesOutcome::ColumnProtected { write, capability } => Err(refuse(
+            write,
+            None,
+            column_of(write),
+            SchemaError::ColumnProtected { capability }.to_string(),
+        )),
         WritesOutcome::ColumnRenamedElsewhere { write } => Err(refuse(
             write,
             None,

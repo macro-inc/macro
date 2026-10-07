@@ -190,3 +190,27 @@ fn display_lists_bot_typed_entity_access_grant() {
         "entity_access bot bot|00000000-0000-0000-0000-000000000123 owner"
     );
 }
+
+#[test]
+fn editing_a_form_is_edit_on_its_database() {
+    let form_id = Uuid::from_u128(7);
+    let grant = AccessGrant::ViaForm { form_id };
+    assert_eq!(
+        grant.permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(grant.to_string(), format!("via_form {form_id} edit"));
+}
+
+#[test]
+fn a_public_form_is_view() {
+    assert_eq!(
+        AccessGrant::PublicForm.permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+    assert_eq!(AccessGrant::PublicForm.to_string(), "public_form view");
+}

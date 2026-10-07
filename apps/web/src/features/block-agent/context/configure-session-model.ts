@@ -5,6 +5,45 @@ import {
 } from '../state/session-config';
 import { confirmSessionControl } from './confirm-session-control';
 
+/**
+ * Resolve once the runtime has reported its configuration. A new session's
+ * fold may be loaded before the `session/new` reply lands, with nothing yet to
+ * compare a model or effort against.
+ */
+export function sessionConfigReported(
+  session: Pick<AgentSession, 'snapshot' | 'subscribe'>
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let finished = false;
+    const finish = (error?: Error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timeout);
+      unsubscribe();
+      if (error) reject(error);
+      else resolve();
+    };
+    const inspect = async () => {
+      try {
+        const snapshot = await session.snapshot();
+        if (snapshot.metadata.configOptions.length > 0) finish();
+      } catch (error) {
+        finish(
+          error instanceof Error
+            ? error
+            : new Error('Could not read the session configuration.')
+        );
+      }
+    };
+    const timeout = setTimeout(
+      () => finish(new Error('The agent did not report its configuration.')),
+      60_000
+    );
+    const unsubscribe = session.subscribe(() => void inspect());
+    void inspect();
+  });
+}
+
 /** Validate against the model's confirmed runtime snapshot before setting effort. */
 export async function configureSessionModel(
   session: Pick<AgentSession, 'issue' | 'snapshot' | 'subscribe'>,

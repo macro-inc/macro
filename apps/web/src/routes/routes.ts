@@ -62,6 +62,13 @@ export const publicBookingRoute = defineRoute({
   externalSearch: '*',
 });
 
+/** A form's respond page, outside the split layout so public forms skip login. */
+export const formRespondRoute = defineRoute({
+  id: 'form-respond',
+  path: 'form/:formId/respond',
+  externalSearch: '*',
+});
+
 export const bookingReceiptRoute = defineRoute({
   id: 'booking-receipt',
   path: 'booking/:id',

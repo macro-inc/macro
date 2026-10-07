@@ -23,6 +23,7 @@ import { Dropdown } from '@ui/components/Dropdown';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useColumnUsage } from '../context/column-usage';
 import { useOptionEditing } from '../context/option-editing';
 import {
   columnSchemaMessage,
@@ -32,6 +33,7 @@ import {
   type DatabaseSchemaChange,
 } from '../core/column-schema';
 import { type DatabaseViewColumn, isOptionColumn } from '../core/database-view';
+import { columnDeleteNote } from '../core/forms-usage';
 import {
   ColumnTypeMenu,
   type DatabaseColumnConversionChoice,
@@ -79,6 +81,7 @@ export type DatabaseColumnHeaderProps = {
 
 /** Header interactions stay local; the host supplies the persisted rename. */
 export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
+  const columnUsage = useColumnUsage();
   const [operating, setOperating] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [deleteOpen, setDeleteOpen] = createSignal(false);
@@ -249,8 +252,11 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
             label: 'Delete column',
             icon: TrashIcon,
             group: 'delete',
+            disabled: props.column.protections?.includes('delete') ?? false,
             run: () => {
+              if (props.column.protections?.includes('delete')) return;
               setError('');
+              columnUsage?.prepare();
               setDeleteOpen(true);
             },
           },
@@ -372,6 +378,16 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                           }
                         >
                           <Dropdown.Group>
+                            <Show
+                              when={
+                                group === 'delete' &&
+                                props.column.protections?.includes('delete')
+                              }
+                            >
+                              <Dropdown.Item disabled>
+                                Protected column — required by its feature
+                              </Dropdown.Item>
+                            </Show>
                             <For
                               each={actions().filter(
                                 (action) => action.group === group
@@ -606,6 +622,14 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               “{props.column.name}” and its values in this table will be
               deleted.
             </p>
+            <Show
+              when={
+                columnUsage &&
+                columnDeleteNote(columnUsage.usage(props.column.id))
+              }
+            >
+              {(note) => <p class="mt-2">{note()}</p>}
+            </Show>
             <Show when={error()}>
               <p role="alert" class="mt-2 text-failure-ink">
                 {error()}

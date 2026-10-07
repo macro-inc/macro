@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, title, description, kind, gate_rules, gate_message, booking_target\n        FROM form_sections WHERE form_id = $1\n        ORDER BY position, id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "gate_rules",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "gate_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "booking_target",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "8decbb0d1133a6b0b2cdbd4aa8db612edd5f80b51f15f3a6394611c0c35c828d"
+}

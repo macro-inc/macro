@@ -1,4 +1,4 @@
-use authentication_service::service::signup_policy::SignupPolicyDenial;
+use crate::service::signup_policy::SignupPolicyDenial;
 
 use super::*;
 
