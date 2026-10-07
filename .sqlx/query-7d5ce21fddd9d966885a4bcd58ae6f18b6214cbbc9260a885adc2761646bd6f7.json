@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Records', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d5ce21fddd9d966885a4bcd58ae6f18b6214cbbc9260a885adc2761646bd6f7"
+}

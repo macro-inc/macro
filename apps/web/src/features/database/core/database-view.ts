@@ -19,9 +19,13 @@ export type DatabaseViewColumn = {
   isMultiSelect: boolean;
   options: DatabaseOption[];
   writable: boolean;
+  /** The preferred field for record titles and initial focus. */
+  primary?: boolean;
   specificEntityType?: DatabaseEntityType | null;
   /** A new, empty Text column may adopt the type of its first entry. */
   inferType?: boolean;
+  /** Whether a row may omit this cell. Defaults to true for legacy sources. */
+  nullable?: boolean;
   /** Schema actions reserved by the feature using this column. */
   protections?: ('delete' | 'change_type')[];
   /** The column's definition is used beyond this database, so its options change everywhere. */

@@ -389,6 +389,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Skill
             | EntityType::ScheduledAction
             | EntityType::Reminder
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::Form => {
                 return Err(rootcause::report!(

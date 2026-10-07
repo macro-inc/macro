@@ -1814,6 +1814,34 @@ editors without changing hosted data.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
 The sidebar's Views and Lists sections can also collapse independently.
 
+**Pipelines** in the CRM sidebar hold company or contact entries in the shared
+records editor. They have their own identity, ownership and sharing; their
+storage does not appear as a separate database in navigation.
+**New pipeline** is disabled until the team's CRM is enabled. For a new team,
+use **Open CRM settings** in the empty state to enable CRM, then return to
+Customers to create a pipeline. Verify this with a newly created team as well as
+an existing CRM-enabled team.
+Choose **New pipeline**, enter a name, choose **Companies** or **Contacts**, and
+choose **Just me** (the default) or **My team**. Creating opens the pipeline's
+editable table. Team members can edit shared pipelines; the creator owns them
+and can change access later through the standard **Share** dialog. Under
+**Team access**, choose **Edit** to share with the team or **None** to make the
+pipeline private. **Copy Link** copies a CRM link that opens this pipeline for
+anyone who has access. On mobile, team access is in the **Team** tab.
+
+The first column is a required company/contact reference. The same company or
+contact can occur in multiple rows in a pipeline and can also belong to other
+pipelines. Each row has its own field values; **Duplicate** copies a row into a new
+entry referencing the same company or contact. The reference column
+can be renamed but cannot be removed or changed to another type. Stage, Owner,
+and Revenue are independent pipeline fields; editing them does not modify the
+company's CRM fields. Use **Add column** or a column header's menu to customize
+columns. Pipeline Stage options initially copy the team's current deal stages. Open
+pipelines refresh other editors' changes periodically; a local edit refreshes
+immediately after saving.
+**Trash pipeline** removes its table from navigation without deleting the linked
+companies or contacts. **Back to companies** returns to the main CRM views.
+
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
 Existing list data is preserved; a restored list view returns to All companies while
@@ -2046,6 +2074,9 @@ auto-join must keep working beyond five members and the former stage-plan limits
 Free-team joins do not create a paid subscription, bill a seat, or grant premium
 roles. Teams with an existing paid subscription retain their per-seat billing;
 enterprise teams retain their billing bypass.
+
+On a local stack started with `--no-doppler`, verify free-team creation from a
+fresh passwordless signup. It must work without Stripe credentials.
 
 Under **Team**, owners/admins can turn **Auto-join on domain** off and can restrict
 invitations to admins with **Members can invite**. These controls still apply.

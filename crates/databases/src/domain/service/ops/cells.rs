@@ -9,14 +9,14 @@ use models_properties::shared::{DataType, EntityReference};
 use super::super::column_types::is_complete_url;
 use super::super::{option_label_key, takes_options};
 use super::{Place, Planner, RelatedRow};
-use crate::domain::catalog::{self, ColumnEntry, TableEntry, entity_type};
+use crate::domain::catalog::{self, ColumnEntry, StorageTable, entity_type};
 use crate::domain::models::{CellChanges, ColumnConfig, DatabaseError};
 
 impl Planner {
     /// One row's cells as stored values; `None` empties a cell.
     pub(super) fn cells(
         &mut self,
-        entry: &TableEntry,
+        entry: &StorageTable,
         op: usize,
         row: Option<usize>,
         cells: &[CellWrite],

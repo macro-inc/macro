@@ -1446,6 +1446,21 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
     ));
+    let pipeline_service = Arc::new(crm::domain::pipelines::PipelineServiceImpl::new(
+        crm::outbound::pipelines::PgPipelineRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        ),
+        databases_service.clone(),
+        entity_access_service.clone(),
+        crm::outbound::stage_definitions::PropertiesStageDefinitionStore::new(
+            properties_service.clone(),
+        ),
+    ));
+
     let forms_service = Arc::new(forms::wiring::build_service(
         db.clone(),
         databases_service.clone(),
@@ -2041,6 +2056,11 @@ pub async fn run() -> anyhow::Result<()> {
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
+        pipeline_state: crm::inbound::pipelines::PipelineRouterState {
+            service: pipeline_service,
+            access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(

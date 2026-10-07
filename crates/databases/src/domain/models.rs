@@ -778,7 +778,8 @@ pub struct CommittedChange {
 
 /// What a committed batch answers: a result per op, and the journal's change
 /// for each table version it produced.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct AppliedOps {
     /// One result per op, in order.
     pub results: Vec<models_databases::OpResult>,
@@ -787,12 +788,15 @@ pub struct AppliedOps {
 }
 
 /// A batch of ops for one database and the versions its tables must be at.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OpBatch {
     /// The ops, in the order they apply.
     pub ops: Vec<DatabaseOp>,
     /// The version each named table must still be at; the batch is refused
     /// as a conflict if one moved. Without one, ops are last-write-wins.
+    #[serde(default)]
+    #[schema(value_type = HashMap<String, TableVersion>)]
     pub base_versions: HashMap<TableId, TableVersion>,
 }
 

@@ -12,6 +12,36 @@ fn local_env() -> BTreeMap<String, String> {
     env
 }
 
+#[test]
+fn local_macro_api_tokens_can_be_signed_and_verified() {
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let env = local_env();
+    let claims = serde_json::json!({
+        "iss": env["MACRO_API_TOKEN_ISSUER"],
+        "exp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 60,
+        "macro_user_id": "macro|local@example.test",
+    });
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = Some("macro".into());
+    let token = jsonwebtoken::encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PRIVATE_SECRET_KEY"].as_bytes()).unwrap(),
+    )
+    .unwrap();
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_issuer(&[&env["MACRO_API_TOKEN_ISSUER"]]);
+    let decoded = jsonwebtoken::decode::<serde_json::Value>(
+        &token,
+        &DecodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PUBLIC_KEY"].as_bytes()).unwrap(),
+        &validation,
+    )
+    .unwrap();
+    assert_eq!(decoded.claims, claims);
+}
+
 /// Every key a local service relies on must be present — this is the test that
 /// replaces "someone remembers to update defaults.env".
 #[test]

@@ -3309,6 +3309,10 @@ Canonical entity types accepted by cross-entity APIs.
 """
 enum GraphqlEntityType {
 	"""
+	CRM pipeline entity.
+	"""
+	CRM_PIPELINE
+	"""
 	Document entity.
 	"""
 	DOCUMENT

@@ -50,6 +50,16 @@ describe('record title', () => {
         [name, entity]
       )
     ).toBe('Launch plan');
+    // Moving a custom column before a pipeline's primary reference keeps its identity.
+    expect(
+      rowTitle(
+        {
+          rowId: 'row',
+          cells: { person: 'macro|ada@example.com', name: 'Launch plan' },
+        },
+        [name, { ...entity, primary: true }]
+      )
+    ).toBe('Linked record');
   });
 });
 

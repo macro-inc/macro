@@ -71,5 +71,5 @@ sharing, navigation, Forms integration and concrete network clients in
 The API-only browser fixture is in
 `../block-database/browser-test/api.tsx`. It exercises pagination, row edits,
 column creation, permission changes and board rendering without app providers
-beyond the query client. CRM wiring belongs in the CRM feature after it rebases
-on this extraction.
+beyond the query client. The CRM feature uses `createPipelineApi` and the same provider/controller; its
+browser fixture is `../crm/browser-test/editor.tsx`.

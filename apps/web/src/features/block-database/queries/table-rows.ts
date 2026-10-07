@@ -1,3 +1,7 @@
+import { toViewColumn } from '../../database/queries/column-detail';
+
+export { toViewColumn } from '../../database/queries/column-detail';
+
 import { databaseSqlSchema } from '@core/database-sql/catalog';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import type { DatabaseSqlReadReason } from '@core/database-sql/trace';
@@ -43,10 +47,7 @@ import {
   type DatabaseColumnType,
   inferDatabaseNumber,
 } from '../../database/core/column-inference';
-import type {
-  DatabaseCellValue,
-  DatabaseViewColumn,
-} from '../../database/core/database-view';
+import type { DatabaseCellValue } from '../../database/core/database-view';
 import { gridRows } from '../../database/core/grid-cells';
 import { writeDatabaseRow } from '../../database/core/row-write';
 import type {
@@ -64,36 +65,6 @@ import {
   refreshChangedRows,
   type TableChangesCapabilities,
 } from './table-changes';
-
-export function toViewColumn(column: ColumnDetail): DatabaseViewColumn {
-  const relation =
-    column.column.config?.kind === 'link' ? column.column.config : undefined;
-  return {
-    id: column.column.id,
-    name:
-      column.column.display_name ?? column.definition.definition.display_name,
-    dataType: column.definition.definition.data_type,
-    isMultiSelect: !!relation || column.definition.definition.is_multi_select,
-    options: column.definition.property_options.map((option) => ({
-      id: option.id,
-      label: String(option.value.value),
-      color: option.color,
-    })),
-    writable: column.writable,
-    sharedOutsideDatabase: column.shared_outside_database,
-    ...(relation
-      ? {
-          relation: {
-            databaseId: relation.database_id,
-            tableId: relation.table_id,
-          },
-        }
-      : {}),
-    specificEntityType: column.definition.definition.specific_entity_type,
-    inferType: column.column.infer_type,
-    protections: column.column.protections,
-  };
-}
 
 /** A stale table or column name, which a refreshed schema may resolve. */
 function isStaleSchema(

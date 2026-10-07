@@ -25,14 +25,26 @@ Collaboration surfaces are a similar reusable resource; this change does not
 turn them into entities or change their parent-based access model.
 
 `DatabaseStorage` exposes allocation, validated storage batches, and deletion
-without app metadata. A future CRM domain can hold its own reference to a core
-database and authorize access through its own service. Its composition root
+without app metadata. The CRM pipeline domain holds its own reference to core
+storage and authorizes access through its own service. Its composition root
 supplies the storage adapter. The port is trusted persistence, not a new public
 API: consumers validate their own commands and authorize their own resources.
 The Macro database service creates its entity and owner grant atomically through
 its repository and uses `CellStore` to hold the entity's lifecycle lock during writes.
 Both paths use the same transaction engine, table versions, cells and journal.
 An app entity's foreign key prevents deleting its storage through the core port.
+
+`DatabaseStorageService` reuses the typed operation planner for hosts that accept
+`DatabaseOp` batches. It reads schema and paginated cells without app metadata,
+then writes through `DatabaseStorage::apply_storage_writes`; it does not mint
+app access receipts or publish app-entity events. The host holds its lifecycle
+guard while it calls the service. External property bindings and relations are
+refused unless a future host-specific capability authorizes them.
+
+`DatabaseStorageProvisioner` creates an initial schema in its host's transaction.
+CRM commits pipeline metadata, grants, and storage together through this port,
+without creating a `database_entities` row. The one-time legacy Sales copy runs
+through the normal SQLx migration runner.
 
 The migration is a destructive cutover: it discards existing database content,
 grants, saved queries, journal entries, and starter markers, then removes app
@@ -163,3 +175,11 @@ restores the column setting alongside its cells.
 
 Enforcement belongs to the Rust database engine. Direct SQL and writes through
 unrelated property APIs bypass it; the migration only adds the nullable flag.
+
+
+Host-owned storage reads accept the common `ViewQuery` and retained row IDs.
+The storage service reads bounded batches, evaluates the shared query compiler
+and fold over the complete table, then returns pages with table versions. This
+preserves filtering, option ordering, row positions and sorting across pages.
+The current implementation scans the table for each page; indexed query pushdown
+is a future optimization, not a different query language for each host.

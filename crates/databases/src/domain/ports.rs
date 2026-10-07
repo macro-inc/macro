@@ -181,6 +181,14 @@ pub trait DatabaseStorage: Send + Sync + 'static {
     /// Allocate an empty core database without creating an app entity or grants.
     fn create_storage(&self) -> impl Future<Output = Result<DatabaseId, Self::Error>> + Send;
 
+    /// A bounded page of identities from a host-authorized storage table.
+    fn storage_row_page(
+        &self,
+        table: TableId,
+        after: Option<RowId>,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<RowRef>, Self::Error>> + Send;
+
     /// Delete unbound storage, its tables, cells, definitions and journal.
     /// An attached app entity prevents deletion through its foreign key.
     fn delete_storage(

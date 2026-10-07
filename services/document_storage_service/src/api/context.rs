@@ -187,6 +187,20 @@ pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
     crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
 >;
 
+pub(crate) type DssPipelineService = crm::domain::pipelines::PipelineServiceImpl<
+    crm::outbound::pipelines::PgPipelineRepo<
+        databases::outbound::pg_cell_store::PgCellStore<PropertiesPgRepo>,
+    >,
+    DatabasesServiceType,
+    EntityAccessService,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
+    DssPipelineService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -864,6 +878,7 @@ pub(crate) struct ApiContext {
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
+    pub pipeline_state: DssPipelineState,
 }
 
 env_var! {

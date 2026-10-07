@@ -35,6 +35,8 @@ struct MockRepo {
     scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
     accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
+    pipeline_access: Arc<Mutex<Option<AccessLevel>>>,
+    pipeline_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_access: Arc<Mutex<Option<AccessLevel>>>,
     database_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_row_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -88,6 +90,8 @@ impl MockRepo {
             scheduled_action_access: Arc::new(Mutex::new(None)),
             accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
             agent_session_parent: Arc::default(),
+            pipeline_access: Arc::default(),
+            pipeline_access_list: Arc::default(),
             database_access: Arc::new(Mutex::new(None)),
             database_access_list: Arc::new(Mutex::new(Vec::new())),
             database_row_access: Arc::new(Mutex::new(None)),
@@ -410,6 +414,20 @@ impl AccessRepository for MockRepo {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
         Ok(*self.initiative_access.lock().await)
+    }
+
+    async fn get_pipeline_access(
+        &self,
+        _id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.pipeline_access.lock().await)
+    }
+    async fn list_pipeline_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.pipeline_access_list.lock().await.clone())
     }
 
     async fn get_database_access(
@@ -2900,5 +2918,47 @@ async fn accessible_forms_are_the_repository_listing() {
     assert_eq!(
         service.accessible_forms(&test_user_id()).await.unwrap(),
         vec![(shared, AccessLevel::View), (owned, AccessLevel::Owner)]
+    );
+}
+
+#[tokio::test]
+async fn pipeline_receipts_use_their_own_grants() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    let user = MacroUserIdStr::try_from_email("pipeline@macro.com").unwrap();
+    let id = Uuid::now_v7().to_string();
+    assert!(
+        service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
+    );
+    *repo.pipeline_access.lock().await = Some(AccessLevel::Edit);
+    assert!(
+        service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_ok()
+    );
+    assert!(
+        service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
     );
 }

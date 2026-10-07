@@ -135,6 +135,7 @@ fn column_detail(
     };
     ColumnDetail {
         column: Column {
+            nullable: true,
             protections: vec![],
             nullable: true,
             id: column.id,

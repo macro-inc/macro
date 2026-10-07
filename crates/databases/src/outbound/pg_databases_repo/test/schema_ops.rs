@@ -784,3 +784,45 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
         }
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn protected_columns_refuse_direct_sql_but_allow_parent_deletion(pool: PgPool) {
+    let guests = guests(&pool).await;
+    sqlx::query!("INSERT INTO database_column_protections (column_id, capability) VALUES ($1, 'delete'), ($1, 'change_type')", guests.name.into_uuid()).execute(&pool).await.unwrap();
+    let error = sqlx::query!(
+        "DELETE FROM database_columns WHERE id = $1",
+        guests.name.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("database_column_protected")
+    );
+    let error = sqlx::query!(
+        "UPDATE property_definitions SET data_type = 'NUMBER' WHERE id = $1",
+        guests.name_definition
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("database_column_protected")
+    );
+    sqlx::query!(
+        "UPDATE database_columns SET display_name = 'Renamed' WHERE id = $1",
+        guests.name.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM database_entities WHERE database_id = $1",
+        guests.database_id.into_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+}

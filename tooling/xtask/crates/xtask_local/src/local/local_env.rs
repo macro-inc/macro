@@ -644,10 +644,10 @@ impl FusionAuthEnv {
 /// Values the services' `macro_config` loaders require but that only exist in
 /// Doppler's `lcl_personal` config. Without these a `--no-doppler` stack's
 /// containers crash at startup ("missing required value") before any of the
-/// integration the value backs is ever exercised. Each entry is a deterministic
-/// local stub: good enough to boot, never a real secret, and only meaningful
-/// for the specific integration it names (which won't work locally anyway —
-/// that's what `--env-file` / `run_dev` are for).
+/// integration the value backs is ever exercised. Entries are deterministic
+/// local fixtures or third-party placeholders, never deployed secrets. Local
+/// authentication fixtures must support real requests; third-party integrations
+/// need `--env-file` / `run_dev` for working credentials.
 ///
 /// Unlike the rest of [`LocalEnv`], these are a FALLBACK layer: the resolver
 /// applies them below Doppler (see `env_layer::resolve`), so a developer with
@@ -732,18 +732,17 @@ impl BootStubEnv {
             "15000".into(),
         );
         env.insert("AI_USAGE_OVERAGE_MARKUP_PERCENT".into(), "25".into());
-        // macro_auth's `JwtValidationArgs` (used by every service that mounts
-        // the auth middleware) reads these at boot. The keys are only parsed
-        // when a Macro API token is actually validated — normal local auth
-        // uses FusionAuth JWTs — so dummies are fine.
+        // Browser clients exchange FusionAuth sessions for Macro API tokens
+        // for actions such as enabling CRM. Both issuance and validation need
+        // the same usable local key pair, even without Doppler.
         env.insert("MACRO_API_TOKEN_ISSUER".into(), "local".into());
         env.insert(
             "MACRO_API_TOKEN_PUBLIC_KEY".into(),
-            "local-macro-api-token-public-key".into(),
+            identity::MACRO_API_TOKEN_PUBLIC_KEY.into(),
         );
         env.insert(
             "MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(),
-            "local-macro-api-token-private-key".into(),
+            identity::MACRO_API_TOKEN_PRIVATE_KEY.into(),
         );
         env.insert("MACRO_API_TOKEN_EXPIRY_SECONDS".into(), "3600".into());
         // email_service's GCP pubsub queue (gmail watch notifications) and

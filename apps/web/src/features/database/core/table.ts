@@ -41,9 +41,9 @@ export function rowValue(
   return row.cells[columnId] ?? null;
 }
 
-/** The column a row is named by outside a board: the table's first. */
+/** Name rows by their primary reference, or by the first column otherwise. */
 export function titleColumn(columns: readonly DatabaseViewColumn[]) {
-  return columns[0];
+  return columns.find((column) => column.primary) ?? columns[0];
 }
 
 /** A row's name as `column` holds it, or `Unnamed` when it holds nothing. */

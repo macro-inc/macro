@@ -5,7 +5,7 @@ use models_databases::views::LaneKey;
 use models_databases::{RowChanges, RowsChange};
 
 use super::{MAX_WRITTEN_ROWS, Place, Planner, refuse};
-use crate::domain::catalog::TableEntry;
+use crate::domain::catalog::StorageTable;
 use crate::domain::journal::cell_value;
 use crate::domain::models::{DatabaseError, Write};
 
@@ -13,7 +13,7 @@ impl Planner {
     pub(super) fn rows_write(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         change: &RowsChange,
     ) -> Result<Write, DatabaseError> {
         let table = entry.table.id;

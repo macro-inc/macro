@@ -3,6 +3,7 @@
 //! options.
 
 mod core;
+mod provisioning;
 mod required;
 mod transfer;
 
@@ -428,7 +429,7 @@ where
         let refused = |outcome| Ok(Applied::Refused(outcome));
         let database_id = writes.database_id;
         // Schema planning is optimistic. Recheck protections under the same table
-        // locks that serialize form registration before changing stored schema.
+        // locks that serialize protection registration before changing stored schema.
         let protected_operation = match write {
             Write::DeleteColumn { column_id, .. } => Some((*column_id, ColumnProtection::Delete)),
             Write::ReplaceColumn { replacement, .. } => {
