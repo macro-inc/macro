@@ -110,6 +110,16 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         }
     }
 
+    /// Delete `action` and hand its removal to the dispatcher. The permit is
+    /// reserved first so a stopped dispatcher fails while the row still exists
+    /// for a retry to find.
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+        let permit = self.dispatcher_tx.reserve().await?;
+        self.repo.delete_action(id).await?;
+        permit.send(DispatchEvent::Delete(action));
+        Ok(())
+    }
+
     fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
         if trigger.event_filters().is_some() && !self.event_management_enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
@@ -257,11 +267,7 @@ where
             let Some(id) = action.id else {
                 bail!("cannot delete action without id");
             };
-            // Reserve before deleting: a stopped dispatcher must not leave us
-            // reporting failure after losing the row needed to retry its event.
-            let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id).await?;
-            permit.send(DispatchEvent::Delete(action));
+            self.delete_and_dispatch(&id, action).await?;
         }
         Ok(())
     }
@@ -282,11 +288,7 @@ where
         if action.owner != *expected_owner {
             return Ok(OwnedPurgeOutcome::OwnedElsewhere);
         }
-        // Reserve before deleting: a stopped dispatcher must fail the purge
-        // while the row still exists for the retry to find.
-        let permit = self.dispatcher_tx.reserve().await?;
-        self.repo.delete_action(&id).await?;
-        permit.send(DispatchEvent::Delete(action));
+        self.delete_and_dispatch(&id, action).await?;
         Ok(OwnedPurgeOutcome::Purged)
     }
 
