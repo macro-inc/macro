@@ -11,7 +11,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(
     title = "ReadForm",
-    description = "Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses."
+    description = "Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and current settings. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses."
 )]
 pub struct ReadForm {
     /// Flat workflow arguments shared with the domain service.

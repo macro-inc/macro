@@ -11,7 +11,6 @@ use models_permissions::share_permission::channel_share_permission::{
 
 use super::*;
 
-mod authoring;
 mod booking;
 mod drafts;
 mod names;

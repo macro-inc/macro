@@ -234,7 +234,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
             .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset())
-            .add_user_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
+            .add_tool::<forms::inbound::toolset::SetFormAccess, ToolFormsToolContext>(),
         AiHost::ChannelBot | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())

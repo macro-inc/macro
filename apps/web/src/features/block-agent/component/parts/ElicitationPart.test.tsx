@@ -11,7 +11,7 @@ import type {
   PendingElicitation,
 } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import { fireEvent, render, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InteractionResponse } from '../../context/interaction';
@@ -123,9 +123,6 @@ vi.mock('@core/component/AI/component/tool/calendar/DraftComposer', () => ({
 }));
 vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
   EmailDraftComposer: composerStub('email'),
-}));
-vi.mock('@core/component/AI/component/tool/forms/AccessReview', () => ({
-  FormAccessReview: composerStub('forms'),
 }));
 vi.mock('./UserToolCall', () => ({
   UserToolCall: (props: {
@@ -462,35 +459,6 @@ describe('ElicitationPart', () => {
         content: { draft: JSON.stringify(eventDraft) },
       });
       fireEvent.click(getByTestId('composer-reject'));
-      expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
-    });
-
-    it('sends the entire Forms argument object inside the review draft field', async () => {
-      const formArgs = {
-        formId: '0199bfee-1000-7000-8000-000000000002',
-        baseRevision: '0199bfee-1000-7000-8000-000000000003',
-        draft: {
-          audience: 'public',
-          status: 'open',
-          closesAt: null,
-          tallyVisible: false,
-          channelGrants: [],
-        },
-      };
-      const request = review('SetFormAccess', formArgs);
-      pending = { ...live(), request };
-      const view = render(() => (
-        <ElicitationPart turn={0} part={part({ request })} />
-      ));
-      await waitFor(() =>
-        expect(view.getByTestId('forms-composer')).toBeTruthy()
-      );
-      fireEvent.click(view.getByTestId('composer-execute'));
-      expect(respond).toHaveBeenCalledWith({
-        action: 'accept',
-        content: { draft: JSON.stringify(formArgs) },
-      });
-      fireEvent.click(view.getByTestId('composer-reject'));
       expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
     });
 

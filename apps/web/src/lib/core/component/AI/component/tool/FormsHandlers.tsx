@@ -26,7 +26,7 @@ function handler<N extends Name>(name: N): ToolHandler<N, RenderContext> {
       const enabled = useFeatureFlag(enableForms);
       return (
         <Show
-          when={enabled().enabled || name === 'SetFormAccess'}
+          when={enabled().enabled}
           fallback={
             <span class="text-xs text-ink-muted">
               Forms is not enabled for this account.

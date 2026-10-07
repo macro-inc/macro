@@ -219,7 +219,7 @@ selected table whose database you own. Give questions and sections distinct loca
 keys; gates refer to earlier question keys and choice rules can refer to their
 option keys. The result maps these keys to saved identities. New forms start
 **closed and members-only**. A successful create returns the actual saved draft,
-its builder and respondent URLs, and a content fingerprint for sharing review.
+and its builder and respondent URLs.
 A respondent URL alone does not mean the form accepts responses.
 
 Use `ReadForm` in authoring mode before changing an existing form. It reads the
@@ -249,28 +249,19 @@ filter when truncated. Respondent-mode `ReadForm` omits authoring revisions,
 response summaries and hidden booking destinations. Authoring summaries contain
 counts, never response rows.
 
-To obtain a usable link, the owner calls `SetFormAccess` with a fresh saved revision
-and complete audience, open/closed, deadline and tally settings. Chat and agent
-sessions show a native sharing review; no additional prose confirmation is needed.
-Review the questions and screeners, who may respond, and the respondent URL, then
-choose **Save sharing** or **Cancel review**. Channel View allows responding.
-Channel Edit also permits reading and editing the entire backing database,
-including columns the form does not ask. Explicit grant deltas leave other grants
-unchanged and do not post messages or send invitations. A passed deadline keeps
-an otherwise open form closed to responses. If the reviewed state changed, read
-again and review the updated proposal. Chat completes the deferred tool after the
-turn; agent sessions return the accepted result to the running agent.
+The owner calls `SetFormAccess` with complete audience, open/closed, deadline and
+tally settings. It executes directly without a sharing review card. Channel View
+allows responding. Channel Edit also permits reading and editing the entire
+backing database, including columns the form does not ask. Explicit grant deltas
+leave other grants unchanged and do not post messages or send invitations.
+A passed deadline keeps an otherwise open form closed to responses. Settings and
+channel grants use the same services as the browser and are separate writes;
+a partial result requires inspecting the form before retrying.
 
 Mutations do not retain a retry history or deduplicate repeated calls. Each
 `CreateForm` invocation can create a new form. After a timeout, use `ListForms`
 and `ReadForm` to inspect existing work before creating again. A partial result
 includes the target form ID; inspect it and make targeted repairs.
-A changed sharing fingerprint requires a fresh authoring read. Forms authoring and
-review UI follow the existing `enable-forms` feature flag; server execution uses
-the same authenticated user/delegated-agent permissions as the rest of Forms.
-
-Sharing checks the current durable revision after remote booking validation and
-then conditionally saves settings. It does not freeze the collaborative editor:
-subsequent editor changes can become live. A returned diagnostic calls out a live
-edit detected after that check. Owners can still close a form or remove access
-when its draft or booking destination needs repair.
+Forms tool UI follows the existing `enable-forms` feature flag; server execution
+uses the same authenticated user/delegated-agent permissions as the rest of Forms.
+Owners can still close a form or remove access when its draft needs repair.

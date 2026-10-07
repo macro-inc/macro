@@ -429,7 +429,7 @@ fn every_eager_tool_exists() {
 }
 
 #[test]
-fn forms_are_discoverable_and_access_review_matches_host_capabilities() {
+fn forms_are_discoverable_and_execute_directly_on_every_host() {
     for host in [
         AiHost::Chat,
         AiHost::AgentSession,
@@ -449,10 +449,7 @@ fn forms_are_discoverable_and_access_review_matches_host_capabilities() {
                 assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
             }
         }
-        assert_eq!(
-            tools.toolset.user_tools.contains_key("SetFormAccess"),
-            matches!(host, AiHost::Chat | AiHost::AgentSession)
-        );
+        assert!(!tools.toolset.user_tools.contains_key("SetFormAccess"));
     }
     let delegated = subagent_toolset();
     for name in ["CreateForm", "ReadForm", "EditForm", "ListForms"] {

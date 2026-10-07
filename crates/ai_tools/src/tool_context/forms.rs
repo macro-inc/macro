@@ -5,7 +5,6 @@ use ::forms::{
     outbound::{
         authoring_access::EntityAuthoringAccess,
         authoring_booking::SchedulingTargets,
-        authoring_settings::PgAuthoringSettings,
         gateway_event_publisher::{FormPublishError, GatewayFormEventPublisher},
     },
 };
@@ -42,7 +41,6 @@ type Core = ::forms::wiring::PgFormsService<
 pub type ToolFormsService = AuthoringWorkflow<
     Core,
     ToolDatabasesService,
-    PgAuthoringSettings,
     SchedulingTargets<PostgresRepository, Calendars, Directory>,
     EntityAuthoringAccess<ToolEntityAccessService>,
     ::forms::outbound::authoring_editor::WorkerFormEditor,
@@ -99,7 +97,6 @@ pub fn build_forms_tool_context(
         service: Arc::new(AuthoringWorkflow {
             core,
             databases: databases.service.clone(),
-            settings: PgAuthoringSettings::new(pool),
             booking: SchedulingTargets(scheduling),
             access: EntityAuthoringAccess(databases.entity_access_service.clone()),
             editor: ::forms::outbound::authoring_editor::WorkerFormEditor::new(

@@ -3,11 +3,10 @@ use super::*;
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> FormsAuthoringService for AuthoringWorkflow<C, D, S, B, A, E>
+> FormsAuthoringService for AuthoringWorkflow<C, D, B, A, E>
 {
     async fn create_form(
         &self,
@@ -52,7 +51,7 @@ impl<
                     None
                 };
                 Ok(ReadResult::Authoring {
-                    saved: Box::new(self.saved(&actor.user_id, snapshot).await?),
+                    saved: Box::new(self.saved(snapshot)),
                     summary,
                 })
             }

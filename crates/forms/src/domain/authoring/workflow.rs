@@ -5,12 +5,10 @@ mod edit;
 mod read;
 use super::{
     ports::{
-        AuthoringAccess, AuthoringBooking, AuthoringCore, AuthoringEditor, AuthoringSettings,
-        FormsAuthoringService,
+        AuthoringAccess, AuthoringBooking, AuthoringCore, AuthoringEditor, FormsAuthoringService,
     },
     *,
 };
-use crate::domain::collaboration::revision_matches;
 use databases::domain::{
     models::{OpBatch, Viewer},
     ports::DatabasesService,
@@ -19,19 +17,16 @@ use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission,
     ViewAccessLevel,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::{ColumnChange, DatabaseOp, NewColumn, NewOption};
 use models_forms::{FormAccess, FormId, FormLayout};
 use std::sync::Arc;
 
 /// Dependencies supplied by the composition root. Permissions are checked on every call.
-pub struct AuthoringWorkflow<Core, Databases, Settings, Booking, Access, Editor> {
+pub struct AuthoringWorkflow<Core, Databases, Booking, Access, Editor> {
     /// Authoritative shared Forms document.
     pub core: Arc<Core>,
     /// Owning service for schema mutations.
     pub databases: Arc<Databases>,
-    /// Conditional settings writes to existing Forms storage.
-    pub settings: Settings,
     /// Scheduling readiness and access validation.
     pub booking: Booking,
     /// Existing entity authorization boundary.
@@ -72,11 +67,10 @@ fn managed(snapshot: &Snapshot) -> Vec<models_databases::ColumnId> {
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, S, B, A, E>
+> AuthoringWorkflow<C, D, B, A, E>
 {
     async fn receipt<L: RequiredPermission>(
         &self,
@@ -104,12 +98,11 @@ impl<
             diagnostics: vec![],
         }
     }
-    async fn outcome(
+    fn outcome(
         &self,
-        actor: &Viewer,
         mut outcome: MutationResult,
         result: Result<Snapshot, AuthoringError>,
-    ) -> Result<MutationResult, AuthoringError> {
+    ) -> MutationResult {
         match result {
             Ok(snapshot) => {
                 let state = if snapshot.projected {
@@ -117,30 +110,16 @@ impl<
                 } else {
                     MutationState::SavedPendingProjection
                 };
-                match self.saved(&actor.user_id, snapshot).await {
-                    Ok(saved) => {
-                        outcome.saved = Some(saved);
-                        outcome.state = state;
-                    }
-                    Err(error) => outcome.diagnostics.push(error.into()),
-                }
+                outcome.saved = Some(self.saved(snapshot));
+                outcome.state = state;
             }
             Err(error) => outcome.diagnostics.push(error.into()),
         }
-        Ok(outcome)
+        outcome
     }
-    async fn saved(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        mut snapshot: Snapshot,
-    ) -> Result<SavedForm, AuthoringError> {
-        if snapshot.access == FormAccess::Owner {
-            snapshot.grants = self.settings.grants(snapshot.form.id).await?;
-        }
-        let revision = review_revision(user, &snapshot)?;
+    fn saved(&self, snapshot: Snapshot) -> SavedForm {
         let id = snapshot.form.id;
-        Ok(SavedForm {
-            revision,
+        SavedForm {
             accepting_responses: snapshot.form.accepts_responses_at(chrono::Utc::now()),
             form: snapshot.form,
             layout: snapshot.layout,
@@ -154,7 +133,7 @@ impl<
                 safe_linked_type_changes: false,
                 required_booking_qualification: false,
             },
-        })
+        }
     }
     fn editor_url(&self, id: FormId) -> String {
         format!("{}/app/form/{id}", self.app_origin.trim_end_matches('/'))
@@ -219,30 +198,4 @@ impl<
             .map_err(failure)?;
         Ok(())
     }
-}
-
-/// A review is tied to content, metadata, schema and recipients, not respondent row traffic.
-/// This is a freshness check, never an authorization capability.
-fn review_revision(
-    user: &MacroUserIdStr<'_>,
-    snapshot: &Snapshot,
-) -> Result<AuthoringRevisionId, AuthoringError> {
-    let mut grants = snapshot.grants.clone();
-    grants.sort_by_key(|grant| grant.channel_id);
-    let mut columns = snapshot.columns.clone();
-    columns.sort_by_key(|column| column.id);
-    let content = serde_json::to_vec(&(
-        user.as_ref(),
-        &snapshot.form,
-        &snapshot.layout,
-        columns,
-        grants,
-        snapshot.access,
-        snapshot.projected,
-    ))
-    .map_err(failure)?;
-    Ok(AuthoringRevisionId::from_uuid(uuid::Uuid::new_v5(
-        &uuid::Uuid::NAMESPACE_OID,
-        &content,
-    )))
 }

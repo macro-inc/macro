@@ -2,12 +2,11 @@
 use models_databases::views::{Conjunction, FilterTest, SetOperator};
 use models_databases::{ColumnId, ColumnKind, OptionId};
 use models_forms::{
-    BookingTarget, Form, FormAccess, FormLayout, FormQuestionId, FormSectionId, FormSource,
-    QuestionOption, Widget,
+    BookingTarget, Form, FormLayout, FormQuestionId, FormSectionId, FormSource, QuestionOption,
+    Widget,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// A local create key or an existing stable identity. Labels are never identities.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -267,10 +266,6 @@ pub struct Snapshot {
     pub table_version: i64,
     /// Whether this durable draft is projected and valid.
     pub projected: bool,
-    /// Proven access level.
-    pub access: FormAccess,
-    /// Owner-only direct grants used by the sharing review.
-    pub grants: Vec<Grant>,
 }
 /// Explicit widget edit; omission leaves the widget unchanged.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -405,29 +400,6 @@ pub struct Edit {
     pub confirmation_message: Option<String>,
 }
 
-macro_rules! authoring_id {
-    ($(#[$doc:meta])* $name:ident) => {
-        $(#[$doc])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
-        #[serde(transparent)]
-        pub struct $name(Uuid);
-        impl $name {
-            /// Fresh UUIDv7 identity.
-            pub fn new() -> Self { Self(Uuid::now_v7()) }
-            /// Stored UUID identity.
-            pub const fn from_uuid(value: Uuid) -> Self { Self(value) }
-            /// UUID for persistence adapters.
-            pub const fn into_uuid(self) -> Uuid { self.0 }
-        }
-        impl Default for $name { fn default() -> Self { Self::new() } }
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { self.0.fmt(f) }
-        }
-    }
-}
-authoring_id!(/// Content fingerprint for sharing review, scoped to actor and form.
-    AuthoringRevisionId);
-
 /// Closed set of actionable authoring refusals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, strum::Display)]
 pub enum Code {
@@ -497,16 +469,6 @@ pub enum Code {
     TableAlreadyHasForm,
     /// BookingTargetUnavailable: see the accompanying path and corrective message.
     BookingTargetUnavailable,
-}
-
-/// A direct channel recipient retained for owner review comparisons.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Grant {
-    /// Channel identity.
-    pub channel_id: Uuid,
-    /// Direct role.
-    pub access: super::contracts::GrantAccess,
 }
 
 impl From<crate::domain::models::FormError> for AuthoringError {

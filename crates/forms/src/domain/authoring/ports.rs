@@ -9,7 +9,7 @@ use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
 use models_forms::{FormDetail, FormId, FormLayout};
 
 /// Forms' existing source-of-truth operations, with conditional authoring writes.
-pub trait AuthoringCore: FormsService {
+pub trait AuthoringCore: FormsService + crate::domain::sharing::FormSharingService {
     /// Describe source schema and predictable managed identities before provisioning.
     fn authoring_source(
         &self,
@@ -17,11 +17,10 @@ pub trait AuthoringCore: FormsService {
     ) -> impl Future<
         Output = Result<(Vec<super::Column>, Vec<models_databases::ColumnId>), FormError>,
     > + Send;
-    /// Publish liveness and attributed sharing events after a committed authoring write.
+    /// Publish liveness after a committed authoring write.
     fn authoring_changed(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        sharing: bool,
     ) -> impl Future<Output = ()> + Send;
     /// Create closed/private at insertion with a fresh form identity.
     fn create_private(
@@ -76,7 +75,7 @@ pub trait FormsAuthoringService: Send + Sync + 'static {
         actor: Viewer,
         intent: super::List,
     ) -> impl Future<Output = Result<super::ListResult, super::AuthoringError>> + Send;
-    /// Owner-only exact-review transition with explicit grant deltas.
+    /// Owner-only settings changes with explicit grant deltas.
     fn set_form_access(
         &self,
         actor: Viewer,
@@ -127,24 +126,4 @@ pub trait AuthoringEditor: Send + Sync + 'static {
         snapshot: &[u8],
         layout: &FormLayout,
     ) -> impl Future<Output = Result<Vec<u8>, super::AuthoringError>> + Send;
-}
-
-/// Conditional metadata and sharing writes to existing Forms storage.
-pub trait AuthoringSettings: Send + Sync + 'static {
-    /// Read direct recipients after the workflow proves Owner.
-    fn grants(
-        &self,
-        form: FormId,
-    ) -> impl Future<Output = Result<Vec<super::Grant>, super::AuthoringError>> + Send;
-    /// Commit settings and explicit grant deltas at the observed metadata/draft baseline.
-    /// The workflow requires the table version for schema-dependent or exposing changes;
-    /// pure restrictions remain possible while respondents are writing rows.
-    fn settings(
-        &self,
-        expected: &Snapshot,
-        update: &models_forms::UpdateForm,
-        grants: &[super::GrantChange],
-        check_grants: bool,
-        check_table_version: bool,
-    ) -> impl Future<Output = Result<(), super::AuthoringError>> + Send;
 }

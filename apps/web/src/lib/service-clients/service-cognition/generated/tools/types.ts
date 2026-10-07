@@ -758,10 +758,6 @@ export type Audience = 'members' | 'public';
  */
 export type FormStatus = 'open' | 'closed';
 /**
- * Content fingerprint for sharing review, scoped to actor and form.
- */
-export type AuthoringRevisionId = string;
-/**
  * One section of a layout: questions on one screen, or a gate the answers
  * so far must pass.
  */
@@ -4238,15 +4234,6 @@ export type GrantChange =
  */
 export type GrantAccess = 'view' | 'edit';
 /**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForMutationResult =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: MutationResult;
-    };
-/**
  * Where future mail from this sender lands: `signal`, `noise`, or `block`.
  */
 export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
@@ -6360,7 +6347,7 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
- * Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, revision, links and completion state; inspect partial work instead of recreating.
+ * Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, links and completion state; inspect partial work instead of recreating.
  */
 export interface CreateForm {
   /**
@@ -6465,7 +6452,6 @@ export interface MutationResult {
  */
 export interface SavedForm {
   form: Form;
-  revision: AuthoringRevisionId;
   layout: FormLayout;
   /**
    * Backing columns and saved option identities, without any response cells.
@@ -10746,7 +10732,7 @@ export interface ReadDesignResponse {
   content: string;
 }
 /**
- * Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses.
+ * Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and current settings. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses.
  */
 export interface ReadForm {
   formId: FormId;
@@ -11797,15 +11783,14 @@ export interface SetEntityPropertyResponse {
   message: string;
 }
 /**
- * Open, close or share a saved form using a concrete baseRevision from ReadForm. Requires Form Owner and a current valid respondent projection before opening. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Interactive hosts show an editable review card: call directly without an extra prose confirmation. Cancellation changes nothing. This never posts a message or sends invitations. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
+ * Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
  */
 export interface SetFormAccess {
   formId: FormId;
-  baseRevision: AuthoringRevisionId;
   draft: AccessDraft;
 }
 /**
- * Complete reviewed access settings. Empty grant deltas are a no-op.
+ * Complete access settings. Empty grant deltas are a no-op.
  */
 export interface AccessDraft {
   audience: Audience;

@@ -10,11 +10,9 @@
  * this file depends on chat context.
  */
 
-import type { FormAccessArgs } from '@core/component/AI/component/tool/forms/types';
 import { ItemPreview } from '@core/component/ItemPreview';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import EmailIcon from '@phosphor/envelope.svg';
-import ListChecks from '@phosphor/list-checks.svg';
 import type {
   ToolDetail,
   UserToolOutcome,
@@ -34,7 +32,6 @@ import {
   createMemo,
   For,
   type JSX,
-  lazy,
   Match,
   Show,
   Suspense,
@@ -44,12 +41,6 @@ import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
 import type { ToolCallCommon } from './shared';
 import { TextPart } from './TextPart';
-
-const FormAccessOutcome = lazy(async () => ({
-  default: (
-    await import('@core/component/AI/component/tool/forms/AccessOutcome')
-  ).FormAccessOutcome,
-}));
 
 type UserToolDetail = Extract<ToolDetail, { kind: 'user_tool' }>;
 
@@ -74,9 +65,7 @@ function outcomeLabel(outcome: UserToolOutcome): string {
 function typedDraft(
   common: ToolCallCommon,
   input: unknown
-):
-  | NamedTool<'SendEmail' | 'CreateCalendarEvent' | 'SetFormAccess', 'call'>
-  | undefined {
+): NamedTool<'SendEmail' | 'CreateCalendarEvent', 'call'> | undefined {
   const call = deserializeToolCall({
     id: common.id,
     name: common.label,
@@ -84,13 +73,8 @@ function typedDraft(
   });
   if (call.isErr()) return undefined;
   const tool = call.value;
-  return tool.name === 'SendEmail' ||
-    tool.name === 'CreateCalendarEvent' ||
-    tool.name === 'SetFormAccess'
-    ? (tool as NamedTool<
-        'SendEmail' | 'CreateCalendarEvent' | 'SetFormAccess',
-        'call'
-      >)
+  return tool.name === 'SendEmail' || tool.name === 'CreateCalendarEvent'
+    ? (tool as NamedTool<'SendEmail' | 'CreateCalendarEvent', 'call'>)
     : undefined;
 }
 
@@ -110,9 +94,7 @@ export function UserToolCall(props: {
   return (
     <ToolCard
       icon={
-        props.common.label === 'SetFormAccess' ? (
-          <ListChecks class="size-4" />
-        ) : props.common.label === 'CreateCalendarEvent' ? (
+        props.common.label === 'CreateCalendarEvent' ? (
           <CalendarIcon class="size-4" />
         ) : (
           <EmailIcon class="size-4" />
@@ -122,27 +104,13 @@ export function UserToolCall(props: {
       status={props.common.status}
       subtitle={draft() && draftSubtitle(draft()!)}
       muted={props.common.muted || failure() !== undefined}
-      trailing={
-        props.common.trailing ??
-        (props.common.label === 'SetFormAccess' &&
-        outcome().kind === 'completed'
-          ? formOutcomeLabel(outcome())
-          : outcomeLabel(outcome()))
-      }
+      trailing={props.common.trailing ?? outcomeLabel(outcome())}
       hasContent={draft() !== undefined}
     >
       <Show when={draft()}>
         <Switch>
           <Match when={failure()}>
             {(message) => <FoldedOutput text={message()} />}
-          </Match>
-          <Match when={draft()?.name === 'SetFormAccess' && draft()}>
-            {(tool) => (
-              <FormAccessDraft
-                args={tool().data as FormAccessArgs}
-                outcome={outcome()}
-              />
-            )}
           </Match>
           <Match when={draft()?.name === 'SendEmail' && draft()}>
             {(tool) => (
@@ -166,58 +134,13 @@ export function UserToolCall(props: {
 
 /** The one thing to say beside the tool's name: the subject, or the title. */
 function draftSubtitle(
-  tool: NamedTool<'SendEmail' | 'CreateCalendarEvent' | 'SetFormAccess', 'call'>
+  tool: NamedTool<'SendEmail' | 'CreateCalendarEvent', 'call'>
 ): string | undefined {
-  if (tool.name === 'SetFormAccess') return 'Form sharing';
   const text =
     tool.name === 'SendEmail'
       ? (tool.data as SendEmail).subject
       : (tool.data as CreateCalendarEvent).title;
   return text.trim() === '' ? undefined : text;
-}
-
-function formOutcomeLabel(outcome: UserToolOutcome): string {
-  if (
-    outcome.kind !== 'completed' ||
-    !outcome.result ||
-    typeof outcome.result !== 'object' ||
-    !('state' in outcome.result)
-  )
-    return 'Result available';
-  return outcome.result.state === 'completed'
-    ? 'Saved'
-    : outcome.result.state === 'savedPendingProjection'
-      ? 'Draft saved'
-      : 'Partially saved';
-}
-
-function FormAccessDraft(props: {
-  args: FormAccessArgs;
-  outcome: UserToolOutcome;
-}) {
-  const completed = () =>
-    props.outcome.kind === 'completed' ? props.outcome : undefined;
-  return (
-    <Show
-      when={completed()}
-      fallback={
-        <p class="text-sm text-ink-muted">
-          Proposed: {props.args.draft.status} ·{' '}
-          {props.args.draft.audience === 'public'
-            ? 'Anyone with the link'
-            : 'People with access'}
-          .{' '}
-          {props.outcome.kind === 'rejected' ? 'Sharing was not changed.' : ''}
-        </p>
-      }
-    >
-      {(outcome) => (
-        <Suspense fallback={<p>Loading sharing result…</p>}>
-          <FormAccessOutcome result={outcome().result} />
-        </Suspense>
-      )}
-    </Show>
-  );
 }
 
 /**

@@ -1,6 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FormAccessOutcome } from './AccessOutcome';
 import { MutationDetails } from './ResultDetails';
 import type { FormMutation } from './types';
 
@@ -11,7 +10,6 @@ const result: FormMutation = {
   keys: { columns: {}, options: {}, questions: {}, sections: {} },
   diagnostics: [],
   saved: {
-    revision: '0199bfee-1000-7000-8000-000000000003',
     projected: true,
     editorUrl: '/app/form/intake',
     respondentUrl: '/app/form/intake/respond',
@@ -79,13 +77,9 @@ describe('Forms saved results', () => {
       screen.getByRole('link', { name: 'Respondent link' }).getAttribute('href')
     ).toBe('/app/form/intake/respond');
   });
-  it('retains the saved result in a completed session review', () => {
-    render(() => <FormAccessOutcome result={result} />);
-    expect(screen.getByRole('link', { name: 'Respondent link' })).toBeTruthy();
-  });
   it('shows partial outcome guidance without inventing a saved link', () => {
     render(() => (
-      <FormAccessOutcome
+      <MutationDetails
         result={{
           ...result,
           state: 'partiallyApplied',

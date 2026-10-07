@@ -4,11 +4,10 @@ use models_forms::UpdateForm;
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, S, B, A, E>
+> AuthoringWorkflow<C, D, B, A, E>
 {
     pub(super) async fn edit(
         &self,
@@ -74,45 +73,30 @@ impl<
         let outcome = Self::result(intent.form_id, KeyMap::default());
         let result = async {
             self.schema(actor.clone(), &latest, &added).await?;
-            let snapshot = self
-                .core
+            self.core
                 .apply_authoring_update(receipt.clone(), update)
                 .await?;
             if intent.description.is_some() || intent.confirmation_message.is_some() {
-                // Recheck metadata after the collaborative write, so a human
-                // metadata edit during that write is preserved.
-                if intent.description.is_some()
-                    && latest.form.description != snapshot.form.description
-                {
-                    return Err(stale("description"));
-                }
-                if intent.confirmation_message.is_some()
-                    && latest.form.confirmation_message != snapshot.form.confirmation_message
-                {
-                    return Err(stale("confirmationMessage"));
-                }
-                self.settings
-                    .settings(
-                        &snapshot,
-                        &UpdateForm {
+                self.core
+                    .update_form(
+                        receipt.clone(),
+                        UpdateForm {
                             description: intent.description,
                             confirmation_message: intent.confirmation_message,
                             ..Default::default()
                         },
-                        &[],
-                        false,
-                        true,
                     )
-                    .await?;
+                    .await
+                    .map_err(form_failure)?;
             }
-            self.core.authoring_changed(receipt.clone(), false).await;
+            self.core.authoring_changed(receipt.clone()).await;
             self.core
                 .authoring_snapshot(receipt)
                 .await
                 .map_err(form_failure)
         }
         .await;
-        self.outcome(&actor, outcome, result).await
+        Ok(self.outcome(outcome, result))
     }
 }
 

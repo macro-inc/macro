@@ -11,7 +11,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(
     title = "SetFormAccess",
-    description = "Open, close or share a saved form using a concrete baseRevision from ReadForm. Requires Form Owner and a current valid respondent projection before opening. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Interactive hosts show an editable review card: call directly without an extra prose confirmation. Cancellation changes nothing. This never posts a message or sends invitations. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open."
+    description = "Open, close or share a saved form immediately. Requires Form Owner. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Uses the existing Forms settings and sharing services without a review step. This never posts a message or sends invitations. Settings and channel grants are separate writes; inspect partial results before retrying. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open."
 )]
 pub struct SetFormAccess {
     /// Flat workflow arguments shared with the domain service.

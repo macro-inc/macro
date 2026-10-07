@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub enum ReadView {
-    /// Requires Edit and returns the live collaborative layout and a sharing-review fingerprint.
+    /// Requires Edit and returns the live collaborative layout.
     #[default]
     Authoring,
     /// Requires View; omits booking destinations, draft state and response data.
@@ -25,7 +25,7 @@ pub enum ReadView {
 pub struct Read {
     /// Saved form identity.
     pub form_id: FormId,
-    /// Defaults to authoring. Respondent reads never return an edit revision.
+    /// Defaults to authoring. Respondent reads omit the durable editor document.
     #[serde(default)]
     pub view: ReadView,
     /// Editor-only response counts; never raw response rows.
@@ -76,7 +76,7 @@ pub enum GrantChange {
         channel_id: Uuid,
     },
 }
-/// Complete reviewed access settings. Empty grant deltas are a no-op.
+/// Complete access settings. Empty grant deltas are a no-op.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AccessDraft {
@@ -92,14 +92,12 @@ pub struct AccessDraft {
     #[serde(default)]
     pub channel_grants: Vec<GrantChange>,
 }
-/// Owner-only transition reviewed against a concrete saved authoring revision.
+/// Owner-only settings and sharing changes.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetAccess {
     /// Saved form to open, close or share.
     pub form_id: FormId,
-    /// Exact saved revision reviewed by the owner. ReadForm refreshes it.
-    pub base_revision: AuthoringRevisionId,
     /// Complete desired settings and explicit channel deltas.
     pub draft: AccessDraft,
 }
@@ -142,8 +140,6 @@ pub struct Capabilities {
 pub struct SavedForm {
     /// Form metadata, including source and actual audience/status.
     pub form: Form,
-    /// Content fingerprint for a subsequent sharing review; no snapshot is retained.
-    pub revision: AuthoringRevisionId,
     /// Actual durable layout and stable question/section identities.
     pub layout: FormLayout,
     /// Backing columns and saved option identities, without any response cells.
@@ -200,7 +196,7 @@ pub enum ReadResult {
         /// Optional ledger/table counts with labeled populations.
         summary: Option<ResponseSummary>,
     },
-    /// Respondent-safe projection. No draft revisions or hidden booking destinations.
+    /// Respondent-safe projection. No durable draft or hidden booking destinations.
     Respondent {
         /// Public/member page content under the caller's View grant.
         detail: Box<FormDetail>,

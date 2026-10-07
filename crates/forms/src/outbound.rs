@@ -9,9 +9,6 @@ pub mod gateway_event_publisher;
 pub mod pg_forms_repo;
 pub mod system_clock;
 
-#[cfg(feature = "postgres")]
-pub mod authoring_settings;
-
 /// Authoring permission adapter.
 pub mod authoring_access;
 /// Authorized scheduling destination adapter.

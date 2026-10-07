@@ -1,4 +1,4 @@
-//! Workflow tools over the Forms domain; interactive sharing uses native user-tool review.
+//! Direct workflow tools over the Forms domain.
 use crate::domain::authoring::{AuthoringError, ports::FormsAuthoringService};
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use bot_id::BotId;
@@ -49,7 +49,7 @@ fn tool_error(error: AuthoringError) -> ToolCallError {
         internal_error: anyhow::Error::new(error),
     }
 }
-/// Draft workflows shared by main and delegated agents. Sharing is a separate review.
+/// Draft workflows shared by main and delegated agents.
 pub fn authoring_toolset<Service: FormsAuthoringService>()
 -> AsyncToolCollection<FormsToolContext<Service>> {
     AsyncToolCollection::new()
@@ -58,13 +58,8 @@ pub fn authoring_toolset<Service: FormsAuthoringService>()
         .add_tool::<EditForm, FormsToolContext<Service>>()
         .add_tool::<ListForms, FormsToolContext<Service>>()
 }
-/// Chat and agent-session sharing waits for the actual native review card.
+/// All Forms tools execute directly after domain authorization.
 pub fn forms_toolset<Service: FormsAuthoringService>()
--> AsyncToolCollection<FormsToolContext<Service>> {
-    authoring_toolset().add_user_tool::<SetFormAccess, FormsToolContext<Service>>()
-}
-/// Headless hosts apply their own confirmation policy and execute a real access workflow.
-pub fn direct_toolset<Service: FormsAuthoringService>()
 -> AsyncToolCollection<FormsToolContext<Service>> {
     authoring_toolset().add_tool::<SetFormAccess, FormsToolContext<Service>>()
 }

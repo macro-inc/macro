@@ -2,65 +2,12 @@
 use super::*;
 use crate::domain::authoring::{Create, workflow::AuthoringWorkflow};
 use crate::domain::authoring::{
-    ports::{AuthoringAccess, AuthoringCore, AuthoringSettings, FormsAuthoringService},
+    ports::{AuthoringAccess, AuthoringCore, FormsAuthoringService},
     *,
 };
 use crate::domain::collaboration;
 use serde_json::json;
 
-struct Settings {
-    world: Shared,
-}
-impl AuthoringSettings for Settings {
-    async fn grants(&self, _: FormId) -> Result<Vec<Grant>, AuthoringError> {
-        Ok(vec![])
-    }
-    async fn settings(
-        &self,
-        expected: &Snapshot,
-        update: &models_forms::UpdateForm,
-        grants: &[GrantChange],
-        _: bool,
-        _: bool,
-    ) -> Result<(), AuthoringError> {
-        assert!(
-            grants.is_empty(),
-            "these fixtures do not exercise channel persistence"
-        );
-        let mut world = self.world.lock().unwrap();
-        let saved = world
-            .forms
-            .iter_mut()
-            .find(|f| f.form.id == expected.form.id)
-            .unwrap();
-        if saved.form != expected.form {
-            return Err(AuthoringError::new(
-                Code::ConcurrentFieldChange,
-                "form",
-                "Changed metadata",
-            ));
-        }
-        if let Some(value) = &update.description {
-            saved.form.description = value.clone();
-        }
-        if let Some(value) = &update.confirmation_message {
-            saved.form.confirmation_message = value.clone();
-        }
-        if let Some(value) = update.audience {
-            saved.form.audience = value;
-        }
-        if let Some(value) = update.status {
-            saved.form.status = value;
-        }
-        if let Some(value) = update.closes_at {
-            saved.form.closes_at = value;
-        }
-        if let Some(value) = update.tally_visible {
-            saved.form.tally_visible = value;
-        }
-        Ok(())
-    }
-}
 struct Access(Shared);
 impl AuthoringAccess for Access {
     async fn receipt<L: RequiredPermission>(
@@ -113,9 +60,6 @@ async fn each_creation_is_independent_and_stays_closed() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -162,9 +106,6 @@ async fn existing_table_requires_owner_before_provisioning() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -182,14 +123,11 @@ async fn existing_table_requires_owner_before_provisioning() {
 }
 
 #[tokio::test]
-async fn authoring_preserves_human_edits_then_opens_the_reviewed_form_without_response_leakage() {
+async fn authoring_preserves_human_edits_then_opens_directly_without_response_leakage() {
     let world = world();
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -247,7 +185,6 @@ async fn authoring_preserves_human_edits_then_opens_the_reviewed_form_without_re
     );
     let access = SetAccess {
         form_id: id,
-        base_revision: saved.revision,
         draft: AccessDraft {
             audience: Audience::Public,
             status: FormStatus::Open,
@@ -284,9 +221,9 @@ async fn authoring_preserves_human_edits_then_opens_the_reviewed_form_without_re
         workflow
             .set_form_access(viewer(OWNER), access)
             .await
-            .unwrap_err()
-            .code,
-        Code::ConcurrentFieldChange
+            .unwrap()
+            .state,
+        MutationState::Completed
     );
     let respondent = workflow
         .read_form(
@@ -350,9 +287,6 @@ async fn interrupted_creation_reports_partial_with_a_form_id_to_inspect() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -380,9 +314,6 @@ async fn existing_table_creation_protects_managed_bindings() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -419,9 +350,6 @@ async fn a_managed_name_is_rejected_before_new_database_creation() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -446,9 +374,6 @@ async fn unrelated_schema_additions_do_not_block_targeted_help_edits() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -514,9 +439,6 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -564,7 +486,6 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
             viewer(OWNER),
             SetAccess {
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 draft: AccessDraft {
                     audience: Audience::Public,
                     status: FormStatus::Closed,
@@ -581,101 +502,6 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
         world.lock().unwrap().forms[0].form.status,
         FormStatus::Closed
     );
-}
-
-struct EditingBooking(Shared);
-impl crate::domain::authoring::ports::AuthoringBooking for EditingBooking {
-    async fn check_target(
-        &self,
-        _: &Viewer,
-        _: &models_forms::BookingTarget,
-    ) -> Result<(), AuthoringError> {
-        use crate::domain::drafts::FormDraftStore;
-        let drafts = FakeDrafts(self.0.clone());
-        let bytes = drafts.snapshot(RSVP_FORM).await.unwrap();
-        let mut layout = crate::domain::collaboration::read_layout(&bytes)
-            .unwrap()
-            .layout;
-        let FormSection::Questions { questions, .. } = &mut layout.sections[0] else {
-            panic!("questions");
-        };
-        questions[0].column = ColumnId::new();
-        let change = crate::domain::collaboration::replace_layout(&bytes, &layout).unwrap();
-        drafts
-            .update(RSVP_FORM, change.expected_revision, change.update)
-            .await
-            .unwrap();
-        Ok(())
-    }
-}
-
-#[tokio::test]
-async fn sharing_rechecks_durable_draft_after_booking_readiness() {
-    let world = world();
-    seed_rsvp(&world, Audience::Members);
-    {
-        let mut state = world.lock().unwrap();
-        state.forms[0].form.status = FormStatus::Closed;
-        state
-            .layouts
-            .get_mut(&RSVP_FORM)
-            .unwrap()
-            .sections
-            .push(FormSection::Booking {
-                id: models_forms::FormSectionId::new(),
-                title: "Book a call".into(),
-                description: String::new(),
-                target: models_forms::BookingTarget {
-                    profile_id: models_forms::BookingProfileId::new(),
-                    event_type_id: models_forms::BookingEventTypeId::new(),
-                },
-            });
-    }
-    let workflow = AuthoringWorkflow {
-        core: Arc::new(service(&world)),
-        databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
-        booking: EditingBooking(world.clone()),
-        access: Access(world.clone()),
-        editor: Editor,
-        app_origin: "https://macro.test".into(),
-    };
-    let ReadResult::Authoring { saved, .. } = workflow
-        .read_form(
-            viewer(OWNER),
-            Read {
-                form_id: RSVP_FORM,
-                view: ReadView::Authoring,
-                include_summary: false,
-            },
-        )
-        .await
-        .unwrap()
-    else {
-        panic!("authoring");
-    };
-    let result = workflow
-        .set_form_access(
-            viewer(OWNER),
-            SetAccess {
-                form_id: RSVP_FORM,
-                base_revision: saved.revision,
-                draft: AccessDraft {
-                    audience: Audience::Public,
-                    status: FormStatus::Open,
-                    closes_at: None,
-                    tally_visible: false,
-                    channel_grants: vec![],
-                },
-            },
-        )
-        .await;
-    assert_eq!(result.unwrap_err().code, Code::ConcurrentFieldChange);
-    let state = world.lock().unwrap();
-    assert_eq!(state.forms[0].form.status, FormStatus::Closed);
-    assert_eq!(state.forms[0].form.audience, Audience::Members);
 }
 
 #[tokio::test]
@@ -706,9 +532,6 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -800,9 +623,6 @@ async fn edited_question_schema_is_rechecked_after_remote_booking_validation() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: SchemaEditingBooking(world.clone()),
         access: Access(world.clone()),
         editor: Editor,
@@ -865,9 +685,6 @@ async fn failed_ai_attachment_preserves_a_database_adopted_by_a_human() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -940,9 +757,6 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1033,9 +847,6 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1060,7 +871,6 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
             viewer(OWNER),
             SetAccess {
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 draft: AccessDraft {
                     audience: Audience::Public,
                     status: FormStatus::Open,
@@ -1158,9 +968,6 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
     let workflow = AuthoringWorkflow {
         core: Arc::new(forms),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1186,7 +993,6 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
             viewer(OWNER),
             SetAccess {
                 form_id: RSVP_FORM,
-                base_revision: saved.revision,
                 draft: AccessDraft {
                     audience: Audience::Members,
                     status: FormStatus::Closed,
@@ -1224,54 +1030,11 @@ fn reorder_revision(revision: &[u8]) -> Vec<u8> {
 }
 
 #[tokio::test]
-async fn crdt_review_revision_is_stable_across_reads_without_retained_snapshots() {
-    let world = world();
-    let workflow = AuthoringWorkflow {
-        core: Arc::new(service(&world)),
-        databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
-        booking: (),
-        access: Access(world.clone()),
-        editor: Editor,
-        app_origin: "https://macro.test".into(),
-    };
-    let intent: Create = serde_json::from_value(json!({
-        "name":"Live editing", "source":{"kind":"new"},
-        "draft":{"sections":[{"kind":"questions","key":"intro","questions":[{"key":"name","column":{"kind":"new","name":"Name","type":{"type":"text"}},"helpText":"Original"}]}]}
-    })).unwrap();
-    let created = workflow.create_form(viewer(OWNER), intent).await.unwrap();
-    let saved = created.saved.unwrap();
-    let ReadResult::Authoring { saved: again, .. } = workflow
-        .read_form(
-            viewer(OWNER),
-            Read {
-                form_id: saved.form.id,
-                view: ReadView::Authoring,
-                include_summary: false,
-            },
-        )
-        .await
-        .unwrap()
-    else {
-        panic!("authoring")
-    };
-    assert_eq!(
-        saved.revision, again.revision,
-        "review identity comes from current content, not a retained snapshot row"
-    );
-}
-
-#[tokio::test]
 async fn crdt_edit_uses_the_current_document_instead_of_a_read_time_baseline() {
     let world = world();
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1329,9 +1092,6 @@ async fn crdt_edit_merges_concurrent_characters_and_later_calls_use_current_stat
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1400,9 +1160,6 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1494,9 +1251,6 @@ async fn crdt_merge_revalidates_authoring_limits_after_a_concurrent_addition() {
     let workflow = AuthoringWorkflow {
         core: Arc::new(service(&world)),
         databases: Arc::new(FakeDatabases(world.clone())),
-        settings: Settings {
-            world: world.clone(),
-        },
         booking: (),
         access: Access(world.clone()),
         editor: Editor,
@@ -1566,9 +1320,6 @@ async fn malformed_worker_updates_are_rejected_before_schema_mutations() {
         let workflow = AuthoringWorkflow {
             core: Arc::new(service(&world)),
             databases: Arc::new(FakeDatabases(world.clone())),
-            settings: Settings {
-                world: world.clone(),
-            },
             booking: (),
             access: Access(world.clone()),
             editor: Editor,
@@ -1606,7 +1357,6 @@ async fn malformed_worker_updates_are_rejected_before_schema_mutations() {
             editor: InvalidEditor(response),
             core: workflow.core,
             databases: workflow.databases,
-            settings: workflow.settings,
             booking: workflow.booking,
             access: workflow.access,
             app_origin: workflow.app_origin,
@@ -1640,4 +1390,79 @@ async fn malformed_worker_updates_are_rejected_before_schema_mutations() {
             snapshot.columns
         );
     }
+}
+
+#[tokio::test]
+async fn direct_access_changes_use_existing_channel_sharing_and_report_partial_failures() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        booking: (),
+        access: Access(world.clone()),
+        editor: Editor,
+        app_origin: "https://macro.test".into(),
+    };
+    let channel = uuid::Uuid::now_v7();
+    let mut intent = SetAccess {
+        form_id: RSVP_FORM,
+        draft: AccessDraft {
+            audience: Audience::Members,
+            status: FormStatus::Open,
+            closes_at: None,
+            tally_visible: false,
+            channel_grants: vec![GrantChange::Upsert {
+                channel_id: channel,
+                access: GrantAccess::View,
+            }],
+        },
+    };
+    assert_eq!(
+        workflow
+            .set_form_access(viewer(STRANGER), intent.clone())
+            .await
+            .unwrap_err()
+            .code,
+        Code::Forbidden
+    );
+    let result = workflow
+        .set_form_access(viewer(OWNER), intent.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        result.state,
+        MutationState::Completed,
+        "{:?}",
+        result.diagnostics
+    );
+    assert_eq!(
+        world.lock().unwrap().channel_grants[&RSVP_FORM][0].channel_id,
+        channel.to_string()
+    );
+    intent.draft.status = FormStatus::Closed;
+    intent
+        .draft
+        .channel_grants
+        .push(intent.draft.channel_grants[0].clone());
+    let result = workflow
+        .set_form_access(viewer(OWNER), intent.clone())
+        .await
+        .unwrap();
+    assert_eq!(result.state, MutationState::PartiallyApplied);
+    assert!(!result.diagnostics.is_empty());
+    assert_eq!(
+        world.lock().unwrap().forms[0].form.status,
+        FormStatus::Closed
+    );
+    assert_eq!(world.lock().unwrap().channel_grants[&RSVP_FORM].len(), 1);
+    intent.draft.channel_grants = vec![GrantChange::Remove {
+        channel_id: channel,
+    }];
+    let result = workflow
+        .set_form_access(viewer(OWNER), intent)
+        .await
+        .unwrap();
+    assert_eq!(result.state, MutationState::Completed);
+    assert!(world.lock().unwrap().channel_grants[&RSVP_FORM].is_empty());
 }

@@ -1,4 +1,4 @@
-//! Registration protects the review boundary on interactive hosts.
+//! Forms tools execute directly on every host.
 use super::*;
 use crate::domain::authoring::*;
 
@@ -26,10 +26,10 @@ impl FormsAuthoringService for UncalledService {
 }
 
 #[test]
-fn interactive_hosts_defer_access_but_allow_direct_draft_work() {
+fn interactive_hosts_execute_access_without_a_review() {
     let tools = forms_toolset::<UncalledService>();
-    assert!(tools.user_tools.contains_key("SetFormAccess"));
-    assert_eq!(tools.user_tools.len(), 1);
+    assert!(tools.user_tools.is_empty());
+    assert!(tools.tools.contains_key("SetFormAccess"));
     for name in ["CreateForm", "ReadForm", "EditForm", "ListForms"] {
         assert!(tools.tools.contains_key(name), "{name}");
         assert!(!tools.user_tools.contains_key(name), "{name}");
@@ -38,7 +38,7 @@ fn interactive_hosts_defer_access_but_allow_direct_draft_work() {
 
 #[test]
 fn headless_hosts_never_return_unfinishable_pending_reviews() {
-    let tools = direct_toolset::<UncalledService>();
+    let tools = forms_toolset::<UncalledService>();
     assert!(tools.user_tools.is_empty());
     for name in [
         "CreateForm",
@@ -62,11 +62,7 @@ fn tool_schemas_keep_workflow_instructions_and_flat_arguments() {
         (schemars::schema_for!(ReadForm), "formId", "hidden booking"),
         (schemars::schema_for!(EditForm), "changes", "CRDT updates"),
         (schemars::schema_for!(ListForms), "query", "public forms"),
-        (
-            schemars::schema_for!(SetFormAccess),
-            "draft",
-            "Cancellation",
-        ),
+        (schemars::schema_for!(SetFormAccess), "draft", "immediately"),
     ];
     for (schema, argument, instruction) in schemas {
         let value = schema.to_value();
@@ -95,6 +91,17 @@ fn tool_schemas_do_not_advertise_retry_or_operation_identity() {
     assert!(
         schemars::schema_for!(ReadForm).to_value()["properties"]
             .get("operationId")
+            .is_none()
+    );
+}
+
+#[test]
+fn sharing_has_no_review_revision_contract() {
+    let schema = schemars::schema_for!(SetFormAccess).to_value();
+    assert!(schema["properties"].get("baseRevision").is_none());
+    assert!(
+        schemars::schema_for!(SavedForm).to_value()["properties"]
+            .get("revision")
             .is_none()
     );
 }

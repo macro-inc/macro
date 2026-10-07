@@ -330,10 +330,7 @@ type ToolParserMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
-  SetFormAccess: {
-    call: types.SetFormAccess;
-    response: types.UserToolResponseForMutationResult;
-  };
+  SetFormAccess: { call: types.SetFormAccess; response: types.MutationResult };
   SetSenderPolicy: {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;
@@ -719,7 +716,7 @@ const toolParserMap = {
   },
   SetFormAccess: {
     call: schemas.SetFormAccess,
-    response: schemas.UserToolResponseForMutationResult,
+    response: schemas.MutationResult,
   },
   SetSenderPolicy: {
     call: schemas.SetSenderPolicy,
@@ -1085,10 +1082,7 @@ type ToolDataMap = {
     call: types.SetEntityProperty;
     response: types.SetEntityPropertyResponse;
   };
-  SetFormAccess: {
-    call: types.SetFormAccess;
-    response: types.UserToolResponseForMutationResult;
-  };
+  SetFormAccess: { call: types.SetFormAccess; response: types.MutationResult };
   SetSenderPolicy: {
     call: types.SetSenderPolicy;
     response: types.SetSenderPolicyResponse;

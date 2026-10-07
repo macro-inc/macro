@@ -3,7 +3,7 @@
 use crate::{AccessLevel, EntityType};
 use macro_uuid::Uuid;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use sqlx::{PgExecutor, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 
 /// Insert a direct channel grant only when one does not already exist.
 ///
@@ -33,9 +33,9 @@ pub async fn insert_if_absent(
 }
 
 /// Direct channel grants of an entity; project-inherited grants are not included.
-#[tracing::instrument(skip(executor), err)]
-pub async fn get_direct_channel_grants<'e>(
-    executor: impl PgExecutor<'e>,
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_direct_channel_grants(
+    pool: &PgPool,
     entity_id: &Uuid,
     entity_type: EntityType,
 ) -> Result<Vec<ChannelSharePermission>, sqlx::Error> {
@@ -48,7 +48,7 @@ pub async fn get_direct_channel_grants<'e>(
         entity_id,
         entity_type.as_ref(),
     )
-    .fetch_all(executor)
+    .fetch_all(pool)
     .await?;
     Ok(rows
         .into_iter()

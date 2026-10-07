@@ -9,7 +9,7 @@ use crate::domain::ports::CreateSource;
 impl<Repository, Databases, Access, Events, Now, Broker, Drafts> AuthoringCore
     for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
-    Repository: FormsRepo + FormDraftRepository,
+    Repository: FormsRepo + FormDraftRepository + crate::domain::sharing::FormSharingRepo,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
     Access: FormAccessDirectory,
     Events: FormEventPublisher,
@@ -92,21 +92,9 @@ where
         }
     }
 
-    async fn authoring_changed(
-        &self,
-        receipt: EntityAccessReceipt<EditAccessLevel>,
-        sharing: bool,
-    ) {
+    async fn authoring_changed(&self, receipt: EntityAccessReceipt<EditAccessLevel>) {
         if let Ok(id) = receipt_form_id(&receipt) {
             self.announce(id).await;
-            if sharing {
-                self.emit(crate::domain::events::FormTopicEvent::SharingChanged(
-                    crate::domain::events::FormChangedMetadata {
-                        form_id: id,
-                        attribution: receipt_attribution(&receipt),
-                    },
-                ));
-            }
         }
     }
 
@@ -153,7 +141,7 @@ where
                     FormError::Collaboration(rootcause::report!(error).into_dynamic())
                 })?
                 .unwrap_or(false);
-        // Settings CAS uses the persisted representation; equivalent version maps
+        // Preserve the persisted representation; equivalent version maps
         // can encode in different orders when the durable draft is read again.
         let revision = state
             .revision
@@ -177,8 +165,6 @@ where
             columns,
             table_version: table.table.version.0,
             projected,
-            access: receipt_access(&receipt),
-            grants: vec![],
         })
     }
 

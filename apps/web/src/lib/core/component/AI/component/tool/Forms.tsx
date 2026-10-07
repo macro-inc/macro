@@ -1,10 +1,9 @@
 import ListChecks from '@phosphor-icons/core/regular/list-checks.svg';
-import { invalidateAuthoredForm } from '@queries/storage/form-tool-review';
+import { invalidateAuthoredForm } from '@queries/storage/form-tools';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import type { FormToolHandlerMap } from './FormsHandlers';
-import { FormAccessChatCompose } from './forms/ChatCompose';
 import { MutationDetails, SavedFormDetails } from './forms/ResultDetails';
 import type { FormMutation } from './forms/types';
 import { Tool } from './Tool';
@@ -44,10 +43,9 @@ function mutationStatus(result: FormMutation | undefined) {
       ? 'Draft saved'
       : 'Partially saved';
 }
-function mutationHandler<Name extends 'CreateForm' | 'EditForm'>(
-  name: Name,
-  label: string
-) {
+function mutationHandler<
+  Name extends 'CreateForm' | 'EditForm' | 'SetFormAccess',
+>(name: Name, label: string) {
   return createToolRenderer({
     name,
     handleResponse: (ctx) => {
@@ -170,56 +168,7 @@ const listForms = createToolRenderer({
     </Card>
   ),
 });
-type AccessResult = NamedTool<'SetFormAccess', 'response'>['data'];
-function accessResult(response?: AccessResult): FormMutation | undefined {
-  return typeof response === 'object' &&
-    response !== null &&
-    'UserAction' in response
-    ? response.UserAction
-    : undefined;
-}
-const setFormAccess = createToolRenderer({
-  name: 'SetFormAccess',
-  handleResponse: (ctx) => {
-    const saved = accessResult(ctx.tool.data)?.saved;
-    if (saved)
-      void invalidateAuthoredForm(saved.form.id, saved.form.databaseId);
-  },
-  render: (ctx) => (
-    <Switch
-      fallback={<Card label="Share form" renderContext={ctx.renderContext} />}
-    >
-      <Match when={ctx.response?.data === 'PendingUserExecution'}>
-        <FormAccessChatCompose
-          chatId={ctx.chat_id}
-          messageId={ctx.message_id}
-          toolCallId={ctx.tool.id}
-          name="SetFormAccess"
-          initialData={ctx.tool.data}
-          streamLocked={ctx.renderContext.isStreaming}
-        />
-      </Match>
-      <Match when={ctx.response?.data === 'Rejected'}>
-        <Card
-          label="Share form"
-          status="Canceled"
-          renderContext={ctx.renderContext}
-        />
-      </Match>
-      <Match when={accessResult(ctx.response?.data)}>
-        {(result) => (
-          <Card
-            label="Share form"
-            status={mutationStatus(result())}
-            renderContext={ctx.renderContext}
-          >
-            <MutationDetails result={result()} />
-          </Card>
-        )}
-      </Match>
-    </Switch>
-  ),
-});
+const setFormAccess = mutationHandler('SetFormAccess', 'Set form access');
 export const formsToolHandlers: FormToolHandlerMap = {
   CreateForm: createForm,
   ReadForm: readForm,

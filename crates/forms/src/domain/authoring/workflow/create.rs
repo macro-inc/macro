@@ -5,11 +5,10 @@ use models_forms::{FormSource, UpdateForm};
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, S, B, A, E>
+> AuthoringWorkflow<C, D, B, A, E>
 {
     pub(super) async fn create(
         &self,
@@ -82,31 +81,27 @@ impl<
             )?;
             self.schema(actor.clone(), &snapshot, &prepared.columns)
                 .await?;
-            let snapshot = self
-                .core
+            self.core
                 .save_authoring_layout(receipt.clone(), snapshot.revision, prepared.layout)
                 .await
                 .map_err(form_failure)?;
-            self.settings
-                .settings(
-                    &snapshot,
-                    &UpdateForm {
+            self.core
+                .update_form(
+                    receipt.clone(),
+                    UpdateForm {
                         description: Some(intent.draft.description),
                         confirmation_message: Some(intent.draft.confirmation_message),
                         ..Default::default()
                     },
-                    &[],
-                    false,
-                    true,
                 )
-                .await?;
-            self.core.authoring_changed(receipt.clone(), false).await;
+                .await
+                .map_err(form_failure)?;
             self.core
                 .authoring_snapshot(receipt)
                 .await
                 .map_err(form_failure)
         }
         .await;
-        self.outcome(&actor, outcome, result).await
+        Ok(self.outcome(outcome, result))
     }
 }
