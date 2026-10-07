@@ -582,8 +582,52 @@ describe('video link transformer', () => {
 
     editor.getEditorState().read(() => {
       const root = $getRoot();
-      const video = root.getChildren().find($isVideoNode);
-      expect(video).toBeUndefined();
+      expect(root.getChildren().find($isVideoNode)).toBeUndefined();
+      expect(root.getTextContent()).toContain('Document');
     });
+    expect(exportMarkdown(editor)).toContain('https://example.com/doc.pdf');
+  });
+
+  it('leaves static-file PDF links as links', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Report.pdf](https://static-file-service.macro.com/file/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Report.pdf');
+    });
+    expect(exportMarkdown(editor)).toContain(
+      'static-file-service.macro.com/file/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    );
+  });
+
+  it('does not turn a trailing inline video link into a block video', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      'Watch this: [clip](https://example.com/clip.mp4)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Watch this:');
+    });
+  });
+
+  it('ignores a video extension that only appears in a query string', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      '[Document](https://example.com/document.pdf?next=clip.mp4)'
+    );
+
+    editor.getEditorState().read(() => {
+      expect($getRoot().getChildren().find($isVideoNode)).toBeUndefined();
+      expect($getRoot().getTextContent()).toContain('Document');
+    });
+    expect(exportMarkdown(editor)).toContain('document.pdf?next=clip.mp4');
   });
 });
