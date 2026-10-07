@@ -37,9 +37,9 @@ use model_entity::Entity;
 use super::models::{
     BranchNameContext, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShare, DocumentTeamShareResponse, EditDocumentRepoArgs,
-    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, OwnerTeam, TaskBranchName,
-    TeamTaskMetadata,
+    EditDocumentServiceArgs, EmailImportRepoOutcome, GithubPullRequestTasksResponse,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
+    OwnerTeam, TaskBranchName, TeamTaskMetadata,
 };
 
 /// Repository for accessing document data from the database.
@@ -236,6 +236,12 @@ pub trait DocumentRepo: Send + Sync + 'static {
         &self,
         task_short_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
+
+    /// Get `(github_key, task_short_id)` links for the pull requests `github_keys`, oldest first.
+    fn get_github_pull_request_task_links(
+        &self,
+        github_keys: &[String],
+    ) -> impl Future<Output = Result<Vec<(String, String)>, Self::Err>> + Send;
 
     /// Load persisted ownership, membership and explicit sharing facts for policy.
     ///
@@ -530,6 +536,14 @@ pub trait DocumentService: Send + Sync + 'static {
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
         document_context: &DocumentBasic,
     ) -> impl Future<Output = Result<GithubPullRequestsResponse, DocumentError>> + Send;
+
+    /// Get the tasks linked to each GitHub pull request in `github_keys` that `user_id` can
+    /// see, in request order.
+    fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> impl Future<Output = Result<GithubPullRequestTasksResponse, DocumentError>> + Send;
 
     /// Edit a document's metadata and share permissions.
     ///

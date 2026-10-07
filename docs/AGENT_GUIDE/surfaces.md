@@ -1139,7 +1139,18 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. In a folder
+The New menu and drag/drop uploads target the selected folder. **New → Folder**
+and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
+choose **Add tags**, and stage files or nested folders in the large drop area
+(or use **Add files** / **Add folder**). Staged items can be removed before
+**Create Folder** (Cmd/Ctrl+Enter); nothing uploads until submission. Confirmation
+closes the composer immediately while creation and uploads finish in the background.
+On touch devices, the folder composer uses the same bottom drawer as Task, with
+the name and tags fields; the upload area and file/folder picker buttons are hidden.
+Expanding into a split keeps the draft. Creation preserves the current location
+and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
+action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft
+without submitting when verifying against hosted dev data. In a folder
 opened in its own split or an inline preview, drop files from the computer onto
 the empty state or file list, then reopen the folder to verify membership.
 Check both one file and multiple files; the nested list drop target must retain
@@ -2305,14 +2316,25 @@ on Free seats. Member options stay hidden until the billing summary confirms
 they pay for their own seat. On a team, a plan change moves only the viewer's
 own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
 still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+The upgrade modal and Billing use the same plan cards and benefits, including
+the same flag-gated AI usage label and responsive card layout. The modal offers
+Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
+Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
+`Manage plan` closes the modal and opens Billing settings, where checkout and
+plan changes take place. Team-paid members see a message
+to contact their team owner. Plan options wait for the billing summary and team
+lookup; failed lookups show `Try again` rather than guessed upgrade options.
 
-On a local HMR dev server, `Preview billing states` opens an opt-in preview in
+On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
 Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
 and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
 billing summary status, billing permission, active/trialing license, AI usage
 flag, and pending plan actions. The preview uses the real Billing UI with local
 fixtures; checkout, plan changes, Manage, and Team settings only show preview
-status messages. `Reset preview` restores Solo/Free; `Exit preview` restores
+status messages. `Preview paywall` opens the same modal for the selected state,
+without developer controls inside it. Dismissing the modal returns to Billing
+with the selection preserved. `Manage plan` returns to the selected Billing preview.
+`Reset preview` restores Solo/Free; `Exit preview` restores
 the signed-in account. State is not persisted and resets on leaving Billing.
 These controls are excluded from deployed builds, including dev.macro.com.
 

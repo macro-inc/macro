@@ -3,7 +3,7 @@
 ## Surface
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, `Team tasks`, and `Projects`.
-The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
+The desktop toolbar contains search (`Ctrl+F`), an icon-only `Task layout` dropdown, `Sort`, `Group`, and `Filter`;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
@@ -72,6 +72,96 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+## Board layout
+
+Open the icon-only **Task layout** dropdown in the toolbar and choose **Board**
+(or **List** to switch back). Its icon reflects the current layout. **Group by**
+offers Status, Priority, Assignee, and (when Projects is enabled) Project.
+Both layouts share one grouping, which restores with the Tasks navigation entry.
+List-only None and Date groupings display Status columns in Board; switching
+back to List retains those selections and collapsed groups until grouping changes.
+
+Click a card's body or title to open the task. Move at least 10 pixels with the
+mouse button held to start dragging to another column; holding still does not
+start a drag. Property pills remain interactive and do not start a drag.
+A new destination column highlights once movement slows
+or pauses for about 100 ms. Fast travel suppresses activation of new columns.
+A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
+using the active sort label. The drop does not choose a pointer insertion slot:
+its card takes its place in the current sort (or search relevance order).
+Same-column moves and column reordering remain disabled.
+Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
+`tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
+Explicit URL values override saved preferences; back/forward navigation
+restores the corresponding controls, including the layout.
+Columns are 336px wide. Each column pages independently with **Load more tasks**.
+Use the horizontal scrollbar to reach more columns. Vertical wheel input over
+empty board background or gaps also scrolls horizontally. A wheel gesture stays
+with its original scroll area until momentum stops, even if another column moves
+under the pointer. A new gesture inside an overflowing column scrolls vertically.
+Each column has its own vertical scrollbar when its cards overflow, while keeping
+its heading visible. Lane scrollbars appear while hovering the lane or scroll track
+and hide 200 ms after leaving. Off-hover momentum does not reveal them; focus and
+active scrollbar dragging retain visibility.
+Normal columns fit their content up to the viewport height; only the hidden-column
+summary fills the height. Both columns and cards are virtualized, so offscreen
+content is not all present in the DOM. A column's vertical position restores when
+scrolling away and back. The active drag source
+stays mounted while scrolling to a destination.
+While dragging, hold the card near a column's top or bottom edge to scroll its
+cards vertically. Hold near the board's left or right edge to scroll horizontally;
+moving beyond that edge keeps scrolling until release or cancellation. Valid drops
+still require the pointer to be inside a visible destination column.
+
+Column titles use status/priority icons, assignee avatars, or the project icon.
+Active filters also restrict columns: excluded values do not remain as empty
+boards. Allowed Status and Priority values retain empty destinations. Assignee
+and Project columns come from matching task groups; there is no extra-column
+selector. When filters hide known columns, a full-height dashed summary appears
+at the end. A filter illustration, count, and outline **Reveal hidden columns**
+button stay near the top of that column.
+Status and Priority show **N hidden**. Assignee and Project show **N+ hidden**:
+these lower bounds count known groups, not every group excluded by server filters.
+**Reveal hidden columns** clears only the current grouping's filter;
+other filters, the current tab, and search stay active. The dashed column is not
+a drop target.
+
+An icon-only status pill appears before the task title, and an icon-only assignee
+pill appears to its right in every grouping. The lower row omits status, assignee,
+and the grouping property. The remaining properties use standard pill controls
+and icons. Priority uses a compact icon-only pill; due date and project appear
+when set. Read-only tasks keep passive property pills.
+A task assigned to multiple people appears in each person's column. Moving it
+from Alice to Bob replaces Alice while keeping the other assignees. Moving to
+**Unassigned** clears all assignees. Project moves change the task's Project
+property (an initiative), never its legacy folder.
+
+Only editable tasks can move. Access checks and property definitions can keep
+moves unavailable while loading. A destination project also requires edit
+access. A pending move disables further moves of the same task in every column;
+failed writes use the shared property mutation's rollback and show an error.
+A valid destination highlights and shows the sort overlay only while dragging
+inside that column, not in gaps or outside the board. Drops move the card
+immediately while the save is pending; failures restore its prior membership.
+After a successful save, the board scrolls only as needed to reveal the destination
+card, including virtualized columns and rows; already visible cards stay in place.
+It does not scroll after a cancelled or failed drop, or when the current board
+scope changes during the save. Successful moves show no notification.
+A cross-column drop settles one opaque visual copy from the card's release position
+into its sorted destination; the real card appears when the copy lands. The release
+snapshot survives source unmounting after edge scrolling. Sorting updates retarget
+an in-flight copy without restarting from the source column.
+Visible placements animate during moves and rollback without animating ordinary
+scrolling or paging. In Assignee grouping, moving to an already assigned person
+reveals the existing card rather than creating a duplicate.
+Reduced-motion preferences disable these transitions.
+Filters remain active: completing a task or removing yourself as assignee can
+hide the card from the current view. Click its title to open the task; modified
+clicks can open a separate split.
+
+Due-date columns and priority/due-date sorting are not in this version.
+The shared board primitives remain independent of Tasks queries and mutations.
+
 ## Cached grouped lists
 
 With GraphQL caching enabled, previously loaded grouped task lists remain usable
@@ -106,14 +196,17 @@ offer independent Open, Closed, and Merged selections. Custom multi-status
 selections hide the tabs, except the combined Closed preset keeps them visible.
 A partial Closed-only or Merged-only selection leaves both tabs unhighlighted.
 Status combines with other filters, counts toward filter badges, and applies
-before pagination. Clearing filters resets to Open. Other filters cover repository,
-author, assignee, label, and, when a GitHub identity is linked, reviews (Reviewed
-by you, Not reviewed by you, and Awaiting review from you). The list topbar says
+before pagination. Clearing filters resets to Open. Other filters cover
+priority, linked work, started from, repository, author, assignee, label, and,
+when a GitHub identity is linked, reviews (Reviewed by you, Not reviewed by you,
+and Awaiting review from you). The list topbar says
 Reviews when narrow or when the sidebar is collapsed; the selected scope stays
 visible as a heading above search.
 Saved review selections stay inactive, including their filter badge and empty-state
 copy, while the GitHub identity is unavailable; they resume when it returns.
-Sort offers Recently updated, Least recently updated, Newest, and Oldest. When visible PRs
+Sort offers Priority, Recently updated, Least recently updated, Newest, and Oldest;
+Priority orders the loaded rows most urgent first and keeps recency within a
+priority. When visible PRs
 have GitHub labels, a Labels section below Favorites lists them with their
 colors; choosing a label shows only PRs with it, and choosing it again clears
 it. PR rows use the shared entity layout with selection checkboxes,
@@ -129,6 +222,34 @@ opens that session; Shift-click on the single-session chip opens another split.
 Chip clicks do not open or select the containing PR row. Empty results have no
 chip, and loading, private, deleted, or unavailable sessions never offer navigation.
 The PR's status pill stays passive; status filtering lives in the Reviews list tabs.
+
+Each PR row shows what it links to. A priority icon before the title comes from
+the most urgent open linked task (a closed task counts only when none is open),
+otherwise from a GitHub priority label (`P0`–`P3`, `priority: high`, `urgent`,
+`critical`); the tooltip names its source. Pills before the author show the
+linked **Agent session**s (sessions an agent opened the PR from, or a person
+linked), **Customer**s (CRM companies in linked tasks' Companies property, or a
+company whose thread started a session), **Ticket**s (tasks the PR text, branch,
+or comments mention as `MACRO-<id>`, and tasks whose thread started a session),
+and **Channel**s (channels whose thread started a session). A pill with one item
+opens it (Shift-click for another split); with more it shows `+N` and opens a
+list. Items the viewer cannot access are omitted. Rows show a pulsing
+placeholder while links load. The first pill names where the PR was started
+(Claude, Codex, Cursor, Devin, Copilot, Jules, or Macro), including PRs opened
+outside Macro: a Macro agent session that opened the PR wins and shows the tool
+its harness ran; otherwise a session link in the description (`claude.ai/code/…`,
+`chatgpt.com/codex/tasks/…`, `cursor.com/agents…`, `app.devin.ai/sessions/…`,
+`jules.google.com/…`, `macro.com/app/agent/…`), then footers such as
+"Generated with Claude Code" or a `Co-Authored-By: Claude` trailer, then the
+bot author (for example `Copilot` or `devin-ai-integration[bot]`), then the
+branch prefix (`claude/`, `codex/`, `cursor/`, `devin/`, `copilot/`, `jules-`).
+Its tooltip names the signal; clicking it opens the Macro session in a split or
+the external session in a new tab. Filters add **Priority** (including No
+priority), **Linked to** (an agent session, a ticket, a customer, a channel),
+and **Started from** (each tool, or Unknown); these run on the loaded rows,
+which wait for their links before matching. The PR side panel's **Linked work**
+section shows the same origin under **Started from**, plus the priority,
+tickets, customers, and channels.
 
 PR rows can be added to or removed from Favorites through their context menu or
 bulk entity actions. When at least one accessible PR is favorited, Reviews shows
@@ -338,8 +459,14 @@ set only on tasks. Setting it needs edit access to the task and the project;
 removing it needs edit access to the task. The project's Tasks tab lists the
 tasks whose Project property names the project.
 
-The project's Tasks tab starts with the task search, controls, and unified list;
-the project title and property pills appear only on Overview. Use
+The project's Tasks tab starts with task search, controls, and the selected List or
+Board layout; the project title and property pills appear only on Overview.
+Use the same icon-only **Task layout** dropdown to choose a layout. Both layouts
+show only tasks linked to the current project and use the same filters and editors.
+Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.sort`,
+`projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent
+of the main Tasks view's controls. Saved project entry state remains the fallback
+when URL parameters are absent. Use
 `New task` to create a task in the project: the composer opens with its Project
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears

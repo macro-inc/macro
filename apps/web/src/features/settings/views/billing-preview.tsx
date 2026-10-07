@@ -1,3 +1,5 @@
+import { PaywallDialog } from '@app/features/paywall/components/paywall-dialog';
+import { PaywallView } from '@app/features/paywall/components/paywall-view';
 import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -51,11 +53,12 @@ function PreviewCheckbox(props: {
   );
 }
 
-/** Only loaded by Billing under the local HMR gate. No live billing capabilities. */
+/** Only loaded by Billing under the local HMR gate. Billing previews simulate actions. */
 export function BillingPreview(props: {
   renderLive: (controls: JSX.Element) => JSX.Element;
 }) {
   const [active, setActive] = createSignal(false);
+  const [paywallOpen, setPaywallOpen] = createSignal(false);
   const [account, setAccount] = createSignal<Account>('solo');
   const [plan, setPlan] = createSignal<PlanTier>('free');
   const [summaryStatus, setSummaryStatus] =
@@ -67,7 +70,7 @@ export function BillingPreview(props: {
   const [action, setAction] = createSignal('');
   const state = () =>
     getBillingState({
-      hasPaid: hasPaid(),
+      hasPaid: hasPaid() || (summaryStatus() === 'loaded' && plan() !== 'free'),
       canManageSubscription: permission(),
       teamRole:
         account() === 'solo'
@@ -94,13 +97,130 @@ export function BillingPreview(props: {
     setAction('');
   };
 
+  const previewControls = () => (
+    <section aria-label="Billing preview" class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-sm text-ink-muted">
+          Local preview · billing actions are simulated
+        </p>
+        <div class="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPaywallOpen(true)}
+          >
+            Preview paywall
+          </Button>
+          <Button size="sm" variant="outline" onClick={reset}>
+            Reset preview
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              reset();
+              setPaywallOpen(false);
+              setActive(false);
+            }}
+          >
+            Exit preview
+          </Button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-4 @sm:grid-cols-2">
+        <PreviewSelect
+          label="Account"
+          value={account()}
+          options={[
+            { value: 'solo', label: 'Solo' },
+            { value: 'team-member', label: 'Team member · team pays' },
+            {
+              value: 'self-paying-member',
+              label: 'Team member · pays for own seat',
+            },
+            { value: 'team-owner', label: 'Team owner' },
+          ]}
+          onChange={(value) => {
+            setAccount(value);
+            setAction('');
+          }}
+        />
+        <PreviewSelect
+          label="Plan"
+          value={plan()}
+          options={(['free', 'premium', 'max'] as const).map((tier) => ({
+            value: tier,
+            label: PLAN_BY_TIER[tier].name,
+          }))}
+          onChange={(value) => {
+            setPlan(value);
+            setHasPaid(value !== 'free');
+            setAction('');
+          }}
+        />
+      </div>
+      <details>
+        <summary class="text-sm text-ink-muted">
+          Permissions, loading, and feature states
+        </summary>
+        <div class="mt-3 flex flex-col gap-3">
+          <PreviewSelect
+            label="Billing summary"
+            value={summaryStatus()}
+            options={[
+              { value: 'loaded', label: 'Loaded' },
+              { value: 'loading', label: 'Loading' },
+              { value: 'failed', label: 'Failed' },
+            ]}
+            onChange={setSummaryStatus}
+          />
+          <div class="flex flex-wrap gap-x-6">
+            <PreviewCheckbox
+              label="Billing permission"
+              checked={permission()}
+              onChange={setPermission}
+            />
+            <PreviewCheckbox
+              label="Active or trialing license"
+              checked={hasPaid()}
+              onChange={setHasPaid}
+            />
+            <PreviewCheckbox
+              label="AI usage billing enabled"
+              checked={aiUsage()}
+              onChange={setAiUsage}
+            />
+            <PreviewCheckbox
+              label="Plan action pending"
+              checked={pending()}
+              onChange={setPending}
+            />
+          </div>
+        </div>
+      </details>
+      <p role="status" class="text-xs text-ink-muted">
+        {action() ||
+          (state().canChangePlan
+            ? 'Personal plan options available'
+            : 'Personal plan options hidden')}
+      </p>
+    </section>
+  );
+
+  const selectPlan = (tier: 'premium' | 'max') =>
+    setAction(
+      `Preview only · ${state().tier === 'free' ? 'Checkout' : 'Change plan'}: ${PLAN_BY_TIER[tier].name}${state().tier === 'free' && tier === 'premium' ? ' · 30-day trial' : ''} · no billing changes made`
+    );
+  const manage = () =>
+    setAction('Preview only · Manage subscription · no billing changes made');
+
   return (
     <Show
       when={active()}
       fallback={props.renderLive(
         <div class="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="outline" onClick={() => setActive(true)}>
-            Preview billing states
+            Preview billing & paywall
           </Button>
           <span class="text-xs text-ink-muted">Local development</span>
         </div>
@@ -108,117 +228,9 @@ export function BillingPreview(props: {
     >
       <BillingSettingsView
         state={state()}
-        controls={
-          <section aria-label="Billing preview" class="flex flex-col gap-4">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <p class="text-sm text-ink-muted">
-                Local preview · billing actions are simulated
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={reset}>
-                  Reset preview
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    reset();
-                    setActive(false);
-                  }}
-                >
-                  Exit preview
-                </Button>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 gap-4 @sm:grid-cols-2">
-              <PreviewSelect
-                label="Account"
-                value={account()}
-                options={[
-                  { value: 'solo', label: 'Solo' },
-                  { value: 'team-member', label: 'Team member · team pays' },
-                  {
-                    value: 'self-paying-member',
-                    label: 'Team member · pays for own seat',
-                  },
-                  { value: 'team-owner', label: 'Team owner' },
-                ]}
-                onChange={(value) => {
-                  setAccount(value);
-                  setAction('');
-                }}
-              />
-              <PreviewSelect
-                label="Plan"
-                value={plan()}
-                options={(['free', 'premium', 'max'] as const).map((tier) => ({
-                  value: tier,
-                  label: PLAN_BY_TIER[tier].name,
-                }))}
-                onChange={(value) => {
-                  setPlan(value);
-                  setHasPaid(value !== 'free');
-                  setAction('');
-                }}
-              />
-            </div>
-            <details>
-              <summary class="text-sm text-ink-muted">
-                Permissions, loading, and feature states
-              </summary>
-              <div class="mt-3 flex flex-col gap-3">
-                <PreviewSelect
-                  label="Billing summary"
-                  value={summaryStatus()}
-                  options={[
-                    { value: 'loaded', label: 'Loaded' },
-                    { value: 'loading', label: 'Loading' },
-                    { value: 'failed', label: 'Failed' },
-                  ]}
-                  onChange={setSummaryStatus}
-                />
-                <div class="flex flex-wrap gap-x-6">
-                  <PreviewCheckbox
-                    label="Billing permission"
-                    checked={permission()}
-                    onChange={setPermission}
-                  />
-                  <PreviewCheckbox
-                    label="Active or trialing license"
-                    checked={hasPaid()}
-                    onChange={setHasPaid}
-                  />
-                  <PreviewCheckbox
-                    label="AI usage billing enabled"
-                    checked={aiUsage()}
-                    onChange={setAiUsage}
-                  />
-                  <PreviewCheckbox
-                    label="Plan action pending"
-                    checked={pending()}
-                    onChange={setPending}
-                  />
-                </div>
-              </div>
-            </details>
-            <p role="status" class="text-xs text-ink-muted">
-              {action() ||
-                (state().canChangePlan
-                  ? 'Personal plan options available'
-                  : 'Personal plan options hidden')}
-            </p>
-          </section>
-        }
-        onManage={() =>
-          setAction(
-            'Preview only · Manage subscription · no billing changes made'
-          )
-        }
-        onSelectPlan={(tier) =>
-          setAction(
-            `Preview only · ${hasPaid() ? 'Change plan' : 'Checkout'}: ${PLAN_BY_TIER[tier].name} · no billing changes made`
-          )
-        }
+        controls={previewControls()}
+        onManage={manage}
+        onSelectPlan={selectPlan}
         onTeamSettings={(event) => {
           event.preventDefault();
           setAction(
@@ -226,6 +238,33 @@ export function BillingPreview(props: {
           );
         }}
       />
+      <Show when={paywallOpen()}>
+        <PaywallDialog
+          open={paywallOpen()}
+          onClose={() => setPaywallOpen(false)}
+        >
+          <PaywallView
+            state={{ ...state(), hasPaid: state().tier !== 'free' }}
+            availability={
+              summaryStatus() === 'loaded'
+                ? 'ready'
+                : summaryStatus() === 'loading'
+                  ? 'loading'
+                  : 'error'
+            }
+            onManagePlan={() => {
+              setPaywallOpen(false);
+            }}
+            onDismiss={() => {
+              setPaywallOpen(false);
+            }}
+            onRetry={() => {
+              setSummaryStatus('loaded');
+              setAction('Preview only · Retried billing summary');
+            }}
+          />
+        </PaywallDialog>
+      </Show>
     </Show>
   );
 }

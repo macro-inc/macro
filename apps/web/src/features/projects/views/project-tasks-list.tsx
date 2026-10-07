@@ -1,5 +1,5 @@
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
-import { TaskList } from '@app/features/tasks-view/components/task-list/TaskList';
+import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import {
   TasksViewProvider,
   type TasksViewProviderProps,
@@ -26,7 +26,7 @@ export type ProjectTasksListProps = Omit<
   addTasksAction?: JSX.Element;
 };
 
-/** Embeds the actual Tasks list, including its controllers, menus and row editors. */
+/** Embeds Tasks layouts with project-scoped data, controllers, menus and editors. */
 export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
   const context = useProjectsContext();
   return (
@@ -36,6 +36,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           initialState={{ tab: 'team-tasks', groupBy: 'status', facets: {} }}
           restoreEntryState
           scopeKey={`initiative:${projectId}:tasks`}
+          searchNamespace="projectTasks"
           onOpenTask={props.onOpenTask}
           onCloseTask={() => {}}
           sourceFactory={(state, options) =>
@@ -97,7 +98,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           </Button>
         </div>
       </Show>
-      <TaskList />
+      <TasksContent />
     </div>
   );
 }

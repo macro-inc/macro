@@ -13,6 +13,8 @@ note: |-
 files:
   - apps/web/src/features/calendar-team/queries/**
   - apps/web/src/features/calendar-team/primitives/**
+  - apps/web/src/features/tasks-view/queries/task-board*
+  - apps/web/src/features/tasks-view/primitives/create-task-board*
   - apps/web/src/features/routines/queries/**
   - apps/web/src/features/routines/primitives/**
   - apps/web/src/features/scheduling/core/**

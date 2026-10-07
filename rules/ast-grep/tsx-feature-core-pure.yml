@@ -16,6 +16,7 @@ note: |-
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
   - apps/web/src/features/calendar-team/core/**
+  - apps/web/src/features/tasks-view/core/task-board*
   - apps/web/src/features/routines/core/**
   - apps/web/src/features/scheduling/core/**
   - apps/web/src/features/usage/core/**

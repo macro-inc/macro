@@ -373,6 +373,13 @@ impl DocumentService for FakeDocumentService {
     ) -> Result<GithubPullRequestsResponse, DocumentError> {
         panic!("unexpected get_task_github_pull_requests call")
     }
+    async fn get_github_pull_request_tasks(
+        &self,
+        _user_id: &str,
+        _github_keys: Vec<String>,
+    ) -> Result<crate::domain::models::GithubPullRequestTasksResponse, DocumentError> {
+        panic!("unexpected get_github_pull_request_tasks call")
+    }
 
     async fn edit_document(
         &self,

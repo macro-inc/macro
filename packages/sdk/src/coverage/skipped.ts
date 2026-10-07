@@ -33,6 +33,8 @@ export const agentHarnessExcluded = [
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
+  // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
+  'agentSessionsForPullRequests',
   // Speculative page warm-up requires a signed-in user and is app-internal.
   'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];

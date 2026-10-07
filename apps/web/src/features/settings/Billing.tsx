@@ -21,12 +21,13 @@ import {
   getFreePlanCheckoutRequest,
 } from './core/billing-state';
 
+const BillingPreview =
+  import.meta.env.DEV && LOCAL_ONLY
+    ? lazyNamed(() => import('./views/billing-preview'), 'BillingPreview')
+    : undefined;
+
 export function Billing() {
-  if (import.meta.env.DEV && LOCAL_ONLY) {
-    const BillingPreview = lazyNamed(
-      () => import('./views/billing-preview'),
-      'BillingPreview'
-    );
+  if (BillingPreview) {
     return (
       <Suspense fallback={<p role="status">Loading billing…</p>}>
         <BillingPreview
@@ -48,6 +49,8 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
+  const effectiveHasPaid = () =>
+    hasPaid() || (summary.isSuccess && summary.data.tier !== 'free');
 
   const canManageSubscription = createMemo(() => {
     return permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION);
@@ -72,7 +75,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
 
   const state = () =>
     getBillingState({
-      hasPaid: hasPaid(),
+      hasPaid: effectiveHasPaid(),
       canManageSubscription: team.isSuccess && canManageSubscription() === true,
       teamRole: teamRole(),
       teamPlans: team.isSuccess
@@ -139,7 +142,9 @@ function LiveBilling(props: { controls?: JSX.Element }) {
       controls={props.controls}
       onManage={() => void handleManage()}
       onSelectPlan={(plan) =>
-        void (hasPaid() ? handleChangePlan(plan) : handleCheckout(plan))
+        void (effectiveHasPaid()
+          ? handleChangePlan(plan)
+          : handleCheckout(plan))
       }
     />
   );

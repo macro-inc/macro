@@ -121,6 +121,7 @@ import type { GithubPullRequestChangesPatchResponse } from './generated/schemas/
 import type { GithubPullRequestChangesResponse } from './generated/schemas/githubPullRequestChangesResponse';
 import type { GithubPullRequestFacets } from './generated/schemas/githubPullRequestFacets';
 import type { GithubPullRequestsResponse } from './generated/schemas/githubPullRequestsResponse';
+import type { GithubPullRequestTasksResponse } from './generated/schemas/githubPullRequestTasksResponse';
 import type { GroupedSoupGroupPage } from './generated/schemas/groupedSoupGroupPage';
 import type { GroupedSoupInitialPage } from './generated/schemas/groupedSoupInitialPage';
 import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
@@ -1770,6 +1771,23 @@ export const storageServiceClient = {
     return await dssFetch<GithubPullRequestsResponse>(
       `/documents/${documentId}/github_prs`,
       { method: 'GET' }
+    );
+  },
+
+  /** The tasks each pull request (`owner/repo/pull/number`, at most 100) references. */
+  async getGithubPullRequestTasks({
+    githubKeys,
+  }: {
+    githubKeys: string[];
+  }): Promise<
+    Result<
+      GithubPullRequestTasksResponse,
+      ResultError<FetchWithTokenErrorCode>[]
+    >
+  > {
+    return await dssFetch<GithubPullRequestTasksResponse>(
+      '/documents/github_prs/tasks',
+      { method: 'POST', body: JSON.stringify({ githubKeys }) }
     );
   },
 

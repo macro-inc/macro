@@ -149,23 +149,19 @@ it('offers Project in the shared create menu and opens its native composer', () 
   expect(host.createFolder).not.toHaveBeenCalled();
 });
 
-it('keeps the existing Folder action separate from Project creation', async () => {
+it('opens the Folder composer without creating a folder immediately', () => {
   const folder = CREATABLE_BLOCKS.find((item) => item.label === 'Folder');
   expect(folder).toBeDefined();
-  if (!folder) return;
-  host.createFolder.mockResolvedValueOnce('folder-id');
-  folder.keyDownHandler();
-
-  await vi.waitFor(() => {
-    expect(host.openWithSplit).toHaveBeenCalledExactlyOnceWith(
-      { type: 'project', id: 'folder-id' },
-      { referredFrom: 'launcher', preferNewSplit: false }
-    );
+  folder?.keyDownHandler();
+  expect(host.popoverSplit).toHaveBeenCalledExactlyOnceWith({
+    type: 'component',
+    id: 'folder-compose',
+    params: {
+      parentId: undefined,
+      destination: undefined,
+      source: 'create_menu',
+    },
   });
-  expect(host.createFolder).toHaveBeenCalledExactlyOnceWith({
-    name: 'New Folder',
-    source: 'create_menu',
-    parentId: undefined,
-  });
-  expect(host.popoverSplit).not.toHaveBeenCalled();
+  expect(host.createFolder).not.toHaveBeenCalled();
+  expect(host.openWithSplit).not.toHaveBeenCalled();
 });
