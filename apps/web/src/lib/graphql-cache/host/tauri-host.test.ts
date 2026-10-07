@@ -111,7 +111,7 @@ describe('createTauriCacheHost', () => {
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init_with_schema', {
       scope: 'scope-1',
       hotCapacity: 42,
-      schemaJson: expect.any(String),
+      schemaSdl: expect.stringContaining('type GraphqlUser'),
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read', {
       opId: `${host.clientId}:7`,

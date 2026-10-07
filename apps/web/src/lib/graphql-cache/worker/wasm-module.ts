@@ -241,7 +241,7 @@ export interface CacheWasmModule {
     ) => void
   ): void;
   /** Installs the schema shipped with this frontend before opening storage. */
-  configureCacheSchema(schemaJson: string): void;
+  configureCacheSchema(schemaSdl: string): void;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -329,10 +329,10 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         if (!(exports.memory instanceof WebAssembly.Memory)) {
           throw new Error('cache WASM did not export its linear memory');
         }
-        const { default: schemaJson } = await import(
-          '../schema-artifact.json?raw'
+        const { default: schemaSdl } = await import(
+          '../../../../../../static_assets/schema.graphql?raw'
         );
-        mod.configureCacheSchema(schemaJson);
+        mod.configureCacheSchema(schemaSdl);
         wasmMemory = exports.memory;
         mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
           telemetry.record({

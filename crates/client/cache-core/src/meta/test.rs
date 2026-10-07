@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn query_root_is_present() {
-    let root = type_meta(QUERY_ROOT_TYPE).expect("query root type");
+    let root = type_meta(bundled_schema_ref().query_root()).expect("query root type");
     assert_eq!(root.kind, TypeKind::Object);
     assert!(root.key_fields.is_none());
     assert!(root.fields.iter().any(|f| f.name == "user"));
@@ -15,7 +15,9 @@ fn query_root_is_present() {
 
 #[test]
 fn mutation_root_is_present() {
-    let name = MUTATION_ROOT_TYPE.expect("schema has a mutation root");
+    let name = bundled_schema_ref()
+        .mutation_root()
+        .expect("schema has a mutation root");
     let root = type_meta(name).expect("mutation root type");
     assert_eq!(root.kind, TypeKind::Object);
     assert!(root.key_fields.is_none());
@@ -24,7 +26,9 @@ fn mutation_root_is_present() {
 
 #[test]
 fn subscription_root_is_present() {
-    let name = SUBSCRIPTION_ROOT_TYPE.expect("schema has a subscription root");
+    let name = bundled_schema_ref()
+        .subscription_root()
+        .expect("schema has a subscription root");
     let root = type_meta(name).expect("subscription root type");
     assert_eq!(root.kind, TypeKind::Object);
     assert!(root.key_fields.is_none());
@@ -136,16 +140,6 @@ fn schema_hash_present() {
 }
 
 #[test]
-fn frontend_artifact_matches_validated_sdl_metadata() {
-    let schema = Schema::from_json(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../../apps/web/src/lib/graphql-cache/schema-artifact.json"
-    )))
-    .unwrap();
-    assert_eq!(schema.hash(), bundled_schema_ref().hash());
-}
-
-#[test]
 fn rejects_unsupported_versions_duplicates_and_dangling_types() {
     let mut artifact = bundled_schema_ref().artifact().clone();
     artifact.format_version += 1;
@@ -179,4 +173,75 @@ fn merge_rejects_shape_changes_without_mutating_active_metadata() {
     let hash = old.hash().to_owned();
     assert!(old.merge(&incoming).is_err());
     assert_eq!(old.hash(), hash);
+}
+
+#[test]
+fn runtime_sdl_resolves_extensions_interfaces_unions_and_field_shapes() {
+    let schema = Schema::from_sdl(
+        r#"
+        scalar JSON
+        enum Status { OPEN CLOSED }
+        interface Node { id: ID! }
+        interface Named implements Node { id: ID! name: String! }
+        type Item implements Node & Named { id: ID! name: String! status: Status! data: JSON }
+        type Embedded { value: String }
+        union Result = Item | Embedded
+        type Query { results: [Result!]! nodes: [Node] }
+        extend type Item { labels: [String!] details: Embedded }
+        "#,
+    )
+    .unwrap();
+    assert!(schema.type_matches("Item", "Node"));
+    assert!(schema.type_matches("Item", "Named"));
+    assert!(schema.type_matches("Embedded", "Result"));
+    assert_eq!(
+        schema.type_meta("Item").unwrap().key_fields,
+        Some(vec!["id".into()])
+    );
+    assert!(schema.type_meta("Embedded").unwrap().key_fields.is_none());
+    let labels = schema.field_meta("Item", "labels").unwrap().ty;
+    assert!(labels.list && labels.nullable && !labels.item_nullable);
+    let nodes = schema.field_meta("Query", "nodes").unwrap().ty;
+    assert!(nodes.list && nodes.nullable && nodes.item_nullable);
+    let results = schema.field_meta("Query", "results").unwrap().ty;
+    assert!(results.list && !results.nullable && !results.item_nullable);
+    assert_eq!(
+        schema.field_meta("Item", "status").unwrap().ty.kind,
+        FieldKind::Leaf
+    );
+    assert_eq!(
+        schema.field_meta("Item", "data").unwrap().ty.kind,
+        FieldKind::OpaqueScalar
+    );
+    assert_eq!(
+        schema.field_meta("Item", "details").unwrap().ty.kind,
+        FieldKind::Composite
+    );
+    let persisted = serde_json::to_string(schema.artifact()).unwrap();
+    assert_eq!(Schema::from_json(&persisted).unwrap().hash(), schema.hash());
+}
+
+#[test]
+fn runtime_sdl_rejects_invalid_graphql_and_unsupported_cache_shapes() {
+    for sdl in [
+        "type Query {",
+        "type Query { value: Missing }",
+        "type Query { value: String value: Int }",
+        "interface Node { id: ID! } type Item implements Node { id: String! } type Query { item: Item }",
+        "type Query { values: [[String]] }",
+        "type Query { id: ID! }",
+        "type Query { item: Item } type Item { id: ID }",
+        "type Query { item: Item } type Item { id: String! }",
+    ] {
+        assert!(Schema::from_sdl(sdl).is_err(), "accepted {sdl}");
+    }
+}
+
+#[test]
+fn runtime_sdl_identity_ignores_formatting_and_definition_order() {
+    let first = Schema::from_sdl("type Query { a: String b: Item } type Item { id: ID! }").unwrap();
+    let second =
+        Schema::from_sdl("# new bundle\ntype Item { id: ID! } type Query { b: Item, a: String }")
+            .unwrap();
+    assert_eq!(first.hash(), second.hash());
 }

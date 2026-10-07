@@ -21,18 +21,16 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 ## Runtime GraphQL schema
 
 Desktop and mobile keep the cache engine and Turso storage in the native binary.
-The frontend bundle now supplies schema metadata as data, not executable code or
-WASM. Browser workers receive the same artifact through `configureCacheSchema`.
-
-`bun run gen-cache-runtime-schema` in `apps/web` validates
-`static_assets/schema.graphql` and generates `src/lib/graphql-cache/schema-artifact.json`.
-Frontend dev/build and GraphQL generation run it automatically; `bun run
-check-cache-runtime-schema` checks the committed artifact. Rust tests compare it
-with the independently validated SDL metadata to catch generator drift.
+The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
+text. Native startup and browser workers pass it to the same Rust
+`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
+the cache's internal lookup tables. There is no TypeScript schema generator or
+intermediate JSON asset. Browser workers configure SDL through
+`configureCacheSchema` before opening storage.
 
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
-command. Older native binaries cannot accept runtime metadata. The frontend does
+command. Older native binaries cannot accept runtime SDL. The frontend does
 not fall back to the old initialization command.
 
 An engine owns a validated schema snapshot; there is no mutable global schema.
@@ -43,7 +41,7 @@ superset across restarts and rollbacks, so older windows and pending mutations c
 still reference earlier definitions. Schema installation neither resets records
 nor discards queued mutations or changes the durable storage generation.
 
-Metadata format/compatibility epochs must be supported by the installed engine.
+Persisted metadata format/compatibility epochs must be supported by the installed engine.
 Conflicting field shapes, root types, or entity identities are rejected before
 publishing metadata or opening storage. These changes need an explicit migration;
 a native rebuild alone does not migrate the persisted metadata. Removed definitions

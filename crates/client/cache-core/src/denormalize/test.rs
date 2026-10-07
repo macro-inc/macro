@@ -216,7 +216,7 @@ fn resumed_reads_retain_argument_qualified_viewer_fields() {
     let mut session = ReadSession::new(
         crate::meta::bundled_schema_ref(),
         &root,
-        meta::QUERY_ROOT_TYPE,
+        meta::bundled_schema_ref().query_root(),
         &operation.selection_set,
     );
     let mut deps = QueryDependencies::default();

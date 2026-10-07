@@ -708,24 +708,11 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
         let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
         let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
         let generation = handle.current_storage_generation().await.unwrap();
-        let mut artifact = cache_core::meta::bundled_schema().artifact().clone();
-        artifact
-            .types
-            .iter_mut()
-            .find(|t| t.name == "GraphqlUser")
-            .unwrap()
-            .fields
-            .push(cache_core::meta::OwnedFieldMeta {
-                name: "runtimeLabel".into(),
-                ty: cache_core::meta::OwnedFieldType {
-                    name: "String".into(),
-                    kind: cache_core::meta::FieldKind::Leaf,
-                    nullable: true,
-                    list: false,
-                    item_nullable: false,
-                },
-            });
-        let schema = cache_core::meta::Schema::from_artifact(artifact.clone()).unwrap();
+        let sdl = format!(
+            "{}\nextend type GraphqlUser {{ runtimeLabel: String }}",
+            cache_core::meta::BUNDLED_SCHEMA_SDL
+        );
+        let schema = cache_core::meta::Schema::from_sdl(&sdl).unwrap();
         handle.install_schema(&schema, &path).await.unwrap();
         let query = "query { user { id runtimeLabel } }";
         let data = serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}});
@@ -747,17 +734,10 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
             .await
             .unwrap();
         let persisted = std::fs::read_to_string(&path).unwrap();
-        let field = artifact
-            .types
-            .iter_mut()
-            .find(|t| t.name == "GraphqlUser")
-            .unwrap()
-            .fields
-            .iter_mut()
-            .find(|f| f.name == "runtimeLabel")
-            .unwrap();
-        field.ty.list = true;
-        let conflict = cache_core::meta::Schema::from_artifact(artifact).unwrap();
+        let conflict = cache_core::meta::Schema::from_sdl(
+            &sdl.replace("runtimeLabel: String", "runtimeLabel: [String]"),
+        )
+        .unwrap();
         assert!(handle.install_schema(&conflict, &path).await.is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), persisted);
         handle.shutdown().unwrap();

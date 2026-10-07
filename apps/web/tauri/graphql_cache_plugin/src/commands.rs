@@ -58,12 +58,11 @@ pub async fn graphql_cache_init<R: Runtime>(
     // A pre-runtime-schema bundle may return after an OTA rollback. Retain
     // persisted definitions needed by queued work instead of reverting to only
     // the metadata embedded in the binary.
-    let schema_json = serde_json::to_string(cache_core::meta::bundled_schema().artifact())
-        .map_err(|error| error.to_string())?;
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_json).await
+    let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
 }
 
-/// Loads bundle metadata while retaining native cache execution and native Turso storage.
+/// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
@@ -71,9 +70,9 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     state: State<'_, CacheState>,
     scope: String,
     hot_capacity: Option<u32>,
-    schema_json: String,
+    schema_sdl: String,
 ) -> Result<(), String> {
-    let incoming = cache_core::meta::Schema::from_json(&schema_json).map_err(|e| e.to_string())?;
+    let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
         .path()
         .app_data_dir()

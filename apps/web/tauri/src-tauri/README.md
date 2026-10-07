@@ -152,7 +152,7 @@ Xcode app link must still resolve `init_plugin_call_kit` from the Swift package.
 Do not remove Android's `cdylib` output or disable undefined-symbol checking
 globally to work around an iOS link failure.
 
-GraphQL schema metadata is loaded from the frontend bundle through
+GraphQL schema SDL is loaded from the frontend bundle through
 `graphql_cache_init_with_schema`; the cache engine and Turso remain native.
 Set `MIN_NATIVE_BUILD` to the first native release containing this command before
 shipping the corresponding OTA bundle. See [runtime schema behavior](../../../../crates/client/README.md#runtime-graphql-schema)

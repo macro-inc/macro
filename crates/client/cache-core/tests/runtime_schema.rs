@@ -1,47 +1,16 @@
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
-use cache_core::meta::{FieldKind, OwnedFieldMeta, OwnedFieldType, Schema, bundled_schema};
+use cache_core::meta::{BUNDLED_SCHEMA_SDL, Schema, bundled_schema};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::InMemoryStorage;
 use cache_core::value::EntityKey;
 use serde_json::json;
 
 fn new_schema() -> std::sync::Arc<Schema> {
-    let mut artifact = bundled_schema().artifact().clone();
-    artifact
-        .types
-        .iter_mut()
-        .find(|t| t.name == "GraphqlUser")
-        .unwrap()
-        .fields
-        .push(OwnedFieldMeta {
-            name: "runtimeLabel".into(),
-            ty: OwnedFieldType {
-                name: "String".into(),
-                kind: FieldKind::Leaf,
-                nullable: true,
-                list: false,
-                item_nullable: false,
-            },
-        });
-    let mutation_root = artifact.mutation_root.clone().unwrap();
-    artifact
-        .types
-        .iter_mut()
-        .find(|t| t.name == mutation_root)
-        .unwrap()
-        .fields
-        .push(OwnedFieldMeta {
-            name: "setRuntimeLabel".into(),
-            ty: OwnedFieldType {
-                name: "GraphqlUser".into(),
-                kind: FieldKind::Composite,
-                nullable: false,
-                list: false,
-                item_nullable: false,
-            },
-        });
-    // Exercise the actual wire decoder, not only constructors.
-    Schema::from_json(&serde_json::to_string(&artifact).unwrap()).unwrap()
+    let sdl = format!(
+        "{BUNDLED_SCHEMA_SDL}\nextend type GraphqlUser {{ runtimeLabel: String }}\nextend type {} {{ setRuntimeLabel: GraphqlUser! }}",
+        bundled_schema().mutation_root().unwrap()
+    );
+    Schema::from_sdl(&sdl).unwrap()
 }
 
 #[test]

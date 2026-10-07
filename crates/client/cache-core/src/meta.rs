@@ -81,11 +81,11 @@ pub struct TypeMeta {
     /// Concrete union members or interface implementors.
     pub possible_types: Vec<String>,
 }
-/// Versioned schema wire format. Changes to this format require engine support.
+/// Versioned internal persistence format for merged schema lookup tables.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SchemaArtifact {
-    /// Wire format understood by the engine.
+    /// Persistence format understood by the engine.
     pub format_version: u32,
     /// Persisted record semantics required by this schema.
     pub compatibility_epoch: u32,
@@ -109,7 +109,7 @@ pub struct Schema {
 #[error("invalid cache schema: {0}")]
 pub struct SchemaError(String);
 impl Schema {
-    /// Decode and validate a bundle's metadata before opening its cache.
+    /// Decode persisted metadata before opening its cache.
     pub fn from_json(json: &str) -> Result<Arc<Self>, SchemaError> {
         let artifact: SchemaArtifact =
             serde_json::from_str(json).map_err(|e| SchemaError(e.to_string()))?;
@@ -260,7 +260,7 @@ impl Schema {
     pub fn hash(&self) -> &str {
         &self.hash
     }
-    /// Canonical artifact for build tooling and diagnostics.
+    /// Canonical metadata for persistence and diagnostics.
     pub fn artifact(&self) -> &SchemaArtifact {
         &self.artifact
     }
@@ -309,8 +309,14 @@ impl Schema {
                 .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
     }
 }
-include!(concat!(env!("OUT_DIR"), "/schema_meta.rs"));
-/// Embedded fixture/default for Rust callers. Production hosts supply bundle metadata.
+/// SDL embedded for legacy callers and tests; production hosts supply bundle SDL.
+pub const BUNDLED_SCHEMA_SDL: &str = include_str!("../../../../static_assets/schema.graphql");
+/// Fingerprint of the SDL embedded in this build, for diagnostics.
+pub const SCHEMA_HASH: &str = env!("CACHE_BUNDLED_SCHEMA_HASH");
+static BUNDLED_SCHEMA: LazyLock<Arc<Schema>> =
+    LazyLock::new(|| Schema::from_sdl(BUNDLED_SCHEMA_SDL).expect("valid bundled schema"));
+mod sdl;
+/// Embedded fixture/default for Rust callers. Production hosts supply bundle SDL.
 pub fn bundled_schema_ref() -> &'static Schema {
     &BUNDLED_SCHEMA
 }

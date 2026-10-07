@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "bun run dev:prepare && bun run dev:server",
-    "dev:prepare": "bun run gen-cache-runtime-schema && just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm",
+    "dev:prepare": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm",
     "dev:server": "vite -c vite.config.ts",
-    "build": "bun run gen-cache-runtime-schema && vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
+    "build": "vite build -c vite.config.ts && bun run postbuild:semver && bun run postbuild:bundle-manifest",
     "postbuild:semver": "echo $npm_package_version+$(git rev-parse --short HEAD) > ./dist/semver.txt",
     "postbuild:bundle-manifest": "bun ./scripts/write-bundle-manifest.mjs",
     "test": "bunx vitest run --fsModuleCache",
@@ -22,7 +22,7 @@
     "local:e2e:ui": "LOCAL_E2E=true bunx playwright test --ui",
     "gen-api": "bun scripts/generate-api-schema.ts",
     "gen-emoji-tags": "bun scripts/generate-emoji-tags.ts",
-    "gen-graphql": "graphql-codegen --config codegen.ts && bun run gen-graphql-cache-schema && bun run gen-cache-runtime-schema",
+    "gen-graphql": "graphql-codegen --config codegen.ts && bun run gen-graphql-cache-schema",
     "gen-graphql-cache-schema": "bun scripts/generate-graphql-cache-entity-resolver-schema.ts",
     "check-graphql-cache-schema": "bun scripts/generate-graphql-cache-entity-resolver-schema.ts --check",
     "gen-tools": "bun scripts/generate-dcs-tools.ts",
@@ -32,7 +32,7 @@
     "gen-agent-fold-types": "just gen-agent-fold-types",
     "gen-database-sql-types": "just gen-database-sql-types",
     "type-check": "bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.json",
-    "check": "bun run check-cache-runtime-schema && bun check-graphql-cache-schema && bun check-dynamic-ui-schema && bun type-check && bun biome check",
+    "check": "bun check-graphql-cache-schema && bun check-dynamic-ui-schema && bun type-check && bun biome check",
     "preview": "vite preview -c vite.config.ts --outDir dist --base /app",
     "preview:dev": "vite preview -c vite.config.ts --outDir dist --base /app",
     "preview:prod": "vite preview -c vite.config.ts --outDir dist --base /app",
@@ -42,9 +42,7 @@
     "format": "bunx --bun biome format --write",
     "fix": "bunx --bun biome lint --write",
     "clean": "bun scripts/clean-env.js",
-    "knip": "bunx --bun knip",
-    "gen-cache-runtime-schema": "bun scripts/generate-cache-runtime-schema.ts",
-    "check-cache-runtime-schema": "bun scripts/generate-cache-runtime-schema.ts --check"
+    "knip": "bunx --bun knip"
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",

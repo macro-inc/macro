@@ -575,10 +575,10 @@ thread_local! {
     static RUNTIME_SCHEMA: std::cell::RefCell<Option<std::sync::Arc<cache_core::meta::Schema>>> = const { std::cell::RefCell::new(None) };
 }
 
-/// Installs immutable bundle metadata once per worker, before opening its engine.
+/// Parses bundle SDL once per worker, before opening its engine.
 #[wasm_bindgen(js_name = configureCacheSchema)]
-pub fn configure_cache_schema(schema_json: &str) -> Result<(), JsValue> {
-    let schema = cache_core::meta::Schema::from_json(schema_json).map_err(err_js)?;
+pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
+    let schema = cache_core::meta::Schema::from_sdl(schema_sdl).map_err(err_js)?;
     RUNTIME_SCHEMA.with(|slot| {
         let mut slot = slot.borrow_mut();
         if let Some(existing) = slot.as_ref() {

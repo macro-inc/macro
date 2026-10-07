@@ -244,11 +244,13 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   }
 
   async function initialize(): Promise<void> {
-    const { default: schemaJson } = await import('../schema-artifact.json?raw');
+    const { default: schemaSdl } = await import(
+      '../../../../../../static_assets/schema.graphql?raw'
+    );
     await request<void>('graphql_cache_init_with_schema', {
       scope: options.scope,
       hotCapacity: options.hotCapacity,
-      schemaJson,
+      schemaSdl,
     });
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
