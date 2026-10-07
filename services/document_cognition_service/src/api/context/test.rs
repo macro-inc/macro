@@ -475,8 +475,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         &calendar_tool_context,
         None,
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
-        "https://macro.test".into(),
-        "http://localhost:8933".into(),
+        ai_tools::FormsToolConfig {
+            app_origin: "https://macro.test".into(),
+            editing_worker_url: "http://localhost:8933".into(),
+        },
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {

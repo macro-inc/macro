@@ -436,8 +436,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         &calendar_tool_context,
         Some(side_effect_clients.connection_gateway.as_ref().clone()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
-        macro_service_urls::AppServiceUrl::new()?.to_string(),
-        ai_editing_worker_url,
+        ai_tools::FormsToolConfig {
+            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: ai_editing_worker_url,
+        },
     );
 
     let recorder =

@@ -50,6 +50,14 @@ pub type ToolFormsService = AuthoringWorkflow<
 /// Forms tool context for every AI host.
 pub type ToolFormsToolContext = ::forms::inbound::toolset::FormsToolContext<ToolFormsService>;
 
+/// Host-configured origins for Forms links and collaborative editing.
+pub struct FormsToolConfig {
+    /// Public app origin used for returned links.
+    pub app_origin: String,
+    /// Existing Cloudflare AI editing worker origin.
+    pub editing_worker_url: String,
+}
+
 /// Reuse host clients and the same Forms and Scheduling domain services as HTTP.
 pub fn build_forms_tool_context(
     pool: sqlx::PgPool,
@@ -58,9 +66,12 @@ pub fn build_forms_tool_context(
     calendars: &ToolCalendarToolContext,
     gateway: Option<ConnectionGatewayClient>,
     broker: MaybeToolEventBroker,
-    app_origin: String,
-    editing_worker_url: String,
+    config: FormsToolConfig,
 ) -> ToolFormsToolContext {
+    let FormsToolConfig {
+        app_origin,
+        editing_worker_url,
+    } = config;
     let surfaces = Arc::new(pg_collab_surface_service(
         pool.clone(),
         documents.lexical_client.as_ref().clone(),

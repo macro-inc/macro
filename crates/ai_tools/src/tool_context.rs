@@ -82,7 +82,7 @@ pub use images::build_image_generation_tool_context_test;
 pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
 
 mod forms;
-pub use forms::{ToolFormsToolContext, build_forms_tool_context};
+pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
 pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
