@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            LOWER(c.email_address) AS \"email!\"\n        FROM\n            email_messages m\n        JOIN\n            email_message_recipients mr ON m.id = mr.message_id\n        JOIN\n            email_contacts c ON mr.contact_id = c.id\n        WHERE\n            m.link_id = $1\n            AND m.is_sent = TRUE\n            AND m.is_draft = FALSE\n        GROUP BY\n            LOWER(c.email_address)\n        ORDER BY\n            COUNT(DISTINCT m.id) DESC,\n            LOWER(c.email_address)\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6fe843846a518b0b1892c91eba4ebc55371e92d5b43b60bfe737c16b2387ef5a"
+}

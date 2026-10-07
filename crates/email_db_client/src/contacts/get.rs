@@ -596,6 +596,84 @@ pub async fn fetch_contacts_by_link_id(
     Ok(db_contacts.into_iter().map(Into::into).collect())
 }
 
+/// Every non-automated address in the link's synced address book: contacts the
+/// user saved in Google plus the "other contacts" Google builds from mail. Unlike
+/// [`fetch_contacts_emails_by_link_id`] this does not require the user to have
+/// emailed the address.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_address_book_emails_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<Vec<String>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT
+            LOWER(email_address) AS "email!"
+        FROM
+            email_contacts
+        WHERE
+            link_id = $1
+        ORDER BY
+            1
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| row.email)
+        .filter(|email| !is_generic_email(email))
+        .collect())
+}
+
+/// The non-automated addresses the link has sent the most messages to, most
+/// emailed first, at most `limit` of them.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_top_sent_contact_emails_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+    limit: usize,
+) -> anyhow::Result<Vec<String>> {
+    // Automated addresses are dropped after the query, so read a wider window
+    // than the caller asked for.
+    let window = i64::try_from(limit.saturating_mul(5)).unwrap_or(i64::MAX);
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            LOWER(c.email_address) AS "email!"
+        FROM
+            email_messages m
+        JOIN
+            email_message_recipients mr ON m.id = mr.message_id
+        JOIN
+            email_contacts c ON mr.contact_id = c.id
+        WHERE
+            m.link_id = $1
+            AND m.is_sent = TRUE
+            AND m.is_draft = FALSE
+        GROUP BY
+            LOWER(c.email_address)
+        ORDER BY
+            COUNT(DISTINCT m.id) DESC,
+            LOWER(c.email_address)
+        LIMIT $2
+        "#,
+        link_id,
+        window
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| row.email)
+        .filter(|email| !is_generic_email(email))
+        .take(limit)
+        .collect())
+}
+
 /// returns all non-generic email addresses the passed link has sent emails to.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_contacts_emails_by_link_id(

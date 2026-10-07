@@ -131,7 +131,9 @@ notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mime_guess = "2.0.5"
+channels = { path = "../../crates/channels", features = ["outbound"] }
 contacts = { path = "../../crates/contacts" }
+generic_email_domains = { path = "../../crates/generic_email_domains" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 model_file_type = { path = "../../crates/model_file_type" }

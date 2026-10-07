@@ -85,7 +85,7 @@ async fn initialize_backfill(
         })
     })?;
 
-    if let Err(e) = sync_contacts(
+    match sync_contacts(
         link,
         &ctx.db,
         &ctx.email_api,
@@ -95,7 +95,8 @@ async fn initialize_backfill(
     )
     .await
     {
-        tracing::error!(error = ?e, "Failed to sync contacts");
+        Ok(()) => crate::util::contact_dms::ensure_colleague_dms(&ctx.db, link).await,
+        Err(e) => tracing::error!(error = ?e, "Failed to sync contacts"),
     }
 
     let threads_requested_limit = backfill_job.threads_requested_limit;

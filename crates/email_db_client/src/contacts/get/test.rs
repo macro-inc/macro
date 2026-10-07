@@ -1,5 +1,6 @@
 use crate::contacts::get::{
-    fetch_contacts_by_link_id, fetch_db_recipients_in_bulk, fetch_senders_by_message_ids,
+    fetch_address_book_emails_by_link_id, fetch_contacts_by_link_id, fetch_db_recipients_in_bulk,
+    fetch_senders_by_message_ids, fetch_top_sent_contact_emails_by_link_id,
 };
 use anyhow::Result;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -271,5 +272,48 @@ async fn fetch_db_recipients_in_bulk_returns_empty_for_nonexistent_messages(
 
     assert!(result.is_empty());
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("address_book_and_top_contacts"))
+)]
+async fn fetch_address_book_emails_returns_every_non_automated_contact(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("ab000000-0000-0000-0000-000000000001")?;
+
+    let emails = fetch_address_book_emails_by_link_id(&pool, link_id).await?;
+
+    // Includes contacts the user never emailed, lowercased, without noreply@.
+    assert_eq!(
+        emails,
+        vec![
+            "alice@acme.com",
+            "bob@acme.com",
+            "carol@gmail.com",
+            "dave@example.org"
+        ]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("address_book_and_top_contacts"))
+)]
+async fn fetch_top_sent_contact_emails_ranks_by_messages_sent(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let link_id = Uuid::parse_str("ab000000-0000-0000-0000-000000000001")?;
+
+    let top = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, 10).await?;
+    // carol: 3 messages, alice: 1. The automated address and the contact only
+    // addressed in a draft are excluded or ranked by actual sends.
+    assert_eq!(top, vec!["carol@gmail.com", "alice@acme.com"]);
+
+    let capped = fetch_top_sent_contact_emails_by_link_id(&pool, link_id, 1).await?;
+    assert_eq!(capped, vec!["carol@gmail.com"]);
     Ok(())
 }

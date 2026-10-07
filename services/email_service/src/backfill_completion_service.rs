@@ -258,6 +258,9 @@ async fn finalize_claimed_backfill(
         handle_contacts_sync(ctx, &link)
             .await
             .map_err(completion_effect_retry)?;
+        // Best effort: the mailbox now has sent mail to rank, so open direct
+        // messages with the people the user emails most.
+        crate::util::contact_dms::ensure_top_contact_dms(&ctx.db, &link).await;
         cg_refresh_email(
             &ctx.connection_gateway_client,
             link.macro_id.as_ref(),
