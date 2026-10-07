@@ -56,6 +56,8 @@ aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true, features = ["macros"] }
 base64 = { workspace = true }
+bot_id = { path = "../../crates/bot_id" }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 channels = { path = "../../crates/channels", default-features = false, features = [
   "outbound",
 ] }
@@ -73,6 +75,9 @@ doppleganger = { workspace = true }
 email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", features = [
+  "postgres",
+] }
 foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
@@ -141,7 +146,7 @@ rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true }
 referral = { path = "../../crates/referral" }
 remote_env_var = { path = "../../crates/remote_env_var" }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["query"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions" }
 rootcause = { workspace = true }
 rsa = { version = "0.9.10", features = ["getrandom"] }
