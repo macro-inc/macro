@@ -1,8 +1,11 @@
+import type { EditorControls } from '@core/component/LexicalMarkdown/builder/types';
 import ArrowsOutIcon from '@phosphor/arrows-out.svg';
 import XIcon from '@phosphor/x.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { Button, Checkbox, EntityComposer } from '@ui';
+import { $getRoot } from 'lexical';
 import { For, onMount, Show } from 'solid-js';
+import { ProjectDescriptionComposer } from '../components/project-description-composer';
 import { useProjectsContext } from '../context/projects-context';
 import {
   createProjectComposer,
@@ -25,7 +28,14 @@ export function CreateProject(props: {
     props.initialDraft
   );
   let titleInput: HTMLInputElement | undefined;
+  let description: EditorControls | undefined;
   onMount(() => titleInput?.focus());
+  const focusDescriptionStart = () => {
+    const editor = description?.getLexical();
+    if (!editor) return;
+    editor.update(() => $getRoot().getFirstChild()?.selectStart());
+    editor.focus();
+  };
   const submit = () => {
     const submission = composer.submit();
     if (submission) props.onSubmit(submission);
@@ -67,7 +77,13 @@ export function CreateProject(props: {
               </Button>
             </Show>
           </div>
-          <Show when={composer.name() || composer.drafts().size > 0}>
+          <Show
+            when={
+              composer.name() ||
+              composer.description().trim() ||
+              composer.drafts().size > 0
+            }
+          >
             <Button
               tabIndex={-1}
               size="sm"
@@ -77,6 +93,7 @@ export function CreateProject(props: {
               disabled={composer.pending()}
               onClick={() => {
                 composer.clear();
+                description?.clear();
                 titleInput?.focus();
               }}
             >
@@ -106,8 +123,34 @@ export function CreateProject(props: {
               required
               disabled={composer.pending()}
               onInput={(event) => composer.setName(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.isComposing ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey ||
+                  (event.key !== 'Enter' && event.key !== 'ArrowDown')
+                ) {
+                  return;
+                }
+                event.preventDefault();
+                focusDescriptionStart();
+              }}
             />
           </EntityComposer.Title>
+          <EntityComposer.Body>
+            <ProjectDescriptionComposer
+              initialValue={composer.description()}
+              disabled={composer.pending()}
+              onChange={composer.setDescription}
+              onSubmit={submit}
+              onLeaveStart={() => titleInput?.focus()}
+              ref={(controls) => {
+                description = controls;
+              }}
+            />
+          </EntityComposer.Body>
           <div>
             <EntityComposer.Properties>
               <For each={definitions.properties()}>
