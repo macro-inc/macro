@@ -33,7 +33,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       actor: userFromPrincipal(client, metadata.actor),
       participants: metadata.participant_user_ids.map((userId) =>
-        User.byId(client, userId)
+        User.byId(client, userId),
       ),
     }))
     .with({ event_type: 'channel.updated' }, ({ metadata }) => ({
@@ -60,7 +60,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       addedBy: userFromPrincipal(client, metadata.added_by),
       addedUsers: metadata.added_user_ids.map((userId) =>
-        User.byId(client, userId)
+        User.byId(client, userId),
       ),
     }))
     .with({ event_type: 'channel.participant_removed' }, ({ metadata }) => ({
@@ -69,7 +69,7 @@ export function hydrateChannelEvent(client: MacroClient, event: ChannelEvent) {
       channel: Channel.byId(client, metadata.channel_id),
       removedBy: User.byId(client, metadata.removed_by),
       removedUsers: metadata.removed_user_ids.map((userId) =>
-        User.byId(client, userId)
+        User.byId(client, userId),
       ),
     }))
     .exhaustive();
