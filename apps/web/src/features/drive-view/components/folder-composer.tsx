@@ -14,6 +14,7 @@ export function FolderComposer(props: {
   name: string;
   destination: string;
   files: FolderUpload[];
+  showUploads?: boolean;
   tags: JSX.Element;
   busy: boolean;
   preparing: boolean;
@@ -117,89 +118,91 @@ export function FolderComposer(props: {
           >
             <EntityComposer.Properties>{props.tags}</EntityComposer.Properties>
           </fieldset>
-          <div
-            class="mx-2 flex min-h-60 flex-1 flex-col overflow-auto rounded-lg border border-dashed border-edge-muted p-4"
-            classList={{ 'bg-hover': dragging() }}
-            use:fileFolderDrop={{
-              disabled: props.busy,
-              onDrop: props.onDrop,
-              onDragStart: setDragging,
-              onDragEnd: () => setDragging(false),
-            }}
-          >
-            <div class="flex min-h-44 flex-1 flex-col items-center justify-center gap-3 text-center">
-              <UploadIcon class="size-8 text-ink-extra-muted" />
-              <div>
-                <p class="text-sm text-ink">
-                  Drop files or nested folders here
-                </p>
-                <p class="mt-1 text-xs text-ink-muted">
-                  Add everything you want inside this folder.
-                </p>
+          <Show when={props.showUploads !== false}>
+            <div
+              class="mx-2 flex min-h-60 flex-1 flex-col overflow-auto rounded-lg border border-dashed border-edge-muted p-4"
+              classList={{ 'bg-hover': dragging() }}
+              use:fileFolderDrop={{
+                disabled: props.busy,
+                onDrop: props.onDrop,
+                onDragStart: setDragging,
+                onDragEnd: () => setDragging(false),
+              }}
+            >
+              <div class="flex min-h-44 flex-1 flex-col items-center justify-center gap-3 text-center">
+                <UploadIcon class="size-8 text-ink-extra-muted" />
+                <div>
+                  <p class="text-sm text-ink">
+                    Drop files or nested folders here
+                  </p>
+                  <p class="mt-1 text-xs text-ink-muted">
+                    Add everything you want inside this folder.
+                  </p>
+                </div>
+                <div class="flex flex-wrap justify-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={props.busy}
+                    onClick={props.onFiles}
+                  >
+                    Add files
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={props.busy}
+                    onClick={props.onFolder}
+                  >
+                    Add folder
+                  </Button>
+                </div>
+                <Show when={props.preparing}>
+                  <p role="status" class="text-xs text-ink-muted">
+                    Preparing files…
+                  </p>
+                </Show>
               </div>
-              <div class="flex flex-wrap justify-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={props.busy}
-                  onClick={props.onFiles}
+              <Show when={props.files.length}>
+                <ul
+                  aria-label="Folder contents"
+                  class="mt-4 flex flex-col gap-1 border-t border-edge-muted pt-3"
                 >
-                  Add files
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={props.busy}
-                  onClick={props.onFolder}
-                >
-                  Add folder
-                </Button>
-              </div>
-              <Show when={props.preparing}>
-                <p role="status" class="text-xs text-ink-muted">
-                  Preparing files…
-                </p>
+                  <For each={props.files}>
+                    {(entry) => (
+                      <li class="flex min-w-0 items-center gap-2 text-sm">
+                        <Show
+                          when={entry.isFolder}
+                          fallback={
+                            <FileIcon class="size-4 shrink-0 text-ink-muted" />
+                          }
+                        >
+                          <FolderIcon class="size-4 shrink-0 text-ink-muted" />
+                        </Show>
+                        <span
+                          class="min-w-0 flex-1 truncate"
+                          title={entry.file.name}
+                        >
+                          {entry.isFolder
+                            ? entry.file.name.replace(/\.zip$/, '')
+                            : entry.file.name}
+                        </span>
+                        <Button
+                          size="icon-sm"
+                          aria-label={`Remove ${entry.file.name}`}
+                          tooltip="Remove"
+                          disabled={props.busy}
+                          onClick={() => props.onRemove(entry)}
+                        >
+                          <XIcon />
+                        </Button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
               </Show>
             </div>
-            <Show when={props.files.length}>
-              <ul
-                aria-label="Folder contents"
-                class="mt-4 flex flex-col gap-1 border-t border-edge-muted pt-3"
-              >
-                <For each={props.files}>
-                  {(entry) => (
-                    <li class="flex min-w-0 items-center gap-2 text-sm">
-                      <Show
-                        when={entry.isFolder}
-                        fallback={
-                          <FileIcon class="size-4 shrink-0 text-ink-muted" />
-                        }
-                      >
-                        <FolderIcon class="size-4 shrink-0 text-ink-muted" />
-                      </Show>
-                      <span
-                        class="min-w-0 flex-1 truncate"
-                        title={entry.file.name}
-                      >
-                        {entry.isFolder
-                          ? entry.file.name.replace(/\.zip$/, '')
-                          : entry.file.name}
-                      </span>
-                      <Button
-                        size="icon-sm"
-                        aria-label={`Remove ${entry.file.name}`}
-                        tooltip="Remove"
-                        disabled={props.busy}
-                        onClick={() => props.onRemove(entry)}
-                      >
-                        <XIcon />
-                      </Button>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-          </div>
+          </Show>
         </EntityComposer.Main>
         <Show when={props.error}>
           <p role="alert" class="px-2 text-sm text-failure">

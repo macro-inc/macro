@@ -18,6 +18,7 @@ export function CreateFolder(props: {
   commands: FolderCreationCommands;
   destination: string;
   initialDraft?: FolderDraft;
+  showUploads?: boolean;
   onClose(): void;
   onSubmit(submission: FolderSubmission): void;
   onExpand?(draft: FolderDraft): void;
@@ -61,6 +62,7 @@ export function CreateFolder(props: {
         name={composer.name()}
         destination={props.destination}
         files={composer.files()}
+        showUploads={props.showUploads}
         tags={
           <Suspense
             fallback={<span class="text-xs text-ink-muted">Loading tags…</span>}

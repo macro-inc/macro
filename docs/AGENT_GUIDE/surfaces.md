@@ -1145,6 +1145,8 @@ choose **Add tags**, and stage files or nested folders in the large drop area
 (or use **Add files** / **Add folder**). Staged items can be removed before
 **Create Folder** (Cmd/Ctrl+Enter); nothing uploads until submission. Confirmation
 closes the composer immediately while creation and uploads finish in the background.
+On touch devices, the folder composer uses the same bottom drawer as Task, with
+the name and tags fields; the upload area and file/folder picker buttons are hidden.
 Expanding into a split keeps the draft. Creation preserves the current location
 and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
 action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft

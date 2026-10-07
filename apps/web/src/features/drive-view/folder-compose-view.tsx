@@ -2,6 +2,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onMount, Suspense } from 'solid-js';
 import type { FolderDraft, FolderSubmission } from './core/folder-composer';
 import { createFolderCommands } from './queries/folder-creation';
@@ -70,6 +71,7 @@ export function FolderComposeView(props: FolderComposeProps) {
         <Suspense>
           <CreateFolder
             commands={commands}
+            showUploads={!isTouchDevice()}
             destination={
               props.destination ??
               (props.parentId ? 'Selected folder' : 'Drive')

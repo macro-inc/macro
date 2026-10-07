@@ -145,3 +145,40 @@ it('dismisses immediately on confirmation before folder creation or uploads fini
     name: 'Assets',
   });
 });
+
+it('allows name and tag creation with uploads hidden in the mobile composer', async () => {
+  const commands = {
+    create: vi.fn(async () => 'folder-id'),
+    saveTags: vi.fn(async () => {}),
+    upload: vi.fn(async () => {}),
+  };
+  const onSubmit = vi.fn();
+  render(() => (
+    <CreateFolder
+      commands={commands}
+      destination="Drive"
+      showUploads={false}
+      onClose={() => {}}
+      onSubmit={onSubmit}
+    />
+  ));
+  expect(screen.queryByText('Drop files or nested folders here')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Add files' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Add folder' })).toBeNull();
+  fireEvent.input(screen.getByLabelText('Folder name'), {
+    target: { value: 'Mobile folder' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Add tags' }));
+  fireEvent.click(screen.getByRole('button', { name: /Create Folder/ }));
+  expect(onSubmit).toHaveBeenCalledOnce();
+  const submission: FolderSubmission = onSubmit.mock.calls[0][0];
+  expect(await submission.result).toEqual({
+    type: 'created',
+    id: 'folder-id',
+    name: 'Mobile folder',
+  });
+  expect(commands.saveTags).toHaveBeenCalledWith('folder-id', {
+    tags: ['blue'],
+  });
+  expect(commands.upload).not.toHaveBeenCalled();
+});
