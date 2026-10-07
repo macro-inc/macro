@@ -16,7 +16,6 @@ import {
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
-import { lazyNamed } from '@core/util/lazyNamed';
 import {
   type ComponentProps,
   type JSXElement,
@@ -27,111 +26,37 @@ import {
 } from 'solid-js';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import {
+  ActivityRouteView,
+  AgentsRouteView,
+  CalendarRouteView,
+  CallsRouteView,
+  ChannelCompose,
+  ChannelsRouteView,
+  CompaniesRouteView,
+  ComposeDocument,
+  ComposeSkill,
+  ComposeTask,
+  CreateProjectView,
+  DriveRouteView,
+  EmailCompose,
+  EventComposerSplit,
+  FoldersRouteView,
+  MailRouteView,
+  NotFound,
+  ProjectsListView,
+  ProjectView,
+  RecentRouteView,
+  ReviewsRouteView,
+  RoutineCreator,
+  SearchRouteView,
+  SettingsRouteView,
+  TasksRouteView,
+} from './lazy-route-views';
+import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from './split-router/app-route-shell';
-
-// Views load as their own chunks the first time a split opens them.
-const ActivityRouteView = lazyNamed(
-  () => import('@app/features/activity/route-views'),
-  'ActivityRouteView'
-);
-const AgentsRouteView = lazyNamed(
-  () => import('@app/features/agents-view/route-views'),
-  'AgentsRouteView'
-);
-const CalendarRouteView = lazyNamed(
-  () => import('@app/features/calendar-view/route-views'),
-  'CalendarRouteView'
-);
-const ChannelsRouteView = lazyNamed(
-  () => import('@app/features/channels-view/route-views'),
-  'ChannelsRouteView'
-);
-const CompaniesRouteView = lazyNamed(
-  () => import('@app/features/crm/route-views'),
-  'CompaniesRouteView'
-);
-const DriveRouteView = lazyNamed(
-  () => import('@app/features/drive-view/route-views'),
-  'DriveRouteView'
-);
-const EmailCompose = lazyNamed(
-  () => import('@app/features/email-compose/email-compose'),
-  'EmailCompose'
-);
-const MailRouteView = lazyNamed(
-  () => import('@app/features/email-view/route-views'),
-  'MailRouteView'
-);
-const CallsRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'CallsRouteView'
-);
-const FoldersRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'FoldersRouteView'
-);
-const RecentRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'RecentRouteView'
-);
-const SearchRouteView = lazyNamed(
-  () => import('@app/features/next-soup/route-views'),
-  'SearchRouteView'
-);
-const CreateProjectView = lazyNamed(
-  () => import('@app/features/projects/project-view'),
-  'CreateProjectView'
-);
-const ProjectsListView = lazyNamed(
-  () => import('@app/features/projects/project-view'),
-  'ProjectsListView'
-);
-const ProjectView = lazyNamed(
-  () => import('@app/features/projects/project-view'),
-  'ProjectView'
-);
-const ReviewsRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
-  'ReviewsRouteView'
-);
-const RoutineCreator = lazyNamed(
-  () => import('@app/features/routines/routine-creator'),
-  'RoutineCreator'
-);
-const SettingsRouteView = lazyNamed(
-  () => import('@app/features/settings/route-views'),
-  'SettingsRouteView'
-);
-const TasksRouteView = lazyNamed(
-  () => import('@app/features/tasks-view/route-views'),
-  'TasksRouteView'
-);
-const EventComposerSplit = lazyNamed(
-  () => import('@block-calendar/components/EventComposerSplit'),
-  'EventComposerSplit'
-);
-const ChannelCompose = lazyNamed(
-  () => import('@block-channel/component/Compose'),
-  'ChannelCompose'
-);
-const ComposeSkill = lazyNamed(
-  () => import('@block-md/component/ComposeSkill'),
-  'ComposeSkill'
-);
-const ComposeTask = lazyNamed(
-  () => import('@block-md/component/ComposeTask'),
-  'ComposeTask'
-);
-const ComposeDocument = lazyNamed(
-  () => import('@block-md/views/compose-document'),
-  'ComposeDocument'
-);
-const NotFound = lazy(
-  () => import('@core/component/AccessErrorViews/NotFound')
-);
 
 type ComponentParams = Record<string, unknown>;
 
