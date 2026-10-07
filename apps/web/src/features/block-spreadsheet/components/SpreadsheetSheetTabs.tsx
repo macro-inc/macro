@@ -220,7 +220,9 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
       if (released.pointerId !== pointerId) return;
       const at = dragging() === undefined ? undefined : dropAt();
       finish();
-      if (at === undefined) return;
+      // Permission or formula reference picking can change mid-drag.
+      if (at === undefined || props.readonly || props.preserveEditorFocus)
+        return;
       const to = target(id, at);
       if (to !== undefined) props.onMove(id, to);
       props.onSelect(id);

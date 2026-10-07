@@ -170,6 +170,29 @@ describe('spreadsheet sheet tabs', () => {
     expect(view.onMove).not.toHaveBeenCalled();
   });
 
+  it.each(['readonly', 'preserveEditorFocus'] as const)(
+    'drops nothing when %s turns on during a drag',
+    (guard) => {
+      const [enabled, setEnabled] = createSignal(false);
+      const view = tabs({
+        get readonly() {
+          return guard === 'readonly' && enabled();
+        },
+        get preserveEditorFocus() {
+          return guard === 'preserveEditorFocus' && enabled();
+        },
+      });
+      layOutTabs(view);
+      pointer(view.getByRole('tab', { name: 'Sales' }), 'pointerdown', 150);
+      pointer(window, 'pointermove', 290);
+      setEnabled(true);
+      pointer(window, 'pointerup', 290);
+      expect(view.onMove).not.toHaveBeenCalled();
+      expect(view.onSelect).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-sheet-drop-indicator]')).toBeNull();
+    }
+  );
+
   it.each([
     ['Move left', 'budget'],
     ['Move right', 'forecast'],
