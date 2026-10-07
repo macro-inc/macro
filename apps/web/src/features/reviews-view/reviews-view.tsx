@@ -1,5 +1,6 @@
 import {
   SearchBar,
+  useViewShell,
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
@@ -34,6 +35,12 @@ import {
 } from './components/ReviewsControls';
 import { ReviewsList } from './components/ReviewsList';
 import { ReviewsSidebar } from './components/ReviewsSidebar';
+import { ReviewsStatusTabs } from './components/ReviewsStatusTabs';
+import {
+  reviewsStatusTab,
+  reviewsStatusTabSelection,
+  showReviewsStatusTabs,
+} from './core/reviews-status';
 import { createReviewsListController } from './primitives/create-reviews-list-controller';
 import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
 import { useReviewsQuery } from './queries/use-reviews-query';
@@ -41,14 +48,16 @@ import { effectiveReviewsFilters, searchReviews } from './reviews-filter';
 import { reviewsHostedContent } from './reviews-hosted-content';
 import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
 import {
-  EMPTY_REVIEWS_FILTERS,
+  DEFAULT_REVIEWS_FILTERS,
   REVIEWS_SCOPES,
   type ReviewsFilterId,
   type ReviewsFilterSelection,
   type ReviewsScope,
   type ReviewsSortId,
+  type ReviewsStatusTabId,
   scopeMatchesViewerGithubId,
 } from './reviews-types';
+import { ReviewsListTopBar } from './views/ReviewsListTopBar';
 
 const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
   all: 'Pull requests',
@@ -60,6 +69,17 @@ const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
 const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
   (scope) => ({ value: scope, label: REVIEW_SCOPE_TITLES[scope] })
 );
+function ReviewsListScopeHeading(props: { title: string }) {
+  const shell = useViewShell();
+  return (
+    <Show when={shell.breakpoints.narrow?.() || shell.aside.isCollapsed()}>
+      <div class="flex h-8 min-w-0 items-center">
+        <h2 class="truncate text-xl font-semibold text-ink">{props.title}</h2>
+      </div>
+    </Show>
+  );
+}
+
 function ReviewsRoot() {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -74,7 +94,7 @@ function ReviewsRoot() {
   const [search, setSearch] = createSignal('');
   const [sort, setSort] = createSignal<ReviewsSortId>('recently_updated');
   const [filters, setFilters] = createSignal<ReviewsFilterSelection>(
-    EMPTY_REVIEWS_FILTERS
+    DEFAULT_REVIEWS_FILTERS
   );
   const listVisible = () => !params.foreignEntityId;
   const githubLink = useGithubLinkStatusQuery({ enabled: listVisible });
@@ -111,7 +131,13 @@ function ReviewsRoot() {
         [group]: selected ? [...ids, id] : ids.filter((value) => value !== id),
       };
     });
-  const clearFilters = () => setFilters(EMPTY_REVIEWS_FILTERS);
+  const clearFilters = () => setFilters(DEFAULT_REVIEWS_FILTERS);
+  const statusTab = () => reviewsStatusTab(filters().status);
+  const selectStatusTab = (status: ReviewsStatusTabId) =>
+    setFilters((current) => ({
+      ...current,
+      status: reviewsStatusTabSelection(status),
+    }));
   const clearSearch = () => setSearch('');
   const searchForTab = (tab: ReviewsScope) => ({
     [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
@@ -172,25 +198,13 @@ function ReviewsRoot() {
   });
   const list = () => (
     <>
-      <ViewShell.TopBar>
-        <h1 class="hidden min-w-0 truncate text-sm font-semibold text-ink @max-[720px]/view-shell:block">
-          {scopeTitle()}
-        </h1>
-        <ViewBreadcrumbs.Outlet
-          class="@max-[720px]/view-shell:hidden"
-          aria-label="Review location"
-        />
-      </ViewShell.TopBar>
+      <ReviewsListTopBar />
       <ViewShell.Header>
         <Show
           when={isTouchDevice()}
           fallback={
-            <div class="flex min-w-0 flex-col @max-[720px]/view-shell:gap-3">
-              <div class="hidden h-8 items-center @max-[720px]/view-shell:flex">
-                <h1 class="truncate text-xl font-semibold text-ink">
-                  {scopeTitle()}
-                </h1>
-              </div>
+            <div class="flex min-w-0 flex-col gap-3">
+              <ReviewsListScopeHeading title={scopeTitle()} />
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <SearchBar
                   label="Search reviews"
@@ -222,6 +236,11 @@ function ReviewsRoot() {
             />
           </div>
         </Show>
+        <Show when={showReviewsStatusTabs(filters().status)}>
+          <div class="mt-3 min-w-0 overflow-x-auto">
+            <ReviewsStatusTabs value={statusTab()} onChange={selectStatusTab} />
+          </div>
+        </Show>
       </ViewShell.Header>
       <ViewShell.Content>
         <ReviewsList
@@ -240,7 +259,10 @@ function ReviewsRoot() {
                 : githubLink.data?.status
           }
           search={search()}
-          hasFilters={activeReviewsFilterCount(activeFilters()) > 0}
+          hasFilters={
+            activeReviewsFilterCount(activeFilters()) >
+            (statusTab() === 'open' ? 1 : 0)
+          }
           onClearFilters={clearFilters}
           onClearSearch={clearSearch}
           onOpen={openReview}

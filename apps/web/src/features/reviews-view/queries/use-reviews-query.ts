@@ -71,6 +71,8 @@ const SCOPE_FIELDS: Partial<Record<ReviewsScope, string>> = {
 export const reviewsQueryBody = (filter: ReviewsServerFilter) => {
   const { filters, viewerGithubUserId: viewer } = filter;
   const pullRequest: TargetExpr[] = [];
+  if (filters.status.length > 0)
+    pullRequest.push(anyOf('githubPullRequestStatus', filters.status));
   if (filters.repository.length > 0)
     pullRequest.push(
       anyOf('githubPullRequestRepositoryId', filters.repository)

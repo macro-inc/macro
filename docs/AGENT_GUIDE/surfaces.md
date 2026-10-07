@@ -361,7 +361,11 @@ focus without opening a task until activation. In an open task detail, they
 replace it with the next or previous task in the same filtered order.
 
 When `enable-tasks-reviews` is enabled, `Reviews` appears above `My Tasks` as a
-shortcut to the separate Reviews view. It lists relevant open GitHub pull requests;
+shortcut to the separate Reviews view. It lists accessible GitHub pull requests;
+Open/Closed tabs below search and filters default to Open; Closed includes merged
+PRs. Status also remains in the filter menu. Custom multi-status selections hide
+the tabs except for the combined Closed preset.
+The list topbar says Reviews at narrow widths or with its sidebar collapsed;
 selecting one opens `/app/reviews/pr/<foreignEntityId>` with a Reviews breadcrumb.
 See [Tasks](tasks.md#reviews-view) for verification.
 
@@ -1519,6 +1523,14 @@ GitHub's permissions and branch protections decide; a refusal appears as a toast
 with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
 GitHub account the toast points to Settings. Merged and closed PRs have no Merge
 button. PRs are not tasks and do not appear in the Tasks list.
+The metadata pills beneath the PR title include linked agent sessions, using the
+agent sparkle icon. A single session shows its name; several sessions show a
+count chip opening a session list. Selecting a session opens it, with Shift-click
+on the single-session chip opening another split. The same chip appears in PR
+list metadata without activating its containing PR row. Empty links show no chip;
+loading or inaccessible session previews are not navigable. PR status pills stay
+passive; status filtering uses the Reviews list's Open/Closed sliding tabs and
+filter menu.
 Opening **Changes** slides a full-height pane in from the right beside the PR details,
 including beside the PR top bar rather than underneath it. The PR details shrink
 alongside the entry slide instead of eagerly jumping narrower. The Changes pane

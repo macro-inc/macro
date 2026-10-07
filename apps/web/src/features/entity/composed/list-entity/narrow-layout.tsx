@@ -15,17 +15,15 @@ import {
   ChannelMessageSingleLine,
 } from './channel';
 import { EmailInboxChip } from './email';
-import { GithubAuthorBadge } from './foreign';
+import { GithubPullRequestPills } from './foreign';
 import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
-  const reviewWithAuthor = () => {
+  const pullRequest = () => {
     const entity = props.entity;
-    if (!isGithubPrEntity(entity)) return;
-    if (!entity.metadata.authorLogin && !entity.metadata.authorId) return;
-    return entity;
+    return isGithubPrEntity(entity) ? entity : undefined;
   };
   return (
     <Entity.Layout
@@ -36,8 +34,10 @@ export function NarrowLayout(props: LayoutProps) {
       style={{
         'grid-template-columns':
           'var(--soup-row-indicator-width) 1fr max-content',
-        'grid-template-rows': '44px',
-        'grid-template-areas': '"indicator title timestamp"',
+        'grid-template-rows': pullRequest() ? '44px auto' : '44px',
+        'grid-template-areas': pullRequest()
+          ? '"indicator title timestamp" ". body body"'
+          : '"indicator title timestamp"',
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
@@ -62,16 +62,6 @@ export function NarrowLayout(props: LayoutProps) {
         >
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
         </Show>
-        <Show when={reviewWithAuthor()}>
-          {(review) => (
-            <span class="max-w-32 shrink-0 overflow-hidden text-xs font-normal text-ink-muted">
-              <GithubAuthorBadge
-                entity={review()}
-                displayName={props.authorDisplayName}
-              />
-            </span>
-          )}
-        </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
         </Show>
@@ -94,6 +84,20 @@ export function NarrowLayout(props: LayoutProps) {
           )}
         </Show>
       </Entity.Slot>
+
+      <Show when={pullRequest()}>
+        {(review) => (
+          <Entity.Slot
+            placement="body"
+            class="flex min-w-0 flex-wrap items-center gap-1.5 pb-2"
+          >
+            <GithubPullRequestPills
+              entity={review()}
+              authorDisplayName={props.authorDisplayName}
+            />
+          </Entity.Slot>
+        )}
+      </Show>
 
       <Show
         when={

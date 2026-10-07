@@ -14,7 +14,10 @@ export type ReviewsReviewFilterId =
   | 'reviewed_by_me'
   | 'not_reviewed_by_me'
   | 'awaiting_my_review';
+export type ReviewsStatusFilterId = 'open' | 'closed' | 'merged';
+export type ReviewsStatusTabId = 'open' | 'closed';
 export type ReviewsFilterId =
+  | 'status'
   | 'repository'
   | 'author'
   | 'assignee'
@@ -24,11 +27,18 @@ export type ReviewsFilterId =
 export type ReviewsFilterSelection = Record<ReviewsFilterId, readonly string[]>;
 
 export const EMPTY_REVIEWS_FILTERS: ReviewsFilterSelection = {
+  status: [],
   repository: [],
   author: [],
   assignee: [],
   label: [],
   review: [],
+};
+
+/** Default and reset state for the Reviews list. */
+export const DEFAULT_REVIEWS_FILTERS: ReviewsFilterSelection = {
+  ...EMPTY_REVIEWS_FILTERS,
+  status: ['open'],
 };
 
 /** Sidebar order, which the tab hotkeys follow. */
