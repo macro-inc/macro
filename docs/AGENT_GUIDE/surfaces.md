@@ -1171,6 +1171,17 @@ Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Re
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
 handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
 
+Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
+and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
+for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+path). A range the cache has covered renders with no occurrence request, and a far
+jump fetches only the uncovered weeks. A `refresh_calendar` poke, reconnecting,
+coming online, or returning to the tab runs one `CalendarChanges` delta that
+applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+through the durable mutation queue: a rejected write rolls back with the usual
+error, and a write made offline stays visible and replays on reconnect. Native
+apps whose engine lacks the calendar cache commands keep the REST path.
+
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
 waiting for event responses or hidden-page redraws. Verify repeated forward clicks
