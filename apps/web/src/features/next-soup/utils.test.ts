@@ -397,10 +397,11 @@ describe('non-blocking latest channel opens', () => {
       withLocalOverrides: (notification: UnifiedNotification) => notification,
     };
     const isActive = vi.fn(() => true);
-    const findOpenView = vi.fn(() => ({
+    const view = {
       owner: 'channel-pane',
       topLevelSplit: { isActive },
-    }));
+    };
+    const findOpenView = vi.fn((): typeof view | undefined => view);
     const openWithSplit = vi.fn(
       (_content: unknown, _options?: OpenWithSplitOptions) => ({ status })
     );
@@ -508,21 +509,51 @@ describe('non-blocking latest channel opens', () => {
     expect(fetchChannelNotifications.mock.calls[0][1]).toBe('channel-1');
   });
 
-  it('does not mark a mobile channel read after the user leaves it', async () => {
-    vi.mocked(isTouchDevice).mockReturnValue(true);
+  it.each(['closed', 'hidden'])(
+    'does not mark a mobile channel read after its pane is %s',
+    async (state) => {
+      vi.mocked(isTouchDevice).mockReturnValue(true);
+      const test = setup();
+      let resolve!: (notifications: UnifiedNotification[]) => void;
+      fetchChannelNotifications.mockReturnValueOnce(
+        new Promise((done) => {
+          resolve = done;
+        })
+      );
+      await test.open();
+      if (state === 'closed') test.findOpenView.mockReturnValue(undefined);
+      else test.isActive.mockReturnValue(false);
+      resolve([sendNotification('root', 'message')]);
+      await vi.waitFor(() => expect(test.findOpenView).toHaveBeenCalled());
+      expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
+      expect(test.openWithSplit).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('honors local seen overrides after successful background hydration', async () => {
     const test = setup();
-    let resolve!: (notifications: UnifiedNotification[]) => void;
-    fetchChannelNotifications.mockReturnValueOnce(
-      new Promise((done) => {
-        resolve = done;
-      })
-    );
+    test.source.withLocalOverrides = asRead;
+    fetchChannelNotifications.mockResolvedValueOnce([
+      sendNotification('already-seen', 'message'),
+    ]);
     await test.open();
-    test.isActive.mockReturnValue(false);
-    resolve([sendNotification('root', 'message')]);
-    await vi.waitFor(() => expect(test.isActive).toHaveBeenCalled());
+    await vi.waitFor(() => expect(test.findOpenView).toHaveBeenCalled());
     expect(test.bulkMarkAsRead).not.toHaveBeenCalled();
-    expect(test.openWithSplit).toHaveBeenCalledOnce();
+    expect(test.notificationsByEntity).not.toHaveBeenCalled();
+  });
+
+  it('applies explicit message targets without waiting for notification hydration', async () => {
+    const test = setup();
+    test.channel.target = { messageId: 'message', threadId: 'root' };
+    fetchChannelNotifications.mockResolvedValueOnce([]);
+    await test.open();
+    expect(targetSearch(test.openWithSplit, 'channels')).toMatchObject({
+      messageId: ['message'],
+      threadId: ['root'],
+    });
+    expect(test.openWithSplit.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchChannelNotifications.mock.invocationCallOrder[0]
+    );
   });
 
   it('preserves membership gating before starting background hydration', async () => {

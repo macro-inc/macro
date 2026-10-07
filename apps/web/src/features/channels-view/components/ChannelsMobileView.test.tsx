@@ -139,6 +139,7 @@ describe('mobile channel activation', () => {
       fireEvent.click(screen.getByRole('button', { name: 'One' }));
       expect(mocks.hydrate).not.toHaveBeenCalled();
       expect(mocks.openSplit).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
 
       await waitFor(() =>
         expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(channel, {
@@ -151,4 +152,30 @@ describe('mobile channel activation', () => {
       );
     }
   );
+
+  it('still reports a navigation failure while the list is mounted', async () => {
+    const error = new Error('Navigation failed');
+    mocks.openSplit.mockRejectedValueOnce(error);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(() => (
+        <ChannelsMobileView
+          source={source}
+          searchQuery=""
+          onClearSearch={() => {}}
+          tab="channels"
+          onTabChange={() => {}}
+        />
+      ));
+      fireEvent.click(screen.getByRole('button', { name: 'One' }));
+      await waitFor(() =>
+        expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+          'Unable to open conversation. Please try again.'
+        )
+      );
+      expect(log).toHaveBeenCalledWith('Failed to open conversation', error);
+    } finally {
+      log.mockRestore();
+    }
+  });
 });
