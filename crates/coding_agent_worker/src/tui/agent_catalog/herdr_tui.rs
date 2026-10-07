@@ -52,10 +52,7 @@ impl AgentPreset for HerdrTui {
                 args,
                 env: std::collections::BTreeMap::new(),
             },
-            note: Some(match self.0 {
-                TuiAgent::Claude => "a live Claude Code tab per session",
-                TuiAgent::Codex => "a live Codex tab per session",
-            }),
+            note: None,
             install: None,
         })
     }

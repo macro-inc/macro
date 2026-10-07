@@ -93,6 +93,7 @@ fn world() -> Shared {
                     columns: vec![
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
                                 id: NAME_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: NAME,
@@ -122,6 +123,7 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
                                 id: STATUS_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: STATUS,
@@ -170,6 +172,7 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
                                 id: HALL_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: HALL,
@@ -202,6 +205,7 @@ fn world() -> Shared {
                         },
                         ColumnDetail {
                             column: Column {
+                                protections: vec![],
                                 id: CONTACT_COLUMN,
                                 table_id: GUESTS,
                                 property_definition_id: CONTACT,
@@ -253,6 +257,7 @@ fn world() -> Shared {
                     sql_name: "\"Halls\"".into(),
                     columns: vec![ColumnDetail {
                         column: Column {
+                            protections: vec![],
                             id: HALL_NAME_COLUMN,
                             table_id: HALLS,
                             property_definition_id: HALL_NAME,
@@ -303,6 +308,7 @@ fn world() -> Shared {
                     sql_name: "\"Plans\"".into(),
                     columns: vec![ColumnDetail {
                         column: Column {
+                            protections: vec![],
                             id: PLAN_NAME_COLUMN,
                             table_id: PLANS,
                             property_definition_id: PLAN_NAME,

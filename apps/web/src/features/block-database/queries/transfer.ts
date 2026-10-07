@@ -38,17 +38,21 @@ export function importDatabaseTable(
 type DatabaseExportFailure = DatabaseSqlFailure | { kind: 'too-large' };
 
 /**
- * A cell as the grid shows it. Relation cells have no row names loaded
- * here, so they keep the related rows' ids rather than claiming those rows
- * are unavailable.
+ * A cell as the CSV carries it: what the grid shows, except where its display
+ * drops data. Dates keep their stored moment (the grid shows the day) and
+ * numbers every digit (the grid rounds). Relation cells have no row names
+ * loaded here, so they keep the related rows' ids rather than claiming those
+ * rows are unavailable.
  */
-function exportedValue(
+export function exportedValue(
   column: DatabaseViewColumn,
   value: DatabaseCellValue
 ): string {
-  return column.relation
-    ? relatedRowIds(value).join(', ')
-    : formatCellValue(column, value);
+  if (column.relation) return relatedRowIds(value).join(', ');
+  if (column.dataType === 'DATE' && typeof value === 'string') return value;
+  if (column.dataType === 'NUMBER' && typeof value === 'number')
+    return String(value);
+  return formatCellValue(column, value);
 }
 
 /** Never silently export a partial read. */

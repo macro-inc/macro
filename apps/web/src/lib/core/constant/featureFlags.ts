@@ -120,6 +120,19 @@ export const enableDatabases = defineFlag({
 });
 
 /**
+ * Macro Forms (`block-form`): questionnaires whose answers land as rows of a
+ * database table. On under local HMR, like databases; deployed environments
+ * follow PostHog. The flag gates authoring (create entries, builder, `/poll`,
+ * `/form`, database controls); responding, form cards and mentions follow the
+ * service's access whatever it says.
+ */
+export const enableForms = defineFlag({
+  key: 'enable-forms',
+  env: 'ENABLE_FORMS',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
  * Shows the SQL behind database answers and tool results. Off everywhere;
  * turn on locally with VITE_SHOW_DATABASE_SQL=true.
  */
@@ -377,6 +390,9 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   env: 'ENABLE_CLIENT_EMAIL_SIGNAL_FILTER',
   default: false,
 }).enabled;
+
+/** Desktop download settings rollout on web; native desktop always shows it. */
+export const desktopApp = defineFlag({ key: 'desktop-app' });
 
 export const ENABLE_APP_STORE_QR_CODE = defineFlag({
   env: 'ENABLE_APP_STORE_QR_CODE',
@@ -692,9 +708,9 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry, the folded agent-session view in
-// channels, and which bot the single `@macro` mention targets — the agent
-// session when on, the classic in-channel reply when off.
+// AI agents: the folded agent-session view in channels, and which bot the
+// single `@macro` mention targets — the agent session when on, the classic
+// in-channel reply when off.
 // Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
@@ -716,6 +732,15 @@ export const enableCursorAgents = defineFlag({
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
+});
+
+// Yes/no conditions on routine event triggers, checked by the Jev classifier
+// before a run starts. The scheduled-action service rejects conditions until
+// its TYPESAFE_API_KEY is set. Override with VITE_ENABLE_ROUTINE_CONDITIONS.
+export const enableRoutineConditions = defineFlag({
+  key: 'enable-routine-conditions',
+  env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

@@ -21,6 +21,8 @@ export type UsageContext = {
     settings: Accessor<AutoReloadSettings>;
     available: Accessor<boolean>;
     pending: Accessor<boolean>;
+    /** The last automatic reload failed to charge; saving retries. */
+    suspended: Accessor<boolean>;
     save: (settings: AutoReloadSettings) => Promise<void>;
     preview: Accessor<boolean>;
   };

@@ -102,7 +102,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'project',
             'call',
             'routine',
-            'database'
+            'database',
+            'form'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })

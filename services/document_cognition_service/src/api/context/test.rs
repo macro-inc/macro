@@ -68,6 +68,10 @@ pub async fn test_model_access(ctx: &ApiContext) -> DcsChatModelAccess {
 pub struct MockConnectionRepo;
 
 impl MockConnectionRepo {
+    #[expect(
+        clippy::new_ret_no_self,
+        reason = "tests take the mock as the trait object ApiContext stores"
+    )]
     pub fn new() -> Arc<dyn ConnectionRepo> {
         Arc::new(Self)
     }
@@ -134,6 +138,10 @@ pub struct MockStreamRepo {
 }
 
 impl MockStreamRepo {
+    #[expect(
+        clippy::new_ret_no_self,
+        reason = "tests take the mock as the trait object ApiContext stores"
+    )]
     pub fn new() -> Arc<dyn StreamRepo> {
         let (tx, _) = broadcast::channel(16);
         Arc::new(Self { tx })
@@ -472,6 +480,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            pool.clone(),
+            macro_env::Environment::Local,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
             macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),

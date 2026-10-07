@@ -125,6 +125,7 @@ export const authExcluded = [
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
   'toggleTeamNonAdminInvites',
+  'updateAiBillingAutoReload',
   'updateAiBillingOverage',
   'verifyEmailLink',
   'verifyFusionauthUserEmail',
@@ -294,6 +295,8 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
+  'collaborateForm',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
   'cancelSlackImport',
   'completeSlackImportUploads',

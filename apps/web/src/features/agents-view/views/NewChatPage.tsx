@@ -57,6 +57,8 @@ export function NewChatPage(props: {
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
+  /** Offer only this kind; the Agents workspace passes its Work or Code mode. */
+  kind?: AgentKind;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -69,7 +71,12 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const options = () => props.roster;
+  const options = () => {
+    const kind = props.kind;
+    return kind
+      ? props.roster.filter((agent) => agent.kind === kind)
+      : props.roster;
+  };
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
@@ -84,39 +91,38 @@ export function NewChatPage(props: {
       : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
   const recentAgentId = () => {
-    const ids = recentAgents.ids();
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
-    if (props.rosterLoading || props.availabilityLoading) return ids[0];
-    return ids.find((id) =>
-      options().some((agent) => agent.id === id && !agent.unavailableReason)
-    );
+    const settling = props.rosterLoading || props.availabilityLoading;
+    return recentAgents
+      .ids()
+      .find((id) =>
+        options().some(
+          (agent) => agent.id === id && (settling || !agent.unavailableReason)
+        )
+      );
   };
   const selected = createMemo(() => {
-    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
-    return options().find((agent) => agent.id === wanted) ?? options()[0];
-  });
-  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
-  const macroCatalog = createComposerModels(macro);
-  /** Preferred Macro model when it is still in the live in-memory catalog. */
-  const preferredInmemModel = () => {
-    const id = preferredInmem.model();
-    if (!id) return undefined;
-    const catalog = macroCatalog.models();
-    // Until discovery returns, keep the stored id so the trigger can label it.
-    if (catalog.length === 0) return id;
-    return catalog.some((option) => option.id === id) ? id : undefined;
-  };
-  /**
-   * Model shown on the agent control and sent with the next start. Coding
-   * agents use a one-shot override; Macro prefers an in-session pick, then
-   * the remembered Models choice.
-   */
-  const composerModelOverride = () => {
-    if (selected()?.id === MACRO_PERSONA_ID) {
-      return modelOverride() ?? preferredInmemModel();
+    for (const wanted of [agentId(), recentAgentId(), MACRO_PERSONA_ID]) {
+      const agent = options().find((option) => option.id === wanted);
+      if (agent) return agent;
     }
-    return modelOverride();
+    return options().find((agent) => !agent.unavailableReason) ?? options()[0];
+  });
+  const selectedCatalog = createComposerModels(selected);
+  /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
+  const composerModelOverride = () => {
+    const agent = selected();
+    if (agent?.harness !== 'macro-inmem' && agent?.harness !== 'in-memory')
+      return modelOverride();
+    const preferred =
+      modelOverride() ??
+      (agent.id === MACRO_PERSONA_ID
+        ? preferredInmem.model()
+        : agent.defaultModel);
+    return selectedCatalog.models().some((option) => option.id === preferred)
+      ? preferred
+      : selectedCatalog.currentModel();
   };
   const capabilityTarget = () => {
     const agent = selected();
@@ -125,7 +131,9 @@ export function NewChatPage(props: {
     if (harness !== 'in-memory' && harness !== 'cursor') return undefined;
     return {
       harness,
-      model: composerModelOverride() ?? agent?.defaultModel,
+      model:
+        composerModelOverride() ??
+        (harness === 'in-memory' ? undefined : agent?.defaultModel),
     } as const;
   };
   const capabilities = useAgentCapabilitiesQuery(capabilityTarget);
@@ -153,7 +161,7 @@ export function NewChatPage(props: {
       ? { configId: selection.configId, value: selection.value }
       : undefined;
   };
-  const coding = () => selected()?.kind === 'coder';
+  const coding = () => (props.kind ?? selected()?.kind) === 'coder';
   const localRuntime = () => selected()?.harness === 'macrod';
   const canSelectRepository = () =>
     selected()?.harness === 'cursor' || localRuntime();

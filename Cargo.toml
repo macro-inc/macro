@@ -34,11 +34,14 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/jev",
   "crates/claude_cloud_agents",
   "crates/database_sql",
   "crates/databases",
   "crates/databases_sql",
   "crates/models_databases",
+  "crates/forms",
+  "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
   "crates/dictation",
@@ -270,6 +273,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
+loro = "1.16.2"
 lru = "0.16"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
@@ -432,6 +436,19 @@ zip = "=2.4.2"
 ammonia = "4.1.4"
 html-escape = "0.2"
 subtle = "2.6.1"
+
+# cache-turso's storage tests load thousands of rows into the embedded SQL engine
+# to assert VM step budgets. Unoptimized, the engine made them the slowest tests
+# in the Rust suite (34 s for the crate); at opt-level 2 the crate's tests take
+# 2.6 s. The assertions count VM steps, which optimization does not change.
+[profile.dev.package.turso_core]
+opt-level = 2
+
+[profile.dev.package.turso_parser]
+opt-level = 2
+
+[profile.dev.package.turso_ext]
+opt-level = 2
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final

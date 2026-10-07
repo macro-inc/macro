@@ -25,6 +25,7 @@ import {
 } from 'solid-js';
 import { DatabaseRelationCell } from '../components/database-relation-cell';
 import type { DatabaseCellFocus } from '../components/database-table';
+import { ColumnUsageContext } from '../context/column-usage';
 import {
   type OptionEditing,
   OptionEditingContext,
@@ -52,6 +53,7 @@ import {
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
 import { patchTable } from '../queries/detail-cache';
+import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
@@ -281,6 +283,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
           name: table.name,
         }))
       : [];
+  const formsAsking = useFormsAskingColumns(() => databaseId);
   const columnCasts = createColumnCasts({
     databaseId,
     tableId: props.tableId,
@@ -298,184 +301,189 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
         )}
       </For>
       <StaticMarkdownContext>
-        <OptionEditingContext.Provider
-          value={props.canEdit ? optionEditing : undefined}
-        >
-          <DatabaseRecordsView
-            name={table().table.name}
-            source={source}
-            canEdit={props.canEdit}
-            view={props.view}
-            stored={props.stored}
-            preparingView={props.preparingView}
-            onViewChange={props.onViewChange}
-            onClearConstraints={props.onClearConstraints}
-            boardPositions={boardPositions}
-            onCellFocus={setFocusedCell}
-            remoteUsers={remoteUsers()}
-            renderTextEditor={renderTextEditor}
-            renderTextValue={renderTextValue}
-            renderMentionPicker={renderMentionPicker}
-            renderMentionValue={renderMentionValue}
-            renderRelationCell={(cell) => (
-              <DatabaseRelationCell
-                {...cell}
-                source={relations(cell.column.relation.tableId)}
-                onOpen={(rowId) =>
-                  props.onOpenRelated?.({ ...cell.column.relation, rowId })
-                }
-              />
-            )}
-            relationTables={relationTables()}
-            columnCasts={columnCasts}
-            onChangeColumnType={(columnId, change) =>
-              // Checked against the version the menu's dry run read, so a
-              // change made since is not converted blind.
-              applyDatabaseOps(
-                databaseId,
-                [
-                  {
-                    kind: 'column',
-                    table: props.tableId,
-                    column: columnId,
-                    change: {
-                      kind: 'change_type',
-                      to: opColumnKind(databaseId, change.to),
+        <ColumnUsageContext.Provider value={formsAsking}>
+          <OptionEditingContext.Provider
+            value={props.canEdit ? optionEditing : undefined}
+          >
+            <DatabaseRecordsView
+              name={table().table.name}
+              source={source}
+              canEdit={props.canEdit}
+              view={props.view}
+              stored={props.stored}
+              preparingView={props.preparingView}
+              onViewChange={props.onViewChange}
+              onClearConstraints={props.onClearConstraints}
+              boardPositions={boardPositions}
+              onCellFocus={setFocusedCell}
+              remoteUsers={remoteUsers()}
+              renderTextEditor={renderTextEditor}
+              renderTextValue={renderTextValue}
+              renderMentionPicker={renderMentionPicker}
+              renderMentionValue={renderMentionValue}
+              renderRelationCell={(cell) => (
+                <DatabaseRelationCell
+                  {...cell}
+                  source={relations(cell.column.relation.tableId)}
+                  onOpen={(rowId) =>
+                    props.onOpenRelated?.({ ...cell.column.relation, rowId })
+                  }
+                />
+              )}
+              relationTables={relationTables()}
+              columnCasts={columnCasts}
+              onChangeColumnType={(columnId, change) =>
+                // Checked against the version the menu's dry run read, so a
+                // change made since is not converted blind.
+                applyDatabaseOps(
+                  databaseId,
+                  [
+                    {
+                      kind: 'column',
+                      table: props.tableId,
+                      column: columnId,
+                      change: {
+                        kind: 'change_type',
+                        to: opColumnKind(databaseId, change.to),
+                      },
                     },
-                  },
-                ],
-                { [props.tableId]: change.baseVersion ?? table().table.version }
-              ).map(() => undefined)
-            }
-            onConvertColumn={(columnId, conversion) =>
-              convertDatabaseColumn({
-                databaseId,
-                tableId: props.tableId,
-                columnId,
-                to: conversion.to,
-                name: convertedColumnName(
-                  conversion.columnName,
-                  conversion.label,
-                  table().columns.map((column) => toViewColumn(column).name)
-                ),
-              })
-            }
-            onDeleteColumn={(columnId) => {
-              const tableId = props.tableId;
-              const version = table().table.version;
-              return ResultAsync.fromSafePromise(
-                patchTable(databaseId, tableId, (entry) => ({
-                  ...entry,
-                  columns: entry.columns.filter(
-                    ({ column }) => column.id !== columnId
+                  ],
+                  {
+                    [props.tableId]:
+                      change.baseVersion ?? table().table.version,
+                  }
+                ).map(() => undefined)
+              }
+              onConvertColumn={(columnId, conversion) =>
+                convertDatabaseColumn({
+                  databaseId,
+                  tableId: props.tableId,
+                  columnId,
+                  to: conversion.to,
+                  name: convertedColumnName(
+                    conversion.columnName,
+                    conversion.label,
+                    table().columns.map((column) => toViewColumn(column).name)
                   ),
-                }))
-              )
-                .andThen((rollback) =>
-                  applyDatabaseOps(
-                    databaseId,
-                    [
+                })
+              }
+              onDeleteColumn={(columnId) => {
+                const tableId = props.tableId;
+                const version = table().table.version;
+                return ResultAsync.fromSafePromise(
+                  patchTable(databaseId, tableId, (entry) => ({
+                    ...entry,
+                    columns: entry.columns.filter(
+                      ({ column }) => column.id !== columnId
+                    ),
+                  }))
+                )
+                  .andThen((rollback) =>
+                    applyDatabaseOps(
+                      databaseId,
+                      [
+                        {
+                          kind: 'column',
+                          table: tableId,
+                          column: columnId,
+                          change: { kind: 'delete' },
+                        },
+                      ],
+                      { [tableId]: version }
+                    ).mapErr((error) => {
+                      rollback();
+                      return error;
+                    })
+                  )
+                  .map(() => undefined);
+              }}
+              onReorderColumns={(columnIds) => {
+                const tableId = props.tableId;
+                const version = table().table.version;
+                const order = mergeDatabaseColumnOrder(
+                  table().columns.map(({ column }) => column.id),
+                  columnIds
+                );
+                const rank = new Map(order.map((id, i) => [id, i]));
+                return ResultAsync.fromSafePromise(
+                  patchTable(databaseId, tableId, (entry) => ({
+                    ...entry,
+                    columns: entry.columns.toSorted(
+                      (a, b) =>
+                        (rank.get(a.column.id) ?? Infinity) -
+                        (rank.get(b.column.id) ?? Infinity)
+                    ),
+                  }))
+                )
+                  .andThen((rollback) =>
+                    applyDatabaseOps(
+                      databaseId,
+                      [
+                        {
+                          kind: 'table',
+                          table: tableId,
+                          change: { kind: 'reorder_columns', order },
+                        },
+                      ],
+                      { [tableId]: version }
+                    ).mapErr((error) => {
+                      rollback();
+                      return error;
+                    })
+                  )
+                  .map(() => undefined);
+              }}
+              onRenameColumn={(columnId, name, previousName) => {
+                const tableId = props.tableId;
+                return ResultAsync.fromSafePromise(
+                  patchTable(databaseId, tableId, (entry) => ({
+                    ...entry,
+                    columns: entry.columns.map((column) =>
+                      column.column.id === columnId
+                        ? {
+                            ...column,
+                            column: { ...column.column, display_name: name },
+                          }
+                        : column
+                    ),
+                  }))
+                )
+                  .andThen((rollback) =>
+                    applyDatabaseOps(databaseId, [
                       {
                         kind: 'column',
                         table: tableId,
                         column: columnId,
-                        change: { kind: 'delete' },
+                        change: { kind: 'rename', name, previousName },
                       },
-                    ],
-                    { [tableId]: version }
-                  ).mapErr((error) => {
-                    rollback();
-                    return error;
-                  })
-                )
-                .map(() => undefined);
-            }}
-            onReorderColumns={(columnIds) => {
-              const tableId = props.tableId;
-              const version = table().table.version;
-              const order = mergeDatabaseColumnOrder(
-                table().columns.map(({ column }) => column.id),
-                columnIds
-              );
-              const rank = new Map(order.map((id, i) => [id, i]));
-              return ResultAsync.fromSafePromise(
-                patchTable(databaseId, tableId, (entry) => ({
-                  ...entry,
-                  columns: entry.columns.toSorted(
-                    (a, b) =>
-                      (rank.get(a.column.id) ?? Infinity) -
-                      (rank.get(b.column.id) ?? Infinity)
-                  ),
-                }))
-              )
-                .andThen((rollback) =>
-                  applyDatabaseOps(
-                    databaseId,
-                    [
-                      {
-                        kind: 'table',
-                        table: tableId,
-                        change: { kind: 'reorder_columns', order },
-                      },
-                    ],
-                    { [tableId]: version }
-                  ).mapErr((error) => {
-                    rollback();
-                    return error;
-                  })
-                )
-                .map(() => undefined);
-            }}
-            onRenameColumn={(columnId, name, previousName) => {
-              const tableId = props.tableId;
-              return ResultAsync.fromSafePromise(
-                patchTable(databaseId, tableId, (entry) => ({
-                  ...entry,
-                  columns: entry.columns.map((column) =>
-                    column.column.id === columnId
-                      ? {
-                          ...column,
-                          column: { ...column.column, display_name: name },
-                        }
-                      : column
-                  ),
-                }))
-              )
-                .andThen((rollback) =>
-                  applyDatabaseOps(databaseId, [
-                    {
-                      kind: 'column',
-                      table: tableId,
-                      column: columnId,
-                      change: { kind: 'rename', name, previousName },
-                    },
-                  ]).mapErr((error) => {
-                    rollback();
-                    return error;
-                  })
-                )
-                .map(() => undefined);
-            }}
-            actionsRef={props.actionsRef}
-            renderToolbar={props.renderToolbar}
-            createColumn={() =>
-              createDefaultColumn({
-                databaseId,
-                tableId: props.tableId,
-                columns: table().columns,
-              })
-            }
-            addColumn={(label, onCreated) => (
-              <AddColumnMenu
-                databaseId={databaseId}
-                tableId={props.tableId}
-                columns={table().columns}
-                label={label}
-                onCreated={onCreated}
-              />
-            )}
-          />
-        </OptionEditingContext.Provider>
+                    ]).mapErr((error) => {
+                      rollback();
+                      return error;
+                    })
+                  )
+                  .map(() => undefined);
+              }}
+              actionsRef={props.actionsRef}
+              renderToolbar={props.renderToolbar}
+              createColumn={() =>
+                createDefaultColumn({
+                  databaseId,
+                  tableId: props.tableId,
+                  columns: table().columns,
+                })
+              }
+              addColumn={(label, onCreated) => (
+                <AddColumnMenu
+                  databaseId={databaseId}
+                  tableId={props.tableId}
+                  columns={table().columns}
+                  label={label}
+                  onCreated={onCreated}
+                />
+              )}
+            />
+          </OptionEditingContext.Provider>
+        </ColumnUsageContext.Provider>
       </StaticMarkdownContext>
     </>
   );

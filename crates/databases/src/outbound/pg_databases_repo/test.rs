@@ -166,6 +166,7 @@ async fn commit(
 fn bind(table_id: TableId, definition_id: Uuid, position: &str) -> Write {
     Write::CreateColumn {
         column: Column {
+            protections: vec![],
             id: ColumnId::new(),
             table_id,
             property_definition_id: definition_id,

@@ -74,6 +74,10 @@ HTTPS machine hostnames; verify the proxy configuration before retrying.
 
 ## Live database answers
 
+Opening the slash menu with `/` lists Normal Text, headings, and the other
+Markdown options before Database. Typing `/database` filters to the Database
+action.
+
 With Databases on, type `/database` and choose **Database** to insert a live answer
 to a question about a database. Answers run with each reader's database access and
 refresh when referenced tables change. See
@@ -95,8 +99,11 @@ use a green grid icon in file lists and search. The grid fills
 the panel beneath the formatting and formula bars. While a workbook opens, a
 shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
 formula cells show a short shimmer bar until their first results arrive; wait for
-real cell text before reading values. They have the `.spreadsheet` file type; uploading an
-Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+real cell text before reading values. Once it loads, the grid takes keyboard focus
+with A1 selected, so typing immediately edits A1 and arrow keys move the selection;
+it does not take focus from a dialog or control reached while loading, nor in an
+inline preview or when the sheet was opened by J/K list navigation. They have the `.spreadsheet` file type; uploading an
+Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
 
@@ -152,12 +159,17 @@ and **Cancel edit** while editing, so a software keyboard is sufficient. Swipe t
 formatting ribbon horizontally to reach more controls. On narrow screens, **Add rows**
 is in the active sheet's actions menu; **Import and export** stays at the bottom right.
 
-Both editors offer formula autocomplete. Type `=` or a function prefix such as
-`=SU`, use Up/Down to choose a suggestion, and Tab or Enter to insert it. Clicking
-a suggestion also keeps focus in the editor. The popup shows a description,
-signature, and example; after `(` it highlights the current argument, including
-inside nested formulas. Escape dismisses help first, then cancels editing on a
-second press. Suggestions do not appear inside quoted text or in view-only mode.
+Both editors offer formula autocomplete. Type a function prefix such as `=SU`
+(a bare `=` shows nothing), use Up/Down to choose a suggestion, and Tab or Enter
+to insert it. Clicking a suggestion also keeps focus in the editor. The compact
+popup lists each function with a one-line description and the highlighted
+function's signature; after `(` it shows the signature with the current argument
+highlighted, including inside nested formulas. Help opens only after typing:
+focusing or clicking into an existing formula, switching sheet tabs, or picking a
+reference leaves it closed. Pressing outside the editor closes it, and Escape
+dismisses help first, then cancels editing on a second press; either keeps help
+closed until the next keystroke. Suggestions do not appear inside quoted text or
+in view-only mode.
 
 While editing a formula, click a cell or drag across cells to insert a reference
 at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft updates
@@ -169,6 +181,11 @@ click its tab while the formula is awaiting a reference, then click or drag the
 source cells. The draft stays in the formula bar; Enter commits it to the original
 sheet and cell. Names with spaces are quoted automatically. Escape cancels and
 returns to the original sheet.
+While a formula is being edited, each cell or range it refers to, including whole
+columns or rows such as `D:D`, is outlined in its own color on the grid, and the
+reference text in both editors uses the same color. A repeated reference keeps
+its color. Only references to the sheet being shown are outlined; the colors
+disappear when the edit is committed or cancelled.
 On touch screens, tap a cell while editing a formula, then drag **Move reference
 start** or **Move reference end** to extend its reference. Tapping a suggestion or
 adjusting a reference should keep the input focused and the software keyboard open.
@@ -240,10 +257,11 @@ The footer's bottom-right **Import and export → Import…** accepts `.csv` and
 Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
 clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
 The menu keeps an existing whole-row/column selection when opened within it.
-Insert/delete shifts references and named ranges in local workbooks only; these
-commands are disabled on shared workbooks (including offline sessions) until
-collaborative rows and columns have stable identities. Adding blank rows at the
-bottom remains available. Hidden cells are skipped by keyboard navigation.
+Insert/delete shifts cells, references and named ranges in local workbooks and in
+saved workbooks while connected; the commands are disabled while a saved workbook
+is offline or reconnecting. A collaborator's change that arrives while the cells
+are being moved cancels the insert/delete. Adding blank rows at the bottom
+remains available. Hidden cells are skipped by keyboard navigation.
 
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
 the formula bar to search people, documents, channels, email and dates, then choose an
@@ -276,7 +294,13 @@ protection). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
-while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
+while the preview was open. Encrypted files are rejected. Macro-enabled `.xlsm`
+workbooks import like `.xlsx` (here and as uploads), without their macros: VBA
+projects, Excel 4.0 macro sheets and form/ActiveX controls are dropped with an
+import note, and **Download as Excel** writes a macro-free `.xlsx`; an uploaded
+`.xlsm` keeps its macros in the original download. A legacy `.xls`
+is rejected here with a hint to upload it instead; uploads convert it (see
+[Legacy Office uploads](#legacy-office-uploads)).
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
 current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges, named constants, and names defined by formulas are retained and calculate. Imported legacy formulas keep Excel's implicit intersection, shown with `@` as current Excel shows it; 3-D references such as `SUM('Jan:Dec'!B2)` are listed sheet by sheet. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Imported charts, images, shapes, text boxes, pivot tables, conditional formatting, validation and notes are written back. Structured table formulas and rich text are not fully supported; review import notes before conversion.
@@ -419,6 +443,39 @@ check both source/formula and displayed result in the sheet and another connecte
 client. A viewer's edit must fail; a concurrent manual edit must force a fresh
 read. These tool calls require the updated AI backend, AI editing worker, and sync
 service; the frontend alone cannot test their hosted path.
+
+## Folder uploads
+
+Dropping a folder (or choosing one with the folder picker) zips it in the browser
+and imports it as a folder tree: each subfolder becomes a folder, including empty
+ones, and each file becomes a document. The folder picker cannot see empty
+subfolders, so only dropped folders keep them. Office lock files (`~$…`),
+`Thumbs.db`, `desktop.ini`, `__MACOSX` and hidden files or folders are skipped.
+Extension case does not matter (`REPORT.DOCX` imports as `.docx`). If some files
+fail, the rest of the tree still appears and a toast says some files could not be
+uploaded. The unzip runs in the upload extractor Lambda, which the local stack
+does not run; verify folder imports against a deployed backend.
+
+## Legacy Office uploads
+
+Uploaded legacy binary Office files are converted to their OpenXML equivalents
+on the server: `.doc` → `.docx`, `.ppt` → `.pptx`, `.xls` → `.xlsx`. This also
+applies to files inside an uploaded folder. The document keeps its id and name;
+its file type changes and the converted file becomes its latest version.
+Converted Word files then go through the regular DOCX pipeline, and converted
+workbooks open in the uploaded-workbook preview, where **Edit in Macro** imports
+them into a native spreadsheet.
+
+While a legacy file uploaded in the last 10 minutes is converting, its view shows
+**Converting … to a PowerPoint presentation…** (or Word document / Excel
+workbook) with **Download** still available for the original. When the
+conversion lands, the split reopens in the right block (workbooks switch in
+place). If conversion fails or takes over 3 minutes, the view falls back to
+**No preview available**, and the original stays downloadable. Legacy files
+uploaded before conversion existed are not converted.
+
+Conversion runs in the convert service through the upload finalizer Lambda,
+neither of which the local stack runs, so verify it against a deployed backend.
 
 ## Presentations (PowerPoint)
 

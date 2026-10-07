@@ -34,4 +34,5 @@ export const ListFavoritesEntityTypeItem = {
   initiative: 'initiative',
   database: 'database',
   database_row: 'database_row',
+  form: 'form',
 } as const;

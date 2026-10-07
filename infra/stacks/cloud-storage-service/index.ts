@@ -446,12 +446,18 @@ const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
   SYNC_SERVICE_URL: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
   RUST_LOG:
     'document_upload_finalizer_handler=info,documents=info,macro_http_request=info',
+  // Selects the stack's convert queue.
+  ENVIRONMENT: stack,
+  DOCUMENT_STORAGE_BUCKET: pulumi.interpolate`${documentStorageBucketId}`,
+  DOCX_DOCUMENT_UPLOAD_BUCKET: pulumi.interpolate`${docxUploadBucketName}`,
 };
 
 const documentUploadFinalizer = new DocumentUploadFinalizerLambda(
   `document-upload-finalizer-${stack}`,
   {
     documentStorageBucketArn,
+    docxUploadBucketArn,
+    convertQueueArn,
     envVars: documentUploadFinalizerEnvVars,
     vpc: coparse_api_vpc,
     tags,
@@ -480,4 +486,5 @@ attachPolicyToDocxUnzipBucket({
   docxUnzipLambdaRoleArn: docxUnzipHandler.role.arn,
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
+  documentUploadFinalizerRoleArn: documentUploadFinalizer.role.arn,
 });

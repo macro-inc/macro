@@ -4,6 +4,7 @@
 
 import type { ResultError } from '@core/util/result';
 import { err, ok, type Result } from 'neverthrow';
+import { bookingLinkHistory } from '../../booking-link-history';
 import * as schemas from './schemas';
 import type * as types from './types';
 
@@ -35,6 +36,10 @@ type ToolParserMap = {
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
+  };
+  CreateBookingLink: {
+    call: types.CreateBookingLink;
+    response: types.BookingLinkResult;
   };
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
@@ -97,6 +102,10 @@ type ToolParserMap = {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
   };
+  EditBookingLink: {
+    call: types.EditBookingLink;
+    response: types.BookingLinkResult;
+  };
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
@@ -137,6 +146,10 @@ type ToolParserMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListBookingLinks: {
+    call: types.ListBookingLinks;
+    response: types.ListBookingLinksResult;
+  };
   ListBots: { call: types.ListBots; response: types.ListBotsResponse };
   ListCalendarEvents: {
     call: types.ListCalendarEvents;
@@ -373,6 +386,10 @@ const toolParserMap = {
     call: schemas.ContentSearch,
     response: schemas.SearchToolResponse,
   },
+  CreateBookingLink: {
+    call: schemas.CreateBookingLink,
+    response: schemas.BookingLinkResult,
+  },
   CreateBot: { call: schemas.CreateBot, response: schemas.CreateBotResponse },
   CreateCalendarEvent: {
     call: schemas.CreateCalendarEvent,
@@ -434,6 +451,10 @@ const toolParserMap = {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
   },
+  EditBookingLink: {
+    call: schemas.EditBookingLink,
+    response: schemas.BookingLinkResult,
+  },
   EditDocument: {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
@@ -479,6 +500,10 @@ const toolParserMap = {
   ListAgents: {
     call: schemas.ListAgents,
     response: schemas.ListAgentsResponse,
+  },
+  ListBookingLinks: {
+    call: schemas.ListBookingLinks,
+    response: schemas.ListBookingLinksResult,
   },
   ListBots: { call: schemas.ListBots, response: schemas.ListBotsResponse },
   ListCalendarEvents: {
@@ -751,6 +776,10 @@ type ToolDataMap = {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
   };
+  CreateBookingLink: {
+    call: types.CreateBookingLink;
+    response: types.BookingLinkResult;
+  };
   CreateBot: { call: types.CreateBot; response: types.CreateBotResponse };
   CreateCalendarEvent: {
     call: types.CreateCalendarEvent;
@@ -812,6 +841,10 @@ type ToolDataMap = {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
   };
+  EditBookingLink: {
+    call: types.EditBookingLink;
+    response: types.BookingLinkResult;
+  };
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
@@ -852,6 +885,10 @@ type ToolDataMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListBookingLinks: {
+    call: types.ListBookingLinks;
+    response: types.ListBookingLinksResult;
+  };
   ListBots: { call: types.ListBots; response: types.ListBotsResponse };
   ListCalendarEvents: {
     call: types.ListCalendarEvents;
@@ -1078,7 +1115,9 @@ function deserializeTool<T extends NamedTool>(
     ]);
   }
   const parser = toolParserMap[tool.name as ToolName];
-  const maybeToolCall = parser[direction].safeParse(tool.json);
+  const maybeToolCall = parser[direction].safeParse(
+    bookingLinkHistory(tool.name, direction, tool.json)
+  );
   if (maybeToolCall.success) {
     return ok({
       id: tool.id,

@@ -374,6 +374,8 @@ The mobile task drawer retains its existing layout.
 Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-sidebar-tags).
 Carets and folder-only parents expand branches; actual tags select their exact ID
 and switch the mailbox to All. Parent selection does not include descendant tags.
+Unlike Tasks and Drive, it lists only personal tags; team-shared tags are hidden,
+and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
@@ -507,8 +509,10 @@ writer. Email mutations and their uncached reply reloads use the primary; ordina
 GraphQL/REST lists, direct Soup lookups, and realtime Soup hydration use the replica.
 A mutation reply is fresh, but subsequent list refetches are eventually consistent
 and can still return replica-stale read/archive state. Test that boundary separately
-from mutation reply correctness. A post-commit reply-load failure is retryable;
-it must not discard the queued intent. Deploy
+from mutation reply correctness. GraphQL application errors, including a failed
+post-commit reply load, release the queued mutation rather than retrying forever.
+Transport failures retain the existing retry policy. Draft recovery preserves local
+content and offers explicit Retry using the original handle. Deploy
 the backend schema containing `setEmailThreadArchived` before this client.
 Browser WASM and native cache builds must include the regenerated schema metadata;
 native offline archive support therefore requires a full app build, not just OTA.
@@ -636,8 +640,15 @@ or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
-compose also flushes pending edits when leaving through app navigation. During
-send or discard, its sender and scheduling controls cannot change the operation.
+compose also flushes pending edits when leaving through app navigation. Switch
+views immediately after typing, before the 500 ms autosave debounce: the old
+thread must close, further navigation must work, and reopening must retain the
+last edit. Repeat with an existing draft and a new reply. During
+mobile Save Draft navigation, a failed local flush is reported and keeps the
+back menu and editor open with their contents intact. After another edit saves
+successfully, Save Draft can leave the composer. Reopen an existing reply after
+clearing its body: the saved empty body must not restore the original quoted HTML.
+During send or discard, its sender and scheduling controls cannot change the operation.
 Attachments that can be opened are buttons named by their filename; Tab to one
 and press Enter or Space. Removal is a separate button named `Remove <filename>`.
 Removing a forwarded file keeps the received original.
@@ -645,6 +656,74 @@ When checking draft autosave, edit the body of a draft with uploaded or forwarde
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
+
+With GraphQL draft queuing enabled, working copies and pending attachment bytes
+are saved on this device independently of the mutation queue. A failed server
+save must leave the draft discoverable in **Drafts** (including grouped views)
+and in its reply thread. **Draft saved** sits immediately left of the desktop
+delete button after editing pauses for 500 ms and the latest local save completes,
+then fades out after two seconds, including offline saves. Resuming typing hides
+it immediately; another pause and saved version restart the timer. Background
+sync updates do not. Failures replace it with persistent **Retry** in the same place; hover for details.
+Clicking Send must not show the badge for its preparatory draft save, including
+when delivery fails. Later edits can show it again after the usual pause.
+Verify the label does not cycle through saving/syncing text on each edit and
+that retry remains accessible beside the actions on mobile. Editing while failed
+continues saving locally without repeatedly submitting the rejected request.
+Repeated local-save failures show one persistent warning per composer; recovery
+or closing that composer dismisses it. A later failure shows a new warning.
+Retry preserves the original draft handle. An already-sent rejection drops the
+local copy rather than recreating the sent message. The REST compose path keeps
+its existing behavior.
+
+Native draft recovery requires a full app update containing queue inspection and
+durable mutation metadata support. An older app receiving an OTA bundle shows
+**Macro update required** and uses the existing uncached fallback. Its old queue
+must remain intact, with no new claims or queued writes, until the native update.
+When the cache becomes unavailable, draft saves and discards must not bypass its
+preserved queue through GraphQL or REST fallback. Local editing stays durable;
+reload or update the app to resume server sync. Verify this after a native
+upgrade-required error and a worker initialization failure; ordinary reads still work.
+
+For recovery verification, reject a draft save with a GraphQL error (including
+legacy `retryable: true` metadata), then perform an unrelated queued action: the
+failed save must release the queue. Reload and reopen the draft; verify subject,
+recipients, body, and pending file contents. Retry and check that exactly one
+server draft exists. If per-mutation recovery preparation fails or times out,
+the mutation must fail and release the queue too, including legacy drafts that
+have not been copied into recovery storage. Existing local working copies remain;
+an unmigrated legacy edit can be lost if the queue held its only durable copy.
+Verify that an unrelated queued action still completes in both cases.
+Repeat with two tabs, a save response arriving after a newer
+edit, an attachment upload completing during another local save, and Discard
+while an attachment snapshot is still being saved. A snapshot based on an older
+local revision must fail without replacing newer content or files, including
+when another tab saves first. Reopen the draft to use the latest version.
+A completed discard must not resurrect on reload. A clean,
+fully synchronized local copy must not hide newer server edits or sent state.
+While online, create a disposable reply, wait for its server identity, discard
+it, then leave and reopen the thread and reload. Its local body and attachment
+bytes must be gone and the server draft must stay deleted. Repeat with a second
+tab holding the same draft under its server ID: a delayed save from that tab must
+not recreate the discarded working copy. Repeat after Undo revives the draft:
+the old tab must not overwrite the restored copy even when revisions match.
+A newly composed reply still saves.
+
+For offline replies, use a received email so recipients come from its contacts.
+Type a reply, leave the thread, and reopen it while still offline; repeat both
+immediately after typing and after waiting for autosave. The reply body and
+recipients must remain, including after reload. Delay local draft discovery while
+the cached thread is available: the reply editor must wait for the recovered
+draft before it can accept edits. When several local replies target the same
+message, reopen the most recently edited draft. This exercises the real form-to-
+storage boundary as well as queued saves; plain hand-built save inputs alone
+do not cover it.
+
+Explicit sign-out warns before removing unsynchronized local drafts and files.
+Cancel must retain them; confirm must clear them and fence in-flight work so the
+next account cannot see them. If local storage cannot be inspected, sign-out must
+still offer a warning and a way to continue. Do not verify this by deleting real
+user drafts; use disposable drafts in an isolated test session.
 The three-dot button beneath a body reveals quoted content and a trimmed
 signature. Plaintext and Macro Markdown use the existing Markdown renderer;
 Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
@@ -653,6 +732,16 @@ open shadow root: Playwright text locators can reach them, but a card's ordinary
 
 Sending a reply from an inbox thread marks that thread done but stays on it;
 only the explicit Mark done action opens the next email.
+Sending a message shows it in the open thread immediately, while delivery is
+still pending. It stays visible until the thread refresh confirms it, with no
+duplicate message. Failed delivery removes that message and restores the reply
+draft; a successful Undo Send removes it and reopens the draft. This temporary
+thread display uses the existing REST delivery path.
+Sending must leave the new message's reply composer closed. After delivery,
+focus belongs to the sent message card in the same thread pane, even while
+the thread refresh is still pending. Replying again requires clicking Reply
+or using a reply shortcut.
+
 After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
@@ -675,25 +764,22 @@ offline: a blocking notice explains and nothing is attached.
 For a new standalone email, a failed REST draft save is best-effort: Send can
 still proceed without a draft ID when no save was queued and no attachment is
 waiting to upload. A server rejection blocks sending even an existing draft.
-An internal draft-save failure, including a failed response read after the save
-commits, stays queued and retries with backoff. It must not permanently disable
-autosave; Send stays blocked until a save is confirmed. Invalid or unauthorized
-writes still stop retrying.
+GraphQL draft saves automatically retry only network failures. GraphQL errors,
+including internal, invalid, and unauthorized errors, fail the mutation and
+release the queue. The local working copy offers explicit Retry; Send stays
+blocked until a save is confirmed.
 A successful save response with an invalid cache identity binding still commits
 its normalizable server data and reports a cache diagnostic without replaying
 the mutation or asking the user to save again. If that response also cannot be
 normalized, the attempt stops retrying and reports a permanent cache failure.
-If an offline save is permanently rejected after reconnect, a persistent
-**Draft could not be saved** notice offers **Save as new draft**. The editor keeps
-the latest text and stops autosaving until that action is chosen. Recovery saves
-the current content under a new draft identity; a reply stays in its conversation.
-Previously saved attachments that cannot be copied require reattachment, with a
-separate notice. Verify that further typing alone does not retry the rejected
-write, recovery uses the newest text, and closing or resetting the composer
-removes its recovery notice. Other transient notices must not hide that action.
+If a queued GraphQL save is permanently rejected after reconnect, the draft status
+offers **Retry** using the original draft handle and latest locally saved content.
+Further typing saves locally without retrying the rejected write. Verify that
+pending attachment bytes survive reopening and that a reply stays in its
+conversation.
 An already-sent rejection after reconnect follows the same path as an immediate
 already-sent response: announce that the email or reply was sent, clear the local
-composer, and cancel pending autosave. It must never offer **Save as new draft**.
+composer, and cancel pending autosave. It must never offer Retry for that draft.
 Verify this in standalone and reply composers, including a queued edit awaiting
 its debounce and a failure racing the first identity read. A settlement for a
 previous or different draft must not clear the current editor.
@@ -1051,6 +1137,11 @@ returning from an opened file.
 
 Event composer dropdown triggers and date/time inputs use the theme control
 surface, so they blend with the dialog instead of using the darker page fill.
+Their menus stay inside the composer's portal scope. Verify that calendar,
+recurrence, Guests, conferencing, Location, and Notifications open on the first
+click from the title field and accept changes without closing the composer.
+Open the start/end date picker and its nested time list; selecting a time keeps
+the date picker open. Escape dismisses the active menu before the composer.
 
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
@@ -1355,6 +1446,9 @@ On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
 does not start a new event; the next press creates one. Clicking another event
 switches the open details.
+Desktop event details stay inside the visible calendar grid, including Home
+previews and narrow splits. They overlap wide Day-view events when needed and
+shrink to fit the pane; long details scroll while the RSVP row stays visible.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -1996,9 +2090,16 @@ uses the shared workspace width.
 Left nav (feature and platform gates still apply):
 
 - **Blocks**: Email, Calendar, Agents, CRM.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Mobile App.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Team, Tags, Integrations (personal Gmail/GitHub accounts).
 - **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
+
+**Desktop App** (`/app/settings/desktop-app`) shows a compact version and
+build-date card in the desktop app. The date is when the running app bundle was
+built, not when it was installed on the computer. In the browser it links to the
+latest desktop release on GitHub, and only appears when the `desktop-app` PostHog
+flag is enabled. Native desktop always shows this section regardless of the flag;
+native mobile never shows it.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
@@ -2036,14 +2137,22 @@ those controls, with purchases disabled.
 The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
 It contains Minimum balance (default `$10`), Target balance (default `$100`),
 optional Maximum monthly spend (`No limit`), a payment-method management link,
-and the automatic-charge warning. Balance-triggered reload is not implemented
-by the backend yet, so saving is disabled outside its explicit developer preview.
-Existing postpaid usage billing is shown separately and can be turned off by the
-payer. Local **Developer tools** offer `Preview Free plan` and `Preview paid plan`
-to display either Usage page with sample usage, regardless of the signed-in
-account's tier. `Open Free usage-limit dialog` and `Open paid usage-limit dialog`
-open the corresponding exhausted-usage prompt directly. The previews also work
-before the usage summary loads or when it fails. The paid-plan preview allows
+and the automatic-charge warning. The dialog saves for paid payers:
+`Turn on auto-reload` enables usage billing with those thresholds (the monthly
+limit also caps usage billing per period), `Save` updates them while on, and
+`Turn off` disables usage billing. The **Automatic reload** switch reflects the
+saved state. Paid team members who are not the payer see
+`Only the account that pays for this plan can change automatic reload.` and
+cannot save. After a failed automatic reload the dialog shows `Your last
+automatic reload could not be charged. Update your payment method, then save to
+try again.`; saving retries. Existing postpaid usage billing is shown separately
+and can be turned off by the payer; while it is on, credits reload automatically
+when the balance drops below the minimum. Local **Developer tools** offer
+`Preview Free plan` and `Preview paid plan` to display either Usage page with
+sample usage, regardless of the signed-in account's tier.
+`Open Free usage-limit dialog` and `Open paid usage-limit dialog` open the
+corresponding exhausted-usage prompt directly. The previews also work before
+the usage summary loads or when it fails. The paid-plan preview allows
 testing Auto-Reload settings. Purchases and payment management are disabled during any
 preview; `Reset preview` restores server data and closes the usage-limit dialog.
 `Preview production before Oct 8` shows the October 8 announcement and disables
@@ -2161,6 +2270,21 @@ mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
 
 ## Notifications
+
+In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
+controls system notification delivery for this installation. When the Notifications
+page is disabled by its feature flag, the existing **Account → Notifications**
+switch controls the same preference.
+Turning it off takes effect immediately and persists across app restarts; turning
+it on requests permission and resumes delivery when authorized. On macOS the
+switch reads the actual system authorization, and enabling it requests macOS
+permission if it has not been decided. If macOS reports denial, enabling the switch
+shows directions to **System Settings → Notifications → Macro → Allow notifications**
+without requesting permission again; returning to Macro refreshes the switch.
+It does not change inbox items or other devices. Focus and presentation settings
+can still suppress alerts even when authorization is granted.
+Verify off/on and persistence after restarting; on the Notifications page, a failed
+toggle should show an error toast and allow retry.
 
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel

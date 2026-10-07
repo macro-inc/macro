@@ -14,6 +14,11 @@ import { Dynamic } from 'solid-js/web';
 import { configureAgentHandler, listAgentsHandler } from './Agents';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
 import {
+  createBookingLinkHandler,
+  editBookingLinkHandler,
+  listBookingLinksHandler,
+} from './BookingLinks';
+import {
   configureBotHandler,
   createBotHandler,
   deleteBotHandler,
@@ -166,6 +171,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   IssueBotCredential: issueBotCredentialHandler,
   ListBots: listBotsHandler,
   ManageBotChannelAccess: manageBotChannelAccessHandler,
+  ListBookingLinks: listBookingLinksHandler,
+  CreateBookingLink: createBookingLinkHandler,
+  EditBookingLink: editBookingLinkHandler,
   CreateCalendarEvent: createCalendarEventHandler,
   CreateConfirmedCalendarEvent: createConfirmedCalendarEventHandler,
   UpdateCalendarEvent: updateCalendarEventHandler,

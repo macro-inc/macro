@@ -1,3 +1,4 @@
+import ClipboardText from '@phosphor/clipboard-text.svg';
 import KanbanIcon from '@phosphor/kanban.svg';
 import TableIcon from '@phosphor/table.svg';
 import { Button } from '@ui/components/Button';
@@ -16,6 +17,14 @@ import {
 import { ViewSelect } from './view-select';
 
 type NewViewLayout = 'table' | 'board';
+type NewViewChoice = NewViewLayout | 'form';
+
+/** A form over the current table, offered beside the views (RFC 02 §7). */
+export type NewFormChoice = {
+  initialName: string;
+  /** Resolves a message saying why the form was refused, or undefined once made. */
+  onCreate: (name: string) => Promise<string | undefined>;
+};
 
 import type { NewView } from '../core/view-creation';
 
@@ -24,11 +33,16 @@ export type { NewView } from '../core/view-creation';
 /** The grouping choice that creates a Status column; column ids are UUIDs, so it names none. */
 const NEW_STATUS_COLUMN = 'new-status-column';
 
-/** Creates a table or board view of the current table, named and, for a board, grouped. */
+/**
+ * Creates a table or board view of the current table, named and, for a
+ * board, grouped; given `form`, it also offers a form whose answers land as
+ * the table's rows.
+ */
 export function NewViewDialog(props: {
   initialName: string;
   initialLayout?: NewViewLayout;
   columns: DatabaseViewColumn[];
+  form?: NewFormChoice;
   onSubmit: (view: NewView) => ResultAsync<void, DatabaseOpFailure>;
   onClose: () => void;
   returnFocus?: HTMLElement;
@@ -36,9 +50,10 @@ export function NewViewDialog(props: {
 }) {
   let nameInput: HTMLInputElement | undefined;
   const [name, setName] = createSignal(props.initialName);
-  const [layout, setLayout] = createSignal<NewViewLayout>(
+  const [layout, setLayout] = createSignal<NewViewChoice>(
     props.initialLayout ?? 'table'
   );
+  const [formName, setFormName] = createSignal(props.form?.initialName ?? '');
   const groups = () => boardGroupColumns(props.columns);
   /** The columns a board can group by, or, when there are none, a Status column to create. */
   const groupChoices = () =>
@@ -64,9 +79,24 @@ export function NewViewDialog(props: {
       ? { name: trimmed, layout: 'board', groupBy: group }
       : undefined;
   };
-  const incomplete = () => !request();
+  const incomplete = () =>
+    layout() === 'form' ? !formName().trim() : !request();
+  const submitForm = async (form: NewFormChoice) => {
+    const trimmed = formName().trim();
+    if (pending() || !trimmed) return;
+    setPending(true);
+    setError('');
+    const refusal = await form.onCreate(trimmed);
+    setPending(false);
+    if (refusal) setError(refusal);
+    else props.onClose();
+  };
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
+    if (layout() === 'form' && props.form) {
+      await submitForm(props.form);
+      return;
+    }
     const view = request();
     if (pending() || !view) return;
     setPending(true);
@@ -110,7 +140,11 @@ export function NewViewDialog(props: {
               </Dialog.Description>
             </div>
             <div
-              class="grid grid-cols-2 gap-2"
+              class="grid gap-2"
+              classList={{
+                'grid-cols-2': !props.form,
+                'grid-cols-3': !!props.form,
+              }}
               role="group"
               aria-label="View layout"
             >
@@ -156,7 +190,33 @@ export function NewViewDialog(props: {
                   </span>
                 </span>
               </button>
+              <Show when={props.form}>
+                <button
+                  type="button"
+                  disabled={pending()}
+                  aria-pressed={layout() === 'form'}
+                  onClick={() => setLayout('form')}
+                  class="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+                  classList={{
+                    'border-edge bg-hover': layout() === 'form',
+                    'border-edge-muted': layout() !== 'form',
+                  }}
+                >
+                  <ClipboardText class="mt-0.5 size-4 shrink-0 text-violet" />
+                  <span class="flex flex-col gap-0.5">
+                    <span class="font-medium text-ink">Form</span>
+                    <span class="text-xs text-ink-muted">
+                      Collect answers as new rows
+                    </span>
+                  </span>
+                </button>
+              </Show>
             </div>
+            <Show when={layout() === 'form'}>
+              <p class="text-xs text-ink-muted">
+                A question for each column. Opens the form builder.
+              </p>
+            </Show>
             <Show when={layout() === 'board'}>
               <div class="flex items-center justify-between gap-3 text-sm">
                 <span class="font-medium text-ink">Group by</span>
@@ -176,12 +236,14 @@ export function NewViewDialog(props: {
               </Show>
             </Show>
             <TextField
-              value={name()}
-              onChange={setName}
+              value={layout() === 'form' ? formName() : name()}
+              onChange={layout() === 'form' ? setFormName : setName}
               readOnly={pending()}
               required
             >
-              <TextField.Label>View name</TextField.Label>
+              <TextField.Label>
+                {layout() === 'form' ? 'Form name' : 'View name'}
+              </TextField.Label>
               <TextField.Input
                 ref={nameInput}
                 maxlength={100}
@@ -207,7 +269,7 @@ export function NewViewDialog(props: {
                 variant="cta"
                 disabled={pending() || incomplete()}
               >
-                Create view
+                {layout() === 'form' ? 'Create form' : 'Create view'}
               </Button>
             </div>
           </form>

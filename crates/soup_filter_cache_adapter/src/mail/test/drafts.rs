@@ -2,7 +2,7 @@ use super::*;
 
 const SAVE: &str = r#"mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
     saveEmailDraft(input: $input) { thread {
-        __typename id linkId ownerId inboxVisible isRead isSignal isFavorited cacheProjection latestInboundMessageTs updatedAt
+        __typename id linkId ownerId inboxVisible isRead isSignal isFavorited cacheProjection latestInboundMessageTs reminderReturnedAt updatedAt
         mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id }
         properties { __typename propertyDefinitionId }
         mailDraftState {
@@ -98,6 +98,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: "00000000-0000-4000-8000-000000000081",
                 query: SAVE,
                 operation_name: Some("SaveEmailDraft"),

@@ -467,6 +467,37 @@ pub fn build_calendar_tool_context(
     )
 }
 
+/// Settings-only scheduling service; no provider/calendar writes are exposed here.
+pub type ToolBookingLinkService = calendar_scheduling::domain::service::Service<
+    calendar_scheduling::outbound::postgres::PostgresRepository,
+    (),
+    calendar_scheduling::outbound::macro_services::MacroDirectory<ToolTeamService>,
+>;
+/// Booking-link tool dependencies.
+pub type ToolBookingLinkToolContext =
+    calendar_scheduling::inbound::toolset::BookingLinkToolContext<ToolBookingLinkService>;
+/// Construct scheduling adapters at the AI composition root.
+pub fn build_booking_link_tool_context(
+    pool: sqlx::PgPool,
+    environment: macro_env::Environment,
+) -> ToolBookingLinkToolContext {
+    calendar_scheduling::inbound::toolset::BookingLinkToolContext {
+        service: Arc::new(calendar_scheduling::domain::service::Service::new(
+            calendar_scheduling::outbound::postgres::PostgresRepository::new(pool.clone()),
+            (),
+            calendar_scheduling::outbound::macro_services::MacroDirectory(TeamRepositoryImpl::new(
+                pool,
+            )),
+        )),
+        public_origin: match environment {
+            macro_env::Environment::Production => "https://macro.com",
+            macro_env::Environment::Develop => "https://dev.macro.com",
+            macro_env::Environment::Local => "",
+        }
+        .into(),
+    }
+}
+
 /// Type alias for the CRM AI tool context.
 pub type ToolCrmToolContext =
     CrmToolContext<ToolCrmService, ToolEntityAccessService, ToolPropertiesService>;
@@ -1558,6 +1589,7 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub calendar_tool_context: ToolCalendarToolContext,
+    pub booking_link_tool_context: ToolBookingLinkToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,
     pub databases_sql_tool_context: ToolDatabasesSqlToolContext,

@@ -20,7 +20,7 @@ mod test;
 pub mod types;
 
 pub use accumulator::StreamAccumulator;
-pub use agent_loop::{AgentLoop, Session};
+pub use agent_loop::{AgentLoop, Session, SystemPrompt};
 pub use completion::{complete, complete_about_image, complete_with_history};
 pub use convert::{merge_consecutive_parts, to_rig_messages};
 pub use error::AgentError;

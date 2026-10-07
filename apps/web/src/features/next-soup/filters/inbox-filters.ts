@@ -140,7 +140,8 @@ export function signalFilter(entity: EntityData): boolean {
       // notifications, same as reminders.
       return true;
     case 'database':
-      // Databases are not Soup entities and never reach the Inbox.
+    case 'form':
+      // Databases and forms are not Soup entities and never reach the Inbox.
       return false;
   }
 }

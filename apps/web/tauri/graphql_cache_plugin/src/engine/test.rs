@@ -566,6 +566,7 @@ fn optimistic_layer_commits_durably() {
         "runner".to_string(),
         10,
         1_000,
+        Some(serde_json::json!({"draftRevision": 10})),
     ))
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
@@ -583,6 +584,18 @@ fn optimistic_layer_commits_durably() {
     assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
     assert!(!claimed.superseded);
     assert!(!claimed.requires_confirmation);
+    assert_eq!(
+        claimed.client_metadata,
+        Some(serde_json::json!({"draftRevision": 10}))
+    );
+    let inspected = block_on(handle.inspect_mutations()).unwrap();
+    assert_eq!(inspected[0].client_metadata, claimed.client_metadata);
+    assert_eq!(inspected[0].transaction_id, claimed.transaction_id);
+    assert!(
+        block_on(handle.claim_next_mutation("another-runner".into(), 20, 100))
+            .unwrap()
+            .is_none()
+    );
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -630,6 +643,7 @@ fn rollback_drops_optimistic_contribution() {
         "runner".to_string(),
         10,
         1_000,
+        None,
     ))
     .unwrap();
     let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {

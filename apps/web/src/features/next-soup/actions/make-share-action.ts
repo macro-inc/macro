@@ -20,7 +20,7 @@ export const makeShareAction = () => {
       return;
     }
 
-    openGlobalShareModal({
+    await openGlobalShareModal({
       // TODO: use type guard on entity data, not the type
       entity: entity as ShareableEntityData,
     });

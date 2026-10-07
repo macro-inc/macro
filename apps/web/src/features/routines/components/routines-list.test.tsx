@@ -10,7 +10,8 @@ const rows: RoutineRow[] = [
     name: 'Morning briefing',
     creator: 'You',
     createdAt: '',
-    target: 'Macro',
+    target: 'Sonnet 5.5',
+    targetModel: 'anthropic/claude-sonnet-5-5',
     schedule: 'Weekdays at 9 AM',
     status: 'Active',
     enabled: true,
@@ -91,6 +92,16 @@ describe('routines list', () => {
     fireEvent.click(button);
     expect(props.onToggle).not.toHaveBeenCalled();
     expect(props.onOpen).not.toHaveBeenCalled();
+  });
+  it('marks each target with the provider of the model it runs on', () => {
+    setup();
+    const providerOf = (name: string) =>
+      screen
+        .getByText(name)
+        .parentElement?.querySelector('[data-ai-provider]')
+        ?.getAttribute('data-ai-provider');
+    expect(providerOf('Sonnet 5.5')).toBe('anthropic');
+    expect(providerOf('Finance agent')).toBeUndefined();
   });
   it('opens a blank routine without a templates section', () => {
     const props = setup();

@@ -12,6 +12,7 @@ export default defineConfig({
     'cache-artifact-compatibility.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
     'cache-lifecycle.browser.e2e.ts',
+    'mutation-retry.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

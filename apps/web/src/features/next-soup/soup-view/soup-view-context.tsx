@@ -65,6 +65,11 @@ import {
   unreadFilterFn,
 } from '@entity';
 import { useQueryClient } from '@queries/client';
+import {
+  createLocalDraftSource,
+  localDraftEntities,
+  localDraftMatchesFilters,
+} from '@queries/email/local-draft-source';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
@@ -991,13 +996,28 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const itemsSource = () => soupItemsSource;
 
+  const localDrafts = createLocalDraftSource(
+    () => itemsQuery.transport === 'graphql'
+  );
+  const localDraftRows = () => {
+    const filters = applyViewFilters(queryFilters.state);
+    if (!search.isSearching() && filters.emailView !== 'drafts') return [];
+    return localDraftEntities(
+      localDrafts
+        .drafts()
+        .filter((draft) => localDraftMatchesFilters(draft, filters))
+    ).map((entity) => attachNotifications(entity)) as SoupEntity[];
+  };
   const items = createMemo<SoupEntity[]>(
     (prev) => {
       const searching = search.isSearching();
 
       if (!searching) {
         const data = itemsSource().data();
-        const extras = config().additionalEntities?.() ?? [];
+        const extras = [
+          ...(config().additionalEntities?.() ?? []),
+          ...localDraftRows(),
+        ];
         const extraEntities = extras.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
         ) as SoupEntity[];
@@ -1008,9 +1028,11 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
           // navigation. Once the active query fails, those rows belong to
           // the previous query and must go so the load-error state can
           // render — only client-local rows remain valid.
-          return itemsSource().error() ? extraEntities : prev;
+          return itemsSource().error()
+            ? extraEntities
+            : deduplicateEntities([...extraEntities, ...prev]);
         }
-        if (data.groups) return prev;
+        if (data.groups) return localDraftRows();
 
         const base = data.entities.map((e) =>
           isWithNotification(e) ? e : attachNotifications(e)
@@ -1018,13 +1040,25 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
         if (extraEntities.length === 0) return base;
 
-        return [...extraEntities, ...base];
+        const extraIds = new Set(
+          extraEntities.map((entity) => `${entity.type}:${entity.id}`)
+        );
+        return [
+          ...extraEntities,
+          ...base.filter(
+            (entity) => !extraIds.has(`${entity.type}:${entity.id}`)
+          ),
+        ];
       }
 
       const local = search.localFuzzyResults();
       const service = search.serviceSearchResults();
 
-      const merged: SoupEntity[] = [...service, ...local];
+      const needle = search.searchText().toLowerCase();
+      const recovery = localDraftRows().filter((entity) =>
+        entity.name.toLowerCase().includes(needle)
+      );
+      const merged: SoupEntity[] = [...recovery, ...service, ...local];
 
       if (
         merged.length === 0 &&
@@ -1377,17 +1411,56 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
     const result: SoupRow[] = [];
     let globalIndex = 0;
+    // Local working copies have no server group membership yet. Keep them
+    // discoverable, subject to the same filters as the flat Drafts view.
+    const recovery = entities();
+    const recoveryIds = new Set(
+      recovery.map((entity) => `${entity.type}:${entity.id}`)
+    );
+    if (recovery.length) {
+      const key = 'local-email-drafts';
+      const group: GroupMeta = {
+        key,
+        value: key,
+        label: 'Saved on this device',
+        count: recovery.length,
+        isExpanded: () => soup.grouping.isExpanded(key),
+        toggle: () => soup.grouping.toggle(key),
+      };
+      result.push(
+        soup.buildRow({
+          id: `header:${key}`,
+          index: globalIndex++,
+          original: recovery[0],
+          group,
+          isGrouped: true,
+        })
+      );
+      for (const entity of recovery)
+        result.push(
+          soup.buildRow({
+            id: entity.id,
+            index: globalIndex++,
+            original: entity,
+            group,
+          })
+        );
+    }
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
       const groupData = groupQueryFor(apiGroup.key)?.data();
       const groupEntities =
-        groupData?.entities?.map(
-          (entity) =>
-            (isWithNotification(entity)
-              ? entity
-              : attachNotifications(entity)) as SoupEntity
-        ) ?? [];
+        groupData?.entities
+          ?.map(
+            (entity) =>
+              (isWithNotification(entity)
+                ? entity
+                : attachNotifications(entity)) as SoupEntity
+          )
+          .filter(
+            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
+          ) ?? [];
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -1437,6 +1510,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const searchSourceError = () =>
     (searchQuery.error as Error | null) ??
     nativeOfflineLoadError(searchSourceHasData);
+  const hasLocalRecoveryRows = () => {
+    const ids = new Set(localDraftRows().map((entity) => entity.id));
+    return entities().some(
+      (entity) => entity.type === 'email' && ids.has(entity.id)
+    );
+  };
 
   const context = {
     extensions: props.extensions,
@@ -1454,6 +1533,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         search.isSearching()
           ? searchSourceHasData()
           : itemsSource().hasData() ||
+            hasLocalRecoveryRows() ||
             // Rows retained across a query rebind count as data so the view
             // doesn't flash, but once the query errors only client-local
             // rows remain and must not suppress the load-error state.

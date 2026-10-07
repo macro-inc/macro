@@ -12,20 +12,14 @@ android-build *ARGS:
 # beforeDevCommand's environment, and the --config merge points the webview's
 # devUrl at the same port.
 ios-dev: ios-prepare
-    #!/usr/bin/env bash
-    set -euo pipefail
-    PORT="${PORT:-3000}"
-    cd tauri/src-tauri && cargo tauri ios dev --open \
-      --config "{\"build\":{\"devUrl\":\"http://localhost:${PORT}\"}}" \
-      -- --no-default-features
+    bash scripts/ios-dev.sh
 
-# iOS: prod-facing build, with bundle auto-update turned off, for testing locally on actual iPhone
-ios-build-no-update: ios-prepare
-    cd tauri/src-tauri && cargo tauri ios build --open -- --no-default-features
+# Compatibility alias for `just ios-build --no-update`.
+ios-build-no-update: (ios-build "--no-update")
 
-# iOS: build for release
-ios-build: ios-prepare
-    cd tauri/src-tauri && cargo tauri ios build --open
+# iOS: build for release; --no-update disables automatic bundle updates.
+ios-build *ARGS: ios-prepare
+    bash scripts/ios-build.sh "$@"
 
 # iOS: arm64 Simulator .app for the Appetize PR preview (the `ios_preview`
 # workflow). Simulator builds need no signing, and --no-default-features keeps
@@ -43,6 +37,7 @@ ios-build-sim prebuilt="false": ios-prepare
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{prebuilt}}" != "true" ]; then just build-tauri-dev; fi
+    export TMPDIR="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)"
     # frontendDist is restated because this override replaces the build table:
     # dropping it silently produces an app with an empty assets/ and no
     # index.html, which installs and launches to a black screen.
@@ -71,6 +66,12 @@ ios-prepare-tauri-api:
 dev-tauri: ensure-cache-wasm
     printf development > tauri/src-tauri/.macro-tauri-env
     bun run --bun dev
+
+# iOS prepares WASM before switching to Apple's native compiler and linker.
+[private]
+dev-tauri-prepared:
+    printf development > tauri/src-tauri/.macro-tauri-env
+    bun run --bun dev:server
 
 # List available local service names
 local-services:
@@ -243,7 +244,7 @@ cycles-ci:
 # (gitignored). Unconditional — CI app builds must never skip it (schema or
 # engine changes alter the wasm without a cache-wasm version bump).
 build-cache-wasm:
-    CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
+    scripts/cached-wasm-build.sh cache-wasm {{justfile_directory()}}/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="{{cache_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/cache-wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/graphql-cache/wasm
 
 # Build the production browser harness served by Vite preview.
 build-cache-wasm-browser-production: build-cache-wasm build-cache-wasm-browser-test-hooks
@@ -277,7 +278,7 @@ build-cache-wasm-profile:
 # (gitignored). `--no-default-features` drops the crate's `cli` feature, whose
 # tokio/clap do not build for wasm32; the fold itself needs neither.
 build-agent-fold-wasm:
-    CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/folds/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
+    scripts/cached-wasm-build.sh agent_fold {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- env CARGO_TARGET_DIR="{{agent_fold_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/folds/agent_fold --target web --release --out-dir {{justfile_directory()}}/src/lib/core/agent-fold/wasm -- --no-default-features
 
 # Dev fast path: build the agent-fold wasm pkg only when it is missing or any
 # fold source is newer than the built artifact. A stale artifact folds with the
@@ -294,7 +295,7 @@ ensure-agent-fold-wasm:
 # Build the database-sql wasm module (the SQL engine's staged `Query`) into
 # src/lib/core/database-sql/wasm (gitignored).
 build-database-sql-wasm:
-    CARGO_TARGET_DIR="{{database_sql_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/database_sql --target web --release --out-dir {{justfile_directory()}}/src/lib/core/database-sql/wasm
+    scripts/cached-wasm-build.sh database_sql {{justfile_directory()}}/src/lib/core/database-sql/wasm -- env CARGO_TARGET_DIR="{{database_sql_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/database_sql --target web --release --out-dir {{justfile_directory()}}/src/lib/core/database-sql/wasm
 
 # Dev fast path: build the database-sql wasm pkg only when it is missing or
 # any source it is compiled from is newer than the built artifact: the
@@ -323,7 +324,7 @@ ensure-database-sql-wasm:
 # worker by the pptx block) into src/lib/core/pptx-engine/wasm (gitignored).
 # SIMD speeds up rasterization; every browser the app supports has it.
 build-pptx-engine-wasm:
-    CARGO_TARGET_DIR="{{pptx_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/pptx_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/pptx-engine/wasm
+    scripts/cached-wasm-build.sh pptx_engine {{justfile_directory()}}/src/lib/core/pptx-engine/wasm -- env CARGO_TARGET_DIR="{{pptx_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/pptx_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/pptx-engine/wasm
 
 # Dev fast path: build the pptx-engine wasm pkg only when it is missing or any
 # engine source is newer than the built artifact.
@@ -339,7 +340,7 @@ ensure-pptx-engine-wasm:
 # Build the docx-engine wasm module (DOCX layout, rendering and editing, hosted
 # in a worker by the write block) into src/lib/core/docx-engine/wasm (gitignored).
 build-docx-engine-wasm:
-    CARGO_TARGET_DIR="{{docx_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/docx_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/docx-engine/wasm
+    scripts/cached-wasm-build.sh docx_engine {{justfile_directory()}}/src/lib/core/docx-engine/wasm -- env CARGO_TARGET_DIR="{{docx_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/docx_engine --target web --release --out-dir {{justfile_directory()}}/src/lib/core/docx-engine/wasm
 
 # Dev fast path: build the docx-engine wasm pkg only when it is missing or any
 # engine source (including the pptx engine it builds on) is newer than it.
@@ -356,7 +357,7 @@ ensure-docx-engine-wasm:
 # Build the fig-engine wasm module (.fig parsing and tile rasterization, hosted
 # in workers by the fig block) into src/lib/core/fig-engine/wasm (gitignored).
 build-fig-engine-wasm:
-    CARGO_TARGET_DIR="{{fig_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/fig_engine --target web --profile fig-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/fig-engine/wasm
+    scripts/cached-wasm-build.sh fig_engine {{justfile_directory()}}/src/lib/core/fig-engine/wasm -- env CARGO_TARGET_DIR="{{fig_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/fig_engine --target web --profile fig-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/fig-engine/wasm
 
 # Dev fast path: build the fig-engine wasm pkg only when it is missing or any
 # engine source is newer than the built artifact.
@@ -373,7 +374,7 @@ ensure-fig-engine-wasm:
 # compositing, hosted in workers by the psd block) into
 # src/lib/core/psd-engine/wasm (gitignored).
 build-psd-engine-wasm:
-    CARGO_TARGET_DIR="{{psd_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/psd_engine --target web --profile psd-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/psd-engine/wasm
+    scripts/cached-wasm-build.sh psd_engine {{justfile_directory()}}/src/lib/core/psd-engine/wasm -- env CARGO_TARGET_DIR="{{psd_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/psd_engine --target web --profile psd-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/psd-engine/wasm
 
 # Dev fast path: build the psd-engine wasm pkg only when it is missing or any
 # engine source (or the fig engine it draws text with) is newer than it.
@@ -391,7 +392,7 @@ ensure-psd-engine-wasm:
 # rendering, hosted in workers by the ai block) into
 # src/lib/core/ai-engine/wasm (gitignored).
 build-ai-engine-wasm:
-    CARGO_TARGET_DIR="{{ai_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/ai_engine --target web --profile ai-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/ai-engine/wasm
+    scripts/cached-wasm-build.sh ai_engine {{justfile_directory()}}/src/lib/core/ai-engine/wasm -- env CARGO_TARGET_DIR="{{ai_engine_wasm_target}}" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128" wasm-pack build {{justfile_directory()}}/../../crates/ai_engine --target web --profile ai-engine-wasm --out-dir {{justfile_directory()}}/src/lib/core/ai-engine/wasm
 
 # Dev fast path: build the ai-engine wasm pkg only when it is missing or any
 # engine source (or the fig engine it draws text with) is newer than it.

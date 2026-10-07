@@ -207,14 +207,15 @@ pub trait Storage: MaybeSend {
     ) -> impl Future<Output = Result<Option<ClaimedMutation>, Self::Error>> + MaybeSend;
 
     /// Retains a retryable mutation and its optimistic layer, releases its
-    /// lease, and records the next eligible attempt time. Returns `false`
-    /// when the claim is stale.
+    /// lease, and records the next eligible attempt time. Server failures also
+    /// increment the retry budget atomically. Returns `false` when the claim is stale.
     fn defer_mutation(
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
     /// Atomically writes the real response records and removes the mutation
@@ -635,6 +636,7 @@ impl Storage for InMemoryStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         let Some(queued) = self.mutations.get_mut(&id) else {
             return Ok(false);
@@ -645,6 +647,9 @@ impl Storage for InMemoryStorage {
         let mutation = &mut queued.mutation;
         mutation.next_attempt_at_ms = Some(next_attempt_at_ms);
         mutation.last_error = Some(error);
+        if server_failure {
+            mutation.server_failure_count = mutation.server_failure_count.saturating_add(1);
+        }
         mutation.lease_owner = None;
         mutation.lease_expires_at_ms = None;
         Ok(true)

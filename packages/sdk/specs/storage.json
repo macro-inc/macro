@@ -10237,7 +10237,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             },
@@ -10454,7 +10455,8 @@
                 "scheduled_action",
                 "initiative",
                 "database",
-                "database_row"
+                "database_row",
+                "form"
               ]
             }
           },
@@ -10656,6 +10658,1124 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "The live forms over a database the caller can see, for the grid's chip\nand the delete-table confirmation.",
+        "operationId": "list_forms",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "query",
+            "description": "The database.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Form"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["forms"],
+        "summary": "Create a form owned by the caller: over a new database named like it, or\nover an existing table of a database the caller owns. Database Edit is\nnot enough to attach a form: the form's editors gain Edit on the\ndatabase through it.",
+        "operationId": "create_form",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/accessible": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "Every live form the caller holds a grant on, newest first, with their\nlevel: what Drive and Quick Access list. Public forms reached only by\ntheir link are not listed.",
+        "operationId": "list_accessible_forms",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ListedForm"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "A form with its layout, each question joined with its column's title,\ntype and options. Never rows. Readable by anyone when the form is public.",
+        "operationId": "get_form",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["forms"],
+        "summary": "Change a form's facts. The description and confirmation message take\nedit; who responds, open or closed, the closing time and tallies take\nits owner.",
+        "operationId": "update_form",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateForm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Form"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/collaboration": {
+      "post": {
+        "tags": ["forms"],
+        "summary": "Open the editor-only collaborative layout, or publish its latest valid\nrevision. Content stays in the existing collaboration surface.",
+        "operationId": "collaborate_form",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormCollaboration"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/layout": {
+      "put": {
+        "tags": ["forms"],
+        "summary": "Save a validated replacement in the shared layout and report publication.\nA 200 response with `publicationError` means the draft is saved, while\nrespondents still see `detail`. Retrying collaboration retries publication.",
+        "operationId": "put_form_layout",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FormLayout"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormCollaboration"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/permissions": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "A form's recipients, for its owner. Link and team sharing are always\n`null`: a form's public audience is its own setting.",
+        "operationId": "get_form_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["forms"],
+        "summary": "Change a form's channel recipients, for its owner. Turning on link or\nteam sharing is refused.",
+        "operationId": "update_form_permissions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/responses": {
+      "post": {
+        "tags": ["forms"],
+        "summary": "Respond to a form. A gate that stops the response answers `stopped` and\nwrites nothing to the table. A public form takes anonymous responses.",
+        "operationId": "submit_form_response",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Submission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/responses/mine": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "The signed-in caller's own response, with the row's current cells.",
+        "operationId": "get_my_form_response",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["forms"],
+        "summary": "Replace the signed-in caller's answers while the form is open. A gate\nthat stops the edit leaves the saved response as it was.",
+        "operationId": "edit_my_form_response",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Submission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/responses/summary": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "Response counts for the form's editors.",
+        "operationId": "get_form_response_summary",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forms/{id}/tally": {
+      "get": {
+        "tags": ["forms"],
+        "summary": "Option counts of the form's choice questions: for respondents when the\nowner shows them, for editors always.",
+        "operationId": "get_form_tally",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormTally"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
                 }
               }
             }
@@ -15907,7 +17027,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             ],
@@ -16388,6 +17509,22 @@
             }
           }
         ]
+      },
+      "Answer": {
+        "type": "object",
+        "description": "One question's answer: a value for its column, typed as the column's\ncells are.",
+        "required": ["question", "value"],
+        "properties": {
+          "question": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The question."
+          },
+          "value": {
+            "$ref": "#/components/schemas/CellValue",
+            "description": "The value; `clear` for no answer."
+          }
+        }
       },
       "ApiActivity": {
         "type": "object",
@@ -17221,6 +18358,11 @@
         "description": "RSVP state for an attendee.",
         "enum": ["needs_action", "accepted", "declined", "tentative"]
       },
+      "Audience": {
+        "type": "string",
+        "description": "Who may respond to a form.",
+        "enum": ["members", "public"]
+      },
       "Awareness": {
         "type": "object",
         "description": "Where one viewer is inside a database right now: ephemeral, relayed to\nthe other viewers and never stored. A missing row or column means the\nviewer is on the table but on no cell. Optional end row and column IDs\nmark the opposite corner of a rectangular cell selection.",
@@ -17443,6 +18585,23 @@
           "sha": {
             "type": "string",
             "description": "The sha of the bom part content\nThere is an index on sha for more performant queries based on it."
+          }
+        }
+      },
+      "BookingTarget": {
+        "type": "object",
+        "description": "An existing native Macro scheduling event offered after an accepted response.",
+        "required": ["profileId", "eventTypeId"],
+        "properties": {
+          "eventTypeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The event type to book."
+          },
+          "profileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The scheduling profile that owns the event."
           }
         }
       },
@@ -19861,7 +21020,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             ],
@@ -19929,6 +21089,13 @@
             "type": "string",
             "format": "uuid",
             "description": "The bound property definition."
+          },
+          "protections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ColumnProtection"
+            },
+            "description": "Schema operations reserved by a feature; ordinary edits cannot clear them."
           },
           "table_id": {
             "type": "string",
@@ -20386,6 +21553,11 @@
           }
         ],
         "description": "A type a column can have."
+      },
+      "ColumnProtection": {
+        "type": "string",
+        "description": "A schema operation reserved by a feature using a column.",
+        "enum": ["delete", "change_type"]
       },
       "ColumnResult": {
         "oneOf": [
@@ -21369,6 +22541,21 @@
           "user_id": {
             "type": ["string", "null"],
             "description": "User who recorded the mention."
+          }
+        }
+      },
+      "CreateForm": {
+        "type": "object",
+        "description": "A request to create a form.",
+        "required": ["name", "source"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Its name; a new database takes it too."
+          },
+          "source": {
+            "$ref": "#/components/schemas/FormSource",
+            "description": "Where its responses go."
           }
         }
       },
@@ -24204,7 +25391,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             ],
@@ -24659,7 +25847,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             ],
@@ -24711,7 +25900,8 @@
                   "scheduled_action",
                   "initiative",
                   "database",
-                  "database_row"
+                  "database_row",
+                  "form"
                 ]
               }
             ],
@@ -25169,7 +26359,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -25576,6 +26768,655 @@
           "notification_filters": {
             "$ref": "#/components/schemas/NotificationFilters",
             "description": "Filter by the notification state of the foreign entity (e.g. whether the requesting user's\nGitHub PR notification is done/seen)."
+          }
+        }
+      },
+      "Form": {
+        "type": "object",
+        "description": "A form: a view of one database table whose rows are its responses.",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "ownerId",
+          "databaseId",
+          "tableId",
+          "submittedColumnId",
+          "respondentColumnId",
+          "audience",
+          "tallyVisible",
+          "status",
+          "closesAt",
+          "confirmationMessage",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "audience": {
+            "$ref": "#/components/schemas/Audience",
+            "description": "Who may respond."
+          },
+          "closesAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When it stops taking responses, if it does."
+          },
+          "confirmationMessage": {
+            "type": "string",
+            "description": "What a respondent reads once their response is saved; empty for the\ndefault."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was created."
+          },
+          "databaseId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The database holding its responses."
+          },
+          "description": {
+            "type": "string",
+            "description": "What respondents read under the name."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The form."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Its owner."
+          },
+          "respondentColumnId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted."
+          },
+          "status": {
+            "$ref": "#/components/schemas/FormStatus",
+            "description": "Whether its owner closed it."
+          },
+          "submittedColumnId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The date column each submission stamps; `null` once deleted."
+          },
+          "tableId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The table whose rows are its responses."
+          },
+          "tallyVisible": {
+            "type": "boolean",
+            "description": "Whether respondents may read option tallies."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When its facts or layout last changed."
+          }
+        }
+      },
+      "FormAccess": {
+        "type": "string",
+        "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
+        "enum": ["view", "edit", "owner"]
+      },
+      "FormCollaboration": {
+        "type": "object",
+        "description": "A ready collaborative form and the result of publishing its latest draft.",
+        "required": ["detail"],
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/FormDetail",
+            "description": "The latest validated form. The form id also identifies its surface."
+          },
+          "publicationError": {
+            "$ref": "#/components/schemas/FormPublicationProblem",
+            "description": "Why the current draft cannot yet replace the respondent layout.\nOnly editors can request this result."
+          }
+        }
+      },
+      "FormDetail": {
+        "type": "object",
+        "description": "A form with its layout, as the caller may see it.",
+        "required": ["form", "access", "tableGone", "sections"],
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/FormAccess",
+            "description": "The caller's level on it."
+          },
+          "form": {
+            "$ref": "#/components/schemas/Form",
+            "description": "The form's facts."
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormSectionDetail"
+            },
+            "description": "Its sections, in order."
+          },
+          "tableGone": {
+            "type": "boolean",
+            "description": "Whether its database is in the trash, so it has no table to show or\nwrite: its sections keep no questions and it takes no responses."
+          }
+        }
+      },
+      "FormErrorCode": {
+        "type": "string",
+        "description": "What went wrong with a forms request.",
+        "enum": [
+          "tableAlreadyHasForm",
+          "notFound",
+          "forbidden",
+          "ownerOnly",
+          "signInRequired",
+          "closed",
+          "tableGone",
+          "alreadyResponded",
+          "noResponse",
+          "unknownQuestion",
+          "repeatedAnswer",
+          "missingAnswer",
+          "invalidAnswer",
+          "widgetMismatch",
+          "fileUploadNeedsSignIn",
+          "invalidLayout",
+          "invalidName",
+          "invalidSharing",
+          "tallyHidden",
+          "conflict",
+          "internal"
+        ]
+      },
+      "FormErrorResponse": {
+        "type": "object",
+        "description": "Why a forms request was refused or failed.",
+        "required": ["code", "message", "question", "problem"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/FormErrorCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "What went wrong, in words."
+          },
+          "problem": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/LayoutProblem",
+                "description": "What is wrong with a refused layout."
+              }
+            ]
+          },
+          "question": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The question it is about, if one."
+          }
+        }
+      },
+      "FormLayout": {
+        "type": "object",
+        "description": "Every section of a form, in order.",
+        "required": ["sections"],
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FormSection"
+            },
+            "description": "The sections, first first."
+          }
+        }
+      },
+      "FormPublicationProblem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The draft contains unsupported or malformed layout records. An explicit\nlayout replacement can repair it without replacing its document history.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["invalidDraft"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The layout violates a form invariant.",
+            "required": ["problem", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["layout"]
+              },
+              "problem": {
+                "$ref": "#/components/schemas/LayoutProblem",
+                "description": "The invariant the editor needs to repair."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A question's widget no longer fits its column.",
+            "required": ["question", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["widgetMismatch"]
+              },
+              "question": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The question to repair."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "File questions require a signed-in audience.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["fileUploadNeedsSignIn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The draft was saved, but publication could not finish. Reading the\ncollaboration endpoint retries publication; do not repeat the write.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["pending"]
+              }
+            }
+          }
+        ],
+        "description": "An editor's saved draft is not yet the version respondents can use."
+      },
+      "FormQuestionDetail": {
+        "type": "object",
+        "description": "A question with its column's facts.",
+        "required": [
+          "id",
+          "column",
+          "title",
+          "kind",
+          "options",
+          "helpText",
+          "required",
+          "widget"
+        ],
+        "properties": {
+          "column": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The column it writes."
+          },
+          "helpText": {
+            "type": "string",
+            "description": "What respondents read under the title."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The question."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ColumnKind",
+            "description": "The column's type."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionOption"
+            },
+            "description": "The column's options, in order, for a select or tag column."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether a response must answer it."
+          },
+          "title": {
+            "type": "string",
+            "description": "The column's name."
+          },
+          "widget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Widget",
+                "description": "How it is asked: the question's widget or the kind's default; `null`\nfor a kind asked one way only."
+              }
+            ]
+          }
+        }
+      },
+      "FormResponse": {
+        "type": "object",
+        "description": "One entry of a form's submission ledger: who answered, when, and where\nthe answers went.",
+        "required": [
+          "id",
+          "formId",
+          "status",
+          "stoppedAtSection",
+          "row",
+          "submittedAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "formId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The form."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entry."
+          },
+          "row": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The row holding the answers; `null` when stopped, or once the row was\ndeleted from the table."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResponseStatus",
+            "description": "Saved, or stopped at a gate."
+          },
+          "stoppedAtSection": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The gate that stopped it."
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was first submitted."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it last changed."
+          }
+        }
+      },
+      "FormSection": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Questions asked together.",
+            "required": ["id", "title", "description", "questions", "kind"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "What respondents read under the title."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section, under an id the client mints."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["questions"]
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/QuestionLayout"
+                },
+                "description": "Its questions, in order."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title; may be empty."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A check of earlier answers: a respondent whose answers fail the rules\nis stopped here with the message, and nothing is written.",
+            "required": [
+              "id",
+              "title",
+              "description",
+              "rules",
+              "message",
+              "kind"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Its description, for editors."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section, under an id the client mints."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["gate"]
+              },
+              "message": {
+                "type": "string",
+                "description": "What a stopped respondent reads."
+              },
+              "rules": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "The rules, naming only columns asked in earlier sections."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title, for editors."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The final step, revealed only after the server accepts the response.",
+            "required": ["id", "title", "description", "target", "kind"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "What respondents read before choosing a time."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section, under an id the client mints."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["booking"]
+              },
+              "target": {
+                "$ref": "#/components/schemas/BookingTarget",
+                "description": "The native booking event. Respondent layouts never include this target."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title."
+              }
+            }
+          }
+        ],
+        "description": "One section of a layout: questions on one screen, or a gate the answers\nso far must pass."
+      },
+      "FormSectionDetail": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Questions asked together.",
+            "required": ["id", "title", "description", "questions", "kind"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Its description."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["questions"]
+              },
+              "questions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FormQuestionDetail"
+                },
+                "description": "Its questions, in order."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A check of earlier answers. The rules are sent to every caller so a\nrespondent's page can stop them before submitting; respondents are\nnever shown them.",
+            "required": [
+              "id",
+              "title",
+              "description",
+              "rules",
+              "message",
+              "kind"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Its description."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["gate"]
+              },
+              "message": {
+                "type": "string",
+                "description": "What a stopped respondent reads."
+              },
+              "rules": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "The rules."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A booking step. Its destination is withheld from respondents until\ntheir response has passed every screener and been accepted.",
+            "required": ["id", "title", "description", "kind"],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "Its description."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The section."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["booking"]
+              },
+              "target": {
+                "$ref": "#/components/schemas/BookingTarget",
+                "description": "Editors can configure the destination; respondent layouts omit it."
+              },
+              "title": {
+                "type": "string",
+                "description": "Its title."
+              }
+            }
+          }
+        ],
+        "description": "One section of a form as it reads."
+      },
+      "FormSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A new database named like the form, whose one table, \"Responses\",\nstarts with only the form's own columns.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["new"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An existing table in a database the caller owns. The form starts with a\nquestion per column.",
+            "required": ["databaseId", "tableId", "kind"],
+            "properties": {
+              "databaseId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The table's database."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["table"]
+              },
+              "tableId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The table."
+              }
+            }
+          }
+        ],
+        "description": "Where a new form's responses go."
+      },
+      "FormStatus": {
+        "type": "string",
+        "description": "Whether a form takes responses, as its owner set it. A form also stops\ntaking them once its closing time passes.",
+        "enum": ["open", "closed"]
+      },
+      "FormTally": {
+        "type": "object",
+        "description": "How the table's rows answer each choice question.",
+        "required": ["questions"],
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QuestionTally"
+            },
+            "description": "One tally per select, numeric select, tag or checkbox question, in\nlayout order."
           }
         }
       },
@@ -27641,6 +29482,133 @@
           }
         }
       },
+      "LayoutProblem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A booking step must be unique and follow all questions and screeners.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["bookingMustBeLast"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A question names a column the form's table does not have.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["unknownColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A question names a column the form writes itself.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["managedColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Two questions name one column.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["repeatedColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Two sections or questions share an id.",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["repeatedId"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A gate tests a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["gateNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A gate's rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["gateRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A text is longer than allowed.",
+            "required": ["max", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["textTooLong"]
+              },
+              "max": {
+                "type": "integer",
+                "description": "The longest allowed.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "Why a layout does not fit the form's table."
+      },
       "LeaveCallResponse": {
         "type": "object",
         "description": "Response for the leave/end call operation.",
@@ -27690,6 +29658,21 @@
               "$ref": "#/components/schemas/Table"
             },
             "description": "Tables in tab order, so discovery can find a table independently of\nthe containing database's display name."
+          }
+        }
+      },
+      "ListedForm": {
+        "type": "object",
+        "description": "A form the caller reaches through a grant, as the forms catalog lists\nit, with the caller's level on it.",
+        "required": ["form", "access"],
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/FormAccess",
+            "description": "The caller's level on it."
+          },
+          "form": {
+            "$ref": "#/components/schemas/Form",
+            "description": "The form's facts."
           }
         }
       },
@@ -28926,6 +30909,28 @@
           }
         ],
         "description": "Lifecycle events for the common message service, one per committed fact.\nReactions and typing never reach the topic."
+      },
+      "MyResponse": {
+        "type": "object",
+        "description": "A signed-in respondent's own response, with its answers as the row\nholds them now.",
+        "required": ["response", "answers"],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "description": "The row's cells for the form's current questions, the empty ones\nleft out; none when the row is gone."
+          },
+          "booking": {
+            "$ref": "#/components/schemas/UnlockedBooking",
+            "description": "The form's booking step, while the saved row still passes the form's\ncurrent required questions and gates."
+          },
+          "response": {
+            "$ref": "#/components/schemas/FormResponse",
+            "description": "The ledger entry."
+          }
+        }
       },
       "NewAttachment": {
         "type": "object",
@@ -30834,6 +32839,87 @@
           }
         }
       },
+      "QuestionLayout": {
+        "type": "object",
+        "description": "How one column of the table is asked.",
+        "required": ["id", "column", "helpText", "required", "widget"],
+        "properties": {
+          "column": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The column it writes; its title, type and options are the column's."
+          },
+          "helpText": {
+            "type": "string",
+            "description": "What respondents read under the title."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The question, under an id the client mints; answers name it."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether a response must answer it."
+          },
+          "widget": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Widget",
+                "description": "How it is asked; `null` for the column kind's default."
+              }
+            ]
+          }
+        }
+      },
+      "QuestionOption": {
+        "type": "object",
+        "description": "One option of a question's column.",
+        "required": ["id", "label", "color"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"],
+            "description": "Its colour, a hex string, if it has one."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The option."
+          },
+          "label": {
+            "type": "string",
+            "description": "Its label."
+          }
+        }
+      },
+      "QuestionTally": {
+        "type": "object",
+        "description": "One question's counts.",
+        "required": ["question", "responses", "buckets"],
+        "properties": {
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TallyBucket"
+            },
+            "description": "A count per option in the column's order, zeros included; for a\ncheckbox, checked then unchecked."
+          },
+          "question": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The question."
+          },
+          "responses": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Rows with a value in its column.",
+            "minimum": 0
+          }
+        }
+      },
       "ReactionInput": {
         "type": "object",
         "description": "Reaction mutation for the authenticated user.",
@@ -31038,6 +33124,43 @@
           }
         ],
         "description": "A layout as an op asks for it: a board may leave its card title out."
+      },
+      "ResponseStatus": {
+        "type": "string",
+        "description": "Whether a ledger entry is a saved response or a stop at a gate.",
+        "enum": ["submitted", "stopped"]
+      },
+      "ResponseSummary": {
+        "type": "object",
+        "description": "A form's response counts, for its editors.",
+        "required": ["submitted", "stopped", "stoppedBySection", "rows"],
+        "properties": {
+          "rows": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Rows of the form's table, whoever wrote them.",
+            "minimum": 0
+          },
+          "stopped": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Respondents stopped at a gate.",
+            "minimum": 0
+          },
+          "stoppedBySection": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SectionCount"
+            },
+            "description": "The stops, by gate."
+          },
+          "submitted": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Responses saved.",
+            "minimum": 0
+          }
+        }
       },
       "RingStatus": {
         "type": "string",
@@ -31535,6 +33658,24 @@
           }
         ],
         "description": "Search publication/receipt state. Acceptance is not completed publication;\neven completed publication still awaits consumer indexing and refresh."
+      },
+      "SectionCount": {
+        "type": "object",
+        "description": "How many responses one gate stopped.",
+        "required": ["section", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many it stopped.",
+            "minimum": 0
+          },
+          "section": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The gate."
+          }
+        }
       },
       "SessionDeletedMetadata": {
         "type": "object",
@@ -34422,6 +36563,70 @@
       "String": {
         "type": "string"
       },
+      "Submission": {
+        "type": "object",
+        "description": "A whole set of answers, sent at once.",
+        "required": ["answers"],
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Answer"
+            },
+            "description": "One answer per answered question; a question left out is unanswered."
+          }
+        }
+      },
+      "SubmissionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The answers are saved as a row of the form's table.",
+            "required": ["response", "row", "outcome"],
+            "properties": {
+              "booking": {
+                "$ref": "#/components/schemas/UnlockedBooking",
+                "description": "The form's booking step, unlocked by this accepted response."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["submitted"]
+              },
+              "response": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The ledger entry."
+              },
+              "row": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The row holding the answers."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A gate stopped the response; nothing was written to the table.",
+            "required": ["section", "message", "outcome"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "The gate's message."
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["stopped"]
+              },
+              "section": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The gate."
+              }
+            }
+          }
+        ],
+        "description": "What a submission came to."
+      },
       "SuccessResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -34816,6 +37021,59 @@
           }
         ],
         "description": "An id a request minted for something new that already names something,\nwhich refuses the request: a retried request whose first attempt\ncommitted, or an id minted twice."
+      },
+      "TallyBucket": {
+        "type": "object",
+        "description": "How many rows hold one value.",
+        "required": ["value", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many rows hold it.",
+            "minimum": 0
+          },
+          "value": {
+            "$ref": "#/components/schemas/TallyValue",
+            "description": "The value."
+          }
+        }
+      },
+      "TallyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One option of the column.",
+            "required": ["option", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["option"]
+              },
+              "option": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The option."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A checkbox state.",
+            "required": ["checked", "kind"],
+            "properties": {
+              "checked": {
+                "type": "boolean",
+                "description": "Checked, or not."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["checkbox"]
+              }
+            }
+          }
+        ],
+        "description": "A value a tally counts."
       },
       "TaskFilters": {
         "type": "object",
@@ -35500,6 +37758,30 @@
           "already_back"
         ]
       },
+      "UnlockedBooking": {
+        "type": "object",
+        "description": "A booking step a passing response has unlocked, with its destination.",
+        "required": ["section", "title", "description", "target"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What respondents read before choosing a time."
+          },
+          "section": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The booking section."
+          },
+          "target": {
+            "$ref": "#/components/schemas/BookingTarget",
+            "description": "The native booking event to open."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title."
+          }
+        }
+      },
       "UpdateAgentRequest": {
         "type": "object",
         "description": "Request to replace the editable configuration of a persisted AI agent.",
@@ -35662,6 +37944,37 @@
           }
         }
       },
+      "UpdateForm": {
+        "type": "object",
+        "description": "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
+        "properties": {
+          "audience": {
+            "$ref": "#/components/schemas/Audience",
+            "description": "Who may respond from now on."
+          },
+          "closesAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When it stops taking responses, or `null` for never."
+          },
+          "confirmationMessage": {
+            "type": "string",
+            "description": "Its new confirmation message."
+          },
+          "description": {
+            "type": "string",
+            "description": "Its new description."
+          },
+          "status": {
+            "$ref": "#/components/schemas/FormStatus",
+            "description": "Open or close it."
+          },
+          "tallyVisible": {
+            "type": "boolean",
+            "description": "Whether respondents may read option tallies."
+          }
+        }
+      },
       "UpdateInitiativeRequest": {
         "type": "object",
         "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its collab surface, not here.",
@@ -35821,6 +38134,13 @@
               "$ref": "#/components/schemas/FolderItem"
             },
             "description": "The content of the folder"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Relative paths of folders to create even when they hold no files.\n\nUses the same shape as [FolderItem::relative_path], root folder included."
           },
           "parentId": {
             "type": ["string", "null"],
@@ -36623,6 +38943,21 @@
           }
         }
       },
+      "Widget": {
+        "type": "string",
+        "description": "How a question is asked. Each column kind takes a few, the first its\ndefault; kinds asked one way only (numbers, checkboxes, entity and row\npickers) take none.",
+        "enum": [
+          "short",
+          "paragraph",
+          "datetime",
+          "date",
+          "url",
+          "file",
+          "choice",
+          "dropdown",
+          "checkboxes"
+        ]
+      },
       "WithCallId": {
         "type": "object",
         "description": "Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]\nvariant.",
@@ -36670,6 +39005,10 @@
     {
       "name": "macro cloud storage service",
       "description": "Macro Cloud Storage Service"
+    },
+    {
+      "name": "forms",
+      "description": "Macro Forms: questionnaires over a database table"
     }
   ]
 }

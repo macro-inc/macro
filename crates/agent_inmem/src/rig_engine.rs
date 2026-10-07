@@ -23,7 +23,7 @@
 
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, StreamPart};
+use agent::{AgentError, AgentLoop, StreamPart, SystemPrompt};
 use ai_tools::user_tool_review::user_tool_finisher;
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
@@ -45,6 +45,10 @@ use crate::inbound::ask_user::{AskUser, AskUserContext};
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
+
+#[cfg(test)]
+#[path = "outbound/rig_engine/measure_prompt_cache.rs"]
+mod measure_prompt_cache;
 
 /// How many stream parts may sit unread before the engine pauses; keeps a
 /// slow consumer from buffering a whole turn.
@@ -344,7 +348,7 @@ async fn drive_turn(
         awaiting,
     });
     let session = agent_loop
-        .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
+        .session(toolset, Arc::new(tool_context), system_prompt, usage_ctx)
         .await;
     let (mut session, loop_cancel) = session.cancellable();
 
@@ -388,37 +392,42 @@ async fn drive_turn(
 /// the model reads as it takes in the caller's word — the same reason DCS
 /// puts `additional_instructions` after the standing prompt. Memory stays
 /// last so a remembered fact is never read as an instruction.
+///
+/// The prompt is split after the static Macro prompt: everything before is
+/// the same for every session of the agent and is cached on its own, so a
+/// session whose instructions name its own task still reads it back.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
-) -> String {
-    let mut prompt = String::new();
+) -> SystemPrompt {
+    let mut shared = String::new();
     if let Some(identity) = identity {
-        prompt.push_str(&prompt::agent_identity::render(
+        shared.push_str(&prompt::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));
-        prompt.push('\n');
+        shared.push('\n');
     }
-    prompt.push_str(&prompt::agent_session::PROMPT.to_string());
-    prompt.push('\n');
-    prompt.push_str(&tools_prompt.to_string());
+    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push('\n');
+    shared.push_str(&tools_prompt.to_string());
+    let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
     if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
-        prompt.push_str("\n<session_instructions>\n");
-        prompt.push_str(instructions);
-        prompt.push_str("\n</session_instructions>");
+        rest.push_str("\n<session_instructions>\n");
+        rest.push_str(instructions);
+        rest.push_str("\n</session_instructions>");
     }
     if let Some(memory) = user_memory {
-        prompt.push_str("\n<user_memory>\n");
-        prompt.push_str(memory);
-        prompt.push_str("\n</user_memory>");
+        rest.push_str("\n<user_memory>\n");
+        rest.push_str(memory);
+        rest.push_str("\n</user_memory>");
     }
-    prompt
+    SystemPrompt::split(shared, rest)
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

@@ -250,6 +250,21 @@
         flex: 1;
         flex-direction: column;
       }
+      .bs-desktop-content {
+        display: flex;
+        flex: 1;
+        min-width: 0;
+        margin: 6px 6px 6px 0;
+        overflow: hidden;
+        border: 1px solid var(--bs-edge);
+        border-radius: 6px;
+      }
+      #boot-shell[data-desktop] .bs-rail {
+        border-right: 0;
+      }
+      #boot-shell[data-macos] .bs-head > :last-child {
+        display: none;
+      }
       /* Home's composer: the Agents new-chat grid, under the 48px top bar. */
       .bs-newchat {
         display: grid;
@@ -419,6 +434,14 @@
       // colors; everything degrades to Home's default layout without them.
       try {
         const shell = document.getElementById("boot-shell");
+        const nativeOs = window.__TAURI_OS_PLUGIN_INTERNALS__?.os_type;
+        const nativeDesktop = nativeOs && nativeOs !== "ios" && nativeOs !== "android";
+        if (nativeDesktop) shell.dataset.desktop = "";
+        // Match Layout's native macOS overlay-titlebar clearance before JS loads.
+        if (nativeOs === "macos") {
+          shell.dataset.macos = "";
+          shell.style.paddingTop = "40px";
+        }
         const read = (key) => {
           try {
             return JSON.parse(localStorage.getItem(key) || "null");
@@ -493,7 +516,8 @@
               </div></div>`
             : `<div class="bs-page">${bar("160px")}${["92%", "86%", "95%", "70%", "88%", "80%", "60%"].map((w) => bar(w)).join("")}</div>`;
 
-          shell.innerHTML = `${rail}${showAside ? aside : ""}<div class="bs-main">${main}</div>
+          const content = `${showAside ? aside : ""}<div class="bs-main">${main}</div>`;
+          shell.innerHTML = `${rail}${nativeDesktop ? `<div class="bs-desktop-content">${content}</div>` : content}
             <div class="bs-dock">${bar("24px") + bar("24px") + bar("24px") + bar("24px") + bar("24px")}</div>`;
           if (!showAside && matchMedia("(pointer: coarse)").matches) shell.insertAdjacentHTML("afterbegin", aside);
         }

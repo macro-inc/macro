@@ -10,7 +10,6 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import ListIcon from '@phosphor/list.svg';
 import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
@@ -34,7 +33,9 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { createSidebarMotion } from './create-sidebar-motion';
+import { ViewNavigationSlotContext } from './navigation-slot';
 import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
@@ -326,6 +327,7 @@ function Root(props: ViewShellRootProps) {
   };
 
   const panel = useContext(SplitPanelContext);
+  const navigationSlot = useContext(ViewNavigationSlotContext);
   if (panel) {
     registerHotkey({
       hotkey: 'cmd+.',
@@ -343,6 +345,29 @@ function Root(props: ViewShellRootProps) {
 
   return (
     <ViewShellContext.Provider value={value}>
+      <Show
+        when={
+          navigationSlot?.() &&
+          panel?.isPanelActive() &&
+          value.aside.canCollapse()
+        }
+      >
+        <Portal mount={navigationSlot?.()}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            label={
+              value.aside.isCollapsed() ? 'Show navigation' : 'Hide navigation'
+            }
+            hotkey={TOKENS.workspace.toggleNavigation}
+            aria-expanded={!value.aside.isCollapsed()}
+            ref={tourTarget(VIEW_SHELL_TOUR.sidebarToggle)}
+            onClick={value.aside.toggle}
+          >
+            <SidebarIcon class="size-4" />
+          </Button>
+        </Portal>
+      </Show>
       <div
         {...rest}
         ref={setRoot}
@@ -535,10 +560,13 @@ export function ViewSidebarCloseButton(
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   const ws = useContext(ViewShellContext);
+  const navigationSlot = useContext(ViewNavigationSlotContext);
+  const panel = useContext(SplitPanelContext);
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // only the expand toggle registers, from inside the callback.
   const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   const visible = () =>
+    !(navigationSlot?.() && panel) &&
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
       ? ws.aside.isCollapsed() || ws.aside.isOverlay()
@@ -578,12 +606,7 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
           );
         }}
       >
-        <Show
-          when={props.action === 'expand'}
-          fallback={<SidebarIcon class="size-4" />}
-        >
-          <ListIcon class="size-4" />
-        </Show>
+        <SidebarIcon class="size-4" />
       </Button>
     </Show>
   );

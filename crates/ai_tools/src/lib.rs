@@ -27,6 +27,9 @@ pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
 use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
+use calendar_scheduling::inbound::toolset::{
+    booking_link_toolset, mcp_toolset as booking_link_mcp_toolset,
+};
 use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
@@ -63,30 +66,31 @@ pub use tool_context::{
     ChannelSideEffectClients, MaybeToolEventBroker, NoOpCallRtcClient, NoOpConnectionService,
     NoOpNotificationIngress, NoOpNotificationService, NoOpSnsEndpointManager, NoOpTaskProperties,
     RequestContext, RoutineToolContext, TaskPropertiesAdapter, ToolActivityToolContext,
-    ToolBotService, ToolBotToolContext, ToolCalendarMutationService, ToolCalendarReadService,
-    ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
-    ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
-    ToolChatService, ToolChatToolContext, ToolCodingAgentToolContext, ToolCommsService,
-    ToolCrmService, ToolCrmToolContext, ToolDatabasesService, ToolDatabasesSqlToolContext,
-    ToolDatabasesToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessManagementService, ToolEntityAccessService,
-    ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
+    ToolBookingLinkService, ToolBookingLinkToolContext, ToolBotService, ToolBotToolContext,
+    ToolCalendarMutationService, ToolCalendarReadService, ToolCalendarToolContext,
+    ToolCallRecordQueryService, ToolCallService, ToolCallToolContext, ToolChannelEventDispatcher,
+    ToolChannelMessagesService, ToolChannelToolContext, ToolChatService, ToolChatToolContext,
+    ToolCodingAgentToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
+    ToolDatabasesService, ToolDatabasesSqlToolContext, ToolDatabasesToolContext,
+    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
+    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
+    ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
     ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
     ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
     ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
     ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext,
     ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
     ToolTableEventPublisher, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context, build_bot_tool_context,
-    build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
-    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
-    build_coding_agent_tool_context, build_crm_tool_context, build_databases_sql_tool_context,
-    build_databases_tool_context, build_image_generation_tool_context,
-    build_initiative_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_project_tool_context,
-    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
-    build_routine_tool_context, build_skill_tool_context, build_task_properties_adapter,
-    build_team_repository, build_team_tool_context,
+    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
+    build_booking_link_tool_context, build_bot_tool_context, build_calendar_tool_context,
+    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
+    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
+    build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
+    build_image_generation_tool_context, build_initiative_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_project_tool_context, build_properties_service, build_properties_service_with_broker,
+    build_properties_tool_context, build_routine_tool_context, build_skill_tool_context,
+    build_task_properties_adapter, build_team_repository, build_team_tool_context,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
@@ -226,10 +230,12 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
-            .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_toolset()),
         AiHost::ChannelBot | AiHost::Mcp => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
-            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset()),
+            .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
+            .add_subtoolset::<ToolBookingLinkToolContext>(booking_link_mcp_toolset()),
     };
     let toolset = toolset
         .add_subtoolset::<ToolImportToolContext>(import_toolset())

@@ -502,6 +502,10 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         calendar_tool_context,
+        booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
+            pool.clone(),
+            environment,
+        ),
         notification_tool_context,
         databases_tool_context,
         databases_sql_tool_context,

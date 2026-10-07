@@ -1,5 +1,17 @@
 # Navigation and App Structure
 
+The native macOS app reserves 40 px above the app layout for the inset overlay
+title bar's traffic-light controls. Drag this top strip to move the window, or
+double-click it to toggle zoom. The loading shell uses the same inset; browser,
+Windows, Linux, and mobile layouts do not add this space.
+
+Native desktop content keeps its rounded split frame even with only one split,
+and the app icon rail has no right divider. On macOS, the sidebar icon beside the
+traffic lights toggles navigation for the active split; it replaces the controls
+inside the workspace. The top-right split icon opens another Home split, even
+when Home is already open, and is disabled when there is no room for a new split.
+Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+
 ## Returning from another page
 
 A browser back/forward-cache restore reconnects the GraphQL cache worker and
@@ -328,7 +340,13 @@ the list. Check that reading that item keeps the dot lit if another loaded row
 is unread, and that completing the last one clears it. Query bounds and
 pagination are unchanged.
 
-The Agents sidebar mixes chat and coding sessions in one newest-first list.
+The Agents sidebar opens with a **Work** / **Code** switch (radio group
+"Agents mode") under its title; Work is the default and the choice is remembered
+per user across reloads. Work lists chat sessions and legacy chats; Code lists
+coding sessions only, newest first. Each mode's empty state is its own ("No
+conversations yet." / "No coding conversations yet."). Opening a session of the
+other kind from outside Agents (a link, Home, Ask AI) switches the mode to match;
+switching modes while a session is open returns to that mode's New conversation.
 New agent sessions use one dot in the left slot for activity and notifications:
 pulsing accent for starting/working, amber for waiting for input, and solid accent
 for an unread dormant session. Read dormant sessions leave that slot empty.
@@ -343,10 +361,13 @@ the selected background. Legacy chat rows keep their chat icon.
 Use **Search conversations** beside the Conversations heading to filter by title.
 Results stay packed at the top with compact spacing, even with only a few matches;
 clearing the search restores the list.
-Its **New conversation** button opens the unified composer with one **Agent**
-selector on the right. Choosing a coding agent reveals the repository drawer;
-there is no Chat/Code switch. New sessions use the selected agent's default model
-and the URL for its kind. Opening an existing row restores its own kind and URL.
+Its **New conversation** button opens the composer for the current mode with one
+**Agent** selector on the right. In Work the selector lists Macro's models and
+chat agents, and the composer stays on one line. In Code it lists coding agents
+only, the composer opens expanded with the repository drawer below it, and the
+greeting reads "What should we build?". New sessions use the selected agent's
+default model and the URL for its kind. Home's composer is unchanged and still
+offers both kinds. Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
@@ -560,6 +581,15 @@ the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
 or delegated changes do not retrigger routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
 
+When `enable-routine-conditions` is on, every activity trigger panel has an
+**Only run if** box for an optional yes/no question about each event, such as
+**Is this email an invoice or a receipt?** Before a run starts, the event's
+content (the email, channel message, document, or task, read as the routine
+owner) is checked against it, and events answered no are skipped. The chip
+shows the question after **· if**. Saving a condition fails with "trigger
+conditions are not enabled" while the scheduled-action service has no
+`TYPESAFE_API_KEY`.
+
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
@@ -574,7 +604,10 @@ The **Run options** dropdown contains
 **Enable routine** / **Disable routine** and **Copy prompt**, which copies the
 current instructions, including unsaved edits. **Run History** uses full-width
 Soup rows for past agent sessions, with each run's
-outcome, duration, and time. Click a row or press Enter to open its session;
+outcome, duration, and time. Runs a trigger's condition skipped show
+**Condition not met** (hover for how likely the answer was yes) or **Condition
+couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
+**N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
 Shift opens it in another split. **Back to routines** returns to the list in the
 same pane.
 

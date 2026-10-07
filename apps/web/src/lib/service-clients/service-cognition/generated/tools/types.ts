@@ -314,6 +314,10 @@ export type CalendarEventSearchTime =
  */
 export type AgentSessionAuthor = 'user' | 'agent';
 /**
+ * Team host assignment policy.
+ */
+export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
+/**
  * The mutually exclusive time shape supplied to calendar tools.
  */
 export type EventTimeInput =
@@ -3167,6 +3171,9 @@ export type ToolActivityAction =
       type: 'sent';
     }
   | {
+      type: 'responded';
+    }
+  | {
       /**
        * The property definition id.
        */
@@ -5138,6 +5145,197 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
+ * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. Return the saved URL after execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+ */
+export interface CreateBookingLink {
+  /**
+   * Existing Macro team ID discovered through tools, never requested from the user. Use null for a personal booking link.
+   */
+  teamId?: string | null;
+  draft: BookingLinkDraft;
+  /**
+   * The user's reply approving the specific proposal you already showed them, quoted verbatim.
+   * Never use their original request, paraphrase their reply, or invent approval.
+   */
+  userConfirmation: string;
+}
+/**
+ * Complete proposal reviewed and validated before saving.
+ */
+export interface BookingLinkDraft {
+  event: BookingLinkEvent;
+  schedule: BookingLinkSchedule;
+}
+/**
+ * All editable rules for one link. Personal links must use the authenticated user as host.
+ */
+export interface BookingLinkEvent {
+  /**
+   * Public title.
+   */
+  title: string;
+  /**
+   * Unique link segment within a profile.
+   */
+  slug: string;
+  /**
+   * Public description.
+   */
+  description: string;
+  /**
+   * Meeting duration.
+   */
+  durationMinutes: number;
+  /**
+   * Meeting location.
+   */
+  location: string;
+  /**
+   * Generate a Google Meet conference.
+   */
+  googleMeet: boolean;
+  /**
+   * Whether new bookings are accepted.
+   */
+  enabled: boolean;
+  mode: SchedulingMode;
+  /**
+   * Current Macro user identities selected as hosts.
+   */
+  hosts: string[];
+  /**
+   * Protected time before a meeting.
+   */
+  beforeMinutes: number;
+  /**
+   * Protected time after a meeting.
+   */
+  afterMinutes: number;
+  /**
+   * Minimum notice in minutes.
+   */
+  noticeMinutes: number;
+  /**
+   * Maximum days ahead.
+   */
+  horizonDays: number;
+  /**
+   * Spacing of offered start times.
+   */
+  intervalMinutes: number;
+  /**
+   * Maximum bookings for this event on one schedule-local day.
+   */
+  dailyLimit?: number | null;
+  /**
+   * Hold bookings for host approval.
+   */
+  requiresConfirmation: boolean;
+  /**
+   * Additional form fields.
+   */
+  questions: Question[];
+}
+/**
+ * A question on the booking form.
+ */
+export interface Question {
+  /**
+   * Stable identity.
+   */
+  id: string;
+  /**
+   * Public question label.
+   */
+  label: string;
+  /**
+   * Whether an answer is mandatory.
+   */
+  required: boolean;
+}
+/**
+ * Availability copied into a dedicated schedule when it changes; other links retain their hours.
+ */
+export interface BookingLinkSchedule {
+  /**
+   * Display name.
+   */
+  name: string;
+  /**
+   * IANA time zone.
+   */
+  timeZone: string;
+  /**
+   * Weekly windows.
+   */
+  weekly: WeeklyDay[];
+  /**
+   * Date-specific replacements.
+   */
+  overrides: DateOverride[];
+}
+/**
+ * Availability for one weekday.
+ */
+export interface WeeklyDay {
+  /**
+   * Sunday is zero.
+   */
+  day: number;
+  /**
+   * Non-overlapping local windows.
+   */
+  windows: TimeWindow[];
+}
+/**
+ * A wall-clock window in an availability schedule.
+ */
+export interface TimeWindow {
+  /**
+   * Inclusive HH:MM start.
+   */
+  start: string;
+  /**
+   * Exclusive HH:MM end.
+   */
+  end: string;
+}
+/**
+ * Replacement availability for one date.
+ */
+export interface DateOverride {
+  /**
+   * Local date in the schedule zone.
+   */
+  date: string;
+  /**
+   * Empty means unavailable all day.
+   */
+  windows: TimeWindow[];
+}
+/**
+ * Saved link and shareable URL. Paused links remain discoverable but do not accept bookings.
+ */
+export interface BookingLinkResult {
+  /**
+   * Owning profile.
+   */
+  profileId: string;
+  /**
+   * Stable link identity.
+   */
+  eventTypeId: string;
+  /**
+   * Profile revision to supply when editing.
+   */
+  revision: number;
+  draft: BookingLinkDraft;
+  /**
+   * Link to share; enabled in the draft determines whether guests can book.
+   */
+  url: string;
+}
+/**
  * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
  */
 export interface CreateBot {
@@ -6171,6 +6369,29 @@ export interface DisplayResults {
 }
 export interface DisplayResultsResponse {
   message: string;
+}
+/**
+ * Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and confirm the updated proposal in conversation instead of overwriting concurrent edits. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. Return the saved URL after execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+ */
+export interface EditBookingLink {
+  /**
+   * Existing Macro team ID discovered through tools, never requested from the user. Use null for a personal booking link.
+   */
+  teamId?: string | null;
+  /**
+   * Existing link identity returned by ListBookingLinks.
+   */
+  eventTypeId: string;
+  /**
+   * Revision returned by ListBookingLinks; guards against concurrent settings changes.
+   */
+  expectedRevision: number;
+  draft: BookingLinkDraft;
+  /**
+   * The user's reply approving the specific proposal you already showed them, quoted verbatim.
+   * Never use their original request, paraphrase their reply, or invent approval.
+   */
+  userConfirmation: string;
 }
 /**
  * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName.
@@ -7377,6 +7598,73 @@ export interface ListAgentsResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * Discover and reuse the user's booking links before creating one. Returns shareable URLs, enabled/paused state, full drafts and revision for EditBookingLink, plus reusable availability schedules and the user's host ID. Searches title, slug and description; omit query for all (at most 100). Omit teamId for personal links; use a team ID returned in teamIds for team links. This read never creates settings. These are reusable scheduling pages, not calendar meetings.
+ */
+export interface ListBookingLinks {
+  /**
+   * Existing Macro team ID, or null for personal links.
+   */
+  teamId?: string | null;
+  /**
+   * Optional text to match in the link title, slug or description.
+   */
+  query?: string | null;
+}
+/**
+ * Authorized discovery results with shareable links.
+ */
+export interface ListBookingLinksResult {
+  /**
+   * Current team IDs; call ListBookingLinks again with one as teamId to read team links.
+   */
+  teamIds: string[];
+  /**
+   * Authenticated user's ID; use this host for a personal draft.
+   */
+  userId: string;
+  /**
+   * Personal or team profile identity.
+   */
+  profileId: string;
+  /**
+   * Current profile revision for editing.
+   */
+  revision: number;
+  /**
+   * Reusable availability to copy into a new draft.
+   */
+  schedules: Schedule[];
+  /**
+   * Matching links including their complete drafts.
+   */
+  links: BookingLinkResult[];
+}
+/**
+ * Reusable hours, with DST interpreted in an IANA zone.
+ */
+export interface Schedule {
+  /**
+   * Stable schedule identity.
+   */
+  id: string;
+  /**
+   * Display name.
+   */
+  name: string;
+  /**
+   * IANA time zone.
+   */
+  timeZone: string;
+  /**
+   * Weekly windows.
+   */
+  weekly: WeeklyDay[];
+  /**
+   * Date-specific replacements.
+   */
+  overrides: DateOverride[];
 }
 /**
  * List every active bot the current user can manage, including user-owned bots and bots owned by teams they belong to. Use this to discover a botId before issuing credentials, reading webhook URLs, changing channel access, configuring, or deleting a bot.
