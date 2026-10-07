@@ -1034,10 +1034,13 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
-the owner can change or remove a conversation's access. **Link sharing** offers
+the owner can change or remove a conversation's access. When that list holds
+nobody but the owner — what a participant who cannot read the other grants
+sees — the section is titled **Owner** instead. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
-People, and Link tabs. View and Comment allow reading; Edit also allows
+People, and Link tabs, and the People tab is likewise named Owner when only the
+owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
