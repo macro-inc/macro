@@ -672,30 +672,34 @@ where
     /// the items tells those apart. Read `trailing_silence_ms` first - near
     /// zero means the model was still producing when the run ended, a long tail
     /// means it had stopped talking to us well before.
+    ///
+    /// `first_chunk_ms` is the run's first model call's time to first chunk,
+    /// measured from the provider request (the same value as that call's
+    /// `chat` span's `macro.genai.chat.time_to_first_chunk_ms`), so the
+    /// provider's latency reads off the run span without a join.
     struct StreamLiveness {
         span: tracing::Span,
+        telemetry: GenAiContext,
         started_at: Instant,
         items: i64,
-        first_item: Option<Duration>,
         last_item: Option<Duration>,
     }
 
     impl StreamLiveness {
-        fn new(span: tracing::Span) -> Self {
+        fn new(span: tracing::Span, telemetry: GenAiContext) -> Self {
+            telemetry.take_run_first_chunk();
             Self {
                 span,
+                telemetry,
                 started_at: Instant::now(),
                 items: 0,
-                first_item: None,
                 last_item: None,
             }
         }
 
         fn observed(&mut self) {
-            let at = self.started_at.elapsed();
             self.items += 1;
-            self.first_item.get_or_insert(at);
-            self.last_item = Some(at);
+            self.last_item = Some(self.started_at.elapsed());
         }
     }
 
@@ -704,9 +708,10 @@ where
         // attribute, which every numeric query would then silently miss.
         fn drop(&mut self) {
             self.span.record("agent.stream.items", self.items);
-            if let Some(first) = self.first_item {
+            if let Some((time_to_first_chunk, kind)) = self.telemetry.take_run_first_chunk() {
                 self.span
-                    .record("agent.stream.first_item_ms", millis(first));
+                    .record("agent.stream.first_chunk_ms", millis(time_to_first_chunk));
+                self.span.record("agent.stream.first_chunk_kind", kind);
             }
             // With nothing ever received the silence is the whole run, which is
             // what `unwrap_or_default` says here.
@@ -733,7 +738,7 @@ where
     let financial_context = MeteringContext::current();
     let driver = tokio::spawn(
         MeteringContext::carry(financial_context, async move {
-            let mut liveness = StreamLiveness::new(agent_span.clone());
+            let mut liveness = StreamLiveness::new(agent_span.clone(), telemetry.clone());
 
             while let Some(item) = rig_stream.next().await {
                 liveness.observed();

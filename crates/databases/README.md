@@ -147,3 +147,19 @@ The suite covers permission scoping, typed round trips, relations, safe casts,
 rollback, stale/concurrent writes, sharing, typed views and card moves, and
 retry-safe import/starter provisioning. SQLx tests create isolated databases
 using the repository migrator.
+
+### Required columns
+
+A trusted host can create a column with `Column.nullable = false` through
+`DatabaseStorage::apply_storage_writes`. Existing columns and ordinary user-created
+columns default to nullable. This does not add a UI toggle for requiredness.
+
+The planner rejects omitted required cells on insert and explicit clears on edit.
+Both write ports also check affected required cells in the final transaction state
+under table locks, including schema changes and undo. A batch can add a required
+column and populate existing rows atomically. Empty selections, entity-reference
+lists and link lists are absent; empty text, zero and false are present. Undo
+restores the column setting alongside its cells.
+
+Enforcement belongs to the Rust database engine. Direct SQL and writes through
+unrelated property APIs bypass it; the migration only adds the nullable flag.

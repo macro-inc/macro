@@ -522,6 +522,12 @@ fn applied(
             table_versions,
             changes,
         }),
+        WritesOutcome::MissingRequiredCell { write, column, row } => Err(refuse(
+            write,
+            row_index(&ops[write], row),
+            Some(column),
+            "the required column needs a value",
+        )),
         WritesOutcome::SchemaMoved(_) => Err(DatabaseError::VersionConflict),
         WritesOutcome::TableNotFound(_) => Err(DatabaseError::NotFound),
         WritesOutcome::VersionConflict(_) | WritesOutcome::TablesChanged { .. } => {

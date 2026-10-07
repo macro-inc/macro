@@ -6,8 +6,8 @@ import {
 import type { FilterGroup } from '@service-storage/generated/schemas/filterGroup';
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createSignal } from 'solid-js';
-import type { ColumnUsage } from '../context/column-usage';
-import type { FormsUsage } from '../core/forms-usage';
+import type { ColumnUsage } from '../../database/context/column-usage';
+import type { FormsUsage } from '../../database/core/forms-usage';
 
 type ListRead = ReturnType<typeof useFormsForDatabaseQuery>;
 

@@ -114,10 +114,16 @@ according to `tauri.conf.json`.
 
 From `apps/web`, use `just ios-build` for a release build or
 `just ios-build --no-update` to disable automatic bundle updates.
-`just ios-build-no-update` remains a compatibility alias. Both modes build the
-frontend with the current shell's toolchain, then select Xcode's compiler,
-linker, and tools for the native build and the opened Xcode session. This avoids
-Nix's macOS compiler wrapper injecting `-mmacos-version-min` into an iOS build.
+`just ios-build-no-update` remains a compatibility alias. Both modes use
+`VITE_POSTHOG_API_KEY` from the environment, fetching it from
+Doppler `web-release/prd` if it is unset or empty. Install the Doppler CLI and
+authenticate with read access to that config, or supply the variable explicitly.
+An unavailable or empty key stops the build before frontend compilation.
+
+Both modes build the frontend with the current shell's toolchain, then select
+Xcode's compiler, linker, and tools for the native build and the opened Xcode
+session. This avoids Nix's macOS compiler wrapper injecting
+`-mmacos-version-min` into an iOS build.
 The system `xcode-select` selection is used unless `DEVELOPER_DIR` explicitly
 selects an Xcode installation. Keep the recipe running while building in Xcode
 so Tauri's options server can supply the build configuration and tool paths.
