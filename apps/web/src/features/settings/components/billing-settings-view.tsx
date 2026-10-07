@@ -17,7 +17,7 @@ const PlanFeatures = (props: { tier: PlanTier; aiUsageEnabled: boolean }) => {
     <For each={planBenefits(props.tier, props.aiUsageEnabled)}>
       {(label) => (
         <li class="flex items-center gap-2">
-          <CheckIcon class="size-3 text-success" />
+          <CheckIcon class="size-3 shrink-0 text-success" />
           <span class="text-ink-muted text-xs">{label}</span>
         </li>
       )}
