@@ -12,7 +12,7 @@ import {
   priorityTaskName,
 } from '../../data/pr-links';
 import { prLinksTarget, usePrLinksQuery } from '../../queries/pr-links-query';
-import { PrPriorityIcon } from '../PrLinks';
+import { PrOriginBadge, PrPriorityIcon, prOriginDescription } from '../PrLinks';
 
 function LinkRow(props: {
   icon?: Component<{ class?: string }>;
@@ -82,8 +82,11 @@ export function PrLinkedWorkSection(props: {
     repo: string;
     number: number;
     labels?: readonly { name: string }[] | null;
+    description?: string | null;
+    authorLogin?: string | null;
   };
 }) {
+  const layout = useSplitLayout();
   const target = () =>
     props.pullRequest ? prLinksTarget(props.pullRequest) : undefined;
   const query = usePrLinksQuery(() => {
@@ -112,6 +115,25 @@ export function PrLinkedWorkSection(props: {
         <Match when={links()}>
           {(current) => (
             <div class="flex flex-col gap-3 text-xs">
+              <Show when={current().origin}>
+                {(origin) => (
+                  <LinkGroup label="Started from">
+                    <div class="flex h-6 items-center">
+                      <PrOriginBadge
+                        origin={origin()}
+                        onOpen={(content, newSplit) =>
+                          layout?.openWithSplit(content, {
+                            preferNewSplit: newSplit,
+                          })
+                        }
+                      />
+                    </div>
+                    <div class="text-ink-placeholder">
+                      {prOriginDescription(origin())}
+                    </div>
+                  </LinkGroup>
+                )}
+              </Show>
               <LinkGroup label="Priority">
                 <div class="flex h-6 items-center gap-2">
                   <PrPriorityIcon

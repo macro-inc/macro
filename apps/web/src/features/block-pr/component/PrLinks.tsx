@@ -1,22 +1,36 @@
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { AgentSessionMentionLabel } from '@core/component/LexicalMarkdown/component/decorator/AgentSessionMentionLabel';
 import { useChannelName } from '@core/context/channels';
+import MacroIcon from '@icon/macro-logo.svg';
+import ClaudeIcon from '@icon/wide-claude.svg';
+import CodexIcon from '@icon/wide-codex-ide.svg';
+import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { Popover } from '@kobalte/core/popover';
 import BuildingsIcon from '@phosphor/buildings.svg';
+import GithubIcon from '@phosphor/github-logo.svg';
 import HashIcon from '@phosphor/hash.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
+import RobotIcon from '@phosphor/robot.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { useAgentSessionMentionPreview } from '@queries/agent-session/mentions';
 import { cn, Surface, Tooltip } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
   PR_PRIORITY_LABELS,
   type PrLinks,
   type PrPriority,
   type PrPriorityId,
 } from '../data/pr-links';
+import {
+  PR_ORIGIN_LABELS,
+  PR_ORIGIN_SIGNAL_LABELS,
+  type PrOrigin,
+  type PrOriginTool,
+} from '../data/pr-origin';
 
 /** Opens a linked item; `newSplit` when the viewer asked for another split. */
 export type OpenPrLink = (content: SplitContent, newSplit: boolean) => void;
@@ -273,6 +287,9 @@ export function PrLinkChips(props: {
 
   return (
     <span class="flex min-w-0 shrink items-center gap-1">
+      <Show when={props.links.origin}>
+        {(origin) => <PrOriginBadge origin={origin()} onOpen={props.onOpen} />}
+      </Show>
       <LinkPill
         kind="Agent session"
         icon={AgentIcon}
@@ -298,6 +315,84 @@ export function PrLinkChips(props: {
         onOpen={props.onOpen}
       />
     </span>
+  );
+}
+
+/** The mark of the tool a pull request was started from. */
+export function PrOriginIcon(props: { tool: PrOriginTool; class?: string }) {
+  const icon = () =>
+    match(props.tool)
+      .with('claude', () => ClaudeIcon)
+      .with('codex', () => CodexIcon)
+      .with('cursor', () => CursorIcon)
+      .with('macro', () => MacroIcon)
+      .with('copilot', () => GithubIcon)
+      .with('devin', 'jules', () => RobotIcon)
+      .exhaustive();
+  return (
+    <Dynamic
+      component={icon()}
+      class={cn('size-3 shrink-0', props.class)}
+      aria-hidden="true"
+    />
+  );
+}
+
+/** "Claude, from its branch name"; Macro sessions say which tool they ran. */
+export function prOriginDescription(origin: PrOrigin) {
+  const tool = PR_ORIGIN_LABELS[origin.tool];
+  if (origin.signal === 'agent-session')
+    return origin.tool === 'macro'
+      ? 'Started from a Macro agent session'
+      : `Started from ${tool} in a Macro agent session`;
+  return `Started from ${tool}, ${PR_ORIGIN_SIGNAL_LABELS[origin.signal]}`;
+}
+
+/**
+ * Where the pull request was started. Opens the originating session: the
+ * Macro agent session in a split, or the external session link in a tab.
+ */
+export function PrOriginBadge(props: { origin: PrOrigin; onOpen: OpenPrLink }) {
+  const target = () => props.origin.sessionId ?? props.origin.url;
+  const content = () => (
+    <>
+      <PrOriginIcon tool={props.origin.tool} />
+      <span class="min-w-0 truncate">
+        {PR_ORIGIN_LABELS[props.origin.tool]}
+      </span>
+    </>
+  );
+  return (
+    <Tooltip as="span" label={prOriginDescription(props.origin)}>
+      <Show
+        when={target()}
+        fallback={
+          <span
+            class="inline-flex h-6 min-w-0 max-w-32 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted"
+            aria-label={prOriginDescription(props.origin)}
+          >
+            {content()}
+          </span>
+        }
+      >
+        <button
+          type="button"
+          class="inline-flex h-6 min-w-0 max-w-32 items-center gap-1 rounded-full border border-edge bg-surface/50 px-1.5 text-xs font-medium text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label={`${prOriginDescription(props.origin)}. Open the session`}
+          {...isolate}
+          onClick={(event) => {
+            event.stopPropagation();
+            const sessionId = props.origin.sessionId;
+            if (sessionId)
+              props.onOpen({ type: 'agent', id: sessionId }, event.shiftKey);
+            else if (props.origin.url)
+              window.open(props.origin.url, '_blank', 'noopener,noreferrer');
+          }}
+        >
+          {content()}
+        </button>
+      </Show>
+    </Tooltip>
   );
 }
 

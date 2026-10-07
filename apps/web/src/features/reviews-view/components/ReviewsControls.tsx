@@ -6,16 +6,18 @@ import {
   MobileFilterDrawer,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
-import { PrPriorityIcon } from '@block-pr/component/PrLinks';
+import { PrOriginIcon, PrPriorityIcon } from '@block-pr/component/PrLinks';
 import {
   PR_PRIORITY_IDS,
   PR_PRIORITY_LABELS,
   type PrLinkKind,
 } from '@block-pr/data/pr-links';
+import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Accordion } from '@kobalte/core/accordion';
 import { createSignal, For, Show } from 'solid-js';
+import { UNKNOWN_ORIGIN } from '../reviews-filter';
 import type {
   ReviewsFilterId,
   ReviewsFilterSelection,
@@ -63,6 +65,15 @@ const PRIORITY_OPTIONS: ListControlOption<string>[] = PR_PRIORITY_IDS.map(
   })
 );
 
+const ORIGIN_OPTIONS: ListControlOption<string>[] = [
+  ...PR_ORIGIN_TOOLS.map((tool) => ({
+    id: tool,
+    label: PR_ORIGIN_LABELS[tool],
+    icon: () => <PrOriginIcon tool={tool} class="size-4" />,
+  })),
+  { id: UNKNOWN_ORIGIN, label: 'Unknown' },
+];
+
 const LINKED_OPTIONS: ListControlOption<string>[] = [
   { id: 'agent', label: 'An agent session' },
   { id: 'ticket', label: 'A ticket' },
@@ -76,6 +87,7 @@ function filterGroups(
   return [
     { id: 'priority', label: 'Priority', options: PRIORITY_OPTIONS },
     { id: 'linked', label: 'Linked to', options: LINKED_OPTIONS },
+    { id: 'origin', label: 'Started from', options: ORIGIN_OPTIONS },
     {
       id: 'repository',
       label: 'Repository',

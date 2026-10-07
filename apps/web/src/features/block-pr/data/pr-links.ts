@@ -1,4 +1,5 @@
 import { match } from 'ts-pattern';
+import { detectPrOrigin, type PrOrigin } from './pr-origin';
 
 export type PrPriorityId = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
@@ -24,6 +25,8 @@ export type PrLinkSession = {
   /** `agent` when the session's agent opened the pull request. */
   source: 'agent' | 'user';
   parent?: PrLinkSessionParent;
+  /** The session's harness slug, for sessions whose agent opened the PR. */
+  harness?: string;
 };
 
 /** A task the pull request references: a customer ticket when it names a company. */
@@ -46,6 +49,8 @@ export type PrLinks = {
   channelIds: string[];
   companyIds: string[];
   priority: PrPriority;
+  /** Where the pull request was started, when anything gives it away. */
+  origin?: PrOrigin;
 };
 
 export type PrLinkKind = 'agent' | 'ticket' | 'customer' | 'channel';
@@ -73,14 +78,6 @@ const PRIORITY_RANK: Record<PrPriorityId, number> = {
   medium: 2,
   low: 1,
   none: 0,
-};
-
-export const EMPTY_PR_LINKS: PrLinks = {
-  sessions: [],
-  tasks: [],
-  channelIds: [],
-  companyIds: [],
-  priority: { id: 'none' },
 };
 
 /**
@@ -147,6 +144,9 @@ export function buildPrLinks(input: {
   sessions: readonly PrLinkSession[];
   tasks: readonly PrLinkTask[];
   labels: readonly GithubLabelLike[];
+  description?: string;
+  headBranch?: string;
+  authorLogin?: string;
 }): PrLinks {
   const tasks = [...input.tasks].sort(
     (a, b) =>
@@ -168,6 +168,7 @@ export function buildPrLinks(input: {
       ),
     ]),
     priority: derivePriority(tasks, input.labels),
+    origin: detectPrOrigin(input),
   };
 }
 

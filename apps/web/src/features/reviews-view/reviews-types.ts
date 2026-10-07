@@ -22,7 +22,8 @@ export type ReviewsFilterId =
   | 'label'
   | 'review'
   | 'priority'
-  | 'linked';
+  | 'linked'
+  | 'origin';
 /** Selected option ids per filter group; any option in a group matches. */
 export type ReviewsFilterSelection = Record<ReviewsFilterId, readonly string[]>;
 
@@ -34,6 +35,7 @@ export const EMPTY_REVIEWS_FILTERS: ReviewsFilterSelection = {
   review: [],
   priority: [],
   linked: [],
+  origin: [],
 };
 
 /** Sidebar order, which the tab hotkeys follow. */

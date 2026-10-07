@@ -41,11 +41,14 @@ const PRIORITY_BY_OPTION_ID: Record<string, PrPriorityId> = {
   [PROPERTY_OPTION_IDS.PRIORITY.LOW]: 'low',
 };
 
-/** A pull request whose links to look up. */
+/** A pull request whose links to look up, with what its origin is read from. */
 export type PrLinksTarget = {
   url: string;
   githubKey: string;
   labels: readonly { name: string }[];
+  description?: string;
+  headBranch?: string;
+  authorLogin?: string;
 };
 
 export const prLinksTarget = (pullRequest: {
@@ -53,10 +56,16 @@ export const prLinksTarget = (pullRequest: {
   repo: string;
   number: number;
   labels?: readonly { name: string }[] | null;
+  description?: string | null;
+  headBranch?: string | null;
+  authorLogin?: string | null;
 }): PrLinksTarget => ({
   url: prHtmlUrl(pullRequest),
   githubKey: toGithubKey(pullRequest),
   labels: pullRequest.labels ?? [],
+  description: pullRequest.description ?? undefined,
+  headBranch: pullRequest.headBranch ?? undefined,
+  authorLogin: pullRequest.authorLogin ?? undefined,
 });
 
 const sessionParent = (
@@ -74,13 +83,20 @@ const sessionParent = (
   }
 };
 
+/** The Soup id field of each entity target fetched by id. */
+const SOUP_ID_FIELDS = {
+  df: 'documentId',
+  ccf: 'crmCompanyId',
+  asf: 'agentSessionId',
+} as const;
+
 /** Soup rows for exactly `ids` of one entity target, with their properties. */
 async function fetchSoupEntitiesById(
-  target: 'df' | 'ccf',
+  target: keyof typeof SOUP_ID_FIELDS,
   ids: readonly string[]
 ): Promise<EntityData[]> {
   if (ids.length === 0) return [];
-  const field = target === 'df' ? 'documentId' : 'crmCompanyId';
+  const field = SOUP_ID_FIELDS[target];
   const page = await throwOnErr(() =>
     storageServiceClient.getSoupAstItems({
       params: {},
@@ -169,20 +185,47 @@ export async function fetchPrLinks(
   ];
 
   const taskIds = [...new Set(pullRequests.flatMap(taskIdsFor))];
+  // The harness of a session whose agent opened a PR names the tool it ran.
+  const openerIds = [
+    ...new Set(
+      [...sessionsByUrl.values()].flatMap((sessions) =>
+        sessions.flatMap((session) =>
+          session.source === 'agent' ? [session.id] : []
+        )
+      )
+    ),
+  ];
+  const [taskEntities, openerEntities] = await Promise.all([
+    fetchSoupEntitiesById('df', taskIds),
+    fetchSoupEntitiesById('asf', openerIds),
+  ]);
   const tasks = new Map(
-    (await fetchSoupEntitiesById('df', taskIds)).flatMap((entity) => {
+    taskEntities.flatMap((entity) => {
       const task = toLinkTask(entity);
       return task ? [[task.id, task] as const] : [];
     })
+  );
+  const harnesses = new Map(
+    openerEntities.flatMap((entity) =>
+      entity.type === 'agent_session' && entity.harness
+        ? [[entity.id, entity.harness] as const]
+        : []
+    )
   );
 
   const links = new Map(
     pullRequests.map((pullRequest) => [
       pullRequest.url,
       buildPrLinks({
-        sessions: sessionsByUrl.get(pullRequest.url) ?? [],
+        sessions: (sessionsByUrl.get(pullRequest.url) ?? []).map((session) => ({
+          ...session,
+          harness: harnesses.get(session.id),
+        })),
         tasks: taskIdsFor(pullRequest).flatMap((id) => tasks.get(id) ?? []),
         labels: pullRequest.labels,
+        description: pullRequest.description,
+        headBranch: pullRequest.headBranch,
+        authorLogin: pullRequest.authorLogin,
       }),
     ])
   );

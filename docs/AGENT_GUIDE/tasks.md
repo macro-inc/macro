@@ -127,11 +127,22 @@ or comments mention as `MACRO-<id>`, and tasks whose thread started a session),
 and **Channel**s (channels whose thread started a session). A pill with one item
 opens it (Shift-click for another split); with more it shows `+N` and opens a
 list. Items the viewer cannot access are omitted. Rows show a pulsing
-placeholder while links load. Filters add **Priority** (including No priority)
-and **Linked to** (an agent session, a ticket, a customer, a channel); these
-run on the loaded rows, which wait for their links before matching. The PR
-side panel's **Linked work** section lists the same priority, tickets,
-customers, and channels.
+placeholder while links load. The first pill names where the PR was started
+(Claude, Codex, Cursor, Devin, Copilot, Jules, or Macro), including PRs opened
+outside Macro: a Macro agent session that opened the PR wins and shows the tool
+its harness ran; otherwise a session link in the description (`claude.ai/code/…`,
+`chatgpt.com/codex/tasks/…`, `cursor.com/agents…`, `app.devin.ai/sessions/…`,
+`jules.google.com/…`, `macro.com/app/agent/…`), then footers such as
+"Generated with Claude Code" or a `Co-Authored-By: Claude` trailer, then the
+bot author (for example `Copilot` or `devin-ai-integration[bot]`), then the
+branch prefix (`claude/`, `codex/`, `cursor/`, `devin/`, `copilot/`, `jules-`).
+Its tooltip names the signal; clicking it opens the Macro session in a split or
+the external session in a new tab. Filters add **Priority** (including No
+priority), **Linked to** (an agent session, a ticket, a customer, a channel),
+and **Started from** (each tool, or Unknown); these run on the loaded rows,
+which wait for their links before matching. The PR side panel's **Linked work**
+section shows the same origin under **Started from**, plus the priority,
+tickets, customers, and channels.
 
 PR rows can be added to or removed from Favorites through their context menu or
 bulk entity actions. When at least one accessible PR is favorited, Reviews shows

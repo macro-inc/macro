@@ -1,7 +1,11 @@
 import type { PrLinks } from '@block-pr/data/pr-links';
 import type { GithubPullRequestEntity } from '@entity';
 import { describe, expect, it } from 'vitest';
-import { applyReviewLinks, effectiveReviewsFilters } from './reviews-filter';
+import {
+  applyReviewLinks,
+  effectiveReviewsFilters,
+  UNKNOWN_ORIGIN,
+} from './reviews-filter';
 import {
   EMPTY_REVIEWS_FILTERS,
   type ReviewsFilterSelection,
@@ -52,7 +56,10 @@ describe('review link filters and priority sort', () => {
       priority: { id: 'urgent', source: 'task', taskId: 't' },
       companyIds: ['acme'],
     }),
-    none: links({ sessions: [{ id: 's', source: 'agent' }] }),
+    none: links({
+      sessions: [{ id: 's', source: 'agent' }],
+      origin: { tool: 'claude', signal: 'agent-session', sessionId: 's' },
+    }),
     pending: undefined,
   };
   const reviews = ['low', 'pending', 'none', 'urgent'].map(review);
@@ -95,5 +102,28 @@ describe('review link filters and priority sort', () => {
         )
       )
     ).toEqual(['none', 'urgent']);
+  });
+
+  it('matches the tool a pull request was started from, or unknown', () => {
+    expect(
+      ids(
+        applyReviewLinks(
+          reviews,
+          linksFor,
+          { ...EMPTY_REVIEWS_FILTERS, origin: ['claude'] },
+          'recently_updated'
+        )
+      )
+    ).toEqual(['none']);
+    expect(
+      ids(
+        applyReviewLinks(
+          reviews,
+          linksFor,
+          { ...EMPTY_REVIEWS_FILTERS, origin: [UNKNOWN_ORIGIN] },
+          'recently_updated'
+        )
+      )
+    ).toEqual(['low', 'urgent']);
   });
 });

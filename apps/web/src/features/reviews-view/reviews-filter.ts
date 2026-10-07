@@ -52,7 +52,12 @@ export function searchReviews(
 
 /** Whether the priority or linked-to filters are narrowing the list. */
 export const hasLinkFilters = (filters: ReviewsFilterSelection) =>
-  filters.priority.length > 0 || filters.linked.length > 0;
+  filters.priority.length > 0 ||
+  filters.linked.length > 0 ||
+  filters.origin.length > 0;
+
+/** The origin filter option for pull requests nothing identifies. */
+export const UNKNOWN_ORIGIN = 'unknown';
 
 /**
  * Priority and linked-to filters, and the priority sort, which read each pull
@@ -73,6 +78,11 @@ export function applyReviewLinks(
       if (
         filters.priority.length > 0 &&
         !filters.priority.includes(links.priority.id)
+      )
+        return false;
+      if (
+        filters.origin.length > 0 &&
+        !filters.origin.includes(links.origin?.tool ?? UNKNOWN_ORIGIN)
       )
         return false;
       // Like the other groups, any selected option matches.
