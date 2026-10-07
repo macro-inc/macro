@@ -26,7 +26,7 @@ codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_egress = { path = "../../crates/agent_egress" }
-agent_fold = { path = "../../crates/agent_fold" }
+agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
@@ -61,6 +61,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "s3",
   "service",
 ] }
+mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
@@ -83,6 +84,7 @@ system_properties = { path = "../../crates/system_properties" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
+model_owner = { path = "../../crates/model_owner" }
 axum = { workspace = true }
 axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }
@@ -111,6 +113,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
+tower-http = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
@@ -118,3 +121,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }

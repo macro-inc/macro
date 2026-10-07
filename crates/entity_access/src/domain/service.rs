@@ -8,7 +8,10 @@ use crate::domain::{
         ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
         EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
-    ports::{AccessRepository, AccessibleDatabases, EntityAccessService, ScheduledActionGrants},
+    ports::{
+        AccessRepository, AccessibleDatabases, AccessibleForms, EntityAccessService,
+        ScheduledActionGrants,
+    },
 };
 use futures::{StreamExt, stream};
 use macro_user_id::{
@@ -73,6 +76,7 @@ where
             EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
+            EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
             EntityType::ScheduledAction => {
                 self.repo
                     .get_scheduled_action_access(entity_id, user_id)
@@ -215,7 +219,8 @@ where
             | EntityType::Call
             | EntityType::Initiative
             | EntityType::Database
-            | EntityType::DatabaseRow => {
+            | EntityType::DatabaseRow
+            | EntityType::Form => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -305,6 +310,19 @@ where
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         self.repo.list_database_access(user_id).await
+    }
+}
+
+impl<R> AccessibleForms for EntityAccessServiceImpl<R>
+where
+    R: AccessRepository,
+{
+    #[tracing::instrument(err, skip(self))]
+    async fn accessible_forms(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        self.repo.list_form_access(user_id).await
     }
 }
 
@@ -541,6 +559,7 @@ where
             | EntityType::Initiative
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::Form
             | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
@@ -624,6 +643,7 @@ where
             | EntityType::Initiative
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::Form
             | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
@@ -728,7 +748,8 @@ where
             // channel as a channel source, both of which the generic accessor
             // query expands.
             // A database's audience is exactly its `entity_access` rows, so it
-            // resolves the same way a document's does.
+            // resolves the same way a document's does. So is a form's: a public
+            // audience is anyone with the link, which no list can name.
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
@@ -737,7 +758,8 @@ where
             | EntityType::Initiative
             | EntityType::CrmCompany
             | EntityType::CrmContact
-            | EntityType::Database => {
+            | EntityType::Database
+            | EntityType::Form => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

@@ -1,8 +1,10 @@
 import type { CompletionContext } from '@ironcalc/wasm';
 import catalog from './formula-functions.json';
 
-// Adapted from IronCalc's function catalog at 8fd0a82. See the adjacent MIT license.
-// Filtered against @ironcalc/wasm 0.8.4; volatile functions are disabled in Macro.
+// Adapted from IronCalc's function catalog at the vendored engine's upstream
+// commit (vendor/ironcalc/upstream.json). See the adjacent MIT license.
+// HYPERLINK is left out (Macro shows its text); AGGREGATE and GETPIVOTDATA are
+// Macro's additions.
 export type FormulaFunction = {
   args: string[][];
   description: string;

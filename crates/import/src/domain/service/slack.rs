@@ -18,6 +18,7 @@ pub(super) async fn ensure_channel(
     user: &MacroUserIdStr<'static>,
     row: &ImportEntity,
     team_id: Uuid,
+    participant_emails: &[String],
 ) -> anyhow::Result<Uuid> {
     let meta: SlackChannelMeta = serde_json::from_value(row.metadata.clone())?;
     // Never guess a source ID from a channel name. Older normalization prefixed
@@ -40,13 +41,8 @@ pub(super) async fn ensure_channel(
     if target.ready {
         return Ok(target.channel_id);
     }
-    let emails = meta
-        .participants
-        .iter()
-        .filter_map(|participant| participant.email.clone())
-        .collect::<Vec<_>>();
     let channel_id = creator
-        .create_channel(user, &meta.name, &target, &emails)
+        .create_channel(user, &meta.name, &target, participant_emails)
         .await?;
     // Completion validates the persisted ID against the reservation. On retry,
     // either the same pending UUID is ensured again or a ready mapping is reused.

@@ -194,6 +194,8 @@ pub enum Action {
     Messaged,
     /// An email message was sent on the thread.
     Sent,
+    /// Someone submitted a response to the entity (form).
+    Responded,
     /// A property value changed on the entity (see
     /// [`CommonAction::PropertyChanged`]).
     PropertyChanged(PropertyChange),
@@ -278,7 +280,8 @@ impl Action {
             | Action::Deleted
             | Action::Messaged
             | Action::Sent
-            | Action::PictureChanged => None,
+            | Action::PictureChanged
+            | Action::Responded => None,
             Action::PropertyChanged(change) => payload(change),
             Action::ParticipantAdded(change) | Action::ParticipantRemoved(change) => {
                 payload(change)
@@ -320,6 +323,7 @@ impl Action {
             ActionTag::Deleted => Ok(Action::Deleted),
             ActionTag::Messaged => Ok(Action::Messaged),
             ActionTag::Sent => Ok(Action::Sent),
+            ActionTag::Responded => Ok(Action::Responded),
             ActionTag::PropertyChanged => Ok(Action::PropertyChanged(parsed(payload)?)),
             ActionTag::ParticipantAdded => Ok(Action::ParticipantAdded(parsed(payload)?)),
             ActionTag::ParticipantRemoved => Ok(Action::ParticipantRemoved(parsed(payload)?)),

@@ -209,11 +209,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ),
         crm::domain::service::NoOpCrmService,
         github_pull_request_service,
-        reminders::domain::service::NoOpRemindersService,
     ));
 
     let s3_client = macro_aws_config::s3_client().await;
-    let presentation_files = documents::outbound::s3_presentation_files::S3PresentationFiles::new(
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
         db.clone(),
         s3_client.clone(),
         config.document_storage_bucket.as_ref(),
@@ -308,7 +307,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             &side_effect_clients,
         ),
     )
-    .with_presentation_files(Arc::new(presentation_files));
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
 
     let properties_tool_context = ai_tools::build_properties_tool_context(
         properties_service.clone(),
@@ -446,17 +448,16 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         properties_tool_context,
         email_tool_context,
         call_tool_context,
+        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+            db.clone(),
+            config.environment,
+        ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             db.clone(),
             CalendarServiceUrl::new()?,
             config.internal_api_key.to_string(),
         ),
         notification_tool_context,
-        reminders_tool_context: ai_tools::build_reminders_tool_context(
-            db.clone(),
-            user_email_service.clone(),
-            entity_access_service.clone(),
-        ),
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
@@ -469,6 +470,10 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             dss_url,
             ai_tools::pipedream_client_from_env()?,
         ),
+        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            config.internal_api_key.to_string(),
+        )?,
         project_tool_context,
         initiative_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
@@ -479,6 +484,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         admission: ai_billing::composition::pg_admission_service(
             db.clone(),
             config.enable_ai_usage_enforcement,
+            config.ai_pricing(),
         ),
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),

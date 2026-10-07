@@ -71,6 +71,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
   enableDatabases: {},
+  enableForms: {},
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -152,7 +153,8 @@ vi.mock('@app/features/crm/crm-search', async () => ({
     companies: () => mocks.companies,
   }),
 }));
-vi.mock('@app/features/crm/record-adapter', () => ({
+vi.mock('@app/features/crm/record-adapter', async () => ({
+  ...(await import('@app/features/crm/queries/graphql')),
   useQuickAccessCrmContactsQuery: () => ({
     query: { refetch: vi.fn() },
     contacts: () => mocks.crmContacts,
@@ -173,6 +175,9 @@ vi.mock('@queries/storage/instructions-md', () => ({
 }));
 vi.mock('@queries/storage/databases', () => ({
   useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),
+}));
+vi.mock('@queries/storage/forms', () => ({
+  useFormsQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
@@ -1284,14 +1289,17 @@ describe('CRM contacts', () => {
     expect(people.items()).toEqual([]);
   });
 
-  it('searches contacts locally, by name or email', () => {
+  it('searches contacts locally and in the normalized cache, by name or email', async () => {
     mocks.crmContacts = [contact];
     const list = setup((source) =>
       source.useList({ buckets: ['crm_contact'], searchTerm: () => 'wile@' })
     );
     expect(list.items().map((item) => item.id)).toEqual(['contact-1']);
-    // Contacts aren't cache records, so the cache is never searched for them.
-    expect(mocks.search).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mocks.search).toHaveBeenCalledWith(
+        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' })
+      )
+    );
   });
 
   it('leaves contacts out while the CRM is disabled', () => {

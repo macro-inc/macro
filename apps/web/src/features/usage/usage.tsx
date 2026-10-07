@@ -1,0 +1,190 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
+import {
+  DEV_MODE_ENV,
+  enableAiUsageBilling,
+  LOCAL_ONLY,
+  PROD_MODE_ENV,
+} from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import {
+  useAiBillingPlansQuery,
+  useAiBillingSummaryQuery,
+  useCreateAiCreditCheckoutMutation,
+  useCreateBillingPortalMutation,
+  useUpdateAiAutoReloadMutation,
+  useUpdateAiOverageMutation,
+} from '@queries/auth';
+import { createSignal, Suspense } from 'solid-js';
+import { useAiUsagePreview } from '../paywall/ai-usage-preview';
+import type { UsageContext } from './context/usage-context';
+import {
+  type AutoReloadSettings,
+  DEFAULT_AUTO_RELOAD,
+  isUsageAvailable,
+} from './core/usage';
+import { toUsageSummary } from './queries/usage-summary';
+import { UsageSettingsView } from './views/usage-settings';
+
+export function Usage() {
+  const summary = useAiBillingSummaryQuery();
+  const plans = useAiBillingPlansQuery();
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const checkout = useCreateAiCreditCheckoutMutation();
+  const portal = useCreateBillingPortalMutation();
+  const overage = useUpdateAiOverageMutation();
+  const autoReloadMutation = useUpdateAiAutoReloadMutation();
+  const usagePreview = useAiUsagePreview();
+  const { showUsageLimit, hideUsageLimit } = useAiUsageLimitState();
+  const { openSettings } = useSettingsState();
+  const autoReloadPreview = () => usagePreview.plan() === 'paid';
+  const [previewSettings, setPreviewSettings] =
+    createSignal<AutoReloadSettings>({ ...DEFAULT_AUTO_RELOAD });
+  const previewing = usagePreview.active;
+  const available = () =>
+    !usagePreview.beforeLaunch() &&
+    isUsageAvailable(PROD_MODE_ENV && !LOCAL_ONLY, aiUsageBilling().enabled);
+  const returnUrl = `${window.location.origin}/app/settings/usage`;
+  const usageSummary = () => {
+    const snapshot = usagePreview.withPreview(
+      summary.isSuccess ? summary.data : undefined,
+      plans.isSuccess ? plans.data.plans : undefined
+    );
+    return snapshot ? toUsageSummary(snapshot) : undefined;
+  };
+  const canChangeAutoReload = () =>
+    available() &&
+    !previewing() &&
+    summary.isSuccess &&
+    !summary.data.unlimited &&
+    summary.data.tier !== 'free' &&
+    summary.data.can_manage_billing;
+  const autoReloadAvailable = () =>
+    canChangeAutoReload() ||
+    (available() && DEV_MODE_ENV && autoReloadPreview());
+  const context: UsageContext = {
+    available,
+    summary: usageSummary,
+    loading: () => summary.isPending,
+    failed: () => summary.isError,
+    refresh: () => {
+      void summary.refetch();
+    },
+    checkout: {
+      pending: () => checkout.isPending,
+      supportedAmounts: () =>
+        plans.isSuccess
+          ? plans.data.credit_packs_cents
+          : [1_000, 2_500, 5_000, 10_000],
+      start: async (amountCents) => {
+        if (
+          !available() ||
+          previewing() ||
+          !summary.isSuccess ||
+          summary.data.unlimited ||
+          summary.data.tier === 'free' ||
+          !summary.data.can_manage_billing
+        )
+          throw new Error('Credit purchase unavailable');
+        return await checkout.mutateAsync({
+          amountCents,
+          successUrl: `${returnUrl}?aiCreditsSuccess=true`,
+          cancelUrl: `${returnUrl}?aiCreditsCancel=true`,
+        });
+      },
+    },
+    autoReload: {
+      settings: () => {
+        if (autoReloadPreview()) return previewSettings();
+        return usageSummary()?.autoReload.settings ?? DEFAULT_AUTO_RELOAD;
+      },
+      available: autoReloadAvailable,
+      pending: () => autoReloadMutation.isPending,
+      suspended: () => usageSummary()?.autoReload.suspended ?? false,
+      preview: autoReloadPreview,
+      save: async (settings) => {
+        if (!autoReloadAvailable()) throw new Error('Auto-Reload unavailable');
+        if (autoReloadPreview()) {
+          setPreviewSettings(settings);
+          return;
+        }
+        await autoReloadMutation.mutateAsync(settings);
+      },
+    },
+    paymentMethods: {
+      pending: () => portal.isPending,
+      open: async () => {
+        if (
+          !available() ||
+          previewing() ||
+          !summary.isSuccess ||
+          summary.data.tier === 'free' ||
+          !summary.data.can_manage_billing
+        )
+          throw new Error('Payment methods unavailable');
+        return await portal.mutateAsync({ returnUrl });
+      },
+    },
+    navigateToPayment: (url) => {
+      if (!available()) return;
+      window.location.href = url;
+    },
+    openPlans: () => {
+      if (available()) openSettings('Billing');
+    },
+    existingUsageBilling: {
+      pending: () => overage.isPending,
+      turnOff: async () => {
+        if (
+          !available() ||
+          previewing() ||
+          !summary.isSuccess ||
+          summary.data.tier === 'free' ||
+          !summary.data.can_manage_billing
+        )
+          throw new Error('Usage billing unavailable');
+        await overage.mutateAsync({
+          enabled: false,
+          limitCents: summary.data.overage_limit_cents,
+        });
+      },
+    },
+    developer: DEV_MODE_ENV
+      ? {
+          active: usagePreview.active,
+          plan: usagePreview.plan,
+          beforeLaunch: usagePreview.beforeLaunch,
+          previewPlan: (plan) => {
+            hideUsageLimit();
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewPlan(plan);
+          },
+          openLimitDialog: (plan) => {
+            if (!available()) return;
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewLimit(plan);
+            showUsageLimit(
+              plan === 'free'
+                ? 'ai_free_allowance_exhausted'
+                : 'ai_allowance_exhausted'
+            );
+          },
+          previewBeforeLaunch: () => {
+            hideUsageLimit();
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            usagePreview.previewBeforeLaunch();
+          },
+          reset: () => {
+            usagePreview.reset();
+            setPreviewSettings({ ...DEFAULT_AUTO_RELOAD });
+            hideUsageLimit();
+          },
+        }
+      : undefined,
+  };
+  return (
+    <Suspense fallback={<p role="status">Loading usage…</p>}>
+      <UsageSettingsView context={context} />
+    </Suspense>
+  );
+}

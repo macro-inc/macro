@@ -40,13 +40,20 @@ from the runtime `SLACK_IMPORT_ENABLED` intake flag.
 4. Infrastructure supplies `ENVIRONMENT`, `UPLOAD_STAGING_BUCKET` (bulk-upload's
    bucket output), `OVERRIDE_SLACK_IMPORT_QUEUE`, `OVERRIDE_SLACK_IMPORT_DLQ`,
    `OVERRIDE_CONNECTION_GATEWAY_URL`, `OVERRIDE_SEARCH_PROCESSING_SERVICE_URL`,
-   `DD_SERVICE` and `DD_ENV`. Document/register those names in Doppler's service
-   configuration inventory, but do not add competing overrides. There is no
-   `SEARCH_SERVICE_URL` dependency. No Slack OAuth/bot credentials are needed.
+   `DD_SERVICE`, `DD_ENV`, and `SLACK_IMPORT_JOIN_EMAIL_ENABLED`.
+   `SLACK_IMPORT_JOIN_EMAIL_ENABLED` comes from the stack config key
+   `slack_import_join_email_enabled`, which defaults to false. Leave that key
+   out of the Doppler sync. A missing Doppler key fails task start. The task
+   definition sets the value from stack config. Document/register the
+   infrastructure-supplied names in Doppler's service configuration inventory,
+   but do not add competing overrides. There is no `SEARCH_SERVICE_URL`
+   dependency. No Slack OAuth/bot credentials are needed.
 5. Ensure private-subnet egress can reach MacroDB, AWS endpoints and the gateway.
-   The task role only receives the staging-read and main/DLQ policy from
-   `SlackImportQueue`; it does not inherit DSS's permissions. The execution role
-   reads the worker's Doppler sync, not the task role.
+   The task role receives the `SlackImportQueue` worker policy only. That policy
+   allows reading Slack staging objects, operating the import main queue and DLQ,
+   and `sqs:SendMessage` on the notification ingress queue. The task role does
+   not inherit DSS's permissions. The execution role reads the worker's Doppler
+   sync, not the task role.
 
 No remote secrets are created by the source change itself. After completing the
 above prerequisites, opt in from `infra/stacks/cloud-storage-service/`:
@@ -75,6 +82,18 @@ instead, so maintenance and DLQ reconciliation continue.
   Then set `SLACK_IMPORT_ENABLED=true` and redeploy the worker before opening
   admission. This flag pauses claims/outbox sends, **not** maintenance/DLQ
   reconciliation; even paused tasks require working DB/queue/search configuration.
+- Colleague join email stays off until you set
+  `slack_import_join_email_enabled`. From `infra/stacks/cloud-storage-service/`,
+  set the stack config, then deploy that stack through the normal deployment
+  workflow:
+
+  ```sh
+  pulumi config set cloud-storage-service:slack_import_join_email_enabled true --stack <dev-or-prod>
+  ```
+
+  The `sqs:SendMessage` grant on the notification ingress queue is already on
+  the worker policy. The config key only changes `SLACK_IMPORT_JOIN_EMAIL_ENABLED`
+  in the task definition.
 - Monitor ECS deployment failure alarms, task OOM/restarts, queue age, the existing
   DLQ alarm, import leases and search receipts. Pause admission and set the worker
   flag false to stop new imports; do not purge queues or delete imported data.
@@ -111,4 +130,6 @@ Local env wiring uses `bulk-upload-staging`, full LocalStack queue URL overrides
 `http://connection-gateway:8080`, and
 `http://search-processing-service:8080`. The local `INTERNAL_API_KEY` matches
 search-processing's internal auth key. The default worker flag is false unless
-explicitly overridden. Do not inject a deployed `APP_SECRETS_JSON` locally.
+explicitly overridden. `SLACK_IMPORT_JOIN_EMAIL_ENABLED` also defaults to false
+unless the env file sets it to `true`. Do not inject a deployed
+`APP_SECRETS_JSON` locally.

@@ -189,7 +189,7 @@ pub struct SpreadsheetStyle {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetCellInput {
-    /// A1 address, from A1 through Z1000.
+    /// A1 address, from A1 through XFD100000.
     pub address: String,
     /// Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
     /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
@@ -225,9 +225,9 @@ pub struct SpreadsheetOverride {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetColumnWidth {
-    /// Column letter A through Z.
+    /// Column letter A through XFD.
     pub column: String,
-    /// Width in pixels, 64 through 640.
+    /// Width in pixels, 8 through 640.
     pub width: u16,
 }
 
@@ -300,7 +300,7 @@ pub enum SpreadsheetOperation {
         /// Stable sheet ID or exact name.
         sheet_id: String,
     },
-    /// Append rows, up to the 1,000-row sheet limit.
+    /// Append rows, up to the 100,000-row sheet limit.
     AppendRows {
         /// Stable sheet ID or exact name.
         sheet_id: String,

@@ -41,6 +41,10 @@ export function MentionsMenuItem(props: {
         name: name || email,
         detail: name && name !== email ? email : undefined,
       }))
+      .with({ kind: 'entity', data: { type: 'crm_contact' } }, ({ data }) => ({
+        name: data.name || data.email,
+        detail: data.name && data.name !== data.email ? data.email : undefined,
+      }))
       .with({ kind: 'agentSession' }, ({ data }) => ({
         name: data.name || 'Agent session',
         detail: data.bot?.name ? `@${data.bot.name}` : undefined,

@@ -4,6 +4,8 @@ export const BlockRegistry = [
   'calendar',
   'chat',
   'database',
+  // A questionnaire whose answers are rows of a database table.
+  'form',
   'write',
   'pdf',
   'md',
@@ -13,6 +15,12 @@ export const BlockRegistry = [
   'spreadsheet',
   // PowerPoint presentations, edited in the browser.
   'pptx',
+  // Photoshop documents, edited in the browser.
+  'psd',
+  // Figma files, viewed in the browser.
+  'fig',
+  // Illustrator files, edited in the browser.
+  'ai',
   'channel',
   'project',
   'unknown',

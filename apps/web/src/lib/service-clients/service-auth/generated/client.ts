@@ -9,6 +9,7 @@ import type {
   AppleLoginRequest,
   ChangePlanRequest,
   ChangePlanResponse,
+  CheckoutSessionV2Response,
   CodexConfigRequest,
   CodexConnectionStatus,
   CodexEnvironment,
@@ -52,6 +53,8 @@ import type {
   ListGtmInviteLinksParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
+  MergeGithubPullRequestRequest,
+  MergeGithubPullRequestResponse,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -86,6 +89,7 @@ import type {
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
+  UpdateAutoReloadRequest,
   UpdateOverageRequest,
   UsageSnapshot,
   UserLinkResponse,
@@ -95,6 +99,86 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+/**
+ * @summary Turn automatic credit reloads (and with them overage) on with the given
+thresholds, or off. Payer only. Enabling settles right away, so a balance
+already under the minimum reloads immediately.
+ */
+export type updateAiBillingAutoReloadResponse200 = {
+  data: UsageSnapshot;
+  status: 200;
+};
+
+export type updateAiBillingAutoReloadResponse400 = {
+  data: AiBillingErrorBody;
+  status: 400;
+};
+
+export type updateAiBillingAutoReloadResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type updateAiBillingAutoReloadResponse402 = {
+  data: AiBillingErrorBody;
+  status: 402;
+};
+
+export type updateAiBillingAutoReloadResponse403 = {
+  data: AiBillingErrorBody;
+  status: 403;
+};
+
+export type updateAiBillingAutoReloadResponse500 = {
+  data: AiBillingErrorBody;
+  status: 500;
+};
+
+export type updateAiBillingAutoReloadResponseSuccess =
+  updateAiBillingAutoReloadResponse200 & {
+    headers: Headers;
+  };
+export type updateAiBillingAutoReloadResponseError = (
+  | updateAiBillingAutoReloadResponse400
+  | updateAiBillingAutoReloadResponse401
+  | updateAiBillingAutoReloadResponse402
+  | updateAiBillingAutoReloadResponse403
+  | updateAiBillingAutoReloadResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAiBillingAutoReloadResponse =
+  | updateAiBillingAutoReloadResponseSuccess
+  | updateAiBillingAutoReloadResponseError;
+
+export const getUpdateAiBillingAutoReloadUrl = () => {
+  return `/ai-billing/auto-reload`;
+};
+
+export const updateAiBillingAutoReload = async (
+  updateAutoReloadRequest: UpdateAutoReloadRequest,
+  options?: RequestInit
+): Promise<updateAiBillingAutoReloadResponse> => {
+  const res = await fetch(getUpdateAiBillingAutoReloadUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAutoReloadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAiBillingAutoReloadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAiBillingAutoReloadResponse;
+};
 
 /**
  * @summary Start a Stripe Checkout for a credit pack. Payer only.
@@ -253,7 +337,8 @@ export const updateAiBillingOverage = async (
 };
 
 /**
- * @summary The plan catalog, credit packs, and overage cap bounds.
+ * @summary The plan catalog, credit packs, overage cap bounds, and automatic reload
+defaults and bounds.
  */
 export type getAiBillingPlansResponse200 = {
   data: PlanCatalogResponse;
@@ -1192,6 +1277,98 @@ export const enrichGithubPullRequests = async (
     status: res.status,
     headers: res.headers,
   } as enrichGithubPullRequestsResponse;
+};
+
+/**
+ * @summary Merges a GitHub pull request as the authenticated user, with their own
+GitHub grant. GitHub applies the user's permissions and the repository's
+branch protections; a refusal is returned with GitHub's message.
+ */
+export type mergeGithubPullRequestResponse200 = {
+  data: MergeGithubPullRequestResponse;
+  status: 200;
+};
+
+export type mergeGithubPullRequestResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type mergeGithubPullRequestResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type mergeGithubPullRequestResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type mergeGithubPullRequestResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type mergeGithubPullRequestResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type mergeGithubPullRequestResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type mergeGithubPullRequestResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type mergeGithubPullRequestResponseSuccess =
+  mergeGithubPullRequestResponse200 & {
+    headers: Headers;
+  };
+export type mergeGithubPullRequestResponseError = (
+  | mergeGithubPullRequestResponse401
+  | mergeGithubPullRequestResponse403
+  | mergeGithubPullRequestResponse404
+  | mergeGithubPullRequestResponse409
+  | mergeGithubPullRequestResponse422
+  | mergeGithubPullRequestResponse428
+  | mergeGithubPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type mergeGithubPullRequestResponse =
+  | mergeGithubPullRequestResponseSuccess
+  | mergeGithubPullRequestResponseError;
+
+export const getMergeGithubPullRequestUrl = () => {
+  return `/github_pull_requests/merge`;
+};
+
+export const mergeGithubPullRequest = async (
+  mergeGithubPullRequestRequest: MergeGithubPullRequestRequest,
+  options?: RequestInit
+): Promise<mergeGithubPullRequestResponse> => {
+  const res = await fetch(getMergeGithubPullRequestUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mergeGithubPullRequestRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mergeGithubPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mergeGithubPullRequestResponse;
 };
 
 /**
@@ -5374,7 +5551,7 @@ export const getUserQuota = async (
  * @summary Creates a Stripe checkout session for the user to subscribe.
  */
 export type createCheckoutSessionV2Response200 = {
-  data: StripeSessionResponse;
+  data: CheckoutSessionV2Response;
   status: 200;
 };
 

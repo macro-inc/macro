@@ -1,10 +1,14 @@
 //! The domain: what a session may reach, and with whose credentials.
 
+/// Holding an MCP tool call until the session's owner approves it.
+pub mod approval;
 /// Failures a proxied call can end in.
 pub mod error;
 /// Vocabulary: grants, slugs, targets, and the transport-neutral request and
 /// response the service passes through.
 pub mod model;
+/// A response body that logs how long it lived and how it ended.
+pub mod observed_body;
 /// The capabilities the service needs from the outside.
 pub mod ports;
 /// The service itself.

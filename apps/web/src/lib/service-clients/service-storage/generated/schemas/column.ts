@@ -6,6 +6,7 @@
  */
 import type { ColumnConfigProperty } from './columnConfigProperty';
 import type { ColumnDisplayName } from './columnDisplayName';
+import type { ColumnProtection } from './columnProtection';
 
 /**
  * A column: the placement of a property definition on a table.
@@ -26,6 +27,8 @@ the definition's name. */
   position: string;
   /** The bound property definition. */
   property_definition_id: string;
+  /** Schema operations reserved by a feature; ordinary edits cannot clear them. */
+  protections?: ColumnProtection[];
   /** Table the column appears on. */
   table_id: string;
 }

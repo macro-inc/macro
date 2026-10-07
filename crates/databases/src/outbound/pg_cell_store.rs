@@ -2,6 +2,7 @@
 //! shares one transaction across the schema, row identities, cells and
 //! options.
 
+mod core;
 mod transfer;
 
 use std::collections::HashMap;
@@ -21,8 +22,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::journal::{Before, JournalActor, RowImage, cell_value, row_cells};
 use crate::domain::models::{
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId, Write, Writes,
-    WritesOutcome,
+    ColumnProtection, NewDefinition, OptionId, PropertyDefinitionId, RowId, TableId, TakenId,
+    Write, Writes, WritesOutcome,
 };
 use crate::domain::ports::CellStore;
 use crate::outbound::pg_databases_repo::schema::{self, Inserted, Removed};
@@ -100,6 +101,18 @@ fn row_of(entity_id: &str) -> Result<RowId, PgCellStoreError> {
     entity_id
         .parse()
         .map_err(|_| PgCellStoreError::CorruptRowId(entity_id.to_string()))
+}
+
+/// Preserve the batch API's missing-table outcome when its parent is absent.
+fn missing_database(writes: &Writes) -> WritesOutcome {
+    WritesOutcome::TableNotFound(
+        writes
+            .writes
+            .iter()
+            .flat_map(|write| write.versioned_tables().iter().copied())
+            .next()
+            .unwrap_or_default(),
+    )
 }
 
 fn cells_error(error: impl std::error::Error + Send + Sync + 'static) -> PgCellStoreError {
@@ -180,6 +193,36 @@ where
         // everything back.
         let mut transaction = self.pool.begin().await?;
 
+        if !rows::lock_live_database(&mut transaction, writes.database_id).await? {
+            return Ok(missing_database(writes));
+        }
+        self.apply_in(transaction, writes).await
+    }
+}
+
+/// What one write did inside its batch: the rows it inserted, or the
+/// outcome refusing the whole batch.
+enum Applied {
+    Rows(Vec<RowId>),
+    Refused(WritesOutcome),
+}
+
+impl<Properties> PgCellStore<Properties>
+where
+    Properties: PropertiesRepo<Err = anyhow::Error>
+        + DatabaseCellWriter<Transaction = Transaction<'static, Postgres>>
+        + DatabaseOptionWriter
+        + DatabaseDefinitionWriter<Transaction = Transaction<'static, Postgres>>
+        + Send
+        + Sync
+        + 'static,
+{
+    /// Commit a core storage batch; the app wrapper takes its entity lock first.
+    async fn apply_in(
+        &self,
+        mut transaction: Transaction<'static, Postgres>,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, PgCellStoreError> {
         // Parent locks precede table locks, as every writer takes them.
         if !schema::lock_database(
             &mut transaction,
@@ -188,13 +231,7 @@ where
         )
         .await?
         {
-            let table = writes
-                .writes
-                .iter()
-                .flat_map(|write| write.versioned_tables().iter().copied())
-                .next()
-                .unwrap_or_default();
-            return Ok(WritesOutcome::TableNotFound(table));
+            return Ok(missing_database(writes));
         }
         let created: Vec<TableId> = writes
             .writes
@@ -371,25 +408,7 @@ where
             changes,
         })
     }
-}
 
-/// What one write did inside its batch: the rows it inserted, or the
-/// outcome refusing the whole batch.
-enum Applied {
-    Rows(Vec<RowId>),
-    Refused(WritesOutcome),
-}
-
-impl<Properties> PgCellStore<Properties>
-where
-    Properties: PropertiesRepo<Err = anyhow::Error>
-        + DatabaseCellWriter<Transaction = Transaction<'static, Postgres>>
-        + DatabaseOptionWriter
-        + DatabaseDefinitionWriter<Transaction = Transaction<'static, Postgres>>
-        + Send
-        + Sync
-        + 'static,
-{
     /// Apply one write of a batch inside its transaction.
     async fn apply_write(
         &self,
@@ -400,6 +419,27 @@ where
     ) -> Result<Applied, PgCellStoreError> {
         let refused = |outcome| Ok(Applied::Refused(outcome));
         let database_id = writes.database_id;
+        // Schema planning is optimistic. Recheck protections under the same table
+        // locks that serialize form registration before changing stored schema.
+        let protected_operation = match write {
+            Write::DeleteColumn { column_id, .. } => Some((*column_id, ColumnProtection::Delete)),
+            Write::ReplaceColumn { replacement, .. } => {
+                Some((replacement.column.id, ColumnProtection::ChangeType))
+            }
+            _ => None,
+        };
+        if let Some((column_id, capability)) = protected_operation {
+            let blocked = sqlx::query_scalar!(
+                "SELECT EXISTS(SELECT 1 FROM database_column_protections WHERE column_id = $1 AND capability = $2) AS \"blocked!\"",
+                column_id.into_uuid(), capability.to_string()
+            ).fetch_one(&mut **transaction).await?;
+            if blocked {
+                return refused(WritesOutcome::ColumnProtected {
+                    write: index,
+                    capability,
+                });
+            }
+        }
         match write {
             Write::Unchanged { .. } => {}
             Write::CreateTable { table_id, name } => {

@@ -12,6 +12,7 @@ use chat::domain::events::ChatMacroEvent;
 use databases::domain::events::DatabaseMacroEvent;
 use documents_hex::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
+use forms::domain::events::FormMacroEvent;
 use initiative::domain::events::InitiativeMacroEvent;
 use macro_event_broker::MacroEvent as _;
 use messages::outbound::broker::MessageMacroEvent;
@@ -34,6 +35,7 @@ mod source {
             CallMacroEvent,
             InitiativeMacroEvent,
             DatabaseMacroEvent,
+            FormMacroEvent,
     );
 }
 pub(crate) use source::ActivitySourceEvent;
@@ -74,6 +76,7 @@ pub(crate) async fn ingest(
         ActivitySourceEvent::CallMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::InitiativeMacroEvent(e) => arm(e.event()),
         ActivitySourceEvent::DatabaseMacroEvent(e) => arm(e.event()),
+        ActivitySourceEvent::FormMacroEvent(event) => arm(event.event()),
     }
 }
 

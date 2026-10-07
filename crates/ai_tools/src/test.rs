@@ -73,6 +73,26 @@ fn every_host_toolset_passes_schema_validation() {
 }
 
 #[test]
+fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
+        }
+    }
+    let subagent = subagent_toolset();
+    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        assert!(!subagent.tools.contains_key(name));
+    }
+}
+
+#[test]
 fn project_workflows_are_available_in_every_host_alongside_folder_and_property_tools() {
     let names = [
         "ListInitiatives",
@@ -108,6 +128,39 @@ fn project_workflows_are_available_in_every_host_alongside_folder_and_property_t
             );
         }
     }
+}
+
+/// Every host reads the design files the native engines open, and its
+/// prompt says which tool reads which format.
+#[test]
+fn design_file_readers_are_available_in_every_host_with_their_guidance() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host);
+        let prompt = tools.prompt.to_string();
+        for name in [
+            "ReadDesign",
+            "ReadPhotoshopDocument",
+            "ReadIllustratorDocument",
+        ] {
+            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+            assert!(prompt.contains(name), "{host:?}: {name}");
+        }
+    }
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadPhotoshopDocument")
+    );
+    assert!(
+        subagent_toolset()
+            .tools
+            .contains_key("ReadIllustratorDocument")
+    );
 }
 
 /// Document answers get the one SQL tool, not a read-only twin: the access
@@ -147,6 +200,15 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
             .contains_key("CreateCalendarEvent")
     );
     assert!(session.toolset.user_tools.contains_key("SendEmail"));
+    // The confirmed twins execute in the loop, beside the deferring tools,
+    // for the prompts a session reads out of a thread.
+    assert!(session.toolset.tools.contains_key("SendConfirmedEmail"));
+    assert!(
+        session
+            .toolset
+            .tools
+            .contains_key("CreateConfirmedCalendarEvent")
+    );
     let prompt = session.prompt.to_string();
     assert!(prompt.contains("review card"));
     assert!(!prompt.contains("PendingUserExecution"));
@@ -188,6 +250,14 @@ fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
             !tools.iter().any(|tool| tool["name"] == "SendEmail"),
             "{host:?} toolset must not expose SendEmail"
         );
+        // The confirmed twins are for the in-process agent's thread turns;
+        // these hosts already create directly and keep their own policy.
+        for name in ["SendConfirmedEmail", "CreateConfirmedCalendarEvent"] {
+            assert!(
+                !tools.iter().any(|tool| tool["name"] == name),
+                "{host:?} toolset must not expose {name}"
+            );
+        }
     }
 }
 
@@ -298,3 +368,81 @@ fn every_host_exposes_skill_discovery_and_reading() {
         );
     }
 }
+
+#[test]
+fn hosts_with_tool_search_defer_all_but_the_core_tools() {
+    for host in [AiHost::Chat, AiHost::AgentSession, AiHost::ChannelBot] {
+        let tools = tools_for(host);
+        let lazy = DeferredToolSet::new(tools.toolset.clone(), tools.deferred.clone());
+        let sent: Vec<String> = lazy
+            .request_schemas()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|schema| schema.name)
+            .collect();
+        let catalog: Vec<String> = lazy
+            .searchable_catalog()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect();
+        let prompt = tools.prompt.to_string();
+
+        for name in ["ReadContent", "ContentSearch", "LoadTools", "SearchTools"] {
+            assert!(sent.contains(&name.to_string()), "{host:?} sends {name}");
+        }
+        for name in ["EditPresentation", "EditSpreadsheet", "QueryDatabase"] {
+            assert!(!sent.contains(&name.to_string()), "{host:?} defers {name}");
+            assert!(
+                catalog.contains(&name.to_string()),
+                "{host:?} catalogs {name}"
+            );
+            assert!(
+                prompt.contains(&format!("\n- {name}: ")),
+                "{host:?} lists {name} in the prompt"
+            );
+        }
+        assert_eq!(
+            sent.len() + catalog.len(),
+            tools.toolset.tools.len(),
+            "{host:?}: every tool is either sent or catalogued"
+        );
+    }
+}
+
+#[test]
+fn the_mcp_host_defers_nothing() {
+    let tools = tools_for(AiHost::Mcp);
+
+    assert!(tools.deferred.is_empty());
+    assert!(!tools.prompt.to_string().contains("LoadTools"));
+}
+
+#[test]
+fn every_eager_tool_exists() {
+    let tools = tools_for(AiHost::Chat);
+    for name in EAGER_TOOLS {
+        assert!(
+            tools.toolset.tools.contains_key(*name),
+            "{name} is not a tool"
+        );
+    }
+}
+
+#[test]
+fn booking_link_mutations_execute_without_a_review_on_every_host() {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
+        let tools = tools_for(host).toolset;
+        assert!(tools.tools.contains_key("ListBookingLinks"));
+        for name in ["CreateBookingLink", "EditBookingLink"] {
+            assert!(tools.tools.contains_key(name));
+            assert!(!tools.user_tools.contains_key(name));
+        }
+    }
+}
+
+mod booking_links;

@@ -16,6 +16,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
@@ -64,27 +65,25 @@ export default function BlockCode() {
                 mode={mode()}
                 onModeChange={setMode}
               />
-              <Show
-                when={spreadsheet()}
-                fallback={
-                  <CodeContent
-                    text={blockText() ?? ''}
-                    fileType={blockMetadata()?.fileType}
-                    readOnly={readOnly()}
-                    mode={mode()}
-                    onTextChange={setBlockText}
-                    onSave={(text) => saveCodeDocument(documentId, text)}
-                  />
-                }
-              >
-                <Suspense
+              <div class="relative min-h-0 min-w-0 w-full flex-1 overflow-hidden">
+                <Show
+                  when={spreadsheet()}
                   fallback={
-                    <div class="p-6 text-ink-muted">Opening spreadsheet…</div>
+                    <CodeContent
+                      text={blockText() ?? ''}
+                      fileType={blockMetadata()?.fileType}
+                      readOnly={readOnly()}
+                      mode={mode()}
+                      onTextChange={setBlockText}
+                      onSave={(text) => saveCodeDocument(documentId, text)}
+                    />
                   }
                 >
-                  <UploadedWorkbook />
-                </Suspense>
-              </Show>
+                  <Suspense fallback={<SpreadsheetSkeleton />}>
+                    <UploadedWorkbook />
+                  </Suspense>
+                </Show>
+              </div>
             </div>
           </SidePanel.Layout>
         </div>

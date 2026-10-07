@@ -679,9 +679,21 @@ it('keeps a constant number of selection overlays as ranges grow, with accurate 
   const first = view.container.querySelector('[data-selection-range]');
   view.controller.selectRange({ row: 0, column: 0 }, { row: 29, column: 25 });
   expect(view.container.querySelector('[data-selection-range]')).toBe(first);
+  // Columns outside the viewport are not rendered, like rows; every rendered
+  // cell inside the range is selected.
+  const rendered = [
+    ...view.container.querySelectorAll<HTMLElement>('[role="gridcell"]'),
+  ].filter((cell) => {
+    const row = Number(/\d+$/.exec(cell.dataset.address ?? '')?.[0]) - 1;
+    return row <= 29;
+  });
+  expect(
+    new Set(rendered.map((cell) => cell.dataset.address?.replace(/\d+$/, '')))
+      .size
+  ).toBeLessThan(26);
   expect(
     view.container.querySelectorAll('[role="gridcell"][aria-selected="true"]')
-  ).toHaveLength(30 * 26);
+  ).toHaveLength(rendered.length);
 });
 
 describe('spreadsheet presentation', () => {

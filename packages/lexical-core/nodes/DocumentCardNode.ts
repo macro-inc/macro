@@ -33,7 +33,9 @@ export type CanvasPreviewData = {
   };
 };
 
-export type PreviewData = CanvasPreviewData;
+/** Layout hint persisted with a poll card before its form is fetched. */
+export type PollPreviewData = { poll: { optionCount: number } };
+export type PreviewData = CanvasPreviewData | PollPreviewData;
 
 // Shared base interface for document reference data
 export type DocumentReferenceData = {
@@ -96,6 +98,8 @@ export class DocumentCardNode extends DecoratorBlockNode<
   __previewBox: PreviewBox;
   __previewData: PreviewData | undefined;
   __mentionUuid: string | undefined;
+  __cachedDecoratorSignature?: string;
+  __cachedDecoratorComponent?: DecoratorComponent<DocumentCardDecoratorProps>;
 
   static getType() {
     return 'document-card';
@@ -106,7 +110,7 @@ export class DocumentCardNode extends DecoratorBlockNode<
   }
 
   static clone(node: DocumentCardNode) {
-    return new DocumentCardNode(
+    const clone = new DocumentCardNode(
       node.__documentId,
       node.__documentName,
       node.__blockName,
@@ -116,6 +120,9 @@ export class DocumentCardNode extends DecoratorBlockNode<
       node.__mentionUuid,
       node.__key
     );
+    clone.__cachedDecoratorSignature = node.__cachedDecoratorSignature;
+    clone.__cachedDecoratorComponent = node.__cachedDecoratorComponent;
+    return clone;
   }
 
   constructor(
@@ -329,28 +336,30 @@ export class DocumentCardNode extends DecoratorBlockNode<
   }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
-    const key = $getId(this);
-    const previewComponent = key
-      ? documentCardNodeKeyToPreviewComponent.get(key)?.component
-      : undefined;
+    const componentProps = this.exportComponentProps();
+    const signature = JSON.stringify(componentProps);
+    if (
+      this.__cachedDecoratorComponent &&
+      this.__cachedDecoratorSignature === signature
+    )
+      return this.__cachedDecoratorComponent;
 
-    const decorator =
+    const Component =
       getDecorator<DocumentCardDecoratorProps>(DocumentCardNode);
-    if (decorator) {
-      return () =>
-        decorator({
-          documentId: this.__documentId,
-          documentName: this.__documentName,
-          blockName: this.__blockName,
-          blockParams: this.__blockParams,
-          previewBox: this.__previewBox,
-          previewData: this.__previewData,
-          mentionUuid: this.__mentionUuid,
-          key: this.getKey(),
-          theme: config.theme,
-          previewComponent,
-        });
-    }
+    if (!Component) return undefined;
+
+    const nodeId = $getId(this);
+    this.__cachedDecoratorSignature = signature;
+    this.__cachedDecoratorComponent = () =>
+      Component({
+        ...componentProps,
+        key: this.getKey(),
+        theme: config.theme,
+        previewComponent: nodeId
+          ? documentCardNodeKeyToPreviewComponent.get(nodeId)?.component
+          : undefined,
+      });
+    return this.__cachedDecoratorComponent;
   }
 }
 
@@ -405,7 +414,7 @@ function $removeEmptyElementChain(
 export function $convertMentionToCard(
   mentionNode: DocumentMentionNode,
   previewBox?: [string | number, string | number],
-  previewData?: { view: { x: number; y: number; scale: number } }
+  previewData?: PreviewData
 ): DocumentCardNode {
   // Create the card node with the same document reference data
   const cardNode = $createDocumentCardNode({
@@ -476,7 +485,7 @@ export function $convertCardToMention(
 export function $toggleDocumentNodeType(
   node: DocumentMentionNode | DocumentCardNode,
   previewBox?: [string | number, string | number],
-  previewData?: { view: { x: number; y: number; scale: number } }
+  previewData?: PreviewData
 ): DocumentMentionNode | DocumentCardNode {
   if ($isDocumentMentionNode(node)) {
     return $convertMentionToCard(node, previewBox, previewData);

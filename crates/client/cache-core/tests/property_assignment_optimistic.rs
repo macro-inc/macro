@@ -92,6 +92,7 @@ async fn enqueue(engine: &mut Engine<InMemoryStorage>, value: &str, now: i64) ->
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 identity_bindings: &[],
                 uuid: UUID,
                 query: MUTATION,

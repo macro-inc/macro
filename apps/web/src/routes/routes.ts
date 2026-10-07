@@ -1,4 +1,3 @@
-import { changesSearch } from '@app/features/agent-changes/changes-search';
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
@@ -9,6 +8,7 @@ import {
   calendarPeriodPath,
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import { changesSearch } from '@app/features/changes/changes-search';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
 import {
   DRIVE_DOCUMENT_TYPES,
@@ -20,10 +20,6 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
-import {
-  HOME_REMINDER_DETAIL_ROUTE_ID,
-  REMINDER_DETAIL_ROUTE_ID,
-} from '@app/features/reminders/reminder-navigation';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
   ROUTINE_CREATE_ROUTE_ID,
@@ -63,6 +59,13 @@ export const baseRoute = defineRoute({
 export const publicBookingRoute = defineRoute({
   id: 'public-booking',
   path: 'book/:profile/:slug?',
+  externalSearch: '*',
+});
+
+/** A form's respond page, outside the split layout so public forms skip login. */
+export const formRespondRoute = defineRoute({
+  id: 'form-respond',
+  path: 'form/:formId/respond',
   externalSearch: '*',
 });
 
@@ -134,13 +137,6 @@ export const mobileEmailSignupRoute = defineRoute({
 export const onboardingRoute = defineRoute({
   id: 'onboarding',
   path: 'onboarding',
-  externalSearch: '*',
-});
-
-/** The retired setup path; it forwards to onboarding with its query (?next deep links). */
-export const setupRoute = defineRoute({
-  id: 'setup',
-  path: 'setup',
   externalSearch: '*',
 });
 
@@ -384,14 +380,6 @@ export const homeDocumentRoute = defineRoute({
     `${homeBaseBlockType(documentType)}:${documentId}`,
 });
 
-export const homeReminderRoute = defineRoute({
-  id: HOME_REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
-});
-
 export const homePreviewRoute = defineRoute({
   id: 'home-preview',
   path: ':blockType/:previewId',
@@ -434,13 +422,6 @@ export const homeSplitRoute = defineRoute({
   search: '*' as const,
 });
 
-export const gettingStartedRoute = defineRoute({
-  id: 'view-getting-started',
-  path: 'getting-started',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'getting-started' }),
-});
-
 export const recentRoute = defineRoute({
   id: 'view-recent',
   path: 'recent',
@@ -453,22 +434,6 @@ export const activityRoute = defineRoute({
   path: 'activity',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'activity' }),
-});
-
-/** Lightweight standalone reminder detail at `/app/reminder/:reminderId`. */
-export const reminderDetailRoute = defineRoute({
-  id: REMINDER_DETAIL_ROUTE_ID,
-  path: 'reminder/:reminderId',
-  params: z.object({ reminderId: z.string().min(1) }),
-  remountKey: ({ reminderId }) => reminderId,
-  claim: ({ reminderId }) => ({ namespace: 'reminder', id: reminderId }),
-});
-
-export const remindersRoute = defineRoute({
-  id: 'view-reminders',
-  path: 'reminders',
-  search: '*' as const,
-  claim: () => ({ namespace: 'component', id: 'reminders' }),
 });
 
 export const routinesRoute = defineRoute({

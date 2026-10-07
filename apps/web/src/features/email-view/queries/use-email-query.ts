@@ -69,6 +69,7 @@ function emailMatchesTab(
 ): boolean {
   return match(tab)
     .with('drafts', () => entity.isDraft)
+    .with('archived', () => entity.done === true)
     .with('shared', () => userId !== undefined && entity.ownerId !== userId)
     .with(
       'important',

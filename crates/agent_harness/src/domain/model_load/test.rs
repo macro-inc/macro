@@ -56,6 +56,7 @@ impl HarnessModelAccess for Access {
 }
 
 struct Probe {
+    callers: std::sync::Mutex<Vec<MacroUserIdStr<'static>>>,
     calls: AtomicUsize,
     result: fn() -> Result<RawModelProbe, ModelProbeError>,
 }
@@ -64,6 +65,7 @@ impl Probe {
     fn new(result: fn() -> Result<RawModelProbe, ModelProbeError>) -> Self {
         Self {
             calls: AtomicUsize::new(0),
+            callers: std::sync::Mutex::new(Vec::new()),
             result,
         }
     }
@@ -74,7 +76,11 @@ impl Probe {
 }
 
 impl InMemoryModelProbe for Probe {
-    async fn probe(&self) -> Result<RawModelProbe, ModelProbeError> {
+    async fn probe(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+    ) -> Result<RawModelProbe, ModelProbeError> {
+        self.callers.lock().unwrap().push(caller.clone());
         self.calls.fetch_add(1, Ordering::Relaxed);
         (self.result)()
     }
@@ -145,6 +151,7 @@ async fn claude_models_are_never_returned_for_in_memory() {
     }
     assert_eq!(claude.calls(), 1);
     assert_eq!(service.in_memory.calls(), 1);
+    assert_eq!(*service.in_memory.callers.lock().unwrap(), vec![caller()]);
 }
 
 impl MacrodModelProbe for Probe {
@@ -252,6 +259,7 @@ async fn unsupported_provider_returns_the_supported_response_shape() {
 
     assert_eq!(result, AgentModels::unsupported());
     assert_eq!(service.in_memory.calls(), 1);
+    assert_eq!(*service.in_memory.callers.lock().unwrap(), vec![caller()]);
     assert_eq!(service.cursor.calls(), 0);
 }
 

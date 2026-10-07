@@ -148,7 +148,7 @@ impl std::fmt::Display for TeamRole {
 pub enum SeatPlan {
     /// The $40/seat/month plan.
     Premium,
-    /// The $200/seat/month plan with a 5x AI allowance.
+    /// The $200/seat/month plan with a larger AI allowance.
     Max,
 }
 
@@ -157,10 +157,7 @@ impl SeatPlan {
     pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
 
     /// Plans available for a new purchase or plan move.
-    pub const PURCHASABLE: [SeatPlan; 1] = [
-        SeatPlan::Premium,
-        // SeatPlan::Max,
-    ];
+    pub const PURCHASABLE: [SeatPlan; 2] = Self::ALL;
 
     /// The role tier recorded on a user holding this seat.
     pub fn product_tier(self) -> ProductTier {

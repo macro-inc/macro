@@ -203,6 +203,9 @@ impl<DSvc: DocumentService, ESvc: EntityAccessService> DocumentAttachmentService
 
         if let Some(context) = crate::domain::content::spreadsheet_attachment_context(&document)
             .or_else(|| crate::domain::content::presentation_attachment_context(&document))
+            .or_else(|| crate::domain::content::design_attachment_context(&document))
+            .or_else(|| crate::domain::content::photoshop_attachment_context(&document))
+            .or_else(|| crate::domain::content::illustrator_attachment_context(&document))
         {
             return Ok(AttachmentContent {
                 reference: EntityType::Document.with_entity_string(id.to_string()),

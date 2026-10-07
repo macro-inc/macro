@@ -27,6 +27,7 @@ import {
   REMINDER_OVERRIDES_MAX,
   REMINDER_PRESET_MINUTES,
 } from '../../utils/event-reminders';
+import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
 import {
   type EventEditorCalendarOption,
   type EventEditorConferenceChoice,
@@ -148,7 +149,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-1.5 text-sm glass menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
@@ -187,7 +188,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             </Show>
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }
@@ -255,7 +256,7 @@ function GuestsPopoverEditor(props: {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen()}>
-      <EditorPopover>
+      <EditorPopover portalScope="local">
         <PropertyEntitySelector
           config={{
             isMultiSelect: true,
@@ -335,7 +336,7 @@ export function EventComposerLocationPill(
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
             class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
@@ -357,7 +358,7 @@ export function EventComposerLocationPill(
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }
@@ -439,7 +440,7 @@ export function EventComposerConferencePill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -560,7 +561,7 @@ export function EventComposerRemindersPill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content class="w-56 p-0">
+      <Select.Content portalScope="local" class="w-56 p-0">
         <div class="flex items-center justify-between border-edge-muted border-b px-3 py-2 text-xs text-ink-muted">
           <span>Choose reminders</span>
           <span
@@ -613,7 +614,7 @@ export function EventComposerRecurrencePill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -622,7 +623,7 @@ export function EventComposerRecurrencePill(
 
 export interface EventComposerCalendarPillProps {
   options: EventEditorCalendarOption[];
-  value: EventEditorCalendarOption;
+  value: EventEditorCalendarOption | undefined;
   onChange: (calendarId: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -634,6 +635,7 @@ export function EventComposerCalendarPill(
 ) {
   return (
     <Select<EventEditorCalendarOption>
+      placeholder="Choose calendar"
       options={props.options}
       value={props.value}
       onChange={(option) => {
@@ -655,7 +657,7 @@ export function EventComposerCalendarPill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -721,7 +723,7 @@ export function EventComposerKindPill(props: EventComposerKindPillProps) {
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -789,7 +791,7 @@ export function EventComposerDeclinePill(props: EventComposerDeclinePillProps) {
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -835,7 +837,7 @@ export function EventComposerDeclineMessagePill(
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
             class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
@@ -857,7 +859,7 @@ export function EventComposerDeclineMessagePill(
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }

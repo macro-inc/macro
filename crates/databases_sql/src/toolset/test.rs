@@ -65,6 +65,7 @@ fn world() -> Shared {
                 columns: vec![
                     ColumnDetail {
                         column: Column {
+                            protections: vec![],
                             id: ColumnId::from_uuid(Uuid::from_u128(0xb001)),
                             table_id: GUESTS,
                             property_definition_id: NAME,
@@ -94,6 +95,7 @@ fn world() -> Shared {
                     },
                     ColumnDetail {
                         column: Column {
+                            protections: vec![],
                             id: STATUS_COLUMN,
                             table_id: GUESTS,
                             property_definition_id: STATUS,

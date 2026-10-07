@@ -124,7 +124,6 @@ export function ChannelDetailTabs(props: {
 }) {
   const { activeTab, setActiveTab } = useChannelTab();
   const tabs = useChannelTabItems(props.channelId);
-  // Read once by design: a registration lives for the component's lifetime.
   const isCollapsed = props.collapser
     ? useRegisterPriorityCollapseItem(props.collapser, {
         id: 'channel-tabs',
@@ -198,8 +197,6 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    // py-0 gives the clipping sensor the bar's full height; the tab track is
-    // taller than the padded content box and would be cut off.
     <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
       <PriorityCollapseOverflowSensor
         controller={collapse}
@@ -369,7 +366,10 @@ function ChannelDetailContent(props: ChannelDetailProps) {
               }}
             />
           </DebugSuspense>
-          <div class="flex min-h-0 flex-1 flex-col px-2">
+          <div
+            class="flex min-h-0 flex-1 flex-col px-2"
+            data-channel-tab-content
+          >
             <Switch>
               <Match when={activeTab() === 'messages'}>
                 <DebugSuspense name="ChannelDetail.messages">

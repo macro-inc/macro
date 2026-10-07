@@ -74,6 +74,7 @@ export const NonDocumentBlockTypes = [
   'calendar',
   'chat',
   'database',
+  'form',
   'channel',
   'project',
   'email',
@@ -122,6 +123,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   calendar: allBlockNames,
   chat: allBlockNames,
   database: allBlockNames,
+  form: allBlockNames,
   pdf: ENABLE_PDF_MULTISPLIT ? allBlockNames : exclude(['pdf']),
   write: exclude(['write']),
   md: allBlockNames,
@@ -132,6 +134,9 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   canvas: allBlockNames,
   spreadsheet: allBlockNames,
   pptx: allBlockNames,
+  psd: allBlockNames,
+  fig: allBlockNames,
+  ai: allBlockNames,
   project: allBlockNames,
   unknown: allBlockNames,
   video: allBlockNames,
@@ -154,7 +159,12 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   canvas: new Set(['md']),
   spreadsheet: new Set([]),
   pptx: new Set([]),
+  psd: new Set([]),
+  fig: new Set([]),
+  ai: new Set([]),
   database: new Set([]),
+  // A form card fills in place inside messages and documents (RFC 03 §1).
+  form: new Set(['md', 'channel']),
   chat: new Set([]),
   pdf: new Set(['md']),
   write: new Set([]),
@@ -373,6 +383,9 @@ export type BlockDefinition<
 
   /** The component for the block. */
   component: BlockComponent<Name>;
+
+  /** Lightweight placeholder while the block's component or data loads. */
+  loading?: Component;
 
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;

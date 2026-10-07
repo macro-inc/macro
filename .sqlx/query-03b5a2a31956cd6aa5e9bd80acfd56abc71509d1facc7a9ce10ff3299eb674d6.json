@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT r.id, r.user_id, r.description, f.thread_id, r.next_run_at\n            FROM reminder r\n            JOIN reminder_email_followup f ON f.reminder_id = r.id AND f.user_id = r.user_id\n            WHERE r.id = $1 AND r.next_run_at = $2\n              AND r.enabled AND r.completed_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "03b5a2a31956cd6aa5e9bd80acfd56abc71509d1facc7a9ce10ff3299eb674d6"
+}

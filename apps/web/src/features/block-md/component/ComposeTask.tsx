@@ -181,6 +181,7 @@ function isTitleSelectionAtStart() {
 }
 
 export function ComposeTaskTitleEditor(props: {
+  placeholder?: string;
   value: Accessor<string>;
   onChange: (value: string) => void;
   disabled: Accessor<boolean>;
@@ -316,7 +317,7 @@ export function ComposeTaskTitleEditor(props: {
       />
       <Show when={showPlaceholder()}>
         <div class="pointer-events-none absolute top-0 text-xl/7 font-medium text-ink-placeholder">
-          New task
+          {props.placeholder ?? 'New task'}
         </div>
       </Show>
     </div>

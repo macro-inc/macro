@@ -22,6 +22,45 @@ const column: DatabaseViewColumn = {
   options: [],
   writable: true,
 };
+
+it('disables protected schema actions while keeping rename and movement available', async () => {
+  const remove = vi.fn(() => okAsync(undefined));
+  render(() => (
+    <DatabaseColumnHeader
+      column={{ ...column, protections: ['delete', 'change_type'] }}
+      canRename
+      onRename={vi.fn(() => okAsync(undefined))}
+      onChangeType={vi.fn(() => okAsync(undefined))}
+      onSort={vi.fn()}
+      onDelete={remove}
+      onMove={vi.fn()}
+      canMoveRight
+    />
+  ));
+  fireEvent.keyDown(screen.getByRole('columnheader', { name: 'Name' }), {
+    key: 'Enter',
+  });
+  const deletion = await screen.findByRole('menuitem', {
+    name: 'Delete column',
+  });
+  expect(deletion.getAttribute('aria-disabled')).toBe('true');
+  expect(
+    screen
+      .getByRole('menuitem', { name: 'Change type' })
+      .getAttribute('aria-disabled')
+  ).toBe('true');
+  expect(
+    screen
+      .getByRole('menuitem', { name: 'Move right' })
+      .getAttribute('aria-disabled')
+  ).not.toBe('true');
+  expect(
+    screen
+      .getByRole('menuitem', { name: 'Rename column' })
+      .getAttribute('aria-disabled')
+  ).not.toBe('true');
+  expect(remove).not.toHaveBeenCalled();
+});
 let menuStyles: HTMLStyleElement;
 beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());

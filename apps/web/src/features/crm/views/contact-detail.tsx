@@ -51,49 +51,51 @@ export function Contact(props: {
       floating
       defaultOpen={false}
     >
-      <div class="size-full min-h-0 min-w-0">
-        <Switch>
-          <Match when={section() === 'overview'}>
-            <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
-              <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
-                <ContactHeader
-                  contact={contact()}
-                  onOpenCompany={props.onOpenCompany}
-                />
-                <ContactDiscussionSection contactId={props.contactId} />
-              </div>
-            </div>
-          </Match>
-          <Match when={section() === 'emails'}>
-            <ContactEmailsSection contact={contact()} />
-          </Match>
-          <Match when={section() === 'files'}>
-            <RecordFilesSection scope={scope()} />
-          </Match>
-          <Match when={section() === 'tasks'}>
-            <Suspense
-              fallback={
-                <div class="p-6 text-center text-sm text-ink-muted">
-                  Loading…
+      <div class="flex size-full min-h-0 min-w-0 flex-col">
+        <div class="min-h-0 min-w-0 flex-1">
+          <Switch>
+            <Match when={section() === 'overview'}>
+              <div class="h-full overflow-y-auto px-6 pb-12 pt-12 scrollbar-hidden touch:pt-6">
+                <div class="mx-auto flex max-w-3xl min-w-0 flex-col gap-6">
+                  <ContactHeader
+                    contact={contact()}
+                    onOpenCompany={props.onOpenCompany}
+                  />
+                  <ContactDiscussionSection contactId={props.contactId} />
                 </div>
-              }
-            >
-              <Show
-                when={scope()}
+              </div>
+            </Match>
+            <Match when={section() === 'emails'}>
+              <ContactEmailsSection contact={contact()} />
+            </Match>
+            <Match when={section() === 'files'}>
+              <RecordFilesSection scope={scope()} />
+            </Match>
+            <Match when={section() === 'tasks'}>
+              <Suspense
                 fallback={
                   <div class="p-6 text-center text-sm text-ink-muted">
                     Loading…
                   </div>
                 }
               >
-                {(current) => <context.RecordTasks scope={current()} />}
-              </Show>
-            </Suspense>
-          </Match>
-          <Match when={section() === 'calls'}>
-            <RecordCallsSection scope={scope()} />
-          </Match>
-        </Switch>
+                <Show
+                  when={scope()}
+                  fallback={
+                    <div class="p-6 text-center text-sm text-ink-muted">
+                      Loading…
+                    </div>
+                  }
+                >
+                  {(current) => <context.RecordTasks scope={current()} />}
+                </Show>
+              </Suspense>
+            </Match>
+            <Match when={section() === 'calls'}>
+              <RecordCallsSection scope={scope()} />
+            </Match>
+          </Switch>
+        </div>
       </div>
 
       {/* Sharing is admin-only; hide the whole section for non-admins

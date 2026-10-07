@@ -4,10 +4,11 @@ import { csvImportEdits } from './sheet-operations';
 import { decodeCsv, isUploadedWorkbook } from './uploaded-workbook';
 
 describe('uploaded Excel/CSV detection', () => {
-  it.each(['xlsx', 'XLSX', 'csv', 'CSV'])('recognizes %s', (type) =>
-    expect(isUploadedWorkbook(type)).toBe(true)
+  it.each(['xlsx', 'XLSX', 'xlsm', 'XLSM', 'csv', 'CSV'])(
+    'recognizes %s',
+    (type) => expect(isUploadedWorkbook(type)).toBe(true)
   );
-  it.each(['xls', 'xlsm', 'pdf', 'spreadsheet', '', null, undefined])(
+  it.each(['xls', 'xltm', 'pdf', 'spreadsheet', '', null, undefined])(
     'rejects %s',
     (type) => expect(isUploadedWorkbook(type)).toBe(false)
   );
@@ -81,8 +82,8 @@ describe('CSV file import and export', () => {
     '',
     '"unterminated',
     'a'.repeat(10001),
-    'x\n'.repeat(1001),
-    Array(27).fill('x').join(','),
+    'x\n'.repeat(100_001),
+    Array(16_385).fill('x').join(','),
   ])('rejects invalid or oversized input atomically', (text) =>
     expect(() => decodeCsv(text)).toThrow()
   );

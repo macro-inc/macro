@@ -1,4 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import PlusIcon from '@phosphor/plus.svg';
 import StackIcon from '@phosphor/stack.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
@@ -20,17 +21,31 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
     () => props.open
   );
   const [pending, setPending] = createSignal(false);
-  const [readError, setReadError] = createSignal(false);
-  const failed = () => readError() || Boolean(source.error());
+  const [readFailure, setReadFailure] = createSignal<{
+    action: 'more' | 'refresh';
+    cause: unknown;
+  }>();
+  const failed = () => {
+    if (source.error()) return true;
+    const failure = readFailure();
+    if (!failure) return false;
+    // Refresh actions still reject on transport failure; do not resurrect the
+    // warning that the source suppressed for its usable cached rows.
+    return !(
+      failure.action === 'refresh' &&
+      isResponseFreeNetworkError(failure.cause) &&
+      source.rows() !== undefined
+    );
+  };
   const readProjects = async (action: 'more' | 'refresh') => {
     if (pending() || source.loadingMore()) return;
     setPending(true);
-    setReadError(false);
+    setReadFailure(undefined);
     try {
       if (action === 'more') await source.loadMore();
       else await source.refresh();
-    } catch {
-      setReadError(true);
+    } catch (cause) {
+      setReadFailure({ action, cause });
     } finally {
       setPending(false);
     }

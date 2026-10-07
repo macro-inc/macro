@@ -33,9 +33,12 @@ outbound = [
   "dep:entity_registry",
   "dep:entity_registry_db_utils",
   "dep:model-entity",
+  "dep:reqwest",
+  "dep:macro_authorization",
   "dep:sqlx",
   "dep:share_permission_db_utils",
   "macro_user_id/sqlx",
+  "macro_authorization/axum",
 ]
 # OpenAPI schemas for the vocabulary that reaches an HTTP boundary: the
 # router's DTOs, and the lifecycle events the webhook union carries.
@@ -58,7 +61,7 @@ dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 messages = { path = "../messages", features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
-agent_fold = { path = "../agent_fold" }
+agent_fold = { path = "../folds/agent_fold" }
 # Only the domain vocabulary; `outbound` would pull rdkafka into every
 # consumer of this crate.
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
@@ -83,6 +86,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
 macro_user_id = { path = "../macro_user_id" }
 utoipa = { workspace = true, optional = true }
 rootcause = { workspace = true }
+reqwest = { workspace = true, optional = true }
 uuid = { workspace = true }
 sqlx = { workspace = true, features = ["json"], optional = true }
 chrono = { workspace = true }
@@ -110,14 +114,14 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 model_user = { path = "../model_user" }
 non_empty = { path = "../non_empty" }
-agent_fold = { path = "../agent_fold", features = ["test-utils"] }
+agent_fold = { path = "../folds/agent_fold", features = ["test-utils"] }
 axum = { workspace = true, features = ["ws"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time"] }
+tokio = { workspace = true, features = ["fs", "io-std", "io-util", "macros", "net", "rt-multi-thread", "time", "test-util"] }
 tokio-tungstenite = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 

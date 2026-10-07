@@ -20,6 +20,7 @@ import type {
 import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
@@ -39,6 +40,7 @@ import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
+import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
 /**
@@ -57,12 +59,28 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
+  const session = useOptionalAgentSession();
   // Match accessors keep a part's renderer mounted when a streamed snapshot
   // replaces the object, preserving disclosures while updating their contents.
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
-        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+        {(part) => (
+          <TextPart
+            text={part().text}
+            inFlight={props.inFlight}
+            observeRender={
+              props.message.author.kind === 'agent'
+                ? (element) =>
+                    session?.observeRenderedText?.(
+                      props.message.agentSessionId,
+                      props.message.turn,
+                      element
+                    )
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={props.part.kind === 'attachment' && props.part}>
         {(part) => <AttachmentPart part={part()} />}
@@ -96,6 +114,9 @@ function AgentMessagePart(props: {
       </Match>
       <Match when={props.part.kind === 'permission' && props.part}>
         {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'tool_approval' && props.part}>
+        {(part) => <ToolApprovalPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'plan' && props.part}>
         {(part) => <PlanPart part={part()} />}
@@ -183,6 +204,7 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       { kind: 'text' },
       { kind: 'thought' },
       { kind: 'permission' },
+      { kind: 'tool_approval' },
       { kind: 'elicitation' },
       () => false
     )
@@ -340,7 +362,7 @@ export function Message(props: {
                 when={failed().notice}
                 fallback={
                   <ActionLine
-                    label={`${TURN_FAILED_LABEL} — ${failed().message}`}
+                    label={TURN_FAILED_LABEL}
                     detail={failed().message}
                     failed
                   />

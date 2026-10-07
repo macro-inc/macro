@@ -68,14 +68,40 @@ function loadCal(): CalApi {
   return cal;
 }
 
+/** The cream site palette (see setup/cream-preview.css). */
+const CREAM_BRAND = '#1d1c1a';
+const creamThemeVars = {
+  'cal-bg': '#faf8f3',
+  'cal-bg-emphasis': '#ece8df',
+  'cal-bg-subtle': '#f2eee6',
+  'cal-bg-muted': '#f2eee6',
+  'cal-bg-inverted': '#1d1c1a',
+  'cal-border': '#1d1c1a1a',
+  'cal-border-default': '#1d1c1a1a',
+  'cal-border-emphasis': '#1d1c1a40',
+  'cal-border-subtle': '#1d1c1a14',
+  'cal-border-booker': '#1d1c1a1a',
+  'cal-border-booker-width': '1px',
+  'cal-brand': CREAM_BRAND,
+  'cal-brand-emphasis': '#000',
+  'cal-brand-text': '#f5f1e8',
+  'cal-text': '#54524f',
+  'cal-text-emphasis': '#1d1c1a',
+  'cal-text-muted': '#8f8c86',
+  'cal-text-subtle': '#72706c',
+} as const;
+
 /**
  * Inline cal.com booker for the Macro demo call. Loads embed.js only once the
  * visitor nears it, so the ad landing page's first paint stays light.
  */
-export function DemoBookingEmbed(props: { id: string }) {
+export function DemoBookingEmbed(props: { id: string; cream?: boolean }) {
   let host!: HTMLDivElement;
   onMount(() => {
     const start = () => {
+      const theme = props.cream ? 'light' : 'dark';
+      const brand = props.cream ? CREAM_BRAND : BRAND;
+      const vars = props.cream ? creamThemeVars : calThemeVars;
       const cal = loadCal();
       cal('init', NAMESPACE, { origin: 'https://app.cal.com' });
       const api = cal.ns?.[NAMESPACE];
@@ -83,7 +109,7 @@ export function DemoBookingEmbed(props: { id: string }) {
         elementOrSelector: `#${props.id}`,
         config: {
           layout: 'month_view',
-          theme: 'dark',
+          theme,
           useSlotsViewOnSmallScreen: 'true',
         },
         calLink: buildCalSlugWithAttribution(
@@ -91,11 +117,11 @@ export function DemoBookingEmbed(props: { id: string }) {
         ),
       });
       api?.('ui', {
-        theme: 'dark',
+        theme,
         layout: 'month_view',
         hideEventTypeDetails: false,
-        styles: { branding: { brandColor: BRAND } },
-        cssVarsPerTheme: { light: calThemeVars, dark: calThemeVars },
+        styles: { branding: { brandColor: brand } },
+        cssVarsPerTheme: { light: vars, dark: vars },
       });
     };
     const observer = new IntersectionObserver(

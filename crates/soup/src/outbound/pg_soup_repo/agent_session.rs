@@ -2,8 +2,7 @@
 //!
 //! Agent sessions live in MacroDB and are authorized through `entity_access`
 //! like chats, but they are **opt-in**: a query that says nothing about them
-//! (no `agent_session_filter` in its AST) gets none. This mirrors reminders,
-//! so adding sessions to Soup did not change what pre-existing views return.
+//! (no `agent_session_filter` in its AST) gets none.
 
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;

@@ -295,6 +295,14 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
 /// Membership adapter over the owning teams repository port.
 pub struct MacroDirectory<T>(pub T);
 impl<T: TeamRepository> Directory for MacroDirectory<T> {
+    async fn user_teams(&self, user: &str) -> Result<Vec<Uuid>, Error> {
+        let user = user.try_into().map_err(|_| Error::Forbidden)?;
+        self.0
+            .get_user_teams(&user)
+            .await
+            .map(|teams| teams.into_iter().map(|team| *team.id()).collect())
+            .map_err(|_| Error::Unavailable)
+    }
     async fn members(&self, team: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(self
             .0

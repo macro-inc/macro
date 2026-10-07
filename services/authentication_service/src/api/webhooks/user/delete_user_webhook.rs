@@ -13,7 +13,6 @@ use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfoWithM
 use notification::domain::ports::NotificationRepository;
 use notification::outbound::repository::DbNotificationRepository;
 use sqlx::{Pool, Postgres};
-use stripe::CustomerId;
 use tracing::Instrument;
 
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -137,34 +136,6 @@ async fn delete_user(
         }
     });
 
-    // Handle stripe user deletion
-    if let Some(stripe_customer_id) = macro_user.stripe_customer_id {
-        tokio::spawn({
-            let stripe_customer_id = stripe_customer_id.clone();
-            let stripe_client = ctx.stripe_client.clone();
-            async move {
-                tracing::trace!(stripe_customer_id, "delete_stripe_customer");
-
-                let customer_id: CustomerId = match stripe_customer_id.parse() {
-                    Ok(id) => id,
-                    Err(e) => {
-                        tracing::error!(error=?e, stripe_customer_id, "unable to parse stripe customer id");
-                        return;
-                    }
-                };
-
-                if let Err(e) = stripe::Customer::delete(&stripe_client, &customer_id).await {
-                    tracing::error!(error=?e, stripe_customer_id, "unable to delete stripe customer");
-                }
-
-                tracing::trace!(
-                    stripe_customer_id,
-                    "delete_stripe_customer complete"
-                );
-            }
-        }.in_current_span());
-    }
-
     // Fixed: Create futures and await them all concurrently
     let user_info_futures = user_ids
         .clone()
@@ -261,7 +232,7 @@ async fn delete_user(
         .iter()
         .map(|id| MacroUserIdStr::try_from(id.clone()))
         .collect::<Result<Vec<_>, _>>()?;
-    authentication_service::service::user::delete_user::delete_user_data(
+    crate::service::user::delete_user::delete_user_data(
         ctx.user_deletion.as_ref(),
         &macro_user.id,
         &users,

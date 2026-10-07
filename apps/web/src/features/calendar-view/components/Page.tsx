@@ -35,7 +35,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
 import {
@@ -149,14 +148,6 @@ function CalendarPageDataStatus(props: {
     !props.data.occurrencesQuery.isError &&
     (props.changingView || props.data.isLoading());
 
-  const showBlockingState = () => {
-    if (isRangeUnavailable()) return false;
-    if (props.data.occurrencesQuery.isError) return true;
-    if (showLoading()) return false;
-
-    return props.data.isSyncing() && props.data.events().length === 0;
-  };
-
   return (
     <>
       <CalendarLoadingSkeleton
@@ -166,52 +157,27 @@ function CalendarPageDataStatus(props: {
         disabled={isRangeUnavailable() || props.data.occurrencesQuery.isError}
         onBlockingChange={props.onLoadingBlockingChange}
       />
-      <Show when={showBlockingState()}>
+      <Show when={!isRangeUnavailable() && props.data.occurrencesQuery.isError}>
         <div
           class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
           aria-live="polite"
         >
-          <Show
-            when={!props.data.occurrencesQuery.isError}
-            fallback={
-              <div class="flex max-w-sm flex-col items-center gap-3">
-                <div class="text-sm font-semibold text-ink">
-                  Calendar unavailable
-                </div>
-                <p class="text-xs text-ink-muted">
-                  We couldn’t load your calendar events. Try again.
-                </p>
-                <Button
-                  variant="accent"
-                  size="sm"
-                  label="Retry loading calendar"
-                  onClick={() => void props.data.occurrencesQuery.refetch()}
-                >
-                  Retry
-                </Button>
-              </div>
-            }
-          >
-            <div class="flex items-center gap-2 text-xs text-ink-muted">
-              <SpinnerIcon class="size-4 animate-spin" />
-              <span>Syncing calendar…</span>
+          <div class="flex max-w-sm flex-col items-center gap-3">
+            <div class="text-sm font-semibold text-ink">
+              Calendar unavailable
             </div>
-          </Show>
-        </div>
-      </Show>
-
-      <Show
-        when={
-          !isRangeUnavailable() &&
-          !showLoading() &&
-          !showBlockingState() &&
-          props.data.isSyncing() &&
-          props.data.events().length > 0
-        }
-      >
-        <div class="absolute right-2 bottom-2 z-10 flex items-center gap-1.5 rounded-full border border-edge-muted bg-surface px-2.5 py-1 text-xs text-ink-muted shadow-menu">
-          <SpinnerIcon class="size-3 animate-spin" />
-          Syncing
+            <p class="text-xs text-ink-muted">
+              We couldn’t load your calendar events. Try again.
+            </p>
+            <Button
+              variant="accent"
+              size="sm"
+              label="Retry loading calendar"
+              onClick={() => void props.data.occurrencesQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         </div>
       </Show>
     </>

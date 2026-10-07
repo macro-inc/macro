@@ -1,4 +1,3 @@
-import { SearchBar } from '@app/components/view-shell';
 import { TasksControls } from '@app/features/tasks-view/components/TasksControls';
 import { TaskList } from '@app/features/tasks-view/components/task-list/TaskList';
 import {
@@ -9,6 +8,7 @@ import {
 import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { ProjectTaskSearch } from '../components/project-task-search';
 import { useProjectsContext } from '../context/projects-context';
 import { createProjectTasksDataSource } from '../queries/project-tasks';
 
@@ -21,6 +21,7 @@ export type ProjectTasksListProps = Omit<
   ProjectTasksProviderProps,
   'children'
 > & {
+  projectName: string;
   onCreateTask?: () => void;
   addTasksAction?: JSX.Element;
 };
@@ -66,19 +67,15 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
   const { state, setState, source } = useTasksView();
-  let listElement: HTMLDivElement | undefined;
   return (
     <div class="flex size-full min-h-0 flex-col">
-      <div class="flex min-w-0 flex-wrap items-center gap-3 p-3">
-        <SearchBar
-          label="Search project tasks"
-          placeholder="Search tasks"
-          class="min-w-0 max-w-md flex-1"
+      <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
+        <ProjectTaskSearch
+          projectName={props.projectName}
           value={state.search}
           onValueChange={(search) => setState('search', search)}
-          onEscape={() => listElement?.focus()}
         />
-        <div class="ml-auto flex shrink-0 items-center gap-3">
+        <div class="ml-auto flex shrink-0 items-center gap-2">
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
@@ -100,11 +97,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           </Button>
         </div>
       </Show>
-      <TaskList
-        ref={(element) => {
-          listElement = element;
-        }}
-      />
+      <TaskList />
     </div>
   );
 }

@@ -48,6 +48,7 @@ import {
   type PreviewItemNoAccess,
 } from '@queries/preview';
 import { useDatabaseDetailQuery } from '@queries/storage/databases';
+import { useFormDetailQuery } from '@queries/storage/forms';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -97,11 +98,11 @@ function MentionContainer(props: {
 }) {
   return (
     <span class="pointer-events-auto">
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
+      <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
           {props.text}
         </span>
       </Show>
@@ -397,6 +398,9 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
       <Match when={props.blockName === 'database'}>
         <DatabaseMention {...props} />
       </Match>
+      <Match when={props.blockName === 'form'}>
+        <FormMention {...props} />
+      </Match>
       <Match when={props.blockName === 'skill'}>
         <SkillDocumentMention {...props} />
       </Match>
@@ -413,7 +417,7 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
   const name = () =>
     detail.isSuccess ? detail.data.database.name : props.documentName;
   const open = (event: MouseEvent | KeyboardEvent) => {
-    if (!enabled().enabled || detail.isError) return;
+    if (detail.isError) return;
     event.preventDefault();
     event.stopPropagation();
     openDocument(
@@ -426,8 +430,8 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
   return (
     <span
       class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
-      role={enabled().enabled ? 'link' : undefined}
-      tabIndex={enabled().enabled ? 0 : undefined}
+      role="link"
+      tabIndex={0}
       on:mousedown={(event) => event.preventDefault()}
       on:click={open}
       onKeyDown={(event) => {
@@ -445,6 +449,54 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             data-document-name={name()}
           >
             {detail.isError ? 'Database unavailable' : name() || 'Database'}
+          </span>
+        }
+      />
+    </span>
+  );
+}
+
+/**
+ * A form: its icon and name, from its own detail, which respondents can read.
+ * Opens for every recipient; the forms flag gates authoring only.
+ */
+function FormMention(props: DocumentMentionDecoratorProps) {
+  const detail = useFormDetailQuery(() => props.documentId);
+  const name = () =>
+    detail.isSuccess ? detail.data.form.name : props.documentName;
+  const open = (event: MouseEvent | KeyboardEvent) => {
+    if (detail.isError) return;
+    event.preventDefault();
+    event.stopPropagation();
+    openDocument(
+      'form',
+      props.documentId,
+      props.blockParams,
+      openInNewSplitForMention(event.shiftKey, true)
+    );
+  };
+  return (
+    <span
+      class="rounded-xs hover:bg-hover focus-visible:outline-2 focus-visible:outline-ink/30"
+      role="link"
+      tabIndex={0}
+      on:mousedown={(event) => event.preventDefault()}
+      on:click={open}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') open(event);
+      }}
+    >
+      <MentionContainer
+        icon={<EntityIcon targetType="form" size="fill" />}
+        collapsed={props.collapsed}
+        text={
+          <span
+            data-document-mention="true"
+            data-document-id={props.documentId}
+            data-block-name="form"
+            data-document-name={name()}
+          >
+            {detail.isError ? 'Form unavailable' : name() || 'Form'}
           </span>
         }
       />
@@ -721,7 +773,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       trigger={
         <span class="relative">
           <span
-            class="size-full py-0.5 cursor-default rounded-xs hover:bg-hover focus:bg-active"
+            class="size-full py-[0.125em] cursor-default rounded-xs hover:bg-hover focus:bg-active"
             classList={{
               'bg-active text-ink': isSelectedAsNode(),
             }}

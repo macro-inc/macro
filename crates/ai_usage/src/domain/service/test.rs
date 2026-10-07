@@ -14,12 +14,16 @@ fn completion(feature: AiFeature, total: Option<f32>) -> CompletionUsage {
             amount: UsageAmount::Tokens {
                 input: 1000,
                 output: 500,
+                cache_read: 0,
+                cache_write: 0,
             },
             model: "claude-opus-4-8".to_string(),
             price: total.map(|t| Price {
                 pricing: ModelPricing::Tokens {
                     input: 5.0,
                     output: 25.0,
+                    cache_read: None,
+                    cache_write: None,
                 },
                 total: t,
             }),
@@ -34,6 +38,8 @@ fn price_compute_uses_per_million_rates() {
         amount: UsageAmount::Tokens {
             input: 1_000_000,
             output: 1_000_000,
+            cache_read: 0,
+            cache_write: 0,
         },
         model: "m".to_string(),
         price: None,
@@ -43,11 +49,125 @@ fn price_compute_uses_per_million_rates() {
         ModelPricing::Tokens {
             input: 5.0,
             output: 25.0,
+            cache_read: None,
+            cache_write: None,
         },
         usage.amount,
     )
     .unwrap();
     assert!((price.total - 30.0).abs() < 1e-3);
+}
+
+#[test]
+fn price_compute_bills_each_cache_dimension_at_its_own_rate() {
+    let price = Price::compute(
+        ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
+        },
+        UsageAmount::Tokens {
+            input: 2_000,
+            output: 1_000,
+            cache_read: 140_000,
+            cache_write: 6_000,
+        },
+    )
+    .unwrap();
+
+    // 2k * $5 + 1k * $25 + 140k * $0.50 + 6k * $6.25, per million.
+    assert!((price.total - 0.1425).abs() < 1e-6);
+    assert_eq!(
+        price.pricing,
+        ModelPricing::Tokens {
+            input: 5.0,
+            output: 25.0,
+            cache_read: Some(0.5),
+            cache_write: Some(6.25),
+        }
+    );
+}
+
+#[test]
+fn price_compute_needs_no_cache_rate_when_no_cache_tokens_were_used() {
+    let price = Price::compute(
+        ModelPricing::Tokens {
+            input: 30.0,
+            output: 180.0,
+            cache_read: None,
+            cache_write: None,
+        },
+        UsageAmount::Tokens {
+            input: 1_000_000,
+            output: 0,
+            cache_read: 0,
+            cache_write: 0,
+        },
+    )
+    .unwrap();
+
+    assert!((price.total - 30.0).abs() < 1e-4);
+}
+
+#[test]
+fn price_compute_leaves_cache_reads_unpriced_without_a_cache_read_rate() {
+    let price = Price::compute(
+        ModelPricing::Tokens {
+            input: 1.32,
+            output: 3.96,
+            cache_read: None,
+            cache_write: Some(1.65),
+        },
+        UsageAmount::Tokens {
+            input: 1_000,
+            output: 100,
+            cache_read: 5_000,
+            cache_write: 0,
+        },
+    );
+
+    assert_eq!(price, None);
+}
+
+#[test]
+fn price_compute_leaves_cache_writes_unpriced_without_a_cache_write_rate() {
+    let price = Price::compute(
+        ModelPricing::Tokens {
+            input: 5.0,
+            output: 30.0,
+            cache_read: Some(0.5),
+            cache_write: None,
+        },
+        UsageAmount::Tokens {
+            input: 1_000,
+            output: 100,
+            cache_read: 0,
+            cache_write: 5_000,
+        },
+    );
+
+    assert_eq!(price, None);
+}
+
+#[test]
+fn negative_or_non_finite_cache_rates_are_invalid() {
+    for (cache_read, cache_write) in [
+        (Some(-0.1), None),
+        (None, Some(f32::NAN)),
+        (Some(f32::INFINITY), Some(1.0)),
+    ] {
+        assert!(matches!(
+            ModelPricing::Tokens {
+                input: 1.0,
+                output: 2.0,
+                cache_read,
+                cache_write,
+            }
+            .validate(),
+            Err(UsageError::InvalidPricing)
+        ));
+    }
 }
 
 #[test]
@@ -178,6 +298,8 @@ async fn missing_audio_rate_keeps_usage_unpriced() {
         Some(ModelPricing::Tokens {
             input: 0.0,
             output: 0.0,
+            cache_read: None,
+            cache_write: None,
         }),
     ] {
         let repo = FakeRepo::default();
@@ -219,6 +341,8 @@ async fn both_recording_paths_persist_the_same_counting_policy() {
                     Some(ModelPricing::Tokens {
                         input: 5.0,
                         output: 25.0,
+                        cache_read: None,
+                        cache_write: None,
                     }),
                 ] {
                     let repo = FakeRepo::default();
@@ -226,8 +350,12 @@ async fn both_recording_paths_persist_the_same_counting_policy() {
                     let service = UsageServiceImpl::new(repo.clone()).with_enforcement(enforcement);
                     let event = UsageContext::new(feature, actor.clone()).into_event(
                         "anthropic/test-model".into(),
-                        100,
-                        200,
+                        UsageAmount::Tokens {
+                            input: 100,
+                            output: 200,
+                            cache_read: 0,
+                            cache_write: 0,
+                        },
                     );
                     let expected = enforcement == AiUsageEnforcement::Enabled
                         && actor == real_user
@@ -262,7 +390,15 @@ async fn default_disabled_writes_do_not_change_previously_counted_usage() {
     let enabled = UsageServiceImpl::new(repo.clone()).with_enforcement(AiUsageEnforcement::Enabled);
     let disabled = UsageServiceImpl::new(repo.clone());
     let actor = MacroUserIdStr::try_from("macro|someone@example.com".to_owned()).unwrap();
-    let event = UsageContext::new(AiFeature::Chat, actor).into_event("model".into(), 100, 200);
+    let event = UsageContext::new(AiFeature::Chat, actor).into_event(
+        "model".into(),
+        UsageAmount::Tokens {
+            input: 100,
+            output: 200,
+            cache_read: 0,
+            cache_write: 0,
+        },
+    );
     enabled.record_now(event.clone()).await.unwrap();
     disabled.record_now(event).await.unwrap();
     assert_eq!(*repo.counting.lock().unwrap(), vec![true, false]);
@@ -295,7 +431,9 @@ async fn admin_policy_protects_usage_and_price_changes() {
                 "whisper-1".into(),
                 ModelPricing::Tokens {
                     input: 0.0,
-                    output: 0.0
+                    output: 0.0,
+                    cache_read: None,
+                    cache_write: None,
                 }
             )
             .await,
@@ -309,6 +447,8 @@ async fn admin_policy_protects_usage_and_price_changes() {
             ModelPricing::Tokens {
                 input: 0.0,
                 output: 0.0,
+                cache_read: None,
+                cache_write: None,
             },
         )
         .await
@@ -335,4 +475,81 @@ async fn rejects_invalid_prices_before_writing() {
         ));
     }
     assert!(repo.pricing.lock().unwrap().is_none());
+}
+
+#[tokio::test]
+async fn records_cache_tokens_priced_at_the_model_cache_rates() {
+    let repo = FakeRepo::default();
+    *repo.pricing.lock().unwrap() = Some(ModelPricing::Tokens {
+        input: 5.0,
+        output: 25.0,
+        cache_read: Some(0.5),
+        cache_write: Some(6.25),
+    });
+    let event = UsageContext::new(AiFeature::AgentSession, user()).into_event(
+        "anthropic/claude-opus-5".into(),
+        UsageAmount::Tokens {
+            input: 1_000_000,
+            output: 0,
+            cache_read: 1_000_000,
+            cache_write: 1_000_000,
+        },
+    );
+
+    UsageServiceImpl::new(repo.clone())
+        .record_now(event)
+        .await
+        .unwrap();
+
+    let rows = repo.rows.lock().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].cost.model, "claude-opus-5");
+    assert_eq!(
+        rows[0].cost.amount,
+        UsageAmount::Tokens {
+            input: 1_000_000,
+            output: 0,
+            cache_read: 1_000_000,
+            cache_write: 1_000_000,
+        }
+    );
+    assert!((rows[0].cost.price.unwrap().total - 11.75).abs() < 1e-4);
+}
+
+#[tokio::test]
+async fn cache_tokens_without_a_cache_rate_record_an_unpriced_row() {
+    let repo = FakeRepo::default();
+    *repo.pricing.lock().unwrap() = Some(ModelPricing::Tokens {
+        input: 0.35,
+        output: 1.5,
+        cache_read: None,
+        cache_write: None,
+    });
+    let event = UsageContext::new(AiFeature::AgentSession, user()).into_event(
+        "fireworks/muse-glimmer-30b".into(),
+        UsageAmount::Tokens {
+            input: 1_000,
+            output: 100,
+            cache_read: 9_000,
+            cache_write: 0,
+        },
+    );
+
+    UsageServiceImpl::new(repo.clone())
+        .record_now(event)
+        .await
+        .unwrap();
+
+    let rows = repo.rows.lock().unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].cost.amount,
+        UsageAmount::Tokens {
+            input: 1_000,
+            output: 100,
+            cache_read: 9_000,
+            cache_write: 0,
+        }
+    );
+    assert!(rows[0].cost.price.is_none());
 }

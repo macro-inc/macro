@@ -24,6 +24,17 @@ function excludesMail(input: SoupInput) {
   );
 }
 
+type MetadataLane = 'signal' | 'noise';
+
+/** Fixture timestamps are fixed, so the recency cutoff is required but not applied. */
+function metadataLane(input: SoupInput): MetadataLane {
+  const tree = input.initial?.filters?.emailFilter?.tree;
+  const signal = tree?.and?.left?.literal?.importance;
+  if (typeof signal !== 'boolean' || !tree?.and?.right?.literal?.updatedAt?.gte)
+    throw new Error('Metadata backfill must bound one signal class by recency');
+  return signal ? 'signal' : 'noise';
+}
+
 export type RequestRecord = {
   method: string;
   path: string;
@@ -37,13 +48,17 @@ export type RequestRecord = {
  * No forwarding to a hosted backend, cache seeding, or filter-result injection. */
 export function startFixtureServer(port = 0, filterMatrix = false) {
   const corpus = filterMatrix ? filterCorpus(capsules) : undefined;
-  const metadataMail = corpus
+  const metadataRows = corpus
     ? corpus
         .filter(
           (row) => row.kind === 'email' && LINKS.includes(row.linkId ?? '')
         )
-        .map((row) => row.api)
-    : mail;
+        .map((row) => ({ signal: row.signal === true, api: row.api }))
+    : mail.map((api) => ({ signal: api.isSignal, api }));
+  const metadataMail: Record<MetadataLane, unknown[]> = {
+    signal: metadataRows.filter((row) => row.signal).map((row) => row.api),
+    noise: metadataRows.filter((row) => !row.signal).map((row) => row.api),
+  };
   const sharedMail =
     corpus
       ?.filter((row) => row.kind === 'email' && row.shared)
@@ -63,26 +78,32 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     : [mail[1], mail[5]];
   const requests: RequestRecord[] = [];
   const pageSize = 2;
-  const cursors = new Map<string, number>();
+  const cursors = new Map<string, { lane: MetadataLane; offset: number }>();
   let pagesServed = 0;
 
-  function soupPage(input: SoupInput, operation: string) {
-    if (operation === 'SoupMailBackfill') {
-      let offset = 0;
-      if (input.continuation) {
-        const saved = cursors.get(input.continuation.cursor);
-        if (saved === undefined) throw new Error('Unknown metadata cursor');
-        offset = saved;
-      } else if (input.initial?.emailView !== 'ALL') {
-        throw new Error('Metadata backfill must request ALL');
-      }
-      const nextOffset = offset + pageSize;
-      const nextCursor =
-        nextOffset < metadataMail.length ? `metadata-${nextOffset}` : null;
-      if (nextCursor) cursors.set(nextCursor, nextOffset);
-      pagesServed += 1;
-      return { items: metadataMail.slice(offset, nextOffset), nextCursor };
+  function metadataPage(input: SoupInput) {
+    let lane: MetadataLane;
+    let offset = 0;
+    if (input.continuation) {
+      const saved = cursors.get(input.continuation.cursor);
+      if (saved === undefined) throw new Error('Unknown metadata cursor');
+      ({ lane, offset } = saved);
+    } else if (input.initial?.emailView !== 'ALL') {
+      throw new Error('Metadata backfill must request ALL');
+    } else {
+      lane = metadataLane(input);
     }
+    const rows = metadataMail[lane];
+    const nextOffset = offset + pageSize;
+    const nextCursor =
+      nextOffset < rows.length ? `metadata-${lane}-${nextOffset}` : null;
+    if (nextCursor) cursors.set(nextCursor, { lane, offset: nextOffset });
+    pagesServed += 1;
+    return { items: rows.slice(offset, nextOffset), nextCursor };
+  }
+
+  function soupPage(input: SoupInput, operation: string) {
+    if (operation === 'SoupMailBackfill') return metadataPage(input);
     if (operation === 'SoupSharedMailBackfill')
       return { items: sharedMail, nextCursor: null };
     if (operation === 'SoupBackfill') {
@@ -229,7 +250,10 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     get socketCount() {
       return sockets.size;
     },
-    expectedMetadataPages: Math.ceil(metadataMail.length / pageSize),
+    expectedMetadataPages: Object.values(metadataMail).reduce(
+      (pages, rows) => pages + Math.max(1, Math.ceil(rows.length / pageSize)),
+      0
+    ),
     initialSignalIds: signalMail.map((row) => String(row.id)),
     get metadataPagesServed() {
       return pagesServed;

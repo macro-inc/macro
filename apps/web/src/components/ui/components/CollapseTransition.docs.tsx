@@ -34,7 +34,7 @@ export default defineDoc({
   category: 'Layout',
   status: 'stable',
   description:
-    'Animates a disclosure body open and closed, measuring its height, and mounts the body only while open. Sidebar sections, tree branches, and tool groups share it.',
+    'Animates a disclosure body open and closed along its height or width. Sidebar sections, tree branches, and tool groups share it. Externally sized panels can provide their resting size and companion animations for positioned neighbors.',
   exports: ['CollapseTransition'],
   import:
     "import { CollapseTransition } from '@ui/components/CollapseTransition';",

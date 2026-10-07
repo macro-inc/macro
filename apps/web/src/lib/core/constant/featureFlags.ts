@@ -91,6 +91,13 @@ export function defineFlag(config: RemoteFlagConfig | EnvFlagConfig): Flag {
   };
 }
 
+/** Opt-in versioned canvas documents. Unset overrides defer to PostHog. */
+export const enableCanvasNext = defineFlag({
+  key: 'enable-canvas-next',
+  env: 'ENABLE_CANVAS_NEXT',
+  default: LOCAL_ONLY ? false : undefined,
+});
+
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
  * or `false` if flags have not loaded or the key is unknown.
@@ -109,6 +116,19 @@ export function isFeatureEnabled(flag: Flag): boolean {
 export const enableDatabases = defineFlag({
   key: 'enable-databases',
   env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
+ * Macro Forms (`block-form`): questionnaires whose answers land as rows of a
+ * database table. On under local HMR, like databases; deployed environments
+ * follow PostHog. The flag gates authoring (create entries, builder, `/poll`,
+ * `/form`, database controls); responding, form cards and mentions follow the
+ * service's access whatever it says.
+ */
+export const enableForms = defineFlag({
+  key: 'enable-forms',
+  env: 'ENABLE_FORMS',
   default: LOCAL_ONLY || undefined,
 });
 
@@ -371,6 +391,9 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   default: false,
 }).enabled;
 
+/** Desktop download settings rollout on web; native desktop always shows it. */
+export const desktopApp = defineFlag({ key: 'desktop-app' });
+
 export const ENABLE_APP_STORE_QR_CODE = defineFlag({
   env: 'ENABLE_APP_STORE_QR_CODE',
   default: true,
@@ -459,8 +482,8 @@ export const enableProjects = defineFlag({
   default: onInDev,
 });
 
-// Reminders: the "Remind me" entry in the command menu, the soup
-// context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
+// Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
+// time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
 // is the single gate for all of them. PostHog-gated with a dev-mode default.
 export const enableReminders = defineFlag({
@@ -563,18 +586,6 @@ export function isAutoUpdateUiEnabled(): boolean {
 export const botManagement = defineFlag({
   key: 'bot-management',
   env: 'BOT_MANAGEMENT',
-  default: onInDev,
-});
-
-// Onboarding v4: the full-screen stepper new users land in after signup
-// (unified with /login), driving the import machinery with auto-import.
-// PostHog-gated; override with VITE_ENABLE_ONBOARDING_V4. Read it through
-// `useOnboardingV4Flag()` so the gate reacts when PostHog answers (and so
-// callers can wait instead of treating "flags not loaded yet" as "off").
-// `just run_local` sets the env to false unless `--enable-onboarding`.
-export const enableOnboardingV4 = defineFlag({
-  key: 'enable-onboarding-v4',
-  env: 'ENABLE_ONBOARDING_V4',
   default: onInDev,
 });
 
@@ -697,9 +708,9 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
-// AI agents: the Macro Coder mention entry, the folded agent-session view in
-// channels, and which bot the single `@macro` mention targets — the agent
-// session when on, the classic in-channel reply when off.
+// AI agents: the folded agent-session view in channels, and which bot the
+// single `@macro` mention targets — the agent session when on, the classic
+// in-channel reply when off.
 // Override with VITE_ENABLE_CHAT_V3_AGENTS.
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
@@ -721,6 +732,15 @@ export const enableCursorAgents = defineFlag({
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
+});
+
+// Yes/no conditions on routine event triggers, checked by the Jev classifier
+// before a run starts. The scheduled-action service rejects conditions until
+// its TYPESAFE_API_KEY is set. Override with VITE_ENABLE_ROUTINE_CONDITIONS.
+export const enableRoutineConditions = defineFlag({
+  key: 'enable-routine-conditions',
+  env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
@@ -754,6 +774,39 @@ export const enablePptxEditor = defineFlag({
   default: onInDev,
 });
 
+/**
+ * The in-browser Photoshop editor (`block-psd`). Off shows uploaded `.psd`
+ * and `.psb` files for download only, and hides creating them. On in dev;
+ * deployed environments follow PostHog.
+ */
+export const enablePsdEditor = defineFlag({
+  key: 'enable-psd-editor',
+  env: 'ENABLE_PSD_EDITOR',
+  default: onInDev,
+});
+
+/**
+ * The in-browser Figma file viewer (`block-fig`). Off shows uploaded `.fig`
+ * files as before: download only. On in dev; deployed environments follow
+ * PostHog.
+ */
+export const enableFigViewer = defineFlag({
+  key: 'enable-fig-viewer',
+  env: 'ENABLE_FIG_VIEWER',
+  default: onInDev,
+});
+
+/**
+ * The in-browser Illustrator editor (`block-ai`) and creating `.ai`
+ * documents. Off shows uploaded `.ai` files as before: download only. On in
+ * dev; deployed environments follow PostHog.
+ */
+export const enableAiEditor = defineFlag({
+  key: 'enable-ai-editor',
+  env: 'ENABLE_AI_EDITOR',
+  default: onInDev,
+});
+
 // PostHog controls the internal pilot and team targeting in every environment.
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
@@ -770,6 +823,20 @@ export const enableSpreadsheets = defineFlag({
 export const enableDictation = defineFlag({
   key: 'enable-dictation',
   env: 'ENABLE_DICTATION',
+  default: onInDev,
+});
+
+/**
+ * AI usage billing UI: enables production Usage controls and the usage-limit
+ * dialog, plus the "$N of AI usage" plan copy. Dev and local Usage remain
+ * interactive regardless of this flag. Presentation only:
+ * backend quota admission and settlement are gated separately by
+ * `ENABLE_AI_USAGE_ENFORCEMENT` and `ENABLE_AI_USAGE_BILLING`. On in dev;
+ * production follows PostHog. Override with VITE_ENABLE_AI_USAGE_BILLING.
+ */
+export const enableAiUsageBilling = defineFlag({
+  key: 'enable-ai-usage-billing',
+  env: 'ENABLE_AI_USAGE_BILLING',
   default: onInDev,
 });
 

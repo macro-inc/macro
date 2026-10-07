@@ -5,6 +5,7 @@
 mod chat_reply;
 mod quota;
 mod user_cleanup;
+mod warm;
 
 use agent_session::domain::service::AgentSessionService as _;
 use messages::domain::models::MessageParent;
@@ -49,8 +50,8 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, CommentAnchor, ContextMessage,
     ContextThread, ConversationContext, DeclinedMention, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, SessionBlocker, SessionDefaults, SessionOrigin,
-    SessionRepository, SpawnContainer,
+    HarnessDefaults, MentionOrigin, OpenSession, PromptPeople, SessionBlocker, SessionDefaults,
+    SessionOrigin, SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -209,6 +210,7 @@ type PromptCompositionCall = (String, Option<String>, Option<ConversationContext
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
     parents: Arc<Mutex<Vec<Option<MessageParent>>>>,
+    people: Arc<Mutex<Vec<Option<PromptPeople>>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
@@ -223,6 +225,10 @@ impl PromptComposerMock {
     fn calls(&self) -> Vec<PromptCompositionCall> {
         self.calls.lock().unwrap().clone()
     }
+
+    fn people(&self) -> Vec<Option<PromptPeople>> {
+        self.people.lock().unwrap().clone()
+    }
 }
 
 impl AgentPromptComposer for PromptComposerMock {
@@ -231,9 +237,11 @@ impl AgentPromptComposer for PromptComposerMock {
         prompt_markdown: &str,
         instructions: Option<&str>,
         parent: Option<&MessageParent>,
+        people: Option<&PromptPeople>,
         context: Option<&ConversationContext>,
     ) -> crate::domain::error::Result<String> {
         self.parents.lock().unwrap().push(parent.cloned());
+        self.people.lock().unwrap().push(people.cloned());
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             instructions.map(str::to_owned),
@@ -668,6 +676,7 @@ async fn disconnected_session_owned_by(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id,
             owner_id: owner,
@@ -1244,7 +1253,7 @@ async fn open_announces_while_the_container_is_still_booting() {
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
     let composer = PromptComposerMock::default();
-    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+    let ((service, repo, containers, announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), composer.clone());
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
@@ -1268,6 +1277,28 @@ async fn forward_to_a_live_session_reuses_the_transport() {
             None,
             Some(ConversationContext::default())
         ))
+    );
+    assert_eq!(
+        composer.people(),
+        [
+            Some(PromptPeople {
+                owner: sender(),
+                sender: Some(sender()),
+            }),
+            Some(PromptPeople {
+                owner: sender(),
+                sender: Some(staff_sender()),
+            }),
+        ],
+        "every prompt names the owner and who sent it"
+    );
+    assert_eq!(
+        repo.turn_prompter(id)
+            .await
+            .unwrap()
+            .and_then(|prompter| prompter.user),
+        Some(staff_sender()),
+        "the dispatched turn's prompter is durable before the runtime can act on it"
     );
     assert_eq!(
         prompts(&container.agent())[1],
@@ -2558,6 +2589,64 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         .await
         .expect_err("a removed prompt is gone");
     assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
+}
+
+#[tokio::test]
+async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt = |text: &str| ControlEvent {
+        action: AgentAction::prompt(text),
+        action_id: None,
+        actor: Some(sender()),
+    };
+    let first = service
+        .control_event(id, prompt("first waiting"))
+        .await
+        .expect("the first mid-turn prompt queues");
+    let steered = service
+        .control_event(id, prompt("steer this"))
+        .await
+        .expect("the second mid-turn prompt queues");
+
+    service
+        .steer_queued_control(id, steered.action_id, Some(sender()))
+        .await
+        .expect("a waiting prompt can be steered");
+
+    assert_eq!(
+        cancel_count(&agent),
+        1,
+        "steering cancels the turn in flight"
+    );
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [steered.action_id, first.action_id]
+    );
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from("steer this")],
+        "the steered prompt flushes ahead of the one queued before it"
+    );
+
+    let missing = service
+        .steer_queued_control(id, steered.action_id, Some(sender()))
+        .await
+        .expect_err("a prompt that already flushed is not waiting");
+    assert!(matches!(missing, AgentSessionError::QueuedControlNotFound));
 }
 
 #[tokio::test]
@@ -4447,6 +4536,45 @@ async fn a_chosen_model_is_the_session_model_from_creation() {
     let (opened, _) = tokio::join!(open, drive);
     let session = repo.get(opened.unwrap().id).await.unwrap();
     assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+}
+
+/// A sandboxed coder does not read the session row, so a model chosen at
+/// creation reaches it as the first request after `session/new`, and the web
+/// app need not send one of its own.
+#[tokio::test]
+async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
+    let (service, _, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: Some("openai/gpt-5.6".to_owned()),
+        prompt: None,
+        profile: None,
+    });
+    let drive = async {
+        let session = containers.first_spawned().await;
+        let container = containers.container(session).unwrap();
+        complete_session_handshake(&container).await;
+        let agent = container.agent();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            agent.wait_for_requests(3),
+        )
+        .await
+        .expect("the runtime was never sent the chosen model");
+        agent.received_requests()
+    };
+    let (opened, requests) = tokio::join!(open, drive);
+    opened.unwrap();
+    let ClientRequest::SetSessionConfigOptionRequest(request) = &requests[2] else {
+        panic!("expected a model selection, got {:?}", requests[2]);
+    };
+    let request = serde_json::to_value(request).unwrap();
+    assert_eq!(request["configId"], "model");
+    assert_eq!(request["value"], "openai/gpt-5.6");
 }
 
 /// The agents-view create path names the Cursor bot with no persisted

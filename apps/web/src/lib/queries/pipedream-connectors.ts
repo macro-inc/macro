@@ -1,6 +1,7 @@
 import { openPipedreamConnectUI } from '@core/pipedream/connect-ui';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
 import {
   cognitionApiServiceClient,
   PIPEDREAM_DISABLED,
@@ -69,12 +70,12 @@ export function usePipedreamConnectedSlugs(options?: {
   const slugs = createMemo<ReadonlySet<string>>(
     () =>
       new Set(
-        (query.isSuccess ? query.data : NO_CONNECTIONS).map(
+        (queryReadyGate(query) ? query.data : NO_CONNECTIONS).map(
           (connection) => connection.app_slug
         )
       )
   );
-  const ready = () => !query.isPlaceholderData && !query.isPending;
+  const ready = () => !query.isPlaceholderData && queryReadyGate(query);
   return { slugs, ready };
 }
 

@@ -9,6 +9,8 @@ const config: KnipConfig = {
     // block reachable without hiding dead block-local files from Knip.
     'src/features/block-*/definition.ts',
     'src/lib/workers/**/*.{js,ts,tsx}',
+    // Feature browser harnesses load from their own HTML and Playwright specs.
+    'src/features/*/browser-test/*.{ts,tsx}',
   ],
   project: ['src/**/*.{js,ts,tsx}'],
 
@@ -58,6 +60,8 @@ const config: KnipConfig = {
     'libheif-js',
     '@tailwindcss/vite',
     'bebop',
+    // TypeScript 7's compiler, run by path from `type-check`.
+    'typescript-native',
   ],
 
   ignoreWorkspaces: ['../../packages/loro-mirror', '../../packages/sdk'],

@@ -288,7 +288,6 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupCall",
         "GraphqlSoupCrmCompany",
         "GraphqlSoupForeignEntity",
-        "GraphqlSoupReminder",
         "GraphqlSoupAgentSession",
         "GraphqlSoupDatabaseRow",
     ] {

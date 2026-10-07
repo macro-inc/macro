@@ -52,7 +52,7 @@ describe('openChatWithAgent', () => {
     mocks.manager = true;
   });
 
-  it('opens an agent session with an unsent visible mention', async () => {
+  it('opens a bare agent session, without the Agents sidebar, with an unsent visible mention', async () => {
     await openChatWithAgent({
       type: 'document',
       id: 'document-id',
@@ -66,7 +66,7 @@ describe('openChatWithAgent', () => {
         '<m-document-mention>{"documentId":"document-id","documentName":"Project plan","blockName":"md","blockParams":{}}</m-document-mention> ',
     });
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'agents-session~agents~session-id' },
+      { type: 'agent', id: 'session-id' },
       { activate: true, preferNewSplit: true }
     );
   });
@@ -144,7 +144,7 @@ describe('openChatWithAgent', () => {
       initialInput: undefined,
     });
     expect(mocks.openWithSplit).toHaveBeenCalledWith(
-      { type: 'component', id: 'agents-session~agents~session-id' },
+      { type: 'agent', id: 'session-id' },
       { activate: true, preferNewSplit: true }
     );
   });

@@ -122,6 +122,18 @@ impl UserDirectory {
         Ok(directory)
     }
 
+    /// Display name of the first non-bot export user, in Slack id order, whose
+    /// [`Self::participant`] is `user`. Precedence is profile display name, real name,
+    /// then username. `None` when no such user has a name. Archive text is untrusted.
+    pub fn name_of(&self, user: &MacroUserIdStr<'_>) -> Option<&str> {
+        self.users
+            .iter()
+            .find_map(|(id, export)| {
+                (self.participant(id).as_ref() == Some(user)).then(|| export.display_name())
+            })
+            .flatten()
+    }
+
     /// Display name for source membership labels, including no-email/unknown members.
     pub fn display_name<'a>(&'a self, id: &'a SlackUserId) -> &'a str {
         self.users

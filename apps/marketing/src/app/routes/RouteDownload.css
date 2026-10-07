@@ -1,0 +1,102 @@
+.downloads-page {
+  width: min(580px, 100%);
+  margin: 0 auto;
+  padding: 132px 24px 100px;
+}
+
+.downloads-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.downloads-app-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  margin-bottom: 32px;
+  border: 1px solid #ffffff1c;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #292929, #111);
+  box-shadow: inset 0 1px 1px #ffffff12;
+}
+
+.downloads-app-icon svg {
+  width: 43px;
+  height: 43px;
+  color: #eee;
+}
+
+.downloads-header h1 {
+  margin: 0 0 14px;
+  font:
+    315 clamp(30px, 4vw, 40px) / 1.12 "Roboto Slab Variable",
+    display,
+    serif;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+.downloads-header p {
+  color: #999;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.downloads-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Preserve the shared primary button's ink over the legacy anchor reset. */
+.downloads-action .site-nav-start {
+  color: #000;
+}
+
+.downloads-release {
+  margin-top: 25px !important;
+  text-align: center;
+}
+.downloads-release a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #777;
+  font-size: 12px;
+  text-decoration: none;
+}
+.downloads-release a:hover {
+  color: #ccc;
+}
+.downloads-release svg {
+  width: 13px;
+  height: 13px;
+}
+
+.downloads-page .downloads-version {
+  margin-top: 8px;
+  color: #777;
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .downloads-page {
+    padding: 112px 12px 76px;
+  }
+  .downloads-app-icon {
+    width: 76px;
+    height: 76px;
+    margin-bottom: 28px;
+    border-radius: 19px;
+  }
+  .downloads-app-icon svg {
+    width: 38px;
+    height: 38px;
+  }
+}

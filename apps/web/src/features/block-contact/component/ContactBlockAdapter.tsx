@@ -40,8 +40,6 @@ export function ContactBlockAdapter() {
           containerClass="ph-no-capture min-w-0 h-full mx-2"
         >
           {(isCollapsed) => (
-            // Labels keep their width so the header collapses them to
-            // icons; the icons scroll once even they no longer fit.
             <div
               class={
                 isCollapsed()

@@ -71,7 +71,12 @@ impl Drop for WorkerProcess {
 
 async fn recover(pool: PgPool, boundary: &str) {
     let (_container, endpoint) = LocalStack::start().await;
-    let (storage, queue, config) = resources(&endpoint).await;
+    let Resources {
+        storage,
+        queue,
+        process: config,
+        ..
+    } = resources(&endpoint).await;
     let team = team(&pool).await;
     let limits = ImportLimits::default();
     let repo = PgSlackImportRepo::new(pool.clone(), limits);

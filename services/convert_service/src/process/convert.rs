@@ -1,20 +1,20 @@
 use nix::{
-    libc::exit,
+    libc::{_exit, exit},
     unistd::{ForkResult, fork},
 };
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, str::FromStr, thread, time::Duration};
+use std::{borrow::Cow, fs::File, io::Write, thread, time::Duration};
 
 use anyhow::Context;
-use model::{convert::ConvertQueueMessage, document::FileType};
+use model::convert::ConvertQueueMessage;
 
 use crate::{
     config::{LOK_PATH, WEB_SOCKET_RESPONSE_LAMBDA},
     model::{BomPart, DocxUploadJobData, DocxUploadJobResult, DocxUploadJobSuccessDataInner},
-    utils::{cleanup_folder, get_lok_filter_from_file_types},
+    utils::{
+        cleanup_folder, conversion_timeout, get_lok_filter_from_file_types, resolve_file_type,
+    },
 };
-
-static MAX_WAIT_TIME_SECONDS: u64 = 30;
 
 pub(super) fn is_docx_key(key: &str) -> bool {
     key.to_ascii_lowercase().ends_with(".docx")
@@ -135,19 +135,8 @@ pub async fn convert(
     req: &ConvertQueueMessage,
     s3_client: &s3_client::S3,
 ) -> anyhow::Result<()> {
-    let from_file_type: FileType = req
-        .from_key
-        .split('.')
-        .next_back()
-        .context("expected key to contain a file type")
-        .and_then(|s| Ok(FileType::from_str(s)?))?;
-
-    let to_file_type: FileType = req
-        .to_key
-        .split('.')
-        .next_back()
-        .context("expected key to contain a file type")
-        .and_then(|s| Ok(FileType::from_str(s)?))?;
+    let from_file_type = resolve_file_type(req.from_file_type, &req.from_key)?;
+    let to_file_type = resolve_file_type(req.to_file_type, &req.to_key)?;
 
     let filter = get_lok_filter_from_file_types(&from_file_type, &to_file_type)
         .context("unable to get lok filter")?;
@@ -170,7 +159,41 @@ pub async fn convert(
     file.write_all(&file_content)
         .context("unable to write to input file")?;
 
-    let office_path = &*LOK_PATH;
+    let max_wait = conversion_timeout(&from_file_type, &to_file_type);
+    run_lok_conversion(
+        job_id,
+        &LOK_PATH,
+        &in_file_path,
+        &out_file_path,
+        to_file_type.as_str(),
+        &filter,
+        max_wait,
+    )?;
+
+    let file_content = std::fs::read(out_file_path).context("unable to read result file")?;
+
+    s3_client
+        .put(&req.to_bucket, &req.to_key, &file_content)
+        .await
+        .context("unable to upload file")?;
+
+    Ok(())
+}
+
+/// Converts `in_file_path` to `out_file_path` with LibreOfficeKit in a forked
+/// child process, killing it after `max_wait`.
+///
+/// The child process keeps a LibreOffice crash or hang from taking down the
+/// worker.
+pub(crate) fn run_lok_conversion(
+    job_id: &str,
+    office_path: &str,
+    in_file_path: &str,
+    out_file_path: &str,
+    to_format: &str,
+    filter: &str,
+    max_wait: Duration,
+) -> anyhow::Result<()> {
     let mut child_pids = vec![];
     match unsafe { fork() } {
         Ok(ForkResult::Parent { child }) => {
@@ -187,25 +210,30 @@ pub async fn convert(
                 tracing::trace!("office initialized");
 
                 let document = office
-                    .load_document(&in_file_path)
+                    .load_document(in_file_path)
                     .map_err(|e| anyhow::anyhow!(e))
                     .context("unable to load document")?;
                 tracing::trace!("document loaded");
 
                 document
-                    .save_as(&out_file_path, to_file_type.as_str(), &filter)
+                    .save_as(out_file_path, to_format, filter)
                     .map_err(|e| anyhow::anyhow!(e))
                     .context("unable to save document")?;
                 tracing::trace!("document saved");
 
-                drop(document);
-                drop(office);
+                // The child exits right after this, so skip LibreOffice's
+                // teardown: Writer can crash while destroying a document it
+                // has already saved, which would fail a finished conversion.
+                std::mem::forget(document);
+                std::mem::forget(office);
 
                 Ok(())
             })();
 
             match result {
-                Ok(_) => exit(0),
+                // `_exit` skips LibreOffice's exit handlers, which can hang
+                // after the teardown skipped above.
+                Ok(_) => _exit(0),
                 Err(e) => {
                     tracing::error!(job_id=%job_id, error=?e, "unable to convert");
                     exit(1)
@@ -227,7 +255,7 @@ pub async fn convert(
         }
 
         // Check if we've exceeded the timeout
-        if start_time.elapsed().as_secs() > MAX_WAIT_TIME_SECONDS {
+        if start_time.elapsed() > max_wait {
             tracing::error!(job_id=%job_id, "conversion timed out");
             // Kill any remaining child processes
             for &pid in &child_pids {
@@ -271,13 +299,6 @@ pub async fn convert(
         }
         anyhow::bail!("conversion failed");
     }
-
-    let file_content = std::fs::read(out_file_path).context("unable to read result file")?;
-
-    s3_client
-        .put(&req.to_bucket, &req.to_key, &file_content)
-        .await
-        .context("unable to upload file")?;
 
     Ok(())
 }

@@ -305,6 +305,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	...GraphqlCrmContactFields
 	... on GraphqlSoupCrmCompany {
 		crmTeamId: teamId
 		crmCompanyName: name
@@ -327,27 +328,6 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		sourceMetadata
 		createdAt
 		updatedAt
-	}
-	... on GraphqlSoupReminder {
-		reminderDescription: description
-		scheduleType
-		remindAt
-		cron
-		timezone
-		nextRunAt
-		enabled
-		completedAt
-		createdAt
-		updatedAt
-		referencedEntity {
-			id
-			entityType
-			fileType
-			subType
-		}
-		properties {
-			...SoupPropertyFields
-		}
 	}
 	... on GraphqlSoupCalendarEvent {
 		calendarEventTitle: title

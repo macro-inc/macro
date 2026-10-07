@@ -34,6 +34,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
 mod device;
+mod diagnostics;
 mod logging;
 mod share_target;
 mod staged_upload;
@@ -117,6 +118,9 @@ type Type = std::sync::OnceLock<
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tracing_subscriber::EnvFilter;
+
+    let diagnostics = diagnostics::Diagnostics::from_launch();
+    let recording = diagnostics.is_recording();
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| logging::default_filter(cfg!(debug_assertions)));
@@ -217,7 +221,7 @@ pub fn run() {
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual
             // checks from settings still work.
-            .with_auto_update(cfg!(feature = "auto_apply_update")),
+            .with_auto_update(cfg!(feature = "auto_apply_update") && !recording),
         );
 
     #[cfg(mobile)]
@@ -258,6 +262,7 @@ pub fn run() {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            diagnostics::read_desktop_diagnostics,
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
@@ -268,6 +273,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
+            graphql_cache_plugin::commands::graphql_cache_inspect_mutations,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
             graphql_cache_plugin::commands::graphql_cache_inspect_query,
             graphql_cache_plugin::commands::graphql_cache_claim_next_mutation,
@@ -293,7 +299,8 @@ pub fn run() {
             flush_launch_deep_link,
             staged_upload::upload_staged_file_to_presigned_url,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            diagnostics::setup(app, diagnostics);
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -311,7 +318,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |app_handle, event| match &event {
-            RunEvent::Ready => {
+            RunEvent::Ready if !recording => {
                 #[cfg(feature = "auto_apply_update")]
                 {
                     let app = app_handle.clone();

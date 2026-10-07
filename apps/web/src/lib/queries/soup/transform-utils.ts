@@ -20,6 +20,7 @@ import type {
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -28,7 +29,6 @@ import type {
   InitiativeEntity,
   Notification,
   ProjectEntity,
-  ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
@@ -57,7 +57,6 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
-import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -95,7 +94,7 @@ type SoupEntity =
   | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
-  | ReminderEntity
+  | CrmContactEntity
   | CalendarEventEntity
   | ForeignEntity;
 
@@ -965,6 +964,14 @@ export const mapApiSoupItemToEntity = (
       subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
     }))
+    .with({ tag: 'crmContact' }, (item) => ({
+      ...item.data,
+      type: 'crm_contact' as const,
+      name: item.data.name?.trim() || item.data.email,
+      ownerId: item.data.teamId,
+      sortTs: item.data.lastInteraction,
+      frecencyScore: item.frecency_score,
+    }))
     .with({ tag: 'crmCompany' }, (item) => {
       const primaryDomain = item.data.domains[0]?.domain;
       return {
@@ -990,9 +997,6 @@ export const mapApiSoupItemToEntity = (
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
-    .with({ tag: 'reminder' }, (item) =>
-      reminderEntityFromData(item.data, item.frecency_score)
-    )
     .with({ tag: 'calendarEvent' }, (item) => {
       return {
         type: 'calendar_event',

@@ -6,15 +6,15 @@ use crate::domain::{
 };
 use email::domain::followup::EmailFollowupMailbox;
 
-/// Decorates the existing dispatcher with email reconciliation and inbox return.
+/// Wraps notification delivery with email reconciliation and inbox return.
 pub struct EmailReminderDispatch<D, R, E, C> {
-    generic: D,
+    delivery: D,
     email: EmailFollowupService<R, E, C>,
 }
 impl<D, R, E, C> EmailReminderDispatch<D, R, E, C> {
     /// Use the same workflow/repository as the HTTP service.
-    pub fn new(generic: D, email: EmailFollowupService<R, E, C>) -> Self {
-        Self { generic, email }
+    pub fn new(delivery: D, email: EmailFollowupService<R, E, C>) -> Self {
+        Self { delivery, email }
     }
 }
 impl<
@@ -26,8 +26,8 @@ impl<
 {
     async fn sweep(&self) -> Result<SweepSummary, ReminderError> {
         // Due delivery checks its own email facts. Recovery of unrelated email
-        // workflows must not delay fan-out or suppress ordinary reminders.
-        let result = self.generic.sweep().await;
+        // workflows must not delay delivery of another email reminder.
+        let result = self.delivery.sweep().await;
         if let Err(error) = self.email.reconcile().await {
             tracing::error!(error = ?error, "email follow-up reconciliation failed; will retry next sweep");
         }
@@ -48,10 +48,10 @@ impl<
         let Some(record) = self
             .email
             .repo
-            .reminder_followup(&due.owner_id, due.reminder.id)
+            .reminder_followup(&due.owner_id, due.reminder_id)
             .await?
         else {
-            return self.generic.deliver(firing).await;
+            return Ok(DeliveryOutcome::Gone);
         };
         let _guard = self
             .email
@@ -61,7 +61,7 @@ impl<
         let Some(mut record) = self
             .email
             .repo
-            .reminder_followup(&due.owner_id, due.reminder.id)
+            .reminder_followup(&due.owner_id, due.reminder_id)
             .await?
         else {
             return Ok(DeliveryOutcome::Gone);
@@ -73,6 +73,6 @@ impl<
         {
             return Ok(DeliveryOutcome::Gone);
         }
-        self.generic.deliver(firing).await
+        self.delivery.deliver(firing).await
     }
 }

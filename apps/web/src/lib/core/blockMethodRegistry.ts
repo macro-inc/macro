@@ -20,6 +20,7 @@ export interface BlockMethodRegistry {
   calendar: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
   database: EmptySpec;
+  form: EmptySpec;
   channel: EmptySpec;
   write: EmptySpec;
   pdf: EmptySpec;
@@ -30,6 +31,9 @@ export interface BlockMethodRegistry {
   canvas: AssertSpec<CanvasSpec>;
   spreadsheet: EmptySpec;
   pptx: EmptySpec;
+  psd: EmptySpec;
+  fig: EmptySpec;
+  ai: EmptySpec;
   project: EmptySpec;
   start: EmptySpec;
   unknown: EmptySpec;

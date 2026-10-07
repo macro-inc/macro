@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => ({
   ready: vi.fn(),
   createUploadZipRequest: vi.fn(),
   bulkUploadStatus: vi.fn(),
-  createUploadToast: vi.fn(),
-  dismissToast: vi.fn(),
+  trackUpload: vi.fn(),
+  uploadSending: vi.fn(),
+  uploadProcessing: vi.fn(),
+  uploadDone: vi.fn(),
   contentHash: vi.fn(),
   fetch: vi.fn(),
 }));
@@ -21,7 +23,9 @@ vi.mock('@tauri-apps/api/core', () => ({
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
-  createUploadToast: mocks.createUploadToast,
+}));
+vi.mock('@core/component/UploadProgress/uploadProgress', () => ({
+  trackUpload: mocks.trackUpload,
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   blockAcceptedMimetypeToFileExtension: { 'application/pdf': 'pdf' },
@@ -31,9 +35,6 @@ vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},
 }));
 vi.mock('@core/util/hash', () => ({ contentHash: mocks.contentHash }));
-vi.mock('@kobalte/core/toast', () => ({
-  toaster: { dismiss: mocks.dismissToast },
-}));
 vi.mock('@queries/storage/document-location', () => ({
   waitForDocumentContentReady: mocks.ready,
 }));
@@ -77,7 +78,11 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal('fetch', mocks.fetch);
   mocks.contentHash.mockResolvedValue('cd'.repeat(32));
-  mocks.createUploadToast.mockReturnValue(42);
+  mocks.trackUpload.mockReturnValue({
+    sending: mocks.uploadSending,
+    processing: mocks.uploadProcessing,
+    done: mocks.uploadDone,
+  });
   mocks.browserPut.mockResolvedValue(ok(undefined));
   mocks.createUploadZipRequest.mockResolvedValue(
     ok({ presignedUrl: 'https://example.com/zip', requestId: 'zip-request' })
@@ -178,14 +183,14 @@ describe.each(['pdf', 'zip'])('%s upload checksums', (extension) => {
     expect(mocks.browserPut).not.toHaveBeenCalled();
   });
 
-  it('dismisses the toast and creates no upload request if staged checksum calculation fails', async () => {
+  it('clears the progress indicator and creates no upload request if staged checksum calculation fails', async () => {
     mocks.fetch.mockRejectedValue(new Error('Native bytes unavailable'));
 
     await expect(
       upload(stagedWithoutChecksum(), { unzipFolder: true })
     ).rejects.toThrow('Native bytes unavailable');
 
-    expect(mocks.dismissToast).toHaveBeenCalledWith(42);
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
     expect(mocks.createDocument).not.toHaveBeenCalled();
     expect(mocks.createUploadZipRequest).not.toHaveBeenCalled();
     expect(mocks.invoke).not.toHaveBeenCalled();
@@ -207,12 +212,50 @@ describe('browser upload checksums', () => {
       buffer: bytes,
       sha: 'cd'.repeat(32),
       type: 'application/pdf',
+      onProgress: mocks.uploadSending,
     });
     expect(mocks.fetch).not.toHaveBeenCalled();
     expect(mocks.invoke).not.toHaveBeenCalled();
+    expect(mocks.trackUpload).toHaveBeenCalledWith('browser', 0);
+    expect(mocks.uploadProcessing).toHaveBeenCalledOnce();
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
   });
 
-  it('dismisses the toast before creating a document if hashing fails', async () => {
+  it('clears the progress indicator if the PUT throws', async () => {
+    const file = new File([], 'browser.pdf', { type: 'application/pdf' });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new ArrayBuffer(0),
+    });
+    mocks.browserPut.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(upload(file)).rejects.toThrow('Failed to fetch');
+
+    expect(mocks.uploadProcessing).not.toHaveBeenCalled();
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the progress indicator until the server unpacks a folder', async () => {
+    let unpacked!: (projectId: string) => void;
+    mocks.bulkUploadStatus.mockReturnValue(
+      new Promise<string>((resolve) => {
+        unpacked = resolve;
+      })
+    );
+    const file = new File([], 'folder.zip', { type: 'application/zip' });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: async () => new ArrayBuffer(0),
+    });
+
+    const result = await upload(file, { unzipFolder: true });
+
+    expect(result.type).toBe('folder');
+    expect(mocks.uploadProcessing).toHaveBeenCalledOnce();
+    expect(mocks.uploadDone).not.toHaveBeenCalled();
+    unpacked('project');
+    await vi.waitFor(() => expect(mocks.uploadDone).toHaveBeenCalledOnce());
+  });
+
+  it('clears the progress indicator before creating a document if hashing fails', async () => {
     const file = new File([], 'browser.pdf', { type: 'application/pdf' });
     Object.defineProperty(file, 'arrayBuffer', {
       value: async () => new ArrayBuffer(0),
@@ -221,7 +264,7 @@ describe('browser upload checksums', () => {
 
     await expect(upload(file)).rejects.toThrow('Hash failed');
 
-    expect(mocks.dismissToast).toHaveBeenCalledWith(42);
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
     expect(mocks.createDocument).not.toHaveBeenCalled();
     expect(mocks.browserPut).not.toHaveBeenCalled();
   });

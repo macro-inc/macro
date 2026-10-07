@@ -1,4 +1,5 @@
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { registerActivityRevalidator } from '@queries/activity/push-registry';
 import {
@@ -188,7 +189,19 @@ export function createProjectSoupSource(
         : undefined;
     },
     loading: () => enabled() && query.isPending,
-    error: () => (enabled() ? (query.error ?? undefined) : undefined),
+    error: () => {
+      if (!enabled()) return undefined;
+      // keepPreviousData=false fences filter changes. A complete cached page,
+      // including an empty one, remains usable when only its refresh failed.
+      if (
+        isResponseFreeNetworkError(query.error) &&
+        query.data !== undefined &&
+        !query.isFetchNextPageError
+      ) {
+        return undefined;
+      }
+      return query.error ?? undefined;
+    },
     hasMore: () => enabled() && query.hasNextPage,
     loadingMore: () => enabled() && query.isFetchingNextPage,
     loadMore: async () => {

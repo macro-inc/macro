@@ -2,6 +2,8 @@
 
 mod claude_code;
 mod codex;
+#[cfg(unix)]
+mod herdr_tui;
 mod hermes;
 mod npm_adapter;
 mod open_claw;
@@ -27,6 +29,10 @@ mod environment {
 }
 
 static PRESETS: &[&dyn AgentPreset] = &[
+    #[cfg(unix)]
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Claude),
+    #[cfg(unix)]
+    &herdr_tui::HerdrTui(crate::herdr::acp_agent::TuiAgent::Codex),
     &hermes::Hermes,
     &claude_code::ClaudeCode,
     &codex::Codex,
@@ -77,6 +83,15 @@ pub struct DetectedAgent {
 }
 
 impl DetectedAgent {
+    /// The name inside its group, where "in herdr" goes without saying.
+    pub fn short_name(&self) -> &'static str {
+        match self.kind {
+            AgentKind::HerdrClaude => "Claude Code",
+            AgentKind::HerdrCodex => "Codex",
+            _ => self.name,
+        }
+    }
+
     /// The installation still to run before `launch` works, if any.
     pub fn pending_install(&self) -> Option<&AdapterInstall> {
         self.install
@@ -90,10 +105,19 @@ impl DetectedAgent {
 pub enum AgentKind {
     Hermes,
     ClaudeCode,
+    HerdrClaude,
+    HerdrCodex,
     Codex,
     OpenClaw,
     OpenCode,
     Custom,
+}
+
+impl AgentKind {
+    /// Whether the agent runs as its own TUI in a herdr tab.
+    pub fn is_herdr(self) -> bool {
+        matches!(self, Self::HerdrClaude | Self::HerdrCodex)
+    }
 }
 
 /// Result of checking one preset against the local machine.
@@ -132,6 +156,7 @@ impl PathCommands {
             "hermes-acp",
             "claude",
             "codex",
+            "herdr",
             "npm",
             "openclaw",
             "opencode",

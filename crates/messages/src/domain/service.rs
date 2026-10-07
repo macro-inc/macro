@@ -284,17 +284,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.mentions = self.mentions.extract(&input.content).await?;
         }
         validate_post(&parent, &input)?;
-        if matches!(input.anchor, Some(NewThreadAnchor::Spreadsheet { .. }))
+        if let Some((file_type, error)) = input.anchor.as_ref().and_then(required_file_type)
             && self
                 .repo
                 .document_file_type(&parent.entity_id())
                 .await?
                 .as_deref()
-                != Some("spreadsheet")
+                != Some(file_type)
         {
-            return Err(MessageError::Invalid(
-                "spreadsheet anchors require a native spreadsheet",
-            ));
+            return Err(MessageError::Invalid(error));
         }
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
@@ -742,6 +740,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 }
                 MessageReferenceKind::Automation => continue,
                 MessageReferenceKind::Document => EntityType::Document,
+                MessageReferenceKind::Form => EntityType::Form,
                 MessageReferenceKind::Channel => EntityType::Channel,
                 MessageReferenceKind::EmailThread => EntityType::EmailThread,
                 MessageReferenceKind::Call => EntityType::Call,
@@ -905,7 +904,44 @@ fn validate_post(parent: &MessageParent, input: &PostMessage) -> Result<(), Mess
     {
         return Err(MessageError::Invalid("invalid PDF comment geometry"));
     }
+    if let Some(NewThreadAnchor::Fig {
+        page_id,
+        node_id,
+        x,
+        y,
+    }) = &input.anchor
+        && (!valid_fig_anchor_id(page_id)
+            || !node_id.as_deref().is_none_or(valid_fig_anchor_id)
+            || !x.is_finite()
+            || !y.is_finite())
+    {
+        return Err(MessageError::Invalid("invalid design comment position"));
+    }
     Ok(())
+}
+
+/// Longest page or layer id a design anchor may carry. Figma ids are short
+/// (`12:34`, or a `;`-joined path for a layer inside nested instances).
+const FIG_ANCHOR_ID_LIMIT: usize = 512;
+
+/// The document file type an anchor kind belongs to, with the error for any
+/// other document. Markdown and PDF anchors are tied to their documents by
+/// the annotations and marks they name instead.
+fn required_file_type(anchor: &NewThreadAnchor) -> Option<(&'static str, &'static str)> {
+    match anchor {
+        NewThreadAnchor::Spreadsheet { .. } => Some((
+            "spreadsheet",
+            "spreadsheet anchors require a native spreadsheet",
+        )),
+        NewThreadAnchor::Fig { .. } => Some(("fig", "fig anchors require a design")),
+        NewThreadAnchor::Markdown { .. }
+        | NewThreadAnchor::PdfHighlight { .. }
+        | NewThreadAnchor::PdfPlaceable { .. } => None,
+    }
+}
+
+fn valid_fig_anchor_id(id: &str) -> bool {
+    !id.trim().is_empty() && id.len() <= FIG_ANCHOR_ID_LIMIT
 }
 
 fn valid_spreadsheet_range(range: &str) -> bool {

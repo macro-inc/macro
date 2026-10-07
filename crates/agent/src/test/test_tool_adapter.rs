@@ -63,3 +63,38 @@ fn non_object_schemas_are_unchanged() {
     normalize_request_schema(&mut schema);
     assert_eq!(schema, original);
 }
+
+#[test]
+fn the_schema_description_moves_to_the_tool() {
+    let mut schema = serde_json::json!({
+        "type": "object",
+        "title": "ListLabels",
+        "description": "List the user's Gmail labels.",
+        "properties": {}
+    });
+    let description = take_description("ListLabels", String::new(), &mut schema);
+    assert_eq!(description, "List the user's Gmail labels.");
+    assert_eq!(
+        schema,
+        serde_json::json!({ "type": "object", "title": "ListLabels", "properties": {} })
+    );
+}
+
+#[test]
+fn a_declared_description_wins_over_the_schema() {
+    let mut schema = serde_json::json!({ "type": "object", "description": "From the schema." });
+    let description = take_description("Fetch", "Declared.".to_owned(), &mut schema);
+    assert_eq!(description, "Declared.");
+    assert_eq!(schema, serde_json::json!({ "type": "object" }));
+}
+
+/// OpenAI echoes an omitted description back as `null`, which rig cannot
+/// parse, so the tool name stands in.
+#[test]
+fn a_tool_without_any_description_is_described_by_its_name() {
+    let mut schema = serde_json::json!({ "type": "object", "properties": {} });
+    assert_eq!(
+        take_description("mcp__Linear__list_issues", " ".to_owned(), &mut schema),
+        "mcp__Linear__list_issues"
+    );
+}

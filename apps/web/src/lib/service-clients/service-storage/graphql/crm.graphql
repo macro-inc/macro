@@ -8,3 +8,32 @@ fragment GraphqlCrmCompanyQuickAccessFields on GraphqlSoupCrmCompany {
 	updatedAt
 	viewedAt
 }
+
+fragment GraphqlCrmContactFields on GraphqlSoupCrmContact {
+  __typename
+  id
+  contactTeamId: teamId
+  companyId
+  companyName
+  email
+  crmContactName: name
+  hidden
+  firstInteraction
+  lastInteraction
+  createdAt
+  updatedAt
+  viewedAt
+}
+
+query CrmContacts($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ...GraphqlCrmContactFields
+      }
+      nextCursor
+    }
+  }
+}

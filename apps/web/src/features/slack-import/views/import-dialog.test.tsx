@@ -295,11 +295,7 @@ describe('Slack import dialog', () => {
   it('cancels an unconfirmed review without creating or cancelling a server job', async () => {
     const view = setup();
     await view.choose();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Cancel import (keep partial results)',
-      })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }));
     await waitFor(() =>
       expect(view.fake.archive.dispose).toHaveBeenCalledOnce()
     );
@@ -313,7 +309,7 @@ describe('Slack import dialog', () => {
     const dialog = screen.getByRole('dialog');
     const processing = importReceipt({ status: 'processing' });
     view.setPage({ ...view.page(), jobs: [processing] });
-    fireEvent.click(screen.getByRole('button', { name: 'job · processing' }));
+    fireEvent.click(screen.getByRole('button', { name: /job · Processing/ }));
     const result = importReceipt({
       status: 'cancelled',
       revision: 8,
@@ -355,7 +351,7 @@ describe('Slack import dialog', () => {
     expect(screen.queryByText('Settings suspended')).toBeNull();
     expect(view.completed).toHaveBeenCalledOnce();
     expect(screen.getByText(/9 imported/)).toBeTruthy();
-    expect(screen.getByText('target unavailable')).toBeTruthy();
+    expect(screen.getByText('Target unavailable')).toBeTruthy();
     expect(screen.getAllByRole('link')).toHaveLength(1);
     expect(screen.getByRole('link').getAttribute('href')).toBe(
       '/app/channel/accessible'
@@ -383,11 +379,7 @@ describe('Slack import dialog', () => {
     );
     await waitFor(() => expect(view.fake.put).toHaveBeenCalled());
     expect(screen.getByLabelText(/Upload:/).getAttribute('value')).toBe('2');
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Cancel import (keep partial results)',
-      })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }));
     await waitFor(() =>
       expect(view.fake.commands.cancel).toHaveBeenCalledOnce()
     );
@@ -397,7 +389,7 @@ describe('Slack import dialog', () => {
   it('finalizes a historical upload with skips without creating an archive worker', async () => {
     const view = setup();
     view.setPage({ ...view.page(), jobs: [importReceipt()] });
-    fireEvent.click(screen.getByRole('button', { name: 'job · uploading' }));
+    fireEvent.click(screen.getByRole('button', { name: /job · Uploading/ }));
     fireEvent.click(
       screen.getByRole('button', { name: 'Finalize with skips' })
     );
@@ -419,13 +411,9 @@ describe('Slack import dialog', () => {
       jobs: [importReceipt()],
       nextCursor: 'cursor',
     });
-    fireEvent.click(screen.getByRole('button', { name: 'job · uploading' }));
+    fireEvent.click(screen.getByRole('button', { name: /job · Uploading/ }));
     view.fake.commands.cancel.mockRejectedValue(new Error('request failed'));
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Cancel import (keep partial results)',
-      })
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }));
     await screen.findByText(/Cancellation was not confirmed/);
     fireEvent.click(screen.getByRole('button', { name: 'Older imports' }));
     expect(view.inputs().before?.()).toBe('cursor');

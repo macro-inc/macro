@@ -21,6 +21,7 @@ secret!(DD_APP_KEY);
 secret!(DOPPLER_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(MACOS_RELEASE_DOPPLER_TOKEN);
 secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
 secret!(PULUMI_ACCESS_TOKEN);
@@ -72,6 +73,12 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// a different workload and runner profile.
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
+/// Namespace cache tag for `path-check`, which keeps its release
+/// `xtask_nextest_filter` binary on the volume. Without a fixed tag the small
+/// profile's volume is scoped per branch and PR runs never persisted, so every
+/// run rebuilt the filter.
+pub const NEXTEST_FILTER_CACHE_TAG: &str = "nextest-filter";
+
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
 /// volumes ([`CI_CACHE_TAG`]) would serve it anyway.
@@ -80,6 +87,15 @@ pub const SYNC_SERVICE_CACHE_TAG: &str = "sync-service-deploy";
 /// Bun's global package cache. Mounted explicitly because Bun is supplied by
 /// the Nix dev shell and is not available to Namespace's cache planner yet.
 pub const BUN_CACHE_VOLUME_DIR: &str = "/home/runner/.bun/install/cache";
+
+/// Vitest's filesystem module cache for the web `Test` job. `apps/web`'s
+/// Vitest config reads it from `VITEST_MODULE_CACHE_DIR` and keys entries by
+/// the lockfile and tsconfig, so PR jobs can share one volume.
+pub const VITEST_MODULE_CACHE_VOLUME_DIR: &str = "/home/runner/.cache/vitest-modules";
+
+/// Browser wasm packages keyed by their inputs, so the PR build reuses a package
+/// whose crates did not change (`apps/web/scripts/cached-wasm-build.sh`).
+pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 
 /// GHCR repository for the agent-harness sandbox image (the same Dockerfile
 /// Daytona snapshots). Pushed as `:$SHA` on PRs and `:$SHA` + `:latest` on main.

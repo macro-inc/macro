@@ -78,7 +78,7 @@ pub(crate) fn stored_positions(positions: &[Position]) -> Vec<String> {
     positions.iter().map(Position::to_string).collect()
 }
 
-/// A `databases` row, read by `query_as!` and mapped onto [`Database`].
+/// A `database_entities` row, read by `query_as!` and mapped onto [`Database`].
 pub(crate) struct DatabaseRecord {
     pub(crate) id: Uuid,
     pub(crate) name: String,
@@ -139,8 +139,7 @@ fn position_after(last: Option<&Position>) -> Result<Position, PositionError> {
     key_between(last, None)
 }
 
-/// Insert a database, its first table and its owner's grant inside
-/// `transaction`, so no database can exist that nobody can open.
+/// Insert a core database, its app entity, first table and owner grant atomically.
 pub(crate) async fn insert_owned_database(
     transaction: &mut Transaction<'static, Postgres>,
     database_id: DatabaseId,
@@ -150,12 +149,18 @@ pub(crate) async fn insert_owned_database(
     table_name: &str,
 ) -> Result<Database, PgDatabasesRepoError> {
     let position = position_after(None)?;
+    sqlx::query!(
+        "INSERT INTO databases (id) VALUES ($1)",
+        database_id.into_uuid()
+    )
+    .execute(&mut **transaction)
+    .await?;
     let database: Database = sqlx::query_as!(
         DatabaseRecord,
         r#"
-            INSERT INTO databases (id, name, owner_id)
+            INSERT INTO database_entities (database_id, name, user_id)
             VALUES ($1, $2, $3)
-            RETURNING id, name, owner_id, created_at, trashed_at
+            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at
             "#,
         database_id.into_uuid(),
         name,
@@ -319,7 +324,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT id, name, owner_id, created_at, trashed_at FROM databases WHERE id = $1"#,
+            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -348,7 +353,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<bool, Self::Error> {
         let renamed = sqlx::query!(
-            r#"UPDATE databases SET name = $2, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entities SET name = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             name,
         )
@@ -364,7 +369,7 @@ where
         trashed_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<bool, Self::Error> {
         let trashed = sqlx::query!(
-            r#"UPDATE databases SET trashed_at = $2, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entities SET trashed_at = $2, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
             trashed_at,
         )
@@ -376,7 +381,7 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn restore_database(&self, id: DatabaseId) -> Result<bool, Self::Error> {
         let restored = sqlx::query!(
-            r#"UPDATE databases SET trashed_at = NULL, updated_at = now() WHERE id = $1"#,
+            r#"UPDATE database_entities SET trashed_at = NULL, updated_at = now() WHERE database_id = $1"#,
             id.into_uuid(),
         )
         .execute(&self.pool)
@@ -384,29 +389,16 @@ where
         Ok(restored.rows_affected() == 1)
     }
 
-    /// Tables, columns, rows, views and database-owned property definitions
-    /// go with the database through `ON DELETE CASCADE`, and the rows' cells
-    /// by trigger; `entity_access` rows are a generic side table with no
-    /// foreign key to `databases`, and the change journal outlives what it
-    /// describes by design, so both are purged explicitly in the same
-    /// transaction.
+    /// Deleting the app entity cleans up its owned storage, grants and journal,
+    /// including the same cleanup used when its owner is deleted.
     #[tracing::instrument(err, skip(self))]
     async fn delete_database(&self, id: DatabaseId) -> Result<(), Self::Error> {
-        let mut transaction = self.pool.begin().await?;
-
-        entity_access_db_utils::delete_entity_access_rows(
-            &mut transaction,
-            id.as_uuid(),
-            EntityType::Database,
+        sqlx::query!(
+            r#"DELETE FROM database_entities WHERE database_id = $1"#,
+            id.into_uuid()
         )
+        .execute(&self.pool)
         .await?;
-        journal::purge(&mut *transaction, id).await?;
-
-        sqlx::query!(r#"DELETE FROM databases WHERE id = $1"#, id.into_uuid())
-            .execute(&mut *transaction)
-            .await?;
-
-        transaction.commit().await?;
         Ok(())
     }
 
@@ -419,6 +411,9 @@ where
         actor: &crate::domain::journal::JournalActor,
     ) -> Result<Option<TableVersion>, Self::Error> {
         let mut transaction = self.pool.begin().await?;
+        if !rows::lock_live_database(&mut transaction, table.database_id).await? {
+            return Ok(None);
+        }
         // Row writers take this same lock before checking versions and cells.
         let current = sqlx::query_scalar!(
             "SELECT version FROM database_tables WHERE id = $1 AND database_id = $2 FOR UPDATE",
@@ -438,7 +433,7 @@ where
                   JOIN database_rows r ON r.id::text = p.entity_id
                   WHERE r.table_id = $2 AND p.property_definition_id = $3
                     AND p.entity_type = 'DATABASE_ROW')
-              AND EXISTS (SELECT 1 FROM databases WHERE id = $5 AND trashed_at IS NULL)
+              AND EXISTS (SELECT 1 FROM database_entities WHERE database_id = $5 AND trashed_at IS NULL)
             RETURNING id"#,
             column.id.into_uuid(),
             table.id.into_uuid(),
@@ -491,9 +486,9 @@ where
         Ok(sqlx::query_as!(
             DatabaseRecord,
             r#"
-            SELECT id, name, owner_id, created_at, trashed_at
-            FROM databases
-            WHERE id = ANY($1)
+            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            FROM database_entities
+            WHERE database_id = ANY($1)
             ORDER BY created_at
             "#,
             &uuids(ids),
@@ -529,7 +524,8 @@ where
     async fn columns_for_tables(&self, table_ids: &[TableId]) -> Result<Vec<Column>, Self::Error> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type
+            SELECT id, table_id, property_definition_id, position, config, display_name, infer_type,
+                   ARRAY(SELECT capability FROM database_column_protections p WHERE p.column_id = database_columns.id ORDER BY capability) AS "protections!"
             FROM database_columns
             WHERE table_id = ANY($1)
             ORDER BY table_id, position
@@ -541,6 +537,14 @@ where
         rows.into_iter()
             .map(|row| {
                 Ok(Column {
+                    protections: row
+                        .protections
+                        .iter()
+                        .map(|value| value.parse())
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| {
+                            sqlx::Error::Decode("unknown database column protection".into())
+                        })?,
                     id: ColumnId::from_uuid(row.id),
                     table_id: TableId::from_uuid(row.table_id),
                     property_definition_id: row.property_definition_id,

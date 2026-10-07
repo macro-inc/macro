@@ -4,7 +4,6 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
-import { useGettingStartedEnabled } from '@app/features/getting-started/account-gate';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
@@ -27,7 +26,7 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_CALLS,
   enableCrm,
-  enableReminders,
+  enableTasksReviews,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -38,7 +37,6 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import BellIcon from '@phosphor/bell.svg';
-import CompassIcon from '@phosphor/compass.svg';
 import HomeIcon from '@phosphor/house.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import ActivityIcon from '@phosphor/pulse.svg';
@@ -132,14 +130,6 @@ const SIDEBAR_LINKS = [
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
   {
-    id: 'reminders',
-    label: 'Reminders',
-    href: LIST_VIEW_PATHS.reminders,
-    icon: getIconConfig('reminder').icon,
-    hotkey: 'm',
-    hotkeyToken: TOKENS.sidebar.goTo.reminders,
-  },
-  {
     id: 'calendar',
     label: 'Calendar',
     href: calendarPath('timeGridWeek'),
@@ -224,18 +214,16 @@ export const GoToHotkeys = () => {
     },
   });
 
-  const gettingStartedEnabled = useGettingStartedEnabled();
   const calendarUiEnabled = useCalendarUiFlag();
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
-  const reminders = useFeatureFlag(enableReminders);
+  const reviews = useFeatureFlag(enableTasksReviews);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
-      gettingStartedEnabled(),
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reminders().enabled
+      reviews().enabled
     )
   );
 
@@ -379,15 +367,6 @@ const COMPANIES_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
-const GETTING_STARTED_LINK: SidebarItem = {
-  id: 'getting-started',
-  label: 'Getting Started',
-  href: '/getting-started',
-  icon: CompassIcon,
-  hotkey: 's',
-  hotkeyToken: TOKENS.sidebar.goTo.gettingStarted,
-};
-
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
@@ -408,26 +387,29 @@ const RECENT_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.recent,
 };
 
+const REVIEWS_LINK: SidebarItem = {
+  id: 'reviews',
+  label: 'Reviews',
+  href: '/reviews',
+  icon: getIconConfig('githubPullRequest').icon,
+  hotkey: 'v',
+  hotkeyToken: TOKENS.sidebar.goTo.reviews,
+};
+
 /**
- * Assemble the ordered sidebar link list: the static links plus Getting
- * started and the flag-gated Recent, Activity, Calendar, Reminders, Calls, and CRM
+ * Assemble the ordered sidebar link list: the static links plus the
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
  * entries in their correct positions.
  * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
- * `showGettingStarted` is the account-age gate (`useGettingStartedEnabled`),
- * passed in because this runs outside a component; when false the link is
- * fully absent — `g s` hotkey and command menu entry.
  */
 const buildSidebarLinks = (
-  showGettingStarted: boolean,
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReminders: boolean
+  showReviews: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
-    (link) =>
-      (showCalendar || link.id !== 'calendar') &&
-      (showReminders || link.id !== 'reminders')
+    (link) => showCalendar || link.id !== 'calendar'
   );
 
   const insertAfter = (anchorId: string, link: SidebarItem) => {
@@ -435,12 +417,8 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), link, ...links.slice(idx + 1)];
   };
 
-  // Home leads; Getting started, Recent, and Activity follow it in that order.
+  // Home leads; Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (showGettingStarted) {
-    insertAfter(anchorId, GETTING_STARTED_LINK);
-    anchorId = 'getting-started';
-  }
   if (showRecent) {
     insertAfter(anchorId, RECENT_LINK);
     anchorId = 'recent';
@@ -461,6 +439,11 @@ const buildSidebarLinks = (
       COMPANIES_LINK,
       ...links.slice(idx + 1),
     ];
+  }
+
+  if (showReviews) {
+    // Reviews sits at the end (accessed via More menu but has a hotkey).
+    links = [...links, REVIEWS_LINK];
   }
 
   return links;

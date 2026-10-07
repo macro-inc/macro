@@ -25,6 +25,10 @@ pub mod starter;
 #[cfg(feature = "ports")]
 pub mod upload_finalize;
 
+/// Legacy Office (.doc/.ppt/.xls) upgrades to OpenXML.
+#[cfg(feature = "ports")]
+pub mod legacy_office_upgrade;
+
 pub mod models;
 #[cfg(feature = "axum")]
 pub mod permission_token;
@@ -41,6 +45,18 @@ pub mod word_document;
 /// Reading and editing PowerPoint presentations with the native engine.
 #[cfg(feature = "ai_tools")]
 pub mod presentation;
+
+/// Reading Figma designs with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod design;
+
+/// Reading Photoshop documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod photoshop;
+
+/// Reading Illustrator documents with the native engine.
+#[cfg(feature = "ai_tools")]
+pub mod illustrator;
 
 #[cfg(feature = "ports")]
 pub mod ports;

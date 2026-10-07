@@ -19,6 +19,15 @@ use entity_access::domain::models::{EditAccessLevel, MemberTeamRole, ViewAccessL
 /// The CrmService exposes operations over CRM records (companies, their
 /// domains and contacts).
 pub trait CrmService: Clone + Send + Sync + 'static {
+    /// List the viewer's accessible contacts, collapsed by normalized email.
+    /// Team-scoped bot receipts remain restricted to their authorized team.
+    fn list_contacts_for_soup(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        query: super::contact_listing::CrmContactListQuery,
+    ) -> impl Future<Output = Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError>> + Send;
+
     /// Idempotently records that `email` was seen from the mailbox
     /// identified by `link_id`, for the team `team_id`. Upserts
     /// `crm_companies` (+ `crm_domains`), `crm_contacts`, and
@@ -803,6 +812,45 @@ where
             .await
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn list_contacts_for_soup(
+        &self,
+        user_id: &str,
+        access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        mut query: super::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
+        use super::contact_listing::CrmContactListScope;
+        use entity_access::domain::models::{BotReceiptScope, EntityAccessAuth};
+        let scope = match access.map(|access| (access, access.receipt().auth())) {
+            Some((access, EntityAccessAuth::Bot(bot))) => match bot.scope() {
+                BotReceiptScope::Team { team_id } if *team_id == access.team_id() => {
+                    CrmContactListScope::Team {
+                        team_id: *team_id,
+                        include_hidden: access.include_hidden(),
+                    }
+                }
+                BotReceiptScope::User { acting_user } if acting_user.as_ref() == user_id => {
+                    CrmContactListScope::Viewer(user_id)
+                }
+                _ => {
+                    return Err(CrmError::InvalidRequest(
+                        "contact listing scope mismatch".into(),
+                    ));
+                }
+            },
+            Some((_, EntityAccessAuth::Authenticated(user))) if user.as_ref() != user_id => {
+                return Err(CrmError::InvalidRequest(
+                    "contact listing viewer mismatch".into(),
+                ));
+            }
+            _ => CrmContactListScope::Viewer(user_id),
+        };
+        query.limit = query.limit.clamp(1, MAX_CONTACT_SEARCH_LIMIT);
+        self.companies_repository
+            .list_contacts_for_soup(scope, user_id, &query)
+            .await
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
@@ -958,6 +1006,15 @@ where
 pub struct NoOpCrmService;
 
 impl CrmService for NoOpCrmService {
+    async fn list_contacts_for_soup(
+        &self,
+        _user_id: &str,
+        _access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+        _query: super::contact_listing::CrmContactListQuery,
+    ) -> Result<Vec<super::contact_listing::CrmContactForSoup>, CrmError> {
+        Ok(vec![])
+    }
+
     async fn populate_contact(
         &self,
         _team_id: &uuid::Uuid,

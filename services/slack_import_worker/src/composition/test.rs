@@ -119,7 +119,7 @@ async fn check_read_access_and_mentions(pool: PgPool, kind: ConversationKind) {
         ChannelMapping::Ready { .. }
     ));
     sqlx::query!(
-        "UPDATE comms_messages SET deleted_at = now() WHERE channel_id = $1",
+        "UPDATE comms_messages SET deleted_at = now() WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text",
         target.channel_id
     )
     .execute(&pool)
@@ -478,7 +478,7 @@ async fn overlapping_jobs_remap_speculative_parents_without_duplicate_reactions(
         .unwrap()[0]
         .1;
     let replies = sqlx::query_scalar!(
-        "SELECT thread_id FROM comms_messages WHERE channel_id = $1 AND id <> $2",
+        "SELECT thread_id FROM comms_messages WHERE parent_entity_type = 'channel' AND parent_entity_id = $1::uuid::text AND id <> $2",
         plan.channel_id,
         root
     )

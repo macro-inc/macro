@@ -133,8 +133,8 @@ const SORT_FACT_INSERT: &str =
     "INSERT INTO sort_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const QUEUE_INSERT: &str = "INSERT INTO mutation_queue (uuid, superseded, query, operation_name, variables_json, identity, attempt_count, next_attempt_at_ms, lease_owner, lease_generation, lease_expires_at_ms, last_error, created_at_ms) VALUES (?1, 0, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)";
 const LAYER_INSERT: &str = "INSERT INTO optimistic_layers (mutation_id, optimistic_data_json, normalized_updates) VALUES (?1, ?2, ?3)";
-const QUEUE_SELECT: &str = "SELECT m.id, m.uuid, m.superseded, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id ORDER BY m.id ASC";
-const QUEUE_HEAD_SELECT: &str = "SELECT m.id, m.uuid, m.superseded, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id ORDER BY m.id ASC LIMIT 1";
+const QUEUE_SELECT: &str = "SELECT m.id, m.uuid, m.superseded, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates, r.value FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id LEFT JOIN meta AS r ON r.key = 'mutation-server-failures:' || m.id ORDER BY m.id ASC";
+const QUEUE_HEAD_SELECT: &str = "SELECT m.id, m.uuid, m.superseded, m.query, m.operation_name, m.variables_json, m.identity, m.attempt_count, m.next_attempt_at_ms, m.lease_owner, m.lease_generation, m.lease_expires_at_ms, m.last_error, m.created_at_ms, o.optimistic_data_json, o.normalized_updates, r.value FROM mutation_queue AS m LEFT JOIN optimistic_layers AS o ON o.mutation_id = m.id LEFT JOIN meta AS r ON r.key = 'mutation-server-failures:' || m.id ORDER BY m.id ASC LIMIT 1";
 const ORPHAN_LAYER_SELECT: &str = "SELECT o.mutation_id FROM optimistic_layers AS o LEFT JOIN mutation_queue AS m ON m.id = o.mutation_id WHERE m.id IS NULL LIMIT 1";
 const ANY_LAYER_SELECT: &str = "SELECT mutation_id FROM optimistic_layers LIMIT 1";
 const CLAIM_SELECT: &str = "SELECT lease_owner, lease_generation FROM mutation_queue WHERE id = ?1";
@@ -1041,6 +1041,7 @@ impl Storage for TursoStorage {
                                 )?,
                                 1,
                             )?;
+                            mutation_retry::remove(&connection, mutation_id_to_sql(existing)?)?;
                             MutationUpsertKind::ReplacedPending {
                                 removed_id: existing,
                             }
@@ -1054,6 +1055,11 @@ impl Storage for TursoStorage {
                     1,
                 )?;
                 let id = mutation_id_from_row(connection.last_insert_rowid())?;
+                mutation_retry::save(
+                    &connection,
+                    mutation_id_to_sql(id)?,
+                    entry.mutation.server_failure_count,
+                )?;
                 self.fault_after(TestFaultSite::Enqueue, 1)?;
                 require_changed(
                     driver::execute(
@@ -1227,6 +1233,7 @@ impl Storage for TursoStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         self.require_healthy()?;
         let result = (|| {
@@ -1245,7 +1252,11 @@ impl Storage for TursoStorage {
                         text(&error),
                     ],
                 )?;
-                changed_to_bool(changed)
+                let accepted = changed_to_bool(changed)?;
+                if accepted && server_failure {
+                    mutation_retry::increment(&connection, id)?;
+                }
+                Ok(accepted)
             })
         })();
         self.latch_result(result)
@@ -1306,6 +1317,7 @@ impl Storage for TursoStorage {
                     )?,
                     1,
                 )?;
+                mutation_retry::remove(&connection, sql_id)?;
                 Ok(true)
             })
         })();
@@ -1361,6 +1373,7 @@ impl Storage for TursoStorage {
                     )?,
                     1,
                 )?;
+                mutation_retry::remove(&connection, sql_id)?;
                 write_shadow_reconciliation(&connection, reconciliation, |index| {
                     self.fault_after(TestFaultSite::Complete, entries.len() + index)
                 })?;
@@ -1393,6 +1406,7 @@ impl Storage for TursoStorage {
                     )?,
                     1,
                 )?;
+                mutation_retry::remove(&connection, sql_id)?;
                 self.fault_after(TestFaultSite::Discard, 0)?;
                 Ok(true)
             })
@@ -1427,6 +1441,7 @@ impl Storage for TursoStorage {
                     )?,
                     1,
                 )?;
+                mutation_retry::remove(&connection, sql_id)?;
                 write_shadow_reconciliation(&connection, reconciliation, |index| {
                     self.fault_after(TestFaultSite::Discard, index)
                 })?;
@@ -1444,6 +1459,7 @@ impl Storage for TursoStorage {
                 driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
                 self.fault_after(TestFaultSite::Clear, 0)?;
                 driver::execute(&connection, "DELETE FROM mutation_queue", Vec::new())?;
+                mutation_retry::clear(&connection)?;
                 self.fault_after(TestFaultSite::Clear, 1)?;
                 driver::execute(&connection, "DELETE FROM search_documents", Vec::new())?;
                 driver::execute(&connection, "DELETE FROM index_documents", Vec::new())?;
@@ -4678,7 +4694,7 @@ struct ParsedQueueRow {
 }
 
 fn parse_queue_row(row: &[Value]) -> Result<ParsedQueueRow, TursoStorageError> {
-    if row.len() != 16 {
+    if row.len() != 17 {
         return Err(invariant());
     }
     let optimistic = match (&row[14], &row[15]) {
@@ -4702,6 +4718,7 @@ fn parse_queue_row(row: &[Value]) -> Result<ParsedQueueRow, TursoStorageError> {
                 identity: nullable_text(row, 6)?,
             },
             attempt_count: u32::try_from(required_i64(row, 7)?).map_err(|_| invariant())?,
+            server_failure_count: mutation_retry::parse(nullable_text(row, 16)?)?,
             next_attempt_at_ms: nullable_i64(row, 8)?,
             lease_owner: nullable_text(row, 9)?,
             lease_generation: u64::try_from(required_i64(row, 10)?).map_err(|_| invariant())?,
@@ -4953,6 +4970,7 @@ mod alternatives;
 mod bounded_selection;
 mod conjunction;
 mod integrity;
+mod mutation_retry;
 mod page_retention;
 mod record_batch;
 

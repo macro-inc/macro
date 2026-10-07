@@ -409,3 +409,16 @@ pub enum CrmError {
     #[error("invalid team id in entity access receipt")]
     InvalidTeamId,
 }
+
+/// Contact fields plus the owning team/company and the viewer's history.
+#[derive(Debug, Clone)]
+pub struct CrmContactForSoup {
+    /// The original team-owned contact; its identity is never merged.
+    pub contact: CrmContact,
+    /// Team owning the company/contact record.
+    pub team_id: uuid::Uuid,
+    /// The company's display name (team override, directory name, or domain).
+    pub company_name: String,
+    /// When this viewer last opened this particular contact record.
+    pub viewed_at: Option<DateTime<Utc>>,
+}

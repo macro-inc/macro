@@ -157,19 +157,16 @@ macro_rules! generate_file_types {
         impl FromStr for ContentType {
             type Err = ValueError<Self>;
             fn from_str(mime_type: &str) -> Result<Self, Self::Err> {
-                let cleaned = mime_type.to_ascii_lowercase();
-
-                // there can be multiple variants for the same mime type
-                // but it does not matter for the purposes of this function
-                #[expect(unreachable_patterns)]
-                match cleaned.as_str() {
-                    $(
-                        $mime_type => Ok(ContentType::$variant),
-                    )*
-                    _ => {
-                        Err(ValueError(cleaned, PhantomData))
+                // MIME types are case-insensitive, and some canonical ones are
+                // mixed case (`application/vnd.ms-excel.sheet.macroEnabled.12`).
+                // There can be multiple variants for the same mime type; the
+                // first one wins, which does not matter for this function.
+                $(
+                    if mime_type.eq_ignore_ascii_case($mime_type) {
+                        return Ok(ContentType::$variant);
                     }
-                }
+                )*
+                Err(ValueError(mime_type.to_ascii_lowercase(), PhantomData))
             }
 
         }
@@ -697,7 +694,14 @@ generate_file_types!(
     (Azw3, "azw3", "application/vnd.amazon.ebook", Document),
     (Djvu, "djvu", "image/vnd.djvu", Document),
     (Xls, "xls", "application/vnd.ms-excel", Document),
+    (
+        Xlsm,
+        "xlsm",
+        "application/vnd.ms-excel.sheet.macroEnabled.12",
+        Document
+    ),
     (Ppt, "ppt", "application/vnd.ms-powerpoint", Document),
+    (Doc, "doc", "application/msword", Document),
     (Pptx, "pptx", "application/xml", Document),
     (Xlsx, "xlsx", "application/xml", Document),
     // Database files
@@ -722,6 +726,12 @@ generate_file_types!(
     (Ps, "ps", "application/postscript", Vector),
     (Dxf, "dxf", "image/vnd.dxf", Vector),
     (Dwg, "dwg", "image/vnd.dwg", Vector),
+    (Fig, "fig", "application/x-figma", Vector),
+    // Photoshop documents (`.psb` is the large document format) are layered
+    // design files, not pictures: they belong with the design files, so
+    // nothing routes them to image viewers or decodes them as rasters.
+    (Psd, "psd", "image/vnd.adobe.photoshop", Vector),
+    (Psb, "psb", "image/vnd.adobe.photoshop", Vector),
     // 3D files
     (Stl, "stl", "model/stl", ThreeD),
     (Obj, "obj", "model/obj", ThreeD),

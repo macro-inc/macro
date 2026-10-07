@@ -1,4 +1,4 @@
-import type { IdentityBindingWire } from '../protocol';
+import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
@@ -116,6 +116,7 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<CacheEngineHydrationResult>;
+  inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
     uuid: string,
@@ -129,7 +130,8 @@ export interface CacheEngine {
     createdAtMs: number,
     leaseOwner: string,
     nowMs: number,
-    leaseExpiresAtMs: number
+    leaseExpiresAtMs: number,
+    clientMetadata?: Record<string, unknown>
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
@@ -152,7 +154,8 @@ export interface CacheEngine {
     leaseOwner: string,
     leaseGeneration: string,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure: boolean
   ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,

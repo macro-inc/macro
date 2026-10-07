@@ -32,8 +32,6 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   actions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
-  /** Collection-owned completion of a reminder occurrence. */
-  onToggleReminderDone?: () => Promise<void>;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;

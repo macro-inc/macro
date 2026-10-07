@@ -1,5 +1,5 @@
 import LinkIcon from '@phosphor/link.svg';
-import { Button } from '@ui';
+import { CopyButton } from '@ui';
 import { useCrmContext } from '../context/crm-context';
 
 export function CrmCopyLinkButton(props: {
@@ -10,17 +10,14 @@ export function CrmCopyLinkButton(props: {
   const copyLink = () => copyRecordLink({ type: props.type, id: props.id });
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      depth={2}
-      class="shrink-0 bg-surface"
+    <CopyButton
+      variant="ghost"
+      size="icon-md"
       label={`Copy ${props.type} link`}
       tooltip={`Copy ${props.type} link`}
-      onClick={() => void copyLink()}
+      onClick={copyLink}
     >
-      <LinkIcon class="size-3.5" />
-      Copy link
-    </Button>
+      <LinkIcon class="size-3.5!" />
+    </CopyButton>
   );
 }

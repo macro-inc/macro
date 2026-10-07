@@ -36,6 +36,7 @@ fn every_action_maps_to_stable_columns() {
             "call_ended",
             Some(json!({"call_id":"call-1", "duration_ms":480_000})),
         ),
+        (Action::Responded, "responded", None),
         (
             Action::TaskAdded(InitiativeTaskChange {
                 task_id: "task-1".into(),

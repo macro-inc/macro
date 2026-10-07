@@ -20,6 +20,7 @@ import {
 } from '@macro-inc/lexical-core';
 import CheckSquare from '@phosphor/check-square.svg';
 import CodeBlock from '@phosphor/code-block.svg';
+import FileText from '@phosphor/file-text.svg';
 import VideoIcon from '@phosphor/file-video.svg';
 import MathIcon from '@phosphor/function.svg';
 import TableIcon from '@phosphor/grid-four.svg';
@@ -51,7 +52,7 @@ import { NODE_TRANSFORM } from '../node-transform';
 import { TRY_INSERT_TABLE_PICKER_COMMAND } from '../tables';
 import { type Action, ActionCategory, type ActionContext } from './types';
 
-async function trackSlashTaskMention(
+async function trackSlashCreatedMention(
   context: ActionContext | undefined,
   documentId: string
 ) {
@@ -67,37 +68,65 @@ async function trackSlashTaskMention(
   return await trackMention(context.sourceDocumentId, 'document', documentId);
 }
 
-export const ACTIONS: Action[] = [
-  {
-    id: 'database-query',
-    name: 'Database',
-    keywords: [
-      'query',
-      'query-database',
-      'ask',
-      'database',
-      'live',
-      'answer',
-      'sql',
-    ],
-    category: ActionCategory.MEDIA,
-    icon: LightningIcon,
-    dependencies: [DatabaseQueryNode],
-    action: (editor) => {
-      if (!isFeatureEnabled(enableDatabases)) return;
-      queueMicrotask(() =>
-        editor.update(() => {
-          $insertNodes([
-            $createDatabaseQueryNode({
-              queryId: '',
-              prompt: '',
-              displayMode: 'scalar',
-            }),
-          ]);
-        })
-      );
+function openCreationComposer(
+  editor: LexicalEditor,
+  context: ActionContext | undefined,
+  kind: 'task' | 'document'
+) {
+  const splitManager = globalSplitManager();
+  if (!splitManager) return;
+  const awaitId = nanoid(21);
+  let placeholderInserted = false;
+  splitManager.createPopoverSplit({
+    content: {
+      type: 'component',
+      id: kind === 'task' ? 'task-compose' : 'document-compose',
+      params: {
+        onCreateStart: ({ title }: { title: string }) => {
+          const handled = editor.dispatchCommand(INSERT_AWAIT_NODE_COMMAND, {
+            awaitId,
+            text: `Creating ${title}`,
+          });
+          placeholderInserted = handled;
+        },
+        onCreateFailure: () => {
+          if (!placeholderInserted) return;
+          editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
+          placeholderInserted = false;
+        },
+        onSuccess: async (result: ComposeTaskSuccess) => {
+          const mentionUuid = await trackSlashCreatedMention(
+            context,
+            result.documentId
+          );
+          if (placeholderInserted) {
+            editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, {
+              awaitId,
+              $createReplacement: () =>
+                $createDocumentMentionNode({
+                  documentId: result.documentId,
+                  documentName: result.title,
+                  blockName: kind === 'task' ? 'task' : 'md',
+                  createdAt: Date.now(),
+                  mentionUuid,
+                }),
+            });
+            placeholderInserted = false;
+            return;
+          }
+          editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+            documentId: result.documentId,
+            documentName: result.title,
+            blockName: kind === 'task' ? 'task' : 'md',
+            mentionUuid,
+          });
+        },
+      },
     },
-  },
+  });
+}
+
+export const ACTIONS: Action[] = [
   {
     id: 'paragraph',
     name: 'Normal Text',
@@ -210,62 +239,17 @@ export const ACTIONS: Action[] = [
     keywords: ['task', 'todo', 'create'],
     category: ActionCategory.ELEMENT,
     icon: CheckSquare,
-    action: (editor: LexicalEditor, context?: ActionContext) => {
-      const splitManager = globalSplitManager();
-      if (!splitManager) return;
-      const awaitId = nanoid(21);
-      let placeholderInserted = false;
-      splitManager.createPopoverSplit({
-        content: {
-          type: 'component',
-          id: 'task-compose',
-          params: {
-            onCreateStart: ({ title }: { title: string }) => {
-              const handled = editor.dispatchCommand(
-                INSERT_AWAIT_NODE_COMMAND,
-                {
-                  awaitId,
-                  text: `Creating ${title}`,
-                }
-              );
-              placeholderInserted = handled;
-            },
-            onCreateFailure: () => {
-              if (!placeholderInserted) return;
-              editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, { awaitId });
-              placeholderInserted = false;
-            },
-            onSuccess: async (result: ComposeTaskSuccess) => {
-              const mentionUuid = await trackSlashTaskMention(
-                context,
-                result.documentId
-              );
-              if (placeholderInserted) {
-                editor.dispatchCommand(REPLACE_AWAIT_NODE_COMMAND, {
-                  awaitId,
-                  $createReplacement: () =>
-                    $createDocumentMentionNode({
-                      documentId: result.documentId,
-                      documentName: result.title,
-                      blockName: 'task',
-                      createdAt: Date.now(),
-                      mentionUuid,
-                    }),
-                });
-                placeholderInserted = false;
-                return;
-              }
-              editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-                documentId: result.documentId,
-                documentName: result.title,
-                blockName: 'task',
-                mentionUuid,
-              });
-            },
-          },
-        },
-      });
-    },
+    action: (editor, context) => openCreationComposer(editor, context, 'task'),
+    dependencies: [DocumentMentionNode, AwaitNode],
+  },
+  {
+    id: 'document',
+    name: 'Document',
+    keywords: ['document', 'doc', 'markdown', 'create'],
+    category: ActionCategory.ELEMENT,
+    icon: FileText,
+    action: (editor, context) =>
+      openCreationComposer(editor, context, 'document'),
     dependencies: [DocumentMentionNode, AwaitNode],
   },
   {
@@ -354,5 +338,35 @@ export const ACTIONS: Action[] = [
       editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
     },
     dependencies: [HorizontalRuleNode],
+  },
+  {
+    id: 'database-query',
+    name: 'Database',
+    keywords: [
+      'query',
+      'query-database',
+      'ask',
+      'database',
+      'live',
+      'answer',
+      'sql',
+    ],
+    category: ActionCategory.MEDIA,
+    icon: LightningIcon,
+    dependencies: [DatabaseQueryNode],
+    action: (editor) => {
+      if (!isFeatureEnabled(enableDatabases)) return;
+      queueMicrotask(() =>
+        editor.update(() => {
+          $insertNodes([
+            $createDatabaseQueryNode({
+              queryId: '',
+              prompt: '',
+              displayMode: 'scalar',
+            }),
+          ]);
+        })
+      );
+    },
   },
 ];

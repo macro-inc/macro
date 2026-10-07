@@ -26,6 +26,10 @@ function DesktopHomepageOpenSource(props: {
       scroller = scroller.parentElement;
     }
     onCleanup(animateDemoEntrance(section, scroller));
+    // The cream homepage preview carries its palette into the sample workspace.
+    if (document.documentElement.dataset.palette === 'cream') {
+      frame.src = '/demo?embedded=true&theme=cream';
+    }
     if (!props.showSidebarBreakdown) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const card = connection.querySelector<HTMLElement>(

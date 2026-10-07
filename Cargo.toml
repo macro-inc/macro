@@ -4,11 +4,11 @@ resolver = "2"
 members = [
   "crates/routines",
   "crates/activity",
-  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/agent_fold",
+  "crates/agent", "crates/agent_changes", "crates/agent_egress", "crates/folds/agent_fold", "crates/folds/claude_fold", "crates/folds/codex_fold",
   "crates/agent_harness",
   "crates/agent_preview",
   "crates/agent_inmem",
-  "crates/agent_runtime_protocol", "crates/agent_session",
+  "crates/agent_runtime_protocol", "crates/agent_session", "crates/agent_session_realtime",
   "crates/agent_trigger",
   "crates/ai_billing",
   "crates/ai_projections",
@@ -34,11 +34,14 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/jev",
   "crates/claude_cloud_agents",
   "crates/database_sql",
   "crates/databases",
   "crates/databases_sql",
   "crates/models_databases",
+  "crates/forms",
+  "crates/models_forms",
   "crates/embedding",
   "crates/image_generation",
   "crates/dictation",
@@ -92,8 +95,11 @@ members = [
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/onboarding",
+  "crates/ai_engine",
   "crates/docx_engine",
+  "crates/fig_engine",
   "crates/pptx_engine",
+  "crates/psd_engine",
   "crates/predicate_index",
   "crates/prompt",
   "crates/properties_service",
@@ -208,6 +214,7 @@ axum-extra = { version = "0.10" }
 backoff = { version = "0.4.0", features = ["tokio"] }
 base64 = "0.22.1"
 bebop = "3.1.3"
+brotli-decompressor = { version = "5.0.3", default-features = false, features = ["std"] }
 cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
 chrono = { version = "0.4.39", features = ["serde"] }
 chrono-tz = { version = "0.10.4", features = ["serde"] }
@@ -240,9 +247,11 @@ hex = "0.4.3"
 hmac = "0.12.1"
 encoding_rs = "0.8"
 http = "1"
+http-body = "1.0.1"
 http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
+image-webp = "0.2"
 indexmap = "2"
 infer = "0.19.0"
 indoc = "2"
@@ -264,6 +273,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
+loro = "1.16.2"
 lru = "0.16"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
@@ -321,6 +331,7 @@ rustix = { version = "1", default-features = false, features = ["process", "std"
 rootcause-tracing = "0.12.1"
 schemars = { version = "1.0.4", features = ["chrono04", "uuid1"] }
 semver = { version = "1", features = ["serde"] }
+ruzstd = { version = "0.8", default-features = false, features = ["std"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -426,6 +437,19 @@ ammonia = "4.1.4"
 html-escape = "0.2"
 subtle = "2.6.1"
 
+# cache-turso's storage tests load thousands of rows into the embedded SQL engine
+# to assert VM step budgets. Unoptimized, the engine made them the slowest tests
+# in the Rust suite (34 s for the crate); at opt-level 2 the crate's tests take
+# 2.6 s. The assertions count VM steps, which optimization does not change.
+[profile.dev.package.turso_core]
+opt-level = 2
+
+[profile.dev.package.turso_parser]
+opt-level = 2
+
+[profile.dev.package.turso_ext]
+opt-level = 2
+
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final
 # wasm-opt pass from discarding or rewriting these locations.
@@ -442,3 +466,20 @@ strip = "none"
 inherits = "release"
 lto = true
 opt-level = "s"
+
+# The fig engine's browser build (apps/web `build-fig-engine-wasm`): one
+# codegen unit and full LTO, so its rasterizing loops inline across crates.
+[profile.fig-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.psd-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
+[profile.ai-engine-wasm]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

@@ -1,13 +1,13 @@
 //! Admission belongs at AI boundaries, not at deterministic import claims.
 
 use super::{ImportServiceImpl, ImportSource, Result, RunStatus};
-use crate::domain::ports::ImportRepo;
+use crate::domain::ports::{ImportRepo, SlackWorkspaceSource};
 use ai_billing::{AiAdmissionError, AiAdmissionService};
 use ai_usage::AiFeature;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
-impl<R, S, C> ImportServiceImpl<R, S, C> {
+impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
     /// Attach configured shared admission. Production hosts must supply this;
     /// the source-compatible constructor defaults to disabled enforcement.
     pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
@@ -34,7 +34,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
     }
 }
 
-impl<R: ImportRepo, S, C> ImportServiceImpl<R, S, C> {
+impl<R: ImportRepo, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
     /// Preserve no-op retries and settings before checking new AI spending.
     /// Slack discovery is deterministic until its fallback actually starts.
     pub(super) async fn prepare_gather(

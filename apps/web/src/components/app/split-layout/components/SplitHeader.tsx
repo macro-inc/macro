@@ -91,7 +91,7 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
         id: entity.id,
       }))
       // Reminders open their referenced entity rather than a block of their own.
-      .with({ type: P.union('foreign', 'reminder') }, () => undefined)
+      .with({ type: 'foreign' }, () => undefined)
       // The full calendar opening path supplies the event range to focus.
       .with({ type: 'calendar_event' }, () => ({
         type: 'component',
@@ -114,7 +114,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
             'project',
             'call',
             'routine',
-            'database'
+            'database',
+            'form'
           ),
         },
         (entity) => ({ type: entity.type, id: entity.id })

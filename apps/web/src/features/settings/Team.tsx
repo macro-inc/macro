@@ -1,5 +1,6 @@
-import { PLAN_BY_TIER, PLANS } from '@app/features/paywall/plans';
+import { PLANS } from '@app/features/paywall/plans';
 import { SlackImport } from '@app/features/slack-import/slack-import';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -8,6 +9,8 @@ import {
   NO_LINK_SHARE,
 } from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
@@ -84,6 +87,7 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
+import { ConnectAction } from './integration-ui';
 import {
   IntegrationRow,
   SettingsCard,
@@ -165,35 +169,24 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-const maxPlan = PLAN_BY_TIER.max;
-const MAX_PLAN_OPTION: PlanOption = {
-  value: 'max',
-  label: maxPlan.name,
-  description: `$${maxPlan.price} · $${maxPlan.aiIncluded} of AI`,
-};
-const purchasablePlanOptions: PlanOption[] = [
-  ...PLANS.flatMap((plan) =>
+/** Every paid plan a seat can be moved to, cheapest first. */
+function planOptionsFor(aiUsageBilling: boolean): PlanOption[] {
+  return PLANS.flatMap((plan) =>
     plan.tier === 'free'
       ? []
       : [
           {
             value: plan.tier,
             label: plan.name,
-            description: `$${plan.price} · $${plan.aiIncluded} of AI`,
+            description: `$${plan.price}${aiUsageBilling && plan.tier === 'max' ? ' · 10× usage' : ''}`,
           },
         ]
-  ),
-];
-
-function planOptionsFor(currentPlan: PaidPlan): PlanOption[] {
-  return currentPlan === 'max'
-    ? [...purchasablePlanOptions, MAX_PLAN_OPTION]
-    : purchasablePlanOptions;
+  );
 }
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
- * schema carries `plan`, read it defensively; every seat starts on Premium.
+ * schema carries `plan`, read it defensively; every seat starts on Pro.
  */
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
@@ -205,7 +198,8 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
-  const options = () => planOptionsFor(props.value);
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const options = () => planOptionsFor(aiUsageBilling().enabled);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -442,7 +436,7 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
@@ -548,7 +542,7 @@ function InviteRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-2 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -604,7 +598,7 @@ function UserInviteRow(props: {
   isDeclining: boolean;
 }) {
   return (
-    <div class="flex items-center justify-between gap-3 px-6 py-3 bg-surface">
+    <div class="flex items-center justify-between gap-3 px-4 py-4">
       <div class="flex items-center gap-3 min-w-0 flex-1">
         <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
           <EnvelopeIcon class="size-4 text-accent" />
@@ -943,6 +937,7 @@ function TeamManagement(props: {
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
   const githubLink = useGithubLinkStatusQuery();
+  const { openSettings } = useSettingsState();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -1487,8 +1482,8 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
-          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
+            <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
             <IntegrationRow
               icon={<GithubIcon />}
               title="GitHub App"
@@ -1496,15 +1491,21 @@ function TeamManagement(props: {
             >
               {/* The install callback rejects users without a linked GitHub
                   account, so don't offer the flow until they've connected one
-                  in their personal settings. */}
+                  on the Integrations page. */}
               <Show
                 when={githubLink.data?.status === 'linked'}
                 fallback={
-                  <span class="text-xs text-ink-muted">
-                    {githubLink.isLoading
-                      ? 'Loading…'
-                      : 'Connect your GitHub account first'}
-                  </span>
+                  <Show
+                    when={!githubLink.isLoading}
+                    fallback={
+                      <span class="text-xs text-ink-muted">Loading…</span>
+                    }
+                  >
+                    <ConnectAction
+                      label="Connect your GitHub account first"
+                      onClick={() => openSettings('Connected')}
+                    />
+                  </Show>
                 }
               >
                 <a

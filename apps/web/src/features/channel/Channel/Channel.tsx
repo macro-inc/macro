@@ -698,7 +698,7 @@ export function Channel(props: ChannelProps) {
     >
       <DebugSuspense name="Channel.root">
         <deleteConfirmation.ConfirmationDialog />
-        <StaticMarkdownContext>
+        <StaticMarkdownContext host="channel">
           <SearchHighlightTermsProvider
             value={findBar.getSearchTermsForMessage}
           >

@@ -14,7 +14,8 @@ async fn insert_row(pool: &PgPool) -> (Uuid, Uuid) {
     let table_id = Uuid::now_v7();
     let row_id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO databases (id, name, owner_id) VALUES ($1, 'db', $2)"#,
+        r#"WITH storage AS (INSERT INTO databases (id) VALUES ($1) RETURNING id)
+           INSERT INTO database_entities (database_id, name, user_id) SELECT id, 'db', $2 FROM storage"#,
         database_id,
         OWNER,
     )
@@ -139,5 +140,111 @@ async fn a_row_belongs_to_the_database_of_its_table(pool: PgPool) {
             .await
             .unwrap(),
         None
+    );
+}
+
+/// A form over the table holding `row_id`, granting `MEMBER` `level` on it.
+async fn insert_form_over_row(pool: &PgPool, row_id: Uuid, level: &str, trashed: bool) {
+    let form_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"
+        INSERT INTO forms (id, name, owner_id, database_id, table_id, trashed_at)
+        SELECT $1, 'RSVP', $2, t.database_id, t.id, CASE WHEN $3 THEN now() END
+        FROM database_rows r
+        JOIN database_tables t ON t.id = r.table_id
+        WHERE r.id = $4
+        "#,
+        form_id,
+        OWNER,
+        trashed,
+        row_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'form', $2, 'user', ($3::text)::"AccessLevel")
+        "#,
+        form_id,
+        MEMBER,
+        level,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn a_form_editor_edits_the_rows_of_its_database(pool: PgPool) {
+    let (_, edited) = insert_row(&pool).await;
+    let (_, viewed) = insert_row(&pool).await;
+    let (_, trashed) = insert_row(&pool).await;
+    insert_form_over_row(&pool, edited, "edit", false).await;
+    insert_form_over_row(&pool, viewed, "view", false).await;
+    insert_form_over_row(&pool, trashed, "owner", true).await;
+
+    let member = source_ids(&pool, "member@team.com").await;
+    assert_eq!(
+        get_database_row_access(&pool, &edited, &member)
+            .await
+            .unwrap(),
+        Some(AccessLevel::Edit)
+    );
+    assert_eq!(
+        get_database_row_access(&pool, &viewed, &member)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        get_database_row_access(&pool, &trashed, &member)
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        get_database_rows_access(&pool, &[edited, viewed, trashed], &member)
+            .await
+            .unwrap(),
+        HashMap::from([(edited, AccessLevel::Edit)])
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("user_team"))
+)]
+async fn a_direct_database_grant_above_edit_wins_over_a_form_on_rows(pool: PgPool) {
+    let (database_id, row_id) = insert_row(&pool).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'database', $2, 'user', 'owner')
+        "#,
+        database_id,
+        MEMBER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    insert_form_over_row(&pool, row_id, "edit", false).await;
+
+    let member = source_ids(&pool, "member@team.com").await;
+    assert_eq!(
+        get_database_row_access(&pool, &row_id, &member)
+            .await
+            .unwrap(),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        get_database_rows_access(&pool, &[row_id], &member)
+            .await
+            .unwrap(),
+        HashMap::from([(row_id, AccessLevel::Owner)])
     );
 }

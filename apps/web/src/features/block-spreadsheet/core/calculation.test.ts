@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   createSpreadsheetCalculator,
   type SpreadsheetCalculator,
+  setCalculationClock,
 } from './calculation';
 import {
   SPREADSHEET_DEFAULT_STYLE,
@@ -195,6 +196,60 @@ describe('spreadsheet calculation with IronCalc', () => {
     expect(result.A8.display).toBe('0.00');
   });
 
+  it('reads results at Excel’s fifteen significant digits', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: '=979',
+        A2: '=9104+3',
+        A3: '=0.1+0.2',
+        A4: '=1/3',
+        A5: '=-9905',
+        A6: '=2^60',
+      })
+    );
+    expect(result.A1).toEqual({ number: 979, display: '979' });
+    expect(result.A2).toEqual({ number: 9107, display: '9107' });
+    expect(result.A3.number).toBe(0.3);
+    expect(result.A4.number).toBe(0.333333333333333);
+    expect(result.A5.number).toBe(-9905);
+    expect(result.A6.number).toBe(1.15292150460685e18);
+  });
+
+  it('counts with double negation over arrays, as Excel does', () => {
+    const result = calculator.calculate(
+      cells({
+        A1: 'x',
+        A2: 'y',
+        A3: 'x',
+        B1: '5',
+        B2: '2',
+        C1: '=SUMPRODUCT(--(A1:A3="x"))',
+        C2: '=SUMPRODUCT(--(A1:A3="x"),B1:B3)',
+        C3: '=SUMPRODUCT(--(--(A1:A3="x")))',
+        C4: '=SUMPRODUCT(- -(A1:A3="y"))',
+        // Subtraction, precedence and literals keep their meaning.
+        D1: '=B1--B2',
+        D2: '=2^--B2',
+        D3: '=B1/--B2',
+        D4: '=--"5"+1',
+        D5: '="--"&A1',
+        D6: '=--B1%',
+        D7: '=--A1',
+      })
+    );
+    expect(result.C1.number).toBe(2);
+    expect(result.C2.number).toBe(5);
+    expect(result.C3.number).toBe(2);
+    expect(result.C4.number).toBe(1);
+    expect(result.D1.number).toBe(7);
+    expect(result.D2.number).toBe(4);
+    expect(result.D3.number).toBe(2.5);
+    expect(result.D4.number).toBe(6);
+    expect(result.D5.display).toBe('--x');
+    expect(result.D6.number).toBe(0.05);
+    expect(result.D7.display).toBe('#VALUE!');
+  });
+
   it('shows typed dates and date arithmetic as dates without an explicit format', () => {
     const result = calculator.calculate({
       A1: { value: '9/28/2026' },
@@ -290,29 +345,61 @@ describe('spreadsheet calculation with IronCalc', () => {
     ).toBe('#SPILL!');
   });
 
-  it('makes unsupported volatile functions explicit and deterministic', () => {
-    const result = calculator.calculate(
-      cells({ A1: '=RAND()', A2: '=NOW()', A3: '=A1+1', A4: '="RAND()"' })
-    );
-    expect(result.A1.display).toBe('#N/A');
-    expect(result.A1.error).toContain('same calculation clock');
-    expect(result.A2.display).toBe('#N/A');
-    expect(result.A3.display).toBe('#N/A');
-    expect(result.A4).toEqual({ display: 'RAND()' });
+  it('reads TODAY and NOW from the calculation clock and repeats a seeded RAND', () => {
+    // 23 July 2026, 10:30 UTC: serial 46226.4375.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 10, 30),
+      timezone: 'UTC',
+      seed: 7,
+    });
+    try {
+      const sources = cells({
+        A1: '=TODAY()',
+        A2: '=NOW()',
+        A3: '=RAND()',
+        A4: '=RANDBETWEEN(1,6)',
+        A5: '=_xlfn.RAND()<1',
+        A6: '="RAND()"',
+        A7: '=TEXT(TODAY(),"yyyy-mm-dd")',
+      });
+      const result = calculator.calculate(sources);
+      expect(result.A1.number).toBe(46226);
+      expect(result.A2.number).toBeCloseTo(46226.4375, 9);
+      expect(result.A3.number).toBeGreaterThanOrEqual(0);
+      expect(result.A3.number).toBeLessThan(1);
+      expect([1, 2, 3, 4, 5, 6]).toContain(result.A4.number);
+      expect(result.A5.display).toBe('TRUE');
+      expect(result.A6).toEqual({ display: 'RAND()' });
+      expect(result.A7.display).toBe('2026-07-23');
+      setCalculationClock({
+        time: Date.UTC(2026, 6, 23, 10, 30),
+        timezone: 'UTC',
+        seed: 7,
+      });
+      expect(calculator.calculate(sources).A3.number).toBe(result.A3.number);
+    } finally {
+      setCalculationClock(undefined);
+    }
   });
 
-  it('also rejects volatile functions with Excel compatibility prefixes', () => {
-    const result = calculator.calculate(
-      cells({ A1: '=_xlfn.RAND()', A2: '=_xlfn._xlws.NOW()', A3: '=rand()' })
-    );
-    expect(result.A1.display).toBe('#N/A');
-    expect(result.A2.display).toBe('#N/A');
-    expect(result.A3.display).toBe('#N/A');
+  it('reads TODAY in the time zone of the clock', () => {
+    // 02:00 UTC on 23 July 2026 is still 22 July in New York.
+    setCalculationClock({
+      time: Date.UTC(2026, 6, 23, 2),
+      timezone: 'America/New_York',
+    });
+    try {
+      expect(calculator.calculate(cells({ A1: '=TODAY()' })).A1.number).toBe(
+        46225
+      );
+    } finally {
+      setCalculationClock(undefined);
+    }
   });
 
   it('ignores source addresses outside the supported grid', () => {
     const result = calculator.calculate(
-      cells({ A0: '1', A201: '2', AA1: '3' })
+      cells({ A0: '1', A201: '2', XFE1: '3' })
     );
     expect(result).toEqual({});
   });

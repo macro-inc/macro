@@ -1,23 +1,21 @@
+import { Login } from '@app/features/auth/auth';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
-import { Login } from '@app/features/auth/Login';
-import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
-import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
+import { MobileAuthWelcome } from '@app/features/mobile-onboarding/MobileAuthWelcome';
+import { MobileOnboarding } from '@app/features/mobile-onboarding/MobileOnboarding';
+import { Onboarding } from '@app/features/onboarding/onboarding';
 import {
   BookingReceiptPage,
   PublicBookingPage,
 } from '@app/features/scheduling/public-booking';
-import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
-import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
-import { LoadingBlock } from '@core/component/LoadingBlock';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { Navigate, useLocation } from '@solidjs/router';
 import { Button } from '@ui';
-import { onCleanup, onMount, Show } from 'solid-js';
+import { lazy, onCleanup, onMount } from 'solid-js';
 import {
   bookingReceiptRoute,
   EMAIL_SIGNUP_CALLBACK_PATH,
+  formRespondRoute,
   INBOX_LINK_CALLBACK_PATH,
   publicBookingRoute,
   taskSlugRoute,
@@ -42,53 +40,8 @@ export function WelcomePage() {
   return isNativeMobilePlatform() ? <MobileAuthWelcome /> : <Login />;
 }
 
-/** The retired /setup path forwards to the onboarding flow, query intact. */
-function SetupRedirect() {
-  const location = useLocation();
-  return <Navigate href={`/onboarding${location.search}`} />;
-}
-
-/**
- * The old split-screen /setup surface is retired; the onboarding flow lives at
- * /onboarding now. Flag off, /setup must go home — forwarding would land
- * flag-off web users on /login and native users on MobileOnboarding.
- */
-export function SetupPage() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/" />}>
-        <SetupRedirect />
-      </Show>
-    </Show>
-  );
-}
-
-/**
- * Web/desktop gate for /onboarding. Waits for PostHog to report flags before
- * bouncing: with the flag on but not yet loaded, a direct visit (or a reload
- * mid-flow) would otherwise get kicked to /login and lose its ?next.
- */
-function OnboardingRoute() {
-  const onboardingV4 = useOnboardingV4Flag();
-
-  return (
-    <Show when={!onboardingV4().loading} fallback={<LoadingBlock />}>
-      <Show when={onboardingV4().enabled} fallback={<Navigate href="/login" />}>
-        <OnboardingFlow />
-      </Show>
-    </Show>
-  );
-}
-
-/**
- * Flag-gated here, not just at the redirect: with the flag off a direct visit
- * must not touch the onboarding backend (reading it creates the flow's row
- * and starts gathers).
- */
 export function OnboardingPage() {
-  return isNativeMobilePlatform() ? <MobileOnboarding /> : <OnboardingRoute />;
+  return isNativeMobilePlatform() ? <MobileOnboarding /> : <Onboarding />;
 }
 
 export function LoginPopupSuccess() {
@@ -126,6 +79,17 @@ export function TaskSlugPage() {
 export function PublicBookingRoutePage() {
   const params = useRouteParams(publicBookingRoute);
   return <PublicBookingPage profile={params.profile} slug={params.slug} />;
+}
+
+/** Forms code loads only when someone opens a respond link. */
+const FormRespondPage = lazy(async () => ({
+  default: (await import('@app/features/block-form/form-respond-page'))
+    .FormRespondPage,
+}));
+
+export function FormRespondRoutePage() {
+  const params = useRouteParams(formRespondRoute);
+  return <FormRespondPage formId={params.formId} />;
 }
 
 export function BookingReceiptRoutePage() {

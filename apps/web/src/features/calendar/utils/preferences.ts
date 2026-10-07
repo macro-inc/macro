@@ -15,6 +15,8 @@ import { getDefaultCalendarTimeFormat } from './time-format';
 interface CalendarPreferences {
   periodView: CalendarPeriodView;
   hiddenSourceIds: string[];
+  sourceColors: Record<string, string | undefined>;
+  accountColors: Record<string, string | undefined>;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
@@ -25,6 +27,8 @@ export const useCalendarPreferences = createSharedRoot(() => {
   const defaultPreferences: CalendarPreferences = {
     periodView: getPreferredCalendarPeriodView(),
     hiddenSourceIds: [],
+    sourceColors: {},
+    accountColors: {},
     showWeekends: true,
     weekStartsOn: 0,
     timeFormat: getDefaultCalendarTimeFormat(),
