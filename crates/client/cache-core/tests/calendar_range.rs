@@ -8,7 +8,7 @@ use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
-use serde_json::json;
+use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 
 const HOUR_MS: i64 = 3_600_000;
@@ -660,5 +660,169 @@ fn invalid_requests_and_commits_are_rejected_before_storage() {
                 .is_err()
         );
         assert_eq!(engine.current_revision(), revision);
+    });
+}
+
+const OCCURRENCES: &str = r#"
+query CalendarOccurrences($input: CalendarRangeInput!) {
+  user {
+    id
+    calendarOccurrences(input: $input) {
+      nodes {
+        __typename
+        id
+        eventId
+        linkId
+        occurrenceKey
+        isCancelled
+        time {
+          __typename
+          ... on GraphqlTimedEventTime { startsAt endsAt timeZone }
+          ... on GraphqlAllDayEventTime { startDate endDate }
+        }
+        event { __typename id linkId title }
+      }
+      hasNextPage
+      endCursor
+      syncStatus
+      watermark { linkId seq }
+    }
+  }
+}
+"#;
+
+fn occurrence_node(
+    event: &str,
+    key: &str,
+    time: serde_json::Value,
+    cancelled: bool,
+) -> serde_json::Value {
+    json!({
+        "__typename": "GraphqlCalendarOccurrence",
+        "id": format!("{event}:{key}"),
+        "eventId": event,
+        "linkId": "l1",
+        "occurrenceKey": key,
+        "isCancelled": cancelled,
+        "time": time,
+        "event": { "__typename": "GraphqlCalendarEvent", "id": event, "linkId": "l1", "title": event },
+    })
+}
+
+fn occurrence_page(nodes: Vec<serde_json::Value>) -> serde_json::Value {
+    json!({
+        "user": {
+            "id": "u1",
+            "calendarOccurrences": {
+                "nodes": nodes,
+                "hasNextPage": false,
+                "endCursor": null,
+                "syncStatus": "READY",
+                "watermark": [{ "linkId": "l1", "seq": "4" }],
+            }
+        }
+    })
+}
+
+#[test]
+fn network_pages_are_indexed_through_normalization() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let Json::Object(variables) = json!({
+            "input": { "start": iso(MONDAY_MS), "end": iso(MONDAY_MS + 7 * DAY_MS) }
+        }) else {
+            unreachable!()
+        };
+        let standup = iso(MONDAY_MS + 9 * HOUR_MS);
+        let page = occurrence_page(vec![
+            occurrence_node(
+                "e1",
+                &standup,
+                json!({
+                    "__typename": "GraphqlTimedEventTime",
+                    "startsAt": standup,
+                    "endsAt": iso(MONDAY_MS + 10 * HOUR_MS),
+                    "timeZone": "America/New_York",
+                }),
+                false,
+            ),
+            occurrence_node(
+                "e2",
+                &date(MONDAY_DAY + 2),
+                json!({
+                    "__typename": "GraphqlAllDayEventTime",
+                    "startDate": date(MONDAY_DAY + 2),
+                    "endDate": date(MONDAY_DAY + 3),
+                }),
+                false,
+            ),
+            occurrence_node(
+                "e3",
+                &date(MONDAY_DAY + 4),
+                json!({
+                    "__typename": "GraphqlAllDayEventTime",
+                    "startDate": date(MONDAY_DAY + 4),
+                    "endDate": date(MONDAY_DAY + 5),
+                }),
+                true,
+            ),
+        ]);
+        engine
+            .write_query(None, OCCURRENCES, None, &variables, &page, Some("u1"))
+            .await
+            .unwrap();
+        let result = engine.calendar_range(&week()).await.unwrap();
+        assert_eq!(
+            result.occurrence_keys,
+            [
+                key(&format!("GraphqlCalendarOccurrence:e1:{standup}")),
+                key(&format!(
+                    "GraphqlCalendarOccurrence:e2:{}",
+                    date(MONDAY_DAY + 2)
+                )),
+            ]
+        );
+
+        // The delta rewrites e1 later in the week and commits its full set.
+        let moved = iso(MONDAY_MS + 2 * DAY_MS + 9 * HOUR_MS);
+        let moved_page = occurrence_page(vec![occurrence_node(
+            "e1",
+            &moved,
+            json!({
+                "__typename": "GraphqlTimedEventTime",
+                "startsAt": moved,
+                "endsAt": iso(MONDAY_MS + 2 * DAY_MS + 10 * HOUR_MS),
+                "timeZone": null,
+            }),
+            false,
+        )]);
+        engine
+            .write_query(None, OCCURRENCES, None, &variables, &moved_page, Some("u1"))
+            .await
+            .unwrap();
+        let commit = engine
+            .calendar_commit(&CalendarCommit {
+                replaced_events: vec![CalendarReplacedEvent {
+                    event_key: key("GraphqlCalendarEvent:e1"),
+                    occurrence_keys: vec![key(&format!("GraphqlCalendarOccurrence:e1:{moved}"))],
+                }],
+                ..CalendarCommit::default()
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            commit.changed.into_iter().collect::<Vec<_>>(),
+            [key(&format!("GraphqlCalendarOccurrence:e1:{standup}"))]
+        );
+        let mut only_e1 = week();
+        only_e1.event_key = Some(key("GraphqlCalendarEvent:e1"));
+        assert_eq!(
+            engine
+                .calendar_range(&only_e1)
+                .await
+                .unwrap()
+                .occurrence_keys,
+            [key(&format!("GraphqlCalendarOccurrence:e1:{moved}"))]
+        );
     });
 }
