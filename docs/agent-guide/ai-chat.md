@@ -317,21 +317,25 @@ instructions or a fixed model (database chat, booking-link setup, connector impo
 still open a bare session directly, as does every action while the Agents workspace
 flag is off. These actions do not create legacy cognition chats.
 
-## Dispatching coding agents from chat
+## Starting agent sessions from chat
 
-Ask a chat agent to delegate a coding task, including the repository and branch
-when relevant. The agent uses `ListCodingAgents` to discover your available coding
-agents, chooses one using its description and runtime defaults, and calls
-`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
-The available-agents tool row expands to show the returned names and descriptions.
+Ask an agent to delegate a task to a named agent such as Grungus, to Cursor, or
+to an in-memory session with a model. It uses `StartAgentSession` for all three.
+`ListAgents` supplies saved agents' names, bot IDs, instructions, and settings.
+The launch accepts an exact name, mention handle, or ID; ambiguous names require choosing an ID.
+Omitting the agent starts an in-memory session. Saved personas keep their system
+instructions and connected apps; a supplied model overrides the persona's default.
+For Cursor, pass the repository URL and branch as launch options, not only in the
+prompt. The child receives the task prompt, not the parent's conversation.
 
-A successful dispatch starts a separate coding session and displays its live
-Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
-the dispatched turn, including progress, output, permission requests, and a linked
-pull request. **Open session** opens the coding conversation in another split so
-you can follow up there. Reloading the chat restores the same session card.
-Failed dispatches do not show a successful session card. If no coding agents are
-available, configure one in Agents before retrying.
+After its initial prompt is accepted, the new session appears as a live Magic
+Chip outside collapsed tool groups. The chip follows the initial turn, including
+progress, output, permission requests, and a linked pull request. **Open session**
+opens the conversation in another split for follow-up. Reloading preserves the
+same session card. Starting a session does not mean its task has completed.
+If a launch reports uncertain delivery, do not automatically repeat it: the
+session may already be running. Historical Subagent and coding-dispatch results
+remain readable in existing conversations.
 
 Ask a chat agent what your coding agents need from you and it calls
 `ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
@@ -2369,7 +2373,7 @@ legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
 `ContentSearch` to find sessions. `ListAgents` identifies available agents and
-`CreateAgentSession` starts a conversation with the chosen agent. Use
+`StartAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain

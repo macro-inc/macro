@@ -44,6 +44,12 @@ pub struct PrepareRoutineSession {
     /// schedulers omit it along with `source`.
     #[serde(default)]
     pub visibility: SessionVisibility,
+    /// Optional repository selection, validated by the interactive launch path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_url: Option<String>,
+    /// Optional starting branch for the selected repository.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repo_branch: Option<String>,
 }
 
 /// A verified, persisted session ready for its first prompt.
@@ -144,6 +150,9 @@ pub enum RoutineSessionError {
     /// Non-v7 execution ids, empty prompt, or blank supplied model.
     #[error("invalid routine session command")]
     InvalidCommand,
+    /// Repository or branch is invalid or unsupported by the selected runtime.
+    #[error("invalid or unsupported repository/branch selection for this agent")]
+    InvalidRepositorySelection,
     /// Persona was deleted or is not an executable agent.
     #[error("selected agent is unavailable")]
     PersonaUnavailable,

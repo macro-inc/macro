@@ -834,37 +834,6 @@ export type BookingEventTypeId = string;
  * The supported meaning of qualification at the booking step.
  */
 export type Qualification = 'advisory' | 'required';
-export type SessionAwareSearchResult =
-  | (DocumentSearchResponseItemWithMetadata & {
-      type: 'document';
-    })
-  | (ChatSearchResponseItemWithMetadata & {
-      type: 'chat';
-    })
-  | (EmailSearchResponseItemWithMetadata & {
-      type: 'email';
-    })
-  | (ChannelMessageSearchResponseItem & {
-      type: 'channelMessage';
-    })
-  | (ChannelNameSearchResponseItem & {
-      type: 'channel';
-    })
-  | (ProjectSearchResponseItemWithMetadata & {
-      type: 'project';
-    })
-  | (CallRecordSearchResponseItemWithMetadata & {
-      type: 'call';
-    })
-  | (CrmCompanySearchResponseItem & {
-      type: 'company';
-    })
-  | (CalendarEventSearchResponseItemWithMetadata & {
-      type: 'calendarEvent';
-    })
-  | (AgentSessionSearchResponseItem & {
-      type: 'agentSession';
-    });
 /**
  * Outcome describes actual completion, including uncertain interrupted work.
  */
@@ -4956,6 +4925,37 @@ export type ReadThreadReadContent =
       formatted_preview: string;
       type: 'itemPreviews';
     };
+export type SessionAwareSearchResult =
+  | (DocumentSearchResponseItemWithMetadata & {
+      type: 'document';
+    })
+  | (ChatSearchResponseItemWithMetadata & {
+      type: 'chat';
+    })
+  | (EmailSearchResponseItemWithMetadata & {
+      type: 'email';
+    })
+  | (ChannelMessageSearchResponseItem & {
+      type: 'channelMessage';
+    })
+  | (ChannelNameSearchResponseItem & {
+      type: 'channel';
+    })
+  | (ProjectSearchResponseItemWithMetadata & {
+      type: 'project';
+    })
+  | (CallRecordSearchResponseItemWithMetadata & {
+      type: 'call';
+    })
+  | (CrmCompanySearchResponseItem & {
+      type: 'company';
+    })
+  | (CalendarEventSearchResponseItemWithMetadata & {
+      type: 'calendarEvent';
+    })
+  | (AgentSessionSearchResponseItem & {
+      type: 'agentSession';
+    });
 
 /**
  * Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
@@ -6976,36 +6976,6 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
- * Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
- */
-export interface CreateAgentSession {
-  /**
-   * Agent persona botId from ListAgents.
-   */
-  agentId: string;
-  /**
-   * Complete initial task and relevant context.
-   */
-  prompt: string;
-}
-/**
- * A newly opened session whose first prompt has been accepted.
- */
-export interface DispatchedCodingAgent {
-  /**
-   * Session to show in a magic chip.
-   */
-  agent_session_id: string;
-  /**
-   * Persona that owns the session's identity.
-   */
-  agent_id: string;
-  /**
-   * Persona display name.
-   */
-  agent_name: string;
-}
-/**
  * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location, Macro call, or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. After execution, share the saved URL with an <m-booking-link-mention> chip (profileId/slug/url from the result), not a bare URL. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar. For video, set macroCall (preferred) or googleMeet, never both. Booking a macroCall link creates the call and attaches its join link to the invitation.
  */
 export interface CreateBookingLink {
@@ -7709,66 +7679,17 @@ export interface BookingTarget {
   eventTypeId: BookingEventTypeId;
 }
 /**
- * ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
- * timestamps in opensearch as they would require us to update each chat message record for the chat
- * every time the chat updates (specifically for updated_at and viewed_at)
+ * Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. Retired in favor of StartAgentSession.
  */
-export interface ChatSearchResponseItemWithMetadata {
+export interface CreateAgentSession {
   /**
-   * Metadata from the database. None if the chat doesn't exist in the database.
+   * Agent persona botId from ListAgents.
    */
-  metadata?: ChatMetadata | null;
+  agentId: string;
   /**
-   * Standardized fields that all item types will share.
-   * These field names are being aligned across all item types
-   * for consistency in our data model.
+   * Complete initial task and relevant context.
    */
-  id: string;
-  name: string;
-  owner_id: string;
-  /**
-   * The id of the chat
-   */
-  chat_id: string;
-  /**
-   * The id of the creator of the chat
-   */
-  user_id: string;
-  /**
-   * The search results for the chat
-   * This may be empty if the search result match was on the chat title only
-   */
-  chat_search_results: ChatMessageSearchResult[];
-}
-/**
- * Metadata for a chat fetched from the database
- */
-export interface ChatMetadata {
-  created_at: string;
-  updated_at: string;
-  viewed_at?: string | null;
-  project_id?: string | null;
-  deleted_at?: string | null;
-}
-/**
- * A chat match for a given message id
- */
-export interface ChatMessageSearchResult {
-  /**
-   * The chat message id for the chat
-   * This is only present if the search match was on the chat message content
-   */
-  chat_message_id?: string | null;
-  /**
-   * The role of the chat message
-   * This is only present if the search match was on the chat message content
-   */
-  role?: string | null;
-  highlight: SearchHighlight;
-  /**
-   * The score of the result
-   */
-  score?: number | null;
+  prompt: string;
 }
 /**
  * Every mutation reports its result; no execution history is retained.
@@ -8936,19 +8857,6 @@ export interface ConnectorTool {
    * What the action supports.
    */
   description: string;
-}
-/**
- * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
- */
-export interface DispatchCodingAgent {
-  /**
-   * The id of the best-suited coding agent from ListCodingAgents
-   */
-  agent_id: string;
-  /**
-   * Self-contained coding task, including the repository, relevant context, requirements, and desired outcome
-   */
-  prompt: string;
 }
 /**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
@@ -11778,48 +11686,6 @@ export interface CalendarCapabilities {
    * Whether the organizer can set what guests may do.
    */
   guestPolicy: boolean;
-}
-/**
- * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
- */
-export type ListCodingAgents = {};
-/**
- * Available coding personas and their task-selection context.
- */
-export interface ListCodingAgentsResponse {
-  /**
-   * Personas the user can currently dispatch.
-   */
-  agents: CodingAgent[];
-}
-/**
- * Information used to choose a coding persona for a task.
- */
-export interface CodingAgent {
-  /**
-   * Persona id to pass to dispatch.
-   */
-  id: string;
-  /**
-   * User-facing persona name.
-   */
-  name: string;
-  /**
-   * What the persona is intended to do.
-   */
-  description?: string | null;
-  /**
-   * Saved guidance describing the persona's repositories and specialties.
-   */
-  instructions: string;
-  /**
-   * Runtime configured for the persona.
-   */
-  harness: string;
-  /**
-   * Persona's configured default model, absent when the provider chooses it.
-   */
-  model?: string | null;
 }
 /**
  * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them.
@@ -15640,16 +15506,46 @@ export interface ShareWithChannelResponse {
   summary: string;
 }
 /**
- * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
+ * Start an agent session with a self-contained task. Select a saved agent by its exact name, mention handle, or bot id (use ListAgents for configuration), or use cursor for the Cursor integration. Omit agent to start an in-memory session with an optional model. Saved agents retain their instructions and connected apps. Returns a live session reference once the first prompt is accepted, not the completed task. Do not automatically retry an uncertain launch.
  */
-export interface Subagent {
+export interface StartAgentSession {
   /**
-   * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
+   * Exact agent name, mention handle, or bot UUID. Omit for an in-memory model session.
    */
-  task: string;
+  agent?: string | null;
+  /**
+   * Complete task and context; the child does not inherit the conversation.
+   */
+  prompt: string;
+  /**
+   * Optional model override; otherwise use the persona's configured model.
+   */
+  model?: string | null;
+  /**
+   * Explicit GitHub repository URL for Cursor; task text does not select a repository.
+   */
+  repo_url?: string | null;
+  /**
+   * Starting branch; requires repo_url and a runtime that supports branch selection.
+   */
+  repo_branch?: string | null;
 }
-export interface SubagentResponse {
-  result: string;
+/**
+ * A newly opened session whose first prompt has been accepted.
+ */
+export interface DispatchedCodingAgent {
+  /**
+   * Session to show in a magic chip.
+   */
+  agent_session_id: string;
+  /**
+   * Persona that owns the session's identity.
+   */
+  agent_id: string;
+  /**
+   * Persona display name.
+   */
+  agent_name: string;
 }
 /**
  * Use a text editor in a sandboxed environment using Claude's built-in code execution tool.
@@ -16499,4 +16395,133 @@ export interface MessageWithAttachments {
   content: string;
   date: string;
   attachmentIds: string[];
+}
+/**
+ * Metadata for a chat fetched from the database
+ */
+export interface ChatMetadata {
+  created_at: string;
+  updated_at: string;
+  viewed_at?: string | null;
+  project_id?: string | null;
+  deleted_at?: string | null;
+}
+/**
+ * A chat match for a given message id
+ */
+export interface ChatMessageSearchResult {
+  /**
+   * The chat message id for the chat
+   * This is only present if the search match was on the chat message content
+   */
+  chat_message_id?: string | null;
+  /**
+   * The role of the chat message
+   * This is only present if the search match was on the chat message content
+   */
+  role?: string | null;
+  highlight: SearchHighlight;
+  /**
+   * The score of the result
+   */
+  score?: number | null;
+}
+/**
+ * ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
+ * timestamps in opensearch as they would require us to update each chat message record for the chat
+ * every time the chat updates (specifically for updated_at and viewed_at)
+ */
+export interface ChatSearchResponseItemWithMetadata {
+  /**
+   * Metadata from the database. None if the chat doesn't exist in the database.
+   */
+  metadata?: ChatMetadata | null;
+  /**
+   * Standardized fields that all item types will share.
+   * These field names are being aligned across all item types
+   * for consistency in our data model.
+   */
+  id: string;
+  name: string;
+  owner_id: string;
+  /**
+   * The id of the chat
+   */
+  chat_id: string;
+  /**
+   * The id of the creator of the chat
+   */
+  user_id: string;
+  /**
+   * The search results for the chat
+   * This may be empty if the search result match was on the chat title only
+   */
+  chat_search_results: ChatMessageSearchResult[];
+}
+/**
+ * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
+ */
+export interface Subagent {
+  /**
+   * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
+   */
+  task: string;
+}
+export interface SubagentResponse {
+  result: string;
+}
+/**
+ * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.
+ */
+export interface DispatchCodingAgent {
+  /**
+   * The id of the best-suited coding agent from ListCodingAgents
+   */
+  agent_id: string;
+  /**
+   * Self-contained coding task, including the repository, relevant context, requirements, and desired outcome
+   */
+  prompt: string;
+}
+/**
+ * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
+ */
+export type ListCodingAgents = {};
+/**
+ * Available coding personas and their task-selection context.
+ */
+export interface ListCodingAgentsResponse {
+  /**
+   * Personas the user can currently dispatch.
+   */
+  agents: CodingAgent[];
+}
+/**
+ * Information used to choose a persona for a task.
+ */
+export interface CodingAgent {
+  /**
+   * Persona id to pass to dispatch.
+   */
+  id: string;
+  /**
+   * User-facing persona name.
+   */
+  name: string;
+  /**
+   * What the persona is intended to do.
+   */
+  description?: string | null;
+  /**
+   * Saved guidance describing the persona's repositories and specialties.
+   */
+  instructions: string;
+  /**
+   * Runtime configured for the persona.
+   */
+  harness: string;
+  /**
+   * Persona's configured default model, absent when the provider chooses it.
+   */
+  model?: string | null;
 }

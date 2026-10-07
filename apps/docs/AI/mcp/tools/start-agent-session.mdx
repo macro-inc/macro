@@ -1,0 +1,19 @@
+---
+title: StartAgentSession
+description: >-
+  Start an agent session with a self-contained task.
+---
+
+# StartAgentSession
+
+Start an agent session with a self-contained task. Select a saved agent by its exact name, mention handle, or bot id (use ListAgents for configuration), or use cursor for the Cursor integration. Omit agent to start an in-memory session with an optional model. Saved agents retain their instructions and connected apps. Returns a live session reference once the first prompt is accepted, not the completed task. Do not automatically retry an uncertain launch.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `agent` | string | No | Exact agent name, mention handle, or bot UUID. Omit for an in-memory model session. |
+| `prompt` | string | Yes | Complete task and context; the child does not inherit the conversation. |
+| `model` | string | No | Optional model override; otherwise use the persona's configured model. |
+| `repo_url` | string | No | Explicit GitHub repository URL for Cursor; task text does not select a repository. |
+| `repo_branch` | string | No | Starting branch; requires repo_url and a runtime that supports branch selection. |

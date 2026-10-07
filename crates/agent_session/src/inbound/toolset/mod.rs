@@ -8,8 +8,8 @@ mod set_pull_request;
 mod task_pull_requests;
 
 pub use coding_agents::{
-    CodingAgentToolContext, DispatchCodingAgent, ListCodingAgents, ListCodingAgentsResponse,
-    coding_agent_toolset,
+    CodingAgentToolContext, CreateAgentSession, DispatchCodingAgent, ListCodingAgents,
+    ListCodingAgentsResponse, StartAgentSession, coding_agent_toolset,
 };
 pub use context::SessionToolContext;
 pub use link_task::LinkTask;

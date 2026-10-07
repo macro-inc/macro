@@ -38,6 +38,7 @@ export type PartSegment = {
  * and stand on their own, like a paragraph of the reply.
  */
 const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
+  'StartAgentSession',
   'DispatchCodingAgent',
   'DisplayResults',
   'GenerateImage',

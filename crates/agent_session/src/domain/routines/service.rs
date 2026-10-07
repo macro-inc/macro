@@ -6,11 +6,11 @@ use model_owner::Owner;
 use super::status::action_status;
 use super::{ConnectedApps, RoutineSessions, models::*};
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{AgentMcpServer, AgentMcpServers, AgentSession, AgentSessionId};
+use crate::domain::model::{AgentSession, AgentSessionId};
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenManagedSession, RequestedExternalSession,
-    SelectedPersona, SessionOpener, persona_for_owner,
+    ExternalSessionRequester, ManagedPersonaError, SelectedPersona, SessionOpener,
+    persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 
@@ -165,44 +165,41 @@ where
         command: PrepareRoutineSession,
     ) -> Result<PreparedRoutineSession, RoutineSessionError> {
         validate_session_id(command.session_id)?;
-        let persona = self.select(&command.selection).await?;
         let selection = command.selection;
+        self.select(&selection).await?;
         let owner = Owner::User(selection.owner.clone());
-        let session = match persona {
-            SelectedPersona::Managed(mut profile) => {
-                if let Some(managed) = &mut profile.profile {
-                    add_routine_apps(&mut managed.mcp_servers, &selection.mcp_servers);
+        let session = crate::domain::launch::launch_session(
+            &self.bots,
+            &self.opener,
+            &self.external,
+            crate::domain::launch::LaunchSession {
+                id: Some(command.session_id),
+                owner: owner.clone(),
+                bot_id: Some(selection.bot_id),
+                prompt: None,
+                instructions: None,
+                model: selection.model.clone(),
+                repo_url: command.repo_url,
+                repo_branch: command.repo_branch,
+                source: command.source,
+                visibility: command.visibility,
+                required_apps: selection.mcp_servers.clone(),
+            },
+        )
+        .await
+        .map_err(|error| match error {
+            crate::domain::launch::LaunchSessionError::Persona(error) => match error {
+                ManagedPersonaError::Forbidden | ManagedPersonaError::OwnerNotUser(_) => {
+                    RoutineSessionError::Forbidden
                 }
-                self.opener
-                    .open_managed_session(OpenManagedSession {
-                        id: Some(command.session_id),
-                        repo_url: None,
-                        repo_branch: None,
-                        owner: owner.clone(),
-                        prompt: None,
-                        profile: Some(profile),
-                        instructions: None,
-                        model: selection.model.clone(),
-                        source: command.source,
-                        visibility: command.visibility,
-                    })
-                    .await
+                ManagedPersonaError::Lookup(error) => session_error(error),
+                _ => RoutineSessionError::PersonaUnavailable,
+            },
+            crate::domain::launch::LaunchSessionError::ExternalPrompt => {
+                RoutineSessionError::InvalidCommand
             }
-            SelectedPersona::External { bot_id } => {
-                self.external
-                    .request(RequestedExternalSession {
-                        session_id: command.session_id,
-                        bot_id,
-                        owner: selection.owner,
-                        repo_url: None,
-                        model: selection.model.clone(),
-                        source: command.source,
-                        visibility: command.visibility,
-                    })
-                    .await
-            }
-        }
-        .map_err(session_error)?;
+            crate::domain::launch::LaunchSessionError::Session(error) => session_error(error),
+        })?;
         if session.id != command.session_id
             || session.bot_id != selection.bot_id
             || session.owner_id != owner
@@ -313,19 +310,6 @@ where
     }
 }
 
-/// An agent limited to selected apps also gets the routine's. One that uses
-/// every app its runner connected already has them: they are required to be
-/// connected.
-fn add_routine_apps(servers: &mut AgentMcpServers, required: &[AgentMcpServer]) {
-    if let AgentMcpServers::Selected { servers } = servers {
-        for app in required {
-            if !servers.iter().any(|server| server.app_slug == app.app_slug) {
-                servers.push(app.clone());
-            }
-        }
-    }
-}
-
 fn validate_session_id(id: AgentSessionId) -> Result<(), RoutineSessionError> {
     if id.as_uuid().get_version_num() != 7 {
         return Err(RoutineSessionError::InvalidCommand);
@@ -348,6 +332,9 @@ fn session_error(error: AgentSessionError) -> RoutineSessionError {
         AgentSessionError::Forbidden
         | AgentSessionError::UnknownOwner
         | AgentSessionError::OwnerNotUser(_) => RoutineSessionError::Forbidden,
+        AgentSessionError::InvalidRepositorySelection(_) => {
+            RoutineSessionError::InvalidRepositorySelection
+        }
         AgentSessionError::SessionIdTaken(_) => RoutineSessionError::Conflict,
         AgentSessionError::RuntimeUnavailable(_) | AgentSessionError::Disconnected(_) => {
             RoutineSessionError::RuntimeUnavailable

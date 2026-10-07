@@ -55,6 +55,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DescribeDatabase: (whose) => `read ${whose} databases`,
   DiscoverConnectors: null,
   DescribeCodeTools: null,
+  StartAgentSession: (whose) => `start an agent session with ${whose} access`,
   DispatchCodingAgent: (whose) => `start a coding agent with ${whose} access`,
   DisplayResults: (whose) => `show results from ${whose} workspace`,
   DuplicateItem: (whose) => `duplicate items in ${whose} workspace`,
