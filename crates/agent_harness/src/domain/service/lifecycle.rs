@@ -95,8 +95,6 @@ where
         id: AgentSessionId,
         expected_owner: &Owner,
     ) -> agent_session::domain::error::Result<OwnedPurgeOutcome> {
-        // Missing counts as purged: a failed teardown keeps the row, so a
-        // retry still finds whatever is left to release.
         let Some(session) = self.inner.sessions.find_session(id).await? else {
             return Ok(OwnedPurgeOutcome::Purged);
         };

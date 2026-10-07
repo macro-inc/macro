@@ -50,7 +50,6 @@ where
             &project_id,
             EntityType::Project,
         );
-        // The tree purge only removes a trashed tree.
         if project.deleted_at.is_none() {
             self.soft_delete_project(receipt.clone(), project.clone(), String::new())
                 .await

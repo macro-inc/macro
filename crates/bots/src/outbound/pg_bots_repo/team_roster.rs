@@ -13,8 +13,6 @@ use crate::domain::ports::TeamBotRoster;
 impl TeamBotRoster for PgBotsRepo {
     #[tracing::instrument(skip(self), err)]
     async fn team_bot_ids(&self, team_id: Uuid) -> Result<Vec<BotId>, Report> {
-        // Intentionally no deleted_at filter: a soft-deleted bot still owns
-        // what it created, and this row is the only link back to the team.
         let ids = sqlx::query_scalar!(
             r#"
             SELECT id
