@@ -30,8 +30,6 @@ export interface MessageTimelineQuery {
   direction?: MessageDirection;
   /** Restrict roots to this set, for selected source threads. */
   ids?: string[];
-  /** Merge the parent's selected system activity into the same bounded page. */
-  include_activity?: boolean;
   /** Include whole-thread tombstones when reconciling persisted document marks. */
   include_deleted_threads?: boolean;
   /**

@@ -795,8 +795,8 @@ describe('live timeline activity', () => {
       ],
     });
 
-    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
-    handleTimelineActivity({ channel_id: parent.id, activities: [activity] });
+    handleTimelineActivity({ parent, activities: [activity] });
+    handleTimelineActivity({ parent, activities: [activity] });
 
     expect(keys(latest)).toEqual(['newer', 'activity:renamed', 'older']);
     expect(keys(history)).toEqual(['older']);

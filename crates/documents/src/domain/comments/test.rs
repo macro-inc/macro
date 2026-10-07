@@ -88,7 +88,6 @@ fn markdown(mark: u128, snapshot: Option<&str>) -> Option<ThreadAnchor> {
 fn page(items: Vec<MessageListItem>, next_cursor: Option<MessageCursor>) -> MessagePage {
     MessagePage {
         items,
-        activity: vec![],
         next_cursor,
         previous_cursor: None,
     }

@@ -211,7 +211,7 @@ async function fetchMessageTimelinePage(
   pageParam: MessageTimelinePageParam | null,
   loadAroundMessageId: string | null
 ): Promise<MessageTimelinePage> {
-  const page = await entityMessagesClient.list(parent, {
+  const page = await entityMessagesClient.timeline(parent, {
     limit: pageParam ? 100 : 50,
     cursor: pageParam?.next_cursor ?? pageParam?.previous_cursor,
     direction: pageParam?.previous_cursor ? 'newer' : 'older',
@@ -219,7 +219,6 @@ async function fetchMessageTimelinePage(
     // Annotation layout recovers missed deletions from the same document
     // roots used by Discussion, whose projection hides deleted threads.
     include_deleted_threads: parent.type === 'document',
-    include_activity: parent.type === 'channel',
   });
   return normalizeMessageTimelinePageSenders(page);
 }
@@ -266,12 +265,11 @@ export function messageTimelineQueryOptions(
       }
       try {
         const delta = normalizeMessageTimelinePageSenders(
-          await entityMessagesClient.list(parent, {
+          await entityMessagesClient.timeline(parent, {
             cursor: watermark.after,
             direction: 'newer',
             limit: 50,
             include_deleted_threads: parent.type === 'document',
-            include_activity: parent.type === 'channel',
           })
         );
         if (delta.previous_cursor) {
@@ -370,7 +368,7 @@ export function useMessageTimelineByIdsQuery(
           ids: resolvedMessageIds,
           limit: 100,
         });
-        return timelineMessages(page).map(normalizeChannelMessageSender);
+        return page.items.map(normalizeChannelMessageSender);
       },
       enabled: resolvedMessageIds.length > 0,
       staleTime: Infinity,

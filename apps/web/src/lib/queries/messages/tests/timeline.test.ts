@@ -16,7 +16,7 @@ import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  list: vi.fn(),
+  timeline: vi.fn(),
   track: vi.fn(),
 }));
 
@@ -29,7 +29,7 @@ vi.mock('../../client', () => ({
 }));
 
 vi.mock('@service-storage/messages', () => ({
-  entityMessagesClient: { list: mocks.list },
+  entityMessagesClient: { timeline: mocks.timeline },
 }));
 
 vi.mock('@app/lib/analytics', () => ({
@@ -147,7 +147,6 @@ const fullSelection = {
   direction: 'older',
   around: null,
   include_deleted_threads: false,
-  include_activity: true,
 };
 
 function resultError(code: string) {
@@ -156,7 +155,7 @@ function resultError(code: string) {
 
 beforeEach(() => {
   testQueryClient = new QueryClient();
-  mocks.list.mockReset();
+  mocks.timeline.mockReset();
   mocks.track.mockReset();
 });
 
@@ -168,7 +167,7 @@ describe('messageTimelineQueryOptions', () => {
   it.each(['NOT_FOUND', 'GONE'] as const)(
     'throws missing load-around messages without retrying them for %s',
     async (code) => {
-      mocks.list.mockRejectedValueOnce(resultError(code));
+      mocks.timeline.mockRejectedValueOnce(resultError(code));
 
       const options = messageTimelineQueryOptions(parent, 'message-missing');
 
@@ -186,8 +185,8 @@ describe('messageTimelineQueryOptions', () => {
       expect(error).toBeInstanceOf(ThrownResultError);
       expect(isMissingMessageError(error)).toBe(true);
       expect(options.retry(0, error)).toBe(false);
-      expect(mocks.list).toHaveBeenCalledTimes(1);
-      expect(mocks.list).toHaveBeenCalledWith(parent, {
+      expect(mocks.timeline).toHaveBeenCalledTimes(1);
+      expect(mocks.timeline).toHaveBeenCalledWith(parent, {
         ...fullSelection,
         around: 'message-missing',
       });
@@ -203,14 +202,14 @@ describe('messageTimelineQueryOptions', () => {
 
   it('first load without cache uses the full timeline', async () => {
     const page = fullPage();
-    mocks.list.mockResolvedValueOnce(page);
+    mocks.timeline.mockResolvedValueOnce(page);
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
     expect(ids(result)).toEqual(['full-1']);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
@@ -220,16 +219,15 @@ describe('messageTimelineQueryOptions', () => {
   });
 
   it('document timelines include whole-thread tombstones and report nothing', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
     await messageTimelineQueryOptions(document, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(document, {
+    expect(mocks.timeline).toHaveBeenCalledWith(document, {
       ...fullSelection,
       include_deleted_threads: true,
-      include_activity: false,
     });
     expect(mocks.track).not.toHaveBeenCalled();
   });
@@ -246,7 +244,7 @@ describe('messageTimelineQueryOptions', () => {
       getMessageTimelineQueryKey(project, null),
       { pages: [fullPage([deleted, old])], pageParams: [null] }
     );
-    mocks.list.mockResolvedValueOnce(
+    mocks.timeline.mockResolvedValueOnce(
       fullPage([{ ...old, content: 'Edited while disconnected' }])
     );
 
@@ -257,10 +255,7 @@ describe('messageTimelineQueryOptions', () => {
     expect(timelineMessages(result).map((item) => item.content)).toEqual([
       'Edited while disconnected',
     ]);
-    expect(mocks.list).toHaveBeenCalledWith(project, {
-      ...fullSelection,
-      include_activity: false,
-    });
+    expect(mocks.timeline).toHaveBeenCalledWith(project, fullSelection);
     expect(mocks.track).not.toHaveBeenCalled();
   });
 
@@ -269,7 +264,7 @@ describe('messageTimelineQueryOptions', () => {
     const newer = createMessage('msg-newer', '2026-09-10T13:19:00.123457Z');
     seedLatestCache([older, newer]);
     const deltaItem = createMessage('msg-delta', '2026-09-10T13:20:00.000000Z');
-    mocks.list.mockResolvedValueOnce({
+    mocks.timeline.mockResolvedValueOnce({
       entries: entries([deltaItem]),
       next_cursor: cursor('msg-delta', '2026-09-10T13:20:00.000000Z'),
       previous_cursor: null,
@@ -279,13 +274,12 @@ describe('messageTimelineQueryOptions', () => {
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       cursor: { created_at: '2026-09-10T13:19:00.123457Z', id: 'msg-newer' },
       direction: 'newer',
       limit: 50,
       include_deleted_threads: false,
-      include_activity: true,
     });
     expect(ids(result)).toEqual(['msg-delta', 'msg-newer', 'msg-older']);
     expect(result.next_cursor).toEqual(cachedNext);
@@ -304,7 +298,7 @@ describe('messageTimelineQueryOptions', () => {
       createMessage('msg-a', time),
       createMessage('msg-b', time),
     ]);
-    mocks.list.mockResolvedValueOnce({
+    mocks.timeline.mockResolvedValueOnce({
       entries: [],
       next_cursor: null,
       previous_cursor: null,
@@ -314,7 +308,7 @@ describe('messageTimelineQueryOptions', () => {
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(
+    expect(mocks.timeline).toHaveBeenCalledWith(
       parent,
       expect.objectContaining({ cursor: { created_at: time, id: 'msg-b' } })
     );
@@ -322,7 +316,7 @@ describe('messageTimelineQueryOptions', () => {
 
   it('delta overflow falls back to the full timeline', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    mocks.list.mockResolvedValueOnce({
+    mocks.timeline.mockResolvedValueOnce({
       entries: entries(
         Array.from({ length: 50 }, (_, i) =>
           createMessage(`delta-${i}`, '2026-09-10T13:20:00Z')
@@ -332,13 +326,13 @@ describe('messageTimelineQueryOptions', () => {
       previous_cursor: cursor('delta-0', '2026-09-10T13:20:00Z'),
     });
     const page = fullPage();
-    mocks.list.mockResolvedValueOnce(page);
+    mocks.timeline.mockResolvedValueOnce(page);
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenLastCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenLastCalledWith(parent, fullSelection);
     expect(ids(result)).toEqual(['full-1']);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
@@ -350,7 +344,7 @@ describe('messageTimelineQueryOptions', () => {
 
   it('cache away from latest uses the full timeline', async () => {
     const page = fullPage();
-    mocks.list.mockResolvedValue(page);
+    mocks.timeline.mockResolvedValue(page);
 
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')], {
       pageParam: {
@@ -361,7 +355,7 @@ describe('messageTimelineQueryOptions', () => {
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -369,15 +363,15 @@ describe('messageTimelineQueryOptions', () => {
     });
 
     mocks.track.mockClear();
-    mocks.list.mockClear();
+    mocks.timeline.mockClear();
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')], {
       previousCursor: cursor('newer', '2026-09-10T13:30:00Z'),
     });
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, fullSelection);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, fullSelection);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -387,14 +381,14 @@ describe('messageTimelineQueryOptions', () => {
 
   it('load-around stays on the full timeline', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')]);
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
     await messageTimelineQueryOptions(parent, 'message-42').queryFn({
       pageParam: null,
     });
 
-    expect(mocks.list).toHaveBeenCalledTimes(1);
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       ...fullSelection,
       around: 'message-42',
     });
@@ -407,15 +401,15 @@ describe('messageTimelineQueryOptions', () => {
 
   it('catch-up failure falls back except on auth errors', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    mocks.list.mockRejectedValueOnce(resultError('INTERNAL'));
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockRejectedValueOnce(resultError('INTERNAL'));
+    mocks.timeline.mockResolvedValueOnce(fullPage());
 
     const result = await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: null,
     });
 
     expect(ids(result)).toEqual(['full-1']);
-    expect(mocks.list).toHaveBeenCalledTimes(2);
+    expect(mocks.timeline).toHaveBeenCalledTimes(2);
     expect(mocks.track).toHaveBeenCalledWith('channel_messages_load', {
       channelId: 'channel-1',
       path: 'full',
@@ -423,16 +417,16 @@ describe('messageTimelineQueryOptions', () => {
       after: '2026-09-10T13:19:00.123456Z',
     });
 
-    mocks.list.mockClear();
+    mocks.timeline.mockClear();
     mocks.track.mockClear();
-    mocks.list.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
+    mocks.timeline.mockRejectedValueOnce(resultError('UNAUTHORIZED'));
 
     await expect(
       messageTimelineQueryOptions(parent, null).queryFn({
         pageParam: null,
       })
     ).rejects.toBeInstanceOf(ThrownResultError);
-    expect(mocks.list).toHaveBeenCalledTimes(1);
+    expect(mocks.timeline).toHaveBeenCalledTimes(1);
   });
 
   it('list ahead sets the reason', async () => {
@@ -450,7 +444,7 @@ describe('messageTimelineQueryOptions', () => {
         },
       },
     ] as unknown as ApiChannelWithLatest[]);
-    mocks.list.mockResolvedValueOnce({
+    mocks.timeline.mockResolvedValueOnce({
       entries: entries([createMessage('msg-delta', '2026-09-10T13:20:00Z')]),
       next_cursor: null,
       previous_cursor: null,
@@ -475,7 +469,7 @@ describe('messageTimelineQueryOptions', () => {
     const holdCatchUp = new Promise<void>((resolve) => {
       releaseCatchUp = resolve;
     });
-    mocks.list.mockImplementationOnce(async () => {
+    mocks.timeline.mockImplementationOnce(async () => {
       await holdCatchUp;
       return {
         entries: entries([
@@ -504,39 +498,37 @@ describe('messageTimelineQueryOptions', () => {
   });
 
   it('later pages keep using the full timeline without an event', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
     const older = cursor('page-2', '2026-09-10T12:00:00Z');
 
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: { next_cursor: older, previous_cursor: null },
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       limit: 100,
       cursor: older,
       direction: 'older',
       around: null,
       include_deleted_threads: false,
-      include_activity: true,
     });
     expect(mocks.track).not.toHaveBeenCalled();
   });
 
   it('newer pages page forward from the previous cursor', async () => {
-    mocks.list.mockResolvedValueOnce(fullPage());
+    mocks.timeline.mockResolvedValueOnce(fullPage());
     const newer = cursor('page-0', '2026-09-10T15:00:00Z');
 
     await messageTimelineQueryOptions(parent, null).queryFn({
       pageParam: { next_cursor: null, previous_cursor: newer },
     });
 
-    expect(mocks.list).toHaveBeenCalledWith(parent, {
+    expect(mocks.timeline).toHaveBeenCalledWith(parent, {
       limit: 100,
       cursor: newer,
       direction: 'newer',
       around: null,
       include_deleted_threads: false,
-      include_activity: true,
     });
   });
 });
@@ -627,7 +619,7 @@ describe('channel activity entries', () => {
 
   it('catch-up merges activity newer than the newest cached root', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00Z')]);
-    mocks.list.mockResolvedValueOnce({
+    mocks.timeline.mockResolvedValueOnce({
       entries: [
         { type: 'activity', activity: activity('a', '2026-09-10T13:20:00Z') },
       ],

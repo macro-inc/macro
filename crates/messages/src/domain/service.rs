@@ -88,8 +88,43 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
-        mut query: MessageTimelineQuery,
+        query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        self.repo.timeline(&parent, query).await
+    }
+
+    /// Read a parent's messages and its timeline activity as one ordered page.
+    /// Parents without a timeline activity source return their messages only.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn timeline_entries(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        let (parent, query) = self.timeline_selection(&access, query).await?;
+        let Some(source) = timeline_activity(&parent) else {
+            return self.repo.timeline(&parent, query).await.map(Into::into);
+        };
+        if !query.ids.is_empty()
+            || query.anchored.is_some()
+            || query.activity_after.is_some()
+            || query.activity_before.is_some()
+            || query.include_deleted_threads
+        {
+            return Err(MessageError::Invalid(
+                "activity timelines cannot be combined with message filters",
+            ));
+        }
+        self.activity_timeline(&parent, source, query).await
+    }
+
+    /// Validate a selection and resolve the parent it reads.
+    async fn timeline_selection(
+        &self,
+        access: &EntityAccessReceipt<MessageView>,
+        mut query: MessageTimelineQuery,
+    ) -> Result<(MessageParent, MessageTimelineQuery), MessageError> {
         if query
             .activity_after
             .zip(query.activity_before)
@@ -107,26 +142,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "centered windows cannot have filters",
             ));
         }
-        let parent = parent_from_receipt(&access)?;
+        let parent = parent_from_receipt(access)?;
         self.ensure_parent(&parent).await?;
         query.limit = Some(query.limit.unwrap_or(50).clamp(1, 100));
         if query.ids.len() > 100 || (query.around.is_some() && query.cursor.is_some()) {
             return Err(MessageError::Invalid("invalid timeline selection"));
         }
-        if query.include_activity && matches!(parent, MessageParent::Channel(_)) {
-            if !query.ids.is_empty()
-                || query.anchored.is_some()
-                || query.activity_after.is_some()
-                || query.activity_before.is_some()
-                || query.include_deleted_threads
-            {
-                return Err(MessageError::Invalid(
-                    "system activity cannot be combined with message filters",
-                ));
-            }
-            return self.activity_timeline(&parent, query).await;
-        }
-        self.repo.timeline(&parent, query).await
+        Ok((parent, query))
     }
 
     /// Read a message and its canonical root for navigation.

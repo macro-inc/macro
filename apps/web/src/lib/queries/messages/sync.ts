@@ -30,18 +30,13 @@ import {
 } from './timeline';
 import { handleCommsTyping } from './typing';
 
-/** Committed channel activity, delivered whole so loaded history needs no re-read. */
+/** Committed timeline activity, delivered whole so loaded history needs no re-read. */
 export function handleTimelineActivity(event: {
-  channel_id: string;
+  parent: MessageParent;
   activities: TimelineActivity[];
 }) {
   queryClient.setQueriesData<MessageTimelineData>(
-    {
-      queryKey: getMessageTimelineQueryKeyPrefix({
-        type: 'channel',
-        id: event.channel_id,
-      }),
-    },
+    { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
     (data) => insertActivitiesIntoMessageTimeline(data, event.activities)
   );
 }

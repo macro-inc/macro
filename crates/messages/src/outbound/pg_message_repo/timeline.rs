@@ -89,7 +89,6 @@ impl PgMessageRepository {
         let items = self.hydrate_root_rows(rows).await?;
         Ok(MessagePage {
             items,
-            activity: Vec::new(),
             next_cursor,
             previous_cursor,
         })

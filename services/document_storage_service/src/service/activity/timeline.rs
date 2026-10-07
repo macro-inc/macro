@@ -81,6 +81,7 @@ async fn deliver<R: ChannelRepo>(
 }
 
 /// Only participants receive activity, since it names who joined, left, or renamed.
+/// The payload names the timeline's parent so clients file it like a message.
 async fn deliver_to_participants<R: ChannelRepo>(
     client: &ConnectionGatewayClient,
     channels: &R,
@@ -101,7 +102,10 @@ async fn deliver_to_participants<R: ChannelRepo>(
     let _ = client
         .batch_send_message(
             "timeline_activity".into(),
-            serde_json::json!({ "channel_id": channel_id, "activities": activities }),
+            serde_json::json!({
+                "parent": messages::domain::models::MessageParent::Channel(channel_id),
+                "activities": activities,
+            }),
             participants
                 .iter()
                 .map(|participant| {

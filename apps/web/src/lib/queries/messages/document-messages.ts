@@ -60,7 +60,7 @@ export async function fetchDocumentThreads(
       limit: 100,
       cursor: cursor ?? undefined,
     });
-    for (const root of timelineMessages(page)) {
+    for (const root of page.items) {
       threads.push(await fetchMessageThread(parent, root.id));
     }
     cursor = page.next_cursor;

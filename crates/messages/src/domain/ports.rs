@@ -50,9 +50,6 @@ pub enum MessageDirection {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageTimelineQuery {
-    /// Merge the parent's selected system activity into the same bounded page.
-    #[serde(default)]
-    pub include_activity: bool,
     /// Stable creation-time and UUID cursor.
     pub cursor: Option<MessageCursor>,
     /// Which side of the cursor to fetch.
@@ -78,20 +75,78 @@ pub struct MessageTimelineQuery {
 
 pub use super::models::{MessageListItem, MessageThreadPreview};
 
-/// Bidirectional, bounded timeline page, ordered newest first.
+/// Bidirectional, bounded timeline page, ordered newest root first.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePage {
     /// Root messages with bounded previews.
     pub items: Vec<MessageListItem>,
-    /// System activity within the same window when requested, newest first.
-    /// Clients merge it with `items` by `(created_at | occurred_at, id)`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub activity: Vec<activity::domain::timeline::TimelineActivity>,
+    /// Continue to older roots.
+    pub next_cursor: Option<MessageCursor>,
+    /// Continue to newer roots.
+    pub previous_cursor: Option<MessageCursor>,
+}
+
+/// One chronological entry in a parent's timeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum MessageTimelineEntry {
+    /// A root message with its bounded thread preview.
+    Message {
+        /// The message and thread state.
+        message: Box<MessageListItem>,
+    },
+    /// A recorded fact about the parent, such as a rename or a finished call.
+    Activity {
+        /// The recorded activity.
+        activity: activity::domain::timeline::TimelineActivity,
+    },
+}
+
+impl MessageTimelineEntry {
+    /// Position on the `(timestamp, id)` keyset shared by both kinds.
+    pub fn position(&self) -> (DateTime<Utc>, Uuid) {
+        match self {
+            Self::Message { message } => (message.message.created_at, message.message.id),
+            Self::Activity { activity } => (activity.occurred_at, activity.id),
+        }
+    }
+
+    /// Continue reading on either side of this entry.
+    pub fn cursor(&self) -> MessageCursor {
+        let (created_at, id) = self.position();
+        MessageCursor { created_at, id }
+    }
+}
+
+/// A bounded, newest-first window of a parent's messages and activity, ordered
+/// by the server on one `(timestamp, id)` keyset.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct MessageTimelinePage {
+    /// Messages and activity, newest first.
+    pub entries: Vec<MessageTimelineEntry>,
     /// Continue to older entries.
     pub next_cursor: Option<MessageCursor>,
     /// Continue to newer entries.
     pub previous_cursor: Option<MessageCursor>,
+}
+
+impl From<MessagePage> for MessageTimelinePage {
+    fn from(page: MessagePage) -> Self {
+        Self {
+            entries: page
+                .items
+                .into_iter()
+                .map(|message| MessageTimelineEntry::Message {
+                    message: Box::new(message),
+                })
+                .collect(),
+            next_cursor: page.next_cursor,
+            previous_cursor: page.previous_cursor,
+        }
+    }
 }
 
 /// Authenticated create command; attribution fields are never client controlled.
@@ -471,6 +526,31 @@ pub const CHANNEL_TIMELINE_ACTIONS: &[&str] = &[
     "participant_removed",
     "call_ended",
 ];
+
+/// The activity a parent's timeline shows next to its messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TimelineActivitySource {
+    /// Activity entity type that records facts about the parent.
+    pub entity_type: activity::EntityType,
+    /// Actions shown inline; anything else stays in the activity feed.
+    pub actions: &'static [&'static str],
+}
+
+/// Which activity, if any, belongs in a parent's timeline. Parents without a
+/// source read message-only timelines; adding one is a deliberate choice here.
+pub fn timeline_activity(parent: &MessageParent) -> Option<TimelineActivitySource> {
+    match parent {
+        MessageParent::Channel(_) => Some(TimelineActivitySource {
+            entity_type: activity::EntityType::Channel,
+            actions: CHANNEL_TIMELINE_ACTIONS,
+        }),
+        MessageParent::Document(_)
+        | MessageParent::Initiative(_)
+        | MessageParent::CrmCompany(_)
+        | MessageParent::CrmContact(_)
+        | MessageParent::Call(_) => None,
+    }
+}
 
 /// Identity of a CRM company or contact that hosts a discussion.
 #[derive(Debug, Clone, PartialEq, Eq)]

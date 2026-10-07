@@ -49,16 +49,12 @@ fn message(id: u128) -> MessageListItem {
     }
 }
 
-/// Merged page ids, newest first, as a client interleaves them.
-fn ids(page: &MessagePage) -> Vec<u128> {
-    let mut positions: Vec<_> = page
-        .items
+/// Page ids in server order.
+fn ids(page: &MessageTimelinePage) -> Vec<u128> {
+    page.entries
         .iter()
-        .map(|item| (item.message.created_at, item.message.id))
-        .chain(page.activity.iter().map(|fact| (fact.occurred_at, fact.id)))
-        .collect();
-    positions.sort_by_key(|position| std::cmp::Reverse(*position));
-    positions.into_iter().map(|(_, id)| id.as_u128()).collect()
+        .map(|entry| entry.position().1.as_u128())
+        .collect()
 }
 
 fn roots(items: Vec<MessageListItem>, more: bool) -> MessagePage {
@@ -70,7 +66,6 @@ fn roots(items: Vec<MessageListItem>, more: bool) -> MessagePage {
         next_cursor: more.then(|| cursor(items.last().unwrap())),
         previous_cursor: more.then(|| cursor(items.first().unwrap())),
         items,
-        activity: vec![],
     }
 }
 
@@ -119,7 +114,10 @@ fn activity_only_pages_can_continue_without_messages() {
         ..Default::default()
     };
     let result = merge(roots(vec![], false), vec![activity(1), activity(2)], &query);
-    assert!(result.items.is_empty());
+    assert!(matches!(
+        result.entries[..],
+        [MessageTimelineEntry::Activity { .. }]
+    ));
     assert_eq!(ids(&result), [2]);
     assert_eq!(result.next_cursor.unwrap().id.as_u128(), 2);
 }
@@ -146,28 +144,31 @@ fn exhausted_activity_only_page_has_no_next_cursor() {
 }
 
 #[test]
-fn response_keeps_items_and_adds_activity_only_when_present() {
+fn response_tags_each_entry_with_its_kind() {
     let response = merge(
         roots(vec![message(2)], false),
         vec![activity(1), activity(3)],
         &MessageTimelineQuery::default(),
     );
     let json = serde_json::to_value(response).unwrap();
-    assert_eq!(json["items"][0]["id"], Uuid::from_u128(2).to_string());
+    let entries = json["entries"].as_array().unwrap();
+    let shape: Vec<_> = entries
+        .iter()
+        .map(|entry| {
+            let kind = entry["type"].as_str().unwrap();
+            (
+                kind.to_owned(),
+                entry[kind]["id"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
     assert_eq!(
-        json["activity"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|fact| fact["id"].as_str().unwrap().to_owned())
-            .collect::<Vec<_>>(),
+        shape,
         [
-            Uuid::from_u128(3).to_string(),
-            Uuid::from_u128(1).to_string()
+            ("activity".to_owned(), Uuid::from_u128(3).to_string()),
+            ("message".to_owned(), Uuid::from_u128(2).to_string()),
+            ("activity".to_owned(), Uuid::from_u128(1).to_string()),
         ]
     );
-
-    // Clients that never ask for activity see the unchanged response shape.
-    let plain = serde_json::to_value(roots(vec![message(2)], false)).unwrap();
-    assert!(plain.get("activity").is_none());
+    assert_eq!(entries[1]["message"]["thread"]["reply_count"], 0);
 }

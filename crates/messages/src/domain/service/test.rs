@@ -121,7 +121,6 @@ impl MessageRepository for Repo {
                 }
             });
         Ok(MessagePage {
-            activity: vec![],
             items: if included {
                 vec![MessageListItem {
                     message: self.message.clone(),
@@ -1524,6 +1523,13 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
     }
 }
 
+fn entry_ids(page: &MessageTimelinePage) -> Vec<Uuid> {
+    page.entries
+        .iter()
+        .map(|entry| entry.position().1)
+        .collect()
+}
+
 #[tokio::test]
 async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
     let mut repo = fixture();
@@ -1550,10 +1556,9 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
             .unwrap()
     };
     let center = service
-        .timeline(
+        .timeline_entries(
             view(),
             MessageTimelineQuery {
-                include_activity: true,
                 around: Some(repo.message.id),
                 limit: Some(3),
                 ..Default::default()
@@ -1561,20 +1566,14 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(center.items[0].message.id, repo.message.id);
     assert_eq!(
-        center
-            .activity
-            .iter()
-            .map(|fact| fact.id)
-            .collect::<Vec<_>>(),
-        [facts[2].id, facts[1].id]
+        entry_ids(&center),
+        [facts[2].id, repo.message.id, facts[1].id]
     );
     let older = service
-        .timeline(
+        .timeline_entries(
             view(),
             MessageTimelineQuery {
-                include_activity: true,
                 cursor: center.next_cursor,
                 limit: Some(3),
                 ..Default::default()
@@ -1582,21 +1581,12 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert!(older.items.is_empty());
-    assert_eq!(
-        older
-            .activity
-            .iter()
-            .map(|fact| fact.id)
-            .collect::<Vec<_>>(),
-        [facts[0].id]
-    );
+    assert_eq!(entry_ids(&older), [facts[0].id]);
     assert!(older.next_cursor.is_none());
     let newer = service
-        .timeline(
+        .timeline_entries(
             view(),
             MessageTimelineQuery {
-                include_activity: true,
                 direction: MessageDirection::Newer,
                 cursor: center.previous_cursor,
                 limit: Some(3),
@@ -1605,13 +1595,12 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(newer.activity[0].id, facts[3].id);
+    assert_eq!(entry_ids(&newer), [facts[3].id]);
     assert!(newer.previous_cursor.is_none());
     let anchor = service
-        .timeline(
+        .timeline_entries(
             view(),
             MessageTimelineQuery {
-                include_activity: true,
                 around: Some(repo.message.id),
                 limit: Some(1),
                 ..Default::default()
@@ -1619,9 +1608,16 @@ async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
         )
         .await
         .unwrap();
-    assert_eq!(anchor.items.len(), 1);
-    assert!(anchor.activity.is_empty());
+    assert_eq!(entry_ids(&anchor), [repo.message.id]);
     assert!(anchor.next_cursor.is_some() && anchor.previous_cursor.is_some());
+
+    // The message list stays message-only for clients that never asked for activity.
+    let messages = service
+        .timeline(view(), MessageTimelineQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(messages.items.len(), 1);
+    assert!(messages.next_cursor.is_none());
 }
 
 #[tokio::test]
@@ -1629,12 +1625,11 @@ async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_o
     let service =
         MessageService::new(fixture(), Events::default()).with_activity(TimelineFacts(vec![]));
     let result = service
-        .timeline(
+        .timeline_entries(
             channel_access()
                 .try_into_requirement::<MessageView>()
                 .unwrap(),
             MessageTimelineQuery {
-                include_activity: true,
                 ids: vec![Uuid::from_u128(1)],
                 ..Default::default()
             },
@@ -1642,19 +1637,18 @@ async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_o
         .await;
     assert!(matches!(result, Err(MessageError::Invalid(_))));
     let result = service
-        .timeline(
+        .timeline_entries(
             access("macro|author@example.com", "doc", AccessLevel::Comment)
                 .try_into_requirement::<MessageView>()
                 .unwrap(),
-            MessageTimelineQuery {
-                include_activity: true,
-                ..Default::default()
-            },
+            MessageTimelineQuery::default(),
         )
         .await
         .unwrap();
-    assert_eq!(result.items.len(), 1);
-    assert!(result.activity.is_empty());
+    assert!(matches!(
+        result.entries[..],
+        [MessageTimelineEntry::Message { .. }]
+    ));
 }
 
 #[test]

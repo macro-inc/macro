@@ -8794,14 +8794,9 @@ export type MessageMentionedMetadata = {
 };
 
 /**
- * Bidirectional, bounded timeline page, ordered newest first.
+ * Bidirectional, bounded timeline page, ordered newest root first.
  */
 export type MessagePage = {
-    /**
-     * System activity within the same window when requested, newest first.
-     * Clients merge it with `items` by `(created_at | occurred_at, id)`.
-     */
-    activity?: Array<TimelineActivity>;
     /**
      * Root messages with bounded previews.
      */
@@ -8994,6 +8989,36 @@ export type MessageThreadPreview = {
 };
 
 /**
+ * One chronological entry in a parent's timeline.
+ */
+export type MessageTimelineEntry = {
+    /**
+     * The message and thread state.
+     */
+    message: MessageListItem;
+    type: 'message';
+} | {
+    /**
+     * The recorded activity.
+     */
+    activity: TimelineActivity;
+    type: 'activity';
+};
+
+/**
+ * A bounded, newest-first window of a parent's messages and activity, ordered
+ * by the server on one `(timestamp, id)` keyset.
+ */
+export type MessageTimelinePage = {
+    /**
+     * Messages and activity, newest first.
+     */
+    entries: Array<MessageTimelineEntry>;
+    next_cursor?: null | MessageCursor;
+    previous_cursor?: null | MessageCursor;
+};
+
+/**
  * Root selection shared by channel timelines and document discussions.
  */
 export type MessageTimelineQuery = {
@@ -9022,10 +9047,6 @@ export type MessageTimelineQuery = {
      * Restrict roots to this set, for selected source threads.
      */
     ids?: Array<string>;
-    /**
-     * Merge the parent's selected system activity into the same bounded page.
-     */
-    include_activity?: boolean;
     /**
      * Include whole-thread tombstones when reconciling persisted document marks.
      */
@@ -19812,6 +19833,27 @@ export type EntityMessagePatchThreadResponses = {
 };
 
 export type EntityMessagePatchThreadResponse = EntityMessagePatchThreadResponses[keyof EntityMessagePatchThreadResponses];
+
+export type MessageTimelineEntriesData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Serialized MessageTimelineQuery; absent selects the latest roots.
+         */
+        selection?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/timeline';
+};
+
+export type MessageTimelineEntriesResponses = {
+    200: MessageTimelinePage;
+};
+
+export type MessageTimelineEntriesResponse = MessageTimelineEntriesResponses[keyof MessageTimelineEntriesResponses];
 
 export type EntityMessageTypingData = {
     body: TypingInput;
