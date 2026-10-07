@@ -29,6 +29,8 @@ import {
   scrollEventChipIntoView,
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
+import { useTeamCalendarOverlay } from '@app/features/calendar-team/calendar-team';
+import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
@@ -234,14 +236,24 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() => [
-    ...data.visibleEvents(),
-    ...teamOoo.visibleEvents(),
-  ]);
-  const eventsById = createMemo(() =>
-    teamOoo.eventsById().size === 0
-      ? data.eventsById()
-      : new Map([...data.eventsById(), ...teamOoo.eventsById()])
+  const teamCalendar = useTeamCalendarOverlay({
+    range,
+    enabled: () => calendarView.displaySettings.showTeamCalendars,
+    // Hide sensitive shared payloads immediately, before the deferred grid redraw.
+    isSourceVisible: calendarView.isSourceVisible,
+  });
+  const teamEvents = createMemo(() =>
+    mergeCalendarOverlays([], teamOoo.visibleEvents(), teamCalendar.events())
+  );
+  const visibleEvents = createMemo(() =>
+    mergeCalendarOverlays(
+      data.visibleEvents(),
+      teamOoo.visibleEvents(),
+      teamCalendar.events()
+    )
+  );
+  const eventsById = createMemo(
+    () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
@@ -356,13 +368,32 @@ export function Page(props: {
           <CalendarPageHost
             id={props.id}
             data={data}
-            teamEvents={teamOoo.visibleEvents}
+            teamEvents={teamEvents}
             eventsById={eventsById}
             grid={grid}
             onLoadingBlockingChange={setLoadingDecorationBlocking}
           />
         )}
       </CalendarGrid>
+      <Show when={teamCalendar.isError()}>
+        <div
+          role="status"
+          class="absolute bottom-2 right-2 z-10 max-w-sm rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted"
+        >
+          Team calendars unavailable. Availability is unknown.{' '}
+          <button type="button" class="underline" onClick={teamCalendar.retry}>
+            Retry
+          </button>
+        </div>
+      </Show>
+      <Show when={teamCalendar.isLoading()}>
+        <div
+          role="status"
+          class="absolute bottom-2 right-2 z-10 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted"
+        >
+          Loading team calendars…
+        </div>
+      </Show>
     </div>
   );
 }

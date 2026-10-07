@@ -14,6 +14,7 @@ import {
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { CalendarTeamSidebar } from '@app/features/calendar-team/calendar-team';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
@@ -317,6 +318,7 @@ export function CalendarSidebar() {
         <CalendarMiniCalendar />
         <UpcomingEventsSection />
         <CalendarSourcesSection />
+        <CalendarTeamSidebar />
         <ShowFeatureFlag flag={enableCalendarTeamOoo}>
           <CalendarTeamOooSection />
         </ShowFeatureFlag>

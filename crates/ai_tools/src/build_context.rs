@@ -502,6 +502,12 @@ pub async fn build_tool_service_context_from_env(
         email_tool_context,
         call_tool_context,
         calendar_tool_context,
+        team_calendar_tool_context: crate::tool_context::build_team_calendar_tool_context(
+            pool.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
+        ),
         booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
             pool.clone(),
             environment,

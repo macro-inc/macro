@@ -167,6 +167,7 @@ import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TableDetail } from './generated/schemas/tableDetail';
+import type { TeamCalendarPage } from './generated/schemas/teamCalendarPage';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
@@ -578,6 +579,22 @@ export const storageServiceClient = {
         { method: 'GET', signal }
       )
     ).map((result) => result);
+  },
+
+  async listTeamCalendar(args: {
+    start: string;
+    end: string;
+    cursor?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) {
+    const params = new URLSearchParams({ start: args.start, end: args.end });
+    if (args.cursor) params.set('cursor', args.cursor);
+    if (args.limit !== undefined) params.set('limit', String(args.limit));
+    return dssFetch<TeamCalendarPage>(
+      `/calendar-events/team?${params.toString()}`,
+      { method: 'GET', signal: args.signal }
+    );
   },
 
   async getBatchCalendarEventPreviews(args: CalendarMentionPreviewRequest) {

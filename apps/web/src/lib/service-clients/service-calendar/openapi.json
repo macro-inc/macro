@@ -9,6 +9,58 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/availability-calendars": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "List calendars and their personal-availability inclusion.",
+        "operationId": "get_availability_calendars",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvailabilityCalendarsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/availability-calendars/{calendar_id}": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Change which source calendars normally occupy this user's time.",
+        "operationId": "set_availability_calendar",
+        "parameters": [
+          {
+            "name": "calendar_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvailabilityCalendarBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/calendars": {
       "get": {
         "tags": ["calendar_events"],
@@ -402,6 +454,52 @@
           }
         }
       }
+    },
+    "/team-sharing": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Read the authenticated user's sharing choice.",
+        "operationId": "get_team_sharing",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarSharingBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Set the authenticated user's sharing choice.",
+        "operationId": "set_team_sharing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamCalendarSharingBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarSharingBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -410,6 +508,60 @@
         "type": "string",
         "description": "RSVP state for an attendee.",
         "enum": ["needs_action", "accepted", "declined", "tentative"]
+      },
+      "AvailabilityCalendar": {
+        "type": "object",
+        "description": "Per-user inclusion of a source calendar in personal availability.",
+        "required": [
+          "calendarId",
+          "name",
+          "contributesToAvailability",
+          "isPrimary"
+        ],
+        "properties": {
+          "calendarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Visible source calendar."
+          },
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether its events normally block the user's time."
+          },
+          "isPrimary": {
+            "type": "boolean",
+            "description": "Whether this is the connected account's primary calendar."
+          },
+          "name": {
+            "type": "string",
+            "description": "Source name."
+          }
+        }
+      },
+      "AvailabilityCalendarBody": {
+        "type": "object",
+        "description": "Own-user source inclusion preference.",
+        "required": ["contributesToAvailability"],
+        "properties": {
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether this calendar contributes to personal availability."
+          }
+        }
+      },
+      "AvailabilityCalendarsResponse": {
+        "type": "object",
+        "description": "Source calendar settings returned to their viewer.",
+        "required": ["calendars"],
+        "properties": {
+          "calendars": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityCalendar"
+            },
+            "description": "Directly visible source calendars."
+          }
+        }
       },
       "CalendarAttendee": {
         "type": "object",
@@ -1005,6 +1157,17 @@
                 "description": "Connected inbox whose calendars changed."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A team entitlement changed; discard cached team projections before refetching.",
+            "required": ["event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["team_sharing_changed"]
+              }
+            }
           }
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
@@ -1041,6 +1204,22 @@
                 "description": "How much of a recurring series the response covers. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole series. An explicit `this_event` scope\nrequires `recurrenceId`, so a scoped request is never silently\nwidened to the series."
               }
             ]
+          }
+        }
+      },
+      "TeamCalendarSharing": {
+        "type": "string",
+        "description": "What a user exposes through their team membership.",
+        "enum": ["all", "busy_only", "none"]
+      },
+      "TeamCalendarSharingBody": {
+        "type": "object",
+        "description": "Own-user sharing preference.",
+        "required": ["sharing"],
+        "properties": {
+          "sharing": {
+            "$ref": "#/components/schemas/TeamCalendarSharing",
+            "description": "Busy-only is the default, including when no setting has been saved."
           }
         }
       },

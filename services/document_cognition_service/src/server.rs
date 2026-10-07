@@ -722,6 +722,12 @@ pub async fn run() -> anyhow::Result<()> {
             CalendarServiceUrl::new()?,
             internal_api_key.clone(),
         ),
+        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(
+            db.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
+        ),
         notification_tool_context: notification_tool_context.clone(),
         databases_tool_context,
         databases_sql_tool_context,

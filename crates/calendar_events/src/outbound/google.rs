@@ -538,7 +538,8 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
                 )
                 .await?;
 
-            let mapped = map_snapshot(target, canonical_events, instances);
+            let mapped = map_snapshot(target, canonical_events, instances)
+                .map_err(sync_normalization_error)?;
 
             return Ok(GoogleEventSyncBatch {
                 upserts: mapped.upserts,
@@ -647,20 +648,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 
         for single in classified.single_upserts {
             let provider_event_id = single.id.clone();
-            match map_upsert(target, single.clone(), Vec::new(), vec![single]) {
-                Ok(upsert) => {
-                    applied.upserts.push(upsert);
-                    applied.upserted_singles.insert(provider_event_id);
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        provider_calendar_id=%target.provider_calendar_id,
-                        provider_event_id,
-                        "skipping malformed changed Google Calendar event"
-                    );
-                }
-            }
+            let upsert = map_upsert(target, single.clone(), Vec::new(), vec![single])
+                .map_err(sync_normalization_error)?;
+            applied.upserts.push(upsert);
+            applied.upserted_singles.insert(provider_event_id);
         }
 
         // One bounded refresh per changed series keeps Google authoritative
@@ -678,7 +669,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    applied.refreshed_series.insert(master_id);
+                    return Err(sync_normalization_error(
+                        rootcause::report!("Google Calendar returned a malformed changed series")
+                            .into(),
+                    ));
                 }
             }
         }
@@ -742,7 +736,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     error=?error,
                     provider_calendar_id=%target.provider_calendar_id,
                     provider_event_id,
-                    "skipping malformed changed Google Calendar series"
+                    "rejecting malformed changed Google Calendar series"
                 );
                 Ok(SeriesOutcome::Malformed)
             }
@@ -782,20 +776,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 
         for single in tail_singles {
             let provider_event_id = single.id.clone();
-            match map_upsert(target, single.clone(), Vec::new(), vec![single]) {
-                Ok(upsert) => {
-                    applied.upserts.push(upsert);
-                    applied.upserted_singles.insert(provider_event_id);
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        provider_calendar_id=%target.provider_calendar_id,
-                        provider_event_id,
-                        "skipping malformed Google Calendar event in the coverage tail"
-                    );
-                }
-            }
+            let upsert = map_upsert(target, single.clone(), Vec::new(), vec![single])
+                .map_err(sync_normalization_error)?;
+            applied.upserts.push(upsert);
+            applied.upserted_singles.insert(provider_event_id);
         }
 
         for master_id in tail_series {
@@ -811,7 +795,12 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    applied.refreshed_series.insert(master_id);
+                    return Err(sync_normalization_error(
+                        rootcause::report!(
+                            "Google Calendar returned a malformed series in the coverage tail"
+                        )
+                        .into(),
+                    ));
                 }
             }
         }
@@ -1614,6 +1603,15 @@ fn mutation_normalization_error(error: Report) -> GoogleProviderError {
     )
 }
 
+/// Reject the whole calendar batch so neither its token nor its coverage can
+/// advance past an event that has not been represented successfully.
+fn sync_normalization_error(error: Report) -> GoogleProviderError {
+    GoogleProviderError::new(
+        GoogleProviderErrorKind::Transient,
+        format!("Google Calendar snapshot could not be fully normalized: {error:?}"),
+    )
+}
+
 fn google_response_status(status: AttendeeResponseStatus) -> &'static str {
     match status {
         AttendeeResponseStatus::NeedsAction => "needsAction",
@@ -1921,9 +1919,12 @@ fn map_snapshot(
     target: &GoogleCalendarTarget,
     canonical_events: Vec<GoogleEvent>,
     instances: Vec<GoogleEvent>,
-) -> MappedGoogleSnapshot {
+) -> Result<MappedGoogleSnapshot, Report> {
     let mut occurrences: BTreeMap<String, Vec<GoogleEvent>> = BTreeMap::new();
     for instance in instances {
+        if instance.status.as_deref() == Some("cancelled") {
+            continue;
+        }
         occurrences
             .entry(instance.ical_uid.clone())
             .or_default()
@@ -1933,6 +1934,9 @@ fn map_snapshot(
     let mut exceptions: BTreeMap<String, Vec<GoogleEvent>> = BTreeMap::new();
     let mut masters = BTreeMap::new();
     for event in canonical_events {
+        if event.status.as_deref() == Some("cancelled") {
+            continue;
+        }
         if event.recurring_event_id.is_some() {
             exceptions
                 .entry(event.ical_uid.clone())
@@ -1960,29 +1964,29 @@ fn map_snapshot(
         .collect::<Vec<_>>();
     let upserts = masters
         .into_iter()
-        .filter_map(|(uid, master)| {
-            let provider_event_id = master.id.clone();
+        .map(|(uid, master)| {
             map_upsert(
                 target,
                 master,
                 exceptions.remove(&uid).unwrap_or_default(),
                 occurrences.remove(&uid).unwrap_or_default(),
             )
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar master"
-                );
-            })
-            .ok()
         })
-        .collect();
-    MappedGoogleSnapshot {
+        .collect::<Result<Vec<_>, _>>()?;
+    for exception in exceptions.into_values().flatten() {
+        // A moved exception can be returned by the unexpanded feed even when
+        // its current interval is outside the expanded window. Its absence
+        // there is expected; an in-window orphan is missing coverage.
+        if google_time(&exception)?.overlaps(&target.range) {
+            return Err(rootcause::report!(
+                "Google Calendar snapshot has an in-window exception without a master or expanded instance"
+            ));
+        }
+    }
+    Ok(MappedGoogleSnapshot {
         upserts,
         observed_provider_event_ids,
-    }
+    })
 }
 
 fn map_upsert(
@@ -1999,6 +2003,7 @@ fn map_upsert(
         email_link_id: target.email_link_id,
         account_id: target.account_id,
         calendar_id: target.calendar_id,
+        observed_access_role: target.observed_access_role.clone(),
         provider_event_id: master.id.clone(),
         provider_recurring_event_id: master.recurring_event_id.clone(),
         provider_etag: master.etag.clone(),
@@ -2058,113 +2063,93 @@ fn map_upsert(
         updated_at,
     };
 
-    let overrides = exceptions
-        .into_iter()
-        .filter_map(|exception| {
-            // Cancelled exceptions arrive without times; the occurrence
-            // replace already removes them, so there is no override to keep.
-            if exception.status.as_deref() == Some("cancelled") {
-                return None;
-            }
-            let provider_event_id = exception.id.clone();
-            (|| -> Result<CalendarEventOverride, Report> {
-                let original = exception
-                    .original_start_time
-                    .as_ref()
-                    .and_then(google_start)
-                    .ok_or_else(|| {
-                        rootcause::report!(
-                            "Google recurring exception {} has an invalid original start",
-                            exception.id
-                        )
-                    })?;
-                let time = google_time(&exception)?;
-                Ok(CalendarEventOverride {
-                    sequence: exception.sequence,
-                    source_updated_at: parse_datetime(exception.updated.as_deref()),
-                    recurrence_id: original.occurrence_key(),
-                    original_time: original,
-                    time,
-                    title: exception.summary,
-                    description: exception.description,
-                    location: exception.location,
-                    status: Some(google_status(exception.status.as_deref())),
-                    attendees: exception
-                        .attendees
-                        .map(|attendees| attendees.into_iter().filter_map(map_attendee).collect()),
-                })
-            })()
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar recurrence exception"
-                );
-            })
-            .ok()
-        })
-        .collect();
+    let mut overrides = Vec::new();
+    for exception in exceptions {
+        // Google omits times on cancelled exceptions. The occurrence snapshot
+        // already excludes them, so a cancellation is not a coverage gap.
+        if exception.status.as_deref() == Some("cancelled") {
+            continue;
+        }
+        let original = exception
+            .original_start_time
+            .as_ref()
+            .and_then(google_start)
+            .ok_or_else(|| {
+                rootcause::report!(
+                    "Google recurring exception {} has an invalid original start",
+                    exception.id
+                )
+            })?;
+        let time = google_time(&exception)?;
+        overrides.push(CalendarEventOverride {
+            sequence: exception.sequence,
+            source_updated_at: parse_datetime(exception.updated.as_deref()),
+            recurrence_id: original.occurrence_key(),
+            original_time: original,
+            time,
+            title: exception.summary,
+            description: exception.description,
+            location: exception.location,
+            status: Some(google_status(exception.status.as_deref())),
+            visibility: exception
+                .visibility
+                .as_deref()
+                .map(|value| google_visibility(Some(value))),
+            transparency: exception
+                .transparency
+                .as_deref()
+                .map(|value| google_transparency(Some(value))),
+            attendees: exception
+                .attendees
+                .map(|attendees| attendees.into_iter().filter_map(map_attendee).collect()),
+        });
+    }
 
-    let occurrences = instances
-        .into_iter()
-        .filter_map(|instance| {
-            let provider_event_id = instance.id.clone();
-            (|| -> Result<Option<CalendarOccurrence>, Report> {
-                let time = google_time(&instance)?;
-                let original_start = instance
-                    .original_start_time
-                    .as_ref()
-                    .map(|value| {
-                        google_start(value).ok_or_else(|| {
-                            rootcause::report!(
-                                "Google recurring instance {} has an invalid original start",
-                                instance.id
-                            )
-                        })
-                    })
-                    .transpose()?;
-                Ok(time.overlaps(&target.range).then(|| CalendarOccurrence {
-                    event_id,
-                    occurrence_key: original_start
-                        .as_ref()
-                        .map(|start| start.occurrence_key())
-                        .unwrap_or_else(|| time.occurrence_key()),
-                    recurrence_id: original_start.map(|start| start.occurrence_key()),
-                    time,
-                    is_cancelled: instance.status.as_deref() == Some("cancelled"),
-                }))
-            })()
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar recurrence instance"
-                );
+    let mut occurrences = BTreeMap::<String, CalendarOccurrence>::new();
+    for instance in instances {
+        // Cancellation tombstones need no interval and never block time.
+        if instance.status.as_deref() == Some("cancelled") {
+            continue;
+        }
+        let time = google_time(&instance)?;
+        let original_start = instance
+            .original_start_time
+            .as_ref()
+            .map(|value| {
+                google_start(value).ok_or_else(|| {
+                    rootcause::report!(
+                        "Google recurring instance {} has an invalid original start",
+                        instance.id
+                    )
+                })
             })
-            .ok()
-            .flatten()
-        })
-        .fold(
-            BTreeMap::<String, CalendarOccurrence>::new(),
-            |mut deduped, occurrence| {
-                // Google can expand two instances onto one occurrence key — a
-                // moved exception whose original start still lands on the series
-                // slot, a DST boundary, a pagination overlap. Both would carry
-                // the same (event_id, occurrence_key) primary key, so collapse
-                // them here and keep the live instance over a cancelled tombstone.
-                let replace = deduped
-                    .get(&occurrence.occurrence_key)
-                    .is_none_or(|existing| existing.is_cancelled && !occurrence.is_cancelled);
-                if replace {
-                    deduped.insert(occurrence.occurrence_key.clone(), occurrence);
-                }
-                deduped
-            },
-        )
-        .into_values()
-        .collect();
+            .transpose()?;
+        if instance.recurring_event_id.is_some() && original_start.is_none() {
+            return Err(rootcause::report!(
+                "Google recurring instance {} has no original start",
+                instance.id
+            ));
+        }
+        if !time.overlaps(&target.range) {
+            continue;
+        }
+        let occurrence_key = original_start
+            .as_ref()
+            .map(|start| start.occurrence_key())
+            .unwrap_or_else(|| time.occurrence_key());
+        // Repeated live instances can result from pagination overlap. Keep
+        // the first representation of an original occurrence as before.
+        occurrences
+            .entry(occurrence_key.clone())
+            .or_insert(CalendarOccurrence {
+                event_id,
+                occurrence_key,
+                recurrence_id: original_start.map(|start| start.occurrence_key()),
+                time,
+                is_cancelled: false,
+            });
+    }
+    let occurrences = occurrences.into_values().collect();
 
     Ok(CalendarEventUpsert {
         event,
@@ -2183,34 +2168,39 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
         .end
         .as_ref()
         .ok_or_else(|| rootcause::report!("Google event {} has no end", event.id))?;
-    match (
+    let time = match (
         start.date_time.as_deref(),
         end.date_time.as_deref(),
         start.date.as_deref(),
         end.date.as_deref(),
     ) {
-        (Some(start_value), Some(end_value), _, _) => {
-            let starts_at = DateTime::parse_from_rfc3339(start_value)
+        (Some(start_value), Some(end_value), _, _) => EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339(start_value)
                 .map_err(report)?
-                .with_timezone(&Utc);
-            let ends_at = DateTime::parse_from_rfc3339(end_value)
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339(end_value)
                 .map_err(report)?
-                .with_timezone(&Utc);
-            Ok(EventTime::Timed {
-                starts_at,
-                ends_at,
-                time_zone: start.time_zone.clone(),
-            })
-        }
-        (_, _, Some(start_value), Some(end_value)) => Ok(EventTime::AllDay {
+                .with_timezone(&Utc),
+            time_zone: start.time_zone.clone(),
+        },
+        (_, _, Some(start_value), Some(end_value)) => EventTime::AllDay {
             start_date: NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?,
             end_date: NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?,
-        }),
-        _ => Err(rootcause::report!(
-            "Google event {} has mixed or missing time fields",
+        },
+        _ => {
+            return Err(rootcause::report!(
+                "Google event {} has mixed or missing time fields",
+                event.id
+            ));
+        }
+    };
+    if !time.is_valid() {
+        return Err(rootcause::report!(
+            "Google event {} has an invalid interval",
             event.id
-        )),
+        ));
     }
+    Ok(time)
 }
 
 fn google_start(value: &GoogleEventDateTime) -> Option<EventStart> {

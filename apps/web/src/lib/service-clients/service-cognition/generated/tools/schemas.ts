@@ -5465,6 +5465,88 @@ export const GetEntityPropertiesResponse = z.object({
   summary: z.string(),
 });
 
+export const GetTeamAvailability = z.object({
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
+  userIds: z.union([z.array(z.string()), z.null()]).optional(),
+});
+
+export const TeamAvailability = z.object({
+  start: z.string().datetime({ offset: true }),
+  end: z.string().datetime({ offset: true }),
+  members: z.array(
+    z.object({
+      userId: z.string(),
+      busy: z.array(
+        z.object({
+          start: z.string().datetime({ offset: true }),
+          end: z.string().datetime({ offset: true }),
+        })
+      ),
+      coverage: z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('complete'), z.literal('unknown')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      unknownReasons: z.array(
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('hidden'),
+            z.literal('unavailable'),
+            z.literal('truncated'),
+            z.literal('missing_time_zone'),
+            z.literal('invalid_time_zone'),
+            z.literal('invalid_interval'),
+            z.literal('conflicting_copies'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
+      ),
+    })
+  ),
+  freeWindows: z
+    .union([
+      z.array(
+        z.object({
+          start: z.string().datetime({ offset: true }),
+          end: z.string().datetime({ offset: true }),
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
+  unknownUserIds: z.array(z.string()),
+  complete: z.boolean(),
+  summary: z.string(),
+});
+
 export const GetThread = z.object({
   threadId: z.string().uuid(),
   limit: z.union([z.number().int(), z.null()]).optional(),

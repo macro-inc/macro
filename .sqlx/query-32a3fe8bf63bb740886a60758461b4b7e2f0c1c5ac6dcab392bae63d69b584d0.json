@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET snapshot_normalization_version=1 WHERE account_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "32a3fe8bf63bb740886a60758461b4b7e2f0c1c5ac6dcab392bae63d69b584d0"
+}

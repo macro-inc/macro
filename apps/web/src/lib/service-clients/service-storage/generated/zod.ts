@@ -1428,6 +1428,199 @@ export const mentionPreviewsResponse = zod
   .describe('Batch calendar mention preview response.');
 
 /**
+ * @summary Query authorized projections in a bounded viewport.
+ */
+export const listTeamCalendarQueryLimitMin = 0;
+
+export const listTeamCalendarQueryParams = zod.object({
+  start: zod.iso.datetime({}).describe('Inclusive instant.'),
+  end: zod.iso.datetime({}).describe('Exclusive instant.'),
+  cursor: zod
+    .string()
+    .nullish()
+    .describe('Continuation returned by the preceding page.'),
+  limit: zod
+    .number()
+    .min(listTeamCalendarQueryLimitMin)
+    .nullish()
+    .describe('Maximum source occurrences, at most 2,000.'),
+});
+
+export const listTeamCalendarResponse = zod
+  .object({
+    items: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                kind: zod.enum(['busy']),
+              })
+              .describe('No provider or event metadata.'),
+            zod
+              .object({
+                details: zod
+                  .object({
+                    attendees: zod
+                      .array(
+                        zod
+                          .object({
+                            comment: zod
+                              .string()
+                              .nullish()
+                              .describe('Optional attendee comment.'),
+                            displayName: zod
+                              .string()
+                              .nullish()
+                              .describe('Provider display name.'),
+                            email: zod
+                              .string()
+                              .describe('Normalized email address.'),
+                            isOptional: zod
+                              .boolean()
+                              .describe('Whether attendance is optional.'),
+                            isOrganizer: zod
+                              .boolean()
+                              .describe(
+                                'Whether this attendee is the organizer.'
+                              ),
+                            isSelf: zod
+                              .boolean()
+                              .describe(
+                                "Whether this attendee is one of the viewing requester's inboxes."
+                              ),
+                            responseStatus: zod
+                              .enum([
+                                'needs_action',
+                                'accepted',
+                                'declined',
+                                'tentative',
+                              ])
+                              .describe('RSVP state for an attendee.'),
+                          })
+                          .describe('An attendee on a calendar event.')
+                      )
+                      .describe(
+                        'Attendees; self flags are relative to the requesting viewer.'
+                      ),
+                    calendarName: zod
+                      .string()
+                      .describe(
+                        'Source calendar name, shown only with details.'
+                      ),
+                    conferenceUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Join URL, if supplied by this source.'),
+                    description: zod
+                      .string()
+                      .nullish()
+                      .describe('Body, if supplied by this source.'),
+                    location: zod
+                      .string()
+                      .nullish()
+                      .describe('Location, if supplied by this source.'),
+                    organizerEmail: zod
+                      .string()
+                      .nullish()
+                      .describe('Organizer address from this source.'),
+                    organizerName: zod
+                      .string()
+                      .nullish()
+                      .describe('Organizer name from this source.'),
+                    title: zod.string().describe('Display title.'),
+                  })
+                  .describe('Safe details from a single authorized source.'),
+                kind: zod.enum(['details']),
+              })
+              .describe('Explicitly authorized source content.'),
+          ])
+          .describe(
+            'Disjoint busy\/detail shapes prevent new event fields leaking by default.'
+          )
+          .and(
+            zod.object({
+              contributesToAvailability: zod
+                .boolean()
+                .describe(
+                  "Whether this occurrence blocks the sharer's personal availability.\nA subscribed calendar's block can be shared without occupying the sharer."
+                ),
+              id: zod
+                .string()
+                .describe(
+                  'Stable opaque projection identity, never an event entity id.'
+                ),
+              ownerId: zod
+                .string()
+                .describe('The person sharing access to the source.'),
+              time: zod
+                .union([
+                  zod
+                    .object({
+                      endsAt: zod.iso
+                        .datetime({})
+                        .describe('Exclusive end instant.'),
+                      kind: zod.enum(['timed']),
+                      startsAt: zod.iso
+                        .datetime({})
+                        .describe('Inclusive start instant.'),
+                      timeZone: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Original IANA time-zone identifier, when supplied.'
+                        ),
+                    })
+                    .describe('An event with absolute instants.'),
+                  zod
+                    .object({
+                      endDate: zod.iso
+                        .date()
+                        .describe('Exclusive local end date.'),
+                      kind: zod.enum(['allDay']),
+                      startDate: zod.iso
+                        .date()
+                        .describe('Inclusive local start date.'),
+                    })
+                    .describe(
+                      "An all-day event using RFC 5545's exclusive end date."
+                    ),
+                ])
+                .describe(
+                  'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+                ),
+            })
+          )
+          .describe('A read-only team calendar occurrence.')
+      )
+      .describe('Authorized read-only projections.'),
+    members: zod
+      .array(
+        zod
+          .object({
+            coverage: zod
+              .enum(['ready', 'unavailable', 'hidden'])
+              .describe(
+                "Whether a member's calendar projection can establish availability."
+              ),
+            sharing: zod
+              .enum(['all', 'busy_only', 'none'])
+              .describe('What a user exposes through their team membership.'),
+            userId: zod.string().describe('Macro user identifier.'),
+          })
+          .describe("A current member of the requester's team.")
+      )
+      .describe('Current membership and sharing policies.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe(
+        'Opaque continuation token; null after the last source occurrence.'
+      ),
+  })
+  .describe('A bounded page of team calendar projections.');
+
+/**
  * @summary Return teammates' out-of-office occurrences in the requested viewport.
  */
 export const listTeamOutOfOfficeQueryLimitMax = 2000;

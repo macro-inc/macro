@@ -4,6 +4,7 @@ use bots::{
     domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
     outbound::pg_bots_repo::PgBotsRepo,
 };
+use calendar_events::inbound::team_toolset::TeamCalendarToolContext;
 use calendar_events::inbound::toolset::CalendarToolContext;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
@@ -445,6 +446,27 @@ pub type ToolCalendarMutationService =
 /// Type alias for the calendar AI tool context.
 pub type ToolCalendarToolContext =
     CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
+
+/// Source-scoped team calendar domain service for read-only AI availability.
+pub type ToolTeamCalendarService = calendar_events::domain::team::CalendarTeamServiceImpl<
+    calendar_events::outbound::pg_team::PgCalendarTeamRepository,
+>;
+
+/// Team availability tool dependencies, separate from provider mutation access.
+pub type ToolTeamCalendarToolContext = TeamCalendarToolContext<ToolTeamCalendarService>;
+
+/// Construct the authorized availability service at the AI composition root.
+pub fn build_team_calendar_tool_context(
+    pool: sqlx::PgPool,
+    enabled: bool,
+) -> ToolTeamCalendarToolContext {
+    TeamCalendarToolContext {
+        service: Arc::new(calendar_events::domain::team::CalendarTeamServiceImpl::new(
+            calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(pool),
+            enabled,
+        )),
+    }
+}
 
 /// Build the calendar AI tool context: reads query the local occurrence
 /// projections from `pool`; mutations call the calendar service at
@@ -1589,6 +1611,7 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub calendar_tool_context: ToolCalendarToolContext,
+    pub team_calendar_tool_context: ToolTeamCalendarToolContext,
     pub booking_link_tool_context: ToolBookingLinkToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,

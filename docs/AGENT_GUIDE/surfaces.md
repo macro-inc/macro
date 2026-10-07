@@ -1359,6 +1359,47 @@ Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
 
+With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
+**Team sharing**: `Busy blocks` (the default), `Event details`, and `Nothing`.
+These are Macro read permissions. They do not change Google Calendar ACLs,
+invite teammates to meetings, or let teammates edit, RSVP, or manage reminders.
+The sharing choice covers every currently authorized calendar synced to Macro.
+Private/confidential events only expose generic time blocks; event details
+come from one authorized source copy. Disconnecting an account or losing
+source access removes its team projection.
+
+**Calendars that count as busy** controls which calendars represent the user's
+personal schedule. Primary calendars count by default; other calendars require
+explicit inclusion. Meetings the user attends also contribute, except declined
+meetings. Following a coworker's calendar does not automatically make that
+coworker's events occupy the user's time. In team overlays, `Busy` means the
+block contributes to that teammate's availability; `Shared calendar block`
+means it belongs to a calendar the teammate can access and does not count
+toward their busy time. Event details show the same distinction explicitly.
+
+The sidebar's **Team calendars** section has a master `Show team calendars`
+switch and per-teammate checkboxes; Settings exposes the same display controls.
+Display toggles affect this viewer's grid only. Team chips are prefixed with
+the sharer's name and open read-only details. Copy-event links, guest-email
+actions, RSVP, editing, and deletion are unavailable on team projections.
+A directly accessible copy retains its own actions; another person's projection
+of the same meeting may appear separately, with its sharing provenance.
+An unavailable team fetch displays a warning and removes stale shared details.
+Sharing-change notifications clear open shared details before refetching;
+focus/reconnect and a 30-second refresh provide a fallback. Shared details also
+disappear when an offline refresh is paused; they are not persisted for offline
+use. While the app is running, team responses and in-flight requests expire
+after 60 seconds, so a hung refresh cannot retain old details. Replacing a login
+session clears team data and open shared details before the new identity loads.
+Legacy out-of-office rows are read-only status displays and do not claim
+that every absence blocks availability.
+
+The `GetTeamAvailability` AI tool checks the requester together with the selected
+teammates. It reports confirmed free windows only when every participant has
+complete availability coverage. Hidden, disconnected, stale, or incomplete
+calendars are reported as unknown, never free. Busy blocks contain no event
+titles or private event metadata.
+
 The in-view desktop Calendar header uses one responsive top bar. The viewed
 month and year stay on the left in a heading that scales from 16px in narrow
 splits to a maximum of 24px, with a compact `New` menu when the sidebar is closed.

@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,27 @@ export class Sdk extends HeyApiClient {
     }) {
         super(args);
         Sdk.__registry.set(this, args?.key);
+    }
+    
+    /**
+     * List calendars and their personal-availability inclusion.
+     */
+    public getAvailabilityCalendars<ThrowOnError extends boolean = false>(options?: Options<GetAvailabilityCalendarsData, ThrowOnError>): RequestResult<GetAvailabilityCalendarsResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAvailabilityCalendarsResponses, unknown, ThrowOnError>({ url: '/availability-calendars', ...options });
+    }
+    
+    /**
+     * Change which source calendars normally occupy this user's time.
+     */
+    public setAvailabilityCalendar<ThrowOnError extends boolean = false>(options: Options<SetAvailabilityCalendarData, ThrowOnError>): RequestResult<SetAvailabilityCalendarResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).put<SetAvailabilityCalendarResponses, unknown, ThrowOnError>({
+            url: '/availability-calendars/{calendar_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -118,5 +139,26 @@ export class Sdk extends HeyApiClient {
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+    
+    /**
+     * Read the authenticated user's sharing choice.
+     */
+    public getTeamSharing<ThrowOnError extends boolean = false>(options?: Options<GetTeamSharingData, ThrowOnError>): RequestResult<GetTeamSharingResponses, unknown, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetTeamSharingResponses, unknown, ThrowOnError>({ url: '/team-sharing', ...options });
+    }
+    
+    /**
+     * Set the authenticated user's sharing choice.
+     */
+    public setTeamSharing<ThrowOnError extends boolean = false>(options: Options<SetTeamSharingData, ThrowOnError>): RequestResult<SetTeamSharingResponses, unknown, ThrowOnError> {
+        return (options.client ?? this.client).put<SetTeamSharingResponses, unknown, ThrowOnError>({
+            url: '/team-sharing',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 }

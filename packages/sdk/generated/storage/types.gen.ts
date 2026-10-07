@@ -13013,6 +13013,126 @@ export type TaskFilters = {
 };
 
 /**
+ * Disjoint busy/detail shapes prevent new event fields leaking by default.
+ */
+export type TeamCalendarContent = {
+    kind: 'busy';
+} | {
+    /**
+     * Detail projection.
+     */
+    details: TeamCalendarDetails;
+    kind: 'details';
+};
+
+/**
+ * Whether a member's calendar projection can establish availability.
+ */
+export type TeamCalendarCoverage = 'ready' | 'unavailable' | 'hidden';
+
+/**
+ * Safe details from a single authorized source.
+ */
+export type TeamCalendarDetails = {
+    /**
+     * Attendees; self flags are relative to the requesting viewer.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Source calendar name, shown only with details.
+     */
+    calendarName: string;
+    /**
+     * Join URL, if supplied by this source.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Body, if supplied by this source.
+     */
+    description?: string | null;
+    /**
+     * Location, if supplied by this source.
+     */
+    location?: string | null;
+    /**
+     * Organizer address from this source.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer name from this source.
+     */
+    organizerName?: string | null;
+    /**
+     * Display title.
+     */
+    title: string;
+};
+
+/**
+ * A read-only team calendar occurrence.
+ */
+export type TeamCalendarItem = TeamCalendarContent & {
+    /**
+     * Whether this occurrence blocks the sharer's personal availability.
+     * A subscribed calendar's block can be shared without occupying the sharer.
+     */
+    contributesToAvailability: boolean;
+    /**
+     * Stable opaque projection identity, never an event entity id.
+     */
+    id: string;
+    /**
+     * The person sharing access to the source.
+     */
+    ownerId: string;
+    /**
+     * Occurrence interval.
+     */
+    time: EventTime;
+};
+
+/**
+ * A current member of the requester's team.
+ */
+export type TeamCalendarMember = {
+    /**
+     * Coverage available for a trustworthy calculation.
+     */
+    coverage: TeamCalendarCoverage;
+    /**
+     * Current team-sharing policy.
+     */
+    sharing: TeamCalendarSharing;
+    /**
+     * Macro user identifier.
+     */
+    userId: string;
+};
+
+/**
+ * A bounded page of team calendar projections.
+ */
+export type TeamCalendarPage = {
+    /**
+     * Authorized read-only projections.
+     */
+    items: Array<TeamCalendarItem>;
+    /**
+     * Current membership and sharing policies.
+     */
+    members: Array<TeamCalendarMember>;
+    /**
+     * Opaque continuation token; null after the last source occurrence.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * What a user exposes through their team membership.
+ */
+export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
  * One teammate's out-of-office occurrence.
  */
 export type TeamOutOfOfficeItem = {
@@ -14642,6 +14762,36 @@ export type MentionPreviewsResponses = {
 };
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
+export type ListTeamCalendarData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive instant.
+         */
+        start: string;
+        /**
+         * Exclusive instant.
+         */
+        end: string;
+        /**
+         * Continuation returned by the preceding page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum source occurrences, at most 2,000.
+         */
+        limit?: number | null;
+    };
+    url: '/calendar-events/team';
+};
+
+export type ListTeamCalendarResponses = {
+    200: TeamCalendarPage;
+};
+
+export type ListTeamCalendarResponse = ListTeamCalendarResponses[keyof ListTeamCalendarResponses];
 
 export type ListTeamOutOfOfficeData = {
     body?: never;

@@ -22,6 +22,7 @@ fn token_identity() -> CalendarLinkTokenIdentity {
 
 fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
     CalendarEventMutationTarget {
+        observed_access_role: Some(if is_read_only { "reader" } else { "owner" }.to_owned()),
         event_id: Uuid::now_v7(),
         is_read_only,
         provider_event_id: "instance-id".to_string(),
@@ -50,6 +51,7 @@ fn echo_attendee(email: &str, is_self: bool) -> CalendarAttendee {
 
 fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
     CalendarCreationTarget {
+        observed_access_role: Some(if is_read_only { "reader" } else { "owner" }.to_owned()),
         owner_id: "macro|self@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -103,6 +105,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             updated_at: Utc::now(),
         },
         source: CalendarEventSource::Google(GoogleEventSource {
+            observed_access_role: Some("owner".to_owned()),
             email_link_id: Uuid::now_v7(),
             account_id: Uuid::now_v7(),
             calendar_id: Uuid::now_v7(),
@@ -1655,6 +1658,8 @@ fn echo_override(
 ) -> CalendarEventOverride {
     let original_start = Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap();
     CalendarEventOverride {
+        visibility: None,
+        transparency: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: recurrence_id.to_string(),

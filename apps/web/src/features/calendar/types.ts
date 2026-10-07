@@ -44,6 +44,13 @@ export interface CalendarSource {
 
 /** Calendar occurrence data, independent from FullCalendar. */
 export interface CalendarEvent {
+  /** A sanitized team projection grants read access only, never provider actions. */
+  teamProjection?: {
+    ownerId: string;
+    kind: 'busy' | 'details';
+    /** Legacy OOO status does not carry an availability classification. */
+    contributesToAvailability?: boolean;
+  };
   /** Stable identifier for this rendered occurrence. */
   id: string;
   /** Stable canonical calendar event identifier. */

@@ -816,6 +816,67 @@
         }
       }
     },
+    "/calendar-events/team": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Query authorized projections in a bounded viewport.",
+        "operationId": "list_team_calendar",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive instant.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive instant.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Continuation returned by the preceding page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum source occurrences, at most 2,000.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/calendar-events/team-out-of-office": {
       "get": {
         "tags": ["calendar_events"],
@@ -37695,6 +37756,164 @@
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
           }
         }
+      },
+      "TeamCalendarContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No provider or event metadata.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["busy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicitly authorized source content.",
+            "required": ["details", "kind"],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/TeamCalendarDetails",
+                "description": "Detail projection."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["details"]
+              }
+            }
+          }
+        ],
+        "description": "Disjoint busy/detail shapes prevent new event fields leaking by default."
+      },
+      "TeamCalendarCoverage": {
+        "type": "string",
+        "description": "Whether a member's calendar projection can establish availability.",
+        "enum": ["ready", "unavailable", "hidden"]
+      },
+      "TeamCalendarDetails": {
+        "type": "object",
+        "description": "Safe details from a single authorized source.",
+        "required": ["title", "attendees", "calendarName"],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees; self flags are relative to the requesting viewer."
+          },
+          "calendarName": {
+            "type": "string",
+            "description": "Source calendar name, shown only with details."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Join URL, if supplied by this source."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Body, if supplied by this source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location, if supplied by this source."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer address from this source."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer name from this source."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          }
+        }
+      },
+      "TeamCalendarItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TeamCalendarContent",
+            "description": "Authorized content variant."
+          },
+          {
+            "type": "object",
+            "required": ["id", "ownerId", "time", "contributesToAvailability"],
+            "properties": {
+              "contributesToAvailability": {
+                "type": "boolean",
+                "description": "Whether this occurrence blocks the sharer's personal availability.\nA subscribed calendar's block can be shared without occupying the sharer."
+              },
+              "id": {
+                "type": "string",
+                "description": "Stable opaque projection identity, never an event entity id."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The person sharing access to the source."
+              },
+              "time": {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Occurrence interval."
+              }
+            }
+          }
+        ],
+        "description": "A read-only team calendar occurrence."
+      },
+      "TeamCalendarMember": {
+        "type": "object",
+        "description": "A current member of the requester's team.",
+        "required": ["userId", "sharing", "coverage"],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/TeamCalendarCoverage",
+            "description": "Coverage available for a trustworthy calculation."
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/TeamCalendarSharing",
+            "description": "Current team-sharing policy."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Macro user identifier."
+          }
+        }
+      },
+      "TeamCalendarPage": {
+        "type": "object",
+        "description": "A bounded page of team calendar projections.",
+        "required": ["members", "items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamCalendarItem"
+            },
+            "description": "Authorized read-only projections."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamCalendarMember"
+            },
+            "description": "Current membership and sharing policies."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque continuation token; null after the last source occurrence."
+          }
+        }
+      },
+      "TeamCalendarSharing": {
+        "type": "string",
+        "description": "What a user exposes through their team membership.",
+        "enum": ["all", "busy_only", "none"]
       },
       "TeamOutOfOfficeItem": {
         "type": "object",

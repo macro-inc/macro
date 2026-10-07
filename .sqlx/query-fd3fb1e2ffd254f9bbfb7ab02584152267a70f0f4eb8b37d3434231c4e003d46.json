@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd3fb1e2ffd254f9bbfb7ab02584152267a70f0f4eb8b37d3434231c4e003d46"
+}

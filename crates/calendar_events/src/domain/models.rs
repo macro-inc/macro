@@ -665,6 +665,13 @@ pub struct CalendarEventOverride {
     pub location: Option<String>,
     /// Optional replacement status.
     pub status: Option<EventStatus>,
+    /// Instance visibility, when explicitly supplied by the provider. Kept
+    /// on the source snapshot so team views do not lose privacy information.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<EventVisibility>,
+    /// Instance availability, when explicitly supplied by the provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transparency: Option<EventTransparency>,
     /// Replacement attendee list for this occurrence alone. `None` inherits
     /// the series attendees. Google carries the complete list on every
     /// exception it returns, so a single instance-scoped RSVP — including the
@@ -690,6 +697,12 @@ impl CalendarEventOverride {
     pub fn apply_to(&self, event: &mut CalendarEvent) {
         event.apply_occurrence_content(self.content());
         event.time = self.time.clone();
+        if let Some(visibility) = self.visibility {
+            event.visibility = visibility;
+        }
+        if let Some(transparency) = self.transparency {
+            event.transparency = transparency;
+        }
         if let Some(attendees) = &self.attendees {
             event.attendees = attendees.clone();
         }
@@ -1066,6 +1079,9 @@ pub struct GoogleEventSource {
     pub account_id: Uuid,
     /// Calendar containing the source event.
     pub calendar_id: Uuid,
+    /// Calendar role observed for this account before the provider request.
+    /// Never substitute a newer stored role when persisting its response.
+    pub observed_access_role: Option<String>,
     /// Google event identifier.
     pub provider_event_id: String,
     /// Google recurring master identifier for an instance.
@@ -1109,6 +1125,8 @@ pub struct GoogleCalendarTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// Calendar role captured before this target is sent to the provider.
+    pub observed_access_role: Option<String>,
     /// Whether the provider role prohibits event mutation.
     pub is_read_only: bool,
     /// Occurrence window to materialize.
@@ -1227,6 +1245,8 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// This account's role on the addressed calendar before the provider call.
+    pub observed_access_role: Option<String>,
     /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
     /// The clicker's owned inboxes. `None` when they own none.
@@ -1250,6 +1270,7 @@ impl CalendarEventMutationTarget {
             account_id: self.account_id,
             calendar_id: self.calendar_id,
             provider_calendar_id: self.provider_calendar_id.clone(),
+            observed_access_role: self.observed_access_role.clone(),
             is_read_only: self.is_read_only,
             range,
         }
@@ -1299,6 +1320,8 @@ pub struct CalendarCreationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// This account's role on the addressed calendar before the provider call.
+    pub observed_access_role: Option<String>,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
     /// Whether this is its account's primary calendar. Out-of-office events
@@ -1319,6 +1342,7 @@ impl CalendarCreationTarget {
             account_id: self.account_id,
             calendar_id: self.calendar_id,
             provider_calendar_id: self.provider_calendar_id.clone(),
+            observed_access_role: self.observed_access_role.clone(),
             is_read_only: self.is_read_only,
             range,
         }
@@ -1523,6 +1547,8 @@ pub enum RefreshCalendarEvent {
         /// Connected inbox whose calendars changed.
         link_id: Uuid,
     },
+    /// A team entitlement changed; discard cached team projections before refetching.
+    TeamSharingChanged,
 }
 
 /// Identity of one scheduled reminder firing: an occurrence, an offset, and

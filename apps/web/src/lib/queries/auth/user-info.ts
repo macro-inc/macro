@@ -4,6 +4,7 @@ import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
+import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
 import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
 import { authKeys } from './keys';
@@ -63,6 +64,7 @@ export function invalidateAllAfterLogin() {
   // Login may replace a session without visiting logout (including native auth).
   // Invalidate old display-intent handles before refetching the new identity.
   resetGraphqlSoupDoneSession();
+  resetTeamCalendarSession();
   enableUserInfoQuery();
   const invalidated = queryClient.invalidateQueries();
   // Rebind this device's push registrations once the refetches above have

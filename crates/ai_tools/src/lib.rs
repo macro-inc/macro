@@ -26,6 +26,7 @@ pub mod user_tool_review;
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;
 use bots::inbound::toolset::bot_toolset;
+use calendar_events::inbound::team_toolset::team_calendar_toolset;
 use calendar_events::inbound::toolset::{calendar_toolset, mcp_toolset as calendar_mcp_toolset};
 use calendar_scheduling::inbound::toolset::{
     booking_link_toolset, mcp_toolset as booking_link_mcp_toolset,
@@ -80,17 +81,18 @@ pub use tool_context::{
     ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
     ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext,
     ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTableEventPublisher, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
-    build_booking_link_tool_context, build_bot_tool_context, build_calendar_tool_context,
-    build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
-    build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
-    build_crm_tool_context, build_databases_sql_tool_context, build_databases_tool_context,
-    build_image_generation_tool_context, build_initiative_tool_context,
-    build_message_service_with_side_effects, build_message_service_without_side_effects,
-    build_project_tool_context, build_properties_service, build_properties_service_with_broker,
-    build_properties_tool_context, build_routine_tool_context, build_skill_tool_context,
-    build_task_properties_adapter, build_team_repository, build_team_tool_context,
+    ToolTableEventPublisher, ToolTeamCalendarService, ToolTeamCalendarToolContext, ToolTeamService,
+    ToolTeamToolContext, ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext,
+    build_activity_tool_context, build_booking_link_tool_context, build_bot_tool_context,
+    build_calendar_tool_context, build_channel_tool_context_with_dispatcher,
+    build_channel_tool_context_with_side_effects, build_channel_tool_context_without_side_effects,
+    build_coding_agent_tool_context, build_crm_tool_context, build_databases_sql_tool_context,
+    build_databases_tool_context, build_image_generation_tool_context,
+    build_initiative_tool_context, build_message_service_with_side_effects,
+    build_message_service_without_side_effects, build_project_tool_context,
+    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
+    build_routine_tool_context, build_skill_tool_context, build_task_properties_adapter,
+    build_team_calendar_tool_context, build_team_repository, build_team_tool_context,
 };
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
@@ -226,6 +228,7 @@ pub const EAGER_TOOLS: &[&str] = &[
 pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
+        .add_subtoolset::<ToolTeamCalendarToolContext>(team_calendar_toolset())
         .add_subtoolset::<RoutineToolContext>(routines::inbound::routine_toolset());
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession => toolset

@@ -2728,6 +2728,21 @@ export type ImageReferenceInput =
       type: 'staticFile';
     };
 /**
+ * Whether missing busy blocks can safely be interpreted as free time.
+ */
+export type AvailabilityCoverage = 'complete' | 'unknown';
+/**
+ * Why a person's unoccupied intervals cannot establish availability.
+ */
+export type AvailabilityUnknownReason =
+  | 'hidden'
+  | 'unavailable'
+  | 'truncated'
+  | 'missing_time_zone'
+  | 'invalid_time_zone'
+  | 'invalid_interval'
+  | 'conflicting_copies';
+/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -7429,6 +7444,89 @@ export interface ToolPropertyOption {
    * The display value of this option.
    */
   displayValue: string;
+}
+/**
+ * Check personal busy time for you and your current teammates in a bounded UTC time window. Always includes you, even when userIds selects particular teammates. Omit userIds for the whole team, or use ids from ListTeamMembers for specific people. An empty list checks only you. Returns merged busy intervals without event titles, plus coverage and unknown reasons. Subscribed coworkers' events do not block a person's time unless they attend or included that calendar. Common freeWindows are present only when every requested person's data is complete and current. When freeWindows is absent, report uncertainty and never infer free time from missing busy blocks. Free windows cover the requested range only; working hours are not applied. Prefer a day or a week; the maximum is 370 days within one year past to two years future. This tool grants no Google Calendar access and does not invite, RSVP, or modify events.
+ */
+export interface GetTeamAvailability {
+  /**
+   * Inclusive start, RFC 3339 UTC (for example 2026-10-07T09:00:00Z).
+   */
+  start: string;
+  /**
+   * Exclusive end, RFC 3339 UTC. Must be later than start.
+   */
+  end: string;
+  /**
+   * At most 100 Macro user ids from ListTeamMembers. Omit for the whole team; an empty list checks only you. Unknown ids never expand access and suppress common free windows.
+   */
+  userIds?: string[] | null;
+}
+/**
+ * Availability for exactly the members selected by the domain service.
+ */
+export interface TeamAvailability {
+  /**
+   * Inclusive requested start.
+   */
+  start: string;
+  /**
+   * Exclusive requested end.
+   */
+  end: string;
+  /**
+   * Included people, always including the requester.
+   */
+  members: TeamMemberAvailability[];
+  /**
+   * Common calendar gaps for every included person, present only with
+   * complete coverage. These are not working-hours or booking guarantees.
+   */
+  freeWindows?: AvailabilityInterval[] | null;
+  /**
+   * Requested identifiers without a current team relationship. No profile
+   * or calendar data about those identifiers is disclosed.
+   */
+  unknownUserIds: string[];
+  /**
+   * True only when all requested people and source intervals were covered.
+   */
+  complete: boolean;
+  /**
+   * A concise explanation that does not overstate incomplete results.
+   */
+  summary: string;
+}
+/**
+ * Busy time and confidence for one explicitly included person.
+ */
+export interface TeamMemberAvailability {
+  /**
+   * Macro identifier of the included person.
+   */
+  userId: string;
+  /**
+   * Merged known busy intervals clipped to the requested range.
+   */
+  busy: AvailabilityInterval[];
+  coverage: AvailabilityCoverage;
+  /**
+   * Reasons gaps in the busy intervals cannot be called free.
+   */
+  unknownReasons: AvailabilityUnknownReason[];
+}
+/**
+ * An exact, half-open interval of UTC instants, without event metadata.
+ */
+export interface AvailabilityInterval {
+  /**
+   * Inclusive start.
+   */
+  start: string;
+  /**
+   * Exclusive end.
+   */
+  end: string;
 }
 /**
  * Retrieve an email thread and its messages. Returns the thread metadata, the labels applied to the thread (e.g. INBOX, UNREAD, STARRED, and any custom labels), and message contents including sender, recipients, subject, body text, and the labels on each individual message. Use this to read the contents of a specific email conversation or to see which labels a thread or message has.

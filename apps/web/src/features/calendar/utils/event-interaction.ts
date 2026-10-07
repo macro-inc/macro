@@ -34,6 +34,7 @@ export function calendarEventRenderIds(
 /** Whether an occurrence can safely be moved or resized from the calendar. */
 export function canEditCalendarEventTime(event: CalendarEvent) {
   return (
+    !event.teamProjection &&
     !event.isReadOnly &&
     !event.isCancelled &&
     event.recurrenceLines.length === 0 &&

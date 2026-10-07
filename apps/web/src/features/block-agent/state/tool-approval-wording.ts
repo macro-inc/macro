@@ -51,6 +51,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetBotWebhooks: (whose) => `read ${whose} bot webhooks`,
   GetCompany: (whose) => `look up companies in ${whose} workspace`,
   GetEntityProperties: (whose) => `read properties in ${whose} workspace`,
+  GetTeamAvailability: (whose) => `check availability for ${whose} team`,
   GetThread: (whose) => `read ${whose} email`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,
   IssueBotCredential: (whose) => `issue credentials for ${whose} bots`,

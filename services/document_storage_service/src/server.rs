@@ -1757,8 +1757,18 @@ pub async fn run() -> anyhow::Result<()> {
             ),
         ),
     );
-    let calendar_state =
-        CalendarRouterState::new(calendar_read_service, authorization_state.clone());
+    // Team policy reads use the primary so a sharing downgrade cannot be
+    // served from a lagging replica. The GraphQL own-calendar feed retains
+    // its existing readonly-pool routing.
+    let calendar_state = CalendarRouterState::new(
+        Arc::new(
+            calendar_events::domain::service::CalendarService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            )
+            .with_team_sharing_enabled(config.calendar_team_sharing_enabled),
+        ),
+        authorization_state.clone(),
+    );
     // Calendar writes belong to calendar_service; each GraphQL mutation then
     // answers from the primary so it reads the state its write committed.
     let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
