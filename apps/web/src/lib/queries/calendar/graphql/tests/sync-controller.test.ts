@@ -210,6 +210,32 @@ describe('CalendarSyncController', () => {
     expect(fetchChanges).toHaveBeenCalledTimes(2);
   });
 
+  it('schedules another run when the page cap leaves changes behind', async () => {
+    const pages = Array.from({ length: 51 }, (_, index) =>
+      changes({
+        newWatermark: [{ linkId: 'link-1', seq: String(index + 2) }],
+        hasMore: index < 50,
+      })
+    );
+    const { host, fetchChanges, controller } = setup(pages, [
+      { linkId: 'link-1', seq: '1' },
+    ]);
+    await controller.runDelta();
+    expect(fetchChanges).toHaveBeenCalledTimes(50);
+    expect(
+      host.calendarCommit.mock.calls.at(-1)?.[0].freshness
+    ).toBeUndefined();
+    await vi.runAllTimersAsync();
+    expect(fetchChanges).toHaveBeenCalledTimes(51);
+    expect(host.calendarCommit.mock.calls.at(-1)?.[0]).toMatchObject({
+      watermark: {
+        kind: 'advance',
+        to: [{ linkId: 'link-1', seq: '52' }],
+      },
+      freshness: 'fresh',
+    });
+  });
+
   it('stops scheduling after disposal', async () => {
     const { fetchChanges, controller } = setup([changes()]);
     controller.markStale('poke');

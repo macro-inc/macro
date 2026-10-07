@@ -24,7 +24,8 @@ export type CalendarStaleReason =
   | 'online'
   | 'visible'
   | 'generation'
-  | 'syncing';
+  | 'syncing'
+  | 'continue';
 
 export interface CalendarSyncControllerOptions {
   fetchChanges?: FetchCalendarChanges;
@@ -36,7 +37,7 @@ export interface CalendarSyncControllerOptions {
 /** An empty viewport reads only the stored watermark and freshness. */
 const SYNC_STATE_RANGE = { startMs: 0, endMs: 0, startDay: 0, endDay: 0 };
 const DEFAULT_DEBOUNCE_MS = 250;
-/** Bounds one run; a later poke continues from the advanced watermark. */
+/** Bounds one run; a scheduled run continues from the advanced watermark. */
 const MAX_DELTA_PAGES = 50;
 
 const eventKey = (id: string) => `GraphqlCalendarEvent:${id}`;
@@ -122,6 +123,7 @@ export class CalendarSyncController {
     if (state.kind === 'unsupported' || !state.watermark?.length) return;
     let since = state.watermark;
     let calendarsChanged = false;
+    let hasMore = false;
     for (let page = 0; page < MAX_DELTA_PAGES && !this.disposed; page += 1) {
       const changes = await this.fetchChanges(since);
       const to = changes.newWatermark.map(({ linkId, seq }) => ({
@@ -158,10 +160,12 @@ export class CalendarSyncController {
         changes.calendars.length > 0 ||
         changes.deletedCalendarIds.length > 0 ||
         removedLinkIds.length > 0;
-      if (!changes.hasMore) break;
+      hasMore = changes.hasMore;
+      if (!hasMore) break;
       since = to;
     }
     if (calendarsChanged) await this.refetchCalendars();
+    if (hasMore) this.markStale('continue');
   }
 }
 
