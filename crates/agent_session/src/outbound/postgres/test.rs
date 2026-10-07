@@ -796,6 +796,23 @@ async fn get_missing_session_errors(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn find_answers_none_only_for_a_missing_session(pool: PgPool) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let stored = create_session(&repo, new_session(bot_id, None, None)).await;
+
+    let found = AgentSessionRepo::find(&repo, stored.id)
+        .await
+        .expect("find a stored session");
+    let missing = AgentSessionRepo::find(&repo, AgentSessionId::new())
+        .await
+        .expect("find a missing session");
+
+    assert_eq!(found.map(|session| session.id), Some(stored.id));
+    assert!(missing.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_removes_session(pool: PgPool) {
     let repo = test_repo(&pool);
     let bot_id = create_test_bot(&pool).await;

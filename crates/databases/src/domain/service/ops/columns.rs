@@ -120,6 +120,11 @@ impl Planner {
         };
         let column = Column {
             protections: vec![],
+            nullable: self
+                .restoration
+                .columns
+                .get(&id)
+                .is_none_or(|column| column.nullable),
             id,
             table_id: entry.table.id,
             property_definition_id: definition.definition.id,

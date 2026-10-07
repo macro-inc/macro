@@ -119,6 +119,27 @@ pub struct Column {
     /// Schema operations reserved by a feature; ordinary edits cannot clear them.
     #[serde(default)]
     pub protections: Vec<ColumnProtection>,
+    /// Whether a row may omit this cell; empty collections also count as absent.
+    #[serde(default = "column_nullable_default")]
+    pub nullable: bool,
+}
+
+/// Whether a stored cell satisfies a required column. Empty collections represent
+/// no selection; scalar values, including empty text, zero and false, are present.
+pub(crate) fn cell_has_value(value: &PropertyValue) -> bool {
+    match value {
+        PropertyValue::SelectOption(values) => !values.is_empty(),
+        PropertyValue::EntityRef(values) => !values.is_empty(),
+        PropertyValue::Link(values) => !values.is_empty(),
+        PropertyValue::Bool(_)
+        | PropertyValue::Num(_)
+        | PropertyValue::Str(_)
+        | PropertyValue::Date(_) => true,
+    }
+}
+
+pub(crate) fn column_nullable_default() -> bool {
+    true
 }
 
 impl Column {
@@ -628,6 +649,15 @@ impl Writes {
 /// What applying [`Writes`] did. Anything but `Applied` wrote nothing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WritesOutcome {
+    /// The final batch would leave a required cell empty; nothing committed.
+    MissingRequiredCell {
+        /// The write that affected the row or its schema.
+        write: usize,
+        /// The required column.
+        column: ColumnId,
+        /// The row missing its value.
+        row: RowId,
+    },
     /// A row the undo would remove has a surviving incoming relation.
     RowInUse,
     /// An option the batch must leave unused is selected by an entity.

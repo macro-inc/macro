@@ -278,6 +278,14 @@ impl Planner {
             column,
             &lane.cell(),
         )?;
+        if !column.column.nullable && cell.is_none() {
+            return Err(refuse(
+                index,
+                None,
+                Some(group_by),
+                "the required column needs a value",
+            ));
+        }
         let definition = column.definition.definition.id;
         let state = self
             .boards

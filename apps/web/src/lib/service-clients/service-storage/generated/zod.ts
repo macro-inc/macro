@@ -4830,6 +4830,12 @@ export const getDatabaseResponse = zod
                           .describe(
                             "Whether the first nonempty value may settle this new text column's type."
                           ),
+                        nullable: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            'Whether a row may omit this cell; empty collections also count as absent.'
+                          ),
                         position: zod
                           .string()
                           .describe('Fractional index for column ordering.'),
@@ -9243,6 +9249,12 @@ export const inferDatabaseColumnTypeResponse = zod
               .boolean()
               .describe(
                 "Whether the first nonempty value may settle this new text column's type."
+              ),
+            nullable: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether a row may omit this cell; empty collections also count as absent.'
               ),
             position: zod
               .string()

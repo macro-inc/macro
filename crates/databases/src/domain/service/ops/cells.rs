@@ -40,6 +40,13 @@ impl Planner {
                 .find(|column| column.column.id == cell.column)
                 .ok_or_else(|| place.refuse("no such column in this table"))?;
             let value = self.value(place, column, &cell.value)?;
+            if !column.column.nullable
+                && !value
+                    .as_ref()
+                    .is_some_and(crate::domain::models::cell_has_value)
+            {
+                return Err(place.refuse(format!("\"{}\" requires a value", column.name())));
+            }
             stored.push((column.definition.definition.id, value));
         }
         Ok(stored)

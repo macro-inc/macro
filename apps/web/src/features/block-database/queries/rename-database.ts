@@ -14,7 +14,7 @@ import {
 import type { CombinedError } from '@urql/core';
 import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
-import type { DatabaseEntityFailure } from '../core/write-failure';
+import type { DatabaseEntityFailure } from '../../database/core/write-failure';
 
 /** The slice of the GraphQL client a database rename sends through. */
 export type RenameDatabaseClient = {

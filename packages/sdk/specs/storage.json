@@ -21081,6 +21081,10 @@
             "type": "boolean",
             "description": "Whether the first nonempty value may settle this new text column's type."
           },
+          "nullable": {
+            "type": "boolean",
+            "description": "Whether a row may omit this cell; empty collections also count as absent."
+          },
           "position": {
             "type": "string",
             "description": "Fractional index for column ordering."

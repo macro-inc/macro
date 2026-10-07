@@ -488,3 +488,16 @@ Schema edits update their UI optimistically and finish after the write commits;
 they do not wait for the background catalog refresh. A refused edit rolls back
 its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
+
+### Embedded database editors
+
+The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
+row queries and operation batches from that host's API. Verify cell edits and
+column edits on the host surface, not only in the Macro database block. A host
+without schema-edit permission offers no add, rename, delete or type-change
+actions. Board card dragging requires a supplied position writer; a board without
+one is still readable and must not report a successful move.
+
+For local UI regression coverage, the database browser fixtures include an API
+host with no Macro database entity. Its reads are paginated and its edits pass
+through the same controller used by the database block.
