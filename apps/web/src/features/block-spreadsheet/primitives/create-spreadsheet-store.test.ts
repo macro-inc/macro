@@ -65,7 +65,46 @@ describe('spreadsheet store', () => {
     doc.free();
   });
 
-  it.each(['connected', 'connecting', 'offline'] as const)(
+  it('shifts cells in a connected shared workbook and keeps inserted columns', async () => {
+    const doc = new LoroDoc();
+    writeSpreadsheetCells(doc, { A1: { value: 'Keep me' } });
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'connected',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    expect(store.canChangeStructure()).toBe(true);
+    const before = structuredClone(store.workbook());
+    const next = before.map((sheet) => ({
+      ...sheet,
+      cells: { B1: sheet.cells.A1 },
+      layout: { ...sheet.layout, columnCount: sheet.layout.columnCount + 1 },
+    }));
+    store.applyStructure(before, next, store.revision());
+    expect(store.cells()).toEqual({ B1: before[0].cells.A1 });
+    expect(store.columnCount()).toBe(before[0].layout.columnCount + 1);
+    expect(readSpreadsheetLayout(doc).columnCount).toBe(
+      before[0].layout.columnCount + 1
+    );
+    store.undo();
+    expect(store.cells()).toEqual(before[0].cells);
+    expect(store.columnCount()).toBe(before[0].layout.columnCount);
+    dispose();
+    doc.free();
+  });
+
+  it.each(['connecting', 'offline'] as const)(
     'rejects coordinate shifts for a %s collaborative source',
     async (status) => {
       const doc = new LoroDoc();
@@ -91,7 +130,7 @@ describe('spreadsheet store', () => {
       expect(store.canChangeStructure()).toBe(false);
       expect(() =>
         store.applyStructure(before, before, store.revision())
-      ).toThrow('shared workbooks');
+      ).toThrow('Reconnect');
       expect(doc.version().toJSON()).toEqual(version);
       dispose();
       doc.free();

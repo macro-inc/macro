@@ -240,10 +240,12 @@ The footer's bottom-right **Import and export → Import…** accepts `.csv` and
 Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
 clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
 The menu keeps an existing whole-row/column selection when opened within it.
-Insert/delete shifts references and named ranges in local workbooks only; these
-commands are disabled on shared workbooks (including offline sessions) until
-collaborative rows and columns have stable identities. Adding blank rows at the
-bottom remains available. Hidden cells are skipped by keyboard navigation.
+Insert/delete shifts cells, references, and named ranges in drafts and in saved
+workbooks while connected; offline or reconnecting sessions disable them (the
+menu says "Reconnect to insert or delete rows and columns"). A collaborator edit
+received while the shift is being prepared cancels it with nothing changed.
+Adding blank rows at the bottom remains available. Hidden cells are skipped by
+keyboard navigation.
 
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
 the formula bar to search people, documents, channels, email and dates, then choose an

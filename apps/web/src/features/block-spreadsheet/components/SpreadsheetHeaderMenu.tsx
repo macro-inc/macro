@@ -92,7 +92,7 @@ export function SpreadsheetHeaderMenu(props: {
           )}
           <Show when={!props.canChangeStructure && !props.readonly}>
             <div class="max-w-64 px-3 py-1 text-xs text-ink-muted">
-              Insert and delete are available in local workbooks.
+              Reconnect to insert or delete rows and columns.
             </div>
           </Show>
           {item(`Delete ${label()}`, 'delete')}

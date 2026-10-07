@@ -75,9 +75,7 @@ test.afterAll(async () => {
   await server?.dispose();
 });
 
-test('live edits, named colored ranges, offline recovery and departing cursors', async ({
-  browser,
-}) => {
+async function seedSharedWorkbook() {
   const id = crypto.randomUUID();
   const seeded = await server.dispatchFetch(
     `${serverUrl}document/${id}/initialize`,
@@ -94,31 +92,101 @@ test('live edits, named colored ranges, offline recovery and departing cursors',
     }
   );
   expect(seeded.status).toBe(200);
+  return id;
+}
+
+async function openSharedWorkbook(page: Page, id: string, user: string) {
+  const socket = `${serverUrl.replace('http:', 'ws:')}document/${id}/connect?token=${token(id, user)}`;
+  await page.goto(
+    `http://localhost:3017/?${new URLSearchParams({ document: id, socket, user: `macro|${user}@example.com` })}`
+  );
+  await expect(page.locator('[data-address="A1"]')).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.spreadsheetFixture.connectionStatus())
+    )
+    .toBe('connected');
+}
+
+test('inserts and deletes columns in a shared workbook while connected', async ({
+  browser,
+}) => {
+  const id = await seedSharedWorkbook();
+  const contexts = await Promise.all(
+    ['alice', 'bob'].map(() => browser.newContext())
+  );
+  const [alice, bob] = await Promise.all(
+    contexts.map((context) => context.newPage())
+  );
+  try {
+    await openSharedWorkbook(alice, id, 'alice');
+    await openSharedWorkbook(bob, id, 'bob');
+    await alice.getByRole('button', { name: 'Add sheet', exact: true }).click();
+    await expect(
+      bob.getByRole('tab', { name: 'Sheet2', exact: true })
+    ).toBeVisible();
+    await bob.getByRole('tab', { name: 'Sheet2', exact: true }).click();
+    const edit = async (address: string, value: string) => {
+      await alice.locator(`[data-address="${address}"]`).dblclick();
+      await alice
+        .getByRole('textbox', { name: `Edit ${address}`, exact: true })
+        .fill(value);
+      await alice.keyboard.press('Enter');
+    };
+    await edit('B2', '7');
+    await edit('C2', '=B2*2');
+    await expect(bob.locator('[data-address="C2"]')).toHaveText('14');
+
+    const columnMenu = async (column: string) => {
+      await alice
+        .getByRole('button', { name: `Select column ${column}`, exact: true })
+        .click({ button: 'right' });
+    };
+    await columnMenu('B');
+    await alice
+      .getByRole('menuitem', { name: 'Insert 1 column left', exact: true })
+      .click();
+    await expect(bob.locator('[data-address="C2"]')).toHaveText('7');
+    await expect(bob.locator('[data-address="D2"]')).toHaveText('14');
+    await expect(bob.locator('[data-address="B2"]')).toHaveText('');
+    await expect
+      .poll(async () => {
+        const sheets = await bob.evaluate(() =>
+          window.spreadsheetFixture.snapshot()
+        );
+        return sheets.find((sheet) => sheet.name === 'Sheet2')?.cells.D2;
+      })
+      .toMatchObject({ value: '=C2*2' });
+
+    await columnMenu('B');
+    await alice
+      .getByRole('menuitem', { name: 'Delete 1 column', exact: true })
+      .click();
+    await expect(bob.locator('[data-address="B2"]')).toHaveText('7');
+    await expect(bob.locator('[data-address="C2"]')).toHaveText('14');
+    await alice.getByRole('grid').press('ControlOrMeta+z');
+    await expect(bob.locator('[data-address="C2"]')).toHaveText('7');
+    await expect(bob.locator('[data-address="D2"]')).toHaveText('14');
+  } finally {
+    await Promise.all(contexts.map((context) => context.close()));
+  }
+});
+
+test('live edits, named colored ranges, offline recovery and departing cursors', async ({
+  browser,
+}) => {
+  const id = await seedSharedWorkbook();
   const contexts = await Promise.all(
     ['alice', 'bob', 'carol'].map(() => browser.newContext())
   );
   const pages = await Promise.all(contexts.map((context) => context.newPage()));
   try {
     await Promise.all(
-      pages.map(async (page, index) => {
-        const user = ['alice', 'bob', 'carol'][index];
-        const socket = `${serverUrl.replace('http:', 'ws:')}document/${id}/connect?token=${token(id, user)}`;
-        await page.goto(
-          `http://localhost:3017/?${new URLSearchParams({ document: id, socket, user: `macro|${user}@example.com` })}`
-        );
-        await expect(page.locator('[data-address="A1"]')).toBeVisible();
-      })
-    );
-    const [alice, bob, carol] = pages;
-    await Promise.all(
-      pages.map((page) =>
-        expect
-          .poll(() =>
-            page.evaluate(() => window.spreadsheetFixture.connectionStatus())
-          )
-          .toBe('connected')
+      pages.map((page, index) =>
+        openSharedWorkbook(page, id, ['alice', 'bob', 'carol'][index])
       )
     );
+    const [alice, bob, carol] = pages;
     await alice.locator('[data-address="A1"]').dblclick();
     await alice
       .getByRole('textbox', { name: 'Edit A1', exact: true })
