@@ -221,18 +221,40 @@ describe('readCalendarRange', () => {
     expect(data.items).toHaveLength(1);
   });
 
-  it('asks again after a starting cache fails its first read', async () => {
+  it('reads REST and asks again after a starting cache fails its first read', async () => {
     const host = fakeHost([
       range({ occurrenceKeys: ['GraphqlCalendarOccurrence:event-1:a'] }),
     ]);
     host.calendarRange.mockRejectedValueOnce(new Error('cache worker timeout'));
 
-    await expect(readCalendarRange(host, week)).rejects.toThrow(
-      'cache worker timeout'
-    );
+    await expect(readCalendarRange(host, week)).resolves.toEqual({
+      kind: 'not-ready',
+    });
     const data = await readData(host, week);
     expect(data.items).toHaveLength(1);
     expect(calendarCacheAnswered(host)).toBe(true);
+  });
+
+  it('does not count a late unsupported answer as answering', async () => {
+    let answer: (result: CalendarRangeCacheResult) => void = () => {};
+    const host = fakeHost([{ kind: 'unsupported' }]);
+    host.calendarRange.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+
+    await expect(
+      readCalendarRange(host, week, { headStartMs: 5 })
+    ).resolves.toEqual({ kind: 'not-ready' });
+    answer({ kind: 'unsupported' });
+    await vi.waitFor(async () =>
+      expect(await readCalendarRange(host, week)).toEqual({
+        kind: 'unsupported',
+      })
+    );
+    expect(calendarCacheAnswered(host)).toBe(false);
   });
 });
 

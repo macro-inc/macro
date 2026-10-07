@@ -19,7 +19,12 @@ import type { CalendarOccurrenceQueryRange } from '../keys';
 import type { CalendarOccurrencesData } from '../occurrences';
 import { mapCalendarOccurrence, mapCalendarSyncStatus } from './map';
 import { fetchCached } from './network';
-import { calendarCacheAnswered, markCalendarCacheAnswered } from './readiness';
+import {
+  CALENDAR_CACHE_HEAD_START_MS,
+  calendarCacheAnswered,
+  markCalendarCacheAnswered,
+  withinCacheHeadStart,
+} from './readiness';
 
 const MS_PER_DAY = 86_400_000;
 const OCCURRENCE_PAGE_SIZE = 2000;
@@ -267,15 +272,8 @@ async function readOccurrenceItems(
   return items;
 }
 
-/**
- * How long a host that has not answered a calendar read yet gets before the
- * viewport reads from REST. A healthy browser cache starts in about 0.4s at
- * the median; one that fails to start can take minutes to give up.
- */
-const CALENDAR_CACHE_HEAD_START_MS = 1_000;
-
 // The outstanding first read of each host that has not answered yet.
-const firstReads = new WeakMap<object, Promise<void>>();
+const firstReads = new WeakMap<object, Promise<unknown>>();
 
 export type CalendarRangeRead =
   | { kind: 'range'; data: CalendarOccurrencesData }
@@ -294,29 +292,21 @@ async function askCalendarRange(
 ): Promise<CalendarRangeCacheResult | 'not-ready'> {
   if (calendarCacheAnswered(host)) return host.calendarRange(args);
   if (firstReads.has(host)) return 'not-ready';
-  const answer = host.calendarRange(args);
-  firstReads.set(
-    host,
-    (async () => {
-      try {
-        await answer;
-        markCalendarCacheAnswered(host);
-      } catch {
-        // A failed first read leaves the host unanswered; the next read asks again.
-      } finally {
-        firstReads.delete(host);
-      }
-    })()
-  );
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const headStart = new Promise<'not-ready'>((resolve) => {
-    timer = setTimeout(() => resolve('not-ready'), headStartMs);
-  });
-  try {
-    return await Promise.race([answer, headStart]);
-  } finally {
-    clearTimeout(timer);
-  }
+  const answer = (async (): Promise<CalendarRangeCacheResult | 'not-ready'> => {
+    try {
+      const result = await host.calendarRange(args);
+      if (result.kind === 'range') markCalendarCacheAnswered(host);
+      return result;
+    } catch {
+      // A failed first read leaves the host unanswered: this viewport reads
+      // REST and the next read asks again.
+      return 'not-ready';
+    } finally {
+      firstReads.delete(host);
+    }
+  })();
+  firstReads.set(host, answer);
+  return withinCacheHeadStart(answer, headStartMs);
 }
 
 /** Answers a viewport from the cache, fetching only spans never fetched. */

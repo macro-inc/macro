@@ -12,6 +12,7 @@ import {
   useGraphqlCalendarHost,
 } from './graphql/flag';
 import { readCalendarRange } from './graphql/range';
+import { calendarCacheAnswered } from './graphql/readiness';
 import { activeCalendarSyncController } from './graphql/sync-controller';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
@@ -161,6 +162,16 @@ export function useCalendarOccurrencesQuery(
         networkMode: 'offlineFirst' as const,
         placeholderData: (p: CalendarOccurrencesData | undefined) => p,
         refetchOnWindowFocus: false,
+        // Read from REST while the cache was starting: poll like the REST
+        // path until the provider sync finishes.
+        refetchInterval: (query: {
+          state: { data: CalendarOccurrencesData | undefined };
+        }) =>
+          options?.().pollWhileSyncing !== false &&
+          !calendarCacheAnswered(host) &&
+          query.state.data?.syncStatus === CalendarSyncStatus.syncing
+            ? CALENDAR_SYNC_POLL_INTERVAL
+            : false,
       };
     }
 

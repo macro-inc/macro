@@ -1218,7 +1218,9 @@ error, and a write made offline stays visible and replays on reconnect. Native
 apps whose engine lacks the calendar cache commands keep the REST path. Until the
 cache answers its first calendar read, viewports wait at most a second and then
 read from REST, and writes use REST, so a cache that is slow to start or fails
-("Local cache unavailable") never leaves the calendar on skeletons.
+("Local cache unavailable") never leaves the calendar on skeletons. Writes in
+that window behave as on the REST path: offline, they roll back with an error
+instead of replaying.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
