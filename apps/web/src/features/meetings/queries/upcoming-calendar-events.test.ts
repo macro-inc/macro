@@ -12,6 +12,11 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { listCalendarOccurrences: vi.fn() },
 }));
 
+vi.mock('@queries/calendar/graphql/flag', () => ({
+  useGraphqlCalendarHost: () => () => undefined,
+  markCalendarCacheUnsupported: vi.fn(),
+}));
+
 let client: QueryClient;
 vi.mock('@queries/client', () => ({
   get queryClient() {

@@ -1,11 +1,18 @@
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
+import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import {
+  markCalendarCacheUnsupported,
+  useGraphqlCalendarHost,
+} from './graphql/flag';
+import { readCalendarRange } from './graphql/range';
+import { activeCalendarSyncController } from './graphql/sync-controller';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
 export type { CalendarOccurrenceQueryRange } from './keys';
@@ -24,6 +31,10 @@ export interface CalendarOccurrencesQueryOptions {
   pollWhileSyncing?: boolean;
   refetchOnWindowFocus?: boolean;
 }
+
+type CalendarOccurrencesQueryKey =
+  | ReturnType<typeof calendarKeys.occurrences>['queryKey']
+  | ReturnType<typeof calendarKeys.occurrences>['_ctx']['graphql']['queryKey'];
 
 export interface CalendarOccurrencesData {
   items: CalendarOccurrenceItem[];
@@ -101,8 +112,57 @@ export function useCalendarOccurrencesQuery(
   input: Accessor<CalendarOccurrencesQueryInput>,
   options?: Accessor<CalendarOccurrencesQueryOptions>
 ) {
-  return useQuery(() => {
+  const cacheHost = useGraphqlCalendarHost();
+  const activeQueryClient = useQueryClient();
+
+  createEffect(() => {
+    const host = cacheHost();
+    if (!host) return;
     const { userId, range } = input();
+    const queryKey = calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
+      .queryKey;
+    onCleanup(
+      subscribeToVisibleCacheChanges(host, () =>
+        activeQueryClient.invalidateQueries(
+          { queryKey },
+          { cancelRefetch: false }
+        )
+      )
+    );
+  });
+
+  return useQuery<
+    CalendarOccurrencesData,
+    Error,
+    CalendarOccurrencesData,
+    CalendarOccurrencesQueryKey
+  >(() => {
+    const { userId, range } = input();
+    const enabled =
+      Boolean(userId) && range !== undefined && options?.().enabled !== false;
+    const host = cacheHost();
+
+    if (host) {
+      return {
+        queryKey: calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
+          .queryKey,
+        queryFn: async ({ signal }: { signal: AbortSignal }) => {
+          if (!range) {
+            throw new Error('Calendar occurrence range is unavailable');
+          }
+          const cached = await readCalendarRange(host, range, { signal });
+          if (cached) return cached;
+          markCalendarCacheUnsupported(host);
+          return fetchCalendarOccurrences(range, signal);
+        },
+        enabled,
+        staleTime: Infinity,
+        // Covered viewports never touch the network, so offline reads run.
+        networkMode: 'offlineFirst' as const,
+        placeholderData: (p: CalendarOccurrencesData | undefined) => p,
+        refetchOnWindowFocus: false,
+      };
+    }
 
     return {
       queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
@@ -127,7 +187,18 @@ export function useCalendarOccurrencesQuery(
   });
 }
 
-export function invalidateCalendarOccurrences() {
+/**
+ * Refetches every mounted occurrence viewport. With calendar reads on the
+ * cache, the delta runs first so the viewports see the change that prompted
+ * the refresh rather than the cache from before it.
+ */
+export async function invalidateCalendarOccurrences() {
+  const controller = activeCalendarSyncController();
+  if (controller) {
+    await controller.runDelta().catch((error) => {
+      console.warn('Calendar delta sync failed', error);
+    });
+  }
   return queryClient.invalidateQueries({
     queryKey: calendarKeys.occurrences._def,
   });
