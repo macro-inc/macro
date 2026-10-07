@@ -9,6 +9,7 @@ import {
   validImageUrl,
 } from './sheet-drawings';
 import { formulaReferencesSheet } from './sheet-references';
+import type { DataValidation } from './sheet-rules';
 import {
   parseWorkbookMetadata,
   renameSheetReferences,
@@ -135,6 +136,16 @@ function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
     )
       throw new Error(
         `“${sheet.name}” is referenced by an Excel name definition.`
+      );
+    if (
+      current.metadata?.validations?.some((rule) =>
+        rule.formulas?.some((formula) =>
+          formulaReferencesSheet(`=${formula}`, sheet.name)
+        )
+      )
+    )
+      throw new Error(
+        `“${sheet.name}” is referenced by a data validation rule, such as a dropdown's list. Update the rule before renaming or deleting it.`
       );
     for (const cell of Object.values(current.cells)) {
       if (
@@ -299,6 +310,24 @@ export function deleteSpreadsheetSheet(
   }
   tombstoneSpreadsheetSheet(doc, sheetId);
   doc.commit({ origin: 'spreadsheet-sheet-delete' });
+}
+
+/** Replace a sheet's data validation rules, keeping its other metadata. */
+export function setSpreadsheetValidations(
+  doc: LoroDoc,
+  sheetId: string,
+  validations: DataValidation[]
+) {
+  existingSheet(doc, sheetId);
+  const metadata = doc.getMap('spreadsheetSheetMetadata');
+  const { validations: _previous, ...rest } =
+    parseWorkbookMetadata(metadata.get(sheetId)) ?? {};
+  const encoded = JSON.stringify(
+    validations.length ? { ...rest, validations } : rest
+  );
+  if (!parseWorkbookMetadata(encoded))
+    throw new Error('Invalid data validation rules.');
+  metadata.set(sheetId, encoded);
 }
 
 function validateSheetInputs(

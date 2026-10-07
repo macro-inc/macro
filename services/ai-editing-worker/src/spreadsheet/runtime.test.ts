@@ -370,3 +370,25 @@ it('accepts imported financial styles in AI edits while rejecting unknown border
   body.request.operations[0].style.borderBottomStyle = 'bogus';
   expect(spreadsheetBodySchema.safeParse(body).success).toBe(false);
 });
+
+it('accepts dropdown operations and rejects unknown dropdown fields', () => {
+  const edit = (operation: Record<string, unknown>) =>
+    spreadsheetBodySchema.safeParse({
+      documentId: crypto.randomUUID(),
+      documentToken: 'token',
+      request: {
+        action: 'edit',
+        expectedRevision: 'rev',
+        operations: [{ sheetId: 'sheet1', range: 'B2:B50', ...operation }],
+      },
+    }).success;
+  expect(edit({ type: 'set_dropdown', items: ['Open', 'Done'] })).toBe(true);
+  expect(
+    edit({ type: 'set_dropdown', source: 'Lists!A1:A9', rejectInvalid: false })
+  ).toBe(true);
+  expect(edit({ type: 'clear_validation' })).toBe(true);
+  expect(edit({ type: 'set_dropdown', items: [] })).toBe(false);
+  expect(edit({ type: 'set_dropdown', items: ['a'], formula: '=1' })).toBe(
+    false
+  );
+});

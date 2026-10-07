@@ -513,6 +513,20 @@ export const SpreadsheetResponse = z.any().superRefine((x, ctx) => {
               error: z.union([z.string(), z.null()]).optional(),
             })
           ),
+          validations: z
+            .array(
+              z.object({
+                range: z.string(),
+                type: z.string(),
+                items: z.union([z.array(z.string()), z.null()]).optional(),
+                source: z.union([z.string(), z.null()]).optional(),
+                operator: z.union([z.string(), z.null()]).optional(),
+                formulas: z.union([z.array(z.string()), z.null()]).optional(),
+                dropdown: z.union([z.boolean(), z.null()]).optional(),
+                rejectInvalid: z.boolean(),
+              })
+            )
+            .optional(),
           truncated: z.boolean(),
         })
       ),
@@ -5157,6 +5171,23 @@ export const EditSpreadsheet = z.object({
                 .strict()
             ),
             type: z.literal('resize_columns'),
+          })
+          .strict(),
+        z
+          .object({
+            sheetId: z.string(),
+            range: z.string(),
+            items: z.union([z.array(z.string()), z.null()]).optional(),
+            source: z.union([z.string(), z.null()]).optional(),
+            rejectInvalid: z.union([z.boolean(), z.null()]).optional(),
+            type: z.literal('set_dropdown'),
+          })
+          .strict(),
+        z
+          .object({
+            sheetId: z.string(),
+            range: z.string(),
+            type: z.literal('clear_validation'),
           })
           .strict(),
       ];
