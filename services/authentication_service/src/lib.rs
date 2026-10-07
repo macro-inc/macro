@@ -3,6 +3,7 @@
 //! Doppler config check all link this library, so the service compiles once
 //! and caches as one rlib.
 
+mod account_link_state;
 mod api;
 mod config;
 mod generate_password;

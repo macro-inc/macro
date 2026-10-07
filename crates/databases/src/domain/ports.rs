@@ -181,6 +181,14 @@ pub trait DatabaseStorage: Send + Sync + 'static {
     /// Allocate an empty core database without creating an app entity or grants.
     fn create_storage(&self) -> impl Future<Output = Result<DatabaseId, Self::Error>> + Send;
 
+    /// A bounded page of identities from a host-authorized storage table.
+    fn storage_row_page(
+        &self,
+        table: TableId,
+        after: Option<RowId>,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<RowRef>, Self::Error>> + Send;
+
     /// Delete unbound storage, its tables, cells, definitions and journal.
     /// An attached app entity prevents deletion through its foreign key.
     fn delete_storage(
@@ -227,7 +235,8 @@ pub trait CellStore: Send + Sync + 'static {
     /// live and at its expected version, each new definition created before
     /// any column binds it, each updated or deleted row checked to belong to
     /// its table, each related row to its target table, each changed option
-    /// or column to its definition, and each changed table's version bumped
+    /// or column to its definition, all affected required cells checked in the final
+    /// batch state, and each changed table's version bumped
     /// once. Anything but [`WritesOutcome::Applied`] wrote nothing.
     fn apply_writes(
         &self,

@@ -32,6 +32,36 @@ pub struct TableEntry {
     pub views: Vec<DatabaseView>,
 }
 
+/// A storage table's schema, independent of app metadata and access grants.
+#[derive(Debug, Clone)]
+pub struct StorageTable {
+    /// Table identity, name, ordering and version.
+    pub table: Table,
+    /// Columns and their definitions in display order.
+    pub columns: Vec<ColumnEntry>,
+    /// Stored views, if the consumer uses them.
+    pub views: Vec<DatabaseView>,
+}
+
+impl From<TableEntry> for StorageTable {
+    fn from(entry: TableEntry) -> Self {
+        Self {
+            table: entry.table,
+            columns: entry.columns,
+            views: entry.views,
+        }
+    }
+}
+
+impl StorageTable {
+    /// The column bound to a definition.
+    pub fn column_for(&self, definition: PropertyDefinitionId) -> Option<&ColumnEntry> {
+        self.columns
+            .iter()
+            .find(|column| column.definition.definition.id == definition)
+    }
+}
+
 /// One column placement with the definition behind it.
 #[derive(Debug, Clone)]
 pub struct ColumnEntry {
@@ -113,8 +143,12 @@ pub fn stored_data_type(data_type: DataType) -> StoredDataType {
 
 /// A table's columns as a view's checks see them.
 pub fn schema_columns(entry: &TableEntry) -> Vec<SchemaColumn> {
-    entry
-        .columns
+    storage_schema_columns(&entry.columns)
+}
+
+/// Column types used by the shared storage planner and view validator.
+pub fn storage_schema_columns(columns: &[ColumnEntry]) -> Vec<SchemaColumn> {
+    columns
         .iter()
         .map(|column| {
             SchemaColumn::new(
@@ -296,21 +330,35 @@ pub fn column_kind(
 /// The database's schema as a batch's journal keeps it: every table's
 /// columns, with their options, and views, as `entries` has them.
 pub fn schema_image(entries: &[TableEntry]) -> crate::domain::journal::SchemaImage {
+    storage_schema_image(entries.iter().map(|entry| {
+        (
+            &entry.table,
+            entry.columns.as_slice(),
+            entry.views.as_slice(),
+        )
+    }))
+}
+
+/// Journal schema without an app entity.
+pub fn storage_schema_image<'a>(
+    entries: impl IntoIterator<Item = (&'a Table, &'a [ColumnEntry], &'a [DatabaseView])>,
+) -> crate::domain::journal::SchemaImage {
     use crate::domain::journal::{ColumnImage, OptionImage, SchemaImage, TableImage};
     let mut image = SchemaImage::default();
-    for entry in entries {
+    for (table, columns, views) in entries {
         image.tables.push(TableImage {
-            id: entry.table.id,
-            name: entry.table.name.clone(),
-            version: entry.table.version,
+            id: table.id,
+            name: table.name.clone(),
+            version: table.version,
         });
-        for column in &entry.columns {
+        for column in columns {
             let mut options: Vec<_> = column.definition.property_options.iter().collect();
             options.sort_by_key(|option| option.display_order);
             image.columns.push(ColumnImage {
                 infer_type: column.column.infer_type,
+                nullable: column.column.nullable,
                 id: column.column.id,
-                table: entry.table.id,
+                table: table.id,
                 name: column.name().to_owned(),
                 definition_name: column.definition.definition.display_name.clone(),
                 definition: column.definition.definition.id,
@@ -325,7 +373,7 @@ pub fn schema_image(entries: &[TableEntry]) -> crate::domain::journal::SchemaIma
                     .collect(),
             });
         }
-        image.views.extend(entry.views.iter().cloned());
+        image.views.extend(views.iter().cloned());
     }
     image
 }

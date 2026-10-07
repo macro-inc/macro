@@ -86,20 +86,18 @@ impl GithubOauth for GithubOauthImpl {
     type Err = anyhow::Error;
 
     #[tracing::instrument(skip(self), err)]
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
+    fn construct_oauth_url(
         &self,
         client_id: &str,
         redirect_uri: &str,
-        state: T,
+        state: &str,
     ) -> Result<String, Self::Err> {
-        let state_str = serde_json::to_string(&state)?;
-
         let url = format!(
             "https://github.com/login/oauth/authorize?client_id={}&redirect_uri={}&scope={}&state={}",
             client_id,
             urlencoding::encode(redirect_uri),
             urlencoding::encode("repo user:email"),
-            urlencoding::encode(&state_str)
+            urlencoding::encode(state)
         );
 
         Ok(url)

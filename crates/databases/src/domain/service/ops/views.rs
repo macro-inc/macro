@@ -12,7 +12,7 @@ use models_databases::{ColumnId, OptionId, TakenId, ViewChange};
 use models_properties::service::property_value::PropertyValue;
 
 use super::{Place, Planner, refuse, refuse_taken};
-use crate::domain::catalog::{TableEntry, schema_columns};
+use crate::domain::catalog::{StorageTable, storage_schema_columns};
 use crate::domain::journal::cell_value;
 use crate::domain::models::{DatabaseError, Position, PropertyDefinitionId, RowId, TableId, Write};
 use crate::domain::service::{same_name, validate_name};
@@ -79,7 +79,7 @@ impl Planner {
     pub(super) fn view_write(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         id: ViewId,
         change: &ViewChange,
     ) -> Result<Write, DatabaseError> {
@@ -104,7 +104,7 @@ impl Planner {
                     .map_err(|error| refuse(index, None, None, error.to_string()))?;
                 let view = DatabaseView {
                     id,
-                    database_id: entry.database.id,
+                    database_id: entry.table.database_id,
                     table_id: table,
                     name,
                     position,
@@ -173,7 +173,7 @@ impl Planner {
     pub(super) fn order_views(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         order: &[ViewId],
     ) -> Result<Write, DatabaseError> {
         let views = self.views_of(entry);
@@ -224,7 +224,7 @@ impl Planner {
     fn move_card(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         board: DatabaseView,
         CardMove {
             row,
@@ -278,6 +278,14 @@ impl Planner {
             column,
             &lane.cell(),
         )?;
+        if !column.column.nullable && cell.is_none() {
+            return Err(refuse(
+                index,
+                None,
+                Some(group_by),
+                "the required column needs a value",
+            ));
+        }
         let definition = column.definition.definition.id;
         let state = self
             .boards
@@ -324,7 +332,7 @@ impl Planner {
     }
 
     /// The views of a table as the ops so far leave them, in their order.
-    pub(super) fn views_of(&mut self, entry: &TableEntry) -> &mut Vec<DatabaseView> {
+    pub(super) fn views_of(&mut self, entry: &StorageTable) -> &mut Vec<DatabaseView> {
         self.views
             .entry(entry.table.id)
             .or_insert_with(|| entry.views.clone())
@@ -333,7 +341,7 @@ impl Planner {
     fn view(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         id: ViewId,
     ) -> Result<&DatabaseView, DatabaseError> {
         self.views_of(entry)
@@ -342,7 +350,7 @@ impl Planner {
             .ok_or_else(|| refuse(index, None, None, format!("no view {id} on this table")))
     }
 
-    fn replace_view(&mut self, entry: &TableEntry, view: DatabaseView) {
+    fn replace_view(&mut self, entry: &StorageTable, view: DatabaseView) {
         if let Some(current) = self
             .views_of(entry)
             .iter_mut()
@@ -357,7 +365,7 @@ impl Planner {
     fn view_name(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         view: Option<ViewId>,
         name: &str,
     ) -> Result<String, DatabaseError> {
@@ -387,7 +395,7 @@ impl Planner {
     fn check_view(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         query: &ViewQuery,
         layout: &ViewLayout,
     ) -> Result<(), DatabaseError> {
@@ -398,8 +406,8 @@ impl Planner {
 
     /// A table's columns as a view's checks see them, with the options the
     /// ops so far leave them.
-    fn schema_of(&mut self, entry: &TableEntry) -> Vec<SchemaColumn> {
-        let mut columns = schema_columns(entry);
+    fn schema_of(&mut self, entry: &StorageTable) -> Vec<SchemaColumn> {
+        let mut columns = storage_schema_columns(&entry.columns);
         for (column, schema) in entry.columns.iter().zip(&mut columns) {
             if !schema.options.is_empty() || column.takes_options() {
                 schema.options = self
@@ -449,7 +457,7 @@ impl Planner {
 /// `current_title`, or takes the table's first column.
 fn stored_layout(
     index: usize,
-    entry: &TableEntry,
+    entry: &StorageTable,
     layout: &RequestedLayout,
     current_title: Option<ColumnId>,
 ) -> Result<ViewLayout, DatabaseError> {

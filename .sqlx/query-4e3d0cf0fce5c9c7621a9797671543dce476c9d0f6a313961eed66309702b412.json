@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_change_counters (link_id, seq)\n        VALUES ($1, $2)\n        ON CONFLICT (link_id) DO UPDATE\n        SET seq = calendar_change_counters.seq + EXCLUDED.seq,\n            updated_at = now()\n        RETURNING seq\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "seq",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4e3d0cf0fce5c9c7621a9797671543dce476c9d0f6a313961eed66309702b412"
+}

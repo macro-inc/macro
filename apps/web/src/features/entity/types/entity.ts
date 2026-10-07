@@ -620,6 +620,10 @@ export const isCrmContactEntity = (
   return entity.type === 'crm_contact';
 };
 
+/** The full-email identity shared by CRM contacts and Macro users. Plus
+ * aliases stay distinct, as in the backend's authorized contact deduplication. */
+export const crmContactEmailKey = (email: string) => email.trim().toLowerCase();
+
 export const isDocumentEntity = (
   entity: EntityData
 ): entity is DocumentEntity => {

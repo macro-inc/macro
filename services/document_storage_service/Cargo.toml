@@ -58,7 +58,7 @@ base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
 bot_id = { path = "../../crates/bot_id" }
 bytes = { workspace = true }
-calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "notify", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
@@ -145,6 +145,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
@@ -282,6 +283,7 @@ zip = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]

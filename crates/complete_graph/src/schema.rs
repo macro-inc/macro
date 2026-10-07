@@ -22,6 +22,7 @@ use graphql_activity::{
     resolve_activity_feed, resolve_activity_overview, resolve_database_activity,
     resolve_form_activity,
 };
+use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -95,6 +96,7 @@ pub struct CompleteMutationRoot<
     NotificationMutationRoot<N>,
     GraphqlEmailMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
+    CalendarMutationRoot,
 );
 
 impl<
@@ -118,6 +120,7 @@ impl<
             NotificationMutationRoot::<N>::new(),
             GraphqlEmailMutation::<ES, SoupEmailThreadMutationOutput<E>>::new(),
             InitiativeMutationRoot::<E>::default(),
+            CalendarMutationRoot,
         )
     }
 }
@@ -786,6 +789,12 @@ where
         input: ActivityOverviewInput,
     ) -> async_graphql::Result<GraphqlActivityOverview> {
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// Authenticated user calendar fields supplied by `graphql_calendar`.
+    #[graphql(flatten)]
+    async fn calendar(&self) -> GraphqlCalendarQuery {
+        GraphqlCalendarQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user email catalog fields supplied by `graphql_email`.

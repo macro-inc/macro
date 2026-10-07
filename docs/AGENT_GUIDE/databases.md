@@ -56,6 +56,38 @@ PostHog unless the variable was set when it was built. With the flag off:
 
 `showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
 
+## CRM pipelines
+
+Pipelines are created from the CRM sidebar's **New pipeline** action. Their
+records are read and edited through the pipeline's access; they are not standalone
+database app entities and do not appear in the Databases list. Use **Share → Team access**
+in the CRM to switch between **None** (private) and **Edit** (team). A pipeline's primary
+company/contact reference is required. The same company or contact can appear
+in multiple independent rows, including through the row menu's **Duplicate** action.
+The reference column and table are protected against removal or type changes. See
+[Customers (CRM)](surfaces.md#customers-crm--appcomponentcompanies) for the flow.
+
+Teams migrated from the legacy CRM have a team-shared **Sales** pipeline with
+their visible companies and copied Stage, Owner and Revenue values, including
+closed and unstaged companies. Hidden companies are excluded. The migration is
+a one-time copy: later edits to a company’s legacy properties do not synchronize
+with its pipeline row. The pipeline can be renamed, customized or trashed normally.
+
+Pipeline primary columns use the shared database column protections: their header
+must disable deletion and type changes. Renaming and reordering remain allowed.
+The primary column is non-nullable: inserting a row without its record, clearing
+its cell, or choosing an empty list fails without saving any of the batch.
+Company pipelines accept one company; contact pipelines accept one contact.
+The referenced record can belong to another team if the editor can access it;
+pipeline sharing does not grant access to the referenced record's details.
+
+Pipelines use the shared database editor. Verify that column-menu sorting orders
+all records, including records beyond the first page, and that opening a record
+keeps it available when a view filter excludes it. Cell edits and **Add column**
+use pipeline authorization. Viewer grants hide editing controls. The CRM editor
+fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
+adapter and shared provider against local test responses.
+
 ## Properties and records
 
 An embedded records editor can allow cell edits while its host controls the
@@ -378,6 +410,9 @@ has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
 `QueryDatabase` reads and changes rows and handles schema changes through SQL
 (`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
 editing and checks actual results before reporting success.
+A supplied `databaseId` must refer to an accessible database before rows or
+schema changes resolve. Valid selections still allow qualified joins across
+accessible databases.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and
@@ -488,3 +523,16 @@ Schema edits update their UI optimistically and finish after the write commits;
 they do not wait for the background catalog refresh. A refused edit rolls back
 its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
+
+### Embedded database editors
+
+The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
+row queries and operation batches from that host's API. Verify cell edits and
+column edits on the host surface, not only in the Macro database block. A host
+without schema-edit permission offers no add, rename, delete or type-change
+actions. Board card dragging requires a supplied position writer; a board without
+one is still readable and must not report a successful move.
+
+For local UI regression coverage, the database browser fixtures include an API
+host with no Macro database entity. Its reads are paginated and its edits pass
+through the same controller used by the database block.

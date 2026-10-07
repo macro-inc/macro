@@ -99,10 +99,19 @@ review requests.
 `Authored by me`, `Assigned to me`, and `Review requests` match the linked
 GitHub user ID. If the link-status endpoint has no identity, the list explains
 why the tab is unavailable.
-Search, filter, and sort controls appear above the list. Filters cover
-priority, linked work, repository, author, assignee, label, and, when a GitHub
-identity is linked,
-reviews (Reviewed by you, Not reviewed by you, and Awaiting review from you).
+Search, filter, and sort controls appear above the list. Below them, the same
+sliding tabs used by Chat offer Open and Closed. Open is the default; Closed
+includes both closed and merged PRs. The filter dropdown and mobile drawer also
+offer independent Open, Closed, and Merged selections. Custom multi-status
+selections hide the tabs, except the combined Closed preset keeps them visible.
+A partial Closed-only or Merged-only selection leaves both tabs unhighlighted.
+Status combines with other filters, counts toward filter badges, and applies
+before pagination. Clearing filters resets to Open. Other filters cover
+priority, linked work, started from, repository, author, assignee, label, and,
+when a GitHub identity is linked, reviews (Reviewed by you, Not reviewed by you,
+and Awaiting review from you). The list topbar says
+Reviews when narrow or when the sidebar is collapsed; the selected scope stays
+visible as a heading above search.
 Saved review selections stay inactive, including their filter badge and empty-state
 copy, while the GitHub identity is unavailable; they resume when it returns.
 Sort offers Priority, Recently updated, Least recently updated, Newest, and Oldest;
@@ -115,6 +124,14 @@ author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
 authors fall back to GitHub names. The virtualized list fetches more pages as
 you scroll, including when local filtering removes most fetched rows.
+Linked agent sessions appear alongside the row's other metadata pills and beneath
+the PR detail title. Narrow PR rows put wrapping metadata below the title, keeping
+session chips visible without squeezing the title. One session shows its name with the agent sparkle icon;
+multiple sessions show a count chip that opens a list of names. Selecting a name
+opens that session; Shift-click on the single-session chip opens another split.
+Chip clicks do not open or select the containing PR row. Empty results have no
+chip, and loading, private, deleted, or unavailable sessions never offer navigation.
+The PR's status pill stays passive; status filtering lives in the Reviews list tabs.
 
 Each PR row shows what it links to. A priority icon before the title comes from
 the most urgent open linked task (a closed task counts only when none is open),
@@ -184,6 +201,15 @@ sidebar, return through the breadcrumb, and open a copied link in a second split
 Open a PR's Changes pane; check the file tree, a file's diff, **Unified / Split**,
 refresh after new commits, and that reloading with `s<N>.changes.pane` in the URL
 restores the pane. Check session loading/error/empty copy and full-name tooltips.
+Check both status tabs and the menu's individual statuses. Confirm Closed includes
+merged PRs, custom multi-status choices hide the tabs, and Clear filters returns
+to Open. Combine status with a repository filter while loading another page.
+Repeat on touch. Check the tabs follow search and filters, and that the topbar
+shows Reviews after narrowing or collapsing navigation.
+Check zero, one, and multiple linked sessions in PR rows and beneath the detail
+title, including keyboard activation and a long name. Open the count menu, choose
+a session, and confirm the PR row was not activated. Check permission-denied and
+loading session previews remain disabled.
 Use existing PRs and do not modify hosted data.
 
 ## Create a task

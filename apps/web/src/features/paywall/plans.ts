@@ -103,7 +103,7 @@ const PLAN_FEATURE_ROWS: PlanFeature[] = [
     label: 'Storage',
     values: {
       free: '5 GB',
-      premium: '1 TB',
+      premium: '100 GB',
       max: '1 TB',
     },
   },

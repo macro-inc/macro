@@ -599,7 +599,7 @@ protocol error with a stable `code` and `retryable` flag, not an HTTP status.
 A direct AI tool/MCP or AI-edit refusal is a failed tool result even if the outer
 transport succeeds. No worker/provider edit should happen after refusal. Ordinary
 manual editing, deterministic tools/imports, and the exempt Memory, AiProjection,
-CallSummary, and Dictation features are not blocked by quota. Optional naming or
+CallSummary, Dictation, and ChatRename features are not blocked by quota. Optional naming or
 trigger inference may be skipped without blocking successful primary work; it
 must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session

@@ -23,6 +23,7 @@ import type {
   ReviewsFilterSelection,
   ReviewsReviewFilterId,
   ReviewsSortId,
+  ReviewsStatusFilterId,
 } from '../reviews-types';
 
 export type ReviewsControlProps = {
@@ -49,6 +50,12 @@ const SORT_OPTIONS: ListControlOption<ReviewsSortId>[] = [
   { id: 'least_recently_updated', label: 'Least recently updated' },
   { id: 'newest', label: 'Newest' },
   { id: 'oldest', label: 'Oldest' },
+];
+
+const STATUS_OPTIONS: ListControlOption<ReviewsStatusFilterId>[] = [
+  { id: 'open', label: 'Open' },
+  { id: 'closed', label: 'Closed' },
+  { id: 'merged', label: 'Merged' },
 ];
 
 const REVIEW_OPTIONS: ListControlOption<ReviewsReviewFilterId>[] = [
@@ -85,6 +92,7 @@ function filterGroups(
   props: ReviewsControlProps
 ): ListFilterGroup<ReviewsFilterId, string>[] {
   return [
+    { id: 'status', label: 'Status', options: STATUS_OPTIONS },
     { id: 'priority', label: 'Priority', options: PRIORITY_OPTIONS },
     { id: 'linked', label: 'Linked to', options: LINKED_OPTIONS },
     { id: 'origin', label: 'Started from', options: ORIGIN_OPTIONS },

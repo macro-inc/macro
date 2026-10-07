@@ -501,6 +501,16 @@ use utoipa::OpenApi;
         sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
 
         // /crm
+        crm::inbound::pipelines::create,
+        crm::inbound::pipelines::list,
+        crm::inbound::pipelines::read,
+        crm::inbound::pipelines::table,
+        crm::inbound::pipelines::rows,
+        crm::inbound::pipelines::query_rows,
+        crm::inbound::pipelines::apply_ops,
+        crm::inbound::pipelines::rename,
+        crm::inbound::pipelines::share,
+        crm::inbound::pipelines::trash,
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,

@@ -99,7 +99,10 @@ use a green grid icon in file lists and search. The grid fills
 the panel beneath the formatting and formula bars. While a workbook opens, a
 shimmering placeholder grid (status "Opening spreadsheet…") stands in for it, and
 formula cells show a short shimmer bar until their first results arrive; wait for
-real cell text before reading values. They have the `.spreadsheet` file type; uploading an
+real cell text before reading values. Once it loads, the grid takes keyboard focus
+with A1 selected, so typing immediately edits A1 and arrow keys move the selection;
+it does not take focus from a dialog or control reached while loading, nor in an
+inline preview or when the sheet was opened by J/K list navigation. They have the `.spreadsheet` file type; uploading an
 Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
@@ -156,12 +159,17 @@ and **Cancel edit** while editing, so a software keyboard is sufficient. Swipe t
 formatting ribbon horizontally to reach more controls. On narrow screens, **Add rows**
 is in the active sheet's actions menu; **Import and export** stays at the bottom right.
 
-Both editors offer formula autocomplete. Type `=` or a function prefix such as
-`=SU`, use Up/Down to choose a suggestion, and Tab or Enter to insert it. Clicking
-a suggestion also keeps focus in the editor. The popup shows a description,
-signature, and example; after `(` it highlights the current argument, including
-inside nested formulas. Escape dismisses help first, then cancels editing on a
-second press. Suggestions do not appear inside quoted text or in view-only mode.
+Both editors offer formula autocomplete. Type a function prefix such as `=SU`
+(a bare `=` shows nothing), use Up/Down to choose a suggestion, and Tab or Enter
+to insert it. Clicking a suggestion also keeps focus in the editor. The compact
+popup lists each function with a one-line description and the highlighted
+function's signature; after `(` it shows the signature with the current argument
+highlighted, including inside nested formulas. Help opens only after typing:
+focusing or clicking into an existing formula, switching sheet tabs, or picking a
+reference leaves it closed. Pressing outside the editor closes it, and Escape
+dismisses help first, then cancels editing on a second press; either keeps help
+closed until the next keystroke. Suggestions do not appear inside quoted text or
+in view-only mode.
 
 While editing a formula, click a cell or drag across cells to insert a reference
 at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft updates
@@ -173,6 +181,11 @@ click its tab while the formula is awaiting a reference, then click or drag the
 source cells. The draft stays in the formula bar; Enter commits it to the original
 sheet and cell. Names with spaces are quoted automatically. Escape cancels and
 returns to the original sheet.
+While a formula is being edited, each cell or range it refers to, including whole
+columns or rows such as `D:D`, is outlined in its own color on the grid, and the
+reference text in both editors uses the same color. A repeated reference keeps
+its color. Only references to the sheet being shown are outlined; the colors
+disappear when the edit is committed or cancelled.
 On touch screens, tap a cell while editing a formula, then drag **Move reference
 start** or **Move reference end** to extend its reference. Tapping a suggestion or
 adjusting a reference should keep the input focused and the software keyboard open.
@@ -244,10 +257,11 @@ The footer's bottom-right **Import and export → Import…** accepts `.csv` and
 Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
 clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
 The menu keeps an existing whole-row/column selection when opened within it.
-Insert/delete shifts references and named ranges in local workbooks only; these
-commands are disabled on shared workbooks (including offline sessions) until
-collaborative rows and columns have stable identities. Adding blank rows at the
-bottom remains available. Hidden cells are skipped by keyboard navigation.
+Insert/delete shifts cells, references and named ranges in local workbooks and in
+saved workbooks while connected; the commands are disabled while a saved workbook
+is offline or reconnecting. A collaborator's change that arrives while the cells
+are being moved cancels the insert/delete. Adding blank rows at the bottom
+remains available. Hidden cells are skipped by keyboard navigation.
 
 Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
 the formula bar to search people, documents, channels, email and dates, then choose an

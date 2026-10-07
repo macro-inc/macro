@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import {
@@ -11,15 +10,16 @@ import {
 } from '@solidjs/testing-library';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DatabaseTitle } from '../components/database-title';
-import type { DatabaseEntityFailure } from '../core/write-failure';
+import { toast } from '../../../lib/core/component/Toast/Toast';
+import { DatabaseTitle } from '../../database/components/database-title';
+import type { DatabaseEntityFailure } from '../../database/core/write-failure';
 import { DatabasePageActions } from './database-page-actions';
 
 const mocks = vi.hoisted(() => ({
   download: vi.fn(),
   csv: vi.fn(),
 }));
-vi.mock('@core/component/Toast/Toast', () => ({
+vi.mock('../../../lib/core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
 vi.mock('@filesystem/download', () => ({ downloadFile: mocks.download }));

@@ -10,6 +10,16 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * Metadata together with the caller's effective grant.
+ */
+export type AccessiblePipeline = Pipeline & {
+    /**
+     * Highest effective access.
+     */
+    grant: AccessLevel;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -82,7 +92,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -868,6 +878,21 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
  * Entity type for property lookups (API representation).
  */
 export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+
+/**
+ * What a committed batch answers: a result per op, and the journal's change
+ * for each table version it produced.
+ */
+export type AppliedOps = {
+    /**
+     * The journal's changes.
+     */
+    changes: Array<CommittedChange>;
+    /**
+     * One result per op, in order.
+     */
+    results: Array<OpResult>;
+};
 
 /**
  * A batch of ops for one database, applied in order, in one transaction,
@@ -2856,7 +2881,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -2894,6 +2919,10 @@ export type Column = {
      * Whether the first nonempty value may settle this new text column's type.
      */
     infer_type: boolean;
+    /**
+     * Whether a row may omit this cell; empty collections also count as absent.
+     */
+    nullable?: boolean;
     /**
      * Fractional index for column ordering.
      */
@@ -3996,6 +4025,24 @@ export type CreatePairingRequest = {
      */
     name: string;
     scope?: null | RequestedHarnessScope;
+};
+
+/**
+ * Request to create an empty pipeline with the standard CRM columns.
+ */
+export type CreatePipeline = {
+    /**
+     * Pipeline name.
+     */
+    name: string;
+    /**
+     * Company or contact entries.
+     */
+    recordType: PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
 };
 
 export type CreateProjectRequest = {
@@ -5737,7 +5784,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -6043,7 +6090,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -6065,7 +6112,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -9299,6 +9346,23 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
 export type NumberOperator = 'is' | 'isNot' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
 
 /**
+ * A batch of ops for one database and the versions its tables must be at.
+ */
+export type OpBatch = {
+    /**
+     * The version each named table must still be at; the batch is refused
+     * as a conflict if one moved. Without one, ops are last-write-wins.
+     */
+    baseVersions?: {
+        [key: string]: TableVersion;
+    };
+    /**
+     * The ops, in the order they apply.
+     */
+    ops: Array<DatabaseOp>;
+};
+
+/**
  * Why an op of a batch was refused. Nothing in the batch was written.
  */
 export type OpRefusalResponse = {
@@ -9671,6 +9735,66 @@ export type PinnedItem = {
      */
     pinIndex: number;
 };
+
+/**
+ * Pipeline metadata; table schema and data are read through the database service.
+ */
+export type Pipeline = {
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Dedicated backing database.
+     */
+    databaseId: string;
+    /**
+     * Entity identity, used with `CrmPipeline` access receipts.
+     */
+    id: string;
+    /**
+     * Pipeline display name.
+     */
+    name: string;
+    /**
+     * Protected primary column.
+     */
+    primaryColumnId: string;
+    /**
+     * Kind of the primary reference.
+     */
+    recordType: PipelineRecordType;
+    /**
+     * Whether the pipeline has a team grant.
+     */
+    sharing: PipelineSharing;
+    /**
+     * Table of entries.
+     */
+    tableId: string;
+    /**
+     * Team owning the pipeline; references retain their own access controls.
+     */
+    teamId: string;
+    /**
+     * Trashed pipelines are omitted from navigation.
+     */
+    trashedAt: string | null;
+    /**
+     * Owning user; sharing never changes ownership.
+     */
+    userId: string;
+};
+
+/**
+ * Which CRM entity each row references. Fixed when a pipeline is created.
+ */
+export type PipelineRecordType = 'company' | 'contact';
+
+/**
+ * Initial sharing, or the desired team grant. Individual ownership is preserved.
+ */
+export type PipelineSharing = 'private' | 'team';
 
 /**
  * Request body for `POST /channels/activity`.
@@ -10208,6 +10332,16 @@ export type RenameChannelLabelRequest = {
 };
 
 /**
+ * Rename input.
+ */
+export type RenamePipeline = {
+    /**
+     * New display name.
+     */
+    name: string;
+};
+
+/**
  * Request body for reordering favorites.
  */
 export type ReorderFavoritesRequest = {
@@ -10427,6 +10561,11 @@ export type RowHistoryResponse = {
      */
     changes: Array<RowHistoryEntry>;
 };
+
+/**
+ * Identifier of a row.
+ */
+export type RowId = string;
 
 /**
  * A write to a table's rows.
@@ -10906,6 +11045,16 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Sharing input.
+ */
+export type SharePipeline = {
+    /**
+     * Desired team grant.
+     */
+    sharing: PipelineSharing;
 };
 
 /**
@@ -12435,6 +12584,52 @@ export type StarterDocumentsResponse = {
 };
 
 /**
+ * One storage row, with cells keyed by column placement.
+ */
+export type StorageRow = {
+    /**
+     * Populated cells.
+     */
+    cells: {
+        [key: string]: PropertyValue;
+    };
+    /**
+     * Row identity, independent of any referenced entity.
+     */
+    rowId: RowId;
+};
+
+/**
+ * A bounded page of rows at a table version.
+ */
+export type StorageRows = {
+    next?: null | RowId;
+    /**
+     * Rows in the requested view's order.
+     */
+    rows: Array<StorageRow>;
+    /**
+     * Table version when the read began.
+     */
+    version: TableVersion;
+};
+
+/**
+ * A query over one authorized storage table.
+ */
+export type StorageRowsQuery = {
+    after?: null | RowId;
+    /**
+     * The common database filter and sort semantics.
+     */
+    query?: ViewQuery;
+    /**
+     * Read these retained rows regardless of the active filter.
+     */
+    rowIds?: Array<RowId> | null;
+};
+
+/**
  * A GitHub pull request as Macro stores it, read through one of the caller's records.
  */
 export type StoredGithubPullRequest = {
@@ -13127,6 +13322,16 @@ export type TranscriptSegmentRequest = {
      * (it stamps egress bootstrap, not first audio frame).
      */
     streamStartedAt?: string | null;
+};
+
+/**
+ * Trash/restore input.
+ */
+export type TrashPipeline = {
+    /**
+     * True to trash; false to restore.
+     */
+    trashed: boolean;
 };
 
 /**
@@ -16537,6 +16742,157 @@ export type SetCrmContactNameResponses = {
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
 
+export type ListCrmPipelinesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines';
+};
+
+export type ListCrmPipelinesResponses = {
+    200: Array<AccessiblePipeline>;
+};
+
+export type ListCrmPipelinesResponse = ListCrmPipelinesResponses[keyof ListCrmPipelinesResponses];
+
+export type CreateCrmPipelineData = {
+    body: CreatePipeline;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines';
+};
+
+export type CreateCrmPipelineResponses = {
+    200: AccessiblePipeline;
+};
+
+export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
+
+export type GetCrmPipelineData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}';
+};
+
+export type GetCrmPipelineResponses = {
+    200: AccessiblePipeline;
+};
+
+export type GetCrmPipelineResponse = GetCrmPipelineResponses[keyof GetCrmPipelineResponses];
+
+export type RenameCrmPipelineData = {
+    body: RenamePipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/name';
+};
+
+export type RenameCrmPipelineResponses = {
+    204: void;
+};
+
+export type RenameCrmPipelineResponse = RenameCrmPipelineResponses[keyof RenameCrmPipelineResponses];
+
+export type ApplyCrmPipelineOpsData = {
+    body: OpBatch;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/ops';
+};
+
+export type ApplyCrmPipelineOpsResponses = {
+    200: AppliedOps;
+};
+
+export type ApplyCrmPipelineOpsResponse = ApplyCrmPipelineOpsResponses[keyof ApplyCrmPipelineOpsResponses];
+
+export type GetCrmPipelineRowsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Continue after this row identity.
+         */
+        after?: string | null;
+    };
+    url: '/crm/pipelines/{id}/rows';
+};
+
+export type GetCrmPipelineRowsResponses = {
+    200: StorageRows;
+};
+
+export type GetCrmPipelineRowsResponse = GetCrmPipelineRowsResponses[keyof GetCrmPipelineRowsResponses];
+
+export type QueryCrmPipelineRowsData = {
+    body: StorageRowsQuery;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/rows';
+};
+
+export type QueryCrmPipelineRowsResponses = {
+    200: StorageRows;
+};
+
+export type QueryCrmPipelineRowsResponse = QueryCrmPipelineRowsResponses[keyof QueryCrmPipelineRowsResponses];
+
+export type ShareCrmPipelineData = {
+    body: SharePipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/sharing';
+};
+
+export type ShareCrmPipelineResponses = {
+    204: void;
+};
+
+export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
+
+export type GetCrmPipelineTableData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/table';
+};
+
+export type GetCrmPipelineTableResponses = {
+    200: TableDetail;
+};
+
+export type GetCrmPipelineTableResponse = GetCrmPipelineTableResponses[keyof GetCrmPipelineTableResponses];
+
+export type TrashCrmPipelineData = {
+    body: TrashPipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/trash';
+};
+
+export type TrashCrmPipelineResponses = {
+    204: void;
+};
+
+export type TrashCrmPipelineResponse = TrashCrmPipelineResponses[keyof TrashCrmPipelineResponses];
+
 export type GetCrmTeamSettingsData = {
     body?: never;
     path?: never;
@@ -18319,7 +18675,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -18388,7 +18744,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
         /**
          * The id of the favorited entity.
          */

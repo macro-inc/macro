@@ -560,6 +560,13 @@ export const enableGraphqlSoup = defineFlag({
   env: 'ENABLE_GRAPHQL_SOUP',
 });
 
+/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+export const enableGraphqlCalendar = defineFlag({
+  key: 'enable-graphql-calendar',
+  env: 'ENABLE_GRAPHQL_CALENDAR',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Independent emergency stop. Any true env/PostHog source wins. */
 export const disableBrowserTursoCache = defineFlag({
   key: 'disable-browser-turso-cache',

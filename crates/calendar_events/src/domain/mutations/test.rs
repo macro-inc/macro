@@ -2,11 +2,11 @@ use super::*;
 use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
-    CalendarLinkTokenIdentity, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
-    CalendarWatchRelease, ConferenceChange, DisconnectedGoogleCalendar, EventStart, EventStatus,
-    EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot,
-    GoogleCalendarTarget, GoogleEventSource, GoogleWatchChannel, OutOfOfficeAutoDeclineMode,
-    OutOfOfficeProperties, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
+    ConferenceChange, DisconnectedGoogleCalendar, EventStart, EventStatus, EventTransparency,
+    EventType, EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
+    GoogleEventSource, GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
+    ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -226,7 +226,7 @@ impl CalendarRepository for FakeRepo {
         _range: OccurrenceRange,
         _cursor: Option<CalendarOccurrenceCursor>,
         _limit: u16,
-    ) -> Result<Vec<(CalendarEvent, CalendarOccurrence)>, rootcause::Report> {
+    ) -> Result<Vec<crate::domain::models::OccurrenceListing>, rootcause::Report> {
         unreachable!()
     }
 

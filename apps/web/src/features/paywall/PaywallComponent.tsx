@@ -29,7 +29,7 @@ const PAYWALL_PREMIUM_FEATURES = [
   'Multiple email inboxes',
   'Calls',
   'Teams',
-  '1 TB storage',
+  '100 GB storage',
 ];
 
 const PremiumFeatures = () => (

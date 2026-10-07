@@ -299,11 +299,11 @@ fn default_pull_request_details() -> GithubPullRequestDetails {
 impl GithubOauth for StubGithubOauth {
     type Err = anyhow::Error;
 
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
+    fn construct_oauth_url(
         &self,
         _client_id: &str,
         _redirect_uri: &str,
-        _state: T,
+        _state: &str,
     ) -> Result<String, Self::Err> {
         Ok("https://github.example/oauth".to_string())
     }

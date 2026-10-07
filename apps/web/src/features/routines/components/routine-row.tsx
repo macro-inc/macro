@@ -1,9 +1,13 @@
+import {
+  modelProvider,
+  ProviderIcon,
+} from '@core/component/AI/component/ProviderIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
 import ClockIcon from '@phosphor/clock-clockwise.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
-import type { JSX, ParentProps } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
 
 /** Shared geometry keeps routine properties aligned with their column headers. */
@@ -90,7 +94,17 @@ export function RoutineListRow(props: {
         <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">
           <Tooltip label={props.row.target} class="min-w-0 max-w-full">
             <span class="inline-flex min-w-0 max-w-full items-center gap-1.5">
-              <RobotIcon class="size-3.5 shrink-0" />
+              <Show
+                when={modelProvider(props.row.targetModel)}
+                fallback={
+                  <EntityIcon targetType="chat" size="xs" class="shrink-0" />
+                }
+              >
+                <ProviderIcon
+                  model={props.row.targetModel}
+                  class="size-3.5 shrink-0"
+                />
+              </Show>
               <span class="truncate">{props.row.target}</span>
             </span>
           </Tooltip>

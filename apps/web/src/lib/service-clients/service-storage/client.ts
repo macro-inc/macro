@@ -13,6 +13,7 @@ import {
   SYNC_PERMISSION_TOKEN_DSS_HOST,
   SYNC_SERVICE_HOSTS,
 } from '@core/constant/servers';
+import type { DatabaseOp } from '@core/database-sql/generated/types';
 import type { FetchError } from '@core/service';
 import { cache } from '@core/util/cache';
 import {
@@ -28,6 +29,8 @@ import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
 import type { ApiChannelListPage } from './channel-list-types';
+import { fetchDatabaseOps } from './databases';
+import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
@@ -160,8 +163,11 @@ import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest'
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
 import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
+import type { StorageRows } from './generated/schemas/storageRows';
+import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
+import type { TableDetail } from './generated/schemas/tableDetail';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
@@ -397,6 +403,48 @@ export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 type SlackImportJobArgs = { jobId: JobId; signal?: AbortSignal };
 
 export const storageServiceClient = {
+  listCrmPipelines: () =>
+    dssFetch<PipelineResponse[]>('/crm/pipelines', { method: 'GET' }),
+  getCrmPipeline: (id: string) =>
+    dssFetch<PipelineResponse>(`/crm/pipelines/${id}`, { method: 'GET' }),
+  getCrmPipelineTable: (id: string) =>
+    dssFetch<TableDetail>(`/crm/pipelines/${id}/table`, { method: 'GET' }),
+  getCrmPipelineRows: (id: string, after?: string) =>
+    dssFetch<StorageRows>(
+      `/crm/pipelines/${id}/rows${after ? `?after=${encodeURIComponent(after)}` : ''}`,
+      { method: 'GET' }
+    ),
+  queryCrmPipelineRows: (id: string, request: StorageRowsQuery) =>
+    dssFetch<StorageRows>(`/crm/pipelines/${id}/rows`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }),
+  applyCrmPipelineOps: (
+    id: string,
+    request: { ops: DatabaseOp[]; baseVersions?: Record<string, number> }
+  ) => fetchDatabaseOps(`/crm/pipelines/${id}/ops`, request),
+  createCrmPipeline: (
+    input: Pick<PipelineResponse, 'name' | 'recordType' | 'sharing'>
+  ) =>
+    dssFetch<PipelineResponse>('/crm/pipelines', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  renameCrmPipeline: (id: string, name: string) =>
+    dssFetch(`/crm/pipelines/${id}/name`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    }),
+  shareCrmPipeline: (id: string, sharing: PipelineResponse['sharing']) =>
+    dssFetch(`/crm/pipelines/${id}/sharing`, {
+      method: 'PUT',
+      body: JSON.stringify({ sharing }),
+    }),
+  trashCrmPipeline: (id: string) =>
+    dssFetch(`/crm/pipelines/${id}/trash`, {
+      method: 'PUT',
+      body: JSON.stringify({ trashed: true }),
+    }),
   /** Macro Databases — see `./databases.ts`. */
   databases: databasesClient,
   /** Macro Forms — see `./forms.ts`. */

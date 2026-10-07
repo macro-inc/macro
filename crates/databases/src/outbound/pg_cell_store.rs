@@ -3,6 +3,8 @@
 //! options.
 
 mod core;
+mod provisioning;
+mod required;
 mod transfer;
 
 use std::collections::HashMap;
@@ -347,6 +349,13 @@ where
             }
         }
 
+        if let Some(missing) = self
+            .check_required_cells(&mut transaction, writes, &inserted)
+            .await?
+        {
+            return Ok(missing);
+        }
+
         let mut grouped: Vec<(TableId, Vec<RowId>)> = Vec::new();
         for (table, row) in &writes.related_rows {
             match grouped.iter_mut().find(|(target, _)| target == table) {
@@ -420,7 +429,7 @@ where
         let refused = |outcome| Ok(Applied::Refused(outcome));
         let database_id = writes.database_id;
         // Schema planning is optimistic. Recheck protections under the same table
-        // locks that serialize form registration before changing stored schema.
+        // locks that serialize protection registration before changing stored schema.
         let protected_operation = match write {
             Write::DeleteColumn { column_id, .. } => Some((*column_id, ColumnProtection::Delete)),
             Write::ReplaceColumn { replacement, .. } => {

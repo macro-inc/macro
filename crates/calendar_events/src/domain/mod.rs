@@ -4,6 +4,8 @@ pub mod invitations;
 
 /// The clicker's owned inboxes.
 pub mod acting;
+/// The per-email-link calendar change log.
+pub mod changes;
 /// Kafka event models for the calendar topic.
 pub mod events;
 /// Domain models.

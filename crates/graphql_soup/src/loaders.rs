@@ -310,6 +310,13 @@ impl SoupItemDataLoader {
     }
 }
 
+/// Primary-backed Soup reader for single agent-session lookups. A session is
+/// opened the moment it is created, and its log is read by subscribing first
+/// and querying second; both need every committed row, which a replica
+/// lagging by seconds does not have. Lists keep the replica-backed reader.
+#[derive(Clone)]
+pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
+
 /// Build the realtime Soup DataLoader from the existing Soup and email services.
 pub fn soup_item_loader<S, E>(soup_service: S, email_service: Arc<E>) -> SoupItemDataLoader
 where
@@ -382,6 +389,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Skill
             | EntityType::ScheduledAction
             | EntityType::Reminder
+            | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::Form => {
                 return Err(rootcause::report!(

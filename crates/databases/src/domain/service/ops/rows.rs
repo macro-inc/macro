@@ -4,8 +4,8 @@
 use models_databases::views::LaneKey;
 use models_databases::{RowChanges, RowsChange};
 
-use super::{MAX_WRITTEN_ROWS, Planner, refuse};
-use crate::domain::catalog::TableEntry;
+use super::{MAX_WRITTEN_ROWS, Place, Planner, refuse};
+use crate::domain::catalog::StorageTable;
 use crate::domain::journal::cell_value;
 use crate::domain::models::{DatabaseError, Write};
 
@@ -13,7 +13,7 @@ impl Planner {
     pub(super) fn rows_write(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         change: &RowsChange,
     ) -> Result<Write, DatabaseError> {
         let table = entry.table.id;
@@ -42,6 +42,18 @@ impl Planner {
                     .iter()
                     .enumerate()
                     .map(|(row, cells)| {
+                        for column in &entry.columns {
+                            if !column.column.nullable
+                                && !cells.iter().any(|cell| cell.column == column.column.id)
+                            {
+                                return Err(Place {
+                                    op: index,
+                                    row: Some(row),
+                                    column: column.column.id,
+                                }
+                                .refuse(format!("\"{}\" requires a value", column.name())));
+                            }
+                        }
                         let cells = self.cells(entry, index, Some(row), cells)?;
                         Ok(cells
                             .into_iter()

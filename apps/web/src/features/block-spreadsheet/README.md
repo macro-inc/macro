@@ -119,8 +119,12 @@ Rows and columns currently have fixed positions. Range sorting copies whole rows
 within a selected rectangle and translates their relative formulas through IronCalc.
 It validates that the sheet, selection, permission, and editing state have not changed
 before committing. Other formulas keep their A1 references; they do not follow moved
-records. Structural insertion/deletion still needs stable identities and formula
-reference transformation across concurrent operations.
+records. Inserting or deleting rows and columns rewrites the moved cells, references
+and layout in one commit, under the same revision check. Saved workbooks allow it
+only while connected, so an offline coordinate shift cannot merge later over
+collaborators' edits. Rows and columns have no stable identities: an edit that a
+collaborator commits to old coordinates after the shift arrives still lands at
+those coordinates.
 
 ### Workbook sheets
 

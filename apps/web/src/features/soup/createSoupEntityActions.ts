@@ -271,7 +271,7 @@ export function createSoupEntityActions(): {
       });
     };
 
-    if (openableEntity()) {
+    if (viewContext.supportsOpenInNewSplit && openableEntity()) {
       topItems.push({
         id: 'open-in-split',
         label: 'Open in new split',

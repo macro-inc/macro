@@ -477,6 +477,10 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        Ok(self.find(id).await?.context("agent session not found")?)
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
@@ -499,10 +503,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to get agent session")?
-        .context("agent session not found")?;
+        .context("failed to get agent session")?;
 
-        Ok(row.try_into()?)
+        Ok(row.map(AgentSession::try_from).transpose()?)
     }
 
     async fn preview(

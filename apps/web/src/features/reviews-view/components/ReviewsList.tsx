@@ -221,7 +221,11 @@ export function ReviewsList(props: ReviewsListProps) {
     selectedEntities: list.selection.items,
     focusedEntity: list.focus.item,
     restoreFocus: () => listElement()?.focus(),
-    viewContext: () => ({ supportsMarkDone: false, senderBucket: undefined }),
+    viewContext: () => ({
+      supportsMarkDone: false,
+      supportsOpenInNewSplit: true,
+      senderBucket: undefined,
+    }),
     splitHandle: panel.handle,
     condition: panel.isPanelActive,
   });

@@ -5,7 +5,8 @@ use crate::{
     api::{
         self, MACRO_INTERNAL_USER_ID,
         context::{
-            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, TaskPropertiesAdapter,
+            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, DssOwnedPurgeState,
+            TaskPropertiesAdapter,
         },
     },
     config::{
@@ -1445,6 +1446,21 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
     ));
+    let pipeline_service = Arc::new(crm::domain::pipelines::PipelineServiceImpl::new(
+        crm::outbound::pipelines::PgPipelineRepo::new(
+            db.clone(),
+            databases::outbound::pg_cell_store::PgCellStore::new(
+                db.clone(),
+                properties::outbound::properties_pg_repo::PropertiesPgRepo::new(db.clone()),
+            ),
+        ),
+        databases_service.clone(),
+        entity_access_service.clone(),
+        crm::outbound::stage_definitions::PropertiesStageDefinitionStore::new(
+            properties_service.clone(),
+        ),
+    ));
+
     let forms_service = Arc::new(forms::wiring::build_service(
         db.clone(),
         databases_service.clone(),
@@ -1456,10 +1472,11 @@ pub async fn run() -> anyhow::Result<()> {
         collab_surface_service.clone(),
     ));
 
-    // Individual initiative reads preserve read-after-write consistency when a
-    // newly created project opens immediately. Lists retain the replica reader.
-    // Reuse Soup hydration so detail and mutation metadata include viewer history.
-    let initiative_entity_soup = Arc::new(
+    // Individual initiative and agent-session reads preserve read-after-write
+    // consistency when a newly created entity opens immediately. Lists retain
+    // the replica reader. Reuse Soup hydration so detail and mutation metadata
+    // include viewer history.
+    let primary_entity_soup = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
             frecency_service.clone(),
@@ -1729,11 +1746,35 @@ pub async fn run() -> anyhow::Result<()> {
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
         db.clone(),
     )));
-    let calendar_state = CalendarRouterState::new(
-        Arc::new(calendar_events::domain::service::CalendarService::new(
-            calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
-        )),
-        authorization_state.clone(),
+    let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
+        calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+    ));
+    let graphql_calendar_context = graphql_calendar::CalendarGraphqlContext::new(
+        calendar_read_service.clone(),
+        Arc::new(
+            calendar_events::domain::changes::CalendarChangeService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+            ),
+        ),
+    );
+    let calendar_state =
+        CalendarRouterState::new(calendar_read_service, authorization_state.clone());
+    // Calendar writes belong to calendar_service; each GraphQL mutation then
+    // answers from the primary so it reads the state its write committed.
+    let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
+        Arc::new(
+            calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
+                macro_service_urls::CalendarServiceUrl::new()
+                    .context("calendar service url")?
+                    .to_string(),
+                config.internal_api_key.to_string(),
+            ),
+        ),
+        Arc::new(
+            calendar_events::domain::changes::CalendarChangeService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            ),
+        ),
     );
 
     // Reminder dispatch. An EventBridge rule drops a sweep tick on this queue
@@ -1804,6 +1845,30 @@ pub async fn run() -> anyhow::Result<()> {
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
+    let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
+        documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(db.clone()),
+        documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(sqs_client.clone()),
+        documents_hex::outbound::document_purge::RedisDocxPartReferences::new(
+            redis_sha_client.clone(),
+        ),
+        macro_event_broker.clone(),
+    ));
+
+    let owned_purge_state = DssOwnedPurgeState::new(
+        document_purger.clone(),
+        Arc::new(
+            chat::domain::service::ChatServiceImpl::new_without_tools(
+                chat::outbound::postgres::PgChatRepo::new(
+                    db.clone(),
+                    owned_entity_registrar.clone(),
+                ),
+                entity_access_management_service.clone(),
+            )
+            .with_event_broker(macro_event_broker.clone()),
+        ),
+        project_service.clone(),
+    );
+
     let graphql_entity_mutation_service =
         Arc::new(service::entity_mutation::DssEntityMutationService::new(
             document_service.clone(),
@@ -1871,7 +1936,13 @@ pub async fn run() -> anyhow::Result<()> {
             authorization_state.clone(),
         ),
         graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader(
-            graphql_soup::soup_item_loader(initiative_entity_soup, Arc::new(email_service.clone())),
+            graphql_soup::soup_item_loader(
+                primary_entity_soup.clone(),
+                Arc::new(email_service.clone()),
+            ),
+        ),
+        graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader(
+            graphql_soup::soup_item_loader(primary_entity_soup, Arc::new(email_service.clone())),
         ),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),
@@ -1880,6 +1951,8 @@ pub async fn run() -> anyhow::Result<()> {
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
             scheduled_action_read_service,
         ),
+        graphql_calendar_context,
+        graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
             initiative_service,
             entity_access_service.clone(),
@@ -1942,6 +2015,7 @@ pub async fn run() -> anyhow::Result<()> {
         dynamo_db,
         macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
+        document_purger,
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
         sync_service_client: sync_service_client.clone(),
@@ -2000,6 +2074,11 @@ pub async fn run() -> anyhow::Result<()> {
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,
+        pipeline_state: crm::inbound::pipelines::PipelineRouterState {
+            service: pipeline_service,
+            access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
             stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(
@@ -2011,6 +2090,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },
+        owned_purge_state,
     };
 
     #[cfg(feature = "delete_document_worker")]
