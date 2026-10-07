@@ -36,7 +36,7 @@ it('accepts completion without committing, keeps caret/focus, and dismisses help
   }) as HTMLTextAreaElement;
   input.focus();
   input.setSelectionRange(3, 3);
-  fireEvent.select(input);
+  fireEvent.input(input);
   await screen.findByRole('listbox', { name: 'Formula suggestions' });
   fireEvent.keyDown(input, { key: 'Tab' });
   await waitFor(() => expect(input.value).toBe('=SUM('));
@@ -52,6 +52,51 @@ it('accepts completion without committing, keeps caret/focus, and dismisses help
   expect(key).not.toHaveBeenCalled();
   fireEvent.keyDown(input, { key: 'Escape' });
   expect(key).toHaveBeenCalledTimes(1);
+});
+
+it('opens help only after typing and closes it on an outside press or Escape until the next keystroke', async () => {
+  const complete = vi.fn(async () => ({
+    expecting: [{ FunctionName: 'SU' }],
+    replace_from: 0,
+  }));
+  const view = render(() => (
+    <>
+      <button type="button">Sheet2</button>
+      <FormulaInput
+        label="Formula"
+        value="=SU"
+        class=""
+        autoFocus
+        complete={complete}
+        onInput={() => {}}
+        onKeyDown={() => {}}
+        onBlur={() => {}}
+      />
+    </>
+  ));
+  const input = view.getByRole('textbox') as HTMLTextAreaElement;
+  input.setSelectionRange(3, 3);
+  fireEvent.select(input);
+  fireEvent.click(input);
+  await Promise.resolve();
+  expect(complete).not.toHaveBeenCalled();
+  expect(screen.queryByRole('listbox')).toBeNull();
+
+  fireEvent.input(input);
+  await screen.findByRole('listbox');
+  fireEvent.pointerDown(view.getByRole('button', { name: 'Sheet2' }));
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.select(input);
+  await Promise.resolve();
+  expect(screen.queryByRole('listbox')).toBeNull();
+
+  fireEvent.input(input);
+  await screen.findByRole('listbox');
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.select(input);
+  await Promise.resolve();
+  expect(screen.queryByRole('listbox')).toBeNull();
 });
 
 it('does not request or display suggestions for a read-only formula', async () => {
@@ -97,7 +142,7 @@ it.each(['readonly', 'pickingReference'] as const)(
     const input = view.getByRole('textbox') as HTMLTextAreaElement;
     input.focus();
     input.setSelectionRange(3, 3);
-    fireEvent.select(input);
+    fireEvent.input(input);
     await screen.findByRole('listbox');
     expect(input.getAttribute('aria-controls')).toBeTruthy();
     expect(input.getAttribute('aria-activedescendant')).toBeTruthy();

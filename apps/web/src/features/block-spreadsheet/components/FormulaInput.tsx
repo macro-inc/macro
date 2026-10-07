@@ -55,6 +55,9 @@ export function FormulaInput(props: FormulaInputProps) {
     get autoFocus() {
       return props.autoFocus || transferFocus;
     },
+    get typed() {
+      return transferFocus;
+    },
     onFocus: () => {
       transferFocus = false;
       props.onFocus?.();
@@ -79,11 +82,14 @@ export function FormulaInput(props: FormulaInputProps) {
   );
 }
 
-function FormulaTextarea(props: FormulaInputProps) {
+function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
   let input!: HTMLTextAreaElement;
   let popup: HTMLDivElement | undefined;
   const id = createUniqueId();
   const [focused, setFocused] = createSignal(false);
+  // Help opens only after the user types, so focusing, clicking, or switching
+  // sheets with a formula draft never covers the grid.
+  let typing = !!props.typed;
   const assistance = createFormulaAssistance(
     (text, cursor) =>
       props.complete?.(text, cursor) ?? Promise.resolve(undefined),
@@ -119,10 +125,14 @@ function FormulaTextarea(props: FormulaInputProps) {
     if (argument() < 0 || !args.length) return -1;
     return Math.min(argument(), args.length - 1);
   };
+  const dismiss = () => {
+    typing = false;
+    assistance.dismiss();
+  };
   const update = () => {
     if (!focused() || props.readonly) return;
     props.onSelectionChange?.(input.selectionStart, input.selectionEnd);
-    if (props.pickingReference) assistance.dismiss();
+    if (props.pickingReference || !typing) dismiss();
     else
       assistance.update(input.value, input.selectionStart, input.selectionEnd);
   };
@@ -183,6 +193,7 @@ function FormulaTextarea(props: FormulaInputProps) {
           update();
         }}
         onInput={() => {
+          typing = true;
           props.onInput(input.value);
           update();
         }}
@@ -195,6 +206,7 @@ function FormulaTextarea(props: FormulaInputProps) {
         onKeyDown={(event) => {
           event.stopPropagation();
           if (!props.readonly && assistance.keyDown(event)) {
+            if (event.key === 'Escape') typing = false;
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp')
               popup
                 ?.querySelector('[aria-selected="true"]')
@@ -205,7 +217,7 @@ function FormulaTextarea(props: FormulaInputProps) {
         }}
         onBlur={() => {
           setFocused(false);
-          assistance.dismiss();
+          dismiss();
           props.onBlur();
         }}
       />
@@ -217,13 +229,14 @@ function FormulaTextarea(props: FormulaInputProps) {
             onReady={(element) => {
               popup = element;
             }}
+            onOutsidePress={dismiss}
           >
             <Show when={choices().length}>
               <div
                 id={`${id}-list`}
                 role="listbox"
                 aria-label="Formula suggestions"
-                class="min-h-0 max-h-48 shrink overflow-y-auto overscroll-contain p-1"
+                class="min-h-0 max-h-40 shrink overflow-y-auto overscroll-contain p-1"
               >
                 <For each={choices()}>
                   {(choice, index) => {
@@ -237,7 +250,7 @@ function FormulaTextarea(props: FormulaInputProps) {
                         id={`${id}-${index()}`}
                         role="option"
                         aria-selected={assistance.selected() === index()}
-                        class="flex items-center gap-3 rounded px-2.5 py-2 text-xs touch:min-h-[44px] touch:text-sm"
+                        class="flex items-center gap-2 rounded px-2 py-1 text-xs touch:min-h-[44px] touch:text-sm"
                         classList={{
                           'bg-accent-bg text-accent':
                             assistance.selected() === index(),
@@ -261,10 +274,12 @@ function FormulaTextarea(props: FormulaInputProps) {
             </Show>
             <div
               id={`${id}-help`}
-              class="min-h-0 overflow-y-auto border-t border-edge-muted px-3 py-3 text-xs touch:text-sm"
-              classList={{ 'touch:hidden': choices().length > 0 }}
+              class="min-h-0 overflow-y-auto px-2.5 py-1.5 text-xs touch:text-sm"
+              classList={{
+                'border-t border-edge-muted touch:hidden': choices().length > 0,
+              }}
             >
-              <div class="mb-2 break-words font-mono leading-5 text-ink">
+              <div class="break-words font-mono leading-5 text-ink">
                 <span class="font-semibold text-accent">{name()}</span>(
                 <For each={info().args}>
                   {(arg, index) => (
@@ -283,22 +298,14 @@ function FormulaTextarea(props: FormulaInputProps) {
                 </For>
                 )
               </div>
-              <p class="leading-5 text-ink-muted">
-                {activeArgument() >= 0
-                  ? info().args[activeArgument()][2]
-                  : functionSummary(info())}
-              </p>
-              <Show when={info().examples[0]}>
-                <p class="mt-2 break-words font-mono text-[11px] leading-4 text-ink-subtle">
-                  {info().examples[0]}
+              <Show when={!choices().length}>
+                <p class="text-[11px] leading-4 text-ink-muted">
+                  {activeArgument() >= 0
+                    ? info().args[activeArgument()][2]
+                    : functionSummary(info())}
                 </p>
               </Show>
             </div>
-            <Show when={choices().length}>
-              <div class="shrink-0 border-t border-edge-muted px-3 py-2 text-[10px] text-ink-subtle touch:hidden">
-                ↑↓ Navigate · Tab or Enter to insert · Esc to dismiss
-              </div>
-            </Show>
           </FormulaPopup>
         </Portal>
       </Show>
@@ -311,10 +318,19 @@ function FormulaPopup(props: {
   interactive: boolean;
   children: import('solid-js').JSX.Element;
   onReady: (element: HTMLDivElement) => void;
+  onOutsidePress: () => void;
 }) {
   let element!: HTMLDivElement;
   onMount(() => {
     props.onReady(element);
+    // Pressing a cell, sheet tab, or toolbar keeps the draft but closes help.
+    const press = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!element.contains(target) && !props.anchor.contains(target))
+        props.onOutsidePress();
+    };
+    document.addEventListener('pointerdown', press, true);
+    onCleanup(() => document.removeEventListener('pointerdown', press, true));
     let alive = true;
     const update = async () => {
       const position = await computePosition(props.anchor, element, {
@@ -351,7 +367,7 @@ function FormulaPopup(props: {
     <div
       ref={element}
       style={{ visibility: 'hidden' }}
-      class="fixed z-[100] flex w-96 max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-edge bg-panel text-ink shadow-xl"
+      class="fixed z-[100] flex w-72 max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-edge bg-panel text-ink shadow-xl"
       classList={{ 'pointer-events-none': !props.interactive }}
       onPointerDown={(event) => {
         event.preventDefault();

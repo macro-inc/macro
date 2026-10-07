@@ -119,13 +119,13 @@ test('picks a range on a second sheet and commits the formula back to its origin
   await page.getByRole('button', { name: 'Save name' }).click();
   await page.getByRole('tab', { name: 'Sheet1', exact: true }).click();
   await page.locator('[data-address="C2"]').dblclick();
-  await page
-    .getByRole('textbox', { name: 'Edit C2', exact: true })
-    .fill('=SUM(');
+  const editor = page.getByRole('textbox', { name: 'Edit C2', exact: true });
+  await editor.fill('=SUM(');
+  await expect(editor).toHaveAttribute('aria-describedby', /help/);
   await page.getByRole('tab', { name: 'Forecast 2027', exact: true }).click();
-  await expect(
-    page.getByRole('textbox', { name: 'Formula bar', exact: true })
-  ).toHaveValue('=SUM(');
+  const bar = page.getByRole('textbox', { name: 'Formula bar', exact: true });
+  await expect(bar).toHaveValue('=SUM(');
+  await expect(bar).not.toHaveAttribute('aria-describedby');
   await drag(
     page,
     page.locator('[data-address="A1"]'),

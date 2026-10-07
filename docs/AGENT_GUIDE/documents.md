@@ -152,12 +152,17 @@ and **Cancel edit** while editing, so a software keyboard is sufficient. Swipe t
 formatting ribbon horizontally to reach more controls. On narrow screens, **Add rows**
 is in the active sheet's actions menu; **Import and export** stays at the bottom right.
 
-Both editors offer formula autocomplete. Type `=` or a function prefix such as
-`=SU`, use Up/Down to choose a suggestion, and Tab or Enter to insert it. Clicking
-a suggestion also keeps focus in the editor. The popup shows a description,
-signature, and example; after `(` it highlights the current argument, including
-inside nested formulas. Escape dismisses help first, then cancels editing on a
-second press. Suggestions do not appear inside quoted text or in view-only mode.
+Both editors offer formula autocomplete. Type a function prefix such as `=SU`
+(a bare `=` shows nothing), use Up/Down to choose a suggestion, and Tab or Enter
+to insert it. Clicking a suggestion also keeps focus in the editor. The compact
+popup lists each function with a one-line description and the highlighted
+function's signature; after `(` it shows the signature with the current argument
+highlighted, including inside nested formulas. Help opens only after typing:
+focusing or clicking into an existing formula, switching sheet tabs, or picking a
+reference leaves it closed. Pressing outside the editor closes it, and Escape
+dismisses help first, then cancels editing on a second press; either keeps help
+closed until the next keystroke. Suggestions do not appear inside quoted text or
+in view-only mode.
 
 While editing a formula, click a cell or drag across cells to insert a reference
 at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft updates
