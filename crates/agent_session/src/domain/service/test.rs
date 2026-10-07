@@ -570,6 +570,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
+    }
+
     async fn preview(
         &self,
         viewer: &MacroUserIdStr<'static>,

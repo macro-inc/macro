@@ -5,7 +5,8 @@ use crate::{
     api::{
         self, MACRO_INTERNAL_USER_ID,
         context::{
-            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, TaskPropertiesAdapter,
+            ApiContext, AuthorizationService, DocumentStorageServiceAuthKey, DssOwnedPurgeState,
+            TaskPropertiesAdapter,
         },
     },
     config::{
@@ -1806,6 +1807,30 @@ pub async fn run() -> anyhow::Result<()> {
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
+    let document_purger = Arc::new(documents_hex::domain::purge::DocumentPurger::new(
+        documents_hex::outbound::document_purge::LegacyDocumentPurgeRepository::new(db.clone()),
+        documents_hex::outbound::document_purge::SqsDocumentPurgeQueue::new(sqs_client.clone()),
+        documents_hex::outbound::document_purge::RedisDocxPartReferences::new(
+            redis_sha_client.clone(),
+        ),
+        macro_event_broker.clone(),
+    ));
+
+    let owned_purge_state = DssOwnedPurgeState::new(
+        document_purger.clone(),
+        Arc::new(
+            chat::domain::service::ChatServiceImpl::new_without_tools(
+                chat::outbound::postgres::PgChatRepo::new(
+                    db.clone(),
+                    owned_entity_registrar.clone(),
+                ),
+                entity_access_management_service.clone(),
+            )
+            .with_event_broker(macro_event_broker.clone()),
+        ),
+        project_service.clone(),
+    );
+
     let graphql_entity_mutation_service =
         Arc::new(service::entity_mutation::DssEntityMutationService::new(
             document_service.clone(),
@@ -1951,6 +1976,7 @@ pub async fn run() -> anyhow::Result<()> {
         dynamo_db,
         macro_event_broker: macro_event_broker.clone(),
         sqs_client: sqs_client.clone(),
+        document_purger,
         notification_ingress_service: notification_ingress_service.clone(),
         conn_gateway_client: conn_gateway_client.clone(),
         sync_service_client: sync_service_client.clone(),
@@ -2020,6 +2046,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },
+        owned_purge_state,
     };
 
     #[cfg(feature = "delete_document_worker")]

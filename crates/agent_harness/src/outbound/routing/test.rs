@@ -127,6 +127,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the router never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,

@@ -5,6 +5,7 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::{
     domain::{
         service::ChannelServiceImpl,
@@ -22,6 +23,7 @@ use connection_gateway_client::ConnectionGatewayClient;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_registry::{EntityRegistryServiceImpl, PgEntityRegistryRepository};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -89,6 +91,7 @@ use crate::{
     microsoft_token_cipher::{
         EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
     },
+    outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::task::TaskTracker;
@@ -529,6 +532,21 @@ pub async fn run() -> anyhow::Result<()> {
         .with_enforcement(config.enable_ai_usage_enforcement)
         .with_billing(config.enable_ai_usage_billing),
     );
+    let document_storage_service_client = Arc::new(document_storage_service_client);
+    // The harness and scheduled-action services validate the fleet-wide
+    // internal key, not this service's own inbound key.
+    let internal_key = config.service_internal_auth_key.to_string();
+    let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
+    let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
+        PgBotsRepo::new(db.clone()),
+        EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
+        document_storage_service_client.clone(),
+        internal_key.clone(),
+        harness_url.clone(),
+        scheduled_action_url.clone(),
+    )
+    .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
@@ -541,11 +559,9 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker)
-    .with_open_seat_release((*ai_billing_service).clone());
+    .with_open_seat_release((*ai_billing_service).clone())
+    .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
-    let document_storage_service_client = Arc::new(document_storage_service_client);
-    // The harness and scheduled-action services validate the fleet-wide
-    // internal key, not this service's own inbound key.
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -553,9 +569,9 @@ pub async fn run() -> anyhow::Result<()> {
             teams_service.clone(),
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
             stripe_client.clone(),
-            config.service_internal_auth_key.to_string(),
-            macro_service_urls::AgentHarnessServiceUrl::new()?.to_string(),
-            macro_service_urls::ScheduledActionServiceUrl::new()?.to_string(),
+            internal_key,
+            harness_url,
+            scheduled_action_url,
         )
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
     );

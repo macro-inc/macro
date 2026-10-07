@@ -8,6 +8,9 @@ use super::*;
 const TEAM_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const INVITE_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
 const EVENT_ID: &str = "01998a30-1a2b-7c3d-9e4f-5a6b7c8d9e0f";
+const BOT_ID: &str = "6d5e2c1b-3a4f-4b8e-9c7d-1e2f3a4b5c6d";
+const SESSION_ID: &str = "0199a7c4-52e1-7d3b-8f60-2c9d4e5f6a7b";
+const PROJECT_ID: &str = "0199a7c4-52e1-7d3b-8f60-2c9d4e5f6a7c";
 
 fn team_id() -> Uuid {
     Uuid::parse_str(TEAM_ID).expect("valid team id")
@@ -15,6 +18,10 @@ fn team_id() -> Uuid {
 
 fn invite_id() -> Uuid {
     Uuid::parse_str(INVITE_ID).expect("valid invite id")
+}
+
+fn bot_id() -> BotId {
+    BotId::parse_uuid_str(BOT_ID).expect("valid bot id")
 }
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
@@ -71,13 +78,39 @@ fn topic_events() -> Vec<(TeamTopicEvent, Value)> {
                     user_id("macro|owner@acme.com"),
                     user_id("macro|member@acme.com"),
                 ],
+                bot_ids: vec![bot_id()],
+                owned_entities: vec![
+                    OwnedEntityMetadata {
+                        entity_type: RegisteredEntityType::AgentSession,
+                        id: Uuid::parse_str(SESSION_ID).expect("valid session id"),
+                        owner: Owner::Bot(bot_id()),
+                    },
+                    OwnedEntityMetadata {
+                        entity_type: RegisteredEntityType::Project,
+                        id: Uuid::parse_str(PROJECT_ID).expect("valid project id"),
+                        owner: Owner::Team(team_id()),
+                    },
+                ],
             }),
             json!({
                 "event_type": "team.deleted",
                 "metadata": {
                     "team_id": TEAM_ID,
                     "actor_user_id": "macro|owner@acme.com",
-                    "member_user_ids": ["macro|owner@acme.com", "macro|member@acme.com"]
+                    "member_user_ids": ["macro|owner@acme.com", "macro|member@acme.com"],
+                    "bot_ids": [BOT_ID],
+                    "owned_entities": [
+                        {
+                            "entity_type": "agent_session",
+                            "id": SESSION_ID,
+                            "owner": "bot|6d5e2c1b-3a4f-4b8e-9c7d-1e2f3a4b5c6d"
+                        },
+                        {
+                            "entity_type": "project",
+                            "id": PROJECT_ID,
+                            "owner": TEAM_ID
+                        }
+                    ]
                 }
             }),
         ),
@@ -304,6 +337,33 @@ fn member_joined_defaults_missing_teammate_ids() {
         }
         other => panic!("expected member_joined, got {other:?}"),
     }
+}
+
+#[test]
+fn deleted_defaults_missing_bots_and_owned_entities() {
+    let payload = json!({
+        "event_id": EVENT_ID,
+        "schema_version": 1,
+        "event_type": "team.deleted",
+        "metadata": {
+            "team_id": TEAM_ID,
+            "actor_user_id": "macro|owner@acme.com",
+            "member_user_ids": ["macro|owner@acme.com"]
+        }
+    });
+
+    let event: Event<TeamTopicEvent> =
+        serde_json::from_value(payload).expect("legacy deleted is decodable");
+    assert_eq!(
+        event.event,
+        TeamTopicEvent::Deleted(TeamDeletedMetadata {
+            team_id: team_id(),
+            actor_user_id: user_id("macro|owner@acme.com"),
+            member_user_ids: vec![user_id("macro|owner@acme.com")],
+            bot_ids: Vec::new(),
+            owned_entities: Vec::new(),
+        })
+    );
 }
 
 #[test]

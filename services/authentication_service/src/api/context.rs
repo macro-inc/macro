@@ -105,6 +105,10 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     >,
     AuthenticationEventBroker,
     AiBillingServiceType,
+    crate::outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter<
+        bots::outbound::pg_bots_repo::PgBotsRepo,
+        entity_registry::EntityRegistryServiceImpl<entity_registry::PgEntityRegistryRepository>,
+    >,
 >;
 
 pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::Client>>;
