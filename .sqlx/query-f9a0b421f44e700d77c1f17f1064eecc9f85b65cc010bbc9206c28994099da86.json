@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_entity_transcript_segments WHERE call_id = $1 AND transcript_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f9a0b421f44e700d77c1f17f1064eecc9f85b65cc010bbc9206c28994099da86"
+}

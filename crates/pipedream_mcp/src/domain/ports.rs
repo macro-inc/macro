@@ -3,6 +3,38 @@ use super::models::{
     PipedreamConnection,
 };
 
+/// HTTP methods supported by trusted backend integrations through Connect Proxy.
+#[derive(Clone, Copy)]
+pub enum ProxyMethod {
+    /// Read a provider resource.
+    Get,
+    /// Create a provider resource, such as a webhook subscription.
+    Post,
+    /// Remove a provider resource.
+    Delete,
+}
+
+/// A provider response. Never log the body: registration can return secrets.
+pub struct ProxyResponse {
+    /// Upstream HTTP status.
+    pub status: u16,
+    /// Provider JSON body.
+    pub body: serde_json::Value,
+}
+
+/// Authenticated provider requests using credentials held by Pipedream.
+/// Callers must obtain the account from the authenticated user's connection.
+pub trait ApiProxy: Send + Sync {
+    /// Pipedream restricts targets to the connected app's allowed domains.
+    fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: ProxyMethod,
+        url: &str,
+        body: Option<serde_json::Value>,
+    ) -> impl Future<Output = anyhow::Result<ProxyResponse>> + Send;
+}
+
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
 pub trait ConnectionStore: Send + Sync + 'static {
     /// Error type for store operations.

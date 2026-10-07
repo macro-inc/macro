@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE call_entities SET title = CASE WHEN title IS NOT DISTINCT FROM $7 THEN $2 ELSE title END,\n                started_at = $3, ended_at = $4, duration_ms = $5, updated_at = now()\n                WHERE id = $1 AND user_id = $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a5025e08ccfbb03e7d69f28e54e1a42be1f9b1393dd3bc5ca551ddfc6aa6bc0"
+}

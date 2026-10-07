@@ -2,8 +2,10 @@ use crate::domain::models::{
     CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
     client_info,
 };
+use crate::domain::ports::{ApiProxy, ProxyMethod, ProxyResponse};
 use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
 use anyhow::Context;
+use base64::Engine;
 use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -12,6 +14,50 @@ use serde::Deserialize;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use url::Url;
+
+impl ApiProxy for PipedreamClient {
+    #[tracing::instrument(skip_all, err)]
+    async fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: ProxyMethod,
+        url: &str,
+        body: Option<serde_json::Value>,
+    ) -> anyhow::Result<ProxyResponse> {
+        let target = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(url);
+        let method = match method {
+            ProxyMethod::Get => reqwest::Method::GET,
+            ProxyMethod::Post => reqwest::Method::POST,
+            ProxyMethod::Delete => reqwest::Method::DELETE,
+        };
+        let mut request = self
+            .authed(
+                self.http
+                    .request(method, self.connect_api(&format!("/proxy/{target}"))),
+            )
+            .await?
+            .query(&[
+                ("external_user_id", connection.user_id.as_ref()),
+                ("account_id", connection.account_id.as_str()),
+            ]);
+        if let Some(body) = body {
+            request = request.json(&body);
+        }
+        let response = request
+            .send()
+            .await
+            .context("Pipedream proxy request failed")?;
+        let status = response.status().as_u16();
+        // Preserve status for provider-specific retries and missing resources.
+        let bytes = response.bytes().await?;
+        let body = if bytes.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_slice(&bytes).context("invalid proxy JSON response")?
+        };
+        Ok(ProxyResponse { status, body })
+    }
+}
 
 /// Default base URL of the Pipedream REST API.
 pub const DEFAULT_API_URL: &str = "https://api.pipedream.com";

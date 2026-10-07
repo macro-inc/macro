@@ -540,6 +540,7 @@ async fn main() -> anyhow::Result<()> {
         config.mcp_credentials_key_secret_name.as_ref(),
     )
     .context("invalid MCP credentials encryption key")?;
+    let granola_signing_key = *mcp_encryption_key.as_bytes();
     let mcp_server_repo =
         mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
 
@@ -620,6 +621,29 @@ async fn main() -> anyhow::Result<()> {
     };
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
+    let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
+        pipedream_client.as_ref().map(|client| {
+            Arc::new(granola_sync::domain::service::Service {
+                repo: granola_sync::outbound::pg_repo::PgSyncRepository::new(
+                    db.clone(),
+                    &granola_signing_key,
+                ),
+                granola: granola_sync::outbound::api::GranolaApi(client.clone()),
+                accounts: granola_sync::outbound::accounts::ConnectedAccounts(
+                    pipedream_repo.clone(),
+                ),
+                verifier: granola_sync::outbound::signature::StandardWebhooks,
+                calls: Arc::new(call::domain::imports::CallImportServiceImpl(
+                    call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(
+                        db.clone(),
+                    ),
+                )),
+                public_url: config.mcp_public_url.clone(),
+            }) as Arc<dyn granola_sync::domain::service::SyncService>
+        });
+    let granola_worker = granola_sync
+        .as_ref()
+        .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
 
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
@@ -943,6 +967,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         mcp_state,
         pipedream_state,
+        granola_sync,
         mcp_selector,
         import_service,
         onboarding_service,
@@ -952,6 +977,10 @@ async fn main() -> anyhow::Result<()> {
     .context("failed to setup and serve api");
 
     ai_projection_worker_task.abort();
+    if let Some(worker) = granola_worker {
+        worker.abort();
+        let _ = worker.await;
+    }
     match ai_projection_worker_task.await {
         Err(error) if error.is_cancelled() => {
             tracing::info!("ai projection worker stopped");

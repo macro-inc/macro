@@ -91,6 +91,7 @@ members = [
   "crates/mcp_toolset",
   "crates/notification_state",
   "crates/pipedream_mcp",
+  "crates/granola_sync",
   "crates/onboarding",
   "crates/docx_engine",
   "crates/fig_engine",

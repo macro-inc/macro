@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections\n                SET last_synced_at = CASE WHEN $2 THEN now() ELSE last_synced_at END,\n                    last_error = CASE WHEN $2 THEN NULL ELSE 'Meeting sync failed; retrying automatically' END\n                WHERE id = $1 AND enabled",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "682c4ee7160f7f9a29f20a82f96e7bab28c140bd2c03618e1c45f4d00fcc369c"
+}

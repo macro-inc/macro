@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_entity_transcript_segments (call_id,transcript_id,sequence_num,speaker_label,content,start_ms,end_ms)\n                SELECT $1,$2,\"sequenceNum\",\"speakerLabel\",content,\"startMs\",\"endMs\"\n                FROM jsonb_to_recordset($3::jsonb) AS s(\"sequenceNum\" integer,\"speakerLabel\" text,content text,\"startMs\" bigint,\"endMs\" bigint)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a19df938ace9d80b9e679c2f455b21bca7d38f04c8348339f4ef531f1c434ff6"
+}

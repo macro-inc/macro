@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM call_entity_participants WHERE call_id = $1 AND id = ANY($2) AND NOT (id = ANY($3))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4aa79f5eb0bfd69f15078716e18668a27ae86ff0f1ddbdf281f83e0f948ff1c4"
+}

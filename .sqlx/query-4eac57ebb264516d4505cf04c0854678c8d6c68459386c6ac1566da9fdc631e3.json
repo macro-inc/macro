@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_events SET available_at = now() WHERE connection_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4eac57ebb264516d4505cf04c0854678c8d6c68459386c6ac1566da9fdc631e3"
+}

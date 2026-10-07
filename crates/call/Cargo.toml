@@ -35,7 +35,7 @@ outbound = [
   "dep:urlencoding",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio"]
+ports = ["dep:entity_access", "dep:tokio", "dep:async-trait"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }

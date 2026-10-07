@@ -1862,6 +1862,23 @@ afterwards in **Settings → Billing**, where Guest users can buy Premium or Max
 
 ## Settings — `/app/settings/<section>`
 
+### Granola meeting sync
+
+In **Connections**, add Granola through the existing Pipedream Connect flow using
+a Granola Business or Enterprise API key. The **Granola meetings** card offers
+**Start meeting sync** after choosing personal, workspace-visible, combined, or
+workspace-key access. This subscribes to future meeting events, including updates;
+it does not backfill history. Imported records are private Macro calls with optional
+attendees, summaries, and transcripts, rather than documents or native call rooms.
+
+**Recent synced meetings** opens a saved meeting inline; expand **Transcript** to
+read available text or use **Open in Granola** for the source. **Stop sync** retains
+saved calls, and the saved-meeting card remains available after disconnecting the
+Pipedream account. Provider deletion does not remove the Macro copy. Check start,
+stop, scope selection, missing transcripts, disconnect, and reload without blanking
+the surrounding Settings page. Webhooks require a publicly reachable HTTPS backend;
+local UI fixtures can verify controls but cannot verify live provider delivery.
+
 ### Slack archive import
 
 In **Team → Connections**, **Import from Slack** appears only for team admins

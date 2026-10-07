@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections SET enabled = false, last_error = 'Could not register webhook. Check your Granola key scope and plan, then retry.' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7196b72c40a4ddf34187af94415d0c2701270d609ba02cca787de625d0570653"
+}

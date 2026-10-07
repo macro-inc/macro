@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (\n                SELECT e.connection_id, e.event_id FROM granola_sync_events e\n                JOIN granola_sync_connections c ON c.id = e.connection_id\n                WHERE e.completed_at IS NULL AND e.available_at <= now() AND c.enabled\n                ORDER BY e.available_at LIMIT 1 FOR UPDATE OF e SKIP LOCKED\n            )\n            UPDATE granola_sync_events e SET lease_id = $1, attempts = e.attempts + 1,\n                available_at = now() + interval '10 minutes'\n            FROM candidate c WHERE e.connection_id = c.connection_id AND e.event_id = c.event_id\n            RETURNING e.connection_id, e.event_id, e.note_id, e.event_type, e.occurred_at, e.attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "note_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "occurred_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "aa6f45c23a13b1438b52edfc96a524483a83e5100152962e9a0f4e5ee59098d1"
+}

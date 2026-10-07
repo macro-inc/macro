@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections SET enabled = false, last_error = 'Sync stopped' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2a93dbfc0e63c892a06ace4744e019ded691544afa7b2c55f79f4c827eae46ef"
+}
