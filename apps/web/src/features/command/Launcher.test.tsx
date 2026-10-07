@@ -1,5 +1,5 @@
 import { MemoryRouter, Route } from '@solidjs/router';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -8,6 +8,7 @@ const host = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   createFolder: vi.fn(),
   projectFlag: (): boolean | undefined => true,
+  carouselFlag: (): boolean | undefined => undefined,
 }));
 
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -40,7 +41,9 @@ vi.mock('@app/features/reminders/reminder-composer', () => ({}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled:
-      flag.key === 'enable-projects' ? host.projectFlag() === true : false,
+      flag.key === 'enable-carousel-create-menu'
+        ? host.carouselFlag() === true
+        : flag.key === 'enable-projects' && host.projectFlag() === true,
     loading: flag.key === 'enable-projects' && host.projectFlag() === undefined,
   }),
 }));
@@ -64,10 +67,26 @@ vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));
 vi.mock('./mobile/MobileCreateSheet', () => ({}));
+vi.mock('./DetailsLauncher', () => ({
+  default: (props: LauncherInnerProps) => (
+    <button onClick={() => props.onClose(false)}>
+      Details: {props.blocks?.map((item) => item.label).join(', ')}
+    </button>
+  ),
+}));
+vi.mock('./CarouselLauncher', () => ({
+  default: (props: LauncherInnerProps) => (
+    <button onClick={() => props.onClose(false)}>
+      Carousel: {props.blocks?.map((item) => item.label).join(', ')}
+    </button>
+  ),
+}));
 
 import {
   CREATABLE_BLOCKS,
   createMenuOpen,
+  LauncherInner,
+  type LauncherInnerProps,
   runCreateAction,
   setCreateMenuOpen,
   useCreateMenuBlocks,
@@ -75,6 +94,35 @@ import {
 
 beforeEach(() => {
   host.projectFlag = () => true;
+  host.carouselFlag = () => undefined;
+});
+
+it.each([false, undefined])(
+  'uses the detailed launcher when the carousel flag is %s',
+  async (enabled) => {
+    host.carouselFlag = () => enabled;
+    const view = render(() => <LauncherInner onClose={vi.fn()} />);
+    await view.findByText('Details:');
+    expect(view.queryByText('Carousel:')).toBeNull();
+  }
+);
+
+it('switches the launcher with the flag while forwarding sandbox choices and close behavior', async () => {
+  const [enabled, setEnabled] = createSignal(false);
+  host.carouselFlag = enabled;
+  const onClose = vi.fn();
+  const blocks = CREATABLE_BLOCKS.filter((item) => item.label === 'Task');
+  const view = render(() => (
+    <LauncherInner blocks={blocks} onClose={onClose} />
+  ));
+  await view.findByText('Details: Task');
+  setEnabled(true);
+  fireEvent.click(await view.findByText('Carousel: Task'));
+  expect(onClose).toHaveBeenCalledExactlyOnceWith(false);
+  expect(view.queryByText('Details: Task')).toBeNull();
+  setEnabled(false);
+  await view.findByText('Details: Task');
+  expect(view.queryByText('Carousel: Task')).toBeNull();
 });
 afterEach(() => {
   cleanup();

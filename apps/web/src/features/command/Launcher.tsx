@@ -23,6 +23,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableAiEditor,
+  enableCarouselCreateMenu,
   enableChatV3Agents,
   enableDatabases,
   enableFigViewer,
@@ -62,8 +63,6 @@ import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import { useNavigate } from '@solidjs/router';
 import {
-  CommandMenuHotkeyHint,
-  CommandMenuList,
   CommandMenuSearchInput,
   CommandMenuShell,
   cn,
@@ -74,23 +73,29 @@ import {
 import { getNormalizedKeyString } from '@ui/components/Hotkey';
 import {
   type Accessor,
-  createEffect,
   createMemo,
   createSignal,
+  type JSX,
+  lazy,
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import type { CreateMenuSection } from './core/create-menu-details';
+import {
+  launcherItemKey,
+  recentLauncherBlocks,
+  sortLauncherBlocks,
+} from './core/launcher-history';
 import { createCallCommand } from './create-call-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
 const LAUNCHER_SEARCH_MODE_STORE = 'launcher-search-mode-v1';
-const FRECENCY_COUNT_WEIGHT = 10;
-const FRECENCY_HALF_LIFE_DAYS = 14;
 
 type LauncherFrecencyEntry = {
   count: number;
@@ -108,31 +113,8 @@ const [launcherSearchMode, setLauncherSearchModePreference] = makePersisted(
   { name: LAUNCHER_SEARCH_MODE_STORE }
 );
 
-function launcherItemKey(item: CreatableBlock) {
-  return String(item.hotkeyToken ?? `${item.label}:${item.hotkey}`);
-}
-
-function launcherFrecencyScore(item: CreatableBlock, now = Date.now()) {
-  const entry = launcherFrecencyStore[launcherItemKey(item)];
-  if (!entry) return 0;
-
-  const ageMs = Math.max(now - entry.lastUsedAt, 0);
-  const halfLifeMs = FRECENCY_HALF_LIFE_DAYS * 24 * 60 * 60 * 1000;
-  const recency = Math.pow(0.5, ageMs / halfLifeMs);
-
-  return entry.count * FRECENCY_COUNT_WEIGHT + recency;
-}
-
-function sortLauncherBlocks(items: CreatableBlock[]) {
-  const now = Date.now();
-  return items
-    .map((item, index) => ({
-      item,
-      index,
-      score: launcherFrecencyScore(item, now),
-    }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map(({ item }) => item);
+export function useRecentCreateMenuBlocks(items: Accessor<CreatableBlock[]>) {
+  return createMemo(() => recentLauncherBlocks(items(), launcherFrecencyStore));
 }
 
 function trackLauncherItemUsage(item: CreatableBlock) {
@@ -953,7 +935,7 @@ type LauncherMenuItemProps = {
   showHotkey?: boolean;
 };
 
-const LauncherMenuItem = (props: LauncherMenuItemProps) => {
+export const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   const selectedIconColor = () =>
     getIconConfig(props.creatableBlock.blockName).foreground;
   const launcherHint = () => props.creatableBlock.launcherHint;
@@ -983,7 +965,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       </div>
 
       <Show when={props.showHotkey}>
-        <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal text-ink-muted">
+        <div class="flex border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal text-ink-muted">
           <Hotkey token={props.creatableBlock.hotkeyToken} />
         </div>
       </Show>
@@ -991,26 +973,64 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   );
 };
 
-type LauncherInnerProps = {
+export type LauncherInnerProps = {
   onClose: (shouldReturnFocus?: boolean) => void;
   blocks?: CreatableBlock[];
 };
 
-export const LauncherInner = (props: LauncherInnerProps) => {
+type LauncherBodyState = {
+  sections: Accessor<CreateMenuSection[]>;
+  blocks: Accessor<CreatableBlock[]>;
+  selectedIndex: Accessor<number>;
+  searchMode: Accessor<boolean>;
+  itemId: (item: CreatableBlock) => string;
+  select: (index: number) => void;
+  step: (direction: number) => void;
+  choose: (item: CreatableBlock) => void;
+  scrollSelectedIntoView: Accessor<boolean>;
+};
+
+/** Shared launcher behavior and chrome; each layout supplies its own body. */
+export const LauncherShell = (
+  props: LauncherInnerProps & {
+    children: (state: LauncherBodyState) => JSX.Element;
+    class?: string;
+    horizontalNavigation?: boolean;
+    groupItems?: (
+      items: CreatableBlock[],
+      recentItems: CreatableBlock[]
+    ) => CreateMenuSection[];
+  }
+) => {
   const hkGroup = createHotkeyGroup();
   const commands = useCreateCommands();
   const candidates = () => props.blocks ?? commands;
   const availableBlocks = useCreateMenuBlocks(candidates);
-  const sortedBlocks = createMemo(() => sortLauncherBlocks(availableBlocks()));
+  const sortedBlocks = createMemo(() =>
+    sortLauncherBlocks(availableBlocks(), launcherFrecencyStore)
+  );
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchMode = launcherSearchMode;
-  const blocks = createMemo(() => {
+  const recentBlocks = useRecentCreateMenuBlocks(availableBlocks);
+  const filteredBlocks = createMemo(() => {
     if (!searchMode()) return sortedBlocks();
 
     return sortedBlocks().filter((item) =>
       matchesLauncherSearch(item, searchQuery())
     );
   });
+  const sections = createMemo<CreateMenuSection[]>(
+    () =>
+      props.groupItems?.(filteredBlocks(), recentBlocks()) ?? [
+        {
+          group: { id: 'other', label: 'Results', tagline: '' },
+          items: filteredBlocks(),
+        },
+      ]
+  );
+  const blocks = createMemo(() =>
+    sections().flatMap((section) => section.items)
+  );
   const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
@@ -1040,11 +1060,15 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   const setLauncherSearchMode = (next: boolean) => {
+    const selectedItem = blocks()[focusedIndex()];
     setLauncherSearchModePreference(next);
 
     if (!next) {
       setSearchQuery('');
     }
+    setFocusedIndex(
+      selectedItem ? Math.max(0, blocks().indexOf(selectedItem)) : 0
+    );
 
     queueMicrotask(() => {
       if (next) {
@@ -1055,20 +1079,13 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     });
   };
 
-  createEffect(() => {
-    searchMode();
-    searchQuery();
-    blocks().length;
-    setFocusedIndex(0);
-  });
-
   candidates().forEach((item) => {
     registerHotkey({
       hotkeyToken: item.hotkeyToken,
       hotkey: item.hotkey,
       scopeId: launcherScope,
       description: item.description,
-      condition: () => availableBlocks().includes(item),
+      condition: () => !searchMode() && availableBlocks().includes(item),
       registrationType: item.registrationType,
       runWithInputFocused: item.runWithInputFocused,
       keyDownHandler: () => {
@@ -1082,7 +1099,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         hotkey: `shift+${item.hotkey}` as ValidHotkey,
         scopeId: launcherScope,
         description: `${item.description} in new split`,
-        condition: () => availableBlocks().includes(item),
+        condition: () => !searchMode() && availableBlocks().includes(item),
         registrationType: item.registrationType,
         runWithInputFocused: item.runWithInputFocused,
         keyDownHandler: () => {
@@ -1107,10 +1124,17 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   }).withGroup(hkGroup);
 
   const navUpHotkey = registerHotkey({
-    hotkey: ['arrowup', 'ctrl+k', 'shift+tab'],
+    hotkey: props.horizontalNavigation
+      ? ['arrowleft', 'arrowup', 'ctrl+k', 'shift+tab']
+      : ['arrowup', 'ctrl+k', 'shift+tab'],
     scopeId: launcherScope,
     description: 'Navigate up',
     keyDownHandler: (event) => {
+      if (
+        event?.key === 'ArrowLeft' &&
+        event.target instanceof HTMLInputElement
+      )
+        return false;
       event?.preventDefault();
       return listController.selectPrevious();
     },
@@ -1118,10 +1142,17 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   }).withGroup(hkGroup);
 
   const navDownHotkey = registerHotkey({
-    hotkey: ['arrowdown', 'ctrl+j', 'tab'],
+    hotkey: props.horizontalNavigation
+      ? ['arrowright', 'arrowdown', 'ctrl+j', 'tab']
+      : ['arrowdown', 'ctrl+j', 'tab'],
     scopeId: launcherScope,
     description: 'Navigate down',
     keyDownHandler: (event) => {
+      if (
+        event?.key === 'ArrowRight' &&
+        event.target instanceof HTMLInputElement
+      )
+        return false;
       event?.preventDefault();
       return listController.selectNext();
     },
@@ -1144,6 +1175,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     hotkey: 'escape',
     scopeId: launcherScope,
     description: 'Exit',
+    runWithInputFocused: true,
     keyDownHandler: () => {
       props.onClose();
       return true;
@@ -1201,7 +1233,12 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   return (
     // The shared shell stopped painting its own pane (cmd+k gets one from the
     // app Dialog wrapper); this raw-Kobalte dialog carries it here.
-    <div class="elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]">
+    <div
+      class={cn(
+        'elevated-surface create-menu-pane w-200 max-w-[calc(100vw-16px)] touch:mobile-sheet touch:overflow-hidden touch:pb-[var(--mobile-sheet-safe-padding,0px)]',
+        props.class
+      )}
+    >
       <div
         aria-hidden="true"
         class="hidden touch:flex h-5 shrink-0 items-center justify-center"
@@ -1215,24 +1252,27 @@ export const LauncherInner = (props: LauncherInnerProps) => {
         ref={ref}
         tabindex={-1}
       >
-        <CommandMenuShell.Header class="border-b-0">
+        <CommandMenuShell.Header>
           <Show
             when={searchMode()}
             fallback={
-              <div class="min-w-0 flex flex-1 items-center gap-2 text-ink-muted">
+              <div class="min-w-0 flex h-7 flex-1 items-center gap-2 text-ink-muted">
                 <PlusIcon class="size-4 shrink-0 text-ink-extra-muted" />
                 <h1 class="truncate text-base font-normal">Create New</h1>
               </div>
             }
           >
-            <div class="min-w-0 flex flex-1 items-center gap-2">
+            <div class="min-w-0 flex h-7 flex-1 items-center gap-2">
               <MagnifyingGlassIcon class="size-4 shrink-0 text-ink-extra-muted" />
               <CommandMenuSearchInput
                 ref={searchInputRef}
                 type="text"
                 placeholder="Search create options"
                 value={searchQuery()}
-                onInput={(event) => setSearchQuery(event.currentTarget.value)}
+                onInput={(event) => {
+                  setSearchQuery(event.currentTarget.value);
+                  setFocusedIndex(0);
+                }}
               />
             </div>
           </Show>
@@ -1246,7 +1286,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                 <Hotkey
                   shortcut={searchModeHotkey.hotkey()}
                   theme="subtle"
-                  class="px-2 py-0.5"
+                  class="border-ink/12 px-2 py-0.5"
                 />
               </span>
             }
@@ -1256,25 +1296,23 @@ export const LauncherInner = (props: LauncherInnerProps) => {
           />
         </CommandMenuShell.Header>
         <CommandMenuShell.Body class="touch:flex touch:flex-col">
-          <CommandMenuList
-            items={blocks()}
-            selectedIndex={focusedIndex()}
-            scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-            class="max-h-[min(60vh,26rem)] touch:min-h-0"
-            itemId={(item) => `create-menu-${launcherItemKey(item)}`}
-            onSelect={(item) => runLauncherItem(item)}
-            onItemMouseMove={(index) =>
-              listController.setSelectedIndexFromPointer(index)
-            }
-          >
-            {(item, index) => (
-              <LauncherMenuItem
-                creatableBlock={item}
-                selected={focusedIndex() === index()}
-                showHotkey={!searchMode()}
-              />
-            )}
-          </CommandMenuList>
+          {props.children({
+            sections,
+            blocks,
+            selectedIndex: focusedIndex,
+            searchMode,
+            itemId: (item) => `create-menu-${launcherItemKey(item)}`,
+            select: listController.setSelectedIndexFromPointer,
+            step: (direction) => {
+              const count = blocks().length;
+              if (count)
+                listController.setSelectedIndex(
+                  (((focusedIndex() + direction) % count) + count) % count
+                );
+            },
+            choose: runLauncherItem,
+            scrollSelectedIntoView: listController.shouldScrollSelectedIntoView,
+          })}
         </CommandMenuShell.Body>
         <CommandMenuShell.Footer class="touch:px-6 touch:py-4">
           <style>{`
@@ -1288,19 +1326,27 @@ export const LauncherInner = (props: LauncherInnerProps) => {
             `}</style>
           <span class="flex items-center gap-1">
             <div class="flex gap-1">
-              <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
-                <Hotkey shortcut={navUpHotkey.hotkey()} class="space-x-1" />
+              <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+                <Hotkey
+                  shortcut={searchMode() ? 'arrowup' : navUpHotkey.hotkey()}
+                  class="space-x-1"
+                />
               </div>
-              <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">
-                <Hotkey shortcut={navDownHotkey.hotkey()} class="space-x-1" />
+              <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+                <Hotkey
+                  shortcut={searchMode() ? 'arrowdown' : navDownHotkey.hotkey()}
+                  class="space-x-1"
+                />
               </div>
             </div>
             Navigate
           </span>
-          <CommandMenuHotkeyHint
-            hotkey={<Hotkey shortcut={confirmHotkey.hotkey()} />}
-            label="Create"
-          />
+          <span class="flex items-center gap-1">
+            <div class="flex w-7 justify-center border border-ink/12 text-xxs rounded-md items-center px-1.5 py-px font-normal">
+              <Hotkey shortcut={confirmHotkey.hotkey()} />
+            </div>
+            Create
+          </span>
           <span class="hidden touch:hidden md:flex items-center gap-1">
             Hold
             <span class="relative inline-flex place-items-center">
@@ -1313,7 +1359,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
                   'border text-xxs px-1.5 py-px rounded-md transition-colors duration-150',
                   shiftHeld()
                     ? 'border-accent text-accent bg-accent/10'
-                    : 'border-edge-muted'
+                    : 'border-ink/12'
                 )}
               >
                 {getNormalizedKeyString({ shortcut: 'shift' })}
@@ -1327,6 +1373,23 @@ export const LauncherInner = (props: LauncherInnerProps) => {
   );
 };
 
+const DetailsLauncher = lazy(() => import('./DetailsLauncher'));
+const CarouselLauncher = lazy(() => import('./CarouselLauncher'));
+
+export const LauncherInner = (props: LauncherInnerProps) => {
+  const carouselFlag = useFeatureFlag(enableCarouselCreateMenu);
+  return (
+    <Suspense>
+      <Show
+        when={carouselFlag().enabled}
+        fallback={<DetailsLauncher {...props} />}
+      >
+        <CarouselLauncher {...props} />
+      </Show>
+    </Suspense>
+  );
+};
+
 type LauncherProps = {
   open: boolean;
   onOpenChange: (open: boolean, shouldReturnFocus?: boolean) => void;
@@ -1334,7 +1397,9 @@ type LauncherProps = {
 
 function MobileLauncher(props: LauncherProps) {
   const availableBlocks = useCreateMenuBlocks();
-  const items = createMemo(() => sortLauncherBlocks(availableBlocks()));
+  const items = createMemo(() =>
+    sortLauncherBlocks(availableBlocks(), launcherFrecencyStore)
+  );
   return (
     <MobileCreateSheet
       open={props.open}
