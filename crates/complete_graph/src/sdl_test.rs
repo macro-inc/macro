@@ -720,6 +720,10 @@ fn calendar_reads_hang_off_the_authenticated_user() {
         "calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!",
         "union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime",
         "watermark: [GraphqlCalendarLinkWatermark!]!",
+        "calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!",
+        "since: [CalendarLinkWatermarkInput!]!",
+        "newWatermark: [GraphqlCalendarLinkWatermark!]!",
+        "occurrences: [GraphqlCalendarOccurrence!]!",
         "needsCalendarPermission: Boolean!",
         "calendarDisabled: Boolean!",
         "hasCalendarData: Boolean!",
@@ -756,6 +760,7 @@ fn calendar_reads_hang_off_the_authenticated_user() {
     };
     assert!(!root.fields.contains_key("calendars"));
     assert!(!root.fields.contains_key("calendarOccurrences"));
+    assert!(!root.fields.contains_key("calendarChanges"));
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

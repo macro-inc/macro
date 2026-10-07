@@ -1725,8 +1725,14 @@ async fn run() -> anyhow::Result<()> {
     let calendar_read_service = Arc::new(calendar_events::domain::service::CalendarService::new(
         calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
     ));
-    let graphql_calendar_context =
-        graphql_calendar::CalendarGraphqlContext::new(calendar_read_service.clone());
+    let graphql_calendar_context = graphql_calendar::CalendarGraphqlContext::new(
+        calendar_read_service.clone(),
+        Arc::new(
+            calendar_events::domain::changes::CalendarChangeService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
+            ),
+        ),
+    );
     let calendar_state =
         CalendarRouterState::new(calendar_read_service, authorization_state.clone());
 

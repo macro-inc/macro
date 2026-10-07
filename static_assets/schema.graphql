@@ -24,6 +24,31 @@ input ActivityOverviewInput {
 }
 
 """
+A request for calendar changes after a watermark.
+"""
+input CalendarChangesInput {
+	"""
+	The client's watermark, one entry per tracked connected inbox. Empty
+	returns only the current watermark.
+	"""
+	since: [CalendarLinkWatermarkInput!]!
+}
+
+"""
+How far the client has applied one connected inbox's change log.
+"""
+input CalendarLinkWatermarkInput {
+	"""
+	Connected inbox identifier.
+	"""
+	linkId: ID!
+	"""
+	Last applied sequence, as the decimal string the server returned.
+	"""
+	seq: String!
+}
+
+"""
 A bounded occurrence viewport and page request.
 """
 input CalendarRangeInput {
@@ -1096,6 +1121,43 @@ enum GraphqlCalendarAttendeeResponseStatus {
 }
 
 """
+One bounded page of calendar changes after a watermark.
+"""
+type GraphqlCalendarChanges {
+	"""
+	Events created or changed, each with its full occurrence set.
+	"""
+	events: [GraphqlCalendarEventChange!]!
+	"""
+	Events that no longer exist or no longer have a visible occurrence.
+	"""
+	deletedEventIds: [ID!]!
+	"""
+	Calendars created or changed.
+	"""
+	calendars: [GraphqlCalendar!]!
+	"""
+	Calendars that were removed.
+	"""
+	deletedCalendarIds: [ID!]!
+	"""
+	Position after this page, one entry per currently visible connected
+	inbox. An inbox missing here is no longer visible.
+	"""
+	newWatermark: [GraphqlCalendarLinkWatermark!]!
+	"""
+	Whether more changes follow `newWatermark`.
+	"""
+	hasMore: Boolean!
+	"""
+	Whether the client must drop every calendar record and coverage it
+	holds and refetch: its watermark fell behind retention, or an inbox
+	became visible that it never tracked.
+	"""
+	resetRequired: Boolean!
+}
+
+"""
 Conferencing system backing an event's join URL.
 """
 enum GraphqlCalendarConferenceProvider {
@@ -1235,6 +1297,21 @@ input GraphqlCalendarEventBinaryExpr {
 	Right expression.
 	"""
 	right: GraphqlCalendarEventExpr!
+}
+
+"""
+A changed event with its complete current set of visible occurrences.
+Clients replace everything they hold for the event with it.
+"""
+type GraphqlCalendarEventChange {
+	"""
+	The series event.
+	"""
+	event: GraphqlCalendarEvent!
+	"""
+	Every non-cancelled materialized occurrence, ordered by start.
+	"""
+	occurrences: [GraphqlCalendarOccurrence!]!
 }
 
 """
@@ -7778,9 +7855,15 @@ type GraphqlUser {
 	calendars: [GraphqlCalendar!]!
 	"""
 	One page of occurrences overlapping the viewport, across owned and
-	delegated inboxes, ordered by start.
+	delegated inboxes, ordered by start. `watermark` is read before the
+	occurrences, so the page reflects at least every change it covers.
 	"""
 	calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!
+	"""
+	Changes to the viewer's calendars after `since`, one bounded page at a
+	time. An empty `since` returns only the current watermark.
+	"""
+	calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!
 	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""

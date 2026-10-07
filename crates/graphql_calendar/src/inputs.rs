@@ -1,6 +1,10 @@
-use async_graphql::InputObject;
-use calendar_events::domain::models::{CalendarOccurrenceCursor, OccurrenceRange};
+use async_graphql::{ID, InputObject};
+use calendar_events::domain::{
+    changes::{CalendarLinkWatermark, CalendarWatermark},
+    models::{CalendarOccurrenceCursor, OccurrenceRange},
+};
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
+use graphql_common::parse_id;
 use models_pagination::Base64Str;
 
 use crate::bad_input;
@@ -104,5 +108,43 @@ fn default_end_date(end: DateTime<Utc>) -> Option<NaiveDate> {
         Some(end.date_naive())
     } else {
         end.date_naive().succ_opt()
+    }
+}
+
+/// How far the client has applied one connected inbox's change log.
+#[derive(InputObject, Clone, Debug)]
+pub struct CalendarLinkWatermarkInput {
+    /// Connected inbox identifier.
+    pub link_id: ID,
+    /// Last applied sequence, as the decimal string the server returned.
+    pub seq: String,
+}
+
+/// A request for calendar changes after a watermark.
+#[derive(InputObject, Clone, Debug)]
+pub struct CalendarChangesInput {
+    /// The client's watermark, one entry per tracked connected inbox. Empty
+    /// returns only the current watermark.
+    pub since: Vec<CalendarLinkWatermarkInput>,
+}
+
+impl CalendarChangesInput {
+    pub(crate) fn into_watermark(self) -> async_graphql::Result<CalendarWatermark> {
+        let links = self
+            .since
+            .into_iter()
+            .map(|link| {
+                let link_id = parse_id(link.link_id, "since.linkId")
+                    .map_err(|_| bad_input("since.linkId must be a UUID"))?;
+                let seq = link
+                    .seq
+                    .parse::<i64>()
+                    .ok()
+                    .filter(|seq| *seq >= 0)
+                    .ok_or_else(|| bad_input("since.seq must be a non-negative integer"))?;
+                Ok(CalendarLinkWatermark { link_id, seq })
+            })
+            .collect::<async_graphql::Result<Vec<_>>>()?;
+        Ok(CalendarWatermark::from_links(links))
     }
 }

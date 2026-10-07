@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use calendar_events::domain::{
+    changes::{CalendarChangeQueryService, CalendarChangesPage, CalendarWatermark},
     models::{
         CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
         CalendarOccurrenceCursor, CalendarSyncStatus, EventReminders, EventStatus, EventTime,
@@ -128,11 +129,30 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
     }
 }
 
+impl CalendarChangeQueryService for RecordingCalendarReads {
+    async fn current_watermark(&self, requester_id: &str) -> Result<CalendarWatermark, Report> {
+        self.viewers.lock().unwrap().push(requester_id.to_owned());
+        Ok(CalendarWatermark::default())
+    }
+
+    async fn changes_since(
+        &self,
+        requester_id: &str,
+        _since: CalendarWatermark,
+    ) -> Result<CalendarChangesPage, Report> {
+        self.viewers.lock().unwrap().push(requester_id.to_owned());
+        Ok(CalendarChangesPage {
+            reset_required: true,
+            ..CalendarChangesPage::default()
+        })
+    }
+}
+
 #[tokio::test]
 async fn calendar_fields_read_through_request_data_for_the_viewer() {
     let harness = harness();
     let reads = Arc::new(RecordingCalendarReads::default());
-    let context = CalendarGraphqlContext::new(Arc::clone(&reads));
+    let context = CalendarGraphqlContext::new(Arc::clone(&reads), Arc::clone(&reads));
 
     let id_only = harness
         .schema
@@ -157,8 +177,9 @@ async fn calendar_fields_read_through_request_data_for_the_viewer() {
                             start: "2026-10-05T00:00:00Z", end: "2026-10-12T00:00:00Z"
                         }) {
                             nodes { id eventId linkId event { id title } }
-                            hasNextPage syncStatus
+                            hasNextPage syncStatus watermark { linkId seq }
                         }
+                        calendarChanges(input: { since: [] }) { resetRequired }
                     } }"#,
                     authenticated_parts(),
                 )
@@ -174,10 +195,10 @@ async fn calendar_fields_read_through_request_data_for_the_viewer() {
     assert_eq!(node["id"], format!("{EVENT_ID}:2026-10-06T15:00:00+00:00"));
     assert_eq!(node["event"]["title"], "Planning");
     assert_eq!(user["calendarOccurrences"]["syncStatus"], "READY");
-    assert_eq!(
-        *reads.viewers.lock().unwrap(),
-        vec![VALID_USER_ID.to_owned(), VALID_USER_ID.to_owned()]
-    );
+    assert_eq!(user["calendarChanges"]["resetRequired"], true);
+    let viewers = reads.viewers.lock().unwrap();
+    assert_eq!(viewers.len(), 4);
+    assert!(viewers.iter().all(|viewer| viewer == VALID_USER_ID));
 }
 
 #[tokio::test]

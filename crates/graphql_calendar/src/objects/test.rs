@@ -12,7 +12,7 @@ fn occurrence_identity_composes_event_id_and_occurrence_key() {
     let listing = timed_listing(7);
     let key = listing.occurrence.occurrence_key.clone();
 
-    let occurrence = GraphqlCalendarOccurrence::from(listing);
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
 
     assert_eq!(occurrence.id, ID(format!("{EVENT_ID}:{key}")));
     assert_eq!(occurrence.event_id, ID(EVENT_ID.to_string()));
@@ -35,7 +35,7 @@ fn exception_stays_on_the_occurrence_and_the_event_keeps_series_content() {
         )]),
     };
 
-    let occurrence = GraphqlCalendarOccurrence::from(listing);
+    let occurrence = occurrence_nodes(vec![listing]).remove(0);
 
     assert_eq!(occurrence.event.title, "Standup");
     assert_eq!(
@@ -58,7 +58,7 @@ fn exception_stays_on_the_occurrence_and_the_event_keeps_series_content() {
 
 #[test]
 fn occurrence_without_exception_inherits_everything() {
-    let occurrence = GraphqlCalendarOccurrence::from(timed_listing(8));
+    let occurrence = occurrence_nodes(vec![timed_listing(8)]).remove(0);
 
     assert_eq!(occurrence.override_title, None);
     assert_eq!(occurrence.override_status, None);

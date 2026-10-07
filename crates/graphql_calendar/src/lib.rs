@@ -9,10 +9,11 @@ mod reads;
 mod test_fixtures;
 mod user_query;
 
-pub use inputs::CalendarRangeInput;
+pub use inputs::{CalendarChangesInput, CalendarLinkWatermarkInput, CalendarRangeInput};
 pub use objects::{
     GraphqlAllDayEventTime, GraphqlCalendar, GraphqlCalendarAttendee,
-    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarConferenceProvider, GraphqlCalendarEvent,
+    GraphqlCalendarAttendeeResponseStatus, GraphqlCalendarChanges,
+    GraphqlCalendarConferenceProvider, GraphqlCalendarEvent, GraphqlCalendarEventChange,
     GraphqlCalendarEventSource, GraphqlCalendarEventStatus, GraphqlCalendarEventTransparency,
     GraphqlCalendarEventType, GraphqlCalendarEventVisibility, GraphqlCalendarLinkWatermark,
     GraphqlCalendarOccurrence, GraphqlCalendarOccurrencePage, GraphqlCalendarReminderOverride,
