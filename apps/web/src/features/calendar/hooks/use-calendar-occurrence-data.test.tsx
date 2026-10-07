@@ -1,12 +1,16 @@
-import type { CalendarOccurrencesData } from '@queries/calendar/occurrences';
+import type {
+  CalendarOccurrencesData,
+  CalendarOccurrencesQueryInput,
+} from '@queries/calendar/occurrences';
 import type { VisibleCalendar } from '@service-calendar/generated/schemas/visibleCalendar';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import {
   QueryClient,
   QueryClientProvider,
   useQuery,
+  useQueryClient,
 } from '@tanstack/solid-query';
-import { createSignal, For, Suspense } from 'solid-js';
+import { type Accessor, createSignal, For, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CALENDAR_SOURCE } from '../types';
 import {
@@ -32,13 +36,29 @@ vi.mock('@queries/calendar/calendars', () => ({
     })),
 }));
 vi.mock('@queries/calendar/occurrences', () => ({
-  useCalendarOccurrencesQuery: () =>
-    useQuery(() => ({
-      queryKey: ['occurrences', requests.transport()],
-      queryFn: requests.occurrences,
-      // The query layer retains data only for the same user and date range.
-      placeholderData: (previous) => previous,
-    })),
+  useCalendarOccurrencesQuery: (
+    input: Accessor<CalendarOccurrencesQueryInput>
+  ) => {
+    const client = useQueryClient();
+    return useQuery(() => {
+      const { userId, range } = input();
+      const transport = requests.transport();
+      return {
+        queryKey: ['occurrences', userId, range, transport],
+        queryFn: requests.occurrences,
+        // The query layer seeds the new reader from the same user and range.
+        initialData: () =>
+          client.getQueryData<CalendarOccurrencesData>([
+            'occurrences',
+            userId,
+            range,
+            transport === 'rest' ? 'graphql' : 'rest',
+          ]),
+        initialDataUpdatedAt: 0,
+        staleTime: (query) => (query.state.dataUpdatedAt === 0 ? 0 : Infinity),
+      };
+    });
+  },
 }));
 vi.mock('../utils/preferences', () => ({
   useCalendarPreferences: () => [{ sourceColors: {}, accountColors: {} }],
@@ -167,9 +187,7 @@ describe('calendar occurrence presentation readiness', () => {
     const replacement = deferred<CalendarOccurrencesData>();
     requests.occurrences.mockReturnValue(replacement.promise);
     setTransport('graphql');
-    await waitFor(() =>
-      expect(data.occurrencesQuery.isPlaceholderData).toBe(true)
-    );
+    await waitFor(() => expect(data.occurrencesQuery.isFetching).toBe(true));
     expect(screen.getByText('Planning').getAttribute('data-color')).toBe(
       calendar.color
     );
@@ -179,9 +197,7 @@ describe('calendar occurrence presentation readiness', () => {
     );
 
     replacement.resolve(occurrences);
-    await waitFor(() =>
-      expect(data.occurrencesQuery.isPlaceholderData).toBe(false)
-    );
+    await waitFor(() => expect(data.occurrencesQuery.isFetching).toBe(false));
     expect(screen.getByText('Planning').getAttribute('data-color')).toBe(
       calendar.color
     );

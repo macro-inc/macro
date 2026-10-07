@@ -225,6 +225,93 @@ describe('calendar query transport handoff', () => {
   );
 
   it.each(['REST', 'GraphQL'] as const)(
+    'applies optimistic edits while the replacement for %s is still loading',
+    async (from) => {
+      const cached = makeHost();
+      const [host, setHost] = createSignal<CacheHost | undefined>(
+        from === 'GraphQL' ? cached.host : undefined
+      );
+      cacheHost = host;
+      const keys = calendarKeys.occurrences('user-1', range);
+      client.setQueryData(
+        from === 'GraphQL' ? keys._ctx.graphql.queryKey : keys.queryKey,
+        initialData
+      );
+      const rest = deferred<Ok<CalendarOccurrenceResponse, never>>();
+      mocks.listOccurrences.mockReturnValue(rest.promise);
+      const query = renderHook(() =>
+        useCalendarOccurrencesQuery(() => ({ userId: 'user-1', range }))
+      );
+      await vi.waitFor(() => expect(query.data).toEqual(initialData));
+
+      setHost(from === 'REST' ? cached.host : undefined);
+      await vi.waitFor(() => {
+        expect(
+          from === 'REST' ? cached.calendarRange : mocks.listOccurrences
+        ).toHaveBeenCalledOnce();
+        expect(query.data).toEqual(initialData);
+      });
+
+      // Calendar mutations cancel reads before patching all occurrence caches.
+      // A retained observer-only placeholder would keep showing its old value.
+      const filter = { queryKey: calendarKeys.occurrences._def };
+      await client.cancelQueries(filter);
+      const previous = client.getQueriesData<typeof initialData>(filter);
+      client.setQueriesData<typeof initialData>(filter, (data) =>
+        data ? updatedData : data
+      );
+
+      await vi.waitFor(() => expect(query.data).toEqual(updatedData));
+
+      for (const [queryKey, data] of previous) {
+        client.setQueryData(queryKey, data);
+      }
+      await vi.waitFor(() => expect(query.data).toEqual(initialData));
+
+      // Settlement invalidation must refetch despite the normal Infinity
+      // freshness policy restored by the optimistic write and rollback.
+      const refresh = client.invalidateQueries(filter);
+      await vi.waitFor(() =>
+        expect(
+          from === 'REST' ? cached.calendarRange : mocks.listOccurrences
+        ).toHaveBeenCalledTimes(2)
+      );
+      if (from === 'REST') cached.finish();
+      else
+        rest.resolve(ok({ ...updatedData, hasMore: false, nextCursor: null }));
+      await refresh;
+      await vi.waitFor(() => expect(query.data).toEqual(updatedData));
+    }
+  );
+
+  it.each(['REST', 'GraphQL'] as const)(
+    'retains an exact viewport cached by %s when its new reader mounts',
+    async (from) => {
+      const cached = makeHost();
+      cacheHost = () => (from === 'REST' ? cached.host : undefined);
+      const keys = calendarKeys.occurrences('user-1', range);
+      client.setQueryData(
+        from === 'GraphQL' ? keys._ctx.graphql.queryKey : keys.queryKey,
+        initialData
+      );
+      const rest = deferred<Ok<CalendarOccurrenceResponse, never>>();
+      mocks.listOccurrences.mockReturnValue(rest.promise);
+
+      const query = renderHook(() =>
+        useCalendarOccurrencesQuery(() => ({ userId: 'user-1', range }))
+      );
+
+      await vi.waitFor(() => {
+        expect(
+          from === 'REST' ? cached.calendarRange : mocks.listOccurrences
+        ).toHaveBeenCalledOnce();
+        expect(query.isSuccess).toBe(true);
+        expect(query.data).toEqual(initialData);
+      });
+    }
+  );
+
+  it.each(['REST', 'GraphQL'] as const)(
     'keeps calendar names and colors while switching from %s',
     async (from) => {
       const cached = makeHost();
