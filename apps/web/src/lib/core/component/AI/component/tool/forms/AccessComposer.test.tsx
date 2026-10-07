@@ -53,7 +53,6 @@ const detail: FormDetail = {
   ],
 };
 const args: FormAccessArgs = {
-  requestId: '0199bfee-1000-7000-8000-000000000007',
   formId,
   baseRevision: '0199bfee-1000-7000-8000-000000000008',
   draft: {

@@ -5,10 +5,9 @@ import { MutationDetails } from './ResultDetails';
 import type { FormMutation } from './types';
 
 const result: FormMutation = {
-  operationId: '0199bfee-1000-7000-8000-000000000001',
   formId: '0199bfee-1000-7000-8000-000000000002',
   state: 'completed',
-  phase: 'completed',
+
   keys: { columns: {}, options: {}, questions: {}, sections: {} },
   diagnostics: [],
   saved: {
@@ -90,7 +89,7 @@ describe('Forms saved results', () => {
         result={{
           ...result,
           state: 'partiallyApplied',
-          phase: 'schemaApplied',
+
           saved: null,
           diagnostics: [
             {
@@ -104,7 +103,7 @@ describe('Forms saved results', () => {
       />
     ));
     expect(screen.getByText(/draft write was interrupted/)).toBeTruthy();
-    expect(screen.getByText(/inspect this operation/)).toBeTruthy();
+    expect(screen.getByText(/inspect this form/)).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 });

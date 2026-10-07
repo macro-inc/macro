@@ -31,8 +31,6 @@ pub struct Read {
     /// Editor-only response counts; never raw response rows.
     #[serde(default)]
     pub include_summary: bool,
-    /// Inspect a previous operation by this actor; never replays a mutation.
-    pub operation_id: Option<AuthoringOperationId>,
 }
 /// Bounded discovery across explicit grants, never every public form.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
@@ -98,8 +96,6 @@ pub struct AccessDraft {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetAccess {
-    /// Stable retry identity, reused only for exactly this intent.
-    pub request_id: AuthoringRequestId,
     /// Saved form to open, close or share.
     pub form_id: FormId,
     /// Exact saved revision reviewed by the owner. ReadForm refreshes it.
@@ -163,23 +159,6 @@ pub struct SavedForm {
     /// Explicit unsupported authoring capabilities.
     pub capabilities: Capabilities,
 }
-/// Durable mutation boundary reached by this operation.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema, strum::Display)]
-#[serde(rename_all = "camelCase")]
-pub enum OperationPhase {
-    /// Validated and claimed; a side-effect call may be in progress.
-    Reserved,
-    /// Closed form identity exists.
-    FormCreated,
-    /// Explicit schema operations were applied.
-    SchemaApplied,
-    /// Durable collaborative content was acknowledged.
-    DraftSaved,
-    /// Metadata or access settings were applied.
-    SettingsApplied,
-    /// Final result was persisted.
-    Completed,
-}
 /// Outcome describes actual completion, including uncertain interrupted work.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -190,20 +169,14 @@ pub enum MutationState {
     SavedPendingProjection,
     /// Some phases may have committed; inspect the existing form, never recreate blindly.
     PartiallyApplied,
-    /// A claimed operation has not recorded its final outcome; do not duplicate it.
-    Pending,
 }
-/// Every mutation returns its real saved state and a durable recovery identity.
+/// Every mutation reports its result; no execution history is retained.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationResult {
-    /// Durable operation identity; ReadForm can inspect it.
-    pub operation_id: AuthoringOperationId,
-    /// Completion versus partial/pending work.
+    /// Completion versus partial work.
     pub state: MutationState,
-    /// Last acknowledged phase.
-    pub phase: OperationPhase,
-    /// Reserved target identity, even when creation did not finish.
+    /// Target form identity, usable to inspect partial work.
     pub form_id: FormId,
     /// Actual authorized state when readable; absent is never a completion claim.
     pub saved: Option<SavedForm>,
@@ -220,24 +193,17 @@ pub struct MutationResult {
     rename_all_fields = "camelCase"
 )]
 pub enum ReadResult {
-    /// Actor-scoped recovery for a claimed operation whose form is not yet readable.
-    Operation {
-        /// Last acknowledged phase; no draft content is exposed without form access.
-        operation: MutationResult,
-    },
     /// Editor-only durable authoring state.
     Authoring {
         /// Actual saved state.
         saved: Box<SavedForm>,
         /// Optional ledger/table counts with labeled populations.
         summary: Option<ResponseSummary>,
-        /// This actor's optional earlier operation.
-        operation: Option<MutationResult>,
     },
     /// Respondent-safe projection. No draft revisions or hidden booking destinations.
     Respondent {
         /// Public/member page content under the caller's View grant.
-        detail: FormDetail,
+        detail: Box<FormDetail>,
         /// Canonical URL.
         respondent_url: String,
         /// Actual response availability.

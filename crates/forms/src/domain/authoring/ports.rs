@@ -23,7 +23,7 @@ pub trait AuthoringCore: FormsService {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         sharing: bool,
     ) -> impl Future<Output = ()> + Send;
-    /// Create closed/private at insertion with a reserved operation identity.
+    /// Create closed/private at insertion with a fresh form identity.
     fn create_private(
         &self,
         creator: Viewer,
@@ -127,4 +127,24 @@ pub trait AuthoringEditor: Send + Sync + 'static {
         snapshot: &[u8],
         layout: &FormLayout,
     ) -> impl Future<Output = Result<Vec<u8>, super::AuthoringError>> + Send;
+}
+
+/// Conditional metadata and sharing writes to existing Forms storage.
+pub trait AuthoringSettings: Send + Sync + 'static {
+    /// Read direct recipients after the workflow proves Owner.
+    fn grants(
+        &self,
+        form: FormId,
+    ) -> impl Future<Output = Result<Vec<super::Grant>, super::AuthoringError>> + Send;
+    /// Commit settings and explicit grant deltas at the observed metadata/draft baseline.
+    /// The workflow requires the table version for schema-dependent or exposing changes;
+    /// pure restrictions remain possible while respondents are writing rows.
+    fn settings(
+        &self,
+        expected: &Snapshot,
+        update: &models_forms::UpdateForm,
+        grants: &[super::GrantChange],
+        check_grants: bool,
+        check_table_version: bool,
+    ) -> impl Future<Output = Result<(), super::AuthoringError>> + Send;
 }

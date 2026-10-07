@@ -4,9 +4,9 @@ mod create;
 mod edit;
 mod read;
 use super::{
-    journal::{AuthoringJournal, Claim, Intent, Operation},
     ports::{
-        AuthoringAccess, AuthoringBooking, AuthoringCore, AuthoringEditor, FormsAuthoringService,
+        AuthoringAccess, AuthoringBooking, AuthoringCore, AuthoringEditor, AuthoringSettings,
+        FormsAuthoringService,
     },
     *,
 };
@@ -25,13 +25,13 @@ use models_forms::{FormAccess, FormId, FormLayout};
 use std::sync::Arc;
 
 /// Dependencies supplied by the composition root. Permissions are checked on every call.
-pub struct AuthoringWorkflow<Core, Databases, Journal, Booking, Access, Editor> {
+pub struct AuthoringWorkflow<Core, Databases, Settings, Booking, Access, Editor> {
     /// Authoritative shared Forms document.
     pub core: Arc<Core>,
     /// Owning service for schema mutations.
     pub databases: Arc<Databases>,
-    /// Actor-scoped durable operation retries.
-    pub journal: Journal,
+    /// Conditional settings writes to existing Forms storage.
+    pub settings: Settings,
     /// Scheduling readiness and access validation.
     pub booking: Booking,
     /// Existing entity authorization boundary.
@@ -72,11 +72,11 @@ fn managed(snapshot: &Snapshot) -> Vec<models_databases::ColumnId> {
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    J: AuthoringJournal,
+    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, J, B, A, E>
+> AuthoringWorkflow<C, D, S, B, A, E>
 {
     async fn receipt<L: RequiredPermission>(
         &self,
@@ -95,120 +95,39 @@ impl<
         }
         Ok(())
     }
-    fn operation(
-        intent: Intent,
-        form_id: FormId,
-        prepared: Option<validate::Prepared>,
-    ) -> Operation {
-        // Request and operation occupy separate typed domains, but share a stable
-        // UUID so lookup never requires a second client-provided retry identity.
-        let operation_id = AuthoringOperationId::from_uuid(intent.request_id().into_uuid());
-        let keys = prepared
-            .as_ref()
-            .map(|p| p.keys.clone())
-            .unwrap_or_default();
-        Operation {
-            intent,
-            prepared,
-            result: MutationResult {
-                operation_id,
-                form_id,
-                keys,
-                state: MutationState::Pending,
-                phase: OperationPhase::Reserved,
-                saved: None,
-                diagnostics: vec![],
-            },
+    fn result(form_id: FormId, keys: KeyMap) -> MutationResult {
+        MutationResult {
+            form_id,
+            keys,
+            state: MutationState::PartiallyApplied,
+            saved: None,
+            diagnostics: vec![],
         }
-    }
-    async fn phase(
-        &self,
-        actor: &Viewer,
-        operation: &mut Operation,
-        phase: OperationPhase,
-    ) -> Result<(), AuthoringError> {
-        operation.result.phase = phase;
-        self.journal.save(&actor.user_id, operation).await
     }
     async fn outcome(
         &self,
         actor: &Viewer,
-        mut operation: Operation,
+        mut outcome: MutationResult,
         result: Result<Snapshot, AuthoringError>,
     ) -> Result<MutationResult, AuthoringError> {
         match result {
             Ok(snapshot) => {
-                operation.result.state = if snapshot.projected {
+                let state = if snapshot.projected {
                     MutationState::Completed
                 } else {
                     MutationState::SavedPendingProjection
                 };
                 match self.saved(&actor.user_id, snapshot).await {
                     Ok(saved) => {
-                        operation.result.saved = Some(saved);
-                        operation.result.phase = OperationPhase::Completed;
+                        outcome.saved = Some(saved);
+                        outcome.state = state;
                     }
-                    Err(error) => {
-                        operation.result.state = MutationState::PartiallyApplied;
-                        operation.result.diagnostics.push(error.into());
-                    }
+                    Err(error) => outcome.diagnostics.push(error.into()),
                 }
             }
-            Err(error) => {
-                operation.result.state = MutationState::PartiallyApplied;
-                operation.result.diagnostics.push(error.into());
-            }
+            Err(error) => outcome.diagnostics.push(error.into()),
         }
-        if let Err(error) = self.journal.save(&actor.user_id, &operation).await {
-            operation.result.state = MutationState::PartiallyApplied;
-            operation.result.diagnostics.push(error.into());
-        }
-        Ok(operation.result)
-    }
-    async fn inspect(
-        &self,
-        actor: &Viewer,
-        operation: Operation,
-        snapshot: &Snapshot,
-    ) -> Result<MutationResult, AuthoringError> {
-        let mut result = operation.result;
-        if !matches!(result.state, MutationState::Completed) {
-            let postconditions = operation.prepared.as_ref().is_some_and(|p| {
-                p.layout == snapshot.layout
-                    && p.columns.iter().all(|c| snapshot.columns.contains(c))
-            }) && match &operation.intent {
-                Intent::Create(i) => {
-                    snapshot.form.description == i.draft.description
-                        && snapshot.form.confirmation_message == i.draft.confirmation_message
-                }
-                Intent::Edit(i) => {
-                    i.description
-                        .as_ref()
-                        .is_none_or(|v| *v == snapshot.form.description)
-                        && i.confirmation_message
-                            .as_ref()
-                            .is_none_or(|v| *v == snapshot.form.confirmation_message)
-                }
-                Intent::Access(_) => false,
-            };
-            if result.phase == OperationPhase::SettingsApplied || postconditions {
-                result.state = if snapshot.projected {
-                    MutationState::Completed
-                } else {
-                    MutationState::SavedPendingProjection
-                };
-                result.phase = OperationPhase::Completed;
-                result.diagnostics.clear();
-            } else if result.state == MutationState::SavedPendingProjection && snapshot.projected {
-                result.state = MutationState::Completed;
-            } else {
-                result.diagnostics.push(AuthoringError::new(Code::PartiallyApplied, "operation", format!("Last acknowledged phase: {}. Inspect the returned form and preserved columns. Repair remaining work with a new targeted EditForm or SetFormAccess request against this revision; do not create another form. An in-flight operation may still finish.", result.phase)).into());
-            }
-        }
-        result.saved = Some(self.saved(&actor.user_id, snapshot.clone()).await?);
-        // Inspection must not overwrite the record of a concurrently executing
-        // claimant. Reconciliation is returned, not persisted or replayed.
-        Ok(result)
+        Ok(outcome)
     }
     async fn saved(
         &self,
@@ -216,7 +135,7 @@ impl<
         mut snapshot: Snapshot,
     ) -> Result<SavedForm, AuthoringError> {
         if snapshot.access == FormAccess::Owner {
-            snapshot.grants = self.journal.grants(snapshot.form.id).await?;
+            snapshot.grants = self.settings.grants(snapshot.form.id).await?;
         }
         let revision = review_revision(user, &snapshot)?;
         let id = snapshot.form.id;

@@ -4,11 +4,11 @@ use models_forms::UpdateForm;
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    J: AuthoringJournal,
+    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, J, B, A, E>
+> AuthoringWorkflow<C, D, S, B, A, E>
 {
     pub(super) async fn set_access(
         &self,
@@ -18,23 +18,6 @@ impl<
         let owner = self
             .receipt::<OwnerAccessLevel>(&actor, intent.form_id)
             .await?;
-        if let Some(operation) = self
-            .journal
-            .operation(
-                &actor.user_id,
-                AuthoringOperationId::from_uuid(intent.request_id.into_uuid()),
-            )
-            .await?
-        {
-            if operation.intent != Intent::Access(intent) {
-                return Err(AuthoringError::new(
-                    Code::IdempotencyConflict,
-                    "requestId",
-                    "Use a new requestId for changed access settings.",
-                ));
-            }
-            return Ok(operation.result);
-        }
         let receipt = owner
             .try_into_requirement::<EditAccessLevel>()
             .map_err(failure)?;
@@ -43,7 +26,7 @@ impl<
             .authoring_snapshot(receipt.clone())
             .await
             .map_err(form_failure)?;
-        latest.grants = self.journal.grants(intent.form_id).await?;
+        latest.grants = self.settings.grants(intent.form_id).await?;
         if review_revision(&actor.user_id, &latest)? != intent.base_revision {
             return Err(stale("baseRevision"));
         }
@@ -117,7 +100,7 @@ impl<
             .authoring_snapshot(receipt.clone())
             .await
             .map_err(form_failure)?;
-        checked.grants = self.journal.grants(intent.form_id).await?;
+        checked.grants = self.settings.grants(intent.form_id).await?;
         if checked.form != latest.form
             || !revision_matches(&checked.revision, &latest.revision).map_err(failure)?
             || checked.columns != latest.columns
@@ -126,21 +109,16 @@ impl<
             return Err(stale("baseRevision"));
         }
         latest = checked;
-        let operation = Self::operation(Intent::Access(intent.clone()), intent.form_id, None);
-        let mut operation = match self.journal.claim(&actor.user_id, operation).await? {
-            Claim::Existing(operation) => return Ok(operation.result),
-            Claim::New(operation) => operation,
-        };
+        let mut outcome = Self::result(intent.form_id, KeyMap::default());
         let result = async {
-            self.journal.settings(&latest, &UpdateForm { audience: Some(intent.draft.audience), status: Some(intent.draft.status), closes_at: Some(intent.draft.closes_at), tally_visible: Some(intent.draft.tally_visible), ..Default::default() }, &intent.draft.channel_grants, true, exposes).await?;
+            self.settings.settings(&latest, &UpdateForm { audience: Some(intent.draft.audience), status: Some(intent.draft.status), closes_at: Some(intent.draft.closes_at), tally_visible: Some(intent.draft.tally_visible), ..Default::default() }, &intent.draft.channel_grants, true, exposes).await?;
             self.core.authoring_changed(receipt.clone(), !intent.draft.channel_grants.is_empty()).await;
-            self.phase(&actor, &mut operation, OperationPhase::SettingsApplied).await?;
             let snapshot = self.core.authoring_snapshot(receipt).await.map_err(form_failure)?;
             if !revision_matches(&snapshot.revision, &latest.revision).map_err(failure)? {
-                operation.result.diagnostics.push(AuthoringError::new(Code::ConcurrentFieldChange, "draft", "Access settings were saved. A subsequent live editor change is reflected in the returned draft; this review did not freeze publication.").into());
+                outcome.diagnostics.push(AuthoringError::new(Code::ConcurrentFieldChange, "draft", "Access settings were saved. A subsequent live editor change is reflected in the returned draft; this review did not freeze publication.").into());
             }
             Ok(snapshot)
         }.await;
-        self.outcome(&actor, operation, result).await
+        self.outcome(&actor, outcome, result).await
     }
 }

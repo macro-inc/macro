@@ -12,8 +12,8 @@ use models_forms::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-/// A fully resolved draft; all identities survive retries when persisted with the operation.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// A fully resolved draft with identities allocated for this creation.
+#[derive(Debug, Clone)]
 pub struct Prepared {
     /// Valid resolved layout.
     pub layout: FormLayout,

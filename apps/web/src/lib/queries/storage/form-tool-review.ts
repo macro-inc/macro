@@ -14,12 +14,7 @@ export function useFormAccessReviewQuery(args: Accessor<Args | undefined>) {
     const detail = formDetailQueryOptions(current?.formId ?? '');
     return {
       ...detail,
-      queryKey: [
-        ...detail.queryKey,
-        'access-review',
-        current?.requestId,
-        current?.baseRevision,
-      ],
+      queryKey: [...detail.queryKey, 'access-review', current?.baseRevision],
       enabled: !!current,
       staleTime: 0,
       refetchOnMount: 'always' as const,

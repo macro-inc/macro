@@ -11,7 +11,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[schemars(
     title = "CreateForm",
-    description = "Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Reuse requestId only for the identical retry. Returns actual saved IDs, revision, links and completion state; inspect partial/pending work instead of recreating."
+    description = "Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, revision, links and completion state; inspect partial work instead of recreating."
 )]
 pub struct CreateForm {
     /// Flat workflow arguments shared with the domain service.
@@ -19,7 +19,7 @@ pub struct CreateForm {
     pub intent: Create,
 }
 impl ToolAnnotated for CreateForm {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create form").with_idempotent();
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create form");
 }
 #[async_trait]
 impl<Service: FormsAuthoringService> AsyncTool<FormsToolContext<Service>> for CreateForm {

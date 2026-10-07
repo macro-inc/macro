@@ -11,5 +11,3 @@ pub mod workflow;
 
 pub mod contracts;
 pub use contracts::*;
-
-pub mod journal;

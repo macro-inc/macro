@@ -32,7 +32,6 @@ vi.mock('@app/features/scheduling/scheduling', () => ({
 import { FormAccessReview } from './AccessReview';
 
 const args: FormAccessArgs = {
-  requestId: '0199bfee-1000-7000-8000-000000000001',
   formId: '0199bfee-1000-7000-8000-000000000002',
   baseRevision: '0199bfee-1000-7000-8000-000000000003',
   draft: {

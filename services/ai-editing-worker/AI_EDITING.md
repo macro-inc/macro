@@ -176,5 +176,6 @@ It merges that same delta with fresh live snapshots, validates the merged layout
 and saves through the existing collaboration port with bounded CAS retries.
 Human edits therefore merge at the CRDT field/text level. Metadata, database
 columns, booking policy and sharing remain with their owning domain services.
-No read-time baseline snapshots are retained in Postgres; the separate operation
-journal still prevents duplicate mutations on retries.
+No authoring snapshots or execution records are retained separately. Each tool
+invocation is independent; after a timeout, inspect the current form before
+issuing another mutation.

@@ -261,11 +261,11 @@ an otherwise open form closed to responses. If the reviewed state changed, read
 again and review the updated proposal. Chat completes the deferred tool after the
 turn; agent sessions return the accepted result to the running agent.
 
-Reuse a request ID only for an exact retry of that mutation. The workflow records
-its operation identity and last acknowledged phase. A partial or pending result
-is not a completed form: use `ReadForm` with the returned form and operation IDs
-before attempting repair. Do not create another form to retry an interrupted
-request. A changed sharing fingerprint requires a fresh authoring read. Forms authoring and
+Mutations do not retain a retry history or deduplicate repeated calls. Each
+`CreateForm` invocation can create a new form. After a timeout, use `ListForms`
+and `ReadForm` to inspect existing work before creating again. A partial result
+includes the target form ID; inspect it and make targeted repairs.
+A changed sharing fingerprint requires a fresh authoring read. Forms authoring and
 review UI follow the existing `enable-forms` feature flag; server execution uses
 the same authenticated user/delegated-agent permissions as the rest of Forms.
 
@@ -273,6 +273,4 @@ Sharing checks the current durable revision after remote booking validation and
 then conditionally saves settings. It does not freeze the collaborative editor:
 subsequent editor changes can become live. A returned diagnostic calls out a live
 edit detected after that check. Owners can still close a form or remove access
-when its draft or booking destination needs repair. Operation inspection reconciles
-acknowledged writes with current saved state without replaying them; earlier
-uncertain phases include instructions for a fresh targeted repair request.
+when its draft or booking destination needs repair.

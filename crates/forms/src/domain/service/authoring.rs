@@ -284,7 +284,6 @@ where
             Err(FormDraftError::Conflict) => return Err(FormError::Conflict),
             Err(error) => return Err(drafts::draft_error(error)),
         }
-        // Callers have already persisted their intent before this durable write.
         // A failure here is an uncertain projection outcome, never a safe replay.
         self.authoring_snapshot(receipt).await
     }

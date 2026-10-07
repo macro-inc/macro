@@ -192,12 +192,10 @@ pub struct Draft {
     /// At most 100 ordered sections and 500 questions. Booking is last.
     pub sections: Vec<Section>,
 }
-/// Full create intent. Reuse requestId only for retries of exactly this intent.
+/// Complete creation intent. Each invocation creates a new form.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Create {
-    /// Retry identity, generated once per semantic request.
-    pub request_id: AuthoringRequestId,
     /// Form name, also the new database name for source/new.
     pub name: String,
     /// New database or explicitly selected table requiring database Owner.
@@ -259,7 +257,7 @@ pub struct Snapshot {
     pub form: Form,
     /// Actual durable content, including an invalid draft.
     pub layout: FormLayout,
-    /// Durable Loro document used to produce a granular edit. Never stored in the journal.
+    /// Durable Loro document used to produce a granular edit. Used only during the current edit.
     pub document: Vec<u8>,
     /// Loro version vector.
     pub revision: Vec<u8>,
@@ -376,7 +374,7 @@ pub enum Change {
         question_id: FormQuestionId,
     },
 }
-/// Explicit schema addition. Ids are stable client-minted UUIDs, persisted for retries.
+/// Explicit schema addition. Ids are client-minted UUIDs used by the new question bindings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NewColumnDraft {
@@ -394,8 +392,6 @@ pub struct NewColumnDraft {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Edit {
-    /// Stable retry identity.
-    pub request_id: AuthoringRequestId,
     /// Target form.
     pub form_id: models_forms::FormId,
     /// At most 100 targeted operations; omitted fields survive.
@@ -429,10 +425,6 @@ macro_rules! authoring_id {
         }
     }
 }
-authoring_id!(/// Stable identity of one authoring mutation and its recovery record.
-    AuthoringRequestId);
-authoring_id!(/// Durable identity of an operation, distinct from its client retry key.
-    AuthoringOperationId);
 authoring_id!(/// Content fingerprint for sharing review, scoped to actor and form.
     AuthoringRevisionId);
 
@@ -495,12 +487,6 @@ pub enum Code {
     Unavailable,
     /// InvalidDraft: see the accompanying path and corrective message.
     InvalidDraft,
-    /// IdempotencyConflict: see the accompanying path and corrective message.
-    IdempotencyConflict,
-    /// PendingOperation: see the accompanying path and corrective message.
-    PendingOperation,
-    /// A durable phase was dispatched; inspect the operation before retrying.
-    PartiallyApplied,
     /// InvalidAccess: see the accompanying path and corrective message.
     InvalidAccess,
     /// InvalidName: see the accompanying path and corrective message.

@@ -4,11 +4,11 @@ use models_forms::UpdateForm;
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    J: AuthoringJournal,
+    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, J, B, A, E>
+> AuthoringWorkflow<C, D, S, B, A, E>
 {
     pub(super) async fn edit(
         &self,
@@ -18,25 +18,6 @@ impl<
         let receipt = self
             .receipt::<EditAccessLevel>(&actor, intent.form_id)
             .await?;
-        // Retry lookup precedes edits to the current document: a completed
-        // request must return its recorded result even after its own writes.
-        if let Some(operation) = self
-            .journal
-            .operation(
-                &actor.user_id,
-                AuthoringOperationId::from_uuid(intent.request_id.into_uuid()),
-            )
-            .await?
-        {
-            if operation.intent != Intent::Edit(intent) {
-                return Err(AuthoringError::new(
-                    Code::IdempotencyConflict,
-                    "requestId",
-                    "Use a new requestId for a changed intent.",
-                ));
-            }
-            return Ok(operation.result);
-        }
         let latest = self
             .core
             .authoring_snapshot(receipt.clone())
@@ -90,28 +71,12 @@ impl<
                 return Err(stale("columns"));
             }
         }
-        let operation = Self::operation(
-            Intent::Edit(intent.clone()),
-            intent.form_id,
-            Some(validate::Prepared {
-                layout: layout.clone(),
-                columns: added.clone(),
-                keys: KeyMap::default(),
-            }),
-        );
-        let mut operation = match self.journal.claim(&actor.user_id, operation).await? {
-            Claim::Existing(operation) => return Ok(operation.result),
-            Claim::New(operation) => operation,
-        };
+        let outcome = Self::result(intent.form_id, KeyMap::default());
         let result = async {
             self.schema(actor.clone(), &latest, &added).await?;
-            self.phase(&actor, &mut operation, OperationPhase::SchemaApplied)
-                .await?;
             let snapshot = self
                 .core
                 .apply_authoring_update(receipt.clone(), update)
-                .await?;
-            self.phase(&actor, &mut operation, OperationPhase::DraftSaved)
                 .await?;
             if intent.description.is_some() || intent.confirmation_message.is_some() {
                 // Recheck metadata after the collaborative write, so a human
@@ -126,7 +91,7 @@ impl<
                 {
                     return Err(stale("confirmationMessage"));
                 }
-                self.journal
+                self.settings
                     .settings(
                         &snapshot,
                         &UpdateForm {
@@ -141,15 +106,13 @@ impl<
                     .await?;
             }
             self.core.authoring_changed(receipt.clone(), false).await;
-            self.phase(&actor, &mut operation, OperationPhase::SettingsApplied)
-                .await?;
             self.core
                 .authoring_snapshot(receipt)
                 .await
                 .map_err(form_failure)
         }
         .await;
-        self.outcome(&actor, operation, result).await
+        self.outcome(&actor, outcome, result).await
     }
 }
 

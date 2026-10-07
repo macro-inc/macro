@@ -22,7 +22,6 @@ vi.mock('../../ui', () => ({
 import { UserToolCall } from './UserToolCall';
 
 const input = {
-  requestId: '0199bfee-1000-7000-8000-000000000001',
   formId: '0199bfee-1000-7000-8000-000000000002',
   baseRevision: '0199bfee-1000-7000-8000-000000000003',
   draft: {
@@ -53,18 +52,16 @@ describe('resolved Forms session reviews', () => {
           outcome: {
             kind: 'completed',
             result: {
-              operationId: input.requestId,
               formId: input.formId,
               state: 'partiallyApplied',
-              phase: 'settingsApplied',
               saved: null,
               keys: { columns: {}, questions: {}, sections: {}, options: {} },
               diagnostics: [
                 {
                   code: 'Unavailable',
-                  path: 'operation',
+                  path: 'form',
                   message:
-                    'Read this operation to reconcile its saved sharing settings.',
+                    'Read this form to inspect its saved sharing settings.',
                 },
               ],
             },
@@ -75,7 +72,7 @@ describe('resolved Forms session reviews', () => {
     expect(screen.getByText('Partially saved')).toBeTruthy();
     await waitFor(() =>
       expect(
-        screen.getByText(/reconcile its saved sharing settings/)
+        screen.getByText(/inspect its saved sharing settings/)
       ).toBeTruthy()
     );
     expect(screen.queryByRole('link')).toBeNull();

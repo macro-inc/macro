@@ -90,15 +90,10 @@ export function MutationDetails(props: { result: FormMutation }) {
           </p>
         )}
       </For>
-      <Show
-        when={
-          props.result.state === 'partiallyApplied' ||
-          props.result.state === 'pending'
-        }
-      >
+      <Show when={props.result.state === 'partiallyApplied'}>
         <p class="text-sm text-ink-muted">
-          Some work may have saved. Ask the agent to inspect this operation
-          before retrying.
+          Some work may have saved. Ask the agent to inspect this form before
+          retrying.
         </p>
       </Show>
     </div>

@@ -374,10 +374,6 @@ export type UserToolResponseForToolCalendarEvent =
  */
 export type NewChannelType = 'private' | 'team';
 /**
- * Stable identity of one authoring mutation and its recovery record.
- */
-export type AuthoringRequestId = string;
-/**
  * Where a new form's responses go.
  */
 export type FormSource =
@@ -742,27 +738,12 @@ export type BookingEventTypeId = string;
  */
 export type Qualification = 'advisory' | 'required';
 /**
- * Durable identity of an operation, distinct from its client retry key.
- */
-export type AuthoringOperationId = string;
-/**
  * Outcome describes actual completion, including uncertain interrupted work.
  */
 export type MutationState =
   | 'completed'
   | 'savedPendingProjection'
-  | 'partiallyApplied'
-  | 'pending';
-/**
- * Durable mutation boundary reached by this operation.
- */
-export type OperationPhase =
-  | 'reserved'
-  | 'formCreated'
-  | 'schemaApplied'
-  | 'draftSaved'
-  | 'settingsApplied'
-  | 'completed';
+  | 'partiallyApplied';
 /**
  * Identifier of a form (the shareable entity respondents open).
  */
@@ -877,9 +858,6 @@ export type Code =
   | 'Forbidden'
   | 'Unavailable'
   | 'InvalidDraft'
-  | 'IdempotencyConflict'
-  | 'PendingOperation'
-  | 'PartiallyApplied'
   | 'InvalidAccess'
   | 'InvalidName'
   | 'FormNotFound'
@@ -4039,19 +4017,11 @@ export type ReadView = 'authoring' | 'respondent';
  */
 export type ReadResult =
   | {
-      operation: MutationResult;
-      view: 'operation';
-    }
-  | {
       saved: SavedForm;
       /**
        * Optional ledger/table counts with labeled populations.
        */
       summary?: ResponseSummary | null;
-      /**
-       * This actor's optional earlier operation.
-       */
-      operation?: MutationResult | null;
       view: 'authoring';
     }
   | {
@@ -6390,10 +6360,9 @@ export interface CreateDocumentResponse {
   documentId: string;
 }
 /**
- * Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Reuse requestId only for the identical retry. Returns actual saved IDs, revision, links and completion state; inspect partial/pending work instead of recreating.
+ * Create a complete questionnaire with response columns, ordered sections, screeners and an optional saved booking link. Creates closed and private; use SetFormAccess afterward to open or share it. Existing-table attachment requires database Owner and an unbound table. Use local question/option keys in screeners and reference only earlier sections. Required questions require an answer; screeners compare answers using AND/OR. Empty answers pass only IsEmpty. A final booking step reveals an existing authorized link after acceptance; its independent URL remains usable, and strict qualification is unsupported. Each invocation creates a new form; after a timeout, use ListForms and ReadForm before trying again. Returns actual saved IDs, revision, links and completion state; inspect partial work instead of recreating.
  */
 export interface CreateForm {
-  requestId: AuthoringRequestId;
   /**
    * Form name, also the new database name for source/new.
    */
@@ -6476,12 +6445,10 @@ export interface MessageWithAttachments {
   attachmentIds: string[];
 }
 /**
- * Every mutation returns its real saved state and a durable recovery identity.
+ * Every mutation reports its result; no execution history is retained.
  */
 export interface MutationResult {
-  operationId: AuthoringOperationId;
   state: MutationState;
-  phase: OperationPhase;
   formId: FormId;
   /**
    * Actual authorized state when readable; absent is never a completion claim.
@@ -7406,10 +7373,9 @@ export interface EditDocumentResponse {
   clarification?: string | null;
 }
 /**
- * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/screeners and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep screeners after the questions they test and booking last. Reuse requestId only for identical retries; read actual partial/pending outcomes before proceeding. Opening and sharing require SetFormAccess.
+ * Edit the live form using typed targeted operations. ReadForm provides stable question/section IDs. Edits produce granular CRDT updates; concurrent changes merge using the same rules as the builder. Omitted fields stay unchanged. Invalid merged layouts are refused. Changes can add or move questions/sections, edit requiredness/help/screeners and attach an existing booking target. New columns use explicit stable IDs. Question labels follow backing column names; rename them through database tools. Removing a question keeps its column and answers. Schema retyping and conditional column cleanup are unsupported. Keep screeners after the questions they test and booking last. Read the current form after a timeout or partial result before proceeding. Opening and sharing require SetFormAccess.
  */
 export interface EditForm {
-  requestId: AuthoringRequestId;
   formId: FormId;
   /**
    * At most 100 targeted operations; omitted fields survive.
@@ -7429,7 +7395,7 @@ export interface EditForm {
   confirmationMessage?: string | null;
 }
 /**
- * Explicit schema addition. Ids are stable client-minted UUIDs, persisted for retries.
+ * Explicit schema addition. Ids are client-minted UUIDs used by the new question bindings.
  */
 export interface NewColumnDraft {
   /**
@@ -10780,7 +10746,7 @@ export interface ReadDesignResponse {
   content: string;
 }
 /**
- * Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. Inspect your prior operationId after a partial or pending write; this does not replay mutations. A respondent link may exist while responses are closed; check acceptingResponses.
+ * Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses.
  */
 export interface ReadForm {
   formId: FormId;
@@ -10789,10 +10755,6 @@ export interface ReadForm {
    * Editor-only response counts; never raw response rows.
    */
   includeSummary?: boolean;
-  /**
-   * Inspect a previous operation by this actor; never replays a mutation.
-   */
-  operationId?: AuthoringOperationId | null;
 }
 /**
  * A form's response counts, for its editors.
@@ -11838,7 +11800,6 @@ export interface SetEntityPropertyResponse {
  * Open, close or share a saved form using a concrete baseRevision from ReadForm. Requires Form Owner and a current valid respondent projection before opening. Supply complete audience/status/deadline/tally settings and explicit channel grant deltas; empty deltas change no grants. Public allows anonymous responses. View allows responding without database access; channel Edit grants editing of the entire backing database. Interactive hosts show an editable review card: call directly without an extra prose confirmation. Cancellation changes nothing. This never posts a message or sends invitations. Returns actual access, canonical links and acceptingResponses; a URL alone does not mean the form is open.
  */
 export interface SetFormAccess {
-  requestId: AuthoringRequestId;
   formId: FormId;
   baseRevision: AuthoringRevisionId;
   draft: AccessDraft;

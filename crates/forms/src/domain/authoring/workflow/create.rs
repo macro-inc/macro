@@ -5,11 +5,11 @@ use models_forms::{FormSource, UpdateForm};
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    J: AuthoringJournal,
+    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> AuthoringWorkflow<C, D, J, B, A, E>
+> AuthoringWorkflow<C, D, S, B, A, E>
 {
     pub(super) async fn create(
         &self,
@@ -23,27 +23,6 @@ impl<
                 "name",
                 "Supply a nonempty form name.",
             ));
-        }
-        let previous = self
-            .journal
-            .operation(
-                &actor.user_id,
-                AuthoringOperationId::from_uuid(intent.request_id.into_uuid()),
-            )
-            .await?;
-        if let Some(operation) = previous {
-            if operation.intent != Intent::Create(intent) {
-                return Err(AuthoringError::new(
-                    Code::IdempotencyConflict,
-                    "requestId",
-                    "Use a new requestId for a changed intent.",
-                ));
-            }
-            if operation.result.saved.is_some() {
-                self.receipt::<EditAccessLevel>(&actor, operation.result.form_id)
-                    .await?;
-            }
-            return Ok(operation.result);
         }
         let source = match intent.source {
             FormSource::New => CreateSource::NewDatabase,
@@ -73,26 +52,9 @@ impl<
             models_forms::Audience::Members,
         )?;
         self.targets(&actor, &prepared.layout).await?;
-        let operation = Self::operation(
-            Intent::Create(intent.clone()),
-            FormId::new(),
-            Some(prepared),
-        );
-        let mut operation = match self.journal.claim(&actor.user_id, operation).await? {
-            Claim::New(operation) => operation,
-            Claim::Existing(operation) => {
-                if operation.result.saved.is_some() {
-                    self.receipt::<EditAccessLevel>(&actor, operation.result.form_id)
-                        .await?;
-                }
-                return Ok(operation.result);
-            }
-        };
+        let form_id = FormId::new();
+        let outcome = Self::result(form_id, prepared.keys.clone());
         let result = async {
-            let prepared = operation
-                .prepared
-                .clone()
-                .expect("creation claims a prepared draft");
             self.core
                 .create_private(
                     actor.clone(),
@@ -100,15 +62,11 @@ impl<
                         name: intent.name,
                         source,
                     },
-                    operation.result.form_id,
+                    form_id,
                 )
                 .await
                 .map_err(form_failure)?;
-            self.phase(&actor, &mut operation, OperationPhase::FormCreated)
-                .await?;
-            let receipt = self
-                .receipt::<EditAccessLevel>(&actor, operation.result.form_id)
-                .await?;
+            let receipt = self.receipt::<EditAccessLevel>(&actor, form_id).await?;
             let snapshot = self
                 .core
                 .authoring_snapshot(receipt.clone())
@@ -124,16 +82,12 @@ impl<
             )?;
             self.schema(actor.clone(), &snapshot, &prepared.columns)
                 .await?;
-            self.phase(&actor, &mut operation, OperationPhase::SchemaApplied)
-                .await?;
             let snapshot = self
                 .core
                 .save_authoring_layout(receipt.clone(), snapshot.revision, prepared.layout)
                 .await
                 .map_err(form_failure)?;
-            self.phase(&actor, &mut operation, OperationPhase::DraftSaved)
-                .await?;
-            self.journal
+            self.settings
                 .settings(
                     &snapshot,
                     &UpdateForm {
@@ -147,14 +101,12 @@ impl<
                 )
                 .await?;
             self.core.authoring_changed(receipt.clone(), false).await;
-            self.phase(&actor, &mut operation, OperationPhase::SettingsApplied)
-                .await?;
             self.core
                 .authoring_snapshot(receipt)
                 .await
                 .map_err(form_failure)
         }
         .await;
-        self.outcome(&actor, operation, result).await
+        self.outcome(&actor, outcome, result).await
     }
 }

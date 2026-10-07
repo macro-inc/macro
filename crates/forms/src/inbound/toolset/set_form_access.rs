@@ -19,8 +19,7 @@ pub struct SetFormAccess {
     pub intent: SetAccess,
 }
 impl ToolAnnotated for SetFormAccess {
-    const ANNOTATIONS: ToolAnnotations =
-        ToolAnnotations::destructive("Share form").with_idempotent();
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Share form");
 }
 #[async_trait]
 impl<Service: FormsAuthoringService> AsyncTool<FormsToolContext<Service>> for SetFormAccess {

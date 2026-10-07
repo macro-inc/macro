@@ -1,71 +1,9 @@
 use super::*;
 use crate::domain::drafts::FormDraftRepository;
 use crate::{
-    domain::authoring::{
-        journal::{AuthoringJournal, Claim, Intent, Operation},
-        *,
-    },
-    outbound::authoring_journal::PgAuthoringJournal,
+    domain::authoring::{ports::AuthoringSettings, *},
+    outbound::authoring_settings::PgAuthoringSettings,
 };
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn authoring_claim_is_exclusive_payload_checked_and_actor_scoped(pool: PgPool) {
-    insert_user(&pool, OWNER).await;
-    insert_user(&pool, RESPONDENT).await;
-    let journal = PgAuthoringJournal::new(pool);
-    let request_id = AuthoringRequestId::new();
-    let operation_id = AuthoringOperationId::from_uuid(request_id.into_uuid());
-    let operation = Operation {
-        intent: Intent::Create(Create {
-            request_id,
-            name: "Startup intake".into(),
-            source: models_forms::FormSource::New,
-            draft: Draft {
-                description: String::new(),
-                confirmation_message: String::new(),
-                sections: vec![],
-            },
-        }),
-        prepared: None,
-        result: MutationResult {
-            operation_id,
-            state: MutationState::Pending,
-            phase: OperationPhase::Reserved,
-            form_id: FormId::new(),
-            saved: None,
-            keys: KeyMap::default(),
-            diagnostics: vec![],
-        },
-    };
-    let owner = user(OWNER);
-    let (first, second) = tokio::join!(
-        journal.claim(&owner, operation.clone()),
-        journal.claim(&owner, operation.clone())
-    );
-    assert!(matches!(
-        (first.unwrap(), second.unwrap()),
-        (Claim::New(_), Claim::Existing(_)) | (Claim::Existing(_), Claim::New(_))
-    ));
-    assert!(
-        journal
-            .operation(&user(RESPONDENT), operation_id)
-            .await
-            .unwrap()
-            .is_none()
-    );
-    let mut changed = operation;
-    let Intent::Create(intent) = &mut changed.intent else {
-        panic!("create");
-    };
-    intent.name = "Different intent".into();
-    assert!(matches!(
-        journal.claim(&owner, changed).await,
-        Err(AuthoringError {
-            code: Code::IdempotencyConflict,
-            ..
-        })
-    ));
-}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn authoring_settings_refuse_stale_review(pool: PgPool) {
@@ -108,8 +46,8 @@ async fn authoring_settings_refuse_stale_review(pool: PgPool) {
         table_version: version,
         ..snapshot
     };
-    let journal = PgAuthoringJournal::new(pool.clone());
-    journal
+    let settings = PgAuthoringSettings::new(pool.clone());
+    settings
         .settings(
             &snapshot,
             &UpdateForm {
@@ -124,7 +62,7 @@ async fn authoring_settings_refuse_stale_review(pool: PgPool) {
         .await
         .unwrap();
     assert!(matches!(
-        journal
+        settings
             .settings(
                 &snapshot,
                 &UpdateForm {
@@ -182,7 +120,7 @@ async fn closing_an_unprojected_draft_keeps_the_last_valid_projection(pool: PgPo
         access: models_forms::FormAccess::Owner,
         grants: vec![],
     };
-    PgAuthoringJournal::new(pool.clone())
+    PgAuthoringSettings::new(pool.clone())
         .settings(
             &snapshot,
             &UpdateForm {
@@ -251,7 +189,7 @@ async fn review_regression_closing_after_row_traffic_keeps_the_last_valid_projec
     };
     assert!(
         matches!(
-            PgAuthoringJournal::new(pool.clone())
+            PgAuthoringSettings::new(pool.clone())
                 .settings(
                     &snapshot,
                     &UpdateForm {
@@ -270,7 +208,7 @@ async fn review_regression_closing_after_row_traffic_keeps_the_last_valid_projec
         ),
         "exposing changes still require the observed table version"
     );
-    PgAuthoringJournal::new(pool.clone())
+    PgAuthoringSettings::new(pool.clone())
         .settings(
             &snapshot,
             &UpdateForm {

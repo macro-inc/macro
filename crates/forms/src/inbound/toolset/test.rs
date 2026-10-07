@@ -56,7 +56,7 @@ fn tool_schemas_keep_workflow_instructions_and_flat_arguments() {
     let schemas = [
         (
             schemars::schema_for!(CreateForm),
-            "requestId",
+            "name",
             "strict qualification",
         ),
         (schemars::schema_for!(ReadForm), "formId", "hidden booking"),
@@ -81,4 +81,20 @@ fn tool_schemas_keep_workflow_instructions_and_flat_arguments() {
             "Missing flat {argument}"
         );
     }
+}
+
+#[test]
+fn tool_schemas_do_not_advertise_retry_or_operation_identity() {
+    for schema in [
+        schemars::schema_for!(CreateForm),
+        schemars::schema_for!(EditForm),
+        schemars::schema_for!(SetFormAccess),
+    ] {
+        assert!(schema.to_value()["properties"].get("requestId").is_none());
+    }
+    assert!(
+        schemars::schema_for!(ReadForm).to_value()["properties"]
+            .get("operationId")
+            .is_none()
+    );
 }

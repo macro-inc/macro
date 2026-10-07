@@ -3,11 +3,11 @@ use super::*;
 impl<
     C: AuthoringCore,
     D: DatabasesService,
-    J: AuthoringJournal,
+    S: AuthoringSettings,
     B: AuthoringBooking,
     A: AuthoringAccess,
     E: AuthoringEditor,
-> FormsAuthoringService for AuthoringWorkflow<C, D, J, B, A, E>
+> FormsAuthoringService for AuthoringWorkflow<C, D, S, B, A, E>
 {
     async fn create_form(
         &self,
@@ -33,28 +33,9 @@ impl<
     async fn read_form(&self, actor: Viewer, intent: Read) -> Result<ReadResult, AuthoringError> {
         match intent.view {
             ReadView::Authoring => {
-                let earlier = if let Some(id) = intent.operation_id {
-                    self.journal
-                        .operation(&actor.user_id, id)
-                        .await?
-                        .filter(|o| o.result.form_id == intent.form_id)
-                } else {
-                    None
-                };
-                let receipt = match self
+                let receipt = self
                     .receipt::<EditAccessLevel>(&actor, intent.form_id)
-                    .await
-                {
-                    Ok(receipt) => receipt,
-                    Err(error) => {
-                        if let Some(operation) = earlier.filter(|o| o.result.saved.is_none()) {
-                            return Ok(ReadResult::Operation {
-                                operation: operation.result,
-                            });
-                        }
-                        return Err(error);
-                    }
-                };
+                    .await?;
                 let snapshot = self
                     .core
                     .authoring_snapshot(receipt.clone())
@@ -70,23 +51,17 @@ impl<
                 } else {
                     None
                 };
-                let operation = if let Some(record) = earlier {
-                    Some(self.inspect(&actor, record, &snapshot).await?)
-                } else {
-                    None
-                };
                 Ok(ReadResult::Authoring {
                     saved: Box::new(self.saved(&actor.user_id, snapshot).await?),
                     summary,
-                    operation,
                 })
             }
             ReadView::Respondent => {
-                if intent.include_summary || intent.operation_id.is_some() {
+                if intent.include_summary {
                     return Err(AuthoringError::new(
                         Code::Forbidden,
                         "view",
-                        "Response summaries and operations require an authoring read.",
+                        "Response summaries require an authoring read.",
                     ));
                 }
                 let receipt = self
@@ -104,7 +79,7 @@ impl<
                 let accepting_responses =
                     !detail.table_gone && detail.form.accepts_responses_at(chrono::Utc::now());
                 Ok(ReadResult::Respondent {
-                    detail,
+                    detail: Box::new(detail),
                     respondent_url: self.respondent_url(intent.form_id),
                     accepting_responses,
                 })

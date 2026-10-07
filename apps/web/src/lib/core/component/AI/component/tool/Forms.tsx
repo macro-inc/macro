@@ -42,9 +42,7 @@ function mutationStatus(result: FormMutation | undefined) {
     ? 'Saved'
     : result.state === 'savedPendingProjection'
       ? 'Draft saved'
-      : result.state === 'pending'
-        ? 'Pending'
-        : 'Partially saved';
+      : 'Partially saved';
 }
 function mutationHandler<Name extends 'CreateForm' | 'EditForm'>(
   name: Name,
@@ -79,9 +77,6 @@ function authoringRead(result?: ReadResponse) {
 function respondentRead(result?: ReadResponse) {
   return result?.view === 'respondent' ? result : undefined;
 }
-function operationRead(result?: ReadResponse) {
-  return result?.view === 'operation' ? result.operation : undefined;
-}
 const readForm = createToolRenderer({
   name: 'ReadForm',
   render: (ctx) => (
@@ -102,18 +97,6 @@ const readForm = createToolRenderer({
                     {summary().stopped} signed-in respondents stopped ·{' '}
                     {summary().rows} rows in the table (including other sources)
                   </p>
-                )}
-              </Show>
-              <Show when={read().operation}>
-                {(operation) => (
-                  <div class="text-sm">
-                    <p>Operation: {mutationStatus(operation())}</p>
-                    <For each={operation().diagnostics}>
-                      {(diagnostic) => (
-                        <p class="text-ink-muted">{diagnostic.message}</p>
-                      )}
-                    </For>
-                  </div>
                 )}
               </Show>
             </div>
@@ -148,9 +131,6 @@ const readForm = createToolRenderer({
               </For>
             </div>
           )}
-        </Match>
-        <Match when={operationRead(ctx.response?.data)}>
-          {(operation) => <MutationDetails result={operation()} />}
         </Match>
       </Switch>
     </Card>

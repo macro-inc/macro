@@ -1,9 +1,5 @@
-//! Forms-owned operation identity and atomic settings CAS.
-use crate::domain::authoring::{
-    journal::{AuthoringJournal, Claim, Operation},
-    *,
-};
-use macro_user_id::user_id::MacroUserIdStr;
+//! Conditional metadata and sharing writes to existing Forms storage.
+use crate::domain::authoring::{ports::AuthoringSettings, *};
 use models_forms::{FormId, UpdateForm};
 use models_permissions::share_permission::{
     access_level::AccessLevel,
@@ -15,10 +11,10 @@ use sqlx::PgPool;
 
 /// PostgreSQL persistence shared by all authoring tool hosts.
 #[derive(Clone)]
-pub struct PgAuthoringJournal {
+pub struct PgAuthoringSettings {
     pool: PgPool,
 }
-impl PgAuthoringJournal {
+impl PgAuthoringSettings {
     /// Construct at the composition root.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
@@ -28,8 +24,8 @@ fn failed(error: impl std::fmt::Debug) -> AuthoringError {
     tracing::error!(error=?error, "form authoring persistence failed");
     AuthoringError::new(
         Code::Unavailable,
-        "operation",
-        "Authoring persistence is unavailable; read the operation before retrying a dispatched write.",
+        "form",
+        "Form settings could not be saved. ReadForm to inspect the current state before retrying.",
     )
 }
 fn conflict() -> AuthoringError {
@@ -52,48 +48,7 @@ fn grants(rows: Vec<ChannelSharePermission>) -> Result<Vec<Grant>, AuthoringErro
         })
         .collect()
 }
-impl AuthoringJournal for PgAuthoringJournal {
-    async fn claim(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        operation: Operation,
-    ) -> Result<Claim, AuthoringError> {
-        let data = serde_json::to_value(&operation).map_err(failed)?;
-        let command = serde_json::to_value(&operation.intent).map_err(failed)?;
-        let inserted = sqlx::query!("INSERT INTO form_authoring_operations (user_id, request_id, command, operation) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING", actor.as_ref(), operation.intent.request_id().into_uuid(), command, data).execute(&self.pool).await.map_err(failed)?.rows_affected();
-        if inserted == 1 {
-            return Ok(Claim::New(operation));
-        }
-        let row = sqlx::query!("SELECT command, operation FROM form_authoring_operations WHERE user_id = $1 AND request_id = $2", actor.as_ref(), operation.intent.request_id().into_uuid()).fetch_one(&self.pool).await.map_err(failed)?;
-        if row.command != command {
-            return Err(AuthoringError::new(
-                Code::IdempotencyConflict,
-                "requestId",
-                "This requestId already names a different command. Use a new id for a new intended change.",
-            ));
-        }
-        Ok(Claim::Existing(
-            serde_json::from_value(row.operation).map_err(failed)?,
-        ))
-    }
-    async fn save(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        operation: &Operation,
-    ) -> Result<(), AuthoringError> {
-        let data = serde_json::to_value(operation).map_err(failed)?;
-        sqlx::query!("UPDATE form_authoring_operations SET operation = $3, updated_at = now() WHERE user_id = $1 AND request_id = $2", actor.as_ref(), operation.intent.request_id().into_uuid(), data).execute(&self.pool).await.map_err(failed)?;
-        Ok(())
-    }
-    async fn operation(
-        &self,
-        actor: &MacroUserIdStr<'_>,
-        id: AuthoringOperationId,
-    ) -> Result<Option<Operation>, AuthoringError> {
-        let row = sqlx::query!("SELECT operation FROM form_authoring_operations WHERE user_id = $1 AND request_id = $2", actor.as_ref(), id.into_uuid()).fetch_optional(&self.pool).await.map_err(failed)?;
-        row.map(|row| serde_json::from_value(row.operation).map_err(failed))
-            .transpose()
-    }
+impl AuthoringSettings for PgAuthoringSettings {
     async fn grants(&self, form: FormId) -> Result<Vec<Grant>, AuthoringError> {
         grants(
             entity_access_db_utils::get_direct_channel_grants(

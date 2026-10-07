@@ -188,9 +188,7 @@ function formOutcomeLabel(outcome: UserToolOutcome): string {
     ? 'Saved'
     : outcome.result.state === 'savedPendingProjection'
       ? 'Draft saved'
-      : outcome.result.state === 'pending'
-        ? 'Pending'
-        : 'Partially saved';
+      : 'Partially saved';
 }
 
 function FormAccessDraft(props: {

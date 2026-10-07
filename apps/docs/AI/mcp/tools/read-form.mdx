@@ -6,7 +6,7 @@ description: >-
 
 # ReadForm
 
-Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. Inspect your prior operationId after a partial or pending write; this does not replay mutations. A respondent link may exist while responses are closed; check acceptingResponses.
+Read a known form before editing. Authoring view requires Edit and returns the actual durable collaborative draft, current schema, stable IDs and an opaque base revision. Respondent view returns only safe projected content, never hidden booking targets or response rows. Optional summary requires Edit. After a partial write, inspect the returned formId before making further changes. A respondent link may exist while responses are closed; check acceptingResponses.
 
 ## Parameters
 
@@ -15,4 +15,3 @@ Read a known form before editing. Authoring view requires Edit and returns the a
 | `formId` | FormId | Yes | Identifier of a form (the shareable entity respondents open). |
 | `view` | `"authoring"` \| `"respondent"` | No | Read actual editor content or the respondent-safe projection. |
 | `includeSummary` | boolean | No | Editor-only response counts; never raw response rows. |
-| `operationId` | AuthoringOperationId | No | Inspect a previous operation by this actor; never replays a mutation. |
