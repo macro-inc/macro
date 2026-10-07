@@ -70,3 +70,125 @@ fn equivalent_numeric_options_are_rejected_before_schema_provisioning() {
         "equivalent numeric options cannot survive database normalization"
     );
 }
+
+#[test]
+fn review_regression_preserving_human_content_keeps_authoring_limits() {
+    use models_forms::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
+    let column = Column {
+        id: ColumnId::new(),
+        name: "Contact".into(),
+        kind: ColumnKind::Entity {
+            target: models_databases::EntityKind::User,
+            multi: false,
+        },
+        options: vec![],
+    };
+    let previous = FormLayout {
+        sections: vec![
+            FormSection::Questions {
+                id: FormSectionId::new(),
+                title: String::new(),
+                description: String::new(),
+                questions: vec![QuestionLayout {
+                    id: FormQuestionId::new(),
+                    column: column.id,
+                    help_text: String::new(),
+                    required: false,
+                    widget: None,
+                }],
+            },
+            FormSection::Gate {
+                id: FormSectionId::new(),
+                title: String::new(),
+                description: String::new(),
+                rules: FilterGroup {
+                    conjunction: models_databases::views::Conjunction::And,
+                    conditions: vec![],
+                },
+                message: String::new(),
+            },
+        ],
+    };
+    assert!(
+        canonical_preserving(
+            &previous,
+            std::slice::from_ref(&column),
+            &[],
+            Audience::Members,
+            Some(&previous)
+        )
+        .is_ok()
+    );
+    let mut changed = previous.clone();
+    let FormSection::Questions { questions, .. } = &mut changed.sections[0] else {
+        panic!("questions")
+    };
+    questions[0].id = FormQuestionId::new();
+    assert_eq!(
+        canonical_preserving(
+            &changed,
+            std::slice::from_ref(&column),
+            &[],
+            Audience::Members,
+            Some(&previous)
+        )
+        .unwrap_err()
+        .code,
+        Code::ReferencePickerUnavailable
+    );
+    let mut changed = previous.clone();
+    let FormSection::Gate { id, .. } = &mut changed.sections[1] else {
+        panic!("gate")
+    };
+    *id = FormSectionId::new();
+    assert_eq!(
+        canonical_preserving(
+            &changed,
+            std::slice::from_ref(&column),
+            &[],
+            Audience::Members,
+            Some(&previous)
+        )
+        .unwrap_err()
+        .code,
+        Code::EmptyScreeningGroup
+    );
+    let condition = FilterNode::Condition(models_databases::views::FilterCondition {
+        column: column.id,
+        test: models_databases::views::FilterTest::Presence {
+            operator: models_databases::views::PresenceOperator::IsEmpty,
+        },
+    });
+    let mut crowded = previous.clone();
+    let FormSection::Gate { rules, .. } = &mut crowded.sections[1] else {
+        panic!("gate")
+    };
+    rules.conditions = vec![condition.clone(); 190];
+    let mut more = crowded.clone();
+    more.sections.push(FormSection::Gate {
+        id: FormSectionId::new(),
+        title: String::new(),
+        description: String::new(),
+        rules: FilterGroup {
+            conjunction: models_databases::views::Conjunction::And,
+            conditions: vec![condition; 20],
+        },
+        message: String::new(),
+    });
+    assert_eq!(
+        canonical_preserving(
+            &more,
+            std::slice::from_ref(&column),
+            &[],
+            Audience::Members,
+            Some(&crowded)
+        )
+        .unwrap_err()
+        .code,
+        Code::TooManyConditions
+    );
+    assert!(
+        canonical_preserving(&more, &[column], &[], Audience::Members, Some(&more)).is_ok(),
+        "an existing over-limit layout can still be shared or restricted"
+    );
+}

@@ -103,6 +103,7 @@ impl AuthoringJournal for Journal {
         update: &models_forms::UpdateForm,
         grants: &[GrantChange],
         _: bool,
+        _: bool,
     ) -> Result<(), AuthoringError> {
         assert!(
             grants.is_empty(),
@@ -1088,4 +1089,354 @@ async fn failed_ai_attachment_preserves_a_database_adopted_by_a_human() {
             .iter()
             .any(|d| d.message.contains(&database.id.to_string()))
     );
+}
+
+#[tokio::test]
+async fn review_regression_metadata_edit_preserves_human_reference_questions_and_empty_gates() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    {
+        let mut state = world.lock().unwrap();
+        let column = state.database_mut(RSVP_DATABASE).tables[0]
+            .columns
+            .iter_mut()
+            .find(|c| c.id == TEAM)
+            .unwrap();
+        column.kind = ColumnKind::Entity {
+            target: EntityKind::User,
+            multi: false,
+        };
+        column.options.clear();
+        state.layouts.insert(
+            RSVP_FORM,
+            FormLayout {
+                sections: vec![
+                    FormSection::Questions {
+                        id: ABOUT_YOU,
+                        title: "Contact".into(),
+                        description: String::new(),
+                        questions: vec![QuestionLayout {
+                            id: TEAM_QUESTION,
+                            column: TEAM,
+                            help_text: String::new(),
+                            required: false,
+                            widget: None,
+                        }],
+                    },
+                    FormSection::Gate {
+                        id: FormSectionId::new(),
+                        title: "Optional screening".into(),
+                        description: String::new(),
+                        rules: FilterGroup {
+                            conjunction: Conjunction::And,
+                            conditions: vec![],
+                        },
+                        message: String::new(),
+                    },
+                ],
+            },
+        );
+    }
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        app_origin: "https://macro.test".into(),
+    };
+    let ReadResult::Authoring { saved, .. } = workflow
+        .read_form(
+            viewer(OWNER),
+            Read {
+                form_id: RSVP_FORM,
+                view: ReadView::Authoring,
+                include_summary: false,
+                operation_id: None,
+            },
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("authoring read")
+    };
+    let result = workflow
+        .edit_form(
+            viewer(OWNER),
+            Edit {
+                request_id: AuthoringRequestId::new(),
+                form_id: RSVP_FORM,
+                base_revision: saved.revision,
+                changes: vec![],
+                new_columns: vec![],
+                description: Some("Updated description".into()),
+                confirmation_message: None,
+            },
+        )
+        .await
+        .expect("unrelated metadata edit must preserve human-authored placements");
+    assert_eq!(
+        result.state,
+        MutationState::Completed,
+        "{:?}",
+        result.diagnostics
+    );
+    assert_eq!(result.saved.unwrap().layout, saved.layout);
+}
+
+#[tokio::test]
+async fn review_regression_sharing_preserves_human_reference_questions_and_empty_gates() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    {
+        let mut state = world.lock().unwrap();
+        let column = state.database_mut(RSVP_DATABASE).tables[0]
+            .columns
+            .iter_mut()
+            .find(|c| c.id == TEAM)
+            .unwrap();
+        column.kind = ColumnKind::Entity {
+            target: EntityKind::User,
+            multi: false,
+        };
+        column.options.clear();
+        state.layouts.insert(
+            RSVP_FORM,
+            FormLayout {
+                sections: vec![
+                    FormSection::Questions {
+                        id: ABOUT_YOU,
+                        title: "Contact".into(),
+                        description: String::new(),
+                        questions: vec![QuestionLayout {
+                            id: TEAM_QUESTION,
+                            column: TEAM,
+                            help_text: String::new(),
+                            required: false,
+                            widget: None,
+                        }],
+                    },
+                    FormSection::Gate {
+                        id: FormSectionId::new(),
+                        title: "Optional screening".into(),
+                        description: String::new(),
+                        rules: FilterGroup {
+                            conjunction: Conjunction::And,
+                            conditions: vec![],
+                        },
+                        message: String::new(),
+                    },
+                ],
+            },
+        );
+    }
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(service(&world)),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        app_origin: "https://macro.test".into(),
+    };
+    let ReadResult::Authoring { saved, .. } = workflow
+        .read_form(
+            viewer(OWNER),
+            Read {
+                form_id: RSVP_FORM,
+                view: ReadView::Authoring,
+                include_summary: false,
+                operation_id: None,
+            },
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("authoring read")
+    };
+    let result = workflow
+        .set_form_access(
+            viewer(OWNER),
+            SetAccess {
+                request_id: AuthoringRequestId::new(),
+                form_id: RSVP_FORM,
+                base_revision: saved.revision,
+                draft: AccessDraft {
+                    audience: Audience::Public,
+                    status: FormStatus::Open,
+                    closes_at: None,
+                    tally_visible: false,
+                    channel_grants: vec![],
+                },
+            },
+        )
+        .await
+        .expect("sharing authors no new placements");
+    assert_eq!(
+        result.state,
+        MutationState::Completed,
+        "{:?}",
+        result.diagnostics
+    );
+    assert_eq!(result.saved.unwrap().layout, saved.layout);
+}
+
+#[tokio::test]
+async fn review_regression_equivalent_revision_bytes_remain_projected_and_editable() {
+    use crate::domain::authoring::ports::AuthoringCore;
+    use crate::domain::collaboration;
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let receipt = form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner);
+    forms.authoring_snapshot(receipt.clone()).await.unwrap();
+    let document = loro::LoroDoc::new();
+    document
+        .import(&world.lock().unwrap().drafts[&RSVP_FORM])
+        .unwrap();
+    document.set_peer_id(1).unwrap();
+    document
+        .get_map("review-fixture")
+        .insert("first", true)
+        .unwrap();
+    document.commit();
+    document.set_peer_id(2).unwrap();
+    document
+        .get_map("review-fixture")
+        .insert("second", true)
+        .unwrap();
+    document.commit();
+    world.lock().unwrap().drafts.insert(
+        RSVP_FORM,
+        document.export(loro::ExportMode::Snapshot).unwrap(),
+    );
+    let initial = forms.authoring_snapshot(receipt.clone()).await.unwrap();
+    let reordered = reorder_revision(&initial.revision);
+    assert_ne!(initial.revision, reordered);
+    assert!(collaboration::revision_matches(&initial.revision, &reordered).unwrap());
+    world
+        .lock()
+        .unwrap()
+        .draft_states
+        .get_mut(&RSVP_FORM)
+        .unwrap()
+        .revision = Some(reordered.clone());
+    let snapshot = forms.authoring_snapshot(receipt.clone()).await.unwrap();
+    assert!(
+        snapshot.projected,
+        "map byte order must not make a valid projection appear stale"
+    );
+    assert_eq!(
+        snapshot.revision, reordered,
+        "settings CAS needs the persisted representation"
+    );
+    let mut edited = snapshot.layout;
+    let FormSection::Questions { title, .. } = &mut edited.sections[0] else {
+        panic!("questions")
+    };
+    *title = "Updated contact details".into();
+    let saved = forms
+        .save_authoring_layout(receipt, reordered, edited.clone())
+        .await
+        .unwrap();
+    assert!(saved.projected);
+    assert_eq!(saved.layout, edited);
+
+    // Invalid drafts must also remain closable across equivalent byte encodings.
+    use crate::domain::drafts::FormDraftStore;
+    let mut invalid = saved.layout;
+    let FormSection::Questions { questions, .. } = &mut invalid.sections[0] else {
+        panic!("questions")
+    };
+    questions[0].column = ColumnId::new();
+    let change =
+        collaboration::replace_layout(&world.lock().unwrap().drafts[&RSVP_FORM], &invalid).unwrap();
+    FakeDrafts(world.clone())
+        .update(RSVP_FORM, change.expected_revision, change.update)
+        .await
+        .unwrap();
+    let workflow = AuthoringWorkflow {
+        core: Arc::new(forms),
+        databases: Arc::new(FakeDatabases(world.clone())),
+        journal: Journal {
+            records: Mutex::default(),
+            world: world.clone(),
+        },
+        booking: (),
+        access: Access(world.clone()),
+        app_origin: "https://macro.test".into(),
+    };
+    let ReadResult::Authoring { saved, .. } = workflow
+        .read_form(
+            viewer(OWNER),
+            Read {
+                form_id: RSVP_FORM,
+                view: ReadView::Authoring,
+                include_summary: false,
+                operation_id: None,
+            },
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("authoring read")
+    };
+    assert!(!saved.projected);
+    {
+        let mut records = workflow.journal.records.lock().unwrap();
+        let baseline = records
+            .baselines
+            .get_mut(&(OWNER.to_string(), saved.revision))
+            .unwrap();
+        let different_bytes = reorder_revision(&baseline.revision);
+        assert_ne!(baseline.revision, different_bytes);
+        assert!(collaboration::revision_matches(&baseline.revision, &different_bytes).unwrap());
+        baseline.revision = different_bytes;
+    }
+    let closed = workflow
+        .set_form_access(
+            viewer(OWNER),
+            SetAccess {
+                request_id: AuthoringRequestId::new(),
+                form_id: RSVP_FORM,
+                base_revision: saved.revision,
+                draft: AccessDraft {
+                    audience: Audience::Members,
+                    status: FormStatus::Closed,
+                    closes_at: None,
+                    tally_visible: false,
+                    channel_grants: vec![],
+                },
+            },
+        )
+        .await
+        .expect("equivalent revisions cannot prevent closing an invalid draft");
+    assert_eq!(closed.saved.unwrap().form.status, FormStatus::Closed);
+}
+
+fn reorder_revision(revision: &[u8]) -> Vec<u8> {
+    // Preserve the encoded map entries exactly, but reverse their order.
+    let mut cursor = 1;
+    let mut entries = vec![];
+    for _ in 0..revision[0] {
+        let start = cursor;
+        for _ in 0..2 {
+            while revision[cursor] & 128 != 0 {
+                cursor += 1;
+            }
+            cursor += 1;
+        }
+        entries.push(revision[start..cursor].to_vec());
+    }
+    assert_eq!(cursor, revision.len());
+    let mut reordered = vec![revision[0]];
+    for entry in entries.into_iter().rev() {
+        reordered.extend(entry);
+    }
+    reordered
 }

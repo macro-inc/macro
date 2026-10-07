@@ -48,7 +48,7 @@ impl<
         latest.grants = self.journal.grants(intent.form_id).await?;
         if baseline.access != FormAccess::Owner
             || baseline.form != latest.form
-            || baseline.revision != latest.revision
+            || !revision_matches(&baseline.revision, &latest.revision).map_err(failure)?
             || baseline.columns != latest.columns
             || baseline.grants != latest.grants
         {
@@ -107,11 +107,12 @@ impl<
                     "Repair the draft and ReadForm again before opening or broadening access.",
                 ));
             }
-            validate::canonical(
+            validate::canonical_preserving(
                 &latest.layout,
                 &latest.columns,
                 &managed(&latest),
                 intent.draft.audience,
+                Some(&latest.layout),
             )?;
             self.targets(&actor, &latest.layout).await?;
         }
@@ -125,7 +126,7 @@ impl<
             .map_err(form_failure)?;
         checked.grants = self.journal.grants(intent.form_id).await?;
         if checked.form != latest.form
-            || checked.revision != latest.revision
+            || !revision_matches(&checked.revision, &latest.revision).map_err(failure)?
             || checked.columns != latest.columns
             || checked.grants != latest.grants
         {
@@ -138,11 +139,11 @@ impl<
             Claim::New(operation) => operation,
         };
         let result = async {
-            self.journal.settings(&latest, &UpdateForm { audience: Some(intent.draft.audience), status: Some(intent.draft.status), closes_at: Some(intent.draft.closes_at), tally_visible: Some(intent.draft.tally_visible), ..Default::default() }, &intent.draft.channel_grants, true).await?;
+            self.journal.settings(&latest, &UpdateForm { audience: Some(intent.draft.audience), status: Some(intent.draft.status), closes_at: Some(intent.draft.closes_at), tally_visible: Some(intent.draft.tally_visible), ..Default::default() }, &intent.draft.channel_grants, true, exposes).await?;
             self.core.authoring_changed(receipt.clone(), !intent.draft.channel_grants.is_empty()).await;
             self.phase(&actor, &mut operation, OperationPhase::SettingsApplied).await?;
             let snapshot = self.core.authoring_snapshot(receipt).await.map_err(form_failure)?;
-            if snapshot.revision != latest.revision {
+            if !revision_matches(&snapshot.revision, &latest.revision).map_err(failure)? {
                 operation.result.diagnostics.push(AuthoringError::new(Code::ConcurrentFieldChange, "draft", "Access settings were saved. A subsequent live editor change is reflected in the returned draft; this review did not freeze publication.").into());
             }
             Ok(snapshot)

@@ -8,6 +8,7 @@ use super::{
     ports::{AuthoringAccess, AuthoringBooking, AuthoringCore, FormsAuthoringService},
     *,
 };
+use crate::domain::collaboration::revision_matches;
 use databases::domain::{
     models::{OpBatch, Viewer},
     ports::DatabasesService,

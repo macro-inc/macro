@@ -142,6 +142,7 @@ impl<
                     },
                     &[],
                     false,
+                    true,
                 )
                 .await?;
             self.core.authoring_changed(receipt.clone(), false).await;

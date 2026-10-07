@@ -432,17 +432,56 @@ pub fn canonical(
     managed: &[ColumnId],
     audience: models_forms::Audience,
 ) -> Result<(), AuthoringError> {
-    if layout.sections.len() > 100 {
+    canonical_preserving(layout, columns, managed, audience, None)
+}
+
+/// Validate existing Forms content while restricting only placements authored by this edit.
+/// Passing the current layout as `previous` validates sharing without authoring new content.
+pub fn canonical_preserving(
+    layout: &FormLayout,
+    columns: &[Column],
+    managed: &[ColumnId],
+    audience: models_forms::Audience,
+    previous: Option<&FormLayout>,
+) -> Result<(), AuthoringError> {
+    let previous_questions: Vec<_> = previous
+        .into_iter()
+        .flat_map(|layout| layout.sections.iter())
+        .flat_map(|section| match section {
+            FormSection::Questions { questions, .. } => questions.as_slice(),
+            _ => &[],
+        })
+        .collect();
+    if layout.sections.len() > 100
+        && layout.sections.len() > previous.map_or(0, |layout| layout.sections.len())
+    {
         return Err(fail(
             Code::TooManySections,
             "sections",
             "Use at most 100 sections.",
         ));
     }
+    let count_conditions = |layout: &FormLayout| -> usize {
+        layout
+            .sections
+            .iter()
+            .map(|section| match section {
+                FormSection::Gate { rules, .. } => rules.conditions().len(),
+                _ => 0,
+            })
+            .sum()
+    };
+    let total = count_conditions(layout);
+    if total > 200 && total > previous.map_or(0, count_conditions) {
+        return Err(fail(
+            Code::TooManyConditions,
+            "rules",
+            "Use at most 200 conditions.",
+        ));
+    }
     let mut ids = HashSet::new();
     let mut asked = HashSet::new();
     let mut count = 0;
-    let mut conditions = 0;
     for (index, section) in layout.sections.iter().enumerate() {
         if !ids.insert(section.id().into_uuid()) {
             return Err(fail(
@@ -462,7 +501,7 @@ pub fn canonical(
                 text(description, 10_000, "section.description")?;
                 for q in questions {
                     count += 1;
-                    if count > 500 {
+                    if count > 500 && count > previous_questions.len() {
                         return Err(fail(
                             Code::TooManyQuestions,
                             "questions",
@@ -486,10 +525,12 @@ pub fn canonical(
                             "Choose a column of this form's table.",
                         )
                     })?;
-                    if matches!(
-                        c.kind,
-                        ColumnKind::Entity { .. } | ColumnKind::Relation { .. }
-                    ) {
+                    if !previous_questions.contains(&q)
+                        && matches!(
+                            c.kind,
+                            ColumnKind::Entity { .. } | ColumnKind::Relation { .. }
+                        )
+                    {
                         return Err(fail(
                             Code::ReferencePickerUnavailable,
                             "question.column",
@@ -525,7 +566,12 @@ pub fn canonical(
                 text(title, 200, "section.title")?;
                 text(description, 10_000, "section.description")?;
                 text(message, 10_000, "gate.message")?;
-                nonempty(rules, 0, &mut conditions)?;
+                let unchanged_rules = previous.is_some_and(|layout| layout.sections.iter().any(|old| matches!(old,
+                    FormSection::Gate { id, rules: previous_rules, .. } if *id == section.id() && previous_rules == rules)));
+                if !unchanged_rules {
+                    let mut conditions = 0;
+                    nonempty(rules, 0, &mut conditions)?;
+                }
                 if rules
                     .conditions()
                     .iter()

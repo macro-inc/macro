@@ -70,7 +70,13 @@ impl<
         let added = validate::additions(&intent.new_columns, &latest.columns)?;
         let mut columns = latest.columns.clone();
         columns.extend(added.clone());
-        validate::canonical(&layout, &columns, &managed(&latest), latest.form.audience)?;
+        validate::canonical_preserving(
+            &layout,
+            &columns,
+            &managed(&latest),
+            latest.form.audience,
+            Some(&latest.layout),
+        )?;
         for section in &layout.sections {
             if let models_forms::FormSection::Booking { target, .. } = section {
                 let already_attached = latest.layout.sections.iter().any(|old| matches!(old,
@@ -94,7 +100,7 @@ impl<
                 return Err(stale("columns"));
             }
         }
-        if checked.revision != latest.revision {
+        if !revision_matches(&checked.revision, &latest.revision).map_err(failure)? {
             return Err(stale("baseRevision"));
         }
         let operation = Self::operation(
@@ -144,6 +150,7 @@ impl<
                         },
                         &[],
                         false,
+                        true,
                     )
                     .await?;
             }

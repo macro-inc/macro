@@ -11,7 +11,7 @@ import { deserializeToolResponse } from '@service-cognition/generated/tools/tool
 import { debounce } from '@solid-primitives/scheduled';
 import type { UserToolReviewSink } from '../user-tool-review';
 import { FormAccessReview } from './AccessReview';
-import type { FormAccessArgs } from './types';
+import type { FormAccessArgs, FormMutation } from './types';
 
 /** Chat persists drafts and finishes the existing deferred tool call. */
 export function FormAccessChatCompose(props: {
@@ -121,7 +121,8 @@ export function FormAccessChatCompose(props: {
       }
       finalized = true;
       updateResponse(response, args);
-      void invalidateAuthoredForm(args.formId);
+      const saved = (response.UserAction as FormMutation).saved;
+      void invalidateAuthoredForm(args.formId, saved?.form.databaseId);
       return true;
     },
     onReject: async () => {

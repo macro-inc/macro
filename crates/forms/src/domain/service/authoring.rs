@@ -144,7 +144,21 @@ where
             .map_err(repository_error)?
             .ok_or(FormError::NotFound)?;
         let projected = refreshed.publication_error.is_none()
-            && state.revision.as_ref() == Some(&draft.revision);
+            && state
+                .revision
+                .as_deref()
+                .map(|revision| collaboration::revision_matches(revision, &draft.revision))
+                .transpose()
+                .map_err(|error| {
+                    FormError::Collaboration(rootcause::report!(error).into_dynamic())
+                })?
+                .unwrap_or(false);
+        // Settings CAS uses the persisted representation; equivalent version maps
+        // can encode in different orders when the durable draft is read again.
+        let revision = state
+            .revision
+            .filter(|_| projected)
+            .unwrap_or(draft.revision);
         let mut columns: Vec<Column> = layout::question_columns(&table)
             .into_iter()
             .map(|(id, c)| Column {
@@ -158,7 +172,7 @@ where
         Ok(Snapshot {
             form: self.live_form(form.id).await?,
             layout: draft.layout,
-            revision: draft.revision,
+            revision,
             columns,
             table_version: table.table.version.0,
             projected,
@@ -192,7 +206,9 @@ where
             .map_err(drafts::draft_error)?;
         let change = collaboration::replace_layout(&bytes, &layout)
             .map_err(|error| FormError::Collaboration(rootcause::report!(error).into_dynamic()))?;
-        if change.expected_revision != expected_revision {
+        if !collaboration::revision_matches(&change.expected_revision, &expected_revision)
+            .map_err(|error| FormError::Collaboration(rootcause::report!(error).into_dynamic()))?
+        {
             return Err(FormError::Conflict);
         }
         match self

@@ -80,12 +80,15 @@ pub trait AuthoringJournal: Send + Sync + 'static {
         &self,
         form: FormId,
     ) -> impl Future<Output = Result<Vec<Grant>, AuthoringError>> + Send;
-    /// Commit settings and explicit grant deltas at the observed metadata/schema/draft baseline.
+    /// Commit settings and explicit grant deltas at the observed metadata/draft baseline.
+    /// The workflow requires the table version for schema-dependent or exposing changes;
+    /// pure restrictions remain possible while respondents are writing rows.
     fn settings(
         &self,
         expected: &Snapshot,
         update: &models_forms::UpdateForm,
         grants: &[GrantChange],
         check_grants: bool,
+        check_table_version: bool,
     ) -> impl Future<Output = Result<(), AuthoringError>> + Send;
 }

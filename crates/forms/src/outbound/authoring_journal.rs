@@ -140,6 +140,7 @@ impl AuthoringJournal for PgAuthoringJournal {
         update: &UpdateForm,
         changes: &[GrantChange],
         check_grants: bool,
+        check_table_version: bool,
     ) -> Result<(), AuthoringError> {
         let mut tx = self.pool.begin().await.map_err(failed)?;
         // All ordinary sharing writers hold FOR SHARE on this same form row.
@@ -158,7 +159,7 @@ impl AuthoringJournal for PgAuthoringJournal {
         .await
         .map_err(failed)?
         .ok_or_else(conflict)?;
-        if table.version != expected.table_version {
+        if check_table_version && table.version != expected.table_version {
             return Err(conflict());
         }
         if check_grants {
