@@ -380,7 +380,6 @@ export function MarkdownEditor(props: {
       : undefined,
     iosScrollContainer:
       isIOS || isNativeMobilePlatform() ? () => md.scrollContainer : undefined,
-    taskListControls: true,
     slots: {
       afterMentions: [
         tagsPlugin({

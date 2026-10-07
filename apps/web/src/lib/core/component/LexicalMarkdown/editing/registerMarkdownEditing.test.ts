@@ -157,7 +157,6 @@ describe('registerMarkdownEditing', () => {
     const { tags } = register({
       peerId: () => 'peer',
       iosScrollContainer: () => undefined,
-      taskListControls: true,
       slots: {
         afterMentions: [slot('tags')],
         afterFilePaste: [slot('findAndReplace')],
@@ -192,6 +191,7 @@ describe('registerMarkdownEditing', () => {
       'await',
       'peerId',
       'code',
+      'checklistControls',
       'listToTable',
     ]);
   });

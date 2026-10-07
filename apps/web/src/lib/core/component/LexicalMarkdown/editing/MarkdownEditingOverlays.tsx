@@ -49,11 +49,10 @@ export function MarkdownEditingOverlays(props: {
     <>
       <DecoratorRenderer editor={props.editor} />
       <NodeAccessoryRenderer editor={props.editor} store={accessoryStore} />
-      <Show when={props.editing.checklistControls}>
-        {(data) => (
-          <TaskListControlsRenderer editor={props.editor} data={data()} />
-        )}
-      </Show>
+      <TaskListControlsRenderer
+        editor={props.editor}
+        data={props.editing.checklistControls}
+      />
 
       <DragInsertIndicator state={dragInsertStore} active={props.canEdit()} />
 
