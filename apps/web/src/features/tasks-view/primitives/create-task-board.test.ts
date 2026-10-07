@@ -281,3 +281,69 @@ it.each([false, true])(
     });
   }
 );
+
+it('inserts a pending move in sort order and keeps an existing destination membership', async () => {
+  await createRoot(async (dispose) => {
+    try {
+      const task: TaskBoardTask = {
+        id: 'moved',
+        name: 'Moved',
+        assigneeIds: ['alice', 'bob'],
+        projectIds: [],
+      };
+      const earlier = { ...task, id: 'earlier', assigneeIds: ['bob'] };
+      const later = { ...task, id: 'later', assigneeIds: ['bob'] };
+      let resolve!: () => void;
+      const board = createTaskBoard({
+        scope: () => 'assignees',
+        grouping: () => 'assignee',
+        task: (id) => (id === task.id ? task : undefined),
+        columns: () => [
+          {
+            id: 'alice',
+            label: 'Alice',
+            tasks: [task],
+            count: 1,
+            hasMore: false,
+            loadingMore: false,
+          },
+          {
+            id: 'bob',
+            label: 'Bob',
+            tasks: [earlier, task, later],
+            count: 3,
+            hasMore: false,
+            loadingMore: false,
+          },
+        ],
+        compareTasks: (left, right) =>
+          ['earlier', 'moved', 'later'].indexOf(left) -
+          ['earlier', 'moved', 'later'].indexOf(right),
+        actions: {
+          canEditTask: () => true,
+          canMoveTo: () => true,
+          save: () =>
+            new Promise<void>((done) => {
+              resolve = done;
+            }),
+        },
+      });
+      const save = board.move({
+        id: 'moved',
+        fromLane: 'alice',
+        toLane: 'bob',
+      });
+      expect(board.columns()[0].tasks).toEqual([]);
+      expect(board.columns()[1].tasks.map((item) => item.id)).toEqual([
+        'earlier',
+        'moved',
+        'later',
+      ]);
+      expect(board.columns()[1].count).toBe(3);
+      resolve();
+      expect(await save).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+});

@@ -3,7 +3,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
 } from 'solid-js';
 import type { TaskBoardActions } from '../context/task-board';
 import {
@@ -17,9 +16,7 @@ import {
 import {
   movedTask,
   placementMatches,
-  projectTaskBoardLocalPositions,
   projectTaskBoardPlacements,
-  type TaskBoardLocalPosition,
   type TaskBoardPlacement,
 } from '../core/task-board-optimism';
 
@@ -38,11 +35,6 @@ export function createTaskBoard(options: {
   const [pending, setPending] = createSignal<ReadonlySet<string>>(new Set());
   const [error, setError] = createSignal<{ scope: string; text: string }>();
   const [placements, setPlacements] = createSignal<readonly Placement[]>([]);
-  const [positions, setPositions] = createSignal<
-    readonly TaskBoardLocalPosition[]
-  >([]);
-  const resetPositions = () => setPositions([]);
-  createEffect(on(options.scope, resetPositions, { defer: true }));
   const currentPlacements = createMemo(() =>
     placements().filter(
       (placement) =>
@@ -50,13 +42,10 @@ export function createTaskBoard(options: {
     )
   );
   const columns = createMemo(() =>
-    projectTaskBoardLocalPositions(
-      projectTaskBoardPlacements(
-        options.columns(),
-        currentPlacements(),
-        options.compareTasks
-      ),
-      positions()
+    projectTaskBoardPlacements(
+      options.columns(),
+      currentPlacements(),
+      options.compareTasks
     )
   );
 
@@ -139,12 +128,6 @@ export function createTaskBoard(options: {
     const previous = currentPlacements().find(
       (item) => item.task.id === request.id
     );
-    const previousPosition = positions().find((item) => item.id === request.id);
-    const position: TaskBoardLocalPosition = { ...request };
-    setPositions((items) => [
-      ...items.filter((item) => item.id !== request.id),
-      position,
-    ]);
     const placement: Placement = {
       task: movedTask(task, grouping, request),
       previousGroupKeys: taskBoardGroupKeys(task, grouping),
@@ -172,15 +155,6 @@ export function createTaskBoard(options: {
 
       return true;
     } catch {
-      setPositions((items) => {
-        const retained = items.filter((item) => item !== position);
-
-        if (previousPosition && options.scope() === scope) {
-          retained.push(previousPosition);
-        }
-
-        return retained;
-      });
       setPlacements((items) => {
         const retained = items.filter((item) => item !== placement);
 
@@ -215,7 +189,6 @@ export function createTaskBoard(options: {
     canMove,
     move,
     pending: (id: string) => pending().has(id),
-    resetPositions,
     error: currentError,
   };
 }

@@ -11,6 +11,7 @@ import {
   TaskBoardColumnIcon,
   TaskBoardProperty,
 } from './components/task-board-property';
+import { TASK_SORT_OPTIONS } from './constants';
 import type { TaskBoardTask } from './core/task-board';
 import { taskBoardFacetId, taskBoardPropertyId } from './queries/task-board';
 import { createTaskBoardQueries } from './queries/task-board-queries';
@@ -178,6 +179,11 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
           </For>
         )}
         data={data}
+        sortLabel={() =>
+          TASK_SORT_OPTIONS.find(
+            (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
+          )?.label ?? 'Updated'
+        }
         onRevealHiddenColumns={revealHiddenColumns}
         grouping={() => state.boardGroupBy}
         scope={() =>

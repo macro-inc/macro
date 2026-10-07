@@ -9,6 +9,7 @@ export function TaskBoardView(props: {
   data: TaskBoardData;
   grouping: Accessor<TaskBoardGrouping>;
   scope: Accessor<string>;
+  sortLabel: Accessor<string>;
   loading: Accessor<boolean>;
   error: Accessor<unknown>;
   hasMore: Accessor<boolean>;
@@ -83,6 +84,7 @@ export function TaskBoardView(props: {
         ref={props.ref}
         animationScope={props.scope()}
         columns={board.columns()}
+        sortLabel={props.sortLabel()}
         hiddenColumnCount={props.data.hiddenColumnCount()}
         hiddenColumnCountIsPartial={
           props.grouping() === 'assignee' || props.grouping() === 'project'

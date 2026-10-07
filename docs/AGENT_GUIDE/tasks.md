@@ -83,18 +83,16 @@ Click a card's body or title to open the task. Move at least 10 pixels with the
 mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
-or pauses for about 100 ms. Fast travel suppresses activation of new columns;
-within an already active column, the slot follows the pointer at any speed.
-The pointer's vertical position selects the insertion slot. Cross-column moves
-retain that position locally after saving; reloading or changing sort, grouping,
-or filters restores query order. Same-column and column reordering remain disabled.
-Unmoved cards use the existing Updated, Created, or Viewed sort. Search results
-retain relevance order before local moves.
+or pauses for about 100 ms. Fast travel suppresses activation of new columns.
+A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
+using the active sort label. The drop does not choose a pointer insertion slot:
+its card takes its place in the current sort (or search relevance order).
+Same-column moves and column reordering remain disabled.
 Primary sort, sort direction, list grouping, and board grouping are reflected in
 `tasks.sort`, `tasks.sortReversed`, `tasks.groupBy`, and `tasks.boardGroupBy` search
 parameters. Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls.
-Each column pages independently with **Load more tasks**.
+Columns are 336px wide. Each column pages independently with **Load more tasks**.
 Use the horizontal scrollbar to reach more columns. Vertical wheel input over
 empty board background or gaps also scrolls horizontally. A wheel gesture stays
 with its original scroll area until momentum stops, even if another column moves
@@ -110,8 +108,8 @@ scrolling away and back. The active drag source
 stays mounted while scrolling to a destination.
 While dragging, hold the card near a column's top or bottom edge to scroll its
 cards vertically. Hold near the board's left or right edge to scroll horizontally;
-moving beyond that edge keeps scrolling until release or cancellation. Drop
-placeholders still require the pointer to be inside a visible destination column.
+moving beyond that edge keeps scrolling until release or cancellation. Valid drops
+still require the pointer to be inside a visible destination column.
 
 Column titles use status/priority icons, assignee avatars, or the project icon.
 Active filters also restrict columns: excluded values do not remain as empty
@@ -140,16 +138,16 @@ Only editable tasks can move. Access checks and property definitions can keep
 moves unavailable while loading. A destination project also requires edit
 access. A pending move disables further moves of the same task in every column;
 failed writes use the shared property mutation's rollback and show an error.
-A valid destination shows a placeholder at the pointer-selected placement only
-while dragging over the active destination column, not gaps or space below it.
-Drops move the card immediately while the save is pending; failures restore the
-prior placement. Successful moves do not show a notification. Visible placements
-animate as the drop placeholder shifts cards and during moves and rollback, without
-animating ordinary scrolling or paging. The placeholder flies between columns
-outside their clipping regions while a valid destination remains; leaving the
-board clears it. In Assignee grouping, moving to an already assigned person
-animates the removed placement toward that person's existing card, without
-animating other assignees' cards.
+A valid destination highlights and shows the sort overlay only while dragging
+inside that column, not in gaps or outside the board. Drops move the card
+immediately while the save is pending; failures restore its prior membership.
+After a successful save, the board scrolls both horizontally and vertically to
+reveal the card in its destination, including virtualized columns and rows. It
+does not scroll after a cancelled or failed drop, or when the current board
+scope changes during the save. Successful moves show no notification.
+Visible placements animate during moves and rollback without animating ordinary
+scrolling or paging. In Assignee grouping, moving to an already assigned
+person reveals the existing card rather than creating a duplicate.
 Reduced-motion preferences disable these transitions.
 Filters remain active: completing a task or removing yourself as assignee can
 hide the card from the current view. Click its title to open the task; modified

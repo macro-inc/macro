@@ -35,8 +35,6 @@ export type TaskBoardMove = {
   id: string;
   fromLane: string;
   toLane: string;
-  /** Client-only placement; omitted means append to the destination. */
-  beforeId?: string;
 };
 
 export function taskBoardGroupKeys(

@@ -32,6 +32,7 @@ import type {
   TaskBoardMove,
   TaskBoardTask,
 } from '../core/task-board';
+import { taskBoardRevealIndices } from '../core/task-board-reveal';
 
 const HIDDEN_COLUMN_KEY = -1;
 
@@ -42,6 +43,7 @@ export type TaskBoardPropertySlot = (
 
 export type TaskBoardProps = {
   columns: readonly TaskBoardColumn[];
+  sortLabel: string;
   animationScope?: string;
   targetActivationSpeed?: number;
   hiddenColumnCount: number;
@@ -63,6 +65,12 @@ export type TaskBoardProps = {
 /** Presentation and interaction only. Task queries, permissions, and writes belong to the host. */
 export function TaskBoard(props: TaskBoardProps) {
   let viewport: HTMLDivElement | undefined;
+  let revealGeneration = 0;
+  const [reveal, setReveal] = createSignal<{
+    id: string;
+    toLane: string;
+    scope?: string;
+  }>();
   const motion = createKanbanAnimation({
     viewport: () => viewport,
     items: () => {
@@ -101,21 +109,6 @@ export function TaskBoard(props: TaskBoardProps) {
             layout: row,
           });
         }
-
-        for (const placeholder of element.querySelectorAll<HTMLElement>(
-          '[data-kanban-placeholder]'
-        )) {
-          const row = placeholder.parentElement;
-          if (row) {
-            items.push({
-              key: JSON.stringify([key, 'placeholder']),
-              placeholder: true,
-              parentKey: key,
-              element: placeholder,
-              layout: row,
-            });
-          }
-        }
       }
 
       return items;
@@ -142,7 +135,11 @@ export function TaskBoard(props: TaskBoardProps) {
   createEffect(
     on(
       () => props.animationScope,
-      () => motion.cancel()
+      () => {
+        revealGeneration += 1;
+        setReveal(undefined);
+        motion.cancel();
+      }
     )
   );
   onCleanup(() => {
@@ -156,7 +153,6 @@ export function TaskBoard(props: TaskBoardProps) {
       getViewport={() => viewport}
       canDropCard={props.canMove}
       mode="cross-column"
-      pointerPlacement
       targetActivationSpeed={props.targetActivationSpeed ?? 600}
       onDrop={(drop) => {
         if (!props.canMove(drop)) {
@@ -167,11 +163,32 @@ export function TaskBoard(props: TaskBoardProps) {
           drop.id,
           JSON.stringify(['column', drop.toLane])
         );
-        void props.onMove(drop).finally(finish);
+        const scope = props.animationScope;
+        const generation = ++revealGeneration;
+        setReveal(undefined);
+        const saveAndReveal = async () => {
+          try {
+            const moved = await props.onMove(drop);
+            if (
+              moved &&
+              generation === revealGeneration &&
+              props.animationScope === scope
+            ) {
+              setReveal({ id: drop.id, toLane: drop.toLane, scope });
+            }
+          } finally {
+            finish();
+          }
+        };
+        void saveAndReveal();
       }}
     >
       <TaskBoardViewport
         {...props}
+        reveal={reveal()}
+        onRevealed={(request) =>
+          setReveal((current) => (current === request ? undefined : current))
+        }
         ref={(element) => {
           viewport?.removeEventListener('mousedown', startHover);
           viewport = element;
@@ -183,7 +200,11 @@ export function TaskBoard(props: TaskBoardProps) {
   );
 }
 
-function TaskBoardViewport(props: TaskBoardProps) {
+type Reveal = { id: string; toLane: string; scope?: string };
+
+function TaskBoardViewport(
+  props: TaskBoardProps & { reveal?: Reveal; onRevealed(request: Reveal): void }
+) {
   let viewport: HTMLDivElement | undefined;
   const scrollSnapshots = new Map<string, KanbanScrollSnapshot>();
   const wheel = createKanbanWheelScroll({
@@ -214,7 +235,7 @@ function TaskBoardViewport(props: TaskBoardProps) {
       return keys;
     },
     getScrollElement: () => viewport,
-    estimateSize: 288,
+    estimateSize: 336,
     gap: 16,
     overscan: 1,
     paddingStart: 16,
@@ -222,6 +243,21 @@ function TaskBoardViewport(props: TaskBoardProps) {
   });
   const virtualItems = createMemo(() =>
     virtualizer.getVirtualItems().map((item) => ({ ...item }))
+  );
+  createEffect(
+    on(
+      () => props.reveal,
+      (request) => {
+        if (!request || request.scope !== props.animationScope) return;
+        const indices = taskBoardRevealIndices(
+          props.columns,
+          request.toLane,
+          request.id
+        );
+        if (indices)
+          virtualizer.scrollToIndex(indices.column, { align: 'auto' });
+      }
+    )
   );
 
   return (
@@ -272,6 +308,8 @@ function TaskBoardViewport(props: TaskBoardProps) {
                       <TaskBoardLane
                         column={column()}
                         board={props}
+                        reveal={props.reveal}
+                        onRevealed={props.onRevealed}
                         snapshot={scrollSnapshots.get(columnId)}
                         onSnapshot={(snapshot) => {
                           scrollSnapshots.set(columnId, snapshot);
@@ -292,6 +330,8 @@ function TaskBoardViewport(props: TaskBoardProps) {
 function TaskBoardLane(props: {
   column: TaskBoardColumn;
   board: TaskBoardProps;
+  reveal?: Reveal;
+  onRevealed(request: Reveal): void;
   snapshot?: KanbanScrollSnapshot;
   onSnapshot(snapshot: KanbanScrollSnapshot): void;
 }) {
@@ -299,38 +339,14 @@ function TaskBoardLane(props: {
   const column = () => props.column;
   const [hovered, setHovered] = createSignal(false);
   const target = useKanbanDropTarget();
-  const previewId = createMemo(() => {
-    const drop = target();
-    return drop?.kind === 'card' && drop.toLane === props.column.id
-      ? drop.id
-      : undefined;
-  });
-  const previewBeforeId = () => {
-    const drop = target();
-    return drop?.kind === 'card' ? drop.beforeId : undefined;
-  };
-  const rows = createMemo(() => {
-    const id = previewId();
-    const items: { key: string | number; task?: TaskBoardTask }[] =
-      props.column.tasks
-        .filter((task) => task.id !== id)
-        .map((task) => ({ key: task.id, task }));
-
-    if (!id) {
-      return items;
-    }
-
-    const index = items.findIndex((item) => item.key === previewBeforeId());
-    items.splice(index < 0 ? items.length : index, 0, { key: -1 });
-    return items;
-  });
+  const rows = () => props.column.tasks;
   const rowsById = createMemo(
-    () => new Map(rows().map((row) => [String(row.key), row]))
+    () => new Map(rows().map((task) => [task.id, task]))
   );
   const virtualizer = createKanbanVirtualizer({
     direction: 'vertical',
     laneId: () => props.column.id,
-    keys: () => rows().map((row) => row.key),
+    keys: () => rows().map((task) => task.id),
     getScrollElement: () => viewport,
     estimateSize: 104,
     gap: 12,
@@ -340,6 +356,25 @@ function TaskBoardLane(props: {
   const virtualItems = createMemo(() =>
     virtualizer.getVirtualItems().map((item) => ({ ...item }))
   );
+
+  createEffect(() => {
+    const request = props.reveal;
+    // The horizontal virtualizer can mount this lane after the drop settles.
+    // Wait until the vertical virtualizer connects to its viewport.
+    const mountedRows = virtualItems();
+    if (
+      !request ||
+      request.scope !== props.board.animationScope ||
+      request.toLane !== props.column.id ||
+      !viewport?.isConnected ||
+      mountedRows.length === 0
+    )
+      return;
+    const row = rows().findIndex((task) => task.id === request.id);
+    if (row < 0) return;
+    virtualizer.scrollToIndex(row, { align: 'center' });
+    props.onRevealed(request);
+  });
 
   const countLabel = () => {
     const loaded = props.column.tasks.length;
@@ -352,12 +387,9 @@ function TaskBoardLane(props: {
   };
 
   onCleanup(() => {
-    const measurements = virtualizer.takeSnapshot();
     props.onSnapshot({
       offset: viewport?.scrollTop ?? 0,
-      measurements: measurements.some((item) => item.key === -1)
-        ? []
-        : measurements,
+      measurements: virtualizer.takeSnapshot(),
     });
   });
 
@@ -365,7 +397,7 @@ function TaskBoardLane(props: {
     <KanbanLane
       id={props.column.id}
       label={props.column.label}
-      class="max-h-full min-h-0"
+      class="max-h-full min-h-0 w-84"
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
     >
@@ -386,6 +418,16 @@ function TaskBoardLane(props: {
           {props.column.count ?? props.column.tasks.length}
         </span>
       </header>
+      <Show
+        when={target()?.kind === 'card' && target()?.toLane === props.column.id}
+      >
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-lg bg-accent/10 text-sm font-medium text-ink"
+        >
+          Board sorted by {props.board.sortLabel}
+        </div>
+      </Show>
       <Scroll
         orientation="vertical"
         scrollbars="vertical"
@@ -436,26 +478,10 @@ function TaskBoardLane(props: {
                   ref={row}
                   data-index={item().index}
                   data-kanban-card-layout
-                  data-kanban-next-id={
-                    props.column.tasks[
-                      props.column.tasks.findIndex((task) => task.id === key) +
-                        1
-                    ]?.id ?? ''
-                  }
                   class="absolute left-0 top-0 w-full"
                   style={{ transform: `translateY(${item().start}px)` }}
                 >
-                  <Show
-                    when={rowsById().get(key)?.task}
-                    fallback={
-                      <div
-                        aria-label="Drop task here"
-                        data-kanban-placeholder
-                        data-kanban-before-id={previewBeforeId() ?? ''}
-                        class="h-26 rounded-lg border border-dashed border-accent/50 bg-accent/5"
-                      />
-                    }
-                  >
+                  <Show when={rowsById().get(key)}>
                     {(task) => (
                       <TaskBoardCard
                         task={task()}
@@ -513,7 +539,7 @@ function TaskBoardCard(props: {
         props.board.onOpen(props.task, event);
       }}
     >
-      <div class="flex items-start gap-1 p-3 pb-2">
+      <div class="flex items-center gap-1 p-3 pb-2">
         <div data-kanban-no-drag class="flex shrink-0 items-center">
           {props.board.renderLeadingTitleProperty?.(task, readOnly)}
         </div>
