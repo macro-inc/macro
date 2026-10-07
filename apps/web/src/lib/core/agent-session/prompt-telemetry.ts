@@ -20,6 +20,11 @@ import type {
   FoldedStreamEvent,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
+import {
+  afterLongFrames,
+  observeLongFrames,
+  summarizeFrames,
+} from './long-frames';
 import { observeRenderedAnswer } from './render-telemetry';
 
 /** How a sent prompt ended, as far as this span is concerned. */
@@ -161,6 +166,7 @@ export class PromptTrace {
   readonly #renderers = new Set<() => void>();
   #responses: ResponseWatch[] = [];
   #resourceObserver: PerformanceObserver | undefined;
+  readonly #frames = observeLongFrames();
 
   constructor(sessionId: string, options: PromptTraceOptions) {
     this.#sessionId = sessionId;
@@ -301,22 +307,33 @@ export class PromptTrace {
     this.#stopWatchingResponses();
     if (outcome === 'hidden') this.#set('agent.prompt.hidden', true);
     this.#set('agent.prompt.outcome', outcome);
-    this.#set(
-      'agent.prompt.total_ms',
-      Math.round(performance.now() - this.#startedAt)
-    );
+    const now = performance.now();
+    this.#set('agent.prompt.total_ms', Math.round(now - this.#startedAt));
     this.#ended = true;
     try {
       if (outcome === 'failed' && error !== undefined) this.#span?.error(error);
-      this.#span?.end();
       performance.measure('agent.prompt', {
         start: this.#startedAt,
-        end: performance.now(),
+        end: now,
         detail: { sessionId: this.#sessionId, outcome },
       });
     } catch {
       // See the module comment.
     }
+    // The long frames up to the end, which includes the frame that painted.
+    afterLongFrames(this.#frames, () => {
+      try {
+        for (const [name, value] of Object.entries(
+          summarizeFrames(this.#frames, 'agent.prompt', this.#startedAt, now)
+        )) {
+          this.#span?.setAttr(name, value);
+        }
+        this.#frames?.stop();
+        this.#span?.end();
+      } catch {
+        // See the module comment.
+      }
+    });
   }
 
   #observeMessage(message: FoldedMessage, delivery?: FrameDelivery): void {
