@@ -246,16 +246,20 @@ hosted data.
 
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
-with a project name and the shared property pills for Status, Priority,
-Assignees, and Due date. Team sharing is enabled by default.
+with a project name, a Markdown description (`Add description...`), and the
+shared property pills for Status, Priority, Assignees, and Due date. Team
+sharing is enabled by default. As in the task composer, Enter or ArrowDown in
+the name moves to the description instead of creating the project; Escape, or
+ArrowUp/Shift+Tab at the start of the description, returns to the name. The
+description seeds the project's Overview description.
 Project Status offers `Not Started`, `In Progress`, and `Completed` in the
 composer, list, and detail/side-panel pickers. The Status filter uses the same
 three choices. Task statuses are unchanged. Existing project values from the
 previous status catalog remain visible until an editor changes them.
 
 Submit with
-`Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
-name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
+`Create Project` or Cmd/Ctrl+Enter from the name or description. `Continue
+editing in split` preserves the name, description, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
 Leaving a property unset keeps its normal server default.
 Submitting closes the composer at once; a full composer returns its split to
 Projects, and Back skips the submitted composer. One request creates the project
