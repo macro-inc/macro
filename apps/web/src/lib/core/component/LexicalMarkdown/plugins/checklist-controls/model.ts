@@ -62,6 +62,8 @@ export type EffectiveItem = {
   leadingKeys: NodeKey[];
   attachedKeys: NodeKey[];
   text: string;
+  /** The checkbox state in the document, regardless of task status. */
+  checked: boolean;
   status: TaskStatusBucket;
   priority: TaskPriorityBucket | null;
   assignees: ChecklistAssignee[];
@@ -202,6 +204,7 @@ export function effectiveItem(
     leadingKeys: item.leadingKeys,
     attachedKeys: item.attachedKeys,
     text: item.text,
+    checked: item.checked,
     status: taskStatus ?? (item.checked ? 'done' : 'not-started'),
     priority: taskPriority ?? item.markerPriority,
     assignees,
@@ -279,7 +282,11 @@ function progressOf(items: EffectiveItem[]): { done: number; total: number } {
   for (const item of items) {
     if (item.text === '') continue;
     total += 1;
-    if (item.status === 'done' || item.status === 'canceled') done += 1;
+    // The checkbox the user toggles in the document always counts; a task
+    // whose status is closed counts even when its checkbox was never ticked.
+    if (item.checked || item.status === 'done' || item.status === 'canceled') {
+      done += 1;
+    }
   }
   return { done, total };
 }

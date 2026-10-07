@@ -370,7 +370,6 @@ function TaskListBar(props: {
           style={{ width: progressPct() }}
         />
       </div>
-      <div class="min-w-4 flex-1" />
       <Show when={props.hasTasks()}>
         <div
           class={cn(

@@ -9,6 +9,7 @@ import {
   $setTaskListViewSettings,
   DocumentMentionNode,
 } from '@macro-inc/lexical-core';
+import { PROPERTY_OPTION_IDS } from '@property/constants';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -133,6 +134,51 @@ describe('task-list controls', () => {
     const after = Object.values(editor.read($collectChecklistMeta));
     expect(after).toHaveLength(1);
     expect(after[0].items.map((item) => item.taskId)).toEqual([null]);
+  });
+
+  it('counts a ticked checkbox as done even when its task status lags', () => {
+    const base = {
+      leadingKeys: [],
+      attachedKeys: [],
+      mentionAssignees: [],
+      mentionDue: null,
+      markerPriority: null,
+      taskId: 'task-id',
+    };
+    const notStartedTask = {
+      statusOptionId: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED,
+      priorityOptionId: null,
+      assigneeIds: [],
+      due: null,
+    };
+    const items = [
+      effectiveItem(
+        { ...base, key: 'ticked', checked: true, text: 'Ticked' },
+        notStartedTask,
+        (id) => id
+      ),
+      effectiveItem(
+        { ...base, key: 'open', checked: false, text: 'Open' },
+        notStartedTask,
+        (id) => id
+      ),
+      effectiveItem(
+        {
+          ...base,
+          key: 'closed',
+          checked: false,
+          text: 'Closed in tasks view',
+        },
+        {
+          ...notStartedTask,
+          statusOptionId: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+        },
+        (id) => id
+      ),
+    ];
+
+    const plan = planChecklist(items, normalizeSettings(null), new Date());
+    expect(plan.progress).toEqual({ done: 2, total: 3 });
   });
 
   it('dims filtered items even when an older saved setting requests hiding them', () => {
