@@ -1,4 +1,4 @@
-import type { CardMoved, ViewChange } from '../core/view-state';
+import type { CardMoved, ViewChange } from '../../database/core/view-state';
 /** A table's typed views and a board's card places, written as ops and shown in the cached detail ahead of the answer. */
 
 import type { DatabaseOp } from '@core/database-sql/generated/types';
@@ -21,11 +21,11 @@ import {
   boardWithStatusColumn,
   type MintedStatusColumn,
   newBoardWithStatusColumn,
-} from '../core/board-grouping';
-import type { CardMove } from '../core/board-moves';
-import type { DatabaseViewColumn } from '../core/database-view';
-import { createKeyedSerializer } from '../core/keyed-serializer';
-import type { DatabaseOpFailure } from '../core/write-failure';
+} from '../../database/core/board-grouping';
+import type { CardMove } from '../../database/core/board-moves';
+import type { DatabaseViewColumn } from '../../database/core/database-view';
+import { createKeyedSerializer } from '../../database/core/keyed-serializer';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { applyOp, isResult, patchViews } from './detail-cache';
 import { databaseViewKeys } from './keys';
 

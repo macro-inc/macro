@@ -44,18 +44,21 @@ import {
   Suspense,
 } from 'solid-js';
 import { match } from 'ts-pattern';
-import { DatabaseSearch } from '../components/database-search';
-import type { ShownLayout } from '../components/database-toolbar';
-import { DatabaseToolbar } from '../components/database-toolbar';
-import type { NewFormChoice, NewView } from '../components/new-view-dialog';
+import { DatabaseSearch } from '../../database/components/database-search';
+import type { ShownLayout } from '../../database/components/database-toolbar';
+import { DatabaseToolbar } from '../../database/components/database-toolbar';
+import type {
+  NewFormChoice,
+  NewView,
+} from '../../database/components/new-view-dialog';
+import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
+import type { ViewChange } from '../../database/core/view-state';
+import { allRecordsView, boardLayout } from '../../database/core/views';
+import { databaseOpMessage } from '../../database/core/write-failure';
+import { createDatabaseSearch } from '../../database/primitives/database-search';
+import { createDatabaseUndo } from '../../database/primitives/undo-controller';
+import { createViewCreation } from '../../database/primitives/view-creation';
 import { databaseChat } from '../core/chat-context';
-import type { DatabaseRelatedDestination } from '../core/database-relations';
-import type { ViewChange } from '../core/view-state';
-import { allRecordsView, boardLayout } from '../core/views';
-import { databaseOpMessage } from '../core/write-failure';
-import { createDatabaseSearch } from '../primitives/database-search';
-import { createDatabaseUndo } from '../primitives/undo-controller';
-import { createViewCreation } from '../primitives/view-creation';
 import { createDatabaseViewSelection } from '../primitives/view-selection';
 import { searchDatabase } from '../queries/database-search';
 import { toViewColumn } from '../queries/table-rows';

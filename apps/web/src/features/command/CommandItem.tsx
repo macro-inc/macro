@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
-import { Entity, type EntityData } from '@entity';
+import { type CrmContactEntity, Entity, type EntityData } from '@entity';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import WideStar from '@phosphor/sparkle.svg';
@@ -153,6 +153,25 @@ function EntityDisplay(props: { entity: EntityData }) {
   );
 }
 
+function ContactDisplay(props: { contact: CrmContactEntity }) {
+  const showEmail = () =>
+    Boolean(props.contact.name) && props.contact.name !== props.contact.email;
+
+  return (
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+      <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
+        <Entity.Icon entity={props.contact} />
+      </div>
+      <span class="truncate">
+        <Show when={showEmail()} fallback={props.contact.email}>
+          {props.contact.name}
+          <span class="ml-[0.5em] opacity-50">{props.contact.email}</span>
+        </Show>
+      </span>
+    </div>
+  );
+}
+
 function UserDisplay(props: { item: UserItem }) {
   const name = () => props.item.data.name;
   const email = () => props.item.data.email;
@@ -225,6 +244,15 @@ function ItemDisplay(props: { item: CommandMenuItem }) {
       </Match>
       <Match when={isCommandItem(props.item) && props.item}>
         {(item) => <CommandDisplay item={item()} />}
+      </Match>
+      <Match
+        when={
+          isEntityItem(props.item) &&
+          props.item.data.type === 'crm_contact' &&
+          props.item.data
+        }
+      >
+        {(contact) => <ContactDisplay contact={contact()} />}
       </Match>
       <Match when={isEntityItem(props.item) && props.item}>
         {(item) => <EntityDisplay entity={item().data} />}

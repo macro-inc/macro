@@ -3,7 +3,7 @@ import { render, waitFor } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { okAsync } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
-import { tableDeleteConsequence } from '../core/forms-usage';
+import { tableDeleteConsequence } from '../../database/core/forms-usage';
 import { useFormsOverTables } from './forms-usage';
 
 // The storage client's imports reach the realtime connection.

@@ -50,6 +50,11 @@ where
         self.repo.list_owned_by(owner, entity_type).await
     }
 
+    #[tracing::instrument(skip(self, owner), fields(owner.kind = ?owner.owner_type()), err)]
+    async fn list_all_owned_by(&self, owner: &Owner) -> EntityRegistryResult<Vec<EntityRecord>> {
+        self.repo.list_all_owned_by(owner).await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn count_by_type(
         &self,

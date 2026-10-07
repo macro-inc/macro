@@ -55,8 +55,8 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { toDate } from 'date-fns';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { deduplicateContactItems, toCrmContactItem } from './crm-contacts';
 import {
-  deduplicateContactItems,
   filterQuickAccessItems,
   searchQuickAccessItems,
 } from './entity-search';
@@ -283,12 +283,6 @@ function getCrmCompanyVersion(
 ): string {
   const domains = company.domains.map((d) => d.domain).join(',');
   return `${company.name}|${domains}|${company.updatedAt}|${viewedAt}`;
-}
-
-function getCrmContactSearchText(contact: CrmContactEntity): string {
-  return contact.name === contact.email
-    ? contact.email
-    : `${contact.name} | ${contact.email}`;
 }
 
 function getCrmContactVersion(contact: CrmContactEntity): string {
@@ -691,27 +685,16 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       if (contact.hidden || hidden.has(contact.id)) continue;
       const version = getCrmContactVersion(contact);
       const cached = itemCache.get(contact.id);
-      const sortTimestamp = toTimestamp(
-        contact.lastInteraction ?? contact.updatedAt
-      );
-      if (!cached || cached.version !== version) {
-        itemCache.set(contact.id, {
-          version,
-          item: {
-            kind: 'entity',
-            id: contact.id,
-            bucket: 'crm_contact',
-            searchText: getCrmContactSearchText(contact),
-            sortTimestamp,
-            timestamps: {
-              lastInteraction: contact.lastInteraction ?? contact.updatedAt,
-              createdAt: contact.createdAt,
-            },
-            data: contact,
-          },
-        });
-      }
-      allEntries.push({ id: contact.id, bucket: 'crm_contact', sortTimestamp });
+      const item =
+        cached && cached.version === version
+          ? cached.item
+          : toCrmContactItem(contact);
+      if (item !== cached?.item) itemCache.set(contact.id, { version, item });
+      allEntries.push({
+        id: contact.id,
+        bucket: 'crm_contact',
+        sortTimestamp: item.sortTimestamp,
+      });
     }
     return sortIndexEntries(allEntries);
   });
@@ -1242,25 +1225,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
                   ];
                 }
                 const contact = contactsById.get(id);
-                if (contact) {
-                  return [
-                    {
-                      kind: 'entity',
-                      id,
-                      bucket: 'crm_contact',
-                      searchText: getCrmContactSearchText(contact),
-                      sortTimestamp: toTimestamp(
-                        contact.lastInteraction ?? contact.updatedAt
-                      ),
-                      timestamps: {
-                        lastInteraction:
-                          contact.lastInteraction ?? contact.updatedAt,
-                        createdAt: contact.createdAt,
-                      },
-                      data: contact,
-                    },
-                  ];
-                }
+                if (contact) return [toCrmContactItem(contact)];
                 const company = companiesById.get(id);
                 if (company) {
                   return [

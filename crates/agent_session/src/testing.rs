@@ -259,15 +259,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.find(id).await?.ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.session_reads.fetch_add(1, Ordering::Relaxed);
-        self.sessions
+        Ok(self
+            .sessions
             .lock()
             .expect("in-memory session store is not poisoned")
             .get(&id)
-            .cloned()
-            .ok_or_else(|| {
-                AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
-            })
+            .cloned())
     }
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {

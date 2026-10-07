@@ -22,13 +22,17 @@ export function useCrmContactsQuery(
         enabled: enabled(),
         staleTime: 60_000,
         initialPageParam: null as string | null,
-        queryFn: ({ pageParam, signal }) =>
-          fetchCrmContacts({
+        // Each page names the search it answers, so a consumer reading
+        // pages during a key change cannot attribute them to the new search.
+        queryFn: async ({ pageParam, signal }) => ({
+          ...(await fetchCrmContacts({
             cursor: pageParam,
             search: searchTerm,
             limit,
             signal,
-          }),
+          })),
+          search: searchTerm,
+        }),
         getNextPageParam: (page) => page.nextCursor,
       };
     },

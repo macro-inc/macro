@@ -688,6 +688,23 @@ notifications. External contacts insert a link to their original CRM record;
 they do not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only.
 
+Cmd+K **People** and a typed **All** query also find CRM contacts, using the same
+accessible-team search, hidden-record exclusions, and full-email collapsing as
+mentions. Cached contacts appear at once; the server search starts about 250 ms
+after typing stops and pages 100 contacts at a time, so contacts beyond the first
+500 cached records are found too. An empty query keeps People and All on their
+usual recency lists without contacts. A contact whose email belongs to a Macro user
+appears as that person instead, even when only the CRM name matched: their existing
+direct message when you have one, otherwise the person, and selecting them opens a
+direct message. Other contacts show their email and open the contact page; Enter and
+click open in place, Shift+Enter in a new split. A server match that arrives after
+typing takes the default selection from the Search for… row. Global Search does not
+list CRM contacts; Search for… from People still opens the Channels search. Verify
+a contact outside the cached rows, an email-only query, rapid query changes (rows
+from an earlier query must disappear unless they still match), scrolling or Down
+past the last row to load more, and that Files/Tasks/Channels/Agents never show
+contacts.
+
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's

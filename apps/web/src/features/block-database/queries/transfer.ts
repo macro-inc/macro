@@ -10,14 +10,14 @@ import type { ImportTable } from '@service-storage/generated/schemas/importTable
 import type { Table } from '@service-storage/generated/schemas/table';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { err, ok, type ResultAsync } from 'neverthrow';
-import { encodeDatabaseCsv } from '../core/csv';
-import { relatedRowIds } from '../core/database-relations';
+import { encodeDatabaseCsv } from '../../database/core/csv';
+import { relatedRowIds } from '../../database/core/database-relations';
 import type {
   DatabaseCellValue,
   DatabaseViewColumn,
-} from '../core/database-view';
-import { gridRows } from '../core/grid-cells';
-import { formatCellValue } from '../core/table';
+} from '../../database/core/database-view';
+import { gridRows } from '../../database/core/grid-cells';
+import { formatCellValue } from '../../database/core/table';
 import { tableRowsStatement } from '../sql';
 import { toViewColumn } from './table-rows';
 

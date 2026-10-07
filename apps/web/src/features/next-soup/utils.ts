@@ -688,7 +688,20 @@ export const openEntityInSplitFromUnifiedList = async (
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  if (entity.type === 'channel' && entity.unreadNotifications !== undefined) {
+  // Latest opens do not need notifications to choose their destination. Snapshot
+  // the list row before navigation can dispose its Solid store, and hydrate only
+  // after the open is accepted. Inbox notification-targeted opens still wait.
+  const deferredChannel =
+    entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    options.channelNavigation === 'latest'
+      ? { ...entity }
+      : undefined;
+  if (
+    entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    !deferredChannel
+  ) {
     try {
       entity = await hydrateChannelNotificationSelection(
         entity,
@@ -748,15 +761,45 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
+  const hydrateNotificationsAndMarkSeen = async (
+    channel: ChannelEntity,
+    notificationSource: NotificationSource
+  ) => {
+    try {
+      const hydrated = await hydrateChannelNotificationSelection(
+        channel,
+        notificationSource.withLocalOverrides
+      );
+      const view = splitManager.findOpenView(content);
+      // A late response must not mark a closed conversation or a mobile pane
+      // that the user has already left. Hydration never reopens or retargets it.
+      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
+      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+        channelReadScope: options.channelReadScope,
+      });
+    } catch (error) {
+      console.error('Failed to load conversation notifications after opening', {
+        channelId: channel.id,
+        error,
+      });
+    }
+  };
+
   let markedNotifications = false;
   const markNotificationsSeen = () => {
     if (markedNotifications) return;
     markedNotifications = true;
-    if (options.notificationSource) {
-      markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
-        channelReadScope: options.channelReadScope,
-      });
+    if (!options.notificationSource) return;
+    if (deferredChannel) {
+      void hydrateNotificationsAndMarkSeen(
+        deferredChannel,
+        options.notificationSource
+      );
+      return;
     }
+    markChannelNotificationsSeenOnOpen(entity, options.notificationSource, {
+      channelReadScope: options.channelReadScope,
+    });
   };
   const result = splitManager.openWithSplit(splitContent, {
     search: target ? searchLocationUpdates(content.id, target) : undefined,
