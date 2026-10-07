@@ -223,6 +223,7 @@ export function Page(props: {
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
+    sourcesReady: calendarView.sourcesReady,
     isSourceVisible: isRenderedSourceVisible,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
@@ -435,8 +436,7 @@ function CalendarPageHost(props: {
         wasActive === false &&
         props.data.occurrencesQuery.isSuccess &&
         props.data.occurrencesQuery.isStale &&
-        !props.data.occurrencesQuery.isFetching &&
-        !props.data.occurrencesQuery.isPlaceholderData
+        !props.data.occurrencesQuery.isFetching
       ) {
         void props.data.occurrencesQuery.refetch();
       }
@@ -454,12 +454,11 @@ function CalendarPageHost(props: {
       ([active, selectedEventId, eventsById]) => {
         if (!active || !selectedEventId) return;
 
-        // Placeholder data is the previous range, so an absent event proves
-        // nothing yet.
+        // An absent event proves nothing until its occurrences and source
+        // metadata are ready to render.
         calendarView.refreshSelectedEventFromPage(
           eventsById,
-          props.data.occurrencesQuery.isSuccess &&
-            !props.data.occurrencesQuery.isPlaceholderData
+          props.data.occurrencesQuery.isSuccess && !props.data.isLoading()
         );
       }
     )

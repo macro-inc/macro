@@ -70,7 +70,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
     'CalendarViewContext',
     (props: CalendarViewContextProps) => {
       const [preferences, setPreferences] = useCalendarPreferences();
-      const { sources, sourceById } = useCalendarSources();
+      const { sources, sourceById, sourcesReady } = useCalendarSources();
       // Sources default to visible, so calendars discovered after a
       // preference was saved (or events whose calendar is still loading)
       // never silently disappear.
@@ -175,6 +175,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         displaySettings,
         sources,
         sourceById,
+        sourcesReady,
         hiddenSourceIds,
         isSourceVisible,
         setSourceVisibility,

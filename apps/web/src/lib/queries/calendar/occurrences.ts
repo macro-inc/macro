@@ -5,7 +5,12 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  hashKey,
+  type PlaceholderDataFunction,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
   markCalendarCacheUnsupported,
@@ -109,6 +114,7 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+/** Retained placeholders always belong to the current user and date range. */
 export function useCalendarOccurrencesQuery(
   input: Accessor<CalendarOccurrencesQueryInput>,
   options?: Accessor<CalendarOccurrencesQueryOptions>
@@ -142,11 +148,26 @@ export function useCalendarOccurrencesQuery(
     const enabled =
       Boolean(userId) && range !== undefined && options?.().enabled !== false;
     const host = cacheHost();
+    const keys = calendarKeys.occurrences(userId ?? '', range);
+    // A transport change still describes the same viewport. Retain those
+    // events while its new reader starts, but never another user's or date's.
+    const placeholderData: PlaceholderDataFunction<
+      CalendarOccurrencesData,
+      Error,
+      CalendarOccurrencesData,
+      CalendarOccurrencesQueryKey
+    > = (previous, query) => {
+      if (!query) return undefined;
+      const previousKey = hashKey(query.queryKey);
+      return previousKey === hashKey(keys.queryKey) ||
+        previousKey === hashKey(keys._ctx.graphql.queryKey)
+        ? previous
+        : undefined;
+    };
 
     if (host) {
       return {
-        queryKey: calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
-          .queryKey,
+        queryKey: keys._ctx.graphql.queryKey,
         queryFn: async ({ signal }: { signal: AbortSignal }) => {
           if (!range) {
             throw new Error('Calendar occurrence range is unavailable');
@@ -160,7 +181,7 @@ export function useCalendarOccurrencesQuery(
         staleTime: Infinity,
         // Covered viewports never touch the network, so offline reads run.
         networkMode: 'offlineFirst' as const,
-        placeholderData: (p: CalendarOccurrencesData | undefined) => p,
+        placeholderData,
         refetchOnWindowFocus: false,
         // Read from REST while the cache was starting: poll like the REST
         // path until the provider sync finishes.
@@ -176,7 +197,7 @@ export function useCalendarOccurrencesQuery(
     }
 
     return {
-      queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
+      queryKey: keys.queryKey,
       queryFn: ({ signal }) => {
         if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
@@ -187,7 +208,7 @@ export function useCalendarOccurrencesQuery(
       enabled:
         Boolean(userId) && range !== undefined && options?.().enabled !== false,
       staleTime: CALENDAR_STALE_TIME,
-      placeholderData: (p) => p,
+      placeholderData,
       refetchOnWindowFocus: options?.().refetchOnWindowFocus ?? true,
       refetchInterval: (query) =>
         options?.().pollWhileSyncing !== false &&
