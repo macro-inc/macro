@@ -105,6 +105,9 @@ vi.mock('@app/features/soup', () => ({
 vi.mock('@components/app/split-panel', () => ({
   SplitPanel: { CloseButton: () => null },
 }));
+vi.mock('@app/features/team-invitations/sidebar-invite-team', () => ({
+  SidebarInviteTeam: () => null,
+}));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
   SidebarBigCreateButton: (props: { label: string; onCreate: () => void }) => (
     <button onClick={props.onCreate}>{props.label}</button>

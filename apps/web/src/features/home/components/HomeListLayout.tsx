@@ -1,4 +1,5 @@
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
@@ -11,6 +12,9 @@ function MobileHomeHeader(props: ParentProps) {
     <header class="flex shrink-0 flex-col gap-3 px-4 pt-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:pointer-events-none">
       <div class="flex h-8 min-w-0 items-center touch:h-10 touch:pointer-events-auto">
         {props.children}
+        <Show when={!isTouchDevice()}>
+          <SidebarInviteTeam />
+        </Show>
       </div>
     </header>
   );

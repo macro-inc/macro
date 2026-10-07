@@ -1,6 +1,7 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { SidebarBigCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
@@ -1144,6 +1145,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
             <span>to jump sections</span>
           </footer>
         </Show>
+        <SidebarInviteTeam />
       </div>
     </>
   );

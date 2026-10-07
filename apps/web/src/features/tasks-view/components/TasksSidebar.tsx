@@ -8,6 +8,7 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { openProject } from '@app/features/projects/open-project';
 import { ProjectsSidebarSection } from '@app/features/projects/projects';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { useNavigate, useParams } from '@app/lib/split-router';
 import { projectDetailRoute } from '@app/routes/routes';
 import {
@@ -220,6 +221,7 @@ export function TasksSidebar() {
           />
         </div>
       </ViewSidebar.Content>
+      <SidebarInviteTeam />
     </ViewSidebar.Root>
   );
 }

@@ -380,6 +380,12 @@ accent plus): **New chat** on Home, **New email** on Email, **New task** (or
 touch layouts the tile is taller. When multiple desktop splits are open, a **Close** (X)
 button appears beside each sidebar's New button and closes that split. The last
 logical split has no sidebar close button; mobile chrome is unchanged.
+
+Below the sidebar content, signed-in people see an **Invite team** row under a
+full-width hairline matching the rail's border. Team members open an invite
+dialog from it unless an admin turned off **Members can invite**, in which
+case it is hidden; people without a team open **Settings → Team**.
+
 A lone non-list content split still shows a header X labeled **Return to list**,
 which returns that split to the most recent list in its history, preserving
 that list’s state. If there is no prior list, it replaces the current entry with

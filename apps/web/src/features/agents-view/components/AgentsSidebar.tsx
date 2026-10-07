@@ -16,6 +16,7 @@ import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
 } from '@app/features/soup';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
@@ -403,6 +404,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             </section>
           </Show>
         </ViewSidebar.Content>
+        <SidebarInviteTeam />
       </ViewSidebar.Root>
     </MaybeSoupEntityActionDrawerManager>
   );

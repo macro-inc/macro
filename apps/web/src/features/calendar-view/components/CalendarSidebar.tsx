@@ -15,6 +15,7 @@ import {
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
@@ -325,6 +326,7 @@ export function CalendarSidebar() {
           <CalendarSettingsDropdown sidebar />
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>
+      <SidebarInviteTeam />
     </ViewSidebar.Root>
   );
 }

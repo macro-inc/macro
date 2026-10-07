@@ -1,5 +1,6 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarBigCreateButton } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -156,6 +157,7 @@ export function EmailSidebar() {
           />
         </div>
       </ViewSidebar.Content>
+      <SidebarInviteTeam />
     </ViewSidebar.Root>
   );
 }

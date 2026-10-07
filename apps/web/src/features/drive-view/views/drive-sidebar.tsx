@@ -5,6 +5,7 @@ import {
 } from '@app/components/view-shell';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
@@ -219,6 +220,7 @@ export function DriveSidebar() {
       <ViewSidebar.Content>
         <DriveSidebarContent />
       </ViewSidebar.Content>
+      <SidebarInviteTeam />
     </ViewSidebar.Root>
   );
 }

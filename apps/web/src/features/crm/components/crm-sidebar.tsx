@@ -1,5 +1,6 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
+import { SidebarInviteTeam } from '@app/features/team-invitations/sidebar-invite-team';
 import { TabsInset } from '@core/component/TabsInset';
 import ExportIcon from '@phosphor/download-simple.svg';
 import GearIcon from '@phosphor/gear-six.svg';
@@ -191,6 +192,7 @@ export function CrmSidebar(props: {
           </ViewSidebar.Item>
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>
+      <SidebarInviteTeam />
     </ViewSidebar.Root>
   );
 }
