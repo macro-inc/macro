@@ -247,6 +247,7 @@ impl Inverter<'_> {
                     super::RestoredColumn {
                         kind: image.kind,
                         infer_type: image.infer_type,
+                        nullable: image.nullable,
                     },
                 );
                 self.push(DatabaseOp::Column {

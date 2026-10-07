@@ -2895,6 +2895,10 @@ export type Column = {
      */
     infer_type: boolean;
     /**
+     * Whether a row may omit this cell; empty collections also count as absent.
+     */
+    nullable?: boolean;
+    /**
      * Fractional index for column ordering.
      */
     position: string;

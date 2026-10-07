@@ -243,8 +243,8 @@ pub(crate) async fn insert_column(
         .transpose()?;
     let inserted = sqlx::query!(
         r#"
-            INSERT INTO database_columns (id, table_id, property_definition_id, position, config, infer_type)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO database_columns (id, table_id, property_definition_id, position, config, infer_type, nullable)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         column.id.into_uuid(),
         column.table_id.into_uuid(),
@@ -252,6 +252,7 @@ pub(crate) async fn insert_column(
         column.position.as_str(),
         config,
         column.infer_type,
+        column.nullable,
     )
     .execute(connection)
     .await;

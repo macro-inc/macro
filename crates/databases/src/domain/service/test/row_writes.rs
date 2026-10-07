@@ -229,3 +229,70 @@ async fn grants_scope_writes_per_database() {
     assert_eq!(w.rows[&rooms].len(), 1);
     assert_eq!(w.rows[&seeded.table_id].len(), 1);
 }
+
+#[tokio::test]
+async fn required_columns_reject_missing_and_cleared_values_but_accept_empty_text() {
+    let seeded = seeded().await;
+    seeded
+        .world
+        .lock()
+        .unwrap()
+        .columns
+        .iter_mut()
+        .find(|column| column.id == seeded.name_column.id)
+        .unwrap()
+        .nullable = false;
+    for change in [
+        RowsChange::Insert { rows: vec![vec![]] },
+        RowsChange::Insert {
+            rows: vec![vec![CellWrite {
+                column: seeded.name_column.id,
+                value: CellValue::Clear,
+            }]],
+        },
+        RowsChange::Update {
+            changes: RowChanges::Uniform {
+                rows: vec![seeded.row_id],
+                cells: vec![CellWrite {
+                    column: seeded.name_column.id,
+                    value: CellValue::Clear,
+                }],
+            },
+        },
+    ] {
+        assert!(matches!(
+            seeded
+                .service
+                .apply_ops(
+                    edit(seeded.database_id),
+                    viewer(OWNER),
+                    vec![DatabaseOp::Rows {
+                        table: seeded.table_id,
+                        change
+                    }]
+                    .into()
+                )
+                .await,
+            Err(DatabaseError::InvalidOp(_))
+        ));
+    }
+    assert_eq!(seeded.world.lock().unwrap().write_batches, 0);
+    seeded
+        .service
+        .apply_ops(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            vec![DatabaseOp::Rows {
+                table: seeded.table_id,
+                change: RowsChange::Insert {
+                    rows: vec![vec![CellWrite {
+                        column: seeded.name_column.id,
+                        value: CellValue::Text(String::new()),
+                    }]],
+                },
+            }]
+            .into(),
+        )
+        .await
+        .unwrap();
+}
