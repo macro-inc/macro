@@ -106,7 +106,6 @@ const PLAN_BENEFITS: Record<PlanTier, (usage: string | undefined) => string[]> =
       'All models',
       ...(usage ? [usage] : []),
       'No email watermark',
-      'AI projections',
       'Unlimited connected email accounts',
       'Team-level memory',
       '100 GB storage',
