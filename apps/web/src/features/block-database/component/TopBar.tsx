@@ -22,11 +22,11 @@ import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { Button } from '@ui';
 import type { ResultAsync } from 'neverthrow';
 import { lazy, Show, Suspense } from 'solid-js';
-import { DatabaseTitle } from '../components/database-title';
+import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
-} from '../core/write-failure';
+} from '../../database/core/write-failure';
 import { renameDatabase } from '../queries/rename-database';
 import { DatabasePageActions } from '../views/database-page-actions';
 import { TableTabs } from './TableTabs';
