@@ -2270,6 +2270,9 @@ flag, and pending plan actions. The preview uses the real Billing UI with local
 fixtures; checkout, plan changes, Manage, and Team settings only show preview
 status messages. `Reset preview` restores Solo/Free; `Exit preview` restores
 the signed-in account. State is not persisted and resets on leaving Billing.
+Alongside `Preview billing states`, `Open paywall` opens the real Pro upgrade
+modal using the signed-in account. Its checkout and Manage actions keep their
+normal behavior; the billing preview fixtures do not affect this modal.
 These controls are excluded from deployed builds, including dev.macro.com.
 
 `Team` (members list; on a paid team each row shows the seat's plan,

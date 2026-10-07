@@ -1,4 +1,5 @@
 import { PLAN_BY_TIER, type PlanTier } from '@app/features/paywall/plans';
+import { usePaywallState } from '@core/constant/PaywallState';
 import { Button } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BillingSettingsView } from '../components/billing-settings-view';
@@ -51,10 +52,11 @@ function PreviewCheckbox(props: {
   );
 }
 
-/** Only loaded by Billing under the local HMR gate. No live billing capabilities. */
+/** Only loaded by Billing under the local HMR gate. Billing previews simulate actions. */
 export function BillingPreview(props: {
   renderLive: (controls: JSX.Element) => JSX.Element;
 }) {
+  const { showPaywall } = usePaywallState();
   const [active, setActive] = createSignal(false);
   const [account, setAccount] = createSignal<Account>('solo');
   const [plan, setPlan] = createSignal<PlanTier>('free');
@@ -101,6 +103,9 @@ export function BillingPreview(props: {
         <div class="flex flex-wrap items-center gap-3">
           <Button size="sm" variant="outline" onClick={() => setActive(true)}>
             Preview billing states
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => showPaywall()}>
+            Open paywall
           </Button>
           <span class="text-xs text-ink-muted">Local development</span>
         </div>
