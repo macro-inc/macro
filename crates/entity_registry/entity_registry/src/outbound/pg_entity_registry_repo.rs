@@ -139,6 +139,30 @@ impl EntityRegistryRepository for PgEntityRegistryRepository {
         .collect()
     }
 
+    #[tracing::instrument(skip(self, owner), fields(owner.kind = ?owner.owner_type()), err)]
+    async fn list_all_owned_by(&self, owner: &Owner) -> EntityRegistryResult<Vec<EntityRecord>> {
+        let owner_type = owner.owner_type();
+        let owner_id = owner.principal_id();
+        sqlx::query_as!(
+            EntityRow,
+            r#"
+            SELECT id, entity_type, owner_type AS "owner_type: OwnerType", owner_id,
+                   created_at, updated_at, deleted_at
+            FROM entity
+            WHERE owner_type = $1 AND owner_id = $2
+            ORDER BY created_at DESC, id DESC
+            "#,
+            owner_type as _,
+            owner_id,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context(EntityRegistryError::Infrastructure)?
+        .into_iter()
+        .map(EntityRow::into_record)
+        .collect()
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn count_by_type(
         &self,

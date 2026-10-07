@@ -20,18 +20,18 @@ use super::super::{
     MAX_CONVERTED_ROWS, same_name, takes_options, validate_name, validate_option_labels,
 };
 use super::{ColumnCells, Place, Planner, refuse, refuse_taken, schema_refusal};
-use crate::domain::catalog::{self, ColumnEntry, PropertyType, TableEntry};
+use crate::domain::catalog::{self, ColumnEntry, PropertyType, StorageTable};
 use crate::domain::models::{
-    Column, ColumnConfig, ColumnId, ColumnReplacement, DatabaseError, DatabaseId, DatabaseView,
-    NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId, Write,
-    grant_writes,
+    Column, ColumnConfig, ColumnId, ColumnProtection, ColumnReplacement, DatabaseError, DatabaseId,
+    DatabaseView, NewDefinition, OptionId, PropertyDefinitionId, RowId, SchemaError, TableId,
+    Write, grant_writes,
 };
 
 impl Planner {
     pub(super) fn create_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         definition: &NewColumn,
         after: Option<ColumnId>,
     ) -> Result<Write, DatabaseError> {
@@ -82,7 +82,7 @@ impl Planner {
                     options,
                 };
                 (
-                    stored_definition(self.database.id, &created),
+                    stored_definition(self.database_id, &created),
                     Some(created),
                     config,
                     *infer_type,
@@ -119,6 +119,12 @@ impl Planner {
             }
         };
         let column = Column {
+            protections: vec![],
+            nullable: self
+                .restoration
+                .columns
+                .get(&id)
+                .is_none_or(|column| column.nullable),
             id,
             table_id: entry.table.id,
             property_definition_id: definition.definition.id,
@@ -147,7 +153,7 @@ impl Planner {
     pub(super) fn rename_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         name: &str,
         previous_name: Option<&str>,
@@ -186,10 +192,22 @@ impl Planner {
     pub(super) fn delete_column(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
     ) -> Result<Write, DatabaseError> {
         let column_id = place.column;
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::Delete)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::Delete,
+                }
+                .to_string(),
+            ));
+        }
         let now = self.now;
         let next_title = entry
             .columns
@@ -223,7 +241,7 @@ impl Planner {
     pub(super) fn order_columns(
         &mut self,
         index: usize,
-        entry: &TableEntry,
+        entry: &StorageTable,
         order: &[ColumnId],
     ) -> Result<Write, DatabaseError> {
         let current: HashSet<ColumnId> = entry
@@ -264,7 +282,7 @@ impl Planner {
     pub(super) fn add_options(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         options: &[NewOption],
     ) -> Result<Write, DatabaseError> {
@@ -300,7 +318,7 @@ impl Planner {
     pub(super) fn change_type(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         to: ColumnKind,
     ) -> Result<Write, DatabaseError> {
@@ -320,6 +338,18 @@ impl Planner {
         let views = views_without_tests_of(self.views_of(entry), column_id, now)
             .map_err(|reason| place.refuse(reason.to_string()))?;
         if let Some(previous) = self.restoration.rebinds.get(&place.op).copied() {
+            if column
+                .column
+                .protections
+                .contains(&ColumnProtection::ChangeType)
+            {
+                return Err(place.refuse(
+                    SchemaError::ColumnProtected {
+                        capability: ColumnProtection::ChangeType,
+                    }
+                    .to_string(),
+                ));
+            }
             return self.rebind(place, entry, column, previous, relation, views);
         }
         let current = PropertyType::of(&column.column, &column.definition);
@@ -335,6 +365,19 @@ impl Planner {
             return Ok(Write::Unchanged {
                 table_id: entry.table.id,
             });
+        }
+
+        if column
+            .column
+            .protections
+            .contains(&ColumnProtection::ChangeType)
+        {
+            return Err(place.refuse(
+                SchemaError::ColumnProtected {
+                    capability: ColumnProtection::ChangeType,
+                }
+                .to_string(),
+            ));
         }
 
         let stored = self
@@ -423,7 +466,7 @@ impl Planner {
             (!self.created_tables.contains(&entry.table.id)).then_some(entry.table.version);
 
         self.store_views(entry.table.id, &views);
-        let stored_definition = stored_definition(self.database.id, &definition);
+        let stored_definition = stored_definition(self.database_id, &definition);
         if let Some(column) = self.column_mut(entry.table.id, column_id) {
             column.column.property_definition_id = definition.id;
             column.column.config = config;
@@ -452,7 +495,7 @@ impl Planner {
     fn rebind(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         previous: PropertyDefinitionId,
         relation: Option<(DatabaseId, TableId)>,
@@ -494,7 +537,7 @@ impl Planner {
     pub(super) fn update_option(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         option: OptionId,
         label: Option<&str>,
@@ -532,7 +575,7 @@ impl Planner {
     pub(super) fn delete_option(
         &mut self,
         place: Place,
-        entry: &TableEntry,
+        entry: &StorageTable,
         column: &ColumnEntry,
         option: OptionId,
     ) -> Result<Write, DatabaseError> {
@@ -627,7 +670,7 @@ impl Planner {
         database: DatabaseId,
         table: TableId,
     ) -> Result<(), DatabaseError> {
-        if database == self.database.id {
+        if database == self.database_id {
             return if self.entries.iter().any(|entry| entry.table.id == table) {
                 Ok(())
             } else {
@@ -676,7 +719,7 @@ impl Planner {
 
 /// Where a new column goes: right after `after`, or after the table's last.
 fn column_position(
-    entry: &TableEntry,
+    entry: &StorageTable,
     place: Place,
     after: Option<ColumnId>,
 ) -> Result<models_databases::position::Position, DatabaseError> {

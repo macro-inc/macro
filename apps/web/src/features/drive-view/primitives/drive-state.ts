@@ -11,18 +11,23 @@ import type {
 } from '../core/types';
 import type { DriveListState } from './drive-list';
 
-/** Mask disabled database filters without changing persisted route intent. */
+/** Mask disabled database and form filters without changing persisted route intent. */
 export function availableDriveState(
   state: DriveState,
-  databasesEnabled: boolean
+  databasesEnabled: boolean,
+  formsEnabled: boolean
 ): DriveState {
-  if (databasesEnabled || !state.facets.type?.includes('database'))
-    return state;
+  const masked = [
+    ...(databasesEnabled ? [] : ['database']),
+    ...(formsEnabled ? [] : ['form']),
+  ];
+  const types = state.facets.type;
+  if (!types?.some((id) => masked.includes(id))) return state;
   return {
     ...state,
     facets: {
       ...state.facets,
-      type: state.facets.type.filter((id) => id !== 'database'),
+      type: types.filter((id) => !masked.includes(id)),
     },
   };
 }

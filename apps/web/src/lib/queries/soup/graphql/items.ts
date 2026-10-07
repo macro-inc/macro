@@ -119,6 +119,12 @@ const itemsById = (items: readonly SoupApiItem[]) =>
     items.map((item) => [mapApiSoupItemToEntity(item).id, item])
   );
 
+// A page result can carry the viewer without its `soup` field. Selection runs
+// over every loaded page, so such a page reads as unloaded instead of failing
+// the whole list.
+const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
+  page.user?.soup != null;
+
 /** Creates the live urql query for a flat Soup AST request. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
@@ -591,7 +597,8 @@ export function createGraphqlSoupAstItemsQuery(
       SoupQuery | ChannelListSoupQuery,
       string | null
     >): ServerProjection => {
-      const mappedPages = pages.map(mapGraphqlSoupPage);
+      const soupPages = pages.filter(hasSoupPage);
+      const mappedPages = soupPages.map(mapGraphqlSoupPage);
       const oldestFetchedTimestamp = soupPageTimestamp(
         mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
         sortMethod
@@ -602,7 +609,7 @@ export function createGraphqlSoupAstItemsQuery(
           showSupportedForeignEntities,
         })
       );
-      const records = pages.flatMap<GraphqlSoupItem>(
+      const records = soupPages.flatMap<GraphqlSoupItem>(
         (page) => page.user.soup.items
       );
       return {
@@ -638,7 +645,9 @@ export function createGraphqlSoupAstItemsQuery(
         return { input };
       },
       getNextPageParam: (lastPage) =>
-        lastPage.user.soup.nextCursor ?? undefined,
+        hasSoupPage(lastPage)
+          ? (lastPage.user.soup.nextCursor ?? undefined)
+          : undefined,
       enabled:
         queryOptions.enabled &&
         !queryOptions.localOnly &&

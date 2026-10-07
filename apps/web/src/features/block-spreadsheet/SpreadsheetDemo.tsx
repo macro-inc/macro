@@ -218,6 +218,7 @@ export default function SpreadsheetDemo() {
       </Dialog>
       <div class="min-h-0 min-w-0 flex-1">
         <SpreadsheetEditor
+          autoFocus={!panel.isInlinePreview}
           mentions={spreadsheetMentions}
           store={store}
           name={name()}

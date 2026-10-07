@@ -724,6 +724,12 @@
 
             mkdir -p "$out"
             dmgPath="$out/Macro-${appVersion}-${system}.dmg"
+            # Package a drag-to-install volume, including Finder's icon layout.
+            dmgRoot=$(mktemp -d "$TMPDIR/macro-dmg.XXXXXX")
+            cp -a "$appPath" "$dmgRoot/Macro.app"
+            ln -s /Applications "$dmgRoot/Applications"
+            ${pkgs.python3.withPackages (ps: [ ps.ds-store ])}/bin/python \
+              ${./dmg-layout.py} "$dmgRoot"
             # hdiutil's automatic APFS sizing can run out of space while copying
             # the app. Budget logical bytes (including sparse files), then leave
             # 25% plus 64 MiB for filesystem metadata and temporary allocations.
@@ -737,7 +743,7 @@
               -fs APFS \
               -size "$dmgSizeMiB"m \
               -volname "Macro" \
-              -srcfolder "$appPath" \
+              -srcfolder "$dmgRoot" \
               -ov \
               -format UDZO \
               "$dmgPath"

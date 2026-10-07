@@ -47,6 +47,7 @@ const MODE_PAGE_FILL = 20;
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
   senderBucket: undefined,
 };
 

@@ -806,6 +806,68 @@ impl CalendarOccurrenceCursor {
     }
 }
 
+/// What an exception replaces on one listed occurrence of a series. A field
+/// left `None` inherits the series value.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OccurrenceException {
+    /// Replacement title.
+    pub title: Option<String>,
+    /// Replacement description.
+    pub description: Option<String>,
+    /// Replacement location.
+    pub location: Option<String>,
+    /// Replacement status.
+    pub status: Option<EventStatus>,
+    /// Instance-scoped attendee list replacing the series list for this
+    /// occurrence alone.
+    pub attendees: Option<Vec<CalendarAttendee>>,
+}
+
+impl OccurrenceException {
+    /// The content this exception replaces on its occurrence.
+    pub fn content(&self) -> OccurrenceContent<'_> {
+        OccurrenceContent {
+            title: self.title.as_deref(),
+            description: self.description.as_deref(),
+            location: self.location.as_deref(),
+            status: self.status,
+        }
+    }
+}
+
+/// One occurrence of a viewport query: the series event as stored, the
+/// instance, the instance's exception, and the connected inbox the event
+/// syncs through.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OccurrenceListing {
+    /// The series event, without the occurrence's exception applied.
+    pub event: CalendarEvent,
+    /// The materialized instance.
+    pub occurrence: CalendarOccurrence,
+    /// Connected inbox whose grant backs the event (`source_link_id`).
+    pub link_id: Uuid,
+    /// The instance's exception content, empty when it has none.
+    pub exception: OccurrenceException,
+}
+
+impl OccurrenceListing {
+    /// Read the series event as this occurrence: the exception's content and
+    /// attendee list replace the series values.
+    pub fn into_occurrence_event(self) -> (CalendarEvent, CalendarOccurrence) {
+        let Self {
+            mut event,
+            occurrence,
+            exception,
+            ..
+        } = self;
+        event.apply_occurrence_content(exception.content());
+        if let Some(attendees) = exception.attendees {
+            event.attendees = attendees;
+        }
+        (event, occurrence)
+    }
+}
+
 /// One teammate's out-of-office occurrence, read from the projection their
 /// own connected primary calendar synced.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1436,13 +1498,17 @@ pub struct GoogleBackfillRunReport {
     pub events_upserted: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
+    /// Events removed or rewritten because a source they relied on was
+    /// retired: unobserved by a full snapshot, or on a calendar the account
+    /// no longer lists.
+    pub events_retired: usize,
 }
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
     /// token-only polls report nothing and skip client notifications.
     pub fn changed(&self) -> bool {
-        self.events_upserted > 0 || self.cancellations_observed > 0
+        self.events_upserted > 0 || self.cancellations_observed > 0 || self.events_retired > 0
     }
 }
 

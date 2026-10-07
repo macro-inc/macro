@@ -4,6 +4,7 @@ import CaretCircleDown from '@phosphor/caret-circle-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import ChartBar from '@phosphor/chart-bar.svg';
 import Clipboard from '@phosphor/clipboard-text.svg';
+import Crosshair from '@phosphor/crosshair.svg';
 import Download from '@phosphor/download-simple.svg';
 import Eraser from '@phosphor/eraser.svg';
 import Eye from '@phosphor/eye.svg';
@@ -103,7 +104,11 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
     >
       <Dropdown.Group>
         <Dropdown.GroupLabel>Chart of the selected cells</Dropdown.GroupLabel>
-        <For each={CHART_TYPES.filter((type) => !('more' in type))}>
+        <For
+          each={CHART_TYPES.filter(
+            (type) => !('more' in type) && !('catalog' in type)
+          )}
+        >
           {(type) => (
             <Dropdown.Item
               closeOnSelect
@@ -120,7 +125,11 @@ export function InsertMenu(props: SpreadsheetToolbarProps) {
           </Dropdown.SubTrigger>
           <Dropdown.SubContent>
             <Dropdown.Group>
-              <For each={CHART_TYPES.filter((type) => 'more' in type)}>
+              <For
+                each={CHART_TYPES.filter(
+                  (type) => 'more' in type && !('catalog' in type)
+                )}
+              >
                 {(type) => (
                   <Dropdown.Item
                     closeOnSelect
@@ -226,6 +235,14 @@ export function DataFormatMenu(props: SpreadsheetToolbarProps) {
         >
           <CaretCircleDown class="size-4" />
           Dropdown…
+        </Dropdown.Item>
+        <Dropdown.Item
+          closeOnSelect
+          disabled={props.readonly}
+          onSelect={() => props.onCommand('goal-seek')}
+        >
+          <Crosshair class="size-4" />
+          Goal Seek…
         </Dropdown.Item>
       </Dropdown.Group>
       <Dropdown.Group>

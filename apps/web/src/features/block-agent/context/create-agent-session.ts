@@ -241,7 +241,7 @@ export function createAgentSession(
       setMetadata(snapshot.metadata);
       replace(snapshot.messages);
     });
-    session.rendered(kind);
+    session.rendered(kind, snapshot.messages);
   };
 
   /** The fetched session, shown, with a rename that landed meanwhile kept. */

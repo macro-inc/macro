@@ -48,8 +48,14 @@ import type {
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
+import { CombinedError } from '@urql/core';
 import { v7 as uuidv7 } from 'uuid';
-import { SessionLoadTrace, traceAcquire } from './load-telemetry';
+import {
+  type LoadFailure,
+  SessionLoadTrace,
+  traceAcquire,
+  transcriptSize,
+} from './load-telemetry';
 import { frameDelivery, PromptTrace } from './prompt-telemetry';
 import { publishSessionTurn } from './session-turn';
 
@@ -96,6 +102,15 @@ export class AgentSessionAccessDenied extends Error {
 const inaccessible = (error: unknown) =>
   error instanceof AgentSessionLogUnavailable &&
   error.reason === 'inaccessible';
+
+/** Why the log query failed, for the load span. */
+function logFailure(error: unknown): LoadFailure {
+  const cause = error instanceof Error ? error.cause : undefined;
+  if (cause instanceof CombinedError) {
+    return cause.networkError ? 'log_network' : 'log_graphql';
+  }
+  return cause === undefined ? 'log_fetch' : 'log_unreadable';
+}
 
 const accessDenied = (errors: { code: string }[]) =>
   errors.some(
@@ -524,7 +539,8 @@ export class AgentSession {
       this.watch.cached.then((cached) => {
         this.trace.cacheRead(
           readStartedAt,
-          cached && { rows: cached.rows.length }
+          cached && { rows: cached.rows.length },
+          this.watch.cacheMiss()
         );
         return cached;
       }),
@@ -546,8 +562,11 @@ export class AgentSession {
   }
 
   /** A surface put this session's transcript on screen. */
-  rendered(kind: 'cached' | 'fetched'): void {
-    this.trace.rendered(kind);
+  rendered(
+    kind: 'cached' | 'fetched',
+    messages: SessionFoldSnapshot['messages']
+  ): void {
+    this.trace.rendered(kind, transcriptSize(messages));
   }
 
   private startLoad(): Promise<AgentSessionRecord> {
@@ -585,15 +604,19 @@ export class AgentSession {
     if (session.isErr()) {
       if (accessDenied(session.error)) {
         this.forgetCached();
+        this.trace.failing('access_denied');
         throw new AgentSessionAccessDenied(this.id);
       }
+      this.trace.failing('session_fetch');
       throw new Error(`agent session could not be fetched: ${this.id}`);
     }
     if (!log.ok) {
       if (inaccessible(log.error)) {
         this.forgetCached();
+        this.trace.failing('access_denied');
         throw new AgentSessionAccessDenied(this.id);
       }
+      this.trace.failing(logFailure(log.error));
       throw new Error(`agent session log could not be fetched: ${this.id}`, {
         cause: log.error,
       });
@@ -602,12 +625,17 @@ export class AgentSession {
 
     const foldStartedAt = performance.now();
     this.settled = true;
-    await this.apply([{ kind: 'snapshot', rows: log.log.rows }]);
-    // Inputs can keep arriving while each push is in flight; drain until a
-    // check finds nothing, then flip ready so the next one goes straight in.
-    await this.drainBuffered();
-    this.trace.folded(foldStartedAt);
-    this.setTurn((await readSession(this.id)).metadata.turn);
+    try {
+      await this.apply([{ kind: 'snapshot', rows: log.log.rows }]);
+      // Inputs can keep arriving while each push is in flight; drain until a
+      // check finds nothing, then flip ready so the next one goes straight in.
+      await this.drainBuffered();
+      this.trace.folded(foldStartedAt);
+      this.setTurn((await readSession(this.id)).metadata.turn);
+    } catch (error) {
+      this.trace.failing('fold');
+      throw error;
+    }
     if (this.resyncRequested) void this.resync();
     return { session: session.value, bot: log.log.bot };
   }

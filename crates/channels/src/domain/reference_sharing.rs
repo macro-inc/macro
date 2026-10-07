@@ -13,6 +13,9 @@ use model_file_type::FileType;
 ///
 /// A PDF grants comment access so channel members can annotate it, capped at
 /// the sharer's own access. `file_type` is the referenced document's file type.
+///
+/// Posting a form lets the channel respond to it: anyone who can see the form
+/// grants View, whatever their own level. Edit is never granted by posting.
 #[cfg_attr(
     not(feature = "outbound"),
     allow(dead_code, reason = "only the outbound share adapter grants access")
@@ -29,6 +32,7 @@ pub(crate) fn grant_level(
         (ReferencedShareItemType::CalendarEvent, Some(level)) if level >= AccessLevel::Edit => {
             Some(AccessLevel::View)
         }
+        (ReferencedShareItemType::Form, Some(_)) => Some(AccessLevel::View),
         (ReferencedShareItemType::AgentSession | ReferencedShareItemType::CalendarEvent, _)
         | (_, None) => None,
         (ReferencedShareItemType::Document, Some(level)) if file_type == Some(FileType::Pdf) => {

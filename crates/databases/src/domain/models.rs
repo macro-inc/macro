@@ -64,6 +64,28 @@ pub struct Table {
     pub version: TableVersion,
 }
 
+/// A schema operation reserved by a feature using a column.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+    strum::Display,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ColumnProtection {
+    /// The column must remain present.
+    Delete,
+    /// The column's type and binding must remain stable.
+    ChangeType,
+}
+
 /// A column: the placement of a property definition on a table.
 ///
 /// The definition carries name, [`DataType`], multi-select flag, and options;
@@ -94,6 +116,30 @@ pub struct Column {
     #[serde(default)]
     #[schema(required = true)]
     pub infer_type: bool,
+    /// Schema operations reserved by a feature; ordinary edits cannot clear them.
+    #[serde(default)]
+    pub protections: Vec<ColumnProtection>,
+    /// Whether a row may omit this cell; empty collections also count as absent.
+    #[serde(default = "column_nullable_default")]
+    pub nullable: bool,
+}
+
+/// Whether a stored cell satisfies a required column. Empty collections represent
+/// no selection; scalar values, including empty text, zero and false, are present.
+pub(crate) fn cell_has_value(value: &PropertyValue) -> bool {
+    match value {
+        PropertyValue::SelectOption(values) => !values.is_empty(),
+        PropertyValue::EntityRef(values) => !values.is_empty(),
+        PropertyValue::Link(values) => !values.is_empty(),
+        PropertyValue::Bool(_)
+        | PropertyValue::Num(_)
+        | PropertyValue::Str(_)
+        | PropertyValue::Date(_) => true,
+    }
+}
+
+pub(crate) fn column_nullable_default() -> bool {
+    true
 }
 
 impl Column {
@@ -603,6 +649,15 @@ impl Writes {
 /// What applying [`Writes`] did. Anything but `Applied` wrote nothing.
 #[derive(Debug, Clone, PartialEq)]
 pub enum WritesOutcome {
+    /// The final batch would leave a required cell empty; nothing committed.
+    MissingRequiredCell {
+        /// The write that affected the row or its schema.
+        write: usize,
+        /// The required column.
+        column: ColumnId,
+        /// The row missing its value.
+        row: RowId,
+    },
     /// A row the undo would remove has a surviving incoming relation.
     RowInUse,
     /// An option the batch must leave unused is selected by an entity.
@@ -654,6 +709,13 @@ pub enum WritesOutcome {
     MissingColumn {
         /// The write's index.
         write: usize,
+    },
+    /// A column became protected before the batch committed.
+    ColumnProtected {
+        /// The write's index.
+        write: usize,
+        /// The reserved operation.
+        capability: ColumnProtection,
     },
     /// A write relabeled a column that was relabeled meanwhile.
     ColumnRenamedElsewhere {
@@ -716,7 +778,8 @@ pub struct CommittedChange {
 
 /// What a committed batch answers: a result per op, and the journal's change
 /// for each table version it produced.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct AppliedOps {
     /// One result per op, in order.
     pub results: Vec<models_databases::OpResult>,
@@ -725,12 +788,15 @@ pub struct AppliedOps {
 }
 
 /// A batch of ops for one database and the versions its tables must be at.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct OpBatch {
     /// The ops, in the order they apply.
     pub ops: Vec<DatabaseOp>,
     /// The version each named table must still be at; the batch is refused
     /// as a conflict if one moved. Without one, ops are last-write-wins.
+    #[serde(default)]
+    #[schema(value_type = HashMap<String, TableVersion>)]
     pub base_versions: HashMap<TableId, TableVersion>,
 }
 

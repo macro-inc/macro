@@ -10,7 +10,7 @@ use crate::domain::models::{
     MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
     ViewAccessLevel, ViewOnly,
 };
-use crate::domain::ports::ScheduledActionGrants;
+use crate::domain::ports::{AccessibleForms, ScheduledActionGrants};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
@@ -35,10 +35,16 @@ struct MockRepo {
     scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
     accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
+    pipeline_access: Arc<Mutex<Option<AccessLevel>>>,
+    pipeline_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_access: Arc<Mutex<Option<AccessLevel>>>,
     database_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_row_access: Arc<Mutex<Option<AccessLevel>>>,
     database_row_access_calls: Arc<AtomicUsize>,
+    form_access: Arc<Mutex<Option<AccessLevel>>>,
+    form_access_callers: Arc<Mutex<Vec<Option<String>>>>,
+    form_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    form_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -84,10 +90,16 @@ impl MockRepo {
             scheduled_action_access: Arc::new(Mutex::new(None)),
             accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
             agent_session_parent: Arc::default(),
+            pipeline_access: Arc::default(),
+            pipeline_access_list: Arc::default(),
             database_access: Arc::new(Mutex::new(None)),
             database_access_list: Arc::new(Mutex::new(Vec::new())),
             database_row_access: Arc::new(Mutex::new(None)),
             database_row_access_calls: Arc::default(),
+            form_access: Arc::default(),
+            form_access_callers: Arc::default(),
+            form_users: Arc::default(),
+            form_access_list: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_agent_session_access: Arc::default(),
@@ -166,6 +178,21 @@ impl MockRepo {
 
     fn with_database_access_list(mut self, levels: Vec<(Uuid, AccessLevel)>) -> Self {
         self.database_access_list = Arc::new(Mutex::new(levels));
+        self
+    }
+
+    fn with_form_access(mut self, level: AccessLevel) -> Self {
+        self.form_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_form_access_list(mut self, levels: Vec<(Uuid, AccessLevel)>) -> Self {
+        self.form_access_list = Arc::new(Mutex::new(levels));
+        self
+    }
+
+    fn with_form_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.form_users = Arc::new(Mutex::new(users));
         self
     }
 
@@ -389,6 +416,20 @@ impl AccessRepository for MockRepo {
         Ok(*self.initiative_access.lock().await)
     }
 
+    async fn get_pipeline_access(
+        &self,
+        _id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.pipeline_access.lock().await)
+    }
+    async fn list_pipeline_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.pipeline_access_list.lock().await.clone())
+    }
+
     async fn get_database_access(
         &self,
         _database_id: &str,
@@ -402,6 +443,25 @@ impl AccessRepository for MockRepo {
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
         Ok(self.database_access_list.lock().await.clone())
+    }
+
+    async fn get_form_access(
+        &self,
+        _form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.form_access_callers
+            .lock()
+            .await
+            .push(user_id.map(|user_id| user_id.as_ref().to_string()));
+        Ok(*self.form_access.lock().await)
+    }
+
+    async fn list_form_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.form_access_list.lock().await.clone())
     }
 
     async fn get_database_row_access(
@@ -556,6 +616,7 @@ impl AccessRepository for MockRepo {
             EntityType::Call => panic!("standalone calls must use direct grants"),
             EntityType::Initiative => Ok(vec![]),
             EntityType::Database => Ok(self.database_users.lock().await.clone()),
+            EntityType::Form => Ok(self.form_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
     }
@@ -2723,4 +2784,181 @@ async fn database_row_receipts_deny_rows_without_a_grant() {
         receipts["0198a805-3e22-75b2-97eb-d9c6b91accb1"],
         Err(AccessError::Unauthorized)
     ));
+}
+
+const FORM_ID: &str = "0199b1f2-3e22-75b2-97eb-d9c6b91accb0";
+
+#[tokio::test]
+async fn a_form_permission_is_the_repository_form_access() {
+    let repo = MockRepo::new().with_form_access(AccessLevel::Edit);
+    let callers = repo.form_access_callers.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(Some(&user_id), FORM_ID, EntityType::Form, None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(
+        *callers.lock().await,
+        vec![Some(user_id.as_ref().to_string())]
+    );
+}
+
+#[tokio::test]
+async fn a_form_without_access_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(Some(&user_id), FORM_ID, EntityType::Form, None)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn public_form_access_asks_the_repository_without_a_user() {
+    let repo = MockRepo::new().with_form_access(AccessLevel::View);
+    let callers = repo.form_access_callers.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    assert_eq!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::View)
+            .await
+            .unwrap(),
+        AccessLevel::View
+    );
+    assert!(matches!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::Edit)
+            .await,
+        Err(AccessError::Unauthorized)
+    ));
+    assert_eq!(*callers.lock().await, vec![None, None]);
+}
+
+#[tokio::test]
+async fn a_members_form_has_no_public_access() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+
+    assert!(matches!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::View)
+            .await,
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[tokio::test]
+async fn a_form_audience_is_its_entity_access_users() {
+    let respondent = MacroUserIdStr::try_from_email("respondent@example.com")
+        .unwrap()
+        .into_owned();
+    let service =
+        EntityAccessServiceImpl::new(MockRepo::new().with_form_users(vec![respondent.clone()]));
+
+    assert_eq!(
+        service
+            .get_users_by_entity(FORM_ID, EntityType::Form)
+            .await
+            .unwrap(),
+        vec![respondent]
+    );
+}
+
+#[tokio::test]
+async fn a_team_bot_reaches_a_form_through_the_team_access_pool() {
+    let repo = MockRepo::new().with_team_entity_access(AccessLevel::Edit);
+    let requests = repo.team_entity_requests.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<EditAccessLevel>(
+            BotId::new_from_uuid(Uuid::from_u128(1)),
+            BotAccessScope::Team {
+                team_id: Uuid::from_u128(2),
+            },
+            FORM_ID,
+            EntityType::Form,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(
+        *requests.lock().await,
+        vec![(FORM_ID.to_string(), EntityType::Form)]
+    );
+}
+
+#[tokio::test]
+async fn accessible_forms_are_the_repository_listing() {
+    let shared = Uuid::parse_str("0199b1f2-3e22-75b2-97eb-d9c6b91accb1").unwrap();
+    let owned = Uuid::parse_str("0199b1f2-3e22-75b2-97eb-d9c6b91accb2").unwrap();
+    let repo = MockRepo::new().with_form_access_list(vec![
+        (shared, AccessLevel::View),
+        (owned, AccessLevel::Owner),
+    ]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    assert_eq!(
+        service.accessible_forms(&test_user_id()).await.unwrap(),
+        vec![(shared, AccessLevel::View), (owned, AccessLevel::Owner)]
+    );
+}
+
+#[tokio::test]
+async fn pipeline_receipts_use_their_own_grants() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    let user = MacroUserIdStr::try_from_email("pipeline@macro.com").unwrap();
+    let id = Uuid::now_v7().to_string();
+    assert!(
+        service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
+    );
+    *repo.pipeline_access.lock().await = Some(AccessLevel::Edit);
+    assert!(
+        service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_ok()
+    );
+    assert!(
+        service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
+    );
 }

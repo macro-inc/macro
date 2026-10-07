@@ -40,6 +40,7 @@ use turso_opfs::{OpenResult, OpfsError, OpfsErrorKind, OpfsOwner};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
+mod calendar;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -1674,6 +1675,7 @@ impl CacheEngine {
         now_ms: f64,
         lease_expires_at_ms: f64,
         client_metadata: JsValue,
+        uncertain_calendar_event_keys: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1688,6 +1690,8 @@ impl CacheEngine {
             let revalidations: Vec<QueryRevalidation> = parse_vec(revalidations)?;
             let identity_bindings: Vec<cache_core::identity::IdentityBinding> =
                 parse_vec(identity_bindings)?;
+            let uncertain_calendar_event_keys: Vec<EntityKey<'static>> =
+                parse_vec(uncertain_calendar_event_keys)?;
             let created_at_ms = parse_timestamp(created_at_ms, "enqueue timestamp")?;
             let mut projection_mutations = optimistic_projection_mutations(&data, created_at_ms);
             projection_mutations.extend(
@@ -1747,7 +1751,7 @@ impl CacheEngine {
             let origin = origin_op_id.map(|name| ops.borrow_mut().intern(&name));
             let result = state
                 .engine_mut()?
-                .enqueue_optimistic_mutation_with_projections(
+                .enqueue_optimistic_mutation_with_calendar(
                     origin,
                     BeginOptimisticWrite {
                         client_metadata: client_metadata.as_ref(),
@@ -1763,6 +1767,7 @@ impl CacheEngine {
                     },
                     claim,
                     projection_mutations,
+                    uncertain_calendar_event_keys,
                 )
                 .await;
             let result = state.engine_result(result)?;

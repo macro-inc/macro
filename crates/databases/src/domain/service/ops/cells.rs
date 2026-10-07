@@ -9,14 +9,14 @@ use models_properties::shared::{DataType, EntityReference};
 use super::super::column_types::is_complete_url;
 use super::super::{option_label_key, takes_options};
 use super::{Place, Planner, RelatedRow};
-use crate::domain::catalog::{self, ColumnEntry, TableEntry, entity_type};
+use crate::domain::catalog::{self, ColumnEntry, StorageTable, entity_type};
 use crate::domain::models::{CellChanges, ColumnConfig, DatabaseError};
 
 impl Planner {
     /// One row's cells as stored values; `None` empties a cell.
     pub(super) fn cells(
         &mut self,
-        entry: &TableEntry,
+        entry: &StorageTable,
         op: usize,
         row: Option<usize>,
         cells: &[CellWrite],
@@ -40,6 +40,13 @@ impl Planner {
                 .find(|column| column.column.id == cell.column)
                 .ok_or_else(|| place.refuse("no such column in this table"))?;
             let value = self.value(place, column, &cell.value)?;
+            if !column.column.nullable
+                && !value
+                    .as_ref()
+                    .is_some_and(crate::domain::models::cell_has_value)
+            {
+                return Err(place.refuse(format!("\"{}\" requires a value", column.name())));
+            }
             stored.push((column.definition.definition.id, value));
         }
         Ok(stored)

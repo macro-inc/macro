@@ -32,9 +32,11 @@ function notificationEntityTypeToSoupTag(
         'static_file',
         'crm_company',
         'crm_contact',
+        'crm_pipeline',
         'skill',
         'database',
         'database_row',
+        'form',
         'scheduled_action',
         'initiative'
       ),

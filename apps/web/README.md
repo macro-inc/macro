@@ -8,11 +8,15 @@ The production application is compiled down to a static javascript bundle using 
 
 ## Production analytics configuration
 
-For local production builds, set `VITE_POSTHOG_API_KEY` in the ignored
-`apps/web/.env.production.local`. Vite loads this file automatically; use the
-existing build commands. The shared value is stored in Doppler `web-release/prd`.
-CI continues to inject the GitHub `POSTHOG_API_KEY` secret. Keep the value out of
-tracked env files.
+`just ios-build` uses an existing `VITE_POSTHOG_API_KEY` environment variable or
+fetches it from Doppler `web-release/prd` and exports it for the build. Install
+the Doppler CLI and authenticate with read access to that config. The build
+fails if the key cannot be fetched or is empty; no env file is created.
+
+For other local production builds, set `VITE_POSTHOG_API_KEY` in the environment
+or the ignored `apps/web/.env.production.local`. Vite loads this file
+automatically. CI continues to inject the GitHub `POSTHOG_API_KEY` secret. Keep
+the value out of tracked env files.
 
 ### Toolchain Management
 

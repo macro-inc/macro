@@ -9,6 +9,7 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
+import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import { DebouncedNotificationReadMarker } from '@notifications';
 import {
   type GithubPullRequestWithDetails,
@@ -343,6 +344,12 @@ function PrMetadata(props: {
           </Show>
         </Layer>
       </Show>
+      <Layer depth={2}>
+        <PrAgentSessionsChip
+          url={props.pullRequest?.url ?? prHtmlUrl(props.prRef)}
+          class="border-edge-muted bg-surface px-2 text-sm font-normal"
+        />
+      </Layer>
       <GithubLabelPills
         labels={props.pullRequest?.labels ?? []}
         class="contents"

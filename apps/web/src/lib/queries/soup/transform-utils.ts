@@ -912,6 +912,8 @@ export const mapApiSoupItemToEntity = (
         authorLogin?: string | null;
         authorId?: number | null;
         labels?: GithubPullRequestLabel[] | null;
+        description?: string | null;
+        head?: { name?: string | null } | null;
       };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
@@ -947,6 +949,8 @@ export const mapApiSoupItemToEntity = (
           labels: metadata.labels ?? [],
           authorLogin: metadata.authorLogin ?? undefined,
           authorId: metadata.authorId ?? undefined,
+          description: metadata.description ?? undefined,
+          headBranch: metadata.head?.name ?? undefined,
         },
       };
 

@@ -429,7 +429,7 @@ fn every_eager_tool_exists() {
 }
 
 #[test]
-fn booking_link_mutations_only_defer_on_hosts_that_finish_reviews() {
+fn booking_link_mutations_execute_without_a_review_on_every_host() {
     for host in [
         AiHost::Chat,
         AiHost::AgentSession,
@@ -440,10 +440,9 @@ fn booking_link_mutations_only_defer_on_hosts_that_finish_reviews() {
         assert!(tools.tools.contains_key("ListBookingLinks"));
         for name in ["CreateBookingLink", "EditBookingLink"] {
             assert!(tools.tools.contains_key(name));
-            assert_eq!(
-                tools.user_tools.contains_key(name),
-                matches!(host, AiHost::Chat | AiHost::AgentSession)
-            );
+            assert!(!tools.user_tools.contains_key(name));
         }
     }
 }
+
+mod booking_links;

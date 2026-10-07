@@ -2,7 +2,13 @@ use std::collections::HashSet;
 
 use sqlx::{Pool, Postgres};
 
+#[cfg(test)]
+mod test;
+
 /// Creates a new user in the database and attaches provided roles
+///
+/// `macro_user_customer_id` supplies the required legacy account key. Only an
+/// actual Stripe customer belongs in the optional profile billing field.
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 #[tracing::instrument(skip(db))]
 pub async fn create_user(
@@ -11,7 +17,8 @@ pub async fn create_user(
     username: &str,
     email: &str,
     is_verified: bool,
-    stripe_customer_id: &str,
+    macro_user_customer_id: &str,
+    stripe_customer_id: Option<&str>,
     organization_id: Option<i32>,
     roles: HashSet<String>,
 ) -> anyhow::Result<String> {
@@ -28,7 +35,7 @@ pub async fn create_user(
         "#,
         &id,
         username,
-        stripe_customer_id,
+        macro_user_customer_id,
         email,
         false // has_trialed
     )

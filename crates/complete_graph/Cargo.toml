@@ -25,6 +25,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
+graphql_calendar = { path = "../graphql_calendar" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
 graphql_email = { path = "../graphql_email" }
@@ -58,6 +59,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
+calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }

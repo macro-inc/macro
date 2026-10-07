@@ -124,6 +124,7 @@ export function WideLayout(props: LayoutProps) {
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
+        {props.titleLeading}
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
@@ -183,6 +184,7 @@ export function WideLayout(props: LayoutProps) {
         </Switch>
       </Entity.Slot>
       <Entity.Slot placement="meta" class="flex items-center gap-2">
+        {props.meta}
         <Show when={isProjectEntity(props.entity) && props.entity}>
           {(entity) => (
             <RowTags

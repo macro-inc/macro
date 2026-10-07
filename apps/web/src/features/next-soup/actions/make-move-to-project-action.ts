@@ -8,6 +8,7 @@ export const makeMoveToProjectAction = () => {
   const canExecute = (entity: EntityData): boolean => {
     return (
       entity.type !== 'database' &&
+      entity.type !== 'form' &&
       entity.type !== 'agent_session' &&
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&

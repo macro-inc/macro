@@ -318,15 +318,6 @@ export type AgentSessionAuthor = 'user' | 'agent';
  */
 export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
 /**
- * User tools are pending until a user executes them
- */
-export type UserToolResponseForBookingLinkResult =
-  | 'PendingUserExecution'
-  | 'Rejected'
-  | {
-      UserAction: BookingLinkResult;
-    };
-/**
  * The mutually exclusive time shape supplied to calendar tools.
  */
 export type EventTimeInput =
@@ -3214,6 +3205,9 @@ export type ToolActivityAction =
       type: 'sent';
     }
   | {
+      type: 'responded';
+    }
+  | {
       /**
        * The property definition id.
        */
@@ -5226,14 +5220,19 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
- * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. In chat and agent sessions this presents an editable review card: use it directly without an extra prose confirmation. Cancellation changes nothing. Headless clients apply their own confirmation policy before execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+ * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. Return the saved URL after execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
  */
 export interface CreateBookingLink {
   /**
-   * Existing Macro team ID, or null for a personal booking link.
+   * Existing Macro team ID discovered through tools, never requested from the user. Use null for a personal booking link.
    */
   teamId?: string | null;
   draft: BookingLinkDraft;
+  /**
+   * The user's reply approving the specific proposal you already showed them, quoted verbatim.
+   * Never use their original request, paraphrase their reply, or invent approval.
+   */
+  userConfirmation: string;
 }
 /**
  * Complete proposal reviewed and validated before saving.
@@ -6447,11 +6446,11 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and present a fresh review instead of overwriting concurrent edits. In chat and agent sessions this presents an editable review card: use it directly without an extra prose confirmation. Cancellation changes nothing. Headless clients apply their own confirmation policy before execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
+ * Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and confirm the updated proposal in conversation instead of overwriting concurrent edits. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. Return the saved URL after execution. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar.
  */
 export interface EditBookingLink {
   /**
-   * Existing Macro team ID, or null for a personal booking link.
+   * Existing Macro team ID discovered through tools, never requested from the user. Use null for a personal booking link.
    */
   teamId?: string | null;
   /**
@@ -6463,6 +6462,11 @@ export interface EditBookingLink {
    */
   expectedRevision: number;
   draft: BookingLinkDraft;
+  /**
+   * The user's reply approving the specific proposal you already showed them, quoted verbatim.
+   * Never use their original request, paraphrase their reply, or invent approval.
+   */
+  userConfirmation: string;
 }
 /**
  * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName.

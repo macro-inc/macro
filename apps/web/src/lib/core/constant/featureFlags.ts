@@ -98,6 +98,12 @@ export const enableCanvasNext = defineFlag({
   default: LOCAL_ONLY ? false : undefined,
 });
 
+/** Opt into the carousel create menu; otherwise use the detailed launcher. */
+export const enableCarouselCreateMenu = defineFlag({
+  key: 'enable-carousel-create-menu',
+  env: 'ENABLE_CAROUSEL_CREATE_MENU',
+});
+
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
  * or `false` if flags have not loaded or the key is unknown.
@@ -116,6 +122,19 @@ export function isFeatureEnabled(flag: Flag): boolean {
 export const enableDatabases = defineFlag({
   key: 'enable-databases',
   env: 'ENABLE_DATABASES',
+  default: LOCAL_ONLY || undefined,
+});
+
+/**
+ * Macro Forms (`block-form`): questionnaires whose answers land as rows of a
+ * database table. On under local HMR, like databases; deployed environments
+ * follow PostHog. The flag gates authoring (create entries, builder, `/poll`,
+ * `/form`, database controls); responding, form cards and mentions follow the
+ * service's access whatever it says.
+ */
+export const enableForms = defineFlag({
+  key: 'enable-forms',
+  env: 'ENABLE_FORMS',
   default: LOCAL_ONLY || undefined,
 });
 
@@ -547,6 +566,13 @@ export const enableGraphqlSoup = defineFlag({
   env: 'ENABLE_GRAPHQL_SOUP',
 });
 
+/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+export const enableGraphqlCalendar = defineFlag({
+  key: 'enable-graphql-calendar',
+  env: 'ENABLE_GRAPHQL_CALENDAR',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Independent emergency stop. Any true env/PostHog source wins. */
 export const disableBrowserTursoCache = defineFlag({
   key: 'disable-browser-turso-cache',
@@ -719,6 +745,15 @@ export const enableCursorAgents = defineFlag({
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
+});
+
+// Yes/no conditions on routine event triggers, checked by the Jev classifier
+// before a run starts. The scheduled-action service rejects conditions until
+// its TYPESAFE_API_KEY is set. Override with VITE_ENABLE_ROUTINE_CONDITIONS.
+export const enableRoutineConditions = defineFlag({
+  key: 'enable-routine-conditions',
+  env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
 });
 
 // The Recent view: the touched-by-me feed (everything the viewer mutated,

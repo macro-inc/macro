@@ -28,6 +28,7 @@ env:
     - rust-toolchain.toml
 jobs:
   deploy:
+    if: '!contains(github.event.pull_request.title, ''[no preview]'')'
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     permissions:
       contents: read
