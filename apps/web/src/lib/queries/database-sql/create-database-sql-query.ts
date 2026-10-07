@@ -19,6 +19,10 @@ import type {
   Outcome,
   Schema,
 } from '@core/database-sql/generated/types';
+import {
+  profileDatabasePhase,
+  traceDatabaseFrame,
+} from '@core/database-sql/profile';
 import type {
   DatabaseSqlReadContext,
   DatabaseSqlReadReason,
@@ -26,6 +30,7 @@ import type {
 import { buildDatabaseSqlCatalog } from '@core/database-sql/wasm-module';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { contactsQueryOptions } from '@queries/contacts/contacts';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
@@ -165,6 +170,7 @@ export function createDatabaseSqlQuery(
   const [error, setError] = createSignal<DatabaseSqlFailure>();
   const [loading, setLoading] = createSignal(false);
   let latest = 0;
+  let cancelFrame: (() => void) | undefined;
   // The cache may not hold what an in-flight network read will bring, so a
   // cache change waits for it instead of answering from older rows.
   let networkRead: ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> | undefined;
@@ -180,39 +186,76 @@ export function createDatabaseSqlQuery(
     options: { reportFailure?: boolean; keepLoading?: boolean } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
+    const querySpan = Telemetry.span('database_sql.query');
+    querySpan.setAttr('database_sql.read_reason', reason);
+    querySpan.setAttr('database_sql.request_policy', requestPolicy);
+    if (current.scope)
+      querySpan.setAttr('database_sql.scope_id', current.scope);
+    if (current.view)
+      querySpan.setAttr('database_sql.table_id', current.view.tableId);
+    const catalogSpan = querySpan.span('database_sql.catalog');
     const host = capabilities.cacheHost();
     setLoading(true);
-    const answered = statementCatalog(current, capabilities)
+    const answered = catalogSpan
+      .run(() => statementCatalog(current, capabilities))
+      .andTee(() => catalogSpan.end())
+      .orTee(() => catalogSpan.end())
       .andThen((built) =>
-        runStatement(
-          built,
-          current,
-          createGraphqlRowSource({
-            client: capabilities.client(),
-            catalog: built,
-            requestPolicy,
-            people: capabilities.people,
-            membership: host ? { host, baselines, reconcile } : undefined,
-          }),
-          capabilities,
-          {
-            reason,
-            scope: current.scope,
-            requestPolicy,
-            reportFailure: options.reportFailure,
-          }
-        ).map((answer): DatabaseSqlRun => {
-          if (generation !== latest) return { landed: false };
-          // A cache change that left the answer alone keeps the same outcome.
-          batch(() => {
-            if (JSON.stringify(untrack(catalog)) !== JSON.stringify(built))
-              setCatalog(built);
-            if (JSON.stringify(untrack(outcome)) !== JSON.stringify(answer))
-              setOutcome(answer);
-            setError(undefined);
-          });
-          return { landed: true };
-        })
+        querySpan
+          .run(() =>
+            runStatement(
+              built,
+              current,
+              createGraphqlRowSource({
+                client: capabilities.client(),
+                catalog: built,
+                requestPolicy,
+                people: capabilities.people,
+                membership: host ? { host, baselines, reconcile } : undefined,
+              }),
+              capabilities,
+              {
+                reason,
+                scope: current.scope,
+                requestPolicy,
+                reportFailure: options.reportFailure,
+              }
+            )
+          )
+          .map((answer): DatabaseSqlRun => {
+            if (generation !== latest) return { landed: false };
+            // A cache change that left the answer alone keeps the same outcome.
+            querySpan.setAttr('database_sql.row_count', answer.rows.length);
+            querySpan.setAttr('database_sql.truncated', answer.truncated);
+            const changed = profileDatabasePhase(
+              querySpan.span('database_sql.compare'),
+              () => ({
+                catalog:
+                  JSON.stringify(untrack(catalog)) !== JSON.stringify(built),
+                outcome:
+                  JSON.stringify(untrack(outcome)) !== JSON.stringify(answer),
+              })
+            );
+            querySpan.setAttr(
+              'database_sql.result_changed',
+              changed.catalog || changed.outcome
+            );
+            const publishSpan = querySpan.span('database_sql.publish');
+            profileDatabasePhase(publishSpan, () =>
+              batch(() => {
+                if (changed.catalog) setCatalog(built);
+                if (changed.outcome) setOutcome(answer);
+                setError(undefined);
+              })
+            );
+            if (changed.catalog || changed.outcome) {
+              cancelFrame?.();
+              cancelFrame = traceDatabaseFrame(
+                querySpan.span('database_sql.frame')
+              );
+            }
+            return { landed: true };
+          })
       )
       .orElse((failure) => {
         if (generation !== latest) return okAsync({ landed: false });
@@ -220,9 +263,21 @@ export function createDatabaseSqlQuery(
         return errAsync(failure);
       });
     const settle = async () => {
-      const result = await answered;
-      if (generation === latest && !options.keepLoading) setLoading(false);
-      return result;
+      try {
+        const result = await answered;
+        if (generation === latest && !options.keepLoading) setLoading(false);
+        querySpan.setAttr(
+          'database_sql.outcome',
+          result.isErr()
+            ? 'error'
+            : result.value.landed
+              ? 'published'
+              : 'superseded'
+        );
+        return result;
+      } finally {
+        querySpan.end();
+      }
     };
     return new ResultAsync(settle());
   };
@@ -263,6 +318,7 @@ export function createDatabaseSqlQuery(
 
   createEffect(
     on(statement, (current, previous) => {
+      cancelFrame?.();
       baselines = new Map();
       latest += 1;
       setError(undefined);
@@ -301,6 +357,7 @@ export function createDatabaseSqlQuery(
   });
 
   onCleanup(() => {
+    cancelFrame?.();
     latest += 1;
   });
 
