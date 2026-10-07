@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use shared_entity_registry::OwnedPurgeOutcome;
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -133,6 +134,13 @@ impl AgentSessionNotificationRecipient for Controls {
         panic!("not a routine capability")
     }
     async fn session_deleted(&self, _: AgentSessionId) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
+    async fn purge_owned_session(
+        &self,
+        _: AgentSessionId,
+        _: &Owner,
+    ) -> SessionResult<OwnedPurgeOutcome> {
         panic!("not a routine capability")
     }
     async fn edit_queued_control(

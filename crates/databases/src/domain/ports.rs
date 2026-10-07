@@ -227,7 +227,8 @@ pub trait CellStore: Send + Sync + 'static {
     /// live and at its expected version, each new definition created before
     /// any column binds it, each updated or deleted row checked to belong to
     /// its table, each related row to its target table, each changed option
-    /// or column to its definition, and each changed table's version bumped
+    /// or column to its definition, all affected required cells checked in the final
+    /// batch state, and each changed table's version bumped
     /// once. Anything but [`WritesOutcome::Applied`] wrote nothing.
     fn apply_writes(
         &self,

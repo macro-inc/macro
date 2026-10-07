@@ -5,9 +5,9 @@ import { databasesKeys } from '@queries/storage/keys';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { PropertyOption } from '@service-storage/generated/schemas/propertyOption';
 import { err, errAsync, ok, type Result, ResultAsync } from 'neverthrow';
-import type { OptionChange } from '../context/option-editing';
-import { inferDatabaseNumber } from '../core/column-inference';
-import type { DatabaseOpFailure } from '../core/write-failure';
+import type { OptionChange } from '../../database/context/option-editing';
+import { inferDatabaseNumber } from '../../database/core/column-inference';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import { applyOp, patchDetail } from './detail-cache';
 
 type OptionTarget = {

@@ -3,10 +3,6 @@
  * `POST /databases/{id}/ops`. The forms service never proxies schema edits.
  */
 
-import {
-  columnSchemaMessage,
-  type DatabaseColumnKind,
-} from '@block-database/core/column-schema';
 import { convertDatabaseColumn } from '@block-database/queries/columns';
 import type {
   DatabaseOp,
@@ -15,6 +11,10 @@ import type {
 import { applyDatabaseOps } from '@queries/storage/databases';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ResultAsync } from 'neverthrow';
+import {
+  columnSchemaMessage,
+  type DatabaseColumnKind,
+} from '../../database/core/column-schema';
 import type {
   FormColumnWrites,
   FormWriteFailure,

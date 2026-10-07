@@ -3,6 +3,7 @@
 //! options.
 
 mod core;
+mod required;
 mod transfer;
 
 use std::collections::HashMap;
@@ -345,6 +346,13 @@ where
                 Applied::Rows(rows) => inserted.push(rows),
                 Applied::Refused(outcome) => return Ok(outcome),
             }
+        }
+
+        if let Some(missing) = self
+            .check_required_cells(&mut transaction, writes, &inserted)
+            .await?
+        {
+            return Ok(missing);
         }
 
         let mut grouped: Vec<(TableId, Vec<RowId>)> = Vec::new();

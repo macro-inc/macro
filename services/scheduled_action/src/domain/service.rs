@@ -9,9 +9,10 @@ use entity_access::domain::{
     },
     ports::ScheduledActionGrants,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::event_runs::ConfigurationRevision;
@@ -107,6 +108,16 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             }
             _ => Err(ActionPolicyError::NotFound.into()),
         }
+    }
+
+    /// Delete `action` and hand its removal to the dispatcher. The permit is
+    /// reserved first so a stopped dispatcher fails while the row still exists
+    /// for a retry to find.
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+        let permit = self.dispatcher_tx.reserve().await?;
+        self.repo.delete_action(id).await?;
+        permit.send(DispatchEvent::Delete(action));
+        Ok(())
     }
 
     fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
@@ -256,13 +267,29 @@ where
             let Some(id) = action.id else {
                 bail!("cannot delete action without id");
             };
-            // Reserve before deleting: a stopped dispatcher must not leave us
-            // reporting failure after losing the row needed to retry its event.
-            let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id).await?;
-            permit.send(DispatchEvent::Delete(action));
+            self.delete_and_dispatch(&id, action).await?;
         }
         Ok(())
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> Result<OwnedPurgeOutcome> {
+        let Some(action) = self.repo.get_action(&id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if action.owner != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        self.delete_and_dispatch(&id, action).await?;
+        Ok(OwnedPurgeOutcome::Purged)
     }
 
     async fn create_action(

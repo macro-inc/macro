@@ -1,4 +1,5 @@
 mod admission;
+mod owned_purge;
 mod user_cleanup;
 
 use super::*;
@@ -198,6 +199,28 @@ pub(crate) fn set_stored_owner(service: &TestService, id: Uuid, owner: Owner) {
         .find(|action| action.id == Some(id))
         .expect("stored action");
     action.owner = owner;
+}
+
+pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
+    let actions = service.repo.actions.lock().unwrap();
+    actions
+        .iter()
+        .find(|action| action.id == Some(id))
+        .map(|action| action.owner.clone())
+}
+
+/// The same store behind a dispatcher that has stopped.
+pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
+    let (tx, _) = tokio::sync::mpsc::channel(1);
+    Arc::new(
+        TestService::new(
+            Arc::clone(&service.repo),
+            Arc::clone(&service.executor),
+            tx,
+            Arc::clone(&service.grants),
+        )
+        .with_event_management_enabled(service.event_management_enabled),
+    )
 }
 
 pub(crate) fn grant_to(service: &TestService, user_id: &str, id: Uuid) {
