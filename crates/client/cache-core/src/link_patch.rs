@@ -795,6 +795,10 @@ fn resolve_target(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "recursive traversal carries schema and selection context"
+)]
 fn resolve_from_record(
     schema: &crate::meta::Schema,
     effective: &HashMap<EntityKey<'static>, Record>,

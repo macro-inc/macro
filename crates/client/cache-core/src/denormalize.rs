@@ -127,6 +127,10 @@ pub fn denormalize_record(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit schema and read dependencies"
+)]
 fn denormalize_record_with_entity_resolvers(
     schema: &crate::meta::Schema,
     key: &EntityKey<'static>,

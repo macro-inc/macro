@@ -95,7 +95,7 @@ fn compile_field<'a>(
         Err(error) => return Err(error.into()),
     };
     let storage_key = match resolved_args_key(node, &arguments) {
-        Some(args) => Cow::Owned(field_key(&node.name.as_str(), Some(&args))),
+        Some(args) => Cow::Owned(field_key(node.name.as_str(), Some(&args))),
         None => Cow::Borrowed(node.name.as_str()),
     };
     let source = match resolver {

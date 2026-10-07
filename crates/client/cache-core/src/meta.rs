@@ -213,14 +213,13 @@ impl Schema {
                 return fail("duplicate possible type");
             }
             let id = ty.fields.iter().find(|f| f.name == "id");
-            if let Some(id) = id {
-                if id.ty.name != "ID"
+            if let Some(id) = id
+                && (id.ty.name != "ID"
                     || id.ty.nullable
                     || id.ty.list
-                    || id.ty.kind != FieldKind::Leaf
-                {
-                    return fail("entity id must be ID!");
-                }
+                    || id.ty.kind != FieldKind::Leaf)
+            {
+                return fail("entity id must be ID!");
             }
             if ty
                 .key_fields
