@@ -52,26 +52,26 @@ pub async fn handler(
     };
 
     // validate email matches code
-    if let Some(email) = params.get("email") {
-        let email = urlencoding::decode(email).map_err(|e| {
-            tracing::error!(error=?e, "unable to decode email");
-            (StatusCode::BAD_REQUEST, "unable to decode email").into_response()
+    let raw_email = params
+        .get("email")
+        .ok_or((StatusCode::BAD_REQUEST, "email required").into_response())?;
+
+    let email = urlencoding::decode(raw_email).map_err(|e| {
+        tracing::error!(error=?e, "unable to decode email");
+        (StatusCode::BAD_REQUEST, "unable to decode email").into_response()
+    })?;
+
+    let passwordless_code = ctx
+        .macro_cache_client
+        .get_passwordless_login_code(&email)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, email=%email, "unable to get passwordless login code");
+            (StatusCode::UNAUTHORIZED, "no passwordless login found").into_response()
         })?;
 
-        let passwordless_code = ctx
-            .macro_cache_client
-            .get_passwordless_login_code(&email)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, email=%email, "unable to get passwordless login code");
-                (StatusCode::UNAUTHORIZED, "no passwordless login found").into_response()
-            })?;
-
-        if passwordless_code != code {
-            return Err((StatusCode::UNAUTHORIZED, "invalid code").into_response());
-        }
-    } else {
-        return Err((StatusCode::FORBIDDEN, "unauthenticated").into_response());
+    if passwordless_code != code {
+        return Err((StatusCode::UNAUTHORIZED, "invalid code").into_response());
     }
 
     let passwordless_response = ctx
