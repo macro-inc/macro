@@ -4,12 +4,19 @@ import {
   useViewControlHotkeys,
   ViewShell,
 } from '@app/components/view-shell';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Show, Suspense } from 'solid-js';
+import FolderPlusIcon from '@phosphor/folder-plus.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import { Button } from '@ui';
+import { createSignal, Show, Suspense } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { useDriveView } from '../context/drive-context';
-import { driveLocationLabel } from '../core/location-label';
+import {
+  driveCreateDestinationLabel,
+  driveLocationLabel,
+} from '../core/location-label';
 import { DRIVE_SORT_OPTIONS } from '../core/types';
 import { DriveCreateMenu } from '../drive-create-menu';
 import { DriveFilterMenu } from './drive-filter-menu';
@@ -17,6 +24,7 @@ import { DriveMobileTabs } from './drive-mobile-tabs';
 
 export function DriveHeader() {
   const { state, sidebar } = useDriveView();
+  const { popoverSplit } = useSplitLayout();
 
   const title = () =>
     driveLocationLabel(state.value().location, sidebar.folders());
@@ -29,6 +37,7 @@ export function DriveHeader() {
 
   const panel = useSplitPanelOrThrow();
 
+  const [searchExpanded, setSearchExpanded] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
 
   useViewControlHotkeys({
@@ -40,13 +49,33 @@ export function DriveHeader() {
       condition: () => !state.projectId(),
 
       run: () => {
-        searchInput?.focus();
-        searchInput?.select();
+        setSearchExpanded(true);
+        queueMicrotask(() => {
+          searchInput?.focus();
+          searchInput?.select();
+        });
 
         return true;
       },
     },
   });
+
+  const openFolderComposer = () => {
+    popoverSplit({
+      type: 'component',
+      id: 'folder-compose',
+      params: {
+        parentId: state.projectId(),
+        parentLabel: driveCreateDestinationLabel(
+          state.projectId(),
+          sidebar.folders()
+        ),
+        onSubmit: (submission: { folderId: string; name: string }) => {
+          state.selectFolder(submission.folderId);
+        },
+      },
+    });
+  };
 
   return (
     <>
@@ -74,7 +103,10 @@ export function DriveHeader() {
                   </div>
                 </div>
                 <div class="flex min-w-0 items-center justify-between gap-3">
-                  <Show when={!state.projectId()}>
+                  <Show
+                    when={!state.projectId() && searchExpanded()}
+                    fallback={<div class="flex-1" />}
+                  >
                     <SearchBar
                       ref={(element) => {
                         searchInput = element;
@@ -83,11 +115,42 @@ export function DriveHeader() {
                       placeholder="Search files"
                       value={state.value().search}
                       onValueChange={state.setSearch}
-                      hotkey="cmd+f"
+                      onClose={() => {
+                        state.setSearch('');
+                        setSearchExpanded(false);
+                      }}
+                      onEscape={() => setSearchExpanded(false)}
                       class="max-w-md flex-1"
                     />
                   </Show>
-                  <div class="ml-auto flex shrink-0 items-center gap-2">
+                  <div class="flex shrink-0 items-center gap-2">
+                    <Show when={!state.projectId() && !searchExpanded()}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        square
+                        label="Search files"
+                        tooltip="Search files"
+                        onClick={() => {
+                          setSearchExpanded(true);
+                          queueMicrotask(() => {
+                            searchInput?.focus();
+                          });
+                        }}
+                      >
+                        <MagnifyingGlassIcon class="size-4" />
+                      </Button>
+                    </Show>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      square
+                      label="New folder"
+                      tooltip="New folder"
+                      onClick={openFolderComposer}
+                    >
+                      <FolderPlusIcon class="size-4" />
+                    </Button>
                     <Show when={!isRecent()}>
                       <ListSortDropdown
                         label="Sort files"
