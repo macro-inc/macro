@@ -2,6 +2,10 @@ import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
+import {
+  spreadsheetDetailSearch,
+  spreadsheetLocationUpdates,
+} from '@app/features/block-spreadsheet/spreadsheet-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { isCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
@@ -40,9 +44,9 @@ import {
 } from '@app/routes/app-route';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
-import type { BlockAlias, BlockName } from '@core/block';
+import { chatDetailSearch, chatLocationUpdates } from '@block-chat/chat-route';
+import { type BlockAlias, type BlockName, BlockRegistry } from '@core/block';
 import {
-  blocks,
   fileTypeToBlockName,
   isBlockAlias,
   resolveBlockAlias,
@@ -86,7 +90,7 @@ export function decodeLegacyPair(
     type === 'write'
       ? resolveBlockAlias(fileTypeToBlockName(type))
       : resolveBlockAlias(type as BlockName | BlockAlias);
-  if (!Object.hasOwn(blocks, resolvedType)) return;
+  if (!BlockRegistry.includes(resolvedType)) return;
 
   if (isBlockAlias(type)) {
     return {
@@ -356,6 +360,22 @@ export function resolveContentLocation(
       ...savedSearch,
       [channelsSearch.namespace]: channelSearch,
     };
+  }
+  if (isRecord(content.params)) {
+    const namespace =
+      content.type === 'chat'
+        ? chatDetailSearch.namespace
+        : content.type === 'spreadsheet'
+          ? spreadsheetDetailSearch.namespace
+          : undefined;
+    if (namespace && !savedSearch?.[namespace]) {
+      const targets =
+        content.type === 'chat'
+          ? chatLocationUpdates(content.id, content.params)
+          : spreadsheetLocationUpdates(content.id, content.params);
+      const target = targets[namespace];
+      if (target) contentSearch = { ...contentSearch, [namespace]: target };
+    }
   }
   const search = filterRouteSearch(routes, route, contentSearch);
   const location: SplitLocation = { route };

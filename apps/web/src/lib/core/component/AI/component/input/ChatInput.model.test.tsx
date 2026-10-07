@@ -1,6 +1,6 @@
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import { Chat } from '@block-chat/component/Chat';
-import type { ChatData } from '@block-chat/definition';
+import type { ChatData } from '@block-chat/core/types';
 import { Model } from '@core/component/AI/constant';
 import {
   ChatInputProvider,
@@ -12,6 +12,7 @@ import {
   getSoupInputStoredModel,
 } from '@core/component/AI/util/storage';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
+import { Permissions } from '@core/component/SharePermissions';
 import {
   cleanup,
   fireEvent,
@@ -20,7 +21,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX, onMount } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatInput } from './ChatInput';
 
@@ -47,9 +48,6 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 vi.mock('@block-chat/component/TopBar', () => ({
   TopBar: () => <CurrentModel />,
-}));
-vi.mock('@block-chat/signal/pendingLocationParams', () => ({
-  pendingLocationParamsSignal: { get: vi.fn(), set: vi.fn() },
 }));
 vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
   FloatRegionOrInline: (props: { children: JSX.Element }) => props.children,
@@ -231,8 +229,18 @@ it('preserves a real soup composer selection when creating and opening its first
   expect(getSoupInputStoredModel()).toBe(Model.gpt56);
   composer.unmount();
   mocks.send.mockResolvedValue({ error: true });
+  const [pendingLocation, setPendingLocation] =
+    createSignal<Record<string, string>>();
   const chat = render(() => (
     <Chat
+      chatId="selected-first-chat"
+      scopeId="chat-test"
+      canEdit={() => true}
+      name={() => 'Test Chat'}
+      permissions={() => Permissions.OWNER}
+      pendingLocation={pendingLocation}
+      setPendingLocation={setPendingLocation}
+      navigate={() => {}}
       data={
         {
           chat: {

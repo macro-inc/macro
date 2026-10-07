@@ -56,12 +56,14 @@ it('exposes a handle for content mounted outside a block container until its own
     ).toBeUndefined();
     return dispose;
   });
+  expect(orchestrator.isBlockMounted('channel', 'channel-1')).toBe(true);
 
   const handle = await orchestrator.getBlockHandle('channel-1', 'channel');
   await handle?.goToLocationFromParams({ message: 'message-1' });
   expect(navigate).toHaveBeenCalledWith({ message: 'message-1' });
 
   dispose();
+  expect(orchestrator.isBlockMounted('channel', 'channel-1')).toBe(false);
   const mounted = orchestrator.createBlockInstance('channel', 'channel-1');
   const view = render(mounted.element);
   expect(view.container.textContent).toBe('Channel content');

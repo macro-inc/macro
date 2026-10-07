@@ -1,4 +1,5 @@
 import { isListViewID } from '@app/constants/list-views';
+import { spreadsheetLocationUpdates } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import {
@@ -733,6 +734,12 @@ export const openEntityInSplitFromUnifiedList = async (
     !target && entity.type === 'document'
       ? getDocumentCommentTarget(entity)?.params
       : undefined;
+  const spreadsheetComment =
+    commentParams &&
+    entity.type === 'document' &&
+    entity.fileType === 'spreadsheet'
+      ? spreadsheetLocationUpdates(entity.id, commentParams)
+      : undefined;
 
   const sourceContent =
     splitHandle?.content() ?? splitManager.activeSplit()?.content();
@@ -799,7 +806,9 @@ export const openEntityInSplitFromUnifiedList = async (
     });
   };
   const result = splitManager.openWithSplit(splitContent, {
-    search: target ? searchLocationUpdates(content.id, target) : undefined,
+    search: target
+      ? searchLocationUpdates(content.id, target)
+      : spreadsheetComment,
     onApplied: markNotificationsSeen,
     referredFrom,
     activate: true,
@@ -821,7 +830,7 @@ export const openEntityInSplitFromUnifiedList = async (
     markNotificationsSeen();
   }
 
-  if (commentParams && entity.type === 'document') {
+  if (commentParams && entity.type === 'document' && !spreadsheetComment) {
     // An already-open document ignores new split params.
     await navigateDocumentEntityToComment(entity, blockOrchestrator);
   } else if (!target && openChannelAtLatest) {

@@ -1,6 +1,7 @@
 import { agentsRouteSegments } from '@app/features/agents-view/core/route';
 import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { SPREADSHEET_COMMENT_PARAMS } from '@app/features/block-spreadsheet/core/spreadsheet-comments';
+import { spreadsheetDetailSearch } from '@app/features/block-spreadsheet/spreadsheet-route';
 import {
   CALENDAR_ROUTE_ID,
   CALENDAR_SEARCH_NAMESPACE,
@@ -30,6 +31,7 @@ import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { chatDetailSearch } from '@block-chat/chat-route';
 import { URL_PARAMS as MARKDOWN_URL_PARAMS } from '@block-md/constants';
 import { markdownDetailSearch } from '@block-md/markdown-route';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
@@ -194,7 +196,11 @@ const documentRemountKey = ({
 
 export const driveRootDocumentRoute = defineRoute({
   id: 'drive-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    spreadsheetDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -209,7 +215,11 @@ export const driveRootDocumentRoute = defineRoute({
 
 export const driveFolderDocumentRoute = defineRoute({
   id: 'drive-folder-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    spreadsheetDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -224,7 +234,11 @@ export const driveFolderDocumentRoute = defineRoute({
 
 export const driveTabDocumentRoute = defineRoute({
   id: 'drive-tab-document',
-  search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
+  search: [
+    markdownDetailSearch.namespace,
+    pdfDetailSearch.namespace,
+    spreadsheetDetailSearch.namespace,
+  ],
   path: ':documentType/:documentId',
   params: driveDocumentParams,
   state: driveDetailTrailSchema,
@@ -301,7 +315,11 @@ export const agentsRoute = defineRoute({
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [
+    changesSearch.namespace,
+    agentDetailSearch.namespace,
+    chatDetailSearch.namespace,
+  ],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -311,7 +329,11 @@ export const codersRoute = defineRoute({
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [
+    changesSearch.namespace,
+    agentDetailSearch.namespace,
+    chatDetailSearch.namespace,
+  ],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -321,8 +343,8 @@ export const agentChatsRoute = defineRoute({
   aliases: ['agent-chats/:id'],
   params: z.object({ id: z.string() }),
   remountKey: ({ id }) => id,
-  claim: ({ id }) => ({ namespace: 'chat', id }),
-  search: [changesSearch.namespace],
+  claim: ({ id }) => ({ namespace: 'block', id: `chat:${id}` }),
+  search: [changesSearch.namespace, chatDetailSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 
@@ -384,7 +406,7 @@ export const homePreviewRoute = defineRoute({
   id: 'home-preview',
   path: ':blockType/:previewId',
   params: homePreviewRouteParams,
-  search: HOME_PREVIEW_SEARCH_NAMESPACES,
+  search: [...HOME_PREVIEW_SEARCH_NAMESPACES],
   // Blocks read their own location keys from the URL, as they do in Drive.
   externalSearch: (entry: Readonly<Entry>) => {
     const type = routeParams(entry.location.route).blockType;
@@ -697,8 +719,11 @@ export const legacyContentRoute = defineRoute({
       const [section, conversationId] = agentsRouteSegments(content.id) ?? [];
       if (section && conversationId) {
         return {
-          namespace: section === 'agent-chats' ? 'chat' : 'agent',
-          id: conversationId,
+          namespace: section === 'agent-chats' ? 'block' : 'agent',
+          id:
+            section === 'agent-chats'
+              ? `chat:${conversationId}`
+              : conversationId,
         };
       }
       return { namespace: 'component', id: content.id };

@@ -24,10 +24,14 @@ const mocks = vi.hoisted(() => ({
   rootId: undefined as string | undefined,
   target: undefined as string | undefined,
   canComment: true,
+  header: vi.fn(),
   scroll: vi.fn(() => () => {}),
 }));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
-  SplitHeaderRight: (p: ParentProps) => p.children,
+  SplitHeaderRight: (p: ParentProps) => {
+    mocks.header();
+    return p.children;
+  },
 }));
 vi.mock('@core/component/ScopedPortal', () => ({
   ScopedPortal: (p: ParentProps) => p.children,
@@ -49,10 +53,6 @@ vi.mock('@solidjs/router', () => ({
   ],
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
-vi.mock('@core/signal/permissions', () => ({
-  useCanComment: () => () => mocks.canComment,
-  useIsDocumentOwner: () => () => false,
-}));
 vi.mock('@core/util/url', () => ({ buildSimpleEntityUrl: () => 'link' }));
 vi.mock('@ui/components/Button', () => ({
   Button: (p: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...p} />,
@@ -142,7 +142,7 @@ let cap: SpreadsheetCommentsCapability;
 let active!: (id: string) => void;
 let navigateAgain!: () => void;
 let selection = { anchor: 'B4', focus: 'C5' };
-function mount() {
+function mount(showHeader?: boolean) {
   return render(() => {
     const [id, setId] = createSignal('sheet1');
     active = setId;
@@ -161,7 +161,13 @@ function mount() {
     } as unknown as SpreadsheetStore;
     return (
       <ParamsProvider state={params}>
-        <SpreadsheetComments documentId="doc" store={store}>
+        <SpreadsheetComments
+          documentId="doc"
+          store={store}
+          canComment={() => mocks.canComment}
+          isOwner={() => false}
+          showHeader={showHeader}
+        >
           {(location, comments) => {
             cap = comments;
             let cell!: HTMLButtonElement;
@@ -216,6 +222,20 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+it('opens the full comment list from an embedded control without mounting split-header chrome', () => {
+  mount(false);
+  expect(mocks.header).not.toHaveBeenCalled();
+  const comments = screen.getByRole('button', { name: 'Comments' });
+  expect(comments.closest('[role="toolbar"]')).not.toBeNull();
+  expect(screen.queryByRole('complementary')).toBeNull();
+  fireEvent.click(comments);
+  expect(
+    screen.getByRole('complementary', { name: 'Spreadsheet comments' })
+  ).toBeTruthy();
+  expect(screen.getByText('Discussion')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Close comments' }));
+  expect(screen.queryByRole('complementary')).toBeNull();
 });
 it('offers a cell-anchored composer and freezes the range even if the grid selection moves', async () => {
   mount();

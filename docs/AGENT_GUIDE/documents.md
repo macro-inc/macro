@@ -90,6 +90,12 @@ Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostH
 flag in every environment. Team targeting is configured in PostHog; ordinary
 document permissions continue to control access to each workbook.
 
+Comment notifications and location links use route-owned spreadsheet targets.
+An existing workbook in Drive, Home, a preview, or a popover receives the target
+without resetting its sync session. Reopening the same comment must seek again.
+During a cold load, only the latest request applies. Embedded workbooks keep
+local targets and never borrow a parent pane's comment request.
+
 Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
 Native workbooks open at `/app/spreadsheet/<uuid>` and use the normal document
 title bar with **Ask Macro** and **Share** at the top right. The **File actions**
@@ -104,6 +110,17 @@ with A1 selected, so typing immediately edits A1 and arrow keys move the selecti
 it does not take focus from a dialog or control reached while loading, nor in an
 inline preview or when the sheet was opened by J/K list navigation. They have the `.spreadsheet` file type; uploading an
 Excel (`.xlsx`, `.xlsm`) or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+
+Native workbooks also open in Home and Files detail panes and embedded document
+cards. Switching workbooks closes the previous live session. Check a comment
+link before the workbook finishes loading, then activate the same link again:
+both requests must reveal the range without rebuilding the grid. Nested cards
+keep keyboard shortcuts local instead of taking over the surrounding editor.
+A failed document load offers **Retry**; unavailable documents keep the normal
+access-error screen. Disabled pilot access must not start a workbook load.
+Embedded cards and hosts without split chrome keep a local **Comments** button
+above the grid. Use it to open the workbook comments panel without selecting an
+annotated cell; the control stays out of the surrounding editor's title bar.
 
 You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets. A large workbook shows a progress bar on **Import workbook** while it is written; the page stays responsive, and one undo removes the whole import.
 

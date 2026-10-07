@@ -9,7 +9,6 @@ import {
 import { useUserId } from '@core/context/user';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
-import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import XIcon from '@phosphor/x.svg';
@@ -26,6 +25,7 @@ import type { MessageListItem } from '@service-storage/messages';
 import { Button } from '@ui/components/Button';
 import { SegmentedControl } from '@ui/components/SegmentedControl';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -68,14 +68,18 @@ const COMMENT_FILTER_OPTIONS: Array<{
 export function SpreadsheetComments(props: {
   documentId: string;
   store: SpreadsheetStore;
+  canComment: Accessor<boolean>;
+  isOwner: Accessor<boolean>;
+  /** Place comment controls in split chrome, or locally when false. */
+  showHeader?: boolean;
   children: (
     location: () => SpreadsheetCommentAnchor | undefined,
     comments: SpreadsheetCommentsCapability
   ) => JSX.Element;
 }) {
   const userId = useUserId();
-  const canComment = useCanComment();
-  const isOwner = useIsDocumentOwner();
+  const canComment = props.canComment;
+  const isOwner = props.isOwner;
   const params = useUrlParams(SPREADSHEET_COMMENT_PARAMS);
   const parent = () => ({ type: 'document' as const, id: props.documentId });
   const query = useMessageRootsQuery(parent);
@@ -353,23 +357,39 @@ export function SpreadsheetComments(props: {
       }
     )
   );
+  const CommentsButton = () => (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={toggle}
+      aria-label="Comments"
+      aria-expanded={open()}
+    >
+      <ChatIcon class="size-4" />
+      <span class="hidden sm:inline">Comments</span>
+      <Show when={count()}>
+        <span class="text-xs">{count()}</span>
+      </Show>
+    </Button>
+  );
   return (
     <StaticMarkdownContext>
-      <SplitHeaderRight>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={toggle}
-          aria-label="Comments"
-          aria-expanded={open()}
-        >
-          <ChatIcon class="size-4" />
-          <span class="hidden sm:inline">Comments</span>
-          <Show when={count()}>
-            <span class="text-xs">{count()}</span>
-          </Show>
-        </Button>
-      </SplitHeaderRight>
+      <Show
+        when={props.showHeader !== false}
+        fallback={
+          <div
+            role="toolbar"
+            aria-label="Spreadsheet comment controls"
+            class="flex shrink-0 justify-end border-b border-edge-muted px-2 py-1"
+          >
+            <CommentsButton />
+          </div>
+        }
+      >
+        <SplitHeaderRight>
+          <CommentsButton />
+        </SplitHeaderRight>
+      </Show>
       <div class="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           {props.children(location, comments)}

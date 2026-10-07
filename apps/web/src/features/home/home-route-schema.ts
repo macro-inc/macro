@@ -1,9 +1,11 @@
+import { spreadsheetDetailSearch } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   DRIVE_DOCUMENT_TYPES,
   type DriveDocumentType,
 } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
+import { chatDetailSearch } from '@block-chat/chat-route';
 import {
   type BlockAlias,
   BlockAliasRegistry,
@@ -54,4 +56,6 @@ export function homeBaseBlockType(
 export const HOME_PREVIEW_SEARCH_NAMESPACES = [
   channelsSearch.namespace,
   driveSearch.namespace,
+  chatDetailSearch.namespace,
+  spreadsheetDetailSearch.namespace,
 ] as const;

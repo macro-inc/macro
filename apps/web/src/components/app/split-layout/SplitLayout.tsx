@@ -18,9 +18,10 @@ import {
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
-import { createSplitLayout, type SplitId } from './layoutManager';
+import type { SplitId } from './layoutManager';
 import { createMobilePaneStack } from './mobile/createMobilePaneStack';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
+import { createAppSplitLayout } from './split-router/app-content';
 import {
   resolveContentLocation,
   splitContentFromLocation,
@@ -33,7 +34,7 @@ export function SplitLayout() {
   const router = useSplitRouter();
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
-  const splitManager = createSplitLayout(blockOrchestrator, {
+  const splitManager = createAppSplitLayout(blockOrchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,

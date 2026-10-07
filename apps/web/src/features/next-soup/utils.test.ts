@@ -2321,6 +2321,35 @@ describe('getDocumentCommentTarget', () => {
     });
   });
 
+  it.each(['opened', 'reused'] as const)(
+    'routes spreadsheet comments when the sheet is %s without a block handle',
+    async (status) => {
+      const openWithSplit = vi.fn(() => ({ status }));
+      const getBlockHandle = vi.fn();
+      setGlobalSplitManager({
+        activeSplit: vi.fn(),
+        getOrchestrator: () => ({ getBlockHandle }),
+        getSplitByContent: vi.fn(),
+        openWithSplit,
+      } as unknown as SplitManager);
+      const row = {
+        ...documentRow([commentNotification('n1', 'comment-1')]),
+        fileType: 'spreadsheet',
+      } as EntityData;
+      await openEntityInSplitFromUnifiedList(row, {});
+      const first = targetSearch(openWithSplit, 'spreadsheet-detail');
+      expect(first).toMatchObject({
+        documentId: ['doc-1'],
+        commentId: ['comment-1'],
+        seek: [expect.any(String)],
+      });
+      await openEntityInSplitFromUnifiedList(row, {});
+      expect(
+        targetSearch(openWithSplit, 'spreadsheet-detail')?.seek
+      ).not.toEqual(first?.seek);
+      expect(getBlockHandle).not.toHaveBeenCalled();
+    }
+  );
   it('carries the comment through the Inbox preview route', () => {
     const result = homePreviewNavigation(
       documentRow([commentNotification('n1', 'comment-1')]) as never

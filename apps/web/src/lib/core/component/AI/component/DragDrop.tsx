@@ -10,6 +10,8 @@ false && fileDrop; // Reference for SolidJS directive
 
 type DragDropWrapperProps = ParentProps<{
   class?: string;
+  ref?: (element: HTMLDivElement) => void;
+  tabIndex?: number;
   overlayMessage?: string;
   /** Signal indicating if an entity is being dragged over (from useEntityDropAttachment) */
   isEntityDraggingOver?: Accessor<boolean>;
@@ -30,6 +32,8 @@ export const DragDropWrapper: Component<DragDropWrapperProps> = (props) => {
   return (
     <div
       class={props.class}
+      ref={props.ref}
+      tabIndex={props.tabIndex}
       use:fileDrop={{
         acceptedFileExtensions: SUPPORTED_ATTACHMENT_EXTENSIONS,
         multiple: true,

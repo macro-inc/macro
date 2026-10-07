@@ -1,3 +1,4 @@
+import { spreadsheetLocationUpdates } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import {
@@ -78,6 +79,17 @@ function openSplitIfNotOpen(
       reportApplied();
     }
   };
+  if (type === 'spreadsheet' && options.params) {
+    layoutManager.openWithSplit(contentReference(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+      search: spreadsheetLocationUpdates(id, options.params),
+      ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    });
+    return;
+  }
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();

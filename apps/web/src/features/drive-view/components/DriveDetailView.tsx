@@ -164,6 +164,7 @@ function StackEntityDetail(props: {
         </Show>
         <EntityDetail
           target={props.entry.data}
+          routeOwned
           previewHeaderLeading={
             <Show
               when={entityDetailBlockType(props.entry.data) === 'spreadsheet'}
@@ -216,8 +217,8 @@ export function DriveDetailView() {
   const breadcrumbOrderOffset = () =>
     driveLocationBreadcrumbs(state.value().location, sidebar.folders()).length;
   const navigationStack = useDriveDetailNavigation();
-  // Spreadsheets use their live block in PreviewPanel, which supplies its own
-  // header, sharing controls and the enclosing ViewShell's sidebar toggle.
+  // Spreadsheet detail owns its live session and inline preview chrome,
+  // including sharing controls and the enclosing ViewShell's sidebar toggle.
   const hasBlockHeader = () => {
     const target = navigationStack.active()?.data;
     return target && entityDetailBlockType(target) === 'spreadsheet';

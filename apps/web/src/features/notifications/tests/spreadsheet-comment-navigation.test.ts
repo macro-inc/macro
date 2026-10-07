@@ -14,6 +14,10 @@ vi.mock('../notification-stacking', () => ({
   stackNotifications: vi.fn(),
 }));
 
+import {
+  spreadsheetDetailSearch,
+  spreadsheetDetailSearchCodec,
+} from '@app/features/block-spreadsheet/spreadsheet-route';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { isFeatureEnabled } from '@core/constant/featureFlags';
 import { expect, it, vi } from 'vitest';
@@ -61,14 +65,15 @@ it.each([
     const commentId = '019f862a-84b6-7f00-8000-000000000042';
     const threadId = '019f862a-84b6-7f00-8000-000000000007';
     const navigate = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({
+      goToLocationFromParams: navigate,
+    }));
     const open = vi.fn();
     const activate = vi.fn();
     const layout = {
       getSplitByContent: vi.fn(() => undefined as unknown),
       openWithSplit: open,
-      getOrchestrator: () => ({
-        getBlockHandle: async () => ({ goToLocationFromParams: navigate }),
-      }),
+      getOrchestrator: () => ({ getBlockHandle }),
     };
     const notification = {
       entity_id: 'sheet-doc',
@@ -82,22 +87,28 @@ it.each([
       layout as unknown as SplitManager
     );
     expect(result.isOk()).toBe(true);
-    await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ comment_id: commentId })
-    );
     expect(open).toHaveBeenCalledWith(
       { type: 'spreadsheet', id: 'sheet-doc' },
-      expect.anything()
+      expect.objectContaining({ search: expect.any(Object) })
     );
+    const first = spreadsheetDetailSearchCodec.parse(
+      open.mock.calls[0]?.[1].search[spreadsheetDetailSearch.namespace]
+    );
+    expect(first.valid).toBe(true);
+    expect(first.value).toMatchObject({ documentId: 'sheet-doc', commentId });
     layout.getSplitByContent.mockReturnValue({ activate });
     open.mockClear();
     navigate.mockClear();
     await openNotification(notification, layout as unknown as SplitManager);
-    await vi.waitFor(() =>
-      expect(navigate).toHaveBeenCalledWith({ comment_id: commentId })
+    expect(open).toHaveBeenCalledOnce();
+    const second = spreadsheetDetailSearchCodec.parse(
+      open.mock.calls[0]?.[1].search[spreadsheetDetailSearch.namespace]
     );
-    expect(activate).toHaveBeenCalledOnce();
-    expect(open).not.toHaveBeenCalled();
+    expect(second.value).toMatchObject({ documentId: 'sheet-doc', commentId });
+    expect(second.value.seek).not.toBe(first.value.seek);
+    expect(activate).not.toHaveBeenCalled();
+    expect(getBlockHandle).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   }
 );
 

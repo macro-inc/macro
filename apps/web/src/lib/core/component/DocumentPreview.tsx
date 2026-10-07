@@ -1,3 +1,4 @@
+import { spreadsheetLocationUpdates } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import {
   parseMacroAppLink,
@@ -14,6 +15,7 @@ import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as URL_PARAMS_CANVAS } from '@block-canvas/constants';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { chatLocationUpdates } from '@block-chat/chat-route';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/constants';
 import {
@@ -562,6 +564,26 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
       return;
     }
 
+    if (type === 'chat' || type === 'spreadsheet') {
+      splitManager.openWithSplit(
+        { type, id: props.documentInfo.id },
+        {
+          preferNewSplit: event.shiftKey,
+          search:
+            type === 'chat'
+              ? chatLocationUpdates(
+                  props.documentInfo.id,
+                  props.documentInfo.params
+                )
+              : spreadsheetLocationUpdates(
+                  props.documentInfo.id,
+                  props.documentInfo.params
+                ),
+        }
+      );
+      return;
+    }
+
     if (event.shiftKey) {
       splitManager.openWithSplit(
         { type, id: props.documentInfo.id, params: props.documentInfo.params },
@@ -673,6 +695,25 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     if (!splitManager) return;
 
     const type = targetBlockType();
+    if (type === 'chat' || type === 'spreadsheet') {
+      splitManager.openWithSplit(
+        { type, id: props.documentInfo.id },
+        {
+          preferNewSplit: true,
+          search:
+            type === 'chat'
+              ? chatLocationUpdates(
+                  props.documentInfo.id,
+                  props.documentInfo.params
+                )
+              : spreadsheetLocationUpdates(
+                  props.documentInfo.id,
+                  props.documentInfo.params
+                ),
+        }
+      );
+      return;
+    }
     const existing = splitManager.getSplitByContent(
       type,
       props.documentInfo.id

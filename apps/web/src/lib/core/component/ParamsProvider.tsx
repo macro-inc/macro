@@ -75,14 +75,18 @@ export type ParamsState = ReturnType<typeof createParamsState>;
 export function ParamsProvider(
   props: ParentProps<{
     state?: ParamsState;
+    /** Explicit host search. Supplying this prevents borrowing an ancestor route. */
+    urlParams?: ParamMap;
   }>
 ) {
-  const [searchParams] = useSearchParams();
+  const searchParams = props.urlParams ?? useSearchParams()[0];
   const state = props.state ?? createParamsState();
   const context: ParamsContextValue = {
     getParam: (param) => {
       const blockValue = state.getParam(param);
-      return () => blockValue() ?? flattenParamValue(searchParams[param]);
+      return () =>
+        blockValue() ??
+        flattenParamValue((props.urlParams ?? searchParams)[param]);
     },
     getNavigationCount: state.getNavigationCount,
   };

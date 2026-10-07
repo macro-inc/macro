@@ -1,5 +1,4 @@
-import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
-import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import type { ListView } from '@app/constants/list-views';
 import type {
   Entry,
   NavigationResult,
@@ -17,11 +16,7 @@ import type {
   BlockName,
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
-import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
-import type {
-  BlockInstanceHandle,
-  BlockOrchestrator,
-} from '@core/orchestrator';
+import type { BlockOrchestrator } from '@core/orchestrator';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -35,13 +30,10 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, type Store } from 'solid-js/store';
-import {
-  type ComponentMeta,
-  type ComponentMetaMap,
-  resolveComponent,
-} from './componentRegistry';
+import type { ComponentMeta, ComponentMetaMap } from './componentRegistry';
 import { contentReference } from './content-reference';
 import {
+  type ContentIdentity,
   type ContentInstance,
   createContentInstanceRegistry,
 } from './contentInstanceRegistry';
@@ -131,7 +123,8 @@ type BlockMount = {
   kind: 'block';
   type: string;
   id: string;
-  handle: BlockInstanceHandle;
+  /** Optional resource ownership, independent of the mounted content kind. */
+  claim?: string;
   element: ElementFn;
   aliasContext?: BlockAliasContext;
 };
@@ -140,6 +133,8 @@ type ComponentMount = {
   kind: 'component';
   name: string;
   element: ElementFn;
+  /** Optional resource ownership, independent of the mounted content kind. */
+  claim?: string;
   meta: Store<ComponentMeta>;
   updateMeta: (data: Omit<ComponentMeta, 'kind'>) => void;
 };
@@ -207,13 +202,7 @@ export type OpenWithSplitOptions = {
   preferNewSplit?: boolean;
   insertIndex?: number;
   handle?: SplitHandle;
-  /**
-   * Ask the block to land on its latest content via the `goToLatest` block
-   * method. Covers content that is already mounted (e.g. a channel open in
-   * another split parked at an old scroll position), which would otherwise
-   * just be activated as-is. Omit when navigating to a specific location
-   * within the block.
-   */
+  /** Optional content-owned reopen intent, forwarded without layout interpretation. */
   reopen?: 'latest';
 };
 
@@ -264,37 +253,39 @@ export type SplitEventWithType =
       type: SplitEvent.ReturnFocus;
     } & SplitEventPayload[SplitEvent.ReturnFocus]);
 
-/**
- * If a split layout helper passes and aliased block type, make sure to wrap
- * that with the alias info.
- * @param content
- * @returns
- */
-function attachAliasContext(content: SplitContent): SplitContent {
-  if (content.type !== 'component' && isBlockAlias(content.type)) {
-    return {
-      ...content,
-      aliasContext: {
-        alias: content.type,
-        baseType: resolveBlockAlias(content.type),
-      },
-    };
-  }
-  return content;
-}
-
 export type OpenView = ContentInstance & {
   /** Present when this view is a top-level layout split, rather than an inline detail or popover. */
   topLevelSplit?: SplitHandle;
 };
 
+export type SplitContentAdapter = {
+  mount(
+    content: SplitContent,
+    options: {
+      routeOwned: boolean;
+      destination?: Accessor<Readonly<Entry> | undefined>;
+    }
+  ): SplitMount;
+  normalize(content: SplitContent): SplitContent;
+  identity(content: SplitContent): ContentIdentity;
+  adopt(
+    mount: SplitMount,
+    current: SplitContent,
+    next: SplitContent
+  ): SplitMount;
+  reopen(
+    content: SplitContent,
+    intent: NonNullable<OpenWithSplitOptions['reopen']>
+  ): void;
+};
 export type SplitLayoutOptions = {
   router: SplitRouter;
   /** Where content lives in the router's route table. */
   toLocation: (content: SplitContent) => SplitLocation;
   /** The content a router location shows. */
   toContent: (location: SplitLocation) => SplitContent;
-  defaultSplitContent?: SplitContent;
+  defaultSplitContent: SplitContent;
+  content: SplitContentAdapter;
   /**
    * Panes stack and only the front one shows, as on native mobile. Opens
    * add a pane in front unless they merge history, and activating a pane
@@ -511,62 +502,17 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   ) => void;
 };
 
-function createPinnedMount(
-  orchestrator: BlockOrchestrator,
-  content: SplitContent
-): SplitMount {
-  if (content.type === 'component') {
-    const resolved = resolveComponent(content.id, content.params);
-    const [meta, setMeta] = createStore<ComponentMeta>(
-      resolved.initialMeta ?? {}
-    );
-    const updateMeta = (data: Omit<ComponentMeta, 'kind'>) => {
-      setMeta({ kind: content.id, ...data } as ComponentMeta);
-    };
-    return {
-      kind: 'component',
-      name: content.id,
-      element: resolved.element,
-      meta,
-      updateMeta,
-    };
-  }
-
-  const blockType = resolveBlockAlias(content.type);
-  const handle = orchestrator.createBlockInstance(blockType, content.id, {
-    aliasContext: content.aliasContext,
-    params: content.params,
-  });
-
-  return {
-    kind: 'block',
-    type: content.type,
-    id: content.id,
-    handle,
-    element: handle.element,
-    aliasContext: content.aliasContext,
-  };
-}
-
-function contentIdentity(content: SplitContent) {
-  const route =
-    content.type === 'component' ? parseAgentsRoute(content.id) : undefined;
-  return route
-    ? {
-        type:
-          route.conversation.type === 'agent_session'
-            ? ('agent' as const)
-            : ('chat' as const),
-        id: route.conversation.id,
-      }
-    : content;
-}
-
 export function createSplitLayout(
-  orchestrator: BlockOrchestrator,
   options: SplitLayoutOptions
-): SplitManager {
-  const { router, toLocation, toContent, defaultSplitContent } = options;
+): Omit<SplitManager, 'getOrchestrator'> {
+  const {
+    router,
+    toLocation,
+    toContent,
+    defaultSplitContent,
+    content: contentAdapter,
+  } = options;
+  const contentIdentity = contentAdapter.identity;
   const stacked = () => options.stacked?.() ?? false;
   const [state, setState] = createStore<{
     splits: SplitState[];
@@ -583,6 +529,7 @@ export function createSplitLayout(
         isOpen: boolean;
         options: PopoverSplitOptions;
         handle: PopoverSplitHandle;
+        unregisterClaim?: () => void;
       }
     >;
   }>({
@@ -592,6 +539,10 @@ export function createSplitLayout(
     spotlightId: undefined,
     events: [],
     popovers: new Map(),
+  });
+
+  onCleanup(() => {
+    for (const popover of state.popovers.values()) popover.unregisterClaim?.();
   });
 
   const contentInstances = createContentInstanceRegistry();
@@ -701,10 +652,7 @@ export function createSplitLayout(
     });
   }
 
-  const DEFAULT_SPLIT_CONTENT = defaultSplitContent ?? {
-    type: 'component',
-    id: LIST_VIEW_ID.home,
-  };
+  const DEFAULT_SPLIT_CONTENT = defaultSplitContent;
 
   function dispatchEvent(
     type: SplitEvent,
@@ -738,7 +686,7 @@ export function createSplitLayout(
       entryMetadata: entry.location,
     } as SplitContent;
 
-    return attachAliasContext(content);
+    return contentAdapter.normalize(content);
   }
 
   function contentAt(entry: Entry): SplitContent {
@@ -761,7 +709,7 @@ export function createSplitLayout(
     return {
       id,
       content,
-      mount: createPinnedMount(orchestrator, content),
+      mount: contentAdapter.mount(content, { routeOwned: true }),
       referredFrom: referredFrom ?? null,
       lastNavigationCause: 'fresh',
     };
@@ -831,7 +779,7 @@ export function createSplitLayout(
       });
     }
 
-    const newMount = createPinnedMount(orchestrator, content);
+    const newMount = contentAdapter.mount(content, { routeOwned: true });
 
     setState('splits', (s) => {
       const i = s.findIndex((x) => x.id === split.id);
@@ -939,7 +887,7 @@ export function createSplitLayout(
     if (!findSplitById(id))
       return console.error(`Split with id ${id} not found`);
 
-    const content = attachAliasContext(next);
+    const content = contentAdapter.normalize(next);
     if (!canOpenContent(content, id)) {
       openWithSplit(content);
       return;
@@ -991,20 +939,10 @@ export function createSplitLayout(
         return splits.with(index, {
           ...previous,
           content: next,
-          mount:
-            previous.mount.kind === 'block'
-              ? { ...previous.mount, id: next.id }
-              : previous.mount,
+          mount: contentAdapter.adopt(previous.mount, current, next),
           lastNavigationCause: 'replace',
         });
       });
-      if (current.type !== 'component') {
-        orchestrator.rekeyBlockInstance(
-          resolveBlockAlias(current.type),
-          current.id,
-          next.id
-        );
-      }
     });
   }
 
@@ -1317,7 +1255,9 @@ export function createSplitLayout(
   ): SplitHandle | undefined {
     const { content, activate, referredFrom, insertIndex, allowDuplicate } =
       options;
-    const initialContent = attachAliasContext(content ?? DEFAULT_SPLIT_CONTENT);
+    const initialContent = contentAdapter.normalize(
+      content ?? DEFAULT_SPLIT_CONTENT
+    );
 
     // Direct split creation permits duplicate shells, but never duplicate entities.
     const existing = findOpenView(initialContent);
@@ -1445,12 +1385,31 @@ export function createSplitLayout(
     const focusLock = useFocusLock(`popover-${id}`);
     focusLock.acquire();
 
-    const mount = createPinnedMount(orchestrator, options.content);
+    const [destination, setDestination] = createSignal<Readonly<Entry>>();
+    const mount = contentAdapter.mount(options.content, {
+      routeOwned: false,
+      destination,
+    });
     let closed = false;
+    const claimOwner = Symbol(id);
+    const unregisterClaim = router.claims.register(() => {
+      if (closed || !mount.claim) return [];
+      return [
+        {
+          owner: claimOwner,
+          claim: mount.claim,
+          activate: (next?: Readonly<Entry>) => {
+            if (next) setDestination(next);
+            focusLock.acquire();
+          },
+        },
+      ];
+    });
 
     const close = () => {
       if (closed) return;
       closed = true;
+      unregisterClaim();
 
       // Release focus lock to return focus to previously focused element
       focusLock.release();
@@ -1497,6 +1456,7 @@ export function createSplitLayout(
       isOpen: true,
       options,
       handle, // Store the handle so getActivePopovers can return it
+      unregisterClaim,
     };
 
     setState('popovers', (prev) => {
@@ -1574,15 +1534,7 @@ export function createSplitLayout(
     }
     const existing = findOpenView(content);
 
-    if (options.reopen === 'latest') {
-      // Fire-and-forget so it covers every open path (fresh mount or
-      // duplicate activation). The block-handle proxy waits for the block
-      // and method to register before invoking.
-      void orchestrator
-        .getBlockHandle(content.id)
-        .then((handle) => handle?.goToLatest())
-        .catch((e) => console.error('openWithSplit: goToLatest failed', e));
-    }
+    if (options.reopen) contentAdapter.reopen(content, options.reopen);
 
     // Entity views are always reused; only shell components may be duplicated.
     const canDuplicateShell =
@@ -1731,7 +1683,6 @@ export function createSplitLayout(
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
     resizeContext,
     setResizeContext,
-    getOrchestrator: () => orchestrator,
     createPopoverSplit,
     getActivePopovers,
     closeAllPopovers,

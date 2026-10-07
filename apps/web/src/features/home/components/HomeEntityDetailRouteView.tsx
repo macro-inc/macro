@@ -251,6 +251,7 @@ function HomeEntityDetailBody(props: {
         <EntityDetail
           target={props.target}
           navigationRequest={props.navigationRequest}
+          routeOwned
         >
           {(context) => {
             const name = () => {
@@ -382,6 +383,7 @@ export function HomeEntityDetailRouteView() {
         <PreviewPanel
           target={previewTarget()}
           navigationRequest={previewNavigationRequest()}
+          routeOwned
           orchestrator={orchestrator}
           splitPanelContext={panel}
           headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}

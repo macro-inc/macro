@@ -1003,6 +1003,61 @@ describe('split router while other work is in flight', () => {
     expect(routeIds(router.entry(pane(1)))).toEqual(['home']);
   });
 
+  it('delivers repeated navigation to an inline owner without replacing its surrounding route', () => {
+    const { router, pane } = track(setup('/home'));
+    const owner = Symbol('preview');
+    const destinations: Readonly<Entry>[] = [];
+    const unregister = router.claims.register(() => [
+      {
+        owner,
+        pane: pane(0),
+        claim: 'block:md:d1',
+        activate: (destination) => {
+          if (destination) destinations.push(destination);
+        },
+      },
+    ]);
+
+    for (const token of ['first', 'second']) {
+      expect(
+        router.navigatePane(pane(0), '/drive/md/d1', {
+          search: { drive: { sort: [token] } },
+        })
+      ).toEqual({ status: 'activated', owner });
+    }
+
+    expect(destinations.map((entry) => entry.location.search)).toEqual([
+      { drive: { sort: ['first'] } },
+      { drive: { sort: ['second'] } },
+    ]);
+    expect(routeIds(router.entry(pane(0)))).toEqual(['home']);
+    unregister();
+    expect(router.navigatePane(pane(0), '/drive/md/d1')).toMatchObject({
+      status: 'committed',
+    });
+  });
+
+  it('delivers a route target to a non-pane owner before activation instead of opening another pane', () => {
+    const { router, pane } = track(setup('/home'));
+    const owner = Symbol('popover');
+    const activate = vi.fn<(destination?: Readonly<Entry>) => void>();
+    router.claims.register(() => [{ owner, claim: 'block:md:d1', activate }]);
+
+    expect(
+      router.open(
+        '/drive/md/d1',
+        { newPane: true, source: pane(0) },
+        {
+          search: { drive: { sort: ['name'] } },
+        }
+      )
+    ).toEqual({ status: 'activated', owner });
+    expect(activate.mock.calls[0]?.[0]?.location.search).toEqual({
+      drive: { sort: ['name'] },
+    });
+    expect(router.panes()).toHaveLength(1);
+  });
+
   it('keeps an owner’s pending navigation that stays on the claimed resource', async () => {
     let release: () => void = () => {};
     const { router, pane } = track(

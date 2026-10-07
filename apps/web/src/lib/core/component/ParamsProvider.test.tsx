@@ -2,10 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { render } from '@solidjs/testing-library';
-import { createEffect, on } from 'solid-js';
+import { cleanup, render } from '@solidjs/testing-library';
+import { createEffect, createSignal, on } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createParamsState,
   ParamsProvider,
@@ -16,12 +16,16 @@ import {
 type MockSearchParams = Record<string, string | string[] | undefined>;
 
 const mocks = vi.hoisted(() => ({
+  readSearch: vi.fn(),
   searchParams: undefined as MockSearchParams | undefined,
   setSearchParams: undefined as SetStoreFunction<MockSearchParams> | undefined,
 }));
 
 vi.mock('@solidjs/router', () => ({
-  useSearchParams: () => [mocks.searchParams, mocks.setSearchParams],
+  useSearchParams: () => {
+    mocks.readSearch();
+    return [mocks.searchParams, mocks.setSearchParams];
+  },
 }));
 
 const URL_PARAMS = {
@@ -107,9 +111,41 @@ function renderHarness(initialSearchParams: MockSearchParams = {}) {
 beforeEach(() => {
   mocks.searchParams = undefined;
   mocks.setSearchParams = undefined;
+  mocks.readSearch.mockClear();
 });
 
+afterEach(cleanup);
+
 describe('ParamsProvider', () => {
+  it('isolates explicit host params from ancestor search and reacts to replacements', () => {
+    const counts = createCounts();
+    const values: Values = {
+      nodeId: undefined,
+      location: undefined,
+      commentId: undefined,
+    };
+    mocks.searchParams = {
+      node_id: 'ancestor-node',
+      comment_id: 'ancestor-comment',
+    };
+    const [urlParams, setUrlParams] = createSignal<
+      Record<string, string | undefined>
+    >({
+      node_id: 'local-node',
+    });
+    render(() => (
+      <ParamsProvider urlParams={urlParams()}>
+        <Consumer counts={counts} values={values} />
+      </ParamsProvider>
+    ));
+    expect(mocks.readSearch).not.toHaveBeenCalled();
+    expect(values.nodeId).toBe('local-node');
+    expect(values.commentId).toBeUndefined();
+    setUrlParams({ comment_id: 'local-comment' });
+    expect(values.nodeId).toBeUndefined();
+    expect(values.commentId).toBe('local-comment');
+  });
+
   it('does not notify consumers when unrelated URL params change', async () => {
     const { counts, values, setSearchParams } = renderHarness({
       node_id: 'node-1',

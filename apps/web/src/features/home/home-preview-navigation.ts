@@ -2,6 +2,10 @@ import { agentDetailSearch } from '@app/features/block-agent/agent-route';
 import { callDetailSearch } from '@app/features/block-call/call-route';
 import { markdownDetailSearch } from '@app/features/block-md/markdown-route';
 import { pdfDetailSearch } from '@app/features/block-pdf/pdf-route';
+import {
+  spreadsheetDetailSearch,
+  spreadsheetLocationUpdates,
+} from '@app/features/block-spreadsheet/spreadsheet-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
 import {
@@ -21,6 +25,7 @@ import {
 import { emailDetailSearch } from '@app/features/email-view/email-route';
 import type { SerializedSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { chatDetailSearch, chatLocationUpdates } from '@block-chat/chat-route';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import {
@@ -52,6 +57,8 @@ export function homeDetailSearch(
 ): DetailSearch {
   return {
     [agentDetailSearch.namespace]: undefined,
+    [chatDetailSearch.namespace]: undefined,
+    [spreadsheetDetailSearch.namespace]: undefined,
     [callDetailSearch.namespace]: undefined,
     [markdownDetailSearch.namespace]: undefined,
     [pdfDetailSearch.namespace]: undefined,
@@ -70,7 +77,12 @@ function targetParam(target: PreviewBlockTarget, key: string): string {
 function documentDetailSearch(
   target: PreviewBlockTarget
 ): SerializedSearchParams | undefined {
-  if (target.blockType === 'channel') return;
+  if (
+    target.blockType === 'channel' ||
+    target.blockType === 'chat' ||
+    target.blockType === 'spreadsheet'
+  )
+    return;
   return driveSearchCodec.serialize({
     ...driveSearch.defaults,
     commentId:
@@ -99,15 +111,24 @@ function channelTargetSearch(
 export function homePreviewTargetNavigation(
   target: PreviewBlockTarget
 ): HomePreviewNavigation {
+  const detail =
+    target.blockType === 'chat'
+      ? chatLocationUpdates(target.blockId, target.params)
+      : target.blockType === 'spreadsheet'
+        ? spreadsheetLocationUpdates(target.blockId, target.params)
+        : {};
   return {
     params: {
       blockType: target.aliasContext?.alias ?? target.blockType,
       previewId: target.blockId,
     },
-    search: homeDetailSearch({
-      channel: channelTargetSearch(target),
-      document: documentDetailSearch(target),
-    }),
+    search: {
+      ...homeDetailSearch({
+        channel: channelTargetSearch(target),
+        document: documentDetailSearch(target),
+      }),
+      ...detail,
+    },
   };
 }
 

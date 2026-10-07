@@ -198,6 +198,7 @@ function HomeDetailRouteContent() {
       <PreviewPanel
         target={previewTarget()}
         navigationRequest={previewNavigationRequest()}
+        routeOwned
         orchestrator={orchestrator}
         splitPanelContext={panel}
         headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}

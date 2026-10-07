@@ -1,3 +1,4 @@
+import type { BlockAlias, BlockName } from '@core/block';
 import type { Permissions } from '@core/component/SharePermissions';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -105,6 +106,7 @@ interface BlockToolbarProps {
   entity?: EntityData;
   /** Feature-owned access when the session loads outside legacy Block state. */
   permissions?: Permissions;
+  entityKind?: BlockName | BlockAlias;
 }
 
 /**
@@ -168,6 +170,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
               tools={fileMenuTools()}
               entity={props.entity}
               permissions={props.permissions}
+              entityKind={props.entityKind}
               buttonClass="order-first"
             />
           </SplitTitleFileMenu>
@@ -204,6 +207,7 @@ export function ResponsiveBlockToolbar(props: BlockToolbarProps) {
           tools={fileMenuTools()}
           entity={props.entity}
           permissions={props.permissions}
+          entityKind={props.entityKind}
           buttonClass="order-last"
         />
       </SplitTitleFileMenu>

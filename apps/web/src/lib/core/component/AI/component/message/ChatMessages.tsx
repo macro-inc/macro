@@ -20,6 +20,7 @@ import {
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { createChatMessageTarget } from '../../primitives/create-chat-message-target';
 import { idStream, timeStream } from '../../util/stream/extendedStream';
 import { AssistantMessage } from './AssistantMessage';
 import { createMobileKeyboardScrollPin } from './create-mobile-keyboard-scroll-pin';
@@ -151,38 +152,9 @@ export function ChatMessages(props: ChatMessagesProps) {
     scrollToBottom('instant');
   });
 
-  // the highlight message id when arriving from search
-  const [activeTargetMessageId, setActiveTargetMessageId] = createSignal<
-    string | undefined
-  >(undefined);
-
-  createEffect(() => {
-    const params = props.pendingLocationParams?.();
-    if (!params) return;
-
-    if (params.message_id) {
-      setActiveTargetMessageId(params.message_id);
-      setTimeout(() => {
-        const messageElement = document.getElementById(
-          `chat-${params.message_id}`
-        );
-        if (messageElement) {
-          const scrollContainer = messageElement.closest(
-            '[data-chat-scroll]'
-          ) as HTMLElement;
-          if (scrollContainer) {
-            messageElement.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center',
-            });
-          }
-        }
-      }, 0);
-
-      setTimeout(() => {
-        setActiveTargetMessageId(undefined);
-      }, 1500);
-    }
+  const activeTargetMessageId = createChatMessageTarget({
+    params: () => props.pendingLocationParams?.(),
+    container: () => messagesRef,
   });
 
   const lastPair = () => {

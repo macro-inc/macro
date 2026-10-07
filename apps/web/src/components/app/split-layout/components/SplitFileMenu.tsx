@@ -737,12 +737,15 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 export type BlockSplitFileMenuProps = Omit<
   SplitFileMenuProps,
   'entityKind' | 'permissions'
-> & { permissions?: Permissions };
+> & { permissions?: Permissions; entityKind?: BlockName | BlockAlias };
 
 /** Supplies legacy Block identity, permissions, and registered hotkeys. */
 export function BlockSplitFileMenu(props: BlockSplitFileMenuProps) {
-  const entityKind = useBlockAliasedName();
-  const permissions = useGetPermissions();
+  const entityKind = props.entityKind ?? useBlockAliasedName();
+  const permissions =
+    props.permissions === undefined
+      ? useGetPermissions()
+      : () => Permissions.NO_ACCESS;
 
   return (
     <SplitFileMenu

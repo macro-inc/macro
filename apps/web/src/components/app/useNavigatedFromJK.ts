@@ -1,12 +1,12 @@
-import { useSoup } from '@app/features/next-soup/soup-context';
+import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import { lastExecutedCommand } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo } from 'solid-js';
 
 export function useNavigatedFromJK() {
-  const soup = useSoup();
+  const soup = useMaybeSoup();
   const navigatedFromJK = createMemo(() => {
-    const rows = soup.rows();
+    const rows = soup?.rows();
     if (!rows) return false;
     return (
       rows.length > 0 &&

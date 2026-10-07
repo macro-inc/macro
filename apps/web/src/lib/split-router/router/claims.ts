@@ -10,7 +10,8 @@ export type ClaimHolder = {
   /** The pane showing this holder, if any. Navigation in that pane never yields to it. */
   pane?: PaneId;
   claim: string;
-  activate(): void;
+  /** Non-pane hosts consume the destination before activating their local view. */
+  activate(destination?: Readonly<Entry>): void;
 };
 
 type ClaimSource = () => readonly ClaimHolder[];
@@ -158,8 +159,8 @@ export function createClaims(options: {
     const alreadyHeld = claim === entryClaim(routes, check.from);
     if (alreadyHeld) return;
 
-    const holder = registry.holderOf(claim, check.pane);
-    if (!holder) return;
+    const holder = registry.holderOf(claim);
+    if (!holder || (isPaneHolder(holder) && holder.pane === check.pane)) return;
 
     const openedBeside =
       check.besides !== undefined && isInPane(holder, check.besides);
@@ -192,9 +193,10 @@ export function createClaims(options: {
       if (departing) runner.abort(holder.pane);
 
       options.carrySearch(holder.pane, destination, mode);
+      holder.activate();
+    } else {
+      holder.activate(destination);
     }
-
-    holder.activate();
 
     return { status: 'activated', owner: holder.owner };
   };

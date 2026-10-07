@@ -16,8 +16,9 @@ import {
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSplitLayout, type SplitContent } from '../layoutManager';
+import type { SplitContent } from '../layoutManager';
 import { createMobilePaneStack } from '../mobile/createMobilePaneStack';
+import { createAppSplitLayout } from '../split-router/app-content';
 import { createAppPanePolicy } from '../split-router/app-pane-policy';
 import {
   resolveContentLocation,
@@ -80,7 +81,7 @@ function setup(url: string) {
 
   return createRoot((disposeRoot) => {
     dispose = disposeRoot;
-    let manager: ReturnType<typeof createSplitLayout> | undefined;
+    let manager: ReturnType<typeof createAppSplitLayout> | undefined;
     const router = createSplitRouter({
       routes,
       history,
@@ -94,7 +95,7 @@ function setup(url: string) {
         stacked: () => true,
       }),
     });
-    manager = createSplitLayout(createMockOrchestrator(), {
+    manager = createAppSplitLayout(createMockOrchestrator(), {
       router,
       toLocation: (content) => resolveContentLocation(router.routes, content),
       toContent: splitContentFromLocation,

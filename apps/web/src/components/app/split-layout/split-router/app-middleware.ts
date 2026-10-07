@@ -1,3 +1,4 @@
+import { spreadsheetDetailSearch } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import {
   CALENDAR_ROUTE_ID,
@@ -25,6 +26,7 @@ import {
 import { paneRootMatch } from '@app/routes/app-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
+import { chatDetailSearch } from '@block-chat/chat-route';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { match } from 'ts-pattern';
@@ -142,8 +144,7 @@ function migrateLegacySearch({
       case 'task':
       case 'skill':
       case 'snippet':
-      case 'spreadsheet':
-        return MD_URL_PARAMS.commentId;
+
       case 'pdf':
         return PDF_URL_PARAMS.annotationId;
     }
@@ -155,7 +156,40 @@ function migrateLegacySearch({
       }
     : undefined;
 
+  const route = routeParams(to.location.route);
+  const spreadsheet =
+    leafId === 'drive-document' ||
+    leafId === 'drive-folder-document' ||
+    leafId === 'drive-tab-document' ||
+    leafId === 'home-document'
+      ? route.documentType === 'spreadsheet'
+      : (leafId === 'home-preview' && route.blockType === 'spreadsheet') ||
+        (leafId === 'legacy-content' && route.type === 'spreadsheet');
+  const chat =
+    leafId === 'agent-chats' ||
+    (leafId === 'home-preview' && route.blockType === 'chat') ||
+    (leafId === 'legacy-content' && route.type === 'chat');
   const mapping = match(leafId)
+    .when(
+      () => chat,
+      () => ({
+        namespace: chatDetailSearch.namespace,
+        fields: [
+          ['message_id', 'messageId'],
+          ['share', 'share'],
+        ] as const,
+      })
+    )
+    .when(
+      () => spreadsheet,
+      () => ({
+        namespace: spreadsheetDetailSearch.namespace,
+        fields: [
+          [MD_URL_PARAMS.commentId, 'commentId'],
+          ['share', 'share'],
+        ] as const,
+      })
+    )
     .with('mail-thread', () => ({
       namespace: EMAIL_DETAIL_SEARCH_NAMESPACE,
       fields: [[EMAIL_URL_PARAMS.messageId, 'messageId']] as const,
@@ -206,9 +240,19 @@ function migrateLegacySearch({
 
   if (!Object.keys(additions).length) return;
 
+  const id = chat
+    ? (route.id ?? route.previewId)
+    : (route.documentId ?? route.previewId ?? route.id);
+  const identity = chat ? 'chatId' : 'documentId';
   const search = {
     ...to.location.search,
-    [namespace]: { ...current, ...additions },
+    [namespace]: {
+      ...current,
+      ...additions,
+      ...((chat || spreadsheet) && typeof id === 'string'
+        ? { [identity]: [id] }
+        : {}),
+    },
   };
 
   const query = new URLSearchParams();

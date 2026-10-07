@@ -5,6 +5,16 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Legacy chat location links
+
+Chat message links use the split router and reuse a matching standalone, Home,
+or Agents detail owner without replacing its surrounding list route. Open the
+same message link twice after scrolling away; each request must seek again
+without resetting the draft. During a cold load, only the latest target applies.
+Local previews and embedded cards never consume a parent pane's chat target.
+Opening a message in an existing local preview or popover updates that view;
+closing the view releases its ownership.
+
 ## Checking first-response latency
 
 From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
@@ -459,6 +469,17 @@ Loading metadata affects only its row. Deleted, inaccessible, or missing resourc
 show **Run unavailable** without a link, including failed preparation that created
 no resource. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
+
+## Existing chat detail panes
+
+Existing chats use the same conversation view in standalone routes, Home and
+Agents detail panes, and embedded cards. Reopening a chat restores its draft,
+attachments, and model; switching chats must not mix their drafts or messages.
+A message target requested while loading applies when the transcript is ready.
+Activating the same message target again scrolls and highlights it again without
+reloading the chat. View-only or signed-out access must not show an editable
+composer. A failed load offers **Retry**; inaccessible or deleted chats show the
+normal access-error screen.
 
 ## Start a standalone chat
 

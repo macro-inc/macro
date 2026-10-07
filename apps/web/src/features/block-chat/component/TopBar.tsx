@@ -1,50 +1,50 @@
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
+import { DEFAULT_CHAT_NAME } from '@block-chat/core/types';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
-import {
-  ResponsiveBlockToolbar,
-  ResponsivePermissionsBadge,
-} from '@components/app/ResponsiveBlockToolbar';
+import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import { useBlockId } from '@core/block';
+import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { useChatInputContext } from '@core/component/AI/context';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
+import { Permissions } from '@core/component/SharePermissions';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { blockMetadataSignal } from '@core/signal/load';
-import { useGetPermissions } from '@core/signal/permissions';
-import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import { createRenameDssEntityMutation } from '@entity';
 import IconShared from '@icon/share.svg';
 import ChatDebugIcon from '@phosphor/chat-text.svg';
 import Notepad from '@phosphor/notepad.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {
+  chatId: string;
+  name: Accessor<string>;
+  permissions: Accessor<Permissions>;
+  owner: string;
+  scopeId: string;
   showStreamDebug?: Accessor<boolean>;
   toggleStreamDebug?: () => void;
 }) {
-  const blockId = useBlockId();
+  const blockId = props.chatId;
   const input = useChatInputContext();
 
-  const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
-  const chatName = () => name();
+  const name = props.name;
+  const rename = createRenameDssEntityMutation();
 
   const openInstructions = useOpenInstructionsMd();
 
-  const permissions = useGetPermissions();
+  const permissions = props.permissions;
   const openShare = useShareModal(() => ({
     id: blockId,
     blockAlias: 'chat',
     itemType: 'chat',
     name: name() ?? '',
     userPermissions: permissions(),
-    owner: blockMetadataSignal()?.owner,
+    owner: props.owner,
   }));
 
   const ops: FileOperation[] = [
@@ -76,7 +76,14 @@ export function TopBar(props: {
       label: 'Share',
       icon: IconShared,
       action: openShare,
-      buttonComponent: () => <ShareTrigger onClick={openShare} />,
+      buttonComponent: () => (
+        <ShareTrigger
+          onClick={openShare}
+          id={blockId}
+          blockType="chat"
+          hotkeyScope={props.scopeId}
+        />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];
@@ -84,19 +91,33 @@ export function TopBar(props: {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel
+        <StaticSplitLabel
+          label={name() || DEFAULT_CHAT_NAME}
           icon={<ProviderIcon model={input.model()} class="size-4 shrink-0" />}
-          fallbackName={DEFAULT_CHAT_NAME}
-          lockRename={false}
+          onRename={
+            permissions() === Permissions.OWNER
+              ? (newName) =>
+                  rename.mutate({
+                    entity: {
+                      type: 'chat',
+                      id: blockId,
+                      name: name(),
+                      ownerId: props.owner,
+                    },
+                    newName,
+                  })
+              : undefined
+          }
         />
       </SplitHeaderLeft>
-      <ResponsivePermissionsBadge />
       <ResponsiveBlockToolbar
+        entityKind="chat"
+        permissions={permissions()}
         tools={tools}
         ops={ops}
         id={blockId}
         itemType="chat"
-        name={chatName()}
+        name={name()}
       />
     </>
   );

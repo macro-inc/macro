@@ -512,8 +512,12 @@ export function createBlockOrchestrator(): BlockOrchestrator {
   }
 
   return {
-    isBlockMounted: (type, id) =>
-      instances.get(keyOf(type, id))?.isMounted() ?? false,
+    isBlockMounted: (type, id) => {
+      const instance = instances.get(keyOf(type, id));
+      return instance
+        ? instance.isMounted()
+        : unwrap(blocks)[id]?.type === type;
+    },
     getBlockHandle,
     createBlockInstance: createManagedBlockInstance,
     rekeyBlockInstance,

@@ -1,3 +1,5 @@
+import { spreadsheetLocationUpdates } from '@app/features/block-spreadsheet/spreadsheet-route';
+import { chatLocationUpdates } from '@block-chat/chat-route';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
@@ -13,7 +15,6 @@ const blockNamesWithLocations = [
   'md',
   'task',
   'email',
-  'chat',
   'task',
 ] as const;
 type BlockNameWithLocations = (typeof blockNamesWithLocations)[number];
@@ -45,6 +46,19 @@ export function openDocument(
 
   const targetBlock = fileTypeToBlockName(blockOrFileType);
   if (!targetBlock) return;
+
+  if (targetBlock === 'chat' || targetBlock === 'spreadsheet') {
+    return openWithSplit(
+      { type: targetBlock, id },
+      {
+        preferNewSplit: inNewSplit,
+        search:
+          targetBlock === 'chat'
+            ? chatLocationUpdates(id, params)
+            : spreadsheetLocationUpdates(id, params),
+      }
+    );
+  }
 
   const hasParams = !!params && Object.keys(params).length > 0;
 

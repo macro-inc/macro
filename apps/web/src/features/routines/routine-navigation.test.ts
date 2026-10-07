@@ -16,10 +16,8 @@ import {
   routineDetailRoute,
   routinesRoute,
 } from '@app/routes/routes';
-import {
-  createSplitLayout,
-  type SplitContent,
-} from '@components/app/split-layout/layoutManager';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
+import { createAppSplitLayout } from '@components/app/split-layout/split-router/app-content';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
 import {
   resolveContentLocation,
@@ -72,7 +70,7 @@ let cleanup: (() => void) | undefined;
 function setup(path: string) {
   const history = createMemoryHistory(upgradeLegacyPath(routes, path));
   return createRoot((dispose) => {
-    let manager: ReturnType<typeof createSplitLayout> | undefined;
+    let manager: ReturnType<typeof createAppSplitLayout> | undefined;
     const router = createSplitRouter({
       routes: definitions,
       history,
@@ -92,7 +90,7 @@ function setup(path: string) {
         dispose: vi.fn(),
       })),
     } as unknown as BlockOrchestrator;
-    manager = createSplitLayout(orchestrator, {
+    manager = createAppSplitLayout(orchestrator, {
       router,
       toLocation: (content) => resolveContentLocation(router.routes, content),
       toContent: splitContentFromLocation,

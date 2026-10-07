@@ -1,3 +1,4 @@
+import { spreadsheetLocationParams } from '@app/features/block-spreadsheet/spreadsheet-route';
 import {
   CanvasDetail,
   type CanvasDetailContext,
@@ -24,6 +25,7 @@ import {
   type VideoDetailContext,
 } from '@app/features/drive-view/views/VideoDetail';
 import { getChannelEntityTarget } from '@app/features/next-soup/utils';
+import { chatLocationParams } from '@block-chat/chat-route';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import {
   ChannelDetail,
@@ -32,12 +34,17 @@ import {
 } from '@channel/Channel/ChannelDetail';
 import type { ChannelTargetRequest } from '@channel/Channel/ChannelSurface';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import { PreviewPanel } from '@components/app/PreviewPanel';
+import {
+  PreviewFrame,
+  PreviewPanel,
+  PreviewPanelContext,
+} from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { lazyNamed } from '@core/util/lazyNamed';
+import deepEqual from 'fast-deep-equal';
 import {
   children,
   createMemo,
@@ -53,6 +60,11 @@ import type { EntityDetailTarget } from './entity-detail-target';
 const PdfDetail = lazyNamed(
   () => import('@app/features/drive-view/views/PdfDetail'),
   'PdfDetail'
+);
+const ChatBlock = lazyNamed(() => import('@block-chat/ChatBlock'), 'ChatBlock');
+const SpreadsheetBlock = lazyNamed(
+  () => import('@app/features/block-spreadsheet/SpreadsheetBlock'),
+  'default'
 );
 
 type DocumentDetailContext =
@@ -72,6 +84,7 @@ export type EntityDetailProps = {
   target: EntityDetailTarget;
   previewHeaderLeading?: JSX.Element;
   navigationRequest?: number | string;
+  routeOwned?: boolean;
   children?: (context: EntityDetailContext) => JSX.Element;
 };
 
@@ -98,6 +111,32 @@ function PreviewPanelEntityDetail(props: EntityDetailProps) {
       splitPanelContext={panel}
       headerLeading={props.previewHeaderLeading}
     />
+  );
+}
+
+function EntityPreviewFrame(
+  props: Pick<
+    EntityDetailProps,
+    'target' | 'previewHeaderLeading' | 'navigationRequest'
+  > & { children: JSX.Element }
+) {
+  const panel = useSplitPanelOrThrow();
+  const target = createMemo(() => previewBlockTarget(props.target));
+  const location = createMemo(
+    () => ({ target: target(), request: props.navigationRequest }),
+    undefined,
+    { equals: deepEqual }
+  );
+  return (
+    <PreviewFrame
+      splitPanelContext={panel}
+      headerLeading={props.previewHeaderLeading}
+      locationKey={location}
+    >
+      <PreviewPanelContext previewTarget={target()}>
+        {props.children}
+      </PreviewPanelContext>
+    </PreviewFrame>
   );
 }
 
@@ -210,6 +249,36 @@ export function EntityDetail(props: EntityDetailProps) {
         <CodeDetail documentId={props.target.id}>
           {(context) => <>{renderChildren(context)}</>}
         </CodeDetail>
+      </Match>
+      <Match when={blockType() === 'spreadsheet'}>
+        <EntityPreviewFrame
+          target={props.target}
+          previewHeaderLeading={props.previewHeaderLeading}
+          navigationRequest={props.navigationRequest}
+        >
+          <SpreadsheetBlock
+            documentId={props.target.id}
+            params={spreadsheetLocationParams(
+              previewBlockTarget(props.target).params
+            )}
+            navigationRequest={props.navigationRequest}
+            routeOwned={props.routeOwned}
+          />
+        </EntityPreviewFrame>
+      </Match>
+      <Match when={props.target.type === 'chat'}>
+        <EntityPreviewFrame
+          target={props.target}
+          previewHeaderLeading={props.previewHeaderLeading}
+          navigationRequest={props.navigationRequest}
+        >
+          <ChatBlock
+            chatId={props.target.id}
+            params={chatLocationParams(previewBlockTarget(props.target).params)}
+            navigationRequest={props.navigationRequest}
+            routeOwned={props.routeOwned}
+          />
+        </EntityPreviewFrame>
       </Match>
       <Match when={blockType() === 'canvas'}>
         <CanvasDetail documentId={props.target.id}>

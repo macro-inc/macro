@@ -5,21 +5,23 @@ import {
 } from '@app/features/property/side-panel/properties';
 import { FolderLink, SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
-import { useBlockId } from '@core/block';
-import { useCanEdit } from '@core/signal/permissions';
-import { useChatDataQuery } from '@queries/cognition/chat-data';
 import { useProjectDataQuery } from '@queries/storage/project-data';
-import { createMemo, Show, Suspense } from 'solid-js';
+import type { ChatResponse } from '@service-cognition/generated/schemas/chatResponse';
+import { Show, Suspense } from 'solid-js';
 
-export function ChatSidePanelSections() {
-  const chatId = useBlockId();
-  const canEdit = useCanEdit();
+export function ChatSidePanelSections(props: {
+  chatId: string;
+  data: ChatResponse;
+  canEdit: boolean;
+}) {
+  const chatId = props.chatId;
+  const canEdit = () => props.canEdit;
 
   return (
     <>
       <SidePanel.Footer>
         <Suspense fallback={<SidePanel.Loading />}>
-          <ChatDetailsContent chatId={chatId} />
+          <ChatDetailsContent chat={props.data} />
         </Suspense>
       </SidePanel.Footer>
       <EntityTagsSection
@@ -35,7 +37,7 @@ export function ChatSidePanelSections() {
         order={30}
       >
         <Suspense fallback={<SidePanel.Loading />}>
-          <ChatPropertiesContent chatId={chatId} canEdit={canEdit()} />
+          <ChatPropertiesContent chat={props.data} canEdit={canEdit()} />
         </Suspense>
       </SidePanel.Section>
       <EntityActivitySectionConditional
@@ -47,9 +49,8 @@ export function ChatSidePanelSections() {
   );
 }
 
-function ChatDetailsContent(props: { chatId: string }) {
-  const query = useChatDataQuery(() => props.chatId);
-  const chat = createMemo(() => query.data);
+function ChatDetailsContent(props: { chat: ChatResponse }) {
+  const chat = () => props.chat;
   const projectQuery = useProjectDataQuery(
     () => chat()?.projectId ?? undefined
   );
@@ -63,7 +64,9 @@ function ChatDetailsContent(props: { chatId: string }) {
       <Show
         when={(() => {
           const id = chat()?.projectId;
-          const name = projectQuery.data?.name;
+          const name = projectQuery.isSuccess
+            ? projectQuery.data?.name
+            : undefined;
           return id && name ? { id, name } : undefined;
         })()}
       >
@@ -78,15 +81,16 @@ function ChatDetailsContent(props: { chatId: string }) {
   );
 }
 
-function ChatPropertiesContent(props: { chatId: string; canEdit: boolean }) {
-  const query = useChatDataQuery(() => props.chatId);
-
+function ChatPropertiesContent(props: {
+  chat: ChatResponse;
+  canEdit: boolean;
+}) {
   return (
     <EntityPropertiesSection
-      entityId={props.chatId}
+      entityId={props.chat.id}
       entityType="CHAT"
       canEdit={props.canEdit}
-      documentName={query.data?.name}
+      documentName={props.chat.name}
       showTags={false}
     />
   );

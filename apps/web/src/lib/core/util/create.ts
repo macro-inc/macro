@@ -1,5 +1,5 @@
 import { analytics } from '@app/lib/analytics';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
+import { DEFAULT_CHAT_NAME } from '@block-chat/core/types';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';

@@ -1,5 +1,7 @@
 import { pollCardHeight } from '@app/features/block-form/core/poll-card-layout';
+import { spreadsheetLocationParams } from '@app/features/block-spreadsheet/spreadsheet-route';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { chatLocationParams } from '@block-chat/chat-route';
 import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
@@ -73,6 +75,12 @@ false && floatWithElement;
 const ChannelMessageThreadCard = lazyNamed(
   () => import('./ChannelMessageThreadCard'),
   'ChannelMessageThreadCard'
+);
+
+const ChatBlock = lazyNamed(() => import('@block-chat/ChatBlock'), 'ChatBlock');
+const SpreadsheetBlock = lazyNamed(
+  () => import('@app/features/block-spreadsheet/SpreadsheetBlock'),
+  'default'
 );
 
 const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
@@ -260,18 +268,36 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     if (shouldCreateBlockPreview) {
       const i = item();
       if (!i || i.loading) return;
+      const blockType = resolveBlockAlias(verifyBlockName(props.blockName));
+      if (blockType === 'chat') {
+        getElement = () => (
+          <ChatBlock
+            chatId={i.id}
+            params={chatLocationParams(previewData())}
+            nested
+          />
+        );
+      } else if (blockType === 'spreadsheet') {
+        getElement = () => (
+          <SpreadsheetBlock
+            documentId={i.id}
+            params={spreadsheetLocationParams(previewData())}
+            nested
+          />
+        );
+      } else {
+        const preview = createBlockInstance(
+          resolveBlockAlias(verifyBlockName(props.blockName)),
+          i.id,
+          {
+            params: previewData(),
+            nested: { parentContext: previewContext() },
+          }
+        );
+        if (!preview) return;
 
-      const preview = createBlockInstance(
-        resolveBlockAlias(verifyBlockName(props.blockName)),
-        i.id,
-        {
-          params: previewData(),
-          nested: { parentContext: previewContext() },
-        }
-      );
-      if (!preview) return;
-
-      getElement = () => preview.element();
+        getElement = () => preview.element();
+      }
     } else {
       getElement = () => (
         <div class="p-2">

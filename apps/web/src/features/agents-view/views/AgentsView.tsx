@@ -5,12 +5,12 @@ import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { McpConnections } from '@app/features/settings/McpConnections';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@components/app/GlobalAppState';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
-import { PreviewPanel } from '@components/app/PreviewPanel';
+import {
+  PreviewFrame,
+  PreviewPanelContext,
+} from '@components/app/PreviewPanel';
 import { previewBlockTarget } from '@components/app/previewTarget';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -20,6 +20,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
@@ -59,6 +60,7 @@ import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
 
+const ChatBlock = lazyNamed(() => import('@block-chat/ChatBlock'), 'ChatBlock');
 type SelectedConversation = {
   conversation: AgentConversationTarget;
   activeConversationId: string;
@@ -78,7 +80,6 @@ function LoadingComposer() {
 function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
-  const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
@@ -447,14 +448,23 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                   </div>
                                 )}
                               >
-                                <PreviewPanel
-                                  target={previewBlockTarget(conversation)}
-                                  orchestrator={orchestrator}
+                                <PreviewFrame
                                   splitPanelContext={panel}
                                   headerLeading={
                                     <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
                                   }
-                                />
+                                >
+                                  <PreviewPanelContext
+                                    previewTarget={previewBlockTarget(
+                                      conversation
+                                    )}
+                                  >
+                                    <ChatBlock
+                                      chatId={conversation.id}
+                                      routeOwned
+                                    />
+                                  </PreviewPanelContext>
+                                </PreviewFrame>
                               </ChatEmptyStateContext.Provider>
                             </Suspense>
                           </div>

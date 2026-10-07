@@ -16,7 +16,8 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import { createSplitLayout, type SplitManager } from '../layoutManager';
+import type { SplitManager } from '../layoutManager';
+import { createAppSplitLayout } from '../split-router/app-content';
 import { createAppPanePolicy } from '../split-router/app-pane-policy';
 import {
   resolveContentLocation,
@@ -62,7 +63,7 @@ export function createRoutedSplitLayout(
       stacked: () => false,
     }),
   });
-  manager = createSplitLayout(orchestrator, {
+  manager = createAppSplitLayout(orchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,

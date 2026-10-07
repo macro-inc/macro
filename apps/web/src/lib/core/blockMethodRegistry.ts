@@ -1,5 +1,4 @@
 import type { CanvasSpec } from '@block-canvas/definition';
-import type { BlockChatSpec } from '@block-chat/blockClient';
 import type { BlockName } from './block';
 
 // Base type for all block method specs
@@ -18,7 +17,7 @@ type AssertSpec<T> = T extends BlockMethodSpec ? T : EmptySpec;
 export interface BlockMethodRegistry {
   call: EmptySpec;
   calendar: EmptySpec;
-  chat: AssertSpec<BlockChatSpec>;
+  chat: EmptySpec;
   database: EmptySpec;
   form: EmptySpec;
   channel: EmptySpec;
