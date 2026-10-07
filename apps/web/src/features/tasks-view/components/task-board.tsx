@@ -55,6 +55,7 @@ export type TaskBoardProps = {
   onOpen(task: TaskBoardTask, event: MouseEvent): void;
   onLoadMore(columnId: string): void;
   renderColumnIcon?: (column: Accessor<TaskBoardColumn>) => JSX.Element;
+  renderLeadingTitleProperty?: TaskBoardPropertySlot;
   renderTitleProperty?: TaskBoardPropertySlot;
   renderProperties?: TaskBoardPropertySlot;
 };
@@ -504,7 +505,7 @@ function TaskBoardCard(props: {
       laneId={props.laneId}
       canDrag={!readOnly()}
       pending={props.board.pending(props.task.id)}
-      onDblClick={(event) => {
+      onClick={(event) => {
         if (event.target.closest('[data-kanban-no-drag], button')) {
           return;
         }
@@ -513,6 +514,9 @@ function TaskBoardCard(props: {
       }}
     >
       <div class="flex items-start gap-1 p-3 pb-2">
+        <div data-kanban-no-drag class="flex shrink-0 items-center">
+          {props.board.renderLeadingTitleProperty?.(task, readOnly)}
+        </div>
         <button
           type="button"
           class="min-w-0 flex-1 break-words text-left text-sm font-medium text-ink hover:underline"

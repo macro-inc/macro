@@ -11,24 +11,17 @@ import {
   TaskBoardColumnIcon,
   TaskBoardProperty,
 } from './components/task-board-property';
-import type { TaskBoardGrouping, TaskBoardTask } from './core/task-board';
+import type { TaskBoardTask } from './core/task-board';
 import { taskBoardFacetId, taskBoardPropertyId } from './queries/task-board';
 import { createTaskBoardQueries } from './queries/task-board-queries';
 import { useTasksView } from './tasks-view-context';
 import { TaskBoardView } from './views/task-board-view';
 
 const CARD_PROPERTY_IDS = [
-  SYSTEM_PROPERTY_IDS.STATUS,
   SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
   SYSTEM_PROPERTY_IDS.DUE_DATE,
   SYSTEM_PROPERTY_IDS.PROJECT,
 ];
-
-const titlePropertyId = (grouping: TaskBoardGrouping) =>
-  grouping === 'assignee'
-    ? SYSTEM_PROPERTY_IDS.STATUS
-    : SYSTEM_PROPERTY_IDS.ASSIGNEES;
 
 /** App-facing wiring. No task or app context is required by the shared board. */
 export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
@@ -80,10 +73,9 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
 
   const cardPropertyIds = () => {
     const groupingProperty = taskBoardPropertyId(state.boardGroupBy);
-    const titleProperty = titlePropertyId(state.boardGroupBy);
 
     return CARD_PROPERTY_IDS.filter((id) => {
-      if (id === groupingProperty || id === titleProperty) {
+      if (id === groupingProperty) {
         return false;
       }
 
@@ -169,29 +161,17 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
             />
           </Suspense>
         )}
-        renderTitleProperty={(task, readOnly) => (
-          <Show
-            when={state.boardGroupBy === 'assignee'}
-            fallback={renderProperty(
-              task,
-              readOnly,
-              SYSTEM_PROPERTY_IDS.ASSIGNEES,
-              true
-            )}
-          >
-            {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.STATUS, true)}
-          </Show>
-        )}
+        renderLeadingTitleProperty={(task, readOnly) =>
+          renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.STATUS, true)
+        }
+        renderTitleProperty={(task, readOnly) =>
+          renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)
+        }
         renderProperties={(task, readOnly) => (
           <For each={cardPropertyIds()}>
             {(id) => {
-              const iconOnly =
-                id === SYSTEM_PROPERTY_IDS.STATUS ||
-                id === SYSTEM_PROPERTY_IDS.PRIORITY ||
-                id === SYSTEM_PROPERTY_IDS.ASSIGNEES;
-              const includeEmpty =
-                id === SYSTEM_PROPERTY_IDS.STATUS ||
-                id === SYSTEM_PROPERTY_IDS.PRIORITY;
+              const iconOnly = id === SYSTEM_PROPERTY_IDS.PRIORITY;
+              const includeEmpty = id === SYSTEM_PROPERTY_IDS.PRIORITY;
 
               return renderProperty(task, readOnly, id, iconOnly, includeEmpty);
             }}

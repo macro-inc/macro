@@ -203,6 +203,7 @@ export function Kanban(props: KanbanProps) {
       <DragSessionSensors
         getViewport={() => props.getViewport?.()}
         axis="both"
+        activationDistance={props.mode === 'cross-column' ? 10 : undefined}
         nestedScroll={
           props.mode === 'cross-column'
             ? {
@@ -392,7 +393,7 @@ export function KanbanCard(props: {
   laneId: string;
   canDrag: boolean;
   pending?: boolean;
-  onDblClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
+  onClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
   children: JSX.Element;
 }) {
   const drag = useContext(DragContext);
@@ -437,7 +438,7 @@ export function KanbanCard(props: {
             event.preventDefault();
           }
         }}
-        onDblClick={(event) => {
+        onClick={(event) => {
           if (!event.currentTarget.contains(event.target)) {
             return;
           }
@@ -446,7 +447,7 @@ export function KanbanCard(props: {
             return;
           }
 
-          props.onDblClick?.(event);
+          props.onClick?.(event);
         }}
         on:click={{
           handleEvent(event: MouseEvent) {

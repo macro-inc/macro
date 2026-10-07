@@ -19,6 +19,7 @@ export function TaskBoardView(props: {
   onRevealHiddenColumns(): void;
   ref?: (element: HTMLDivElement) => void;
   renderColumnIcon?: TaskBoardProps['renderColumnIcon'];
+  renderLeadingTitleProperty?: TaskBoardProps['renderLeadingTitleProperty'];
   renderTitleProperty?: TaskBoardProps['renderTitleProperty'];
   renderProperties?: TaskBoardProps['renderProperties'];
 }) {
@@ -94,6 +95,7 @@ export function TaskBoardView(props: {
         onOpen={props.onOpen}
         onLoadMore={(id) => void read(() => props.loadMore(id))}
         renderColumnIcon={props.renderColumnIcon}
+        renderLeadingTitleProperty={props.renderLeadingTitleProperty}
         renderTitleProperty={props.renderTitleProperty}
         renderProperties={props.renderProperties}
       />

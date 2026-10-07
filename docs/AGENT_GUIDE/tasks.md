@@ -79,9 +79,10 @@ offers Status, Priority, Assignee, and (when Projects is enabled) Project.
 The layout and board grouping restore with the Tasks navigation entry. Switching
 back to List retains its previous grouping and collapsed groups.
 
-Drag a card from its body or title to another column. Property pills remain
-interactive and do not start a drag. Double-click the card body to open the task,
-or click its title once. A new destination column highlights once movement slows
+Click a card's body or title to open the task. Move at least 10 pixels with the
+mouse button held to start dragging to another column; holding still does not
+start a drag. Property pills remain interactive and do not start a drag.
+A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns;
 within an already active column, the slot follows the pointer at any speed.
 The pointer's vertical position selects the insertion slot. Cross-column moves
@@ -125,11 +126,11 @@ these lower bounds count known groups, not every group excluded by server filter
 other filters, the current tab, and search stay active. The dashed column is not
 a drop target.
 
-An icon-only assignee pill appears to the right of the task title, except in
-Assignee grouping, where that pill shows status. The lower row omits both the
-grouping property and the title pill's property. The remaining properties use the
-standard pill controls and icons. Status and Priority use compact icon-only pills;
-due date and project appear when set. Read-only tasks keep passive property pills.
+An icon-only status pill appears before the task title, and an icon-only assignee
+pill appears to its right in every grouping. The lower row omits status, assignee,
+and the grouping property. The remaining properties use standard pill controls
+and icons. Priority uses a compact icon-only pill; due date and project appear
+when set. Read-only tasks keep passive property pills.
 A task assigned to multiple people appears in each person's column. Moving it
 from Alice to Bob replaces Alice while keeping the other assignees. Moving to
 **Unassigned** clears all assignees. Project moves change the task's Project
