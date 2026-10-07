@@ -14,6 +14,15 @@ import {
 const mocks = vi.hoisted(() => ({
   replace: undefined as (<T>(name: string, factory: () => T) => T) | undefined,
   routeTab: 'my-tasks',
+  readSearch: (() => ({})) as () => Record<string, string | undefined>,
+  updateSearch: (() => {}) as (
+    next: Record<string, string | undefined>
+  ) => void,
+  writes: [] as {
+    next: Record<string, string | undefined>;
+    options?: { history?: string };
+  }[],
+  navigate: vi.fn(),
   captured: {} as Record<string, unknown>,
   captors: new Map<string, () => unknown>(),
   projectsEnabled: (() => true) as () => boolean,
@@ -22,19 +31,38 @@ const mocks = vi.hoisted(() => ({
   dockText: (): string => '',
 }));
 vi.mock('@app/lib/split-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mocks.navigate,
   useParams: () => ({}),
   createSearchParams: () => [
-    {
-      get tab() {
-        return mocks.routeTab;
-      },
+    new Proxy(
+      {},
+      {
+        get(_target, key: string) {
+          return key === 'tab'
+            ? (mocks.readSearch().tab ?? mocks.routeTab)
+            : mocks.readSearch()[key];
+        },
+      }
+    ),
+    (
+      next: Record<string, string | undefined>,
+      options?: { history?: string }
+    ) => {
+      mocks.writes.push({ next, options });
+      mocks.updateSearch(next);
     },
   ],
 }));
 vi.mock('./tasks-tab-search', () => ({
-  tasksTabSearch: {},
-  tasksTabSearchCodec: { serialize: () => ({}) },
+  tasksTabSearch: { namespace: 'tasks' },
+  tasksTabSearchCodec: {
+    serialize: (state: Record<string, string | undefined>) =>
+      Object.fromEntries(
+        Object.entries(state)
+          .filter(([, value]) => value !== undefined)
+          .map(([key, value]) => [key, [value]])
+      ),
+  },
 }));
 vi.mock('@app/routes/routes', () => ({
   taskDetailRoute: {},
@@ -131,6 +159,8 @@ vi.mock('./queries/use-tasks-query', () => ({
 let disposeSlots: () => void;
 beforeEach(() => {
   mocks.routeTab = 'my-tasks';
+  mocks.writes = [];
+  mocks.navigate.mockClear();
   mocks.touch = false;
   mocks.dockOpen = () => false;
   mocks.dockText = () => '';
@@ -140,6 +170,12 @@ beforeEach(() => {
   createRoot((dispose) => {
     disposeSlots = dispose;
     mocks.replace = createOwnedSlots().replace;
+    const [search, setSearch] = createSignal<
+      Record<string, string | undefined>
+    >({});
+    mocks.readSearch = search;
+    mocks.updateSearch = (next) =>
+      setSearch((current) => ({ ...current, ...next }));
   });
 });
 afterEach(() => {
@@ -331,3 +367,177 @@ it.each([undefined, 'initiative:one:tasks'])(
     expect(current.state.search).toBe('updated saved query');
   }
 );
+
+it('restores board grouping without legacy columns and switches layout without a second data source or losing list grouping', () => {
+  mocks.captured['tasks.view'] = {
+    version: 1,
+    layout: 'board',
+    boardGroupBy: 'assignee',
+    groupBy: 'date',
+    boardAssigneeColumnIds: ['alice'],
+    boardProjectColumnIds: ['launch'],
+  };
+
+  let current!: TasksViewContext;
+  let queryState!: { groupBy: string };
+  let boardEnabled: (() => boolean) | undefined;
+  const sourceFactory = vi.fn(
+    (
+      state: { groupBy: string },
+      options: { board?: () => boolean }
+    ): TasksDataSource => {
+      queryState = state;
+      boardEnabled = options.board;
+
+      return {
+        items: () => [],
+        isLoading: () => false,
+        isFetching: () => false,
+        error: () => undefined,
+        hasMore: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+        loadMoreGroup: async () => {},
+        refresh: async () => {},
+      };
+    }
+  );
+
+  const Probe = () => {
+    current = useTasksView();
+
+    return null;
+  };
+
+  render(() => (
+    <TasksViewProvider sourceFactory={sourceFactory}>
+      <Probe />
+    </TasksViewProvider>
+  ));
+
+  expect(current.state.layout).toBe('board');
+  expect(Object.keys(current.state)).not.toContain('boardAssigneeColumnIds');
+  expect(Object.keys(current.state)).not.toContain('boardProjectColumnIds');
+  expect(queryState.groupBy).toBe('assignee');
+  expect(boardEnabled?.()).toBe(true);
+
+  current.setState('layout', 'list');
+
+  expect(queryState.groupBy).toBe('date');
+
+  current.setState('boardGroupBy', 'priority');
+  current.setState('layout', 'board');
+
+  expect(queryState.groupBy).toBe('priority');
+  expect(current.state.groupBy).toBe('date');
+  expect(sourceFactory).toHaveBeenCalledOnce();
+  expect(mocks.captors.get('tasks.view')!()).not.toHaveProperty(
+    'boardAssigneeColumnIds'
+  );
+  expect(mocks.captors.get('tasks.view')!()).not.toHaveProperty(
+    'boardProjectColumnIds'
+  );
+  expect(mocks.captors.get('tasks.view')!()).toMatchObject({
+    layout: 'board',
+    boardGroupBy: 'priority',
+    groupBy: 'date',
+  });
+});
+
+it('uses URL sort and group preferences over entry persistence and follows browser history', () => {
+  mocks.captured['tasks.view'] = {
+    version: 1,
+    tab: 'my-tasks',
+    sort: [{ id: 'viewed_at', reversed: true }],
+    groupBy: 'date',
+    boardGroupBy: 'assignee',
+  };
+  mocks.updateSearch({
+    sort: 'created_at',
+    sortReversed: 'true',
+    groupBy: 'project',
+    boardGroupBy: 'priority',
+  });
+  let current!: TasksViewContext;
+  const Probe = () => {
+    current = useTasksView();
+    return null;
+  };
+  render(() => (
+    <TasksViewProvider
+      sourceFactory={() => ({
+        items: () => [],
+        isLoading: () => false,
+        isFetching: () => false,
+        error: () => undefined,
+        hasMore: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+        loadMoreGroup: async () => {},
+        refresh: async () => {},
+      })}
+    >
+      <Probe />
+    </TasksViewProvider>
+  ));
+  expect(current.state.sort).toEqual([{ id: 'created_at', reversed: true }]);
+  expect(current.state.groupBy).toBe('project');
+  expect(current.state.boardGroupBy).toBe('priority');
+  expect(mocks.writes).toEqual([]);
+
+  current.setPrimarySort('created_at');
+  expect(current.state.sort).toEqual([{ id: 'created_at', reversed: false }]);
+  expect(mocks.writes.at(-1)?.next).toEqual({
+    sort: 'created_at',
+    sortReversed: 'false',
+  });
+  current.setState('groupBy', 'none');
+  current.setState('boardGroupBy', 'project');
+  expect(mocks.writes.slice(-2).map(({ next }) => next)).toEqual([
+    { groupBy: 'none' },
+    { boardGroupBy: 'project' },
+  ]);
+
+  mocks.updateSearch({
+    sort: 'viewed_at',
+    sortReversed: 'true',
+    groupBy: 'status',
+    boardGroupBy: 'assignee',
+  });
+  expect(current.state.sort).toEqual([{ id: 'viewed_at', reversed: true }]);
+  expect(current.state.groupBy).toBe('status');
+  expect(current.state.boardGroupBy).toBe('assignee');
+  expect(mocks.writes).toHaveLength(3);
+
+  mocks.updateSearch({
+    sort: undefined,
+    sortReversed: undefined,
+    groupBy: undefined,
+    boardGroupBy: undefined,
+  });
+  expect(current.state.sort).toEqual([{ id: 'viewed_at', reversed: true }]);
+  expect(current.state.groupBy).toBe('date');
+  expect(current.state.boardGroupBy).toBe('assignee');
+  expect(mocks.writes).toHaveLength(3);
+
+  mocks.updateSearch({
+    sort: 'viewed_at',
+    sortReversed: 'true',
+    groupBy: 'status',
+    boardGroupBy: 'assignee',
+  });
+  current.openTask({ id: 'task-1' });
+  expect(mocks.navigate).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({
+      search: {
+        tasks: expect.objectContaining({
+          sort: ['viewed_at'],
+          sortReversed: ['true'],
+          groupBy: ['status'],
+          boardGroupBy: ['assignee'],
+        }),
+      },
+    })
+  );
+});

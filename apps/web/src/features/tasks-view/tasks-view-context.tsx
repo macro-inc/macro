@@ -129,7 +129,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     projectId?: string;
     projectsTab?: 'projects';
   }>();
-  const [tabSearch] = createSearchParams(tasksTabSearch);
+  const [tabSearch, setTabSearch] = createSearchParams(tasksTabSearch);
   const selectPreview = createPreviewSelectionGuard();
   const userId = useUserId();
   const tagSets = useTagSets();
@@ -145,6 +145,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const createState = () =>
     makePersistedState(
       createStore<TasksViewState>({
+        layout: initial.layout ?? 'list',
+        boardGroupBy: initial.boardGroupBy ?? 'status',
         tab: initialTab,
         search: initial.search ?? '',
         groupBy: initial.groupBy ?? TASK_DEFAULT_GROUP_BY[initialTab],
@@ -180,6 +182,13 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     get search() {
       return searchText();
     },
+    get boardGroupBy() {
+      if (persistedState.boardGroupBy === 'project' && !projectsEnabled()) {
+        return 'status' as const;
+      }
+
+      return persistedState.boardGroupBy;
+    },
     get tab(): TasksTab {
       return persistedState.tab === 'projects' && !projectsEnabled()
         ? 'my-tasks'
@@ -191,27 +200,85 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     routeParams.projectId || routeParams.projectsTab
       ? 'projects'
       : tabSearch.tab;
+  // The URL wins over restored entry preferences. Missing fields retain the entry
+  // preference, including when returning to an earlier URL via browser history.
+  const entrySort = persistedState.sort.map((item) => ({ ...item }));
+  const entryTab = persistedState.tab;
+  const entryGroupBy = persistedState.groupBy;
+  const entryBoardGroupBy = persistedState.boardGroupBy;
   createEffect(
-    on(routeTab, (tab) => {
-      if (props.scopeKey || persistedState.tab === tab) return;
-      setState(
-        produce((draft) => {
-          draft.tab = tab;
-          draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
-          draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
-          draft.collapsedGroupIds = [];
-        })
-      );
-    })
+    on(
+      () =>
+        [
+          routeTab(),
+          tabSearch.sort,
+          tabSearch.sortReversed,
+          tabSearch.groupBy,
+          tabSearch.boardGroupBy,
+        ] as const,
+      ([tab, sort, sortReversed, groupBy, boardGroupBy]) => {
+        if (props.scopeKey) return;
+        setState(
+          produce((draft) => {
+            if (draft.tab !== tab) {
+              draft.tab = tab;
+              draft.facets = normalizeFacetSelection(
+                DEFAULT_TASK_FACET_SELECTION
+              );
+              draft.collapsedGroupIds = [];
+            }
+            draft.groupBy =
+              groupBy ??
+              (tab === entryTab ? entryGroupBy : TASK_DEFAULT_GROUP_BY[tab]);
+            draft.boardGroupBy = boardGroupBy ?? entryBoardGroupBy;
+            draft.sort = sort
+              ? [{ id: sort, reversed: sortReversed === 'true' }]
+              : entrySort.map((item) => ({ ...item }));
+          })
+        );
+      }
+    )
   );
+  const currentSearch = () =>
+    tasksTabSearchCodec.serialize({
+      tab: state.tab,
+      sort: state.sort[0]?.id,
+      sortReversed: state.sort[0]
+        ? state.sort[0].reversed
+          ? 'true'
+          : 'false'
+        : undefined,
+      groupBy: state.groupBy,
+      boardGroupBy: state.boardGroupBy,
+    });
+  // Existing mobile grouping controls use setState directly.
+  const setStateWithSearch = new Proxy(setState, {
+    apply(target, thisArg, args: unknown[]) {
+      Reflect.apply(target, thisArg, args);
+      if (props.scopeKey) return;
+      if (args[0] === 'groupBy')
+        setTabSearch({ groupBy: persistedState.groupBy });
+      if (args[0] === 'boardGroupBy')
+        setTabSearch({ boardGroupBy: persistedState.boardGroupBy });
+    },
+  });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
+
+  // Both layouts share one query owner; board grouping does not overwrite list preferences.
+  const queryState = mergeProps(state, {
+    get groupBy() {
+      return state.layout === 'board' ? state.boardGroupBy : state.groupBy;
+    },
+  });
+
   const source = withSplitPanelOwner(ownedSlot('data-source'), () =>
-    (props.sourceFactory ?? useTasksDataSource)(state, {
+    (props.sourceFactory ?? useTasksDataSource)(queryState, {
       userId,
       tagSets,
       tagSetsReady,
       isGroupExpanded,
+      board: () => state.layout === 'board',
     })
   );
   type ActivationHandler = (
@@ -265,9 +332,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       },
       {
         search: {
-          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
+          [tasksTabSearch.namespace]: currentSearch(),
         },
       }
     );
@@ -283,9 +348,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       { route: taskDetailRoute, params: { taskId: task.id } },
       {
         search: {
-          [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
-            tab: state.tab,
-          }),
+          [tasksTabSearch.namespace]: currentSearch(),
         },
       }
     );
@@ -302,9 +365,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
             {
               replace: true,
               search: {
-                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
-                  tab: state.tab,
-                }),
+                [tasksTabSearch.namespace]: currentSearch(),
               },
             }
           );
@@ -318,9 +379,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
             {
               replace: true,
               search: {
-                [tasksTabSearch.namespace]: tasksTabSearchCodec.serialize({
-                  tab: state.tab,
-                }),
+                [tasksTabSearch.namespace]: currentSearch(),
               },
             }
           );
@@ -364,6 +423,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     const reversed = current?.id === id ? !current.reversed : false;
 
     setState('sort', [{ id, reversed }]);
+    if (!props.scopeKey)
+      setTabSearch({ sort: id, sortReversed: reversed ? 'true' : 'false' });
   };
 
   const isSidebarSectionOpen = (id: string) =>
@@ -379,7 +440,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     scopeKey: props.scopeKey,
     state,
     projectsEnabled,
-    setState,
+    setState: setStateWithSearch,
     selectedTask,
     source,
     list,

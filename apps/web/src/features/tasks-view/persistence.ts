@@ -40,6 +40,11 @@ const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  layout: z.enum(['list', 'board']).catch('list').default('list'),
+  boardGroupBy: z
+    .enum(['status', 'priority', 'assignee', 'project'])
+    .catch('status')
+    .default('status'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
   groupBy: taskGroupBySchema.default('priority'),
@@ -54,6 +59,8 @@ type TasksEntryState = z.infer<typeof tasksEntryStateSchemaWithDefaults>;
 
 const DEFAULT_TASKS_ENTRY_STATE = {
   version: 1,
+  layout: 'list',
+  boardGroupBy: 'status',
   tab: 'my-tasks',
   search: '',
   groupBy: 'priority',
@@ -89,6 +96,8 @@ export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
 function selectEntryState(state: TasksViewState): TasksEntryState {
   return {
     version: 1,
+    layout: state.layout,
+    boardGroupBy: state.boardGroupBy,
     tab: state.tab,
     search: state.search,
     groupBy: state.groupBy,
@@ -115,6 +124,8 @@ function createTasksEntryStorage(options: {
       const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
         ...current,
+        layout: restored.layout,
+        boardGroupBy: restored.boardGroupBy,
         tab: restored.tab,
         search: restored.search,
         groupBy: restored.groupBy,

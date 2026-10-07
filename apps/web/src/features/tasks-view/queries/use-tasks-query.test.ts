@@ -277,3 +277,74 @@ it('scopes grouped load-more pages to the referenced entity', () => {
     }
   });
 });
+
+it('exposes uncollapsed board rows and hides stale groups during query changes', () => {
+  const [pending, setPending] = createSignal(false);
+  const task: TaskEntityWithProperties = {
+    type: 'document',
+    fileType: 'md',
+    id: 'task',
+    name: 'Task',
+    ownerId: 'viewer',
+    subType: { type: 'task', is_completed: false },
+    properties: [],
+  };
+
+  fixture.query = {
+    get isPending() {
+      return pending();
+    },
+    get isLoading() {
+      return pending();
+    },
+    data: {
+      entities: [task],
+      itemsById: {},
+      groups: [
+        { key: 'todo', label: 'To do', totalCount: 1, itemIds: ['task'] },
+      ],
+    },
+  };
+  fixture.groupQueries = new Map();
+
+  createRoot((dispose) => {
+    try {
+      const source = useTasksDataSource(
+        {
+          tab: 'team-tasks',
+          search: '',
+          facets: {},
+          groupBy: 'status',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => false,
+          board: () => true,
+        }
+      );
+
+      expect(
+        source.items().filter((row) => row.kind === 'entity')
+      ).toHaveLength(0);
+      expect(
+        source.boardRows?.().filter((row) => row.kind === 'entity')
+      ).toHaveLength(1);
+
+      setPending(true);
+
+      expect(source.boardRows?.()).toEqual([]);
+      expect(source.boardLoading?.()).toBe(true);
+
+      setPending(false);
+
+      expect(
+        source.boardRows?.().filter((row) => row.kind === 'entity')
+      ).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+});

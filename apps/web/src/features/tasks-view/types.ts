@@ -1,4 +1,5 @@
 import type { FacetSelection, SortSelection } from '@app/features/soup';
+import type { TaskBoardGrouping } from './core/task-board';
 
 export type TaskTab = 'my-tasks' | 'created-by-me' | 'team-tasks' | 'projects';
 export type TasksTab = TaskTab;
@@ -25,6 +26,8 @@ export type TaskDetailTarget = {
 };
 
 export type TasksViewState = {
+  layout: 'list' | 'board';
+  boardGroupBy: TaskBoardGrouping;
   tab: TasksTab;
   search: string;
   groupBy: TaskGroupBy;

@@ -72,6 +72,91 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+## Board layout
+
+Choose **Board** in the Tasks toolbar to switch from the list. **Group board**
+offers Status, Priority, Assignee, and (when Projects is enabled) Project.
+The layout and board grouping restore with the Tasks navigation entry. Switching
+back to List retains its previous grouping and collapsed groups.
+
+Drag a card from its body or title to another column. Property pills remain
+interactive and do not start a drag. Double-click the card body to open the task,
+or click its title once. A new destination column highlights once movement slows
+or pauses for about 100 ms. Fast travel suppresses activation of new columns;
+within an already active column, the slot follows the pointer at any speed.
+The pointer's vertical position selects the insertion slot. Cross-column moves
+retain that position locally after saving; reloading or changing sort, grouping,
+or filters restores query order. Same-column and column reordering remain disabled.
+Unmoved cards use the existing Updated, Created, or Viewed sort. Search results
+retain relevance order before local moves.
+Primary sort, sort direction, list grouping, and board grouping are reflected in
+`tasks.sort`, `tasks.sortReversed`, `tasks.groupBy`, and `tasks.boardGroupBy` search
+parameters. Explicit URL values override saved preferences; back/forward navigation
+restores the corresponding controls.
+Each column pages independently with **Load more tasks**.
+Use the horizontal scrollbar to reach more columns. Vertical wheel input over
+empty board background or gaps also scrolls horizontally. A wheel gesture stays
+with its original scroll area until momentum stops, even if another column moves
+under the pointer. A new gesture inside an overflowing column scrolls vertically.
+Each column has its own vertical scrollbar when its cards overflow, while keeping
+its heading visible. Lane scrollbars appear while hovering the lane or scroll track
+and hide 200 ms after leaving. Off-hover momentum does not reveal them; focus and
+active scrollbar dragging retain visibility.
+Normal columns fit their content up to the viewport height; only the hidden-column
+summary fills the height. Both columns and cards are virtualized, so offscreen
+content is not all present in the DOM. A column's vertical position restores when
+scrolling away and back. The active drag source
+stays mounted while scrolling to a destination.
+While dragging, hold the card near a column's top or bottom edge to scroll its
+cards vertically. Hold near the board's left or right edge to scroll horizontally;
+moving beyond that edge keeps scrolling until release or cancellation. Drop
+placeholders still require the pointer to be inside a visible destination column.
+
+Column titles use status/priority icons, assignee avatars, or the project icon.
+Active filters also restrict columns: excluded values do not remain as empty
+boards. Allowed Status and Priority values retain empty destinations. Assignee
+and Project columns come from matching task groups; there is no extra-column
+selector. When filters hide known columns, a full-height dashed summary appears
+at the end. A filter illustration, count, and outline **Reveal hidden columns**
+button stay near the top of that column.
+Status and Priority show **N hidden**. Assignee and Project show **N+ hidden**:
+these lower bounds count known groups, not every group excluded by server filters.
+**Reveal hidden columns** clears only the current grouping's filter;
+other filters, the current tab, and search stay active. The dashed column is not
+a drop target.
+
+An icon-only assignee pill appears to the right of the task title, except in
+Assignee grouping, where that pill shows status. The lower row omits both the
+grouping property and the title pill's property. The remaining properties use the
+standard pill controls and icons. Status and Priority use compact icon-only pills;
+due date and project appear when set. Read-only tasks keep passive property pills.
+A task assigned to multiple people appears in each person's column. Moving it
+from Alice to Bob replaces Alice while keeping the other assignees. Moving to
+**Unassigned** clears all assignees. Project moves change the task's Project
+property (an initiative), never its legacy folder.
+
+Only editable tasks can move. Access checks and property definitions can keep
+moves unavailable while loading. A destination project also requires edit
+access. A pending move disables further moves of the same task in every column;
+failed writes use the shared property mutation's rollback and show an error.
+A valid destination shows a placeholder at the pointer-selected placement only
+while dragging over the active destination column, not gaps or space below it.
+Drops move the card immediately while the save is pending; failures restore the
+prior placement. Successful moves do not show a notification. Visible placements
+animate as the drop placeholder shifts cards and during moves and rollback, without
+animating ordinary scrolling or paging. The placeholder flies between columns
+outside their clipping regions while a valid destination remains; leaving the
+board clears it. In Assignee grouping, moving to an already assigned person
+animates the removed placement toward that person's existing card, without
+animating other assignees' cards.
+Reduced-motion preferences disable these transitions.
+Filters remain active: completing a task or removing yourself as assignee can
+hide the card from the current view. Click its title to open the task; modified
+clicks can open a separate split.
+
+Due-date columns and priority/due-date sorting are not in this version.
+The shared board primitives remain independent of Tasks queries and mutations.
+
 ## Cached grouped lists
 
 With GraphQL caching enabled, previously loaded grouped task lists remain usable

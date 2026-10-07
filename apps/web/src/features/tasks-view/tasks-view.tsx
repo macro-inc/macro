@@ -24,6 +24,7 @@ import {
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
+import { TasksBoard } from './tasks-board';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
 import type { TasksViewStateOptions } from './types';
@@ -108,7 +109,12 @@ function TasksViewRoot() {
       <ViewTour tour={tasksTour} actions={<ImportLinearAction />} />
       <ViewShell.Content>
         <Suspense fallback={<TasksListFallback />}>
-          <TaskList ref={setListElement} />
+          <Show
+            when={state.layout === 'board'}
+            fallback={<TaskList ref={setListElement} />}
+          >
+            <TasksBoard ref={setListElement} />
+          </Show>
         </Suspense>
       </ViewShell.Content>
     </>
