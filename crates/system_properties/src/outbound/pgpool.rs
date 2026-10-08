@@ -284,21 +284,22 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
     }
 
     async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
-        // Whole-value containment uses the `values` GIN index.
+        // The Project id is a literal so a generic plan can prove the partial
+        // predicate of idx_ep_project_value_gin. A bound parameter cannot.
+        // Containment on values->'value' matches whole-value containment of
+        // {"value": [ref]}: null, non-object, and non-array rows are excluded
+        // either way. The literal must stay equal to SystemPropertyKey::PROJECT_UUID.
         let rows = sqlx::query_scalar!(
             r#"
             SELECT entity_id
             FROM entity_properties
-            WHERE property_definition_id = $1
+            WHERE property_definition_id = '00000001-0000-0000-0000-000000000014'
               AND entity_type = 'TASK'
-              AND values @> jsonb_build_object(
-                  'value', jsonb_build_array(jsonb_build_object(
-                      'entity_id', $2::text, 'entity_type', 'INITIATIVE'
-                  ))
-              )
+              AND values -> 'value' @> jsonb_build_array(jsonb_build_object(
+                  'entity_id', $1::text, 'entity_type', 'INITIATIVE'
+              ))
             ORDER BY entity_id
             "#,
-            SystemPropertyKey::PROJECT_UUID,
             project_id.to_string(),
         )
         .fetch_all(&self.pool)

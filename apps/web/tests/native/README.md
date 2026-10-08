@@ -46,8 +46,10 @@ file-backed native Turso cache.
 
 Fixtures replace the **remote services**, not the client cache. `fixtures/server.ts`
 serves the normal `/dss/items/soup/graphql` path, executes the app's generated
-queries against `static_assets/schema.graphql`, and returns three pages of Mail
-metadata. Projection capsules reuse the existing Rust-encoded fixtures.
+queries against `static_assets/schema.graphql`, and returns two pages each of
+signal and noise Mail metadata. Metadata requests must carry a recency cutoff,
+but fixture timestamps are fixed, so the server does not apply it. Projection
+capsules reuse the existing Rust-encoded fixtures.
 Unrelated app-chrome reads return explicit empty resources. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
@@ -63,13 +65,14 @@ The six threads are IDs ending in 4, 6, 8, 9, 10, and 12:
 
 Only the initial Signal view and its sidebar unread badge may receive an online
 Mail response. The badge gets only unread Signal rows; Noise and All remain
-unavailable online. The other rows arrive via metadata backfill. Tests wait for the real three-page completion
-checkpoint, then read the six normalized records through native IPC before
-changing filters. Tab changes activate the labeled sidebar buttons with DOM `click()` and verify
+unavailable online. The other rows arrive via metadata backfill. Tests wait for
+the real signal and noise completion checkpoints (four pages), then read the six
+normalized records through native IPC before changing filters. Tab changes
+activate the labeled sidebar buttons with DOM `click()` and verify
 `aria-current` before checking results. This exercises the real UI handlers, but
 not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
-row in the Tauri window, and All is now beyond the numeric tab shortcuts. Assertions compare exact row
-identities, not just counts.
+row in the Tauri window, and All is now beyond the numeric tab shortcuts.
+Assertions compare exact row identities, not just counts.
 
 ## Exhaustive filter-selection matrix
 
@@ -107,7 +110,7 @@ intersections without using the production compiler or cache results.
 This suite does not claim coverage of non-Mail offline pagination or every
 possible real-world user/tag/file value.
 
-After all five real backfill lanes finish, the fixture API and WebSockets are
+After all seven real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
 read-only batches and asserts exact matching IDs against fixture truth. No
 query-specific network baselines are supplied. Mail attachment selections also

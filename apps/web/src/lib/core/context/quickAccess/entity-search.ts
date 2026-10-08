@@ -1,4 +1,5 @@
 import { createFreshSearch } from '@core/util/freshSort';
+import { matchesTokenSubsequences } from '@core/util/string';
 import type { EntityItem, QuickAccessItem } from './types';
 
 const quickAccessSearch = createFreshSearch<QuickAccessItem>({
@@ -15,21 +16,10 @@ export function filterQuickAccessItems(
   items: QuickAccessItem[],
   query: string
 ): QuickAccessItem[] {
-  const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return items;
-
-  return items.filter((item) => {
-    const text = item.searchText.toLowerCase();
-    return tokens.every((token) => {
-      let position = 0;
-      for (const character of token) {
-        const next = text.indexOf(character, position);
-        if (next === -1) return false;
-        position = next + character.length;
-      }
-      return true;
-    });
-  });
+  if (!query.trim()) return items;
+  return items.filter((item) =>
+    matchesTokenSubsequences(item.searchText, query)
+  );
 }
 
 /** Fuzzy-ranks entity candidates using the existing mentions semantics. */

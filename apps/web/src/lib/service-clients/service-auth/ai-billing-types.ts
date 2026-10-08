@@ -23,6 +23,20 @@ export type AiDenyCode =
   | 'ai_overage_limit_reached'
   | 'ai_overage_payment_failed';
 
+/** The payer's automatic reload settings and whether reloads will fire. */
+export interface AiAutoReloadSnapshot {
+  /** Reload once the effective balance drops below this, customer cents. */
+  minimum_balance_cents: number;
+  /** Reload the balance back up to this, customer cents. */
+  target_balance_cents: number;
+  /** Most reloaded per UTC calendar month; `null` when there is no limit. */
+  monthly_spend_limit_cents: number | null;
+  /** Reloads are paused after a failed reload charge. */
+  suspended: boolean;
+  /** Overage is on and reloads are not suspended. */
+  active: boolean;
+}
+
 export interface AiUsageSnapshot {
   tier: AiPlanTier;
   unlimited: boolean;
@@ -39,6 +53,8 @@ export interface AiUsageSnapshot {
   overage_limit_cents: number;
   overage_charged_cents: number;
   overage_suspended: boolean;
+  /** Optional until the next client regeneration; always present from the backend. */
+  auto_reload?: AiAutoReloadSnapshot;
   uncovered_cents: number;
   remaining_cents: number;
   blocked_reason?: AiDenyReason;
@@ -51,11 +67,21 @@ export interface AiPlanCatalogEntry {
   purchasable: boolean;
 }
 
+/** Thresholds automatic reload starts from before the payer sets their own. */
+export interface AiAutoReloadDefaults {
+  minimum_balance_cents: number;
+  target_balance_cents: number;
+}
+
 export interface AiPlanCatalog {
   plans: AiPlanCatalogEntry[];
   credit_packs_cents: number[];
   overage_limit_min_cents: number;
   overage_limit_max_cents: number;
+  /** Optional until the next client regeneration; always present from the backend. */
+  auto_reload_target_max_cents?: number;
+  /** Optional until the next client regeneration; always present from the backend. */
+  auto_reload_defaults?: AiAutoReloadDefaults;
 }
 
 export type PaidPlan = 'premium' | 'max';

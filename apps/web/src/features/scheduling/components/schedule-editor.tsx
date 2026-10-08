@@ -33,10 +33,10 @@ function Windows(props: {
     <div class="flex min-w-0 flex-col gap-2">
       <Index each={props.windows}>
         {(window, i) => (
-          <div class="flex min-w-0 items-center gap-2">
+          <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 @min-[560px]:grid-cols-[128px_auto_128px_auto]">
             <TextInput
               type="time"
-              class="w-28 shrink-0 px-2 @min-[560px]:w-32"
+              class="min-w-0 px-2"
               aria-label={`${props.label} start ${i + 1}`}
               required
               value={window().start}
@@ -51,7 +51,7 @@ function Windows(props: {
             <span class="text-ink-muted">–</span>
             <TextInput
               type="time"
-              class="w-28 shrink-0 px-2 @min-[560px]:w-32"
+              class="min-w-0 px-2"
               aria-label={`${props.label} end ${i + 1}`}
               required
               value={window().end}
@@ -67,6 +67,7 @@ function Windows(props: {
               variant="ghost"
               size="icon-md"
               label={`Remove ${props.label} range ${i + 1}`}
+              class="col-span-3 justify-self-end @min-[560px]:col-span-1"
               onClick={() =>
                 props.onChange(props.windows.filter((_, j) => j !== i))
               }
@@ -156,12 +157,6 @@ export function ScheduleEditor(props: {
     structuredClone(unwrap(props.schedule))
   );
   const [error, setError] = createSignal('');
-  const remembered = new Map<number, TimeWindow[]>();
-  const setDay = (day: number, windows: TimeWindow[]) =>
-    setDraft((d) => ({
-      ...d,
-      weekly: d.weekly.map((w) => (w.day === day ? { ...w, windows } : w)),
-    }));
   const save = async (e: SubmitEvent) => {
     e.preventDefault();
     const message = validateSchedule(draft());
@@ -203,6 +198,26 @@ export function ScheduleEditor(props: {
           {error()}
         </p>
       </Show>
+      <ScheduleFields schedule={draft()} onChange={setDraft} />
+    </form>
+  );
+}
+
+/** Shared availability controls used by settings and AI review. */
+export function ScheduleFields(props: {
+  schedule: AvailabilitySchedule;
+  onChange: (
+    update: (current: AvailabilitySchedule) => AvailabilitySchedule
+  ) => void;
+}) {
+  const remembered = new Map<number, TimeWindow[]>();
+  const setDay = (day: number, windows: TimeWindow[]) =>
+    props.onChange((d) => ({
+      ...d,
+      weekly: d.weekly.map((w) => (w.day === day ? { ...w, windows } : w)),
+    }));
+  return (
+    <div class="@container flex min-w-0 flex-col gap-6">
       <section class="overflow-hidden rounded-xl border border-edge-muted bg-surface-1">
         <div class="border-b border-edge-muted bg-surface-2 px-5 py-5">
           <h3 class="font-semibold">Weekly hours</h3>
@@ -211,7 +226,7 @@ export function ScheduleEditor(props: {
           </p>
         </div>
         <div class="divide-y divide-edge-muted">
-          <Index each={draft().weekly}>
+          <Index each={props.schedule.weekly}>
             {(day) => (
               <div class="grid grid-cols-[1fr_auto] items-start gap-x-3 gap-y-3 px-5 py-4 @min-[720px]:grid-cols-[160px_1fr_auto]">
                 <ToggleSwitch
@@ -272,7 +287,7 @@ export function ScheduleEditor(props: {
                     day={day().day}
                     disabled={!day().windows.length}
                     onCopy={(days) =>
-                      setDraft((d) => ({
+                      props.onChange((d) => ({
                         ...d,
                         weekly: d.weekly.map((w) =>
                           days.includes(w.day)
@@ -303,7 +318,7 @@ export function ScheduleEditor(props: {
             variant="outline"
             depth={2}
             onClick={() =>
-              setDraft((d) => ({
+              props.onChange((d) => ({
                 ...d,
                 overrides: [...d.overrides, { date: '', windows: [] }],
               }))
@@ -313,7 +328,7 @@ export function ScheduleEditor(props: {
             Add date override
           </Button>
         </div>
-        <Index each={draft().overrides}>
+        <Index each={props.schedule.overrides}>
           {(override, index) => (
             <div class="flex flex-col gap-4 border-t border-edge-muted px-5 py-4">
               <div class="flex items-center justify-between gap-3">
@@ -324,7 +339,7 @@ export function ScheduleEditor(props: {
                   aria-label="Override date"
                   value={override().date}
                   onInput={(e) =>
-                    setDraft((d) => ({
+                    props.onChange((d) => ({
                       ...d,
                       overrides: d.overrides.map((o, i) =>
                         i === index ? { ...o, date: e.currentTarget.value } : o
@@ -337,7 +352,7 @@ export function ScheduleEditor(props: {
                   size="icon-md"
                   label="Remove date override"
                   onClick={() =>
-                    setDraft((d) => ({
+                    props.onChange((d) => ({
                       ...d,
                       overrides: d.overrides.filter((_, i) => i !== index),
                     }))
@@ -359,7 +374,7 @@ export function ScheduleEditor(props: {
                     label={override().date || 'Override'}
                     windows={override().windows}
                     onChange={(windows) =>
-                      setDraft((d) => ({
+                      props.onChange((d) => ({
                         ...d,
                         overrides: d.overrides.map((o, i) =>
                           i === index ? { ...o, windows } : o
@@ -376,7 +391,7 @@ export function ScheduleEditor(props: {
                     override().windows.at(-1)?.end === '23:59'
                   }
                   onClick={() =>
-                    setDraft((d) => ({
+                    props.onChange((d) => ({
                       ...d,
                       overrides: d.overrides.map((o, i) =>
                         i === index
@@ -403,10 +418,10 @@ export function ScheduleEditor(props: {
         hint="Your weekly hours and date overrides use this time zone."
       >
         <TimeZoneInput
-          value={draft().timeZone}
-          onChange={(timeZone) => setDraft((d) => ({ ...d, timeZone }))}
+          value={props.schedule.timeZone}
+          onChange={(timeZone) => props.onChange((d) => ({ ...d, timeZone }))}
         />
       </Field>
-    </form>
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import type { CreateChannelScopedBotRequest } from '@service-storage/generated/schemas/createChannelScopedBotRequest';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 
 type AddBotToChannelParams = {
@@ -28,17 +28,19 @@ type CreateChannelScopedBotParams = CreateChannelScopedBotRequest & {
   has_agent?: boolean;
 };
 
-export function useChannelBotsQuery(channelId: () => string) {
-  return useQuery(() => ({
-    queryKey: channelKeys.channelBots(channelId()).queryKey,
-    enabled: !!channelId(),
-    queryFn: async (): Promise<Bot[]> =>
-      await throwOnErr(() =>
-        storageServiceClient.getChannelBots({
-          channel_id: channelId(),
-        })
+function channelBotsQueryOptions(channelId: string) {
+  return queryOptions({
+    queryKey: channelKeys.channelBots(channelId).queryKey,
+    enabled: !!channelId,
+    queryFn: (): Promise<Bot[]> =>
+      throwOnErr(() =>
+        storageServiceClient.getChannelBots({ channel_id: channelId })
       ),
-  }));
+  });
+}
+
+export function useChannelBotsQuery(channelId: () => string) {
+  return useQuery(() => channelBotsQueryOptions(channelId()));
 }
 
 function invalidateChannelBots(channelId: string) {

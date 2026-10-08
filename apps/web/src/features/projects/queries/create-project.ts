@@ -18,6 +18,7 @@ export function createInitiativeInput(
 ): CreateInitiativeInput {
   return {
     name: input.name,
+    description: input.description.trim() || undefined,
     shareWithTeam: input.shareWithTeam,
     propertyValues: input.properties.flatMap(({ property, value }) => {
       const graphqlValue = toGraphqlSetPropertyValue(

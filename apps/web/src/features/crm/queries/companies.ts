@@ -2,14 +2,34 @@ import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { throwOnErr } from '@core/util/result';
 import type { CrmCompanyEntity } from '@entity';
 import { soupKeys } from '@queries/soup/keys';
+import { invalidateCachedCrmContacts } from '@service-storage/crm-contacts';
 import type { CrmCompanyResponse } from '@service-storage/generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from '@service-storage/generated/schemas/crmContactResponse';
-import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryKey,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
 const COMPANY_STALE_TIME = 60 * 1000;
+
+function companyQueryOptions(deps: CrmRecordDependencies, companyId: string) {
+  return queryOptions({
+    queryKey: crmKeys.company(companyId).queryKey,
+    queryFn: () => {
+      if (!companyId) {
+        throw new Error('company id is required to fetch company');
+      }
+      return throwOnErr(() => deps.storage.getCompany({ companyId }));
+    },
+    staleTime: COMPANY_STALE_TIME,
+    enabled: !!companyId && companyId !== NIL_UUID,
+  });
+}
 
 /** A contact row as embedded in the company response. */
 export type CompanyContact = CrmContactResponse;
@@ -30,20 +50,7 @@ export function useCompanyQuery(
   companyId: Accessor<string>
 ) {
   const query = useQuery(
-    () => {
-      const id = companyId();
-      return {
-        queryKey: crmKeys.company(id).queryKey,
-        queryFn: () => {
-          if (!id) {
-            throw new Error('company id is required to fetch company');
-          }
-          return throwOnErr(() => deps.storage.getCompany({ companyId: id }));
-        },
-        staleTime: COMPANY_STALE_TIME,
-        enabled: !!companyId() && companyId() !== NIL_UUID,
-      };
-    },
+    () => companyQueryOptions(deps, companyId()),
     () => deps.client
   );
 
@@ -225,13 +232,15 @@ export function useSetCompanyNameMutation(deps: CrmRecordDependencies) {
           );
         }
       },
-      onSettled: (_data, _err, { companyId }) =>
-        Promise.all([
+      onSettled: async (_data, _err, { companyId }) => {
+        await invalidateCachedCrmContacts();
+        return Promise.all([
           deps.client.invalidateQueries({
             queryKey: crmKeys.company(companyId).queryKey,
           }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
-        ]),
+        ]);
+      },
     }),
     () => deps.client
   );
@@ -255,7 +264,8 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
         hidden: boolean;
       }) =>
         throwOnErr(() => deps.storage.setCompanyHidden({ companyId, hidden })),
-      onSuccess: (_data, { companyId }) => {
+      onSuccess: async (_data, { companyId }) => {
+        await invalidateCachedCrmContacts();
         wipeCompanyEmailCache(deps, companyId);
         return Promise.all([
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),

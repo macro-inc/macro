@@ -106,8 +106,15 @@ entire cache in browser memory. With 10s of thousands of cached objects
 13. **Durable optimistic mutations** — optimistic GraphQL mutations are
     persisted with their replay request, restored across restarts, and applied
     strictly in enqueue order. Retryability is decided by an exchange callback;
-    retryable failures retain their optimistic layer. Each queued network
-    attempt has a one-minute timeout, comfortably inside its five-minute lease.
+    retryable failures retain their optimistic layer. Ten retryable server
+    failures (GraphQL errors or HTTP 5xx responses) permanently fail the mutation
+    through ordinary rollback so the next queued mutation can run. Transport
+    failures/timeouts do not consume or reset that budget. The separate server
+    failure counter survives reloads and tab handoff in pending-mutation metadata;
+    `attempt_count` still counts every claim for backoff and coalescing safety.
+    Settlement removes the pending mutation and counter; there is no retained DLQ.
+    Each queued network attempt has a one-minute timeout, comfortably inside its
+    five-minute lease.
 
 ### Open questions
 

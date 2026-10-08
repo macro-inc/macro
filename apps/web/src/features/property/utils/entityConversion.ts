@@ -101,15 +101,15 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
-    .with({ type: 'reminder' }, () => {
-      throw new Error('reminders do not support properties');
-    })
     .with({ type: 'calendar_event' }, () => {
       // CALENDAR_EVENT is not a property-editing target on the frontend yet.
       throw new Error('calendar events do not support properties');
     })
     .with({ type: 'database' }, () => {
       throw new Error('databases do not support properties');
+    })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
     })
     .exhaustive();
 }

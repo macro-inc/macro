@@ -70,6 +70,12 @@ export type SoupLiveQueryOptions = {
   localReconciliation?: 'without-email';
 };
 
+// A page result can carry the viewer without its `soup` field. Selection runs
+// over every loaded page, so such a page reads as unloaded instead of failing
+// the whole list.
+const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
+  page.user?.soup != null;
+
 /** Owns network pages, live cache records, Mail cursors, and fallback selection.
  * Data is a non-suspending accessor of reactive GraphQL records, before UI mapping.
  */
@@ -291,17 +297,20 @@ export function createSoupLiveQuery(
   }: UrqlInfiniteData<
     SoupQuery | ChannelListSoupQuery,
     string | null
-  >): ServerProjection => ({
-    pageParams,
-    // Accessors keep raw payloads outside deep store reconciliation. Rows from
-    // live urql pages retain their field subscriptions; baselines are snapshots.
-    records: () =>
-      pages.flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
-    baseline: () =>
-      pages.flatMap<GraphqlSoupItem>(
-        (page) => querySnapshot(page).user.soup.items
-      ),
-  });
+  >): ServerProjection => {
+    const soupPages = pages.filter(hasSoupPage);
+    return {
+      pageParams,
+      // Accessors keep raw payloads outside deep store reconciliation. Rows from
+      // live urql pages retain their field subscriptions; baselines are snapshots.
+      records: () =>
+        soupPages.flatMap<GraphqlSoupItem>((page) => page.user.soup.items),
+      baseline: () =>
+        soupPages.flatMap<GraphqlSoupItem>(
+          (page) => querySnapshot(page).user.soup.items
+        ),
+    };
+  };
 
   const query = createUrqlInfiniteQuery<
     SoupQuery | ChannelListSoupQuery,
@@ -325,7 +334,9 @@ export function createSoupLiveQuery(
         return { input };
       },
       getNextPageParam: (lastPage) =>
-        lastPage.user.soup.nextCursor ?? undefined,
+        hasSoupPage(lastPage)
+          ? (lastPage.user.soup.nextCursor ?? undefined)
+          : undefined,
       enabled:
         queryOptions.enabled !== false &&
         !queryOptions.localOnly &&

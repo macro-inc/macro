@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { createGraphqlAgentSessionMentionPreview } from './graphql-mentions';
 import { agentSessionKeys } from './keys';
@@ -10,6 +10,20 @@ import { fetchAgentSessionMentionPreviews } from './mention-fetchers';
 const restPreview = createAgentSessionMentionBatcher((ids) =>
   fetchAgentSessionMentionPreviews(ids, false)
 );
+
+function restMentionQueryOptions(
+  id: string,
+  graphql: boolean,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: agentSessionKeys.preview(id, graphql).queryKey,
+    queryFn: () => restPreview(id),
+    enabled,
+    // A missing live record needs a fresh permission-aware answer.
+    staleTime: graphql ? 0 : 15_000,
+  });
+}
 
 export function useAgentSessionMentionPreview(
   id: Accessor<string>,
@@ -23,13 +37,9 @@ export function useAgentSessionMentionPreview(
   );
   const restEnabled = () =>
     active() && (!flag().enabled || live.shouldFallback());
-  const rest = useQuery(() => ({
-    queryKey: agentSessionKeys.preview(id(), flag().enabled).queryKey,
-    queryFn: () => restPreview(id()),
-    enabled: restEnabled(),
-    // A missing live record needs a fresh permission-aware answer.
-    staleTime: flag().enabled ? 0 : 15_000,
-  }));
+  const rest = useQuery(() =>
+    restMentionQueryOptions(id(), flag().enabled, restEnabled())
+  );
   const data = () => {
     if (!active()) return undefined;
     if (flag().enabled && live.data()) return live.data();

@@ -20,6 +20,7 @@ import type {
   ChatEntity,
   ContentHitData,
   CrmCompanyEntity,
+  CrmContactEntity,
   DocumentEntity,
   EmailEntity,
   EntityData,
@@ -28,7 +29,6 @@ import type {
   InitiativeEntity,
   Notification,
   ProjectEntity,
-  ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
@@ -57,7 +57,6 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
-import { reminderEntityFromData } from '../reminders/entity';
 import { mapAgentSessionSearchResult } from './agent-session-search';
 
 /** Search sends a property's entity type only when it has one. */
@@ -95,7 +94,7 @@ type SoupEntity =
   | ChannelThreadEntity
   | CallEntity
   | CrmCompanyEntity
-  | ReminderEntity
+  | CrmContactEntity
   | CalendarEventEntity
   | ForeignEntity;
 
@@ -326,9 +325,14 @@ const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
 export const useSearchResponseItemMapper = () => {
-  const channelsContext = useChannelsContext();
-  const channels = channelsContext.channels;
+  const { channels } = useChannelsContext();
+  return (result: UnifiedSearchResponseItem, searchQuery: string) =>
+    createSearchResponseItemMapper(channels())(result, searchQuery);
+};
 
+export const createSearchResponseItemMapper = (
+  channels: ReadonlyArray<{ id: string; name?: string | null }>
+) => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
@@ -501,8 +505,7 @@ export const useSearchResponseItemMapper = () => {
           source: 'service',
         };
         const channelName =
-          channels().find((channel) => channel.id === result.channel_id)
-            ?.name ??
+          channels.find((channel) => channel.id === result.channel_id)?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -523,7 +526,7 @@ export const useSearchResponseItemMapper = () => {
       }
       case 'channelMessage': {
         const channelName =
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           blockNameToDefaultFile('channel');
         const search = getSearchData({ type: 'channel', results: [result] });
         const content = search.contentHitData?.[0]?.content ?? '';
@@ -625,7 +628,7 @@ export const useSearchResponseItemMapper = () => {
 
         const channelName: string | undefined =
           result.metadata.channel_name ??
-          channels().find((c) => c.id === result.channel_id)?.name ??
+          channels.find((c) => c.id === result.channel_id)?.name ??
           undefined;
         const status = result.metadata.status;
 
@@ -913,6 +916,8 @@ export const mapApiSoupItemToEntity = (
         authorLogin?: string | null;
         authorId?: number | null;
         labels?: GithubPullRequestLabel[] | null;
+        description?: string | null;
+        head?: { name?: string | null } | null;
       };
 
       let status: GithubPullRequestEntity['metadata']['status'] = 'open';
@@ -948,6 +953,8 @@ export const mapApiSoupItemToEntity = (
           labels: metadata.labels ?? [],
           authorLogin: metadata.authorLogin ?? undefined,
           authorId: metadata.authorId ?? undefined,
+          description: metadata.description ?? undefined,
+          headBranch: metadata.head?.name ?? undefined,
         },
       };
 
@@ -964,6 +971,14 @@ export const mapApiSoupItemToEntity = (
       projectId: item.data.projectId ?? undefined,
       subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
+    }))
+    .with({ tag: 'crmContact' }, (item) => ({
+      ...item.data,
+      type: 'crm_contact' as const,
+      name: item.data.name?.trim() || item.data.email,
+      ownerId: item.data.teamId,
+      sortTs: item.data.lastInteraction,
+      frecencyScore: item.frecency_score,
     }))
     .with({ tag: 'crmCompany' }, (item) => {
       const primaryDomain = item.data.domains[0]?.domain;
@@ -990,9 +1005,6 @@ export const mapApiSoupItemToEntity = (
         properties: item.data.properties,
       } satisfies CrmCompanyEntity;
     })
-    .with({ tag: 'reminder' }, (item) =>
-      reminderEntityFromData(item.data, item.frecency_score)
-    )
     .with({ tag: 'calendarEvent' }, (item) => {
       return {
         type: 'calendar_event',

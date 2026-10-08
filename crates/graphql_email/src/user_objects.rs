@@ -165,6 +165,12 @@ pub struct GraphqlEmailLink {
     settings: GraphqlEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    has_calendar_data: bool,
     /// Link creation timestamp in RFC 3339 format.
     created_at: String,
     /// Link last-updated timestamp in RFC 3339 format.
@@ -185,6 +191,9 @@ impl From<UserEmailLink> for GraphqlEmailLink {
             needs_reauth: link.needs_reauth,
             settings: link.settings.into(),
             is_primary: link.is_primary,
+            needs_calendar_permission: link.needs_calendar_permission,
+            calendar_disabled: link.calendar_disabled,
+            has_calendar_data: link.has_calendar_data,
             created_at: link.created_at.to_rfc3339(),
             updated_at: link.updated_at.to_rfc3339(),
         }

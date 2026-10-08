@@ -1,3 +1,5 @@
+mod pull_requests;
+
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -113,6 +115,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
     assert_eq!(
         DeclaredMacroEvent::topics(),
         [
+            "macro.github_pull_requests",
             "macro.documents",
             "macro.projects",
             "macro.chats",
@@ -741,7 +744,7 @@ async fn updated_payload_maps_to_document_patch_and_commits() {
     let commits = AtomicUsize::new(0);
 
     assert!(matches!(
-        process_event(&service, &event, || {
+        process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         })
         .await,
@@ -779,7 +782,7 @@ async fn transient_service_failures_are_retried_before_committing() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         commits.fetch_add(1, Ordering::SeqCst);
     })
@@ -800,7 +803,7 @@ async fn exhausted_service_retries_drop_and_commit_the_event() {
     let commits = AtomicUsize::new(0);
     let started = tokio::time::Instant::now();
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         assert_eq!(started.elapsed(), Duration::from_secs(15));
         commits.fetch_add(1, Ordering::SeqCst);
@@ -818,14 +821,14 @@ async fn dropped_event_does_not_prevent_later_events_from_being_processed() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let committed_offsets = Mutex::new(Vec::new());
 
-    let first_outcome = process_event(&service, &first_event, || {
+    let first_outcome = process_event(&service, &NoPullRequestSessions, &first_event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), MAX_NOTIFY_ATTEMPTS);
         committed_offsets.lock().expect("offsets lock").push(0);
     })
     .await;
     assert!(matches!(first_outcome, EventOutcome::Dropped));
 
-    let next_outcome = process_event(&service, &next_event, || {
+    let next_outcome = process_event(&service, &NoPullRequestSessions, &next_event, || {
         assert_eq!(
             service.attempts.load(Ordering::SeqCst),
             MAX_NOTIFY_ATTEMPTS + 1
@@ -856,7 +859,7 @@ async fn multi_patch_event_retries_only_the_failed_patch_before_committing() {
     service.failures.insert(2);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(service.attempts.load(Ordering::SeqCst), 4);
         commits.fetch_add(1, Ordering::SeqCst);
     })
@@ -884,7 +887,7 @@ async fn partial_event_failure_discards_remaining_patches_and_commits() {
     service.failures = (2..=MAX_NOTIFY_ATTEMPTS + 1).collect();
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         assert_eq!(
             service.attempts.load(Ordering::SeqCst),
             MAX_NOTIFY_ATTEMPTS + 1
@@ -913,7 +916,7 @@ async fn ignored_event_commits_without_notifying() {
     let service = flaky_service(0);
     let commits = AtomicUsize::new(0);
 
-    let outcome = process_event(&service, &event, || {
+    let outcome = process_event(&service, &NoPullRequestSessions, &event, || {
         commits.fetch_add(1, Ordering::SeqCst);
     })
     .await;
@@ -937,7 +940,7 @@ async fn offset_is_committed_only_after_every_patch_finishes() {
     let event = reindex_event(vec![Uuid::now_v7(), Uuid::now_v7()]);
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
-    let process = process_event(&service, &event, || {
+    let process = process_event(&service, &NoPullRequestSessions, &event, || {
         commits.fetch_add(1, Ordering::SeqCst);
     });
     tokio::pin!(process);
@@ -958,7 +961,7 @@ async fn cancellation_during_publication_leaves_the_event_uncommitted() {
     let service = GatedService(tokio::sync::Semaphore::new(0));
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &event, || {
+        let process = process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         });
         tokio::pin!(process);
@@ -974,7 +977,7 @@ async fn cancellation_during_retry_backoff_leaves_the_event_uncommitted() {
     let service = flaky_service(MAX_NOTIFY_ATTEMPTS);
     let commits = AtomicUsize::new(0);
     {
-        let process = process_event(&service, &event, || {
+        let process = process_event(&service, &NoPullRequestSessions, &event, || {
             commits.fetch_add(1, Ordering::SeqCst);
         });
         tokio::pin!(process);
@@ -1062,4 +1065,11 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         patches_from_property_event(&PropertyTopicEvent::EntityPropertyUpdated(cleanup)),
         vec![update(EntityType::Document, DOCUMENT_ID)]
     );
+}
+
+struct NoPullRequestSessions;
+impl PullRequestSessions for NoPullRequestSessions {
+    async fn linked_sessions(&self, _: &str) -> Result<Vec<Entity<'static>>, Report> {
+        Ok(Vec::new())
+    }
 }

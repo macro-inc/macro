@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET last_sync_error=$2,snapshot_normalization_version=$3 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "edaea28192b00cb0886f13d5fabbc39e475970abae720c14424bb3d94cea362d"
+}

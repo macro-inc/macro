@@ -183,7 +183,7 @@ try {
     await browser.waitUntil(
       async () => {
         const lanes = await checkpoints(browser!);
-        return lanes.length === 5 && lanes.every((lane) => lane.completed);
+        return lanes.length === 7 && lanes.every((lane) => lane.completed);
       },
       { timeout: 60_000 }
     );

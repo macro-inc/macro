@@ -106,19 +106,12 @@ describe('mobile create availability', () => {
 
     setCalendar(true);
     const call = vi.fn(() => true);
-    const reminder = vi.fn(() => true);
     setBlocks([
       {
         label: 'Call',
         description: 'New call',
         blockName: 'call',
         keyDownHandler: call,
-      },
-      {
-        label: 'Reminder',
-        description: 'New reminder',
-        blockName: 'reminder',
-        keyDownHandler: reminder,
       },
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
@@ -127,7 +120,7 @@ describe('mobile create availability', () => {
       Array.from(menu.querySelectorAll('button')).map(
         (button) => button.textContent
       )
-    ).toEqual(['Event', 'Call', 'Reminder', 'New']);
+    ).toEqual(['Event', 'Call', 'New']);
     fireEvent.click(screen.getByRole('button', { name: 'Event' }));
     await vi.waitFor(() => expect(sources.openEvent).toHaveBeenCalledOnce());
   });
@@ -143,11 +136,10 @@ describe('mobile create availability', () => {
     expect(screen.queryByRole('button', { name: 'Reminder' })).toBeNull();
   });
 
-  it('uses the gated Call and Reminder actions in the Calendar New menu', async () => {
+  it('uses the gated Call action in the Calendar New menu', async () => {
     const { setCalendar, setBlocks } = setup('calendar');
     setCalendar(true);
     const call = vi.fn(() => true);
-    const reminder = vi.fn(() => true);
     setBlocks([
       {
         label: 'Call',
@@ -155,17 +147,8 @@ describe('mobile create availability', () => {
         blockName: 'call',
         keyDownHandler: call,
       },
-      {
-        label: 'Reminder',
-        description: 'New reminder',
-        blockName: 'reminder',
-        keyDownHandler: reminder,
-      },
     ]);
-    for (const [label, action] of [
-      ['Call', call],
-      ['Reminder', reminder],
-    ] as const) {
+    for (const [label, action] of [['Call', call]] as const) {
       fireEvent.click(screen.getByRole('button', { name: 'New' }));
       fireEvent.click(await screen.findByRole('button', { name: label }));
       await vi.waitFor(() => expect(action).toHaveBeenCalledOnce());

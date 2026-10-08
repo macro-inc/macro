@@ -1,5 +1,8 @@
 use sqlx::types::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Update the read status of a single message, scoped to the inbox that owns it.
 #[tracing::instrument(skip(tx), err)]
 pub async fn update_message_read_status(
@@ -148,7 +151,12 @@ where
     Ok(updated_count)
 }
 
-/// Updates draft in database to be sent, and populates with provider IDs
+/// Finalize a provider-accepted send and populate its provider IDs.
+///
+/// Macro messages may not have a provider timestamp until inbox sync runs.
+/// Seed their delivery time now so thread metadata and the realtime Mail cache
+/// can include them in Sent immediately. Preserve existing provider timestamps
+/// and the timestamp from an earlier finalization attempt.
 #[tracing::instrument(skip(tx), err)]
 pub async fn mark_message_as_sent(
     tx: &mut sqlx::PgConnection,
@@ -165,6 +173,7 @@ pub async fn mark_message_as_sent(
             provider_thread_id = $2,
             is_draft = false,
             is_sent = true,
+            internal_date_ts = COALESCE(internal_date_ts, NOW()),
             updated_at = NOW()
         WHERE
             id = $3

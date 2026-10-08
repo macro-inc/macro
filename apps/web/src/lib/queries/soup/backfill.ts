@@ -7,6 +7,7 @@ import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
+  type GraphqlEmailExpr,
   SoupBackfillDocument,
   SoupMailBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -28,7 +29,7 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 // persisted cursors cannot retain an older hydration contract.
 // Rehydrate raw file-type projections after retiring enum-normalized facts.
 // Old cursors must not skip records when the cache compatibility epoch changes.
-const BACKFILL_VERSION = 15;
+const BACKFILL_VERSION = 17;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -39,6 +40,14 @@ const CACHE_HOST_RETRY_COUNT = 6;
 const CACHE_HOST_RETRY_SCHEDULE = Schedule.exponential('100 millis');
 const BACKFILL_PROGRESS_PAGE_INTERVAL = 10;
 const EXCLUDED_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Email threads of one signal classification whose latest message is at most
+ * `days` old. */
+type EmailRecencyWindow = { signal: boolean; days: number };
+
+const SIGNAL_EMAIL_WINDOW: EmailRecencyWindow = { signal: true, days: 90 };
+const NOISE_EMAIL_WINDOW: EmailRecencyWindow = { signal: false, days: 30 };
 
 type SoupBackfillFetchPage = (
   input: GraphqlSoupInput,
@@ -69,6 +78,9 @@ export type SoupBackfillParams = {
   /** Refresh the whole metadata corpus: message-time watermarks do not capture
    * read/archive changes to old email threads. Interrupted scans still resume. */
   refreshAll?: boolean;
+  /** Email threads matching any window. The cutoff is fixed when a pass starts;
+   * resumed cursors keep the cutoff they were issued with. */
+  emailRecency?: readonly EmailRecencyWindow[];
 };
 
 /** Backfills the entities used most often by Quick Access and primary views. */
@@ -91,56 +103,85 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 };
 
 /**
- * Backfills email threads and the first message page used by the thread view
- * while excluding every other entity variant with an impossible id filter.
+ * Email threads and the first message page used by the thread view, excluding
+ * every other entity variant with an impossible id filter.
  */
-export const EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'email-thread-pages',
-  fetchPage: fetchEmailContentPage,
-  // A long full scan can skip threads created, viewed, or updated after its
-  // VIEWED_UPDATED cursor has passed them. Consume the recorded watermark
-  // before reporting this lane complete.
-  catchUpAfterInitialPass: true,
-  input: {
-    limit: EMAIL_CONTENT_PAGE_LIMIT,
-    expand: true,
-    sortMethod: 'VIEWED_UPDATED',
-    emailView: 'ALL',
-    filters: {
-      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
-      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
-      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
-      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
-      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
-      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-    },
+const EMAIL_THREAD_PAGES_INPUT: GraphqlSoupInitialInput = {
+  limit: EMAIL_CONTENT_PAGE_LIMIT,
+  expand: true,
+  // Orders by the latest-message timestamp that emailRecency bounds, so each
+  // page is an ordered index range ending at the cutoff.
+  sortMethod: 'UPDATED_AT',
+  emailView: 'ALL',
+  filters: {
+    calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+    chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+    channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
+    channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+    callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+    crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
   },
+};
+
+const EMAIL_THREAD_PAGES_LANE = {
+  fetchPage: fetchEmailContentPage,
+  // A long full scan can skip threads that receive messages after its cursor
+  // has passed them. Consume the recorded watermark before reporting the lane
+  // complete.
+  catchUpAfterInitialPass: true,
+  input: EMAIL_THREAD_PAGES_INPUT,
+} satisfies Omit<SoupBackfillParams, 'checkpointId'>;
+
+export const SIGNAL_EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_THREAD_PAGES_LANE,
+  checkpointId: 'email-signal-thread-pages',
+  emailRecency: [SIGNAL_EMAIL_WINDOW],
+};
+
+export const NOISE_EMAIL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_THREAD_PAGES_LANE,
+  checkpointId: 'email-noise-thread-pages',
+  emailRecency: [NOISE_EMAIL_WINDOW],
 };
 
 /** Filter/row metadata is synchronized before the independently bounded body cache.
  * ALL covers the first Mail slice across every readable owned/delegated inbox. */
-export const EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
-  checkpointId: 'email-filter-metadata',
+const EMAIL_FILTER_LANE = {
   fetchPage: (input, options) =>
     hydrateGraphqlSoup(SoupMailBackfillDocument, { input }, options),
   refreshAll: true,
-  input: { ...EMAIL_SOUP_BACKFILL_LANE.input, limit: PAGE_LIMIT },
+  input: { ...EMAIL_THREAD_PAGES_INPUT, limit: PAGE_LIMIT },
+} satisfies Omit<SoupBackfillParams, 'checkpointId'>;
+
+export const SIGNAL_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_FILTER_LANE,
+  checkpointId: 'email-signal-filter-metadata',
+  emailRecency: [SIGNAL_EMAIL_WINDOW],
+};
+
+export const NOISE_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
+  ...EMAIL_FILTER_LANE,
+  checkpointId: 'email-noise-filter-metadata',
+  emailRecency: [NOISE_EMAIL_WINDOW],
 };
 
 /** Shared grants are separate from owned/delegated inbox scope. A complete scan
- * invalidates omitted old proof; interrupted scans preserve last-known evidence. */
+ * invalidates omitted old proof; interrupted scans preserve last-known evidence.
+ * One lane covers both windows because each scan invalidates every cached
+ * Shared thread it did not return, including threads outside the windows. */
 export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'shared-email-filter-metadata',
   createFetchPage: createSharedMailBackfillFetcher,
   refreshAll: true,
   restartOnRun: true,
+  emailRecency: [SIGNAL_EMAIL_WINDOW, NOISE_EMAIL_WINDOW],
   input: {
-    ...EMAIL_FILTER_BACKFILL_LANE.input,
+    ...EMAIL_FILTER_LANE.input,
     filters: {
-      ...EMAIL_FILTER_BACKFILL_LANE.input.filters,
+      ...EMAIL_FILTER_LANE.input.filters,
       emailFilter: { tree: { literal: { shared: 'ONLY' } } },
     },
   },
@@ -170,9 +211,11 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 /** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
-  EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+  NOISE_EMAIL_FILTER_BACKFILL_LANE,
   SHARED_EMAIL_FILTER_BACKFILL_LANE,
-  EMAIL_SOUP_BACKFILL_LANE,
+  SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+  NOISE_EMAIL_SOUP_BACKFILL_LANE,
   AUXILIARY_SOUP_BACKFILL_LANE,
 ] as const satisfies readonly SoupBackfillParams[];
 
@@ -342,8 +385,8 @@ export function withUpdatedSince(
     literal: { updatedAt: { gte: updatedSince } },
   };
 
-  // VIEWED_UPDATED can move a row ahead of the scan cursor through either
-  // the thread timestamp or this viewer's history timestamp. Cover both.
+  // A cached email row changes through either the thread timestamp or this
+  // viewer's history timestamp, and VIEWED_UPDATED sorts on both. Cover both.
   const emailSortWatermark = {
     or: {
       left: { literal: { updatedAt: { gte: updatedSince } } },
@@ -361,6 +404,44 @@ export function withUpdatedSince(
       emailFilter: {
         ...(filters.emailFilter ?? {}),
         tree: and(filters.emailFilter?.tree, emailSortWatermark),
+      },
+    },
+  };
+}
+
+/**
+ * Restricts email threads to those matching any window. In the ALL view the
+ * email updatedAt literal compares the latest non-spam message timestamp.
+ */
+function withEmailRecency(
+  input: GraphqlSoupInitialInput,
+  windows: readonly EmailRecencyWindow[] | undefined,
+  now: number
+): GraphqlSoupInitialInput {
+  if (!windows?.length) return input;
+
+  const recency = windows
+    .map(
+      ({ signal, days }): GraphqlEmailExpr => ({
+        and: {
+          left: { literal: { importance: signal } },
+          right: {
+            literal: {
+              updatedAt: { gte: new Date(now - days * DAY_MS).toISOString() },
+            },
+          },
+        },
+      })
+    )
+    .reduce((left, right) => ({ or: { left, right } }));
+  const filters = input.filters ?? {};
+  return {
+    ...input,
+    filters: {
+      ...filters,
+      emailFilter: {
+        ...(filters.emailFilter ?? {}),
+        tree: and(filters.emailFilter?.tree, recency),
       },
     },
   };
@@ -430,7 +511,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       continue;
     }
     const passInput = withUpdatedSince(
-      params.input,
+      withEmailRecency(params.input, params.emailRecency, Date.now()),
       params.refreshAll ? null : checkpoint.updatedSince
     );
     const input: GraphqlSoupInput = checkpoint.nextCursor

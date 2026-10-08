@@ -1,3 +1,3 @@
-import type { ReminderEntity } from '@entity';
+import type { EmailFollowup } from '@service-storage/generated/schemas/emailFollowup';
 
-export type EmailRowReminder = { nearest: ReminderEntity; count: number };
+export type EmailRowReminder = EmailFollowup & { name: string };

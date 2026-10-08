@@ -29,9 +29,10 @@ admission and recording:
 | Historical rows / inserts omitting column | Never retrospectively classified | `false` |
 | Disabled after activation | Stop admission and new counting | Existing booleans unchanged |
 
-**Exempt:** Memory, AiProjection, CallSummary, Dictation. **Billable:** Chat,
-Automation, DynamicCompletionsApi, ChatRename, ChannelBot, AiEditing, Import,
-AgentSession, AgentRepositoryChoice. In particular, AI editing is not exempt.
+**Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename.
+**Billable:** Chat, Automation, DynamicCompletionsApi, ChannelBot, AiEditing,
+Import, AgentSession, AgentRepositoryChoice, ImageGeneration. In particular, AI
+editing is not exempt.
 The classification is exhaustive and server-selected, not request-controlled.
 
 Unlimited (enterprise) entitlements are never blocked by this quota policy.
@@ -41,7 +42,7 @@ counted usage per UTC calendar month: past it, admission answers
 or overage. Model-access and resource permissions remain independent. Counting
 eligibility is not a claim that a particular user owes money; it does not
 special-case their plan. Existing paid allowance, per-seat usage, payer credits,
-overage opt-in/cap, and denial decisions remain in the legacy ledger.
+automatic reload opt-in, and denial decisions remain in the legacy ledger.
 
 ### Persistence
 
@@ -64,8 +65,9 @@ backfilled into counted usage or financial authorizations.
 ## Settlement: `ENABLE_AI_USAGE_BILLING`
 
 `ENABLE_AI_USAGE_BILLING` enables **legacy settlement of counted usage past a
-payer's allowance**: prepaid credits are consumed and opt-in overage is reserved
-and collected through Stripe. The [startup loader](../crates/ai_billing/src/config.rs)
+payer's allowance**: prepaid credits are consumed and optional automatic reloads
+purchase more credits through Stripe. Direct usage charges are disabled. The
+[startup loader](../crates/ai_billing/src/config.rs)
 parses it exactly like the enforcement flag (absent means false; only raw `true`
 or `false`; malformed present values fail startup) and hosts load it once. It is
 independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
@@ -80,7 +82,7 @@ hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
 (Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
 (Max, per seat per subscription period) — and `AI_USAGE_OVERAGE_MARKUP_PERCENT`,
 the whole-percent markup over cost applied to paid usage beyond the allowance before
-credits are consumed or overage is charged. There is no default in code: a missing,
+credits are consumed. There is no default in code: a missing,
 malformed, or out-of-range value fails startup and the Doppler CI validator. The values live in `shared_ai` (`lcl`,
 `dev`, `prd`), which every participating service inherits except the authentication
 service, whose `dev` and `prd` configs carry them directly; the no-Doppler local
@@ -97,7 +99,7 @@ Only two hosts participate:
 
 | Host | Gate | When disabled |
 | --- | --- | --- |
-| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage changes, credit-purchase webhooks, and the internal settle endpoint | Returns without reading entitlements, consuming credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
+| Authentication service | [`BillingServiceImpl::settle`](../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, overage and auto-reload changes, credit-purchase webhooks, and the internal settle endpoint. It also reserves and collects automatic credit reloads | Returns without reading entitlements, consuming credits, reloading credits, or touching Stripe. Credit purchases are still booked and remain unconsumed |
 | Document cognition service | [`SettlingUsageRecorder`](../crates/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands | Usage is still recorded and counted; no settlement request is sent |
 
 Every other host composes admission through
@@ -105,9 +107,43 @@ Every other host composes admission through
 settles regardless of configuration. The authentication service's policy is
 authoritative: a request from document cognition is a no-op there while its flag
 is false, and with document cognition false the authentication service still
-settles on summary reads, overage changes, and credit purchases. Enable both
+settles on summary reads, automatic reload changes, and credit purchases. Enable both
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
+
+Automatic credit reload is part of the same settlement. It fires only inside
+`BillingServiceImpl::settle`, so it shares the `ENABLE_AI_USAGE_BILLING` gate,
+and only for the current period, before prepaid credits are consumed: while
+automatic reload is enabled and not reload-suspended, settlement compares the
+credit balance net of the period's
+uncovered usage with the payer's minimum balance and, below it, reloads up to the
+target balance. The minimum, target, and optional monthly spend limit are stored
+per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
+monthly limit counts reloads Stripe may still collect (pending, paid, or failed
+with an invoice) within the UTC calendar month, independent of the Stripe period
+anchor; a remainder under the Stripe minimum charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
+payer lock and collected as a one-off Stripe invoice stamped
+`macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
+purchase, idempotent on the invoice id. A declined invoice stays pending, which
+blocks further reloads, until the Stripe webhook reports it paid (credits are
+booked) or failed (reloads are suspended). A provider failure marks the reload
+failed and sets `auto_reload_suspended_at` until the payer saves their settings
+again. Exhausted reload budgets, declined payments, and provider failures leave
+unfunded usage uncovered. There is no direct-charge fallback or headroom from a
+historical overage cap; when quota enforcement is enabled, exhausted allowance
+and prepaid credits block new AI requests. A failed reload whose invoice reached
+Stripe keeps that invoice, and the next reservation after reloads are re-enabled
+retries it rather than opening a second one. `PATCH /ai-billing/auto-reload`
+(payer on a paid plan only) enables automatic reloads: enabling validates and
+stores the thresholds, sets the legacy `overage_enabled` reload opt-in field,
+zeros the direct-charge cap, clears suspensions, and settles at once. Disabling
+keeps the stored thresholds. The monthly reload budget must be at least `$5`.
+`PATCH /ai-billing/overage` rejects attempts to enable direct billing; disabling
+remains supported for older clients. New V1 funding snapshots also disable
+postpaid authorization. Historical invoices retain their accounting and webhook
+handling, but settlement never creates or retries direct charges.
+`GET /ai-billing/summary`
+reports `auto_reload` with the thresholds, `suspended`, and `active`.
 
 The frontend is not tied to this flag. Settings → Usage and the shared usage-limit
 dialog support all plans. Production activation follows the
@@ -124,8 +160,8 @@ Plan allowance copy and comparisons follow the `enable-ai-usage-billing` PostHog
 flag (`enableAiUsageBilling` in `apps/web/src/lib/core/constant/featureFlags.ts`),
 which defaults on in development builds and follows PostHog elsewhere;
 `VITE_ENABLE_AI_USAGE_BILLING` overrides it locally. Model usage multipliers have
-been removed. The Auto-Reload UI has no balance-triggered backend yet and cannot
-save outside its explicit display-only developer preview.
+been removed. The Auto-Reload dialog saves through `PATCH /ai-billing/auto-reload`
+and is the only surface that turns usage billing on.
 
 ## Public failure contracts
 
@@ -188,8 +224,9 @@ inspect the content type and code rather than assuming every 503 is billing.
   are terminal bookkeeping, not automatic replay. Agent targets delegate funding
   decisions to the session/harness service. A 503 describes a retryable cause, not
   a promise that a scheduler or broker will redeliver the same run.
-- Optional chat/session naming is independently admitted as ChatRename; refusal
-  retains the existing/default title without failing successful primary work.
+- Optional chat/session naming is independently admitted as ChatRename, an exempt
+  feature, so the gate does no quota billing I/O and never charges the user; a
+  refusal retains the existing/default title without failing successful primary work.
   Optional bot/trigger inference (including image captions) skips classification
   on failure, without AI fallback or implied approval. Explicit mentions still
   route deterministically; downstream execution has its own gate and failures.
@@ -239,7 +276,7 @@ admission and R. Admission itself never records usage or calls settlement.
 | Repository chooser / AgentRepositoryChoice | [repository choice service](../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, independent R | [deterministic bypass / typed model refusal](../crates/agent_harness/src/domain/repository_choice/test.rs) |
 | Scheduled manual/cron/event model work / Automation | [shared executor](../services/scheduled_action/src/domain/execution.rs) | [scheduled service](../services/scheduled_action/src/bins/service.rs), common context T | [claims, schedules, terminal events](../services/scheduled_action/src/domain/execution/test.rs), [manual HTTP](../services/scheduled_action/src/inbound/axum_router/test.rs) |
 | Scheduled agent targets / session funding policy | [target runner](../services/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../services/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../crates/agent_session/src/inbound/routine_sessions/test.rs) |
-| Memory, projection, call summary, dictation / exempt | [shared admission policy](../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../crates/memory/src/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../crates/ai_billing/src/composition/test.rs) |
+| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../crates/memory/src/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../crates/ai_billing/src/composition/test.rs) |
 | Existing system task duplicate judge / Automation | [system attribution](../crates/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../crates/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../crates/ai_billing/src/outbound/settling_recorder/test.rs) |
 | Billing summary (not execution) | [billing service policy](../crates/ai_billing/src/domain/service.rs) | [authentication main](../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../services/authentication_service/src/config/test.rs) |
 

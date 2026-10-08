@@ -8,6 +8,7 @@ mod tests;
 mod copy;
 mod create;
 mod edit;
+mod legacy_upgrade;
 mod markdown_backfill;
 mod share;
 
@@ -940,6 +941,28 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         )
         .fetch_all(&self.pool)
         .await
+    }
+
+    #[tracing::instrument(err, skip(self, github_keys), fields(github_keys = github_keys.len()))]
+    async fn get_github_pull_request_task_links(
+        &self,
+        github_keys: &[String],
+    ) -> Result<Vec<(String, String)>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT github_key, task_id
+            FROM github_pr_tasks
+            WHERE github_key = ANY($1)
+            ORDER BY created_at ASC, task_id ASC
+            "#,
+            github_keys,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.github_key, row.task_id))
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]

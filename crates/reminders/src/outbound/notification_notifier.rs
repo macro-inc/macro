@@ -38,22 +38,18 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
     type Err = NotifyError;
 
     // `DueReminder` carries both the owner's macro user id — which embeds their
-    // email — and the description, which is the user's own note. Only the
+    // email — and the private email subject. Only the
     // reminder id is safe to put in a span.
-    #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder.id))]
+    #[tracing::instrument(err, skip_all, fields(reminder_id = %due.reminder_id))]
     async fn notify(&self, due: &DueReminder) -> Result<(), Self::Err> {
-        // The notification belongs to the reminder itself, not to whatever the
-        // reminder references. The client resolves the referenced entity through
-        // the reminder's `referencedEntity` edge.
         let request = SendNotificationRequestBuilder {
-            notification_entity: EntityType::Reminder
-                .with_entity_string(due.reminder.id.to_string()),
+            notification_entity: EntityType::EmailThread
+                .with_entity_string(due.thread_id.to_string()),
             secondary_notification_entity: None,
             notification: ReminderMetadata {
-                reminder_id: due.reminder.id,
-                description: due.reminder.description.clone(),
-                // Which occurrence this is. A recurring reminder produces one
-                // notification per firing, identical but for this.
+                reminder_id: due.reminder_id,
+                description: due.description.clone(),
+                // Retraction must distinguish a previous firing from a newer snooze.
                 scheduled_for: Some(due.scheduled_for),
             },
             // Must stay None. A recipient who is also the sender is filtered
@@ -71,7 +67,7 @@ impl<I: NotificationIngress> ReminderNotifier for NotificationReminderNotifier<I
             .send_notification(request)
             .await
             .map_err(|e| {
-                tracing::error!(error = ?e, reminder_id = %due.reminder.id, "reminder notification rejected");
+                tracing::error!(error = ?e, reminder_id = %due.reminder_id, "reminder notification rejected");
                 NotifyError
             })?;
 

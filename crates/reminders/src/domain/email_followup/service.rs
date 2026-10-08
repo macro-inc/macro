@@ -1,4 +1,4 @@
-//! Orchestration shared by the email API, generic reminder edits and dispatch.
+//! Orchestration shared by the email API and dispatch.
 
 use super::*;
 use crate::domain::ports::{Clock, SystemClock};
@@ -205,25 +205,6 @@ impl<R: EmailFollowupRepo, E: EmailFollowupMailbox, C: Clock> EmailFollowupServi
             return Err(error);
         }
         Ok(record.followup)
-    }
-
-    /// Retire this exact owned reminder. Historical rows never mutate mail or
-    /// another follow-up; the caller retains the dispatch lock through retraction.
-    pub(crate) async fn retire_locked(
-        &self,
-        mut record: FollowupRecord,
-    ) -> Result<(), ReminderError> {
-        record.followup.revision = Uuid::now_v7();
-        record.cancel_on_restore = false;
-        record.restore_inbox_visible = true;
-        record.restore_original = false;
-        record.followup.state = if record.followup.state.active() {
-            FollowupState::Returning
-        } else {
-            FollowupState::Removed
-        };
-        self.repo.save_followup(&record, None, None).await?;
-        self.reconcile_locked(&mut record).await
     }
 
     /// Resume stored intent and cancel replied/inaccessible workflows. The caller

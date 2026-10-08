@@ -1,5 +1,6 @@
 import { pipedreamAppAvailableInEnv } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
+import { queryReadyGate } from '@queries/gate';
 import {
   connectPipedreamApp,
   usePipedreamCatalogQuery,
@@ -38,7 +39,7 @@ export function createPipedreamCatalogSearch(
   const query = usePipedreamCatalogQuery(search);
 
   const entries = (): PipedreamCatalogEntryResponse[] => {
-    if (!query.isSuccess) return [];
+    if (!queryReadyGate(query)) return [];
     return (query.data?.pages ?? [])
       .flatMap((page) => page.servers)
       .filter(

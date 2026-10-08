@@ -487,8 +487,8 @@ async fn allocated(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn threshold_split_is_credit_first_and_not_double_billed(pool: PgPool) {
-    let (repo, billing) = setup(&pool, 1_000, true, 5_000).await;
+async fn allowance_and_credits_are_not_double_billed(pool: PgPool) {
+    let (repo, billing) = setup(&pool, 1_050, true, 5_000).await;
     let invocation = admit(&repo, 30 * DOLLAR).await;
     let record = completed(invocation.clone(), 30 * DOLLAR);
     repo.finalize(record.clone()).await.unwrap();
@@ -511,9 +511,9 @@ async fn threshold_split_is_credit_first_and_not_double_billed(pool: PgPool) {
     assert_eq!(allocation.extra_public.units(), 10 * DOLLAR);
     assert_eq!(
         allocation.prepaid,
-        CustomerMoney::from_cents(1_000).unwrap()
+        CustomerMoney::from_cents(1_050).unwrap()
     );
-    assert_eq!(allocation.postpaid, CustomerMoney::from_cents(50).unwrap());
+    assert_eq!(allocation.postpaid.units(), 0);
     assert_eq!(allocation.macro_absorbed.units(), 0);
     assert_eq!(
         allocation.extra_money().unwrap(),
@@ -560,6 +560,16 @@ async fn opt_out_credit_only_and_exhaustion(pool: PgPool) {
             .await
             .is_err()
     );
+    // The retired opt-in cannot fund even a fresh request.
+    assert!(
+        repo.authorize(request(&denied_rate, 1), denied_rate.clone())
+            .await
+            .is_err()
+    );
+    billing
+        .record_credit_purchase(&user("payer"), 1_050, "cs_replenished")
+        .await
+        .unwrap();
     let fresh = request(&denied_rate, 1);
     assert!(repo.authorize(fresh, denied_rate.clone()).await.is_ok());
     let unknown = AuthorizedInvocation {
@@ -576,7 +586,7 @@ async fn opt_out_credit_only_and_exhaustion(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reversed_completions_release_allowance_before_pricing(pool: PgPool) {
-    let (repo, billing) = setup(&pool, 0, true, 5_000).await;
+    let (repo, billing) = setup(&pool, 1_050, true, 5_000).await;
     let first = admit(&repo, 20 * DOLLAR).await;
     let second = admit(&repo, 10 * DOLLAR).await;
     let second_id = second.request.invocation_id;
@@ -594,26 +604,32 @@ async fn reversed_completions_release_allowance_before_pricing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn earlier_credit_releases_replace_only_eligible_postpaid(pool: PgPool) {
-    let (repo, billing) = setup(&pool, 1_050, true, 5_000).await;
+async fn earlier_credit_releases_remain_available_to_eligible_invocations(pool: PgPool) {
+    let (repo, billing) = setup(&pool, 2_100, true, 5_000).await;
     let included = admit(&repo, 20 * DOLLAR).await;
     allocated(&repo, included, 20 * DOLLAR).await;
     let first = admit(&repo, 10 * DOLLAR).await;
     let second = admit(&repo, 10 * DOLLAR).await;
     let second_id = second.request.invocation_id;
     allocated(&repo, first, 0).await;
-    // Released money is still owed to second, not spendable by newer attempts.
+    // Released money remains committed until the next earlier allocation completes.
+    let pending_rate = rate();
+    assert!(
+        repo.authorize(request(&pending_rate, 10 * DOLLAR), pending_rate)
+            .await
+            .is_err()
+    );
+    allocated(&repo, second, 10 * DOLLAR).await;
     let third = admit(&repo, 10 * DOLLAR).await;
     let third_id = third.request.invocation_id;
-    repo.finalize(completed(third, 10 * DOLLAR)).await.unwrap();
-    allocated(&repo, second, 10 * DOLLAR).await;
+    allocated(&repo, third, 10 * DOLLAR).await;
     let second = repo.allocation(second_id).await.unwrap().unwrap();
     let third = repo.allocation(third_id).await.unwrap().unwrap();
     assert_eq!(second.prepaid, CustomerMoney::from_cents(1_050).unwrap());
-    assert_eq!(second.reclaimed_prepaid, second.prepaid);
+    assert_eq!(second.reclaimed_prepaid.units(), 0);
     assert_eq!(second.postpaid.units(), 0);
-    assert_eq!(third.prepaid.units(), 0);
-    assert_eq!(third.postpaid, CustomerMoney::from_cents(1_050).unwrap());
+    assert_eq!(third.prepaid, CustomerMoney::from_cents(1_050).unwrap());
+    assert_eq!(third.postpaid.units(), 0);
     assert_eq!(
         billing.credit_balance_cents(&user("payer")).await.unwrap(),
         0
@@ -622,7 +638,7 @@ async fn earlier_credit_releases_replace_only_eligible_postpaid(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn later_purchase_and_disable_do_not_reclassify_authorized_liability(pool: PgPool) {
-    let (repo, billing) = setup(&pool, 0, true, 2_000).await;
+    let (repo, billing) = setup(&pool, 1_050, true, 2_000).await;
     let invocation = admit(&repo, 30 * DOLLAR).await;
     billing
         .update_overage(&user("payer"), false, 0)
@@ -633,11 +649,11 @@ async fn later_purchase_and_disable_do_not_reclassify_authorized_liability(pool:
         .await
         .unwrap();
     let allocation = allocated(&repo, invocation, 30 * DOLLAR).await;
-    assert_eq!(allocation.prepaid.units(), 0);
     assert_eq!(
-        allocation.postpaid,
+        allocation.prepaid,
         CustomerMoney::from_cents(1_050).unwrap()
     );
+    assert_eq!(allocation.postpaid.units(), 0);
     assert_eq!(
         billing.credit_balance_cents(&user("payer")).await.unwrap(),
         2_500
@@ -659,7 +675,7 @@ async fn unfunded_overshoot_is_absorbed_not_debt(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn pending_evidence_blocks_watermark_and_is_discoverable(pool: PgPool) {
-    let (repo, _) = setup(&pool, 0, true, 5_000).await;
+    let (repo, _) = setup(&pool, 105, true, 5_000).await;
     let first = admit(&repo, 20 * DOLLAR).await;
     let first_id = first.request.invocation_id;
     let second = admit(&repo, DOLLAR).await;
@@ -847,11 +863,12 @@ async fn duplicate_admissions_reserve_once_even_after_lost_acknowledgement(pool:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn collected_new_liability_is_neither_legacy_coverage_nor_a_second_cap_debit(pool: PgPool) {
-    let (repo, billing) = setup(&pool, 0, true, 210).await;
+async fn historical_v1_charges_are_not_legacy_coverage(pool: PgPool) {
+    let (repo, billing) = setup(&pool, 210, true, 210).await;
     let first = admit(&repo, 21 * DOLLAR).await;
     let allocation = allocated(&repo, first, 21 * DOLLAR).await;
-    assert_eq!(allocation.postpaid, CustomerMoney::from_cents(105).unwrap());
+    assert_eq!(allocation.prepaid, CustomerMoney::from_cents(105).unwrap());
+    assert_eq!(allocation.postpaid.units(), 0);
     let payer = user("payer");
     sqlx::query!(
         "INSERT INTO ai_overage_charge (id, user_id, period_start, amount_cents, status, accounting_policy)
@@ -865,13 +882,13 @@ async fn collected_new_liability_is_neither_legacy_coverage_nor_a_second_cap_deb
     assert_eq!(ledger.overage_charged_cents, 0);
     let next = admit(&repo, DOLLAR).await;
     assert_eq!(
-        allocated(&repo, next, DOLLAR).await.postpaid,
+        allocated(&repo, next, DOLLAR).await.prepaid,
         CustomerMoney::from_cents(105).unwrap()
     );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn racing_postpaid_admissions_never_exceed_the_cap(pool: PgPool) {
+async fn racing_admissions_never_use_a_legacy_postpaid_cap(pool: PgPool) {
     let (repo, _) = setup(&pool, 0, true, 105).await;
     let included = admit(&repo, 20 * DOLLAR).await;
     allocated(&repo, included, 20 * DOLLAR).await;
@@ -887,15 +904,15 @@ async fn racing_postpaid_admissions_never_exceed_the_cap(pool: PgPool) {
     while let Some(result) = tasks.join_next().await {
         admitted += usize::from(result.unwrap());
     }
-    assert_eq!(admitted, 1);
+    assert_eq!(admitted, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn legacy_settlement_cannot_spend_new_holds_or_cap(pool: PgPool) {
     let (repo, billing) = setup(&pool, 1_050, true, 1_050).await;
-    let _held = admit(&repo, 40 * DOLLAR).await;
+    let _held = admit(&repo, 30 * DOLLAR).await;
     let policy = SettlementPolicy {
-        overage_active: true,
+        overage_active: false,
         overage_limit_cents: 1_050,
         charge_threshold_cents: 1_000,
         period_ended: false,
@@ -991,10 +1008,7 @@ async fn purchases_toggles_cap_reductions_and_admission_use_the_same_lock(pool: 
         admitted.request.invocation_id.as_uuid(),
     ).fetch_one(&pool).await.unwrap().admission;
     assert_eq!(captured.policy, UsagePolicy::PublicAllowanceV1);
-    assert_eq!(
-        captured.overage_enabled,
-        matches!(captured.postpaid, PostpaidData::Enabled(_))
-    );
+    assert!(matches!(captured.postpaid, PostpaidData::Disabled));
     assert!(captured.revision <= 3);
     billing
         .update_overage(&user("payer"), false, 0)

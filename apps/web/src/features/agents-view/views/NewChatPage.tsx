@@ -6,6 +6,12 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import {
+  acceleratedSpeed,
+  speedForModel,
+} from '@core/component/AI/constant/speed';
+import { fastModeEnabled } from '@core/component/AI/signal/speed';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
@@ -44,7 +50,12 @@ export type StartConversation = {
   repoUrl?: string;
   repoBranch?: string;
   modelOverride?: string;
+  /** The catalog was still loading, so an in-memory agent runs its persona default. */
+  modelFallback?: boolean;
   effortOverride?: { configId: string; value: string };
+  speedOverride?: { configId: string; value: string };
+  onDelivered?: () => void;
+  onFailure?: () => void;
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -57,6 +68,8 @@ export function NewChatPage(props: {
   autoFocus?: boolean;
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
+  /** Offer only this kind; the Agents workspace passes its Work or Code mode. */
+  kind?: AgentKind;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -69,14 +82,19 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const options = () => props.roster;
+  const options = () => {
+    const kind = props.kind;
+    return kind
+      ? props.roster.filter((agent) => agent.kind === kind)
+      : props.roster;
+  };
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const persistedDraft = createPersistedComposerDraft();
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
@@ -84,39 +102,38 @@ export function NewChatPage(props: {
       : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
   const recentAgentId = () => {
-    const ids = recentAgents.ids();
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
-    if (props.rosterLoading || props.availabilityLoading) return ids[0];
-    return ids.find((id) =>
-      options().some((agent) => agent.id === id && !agent.unavailableReason)
-    );
+    const settling = props.rosterLoading || props.availabilityLoading;
+    return recentAgents
+      .ids()
+      .find((id) =>
+        options().some(
+          (agent) => agent.id === id && (settling || !agent.unavailableReason)
+        )
+      );
   };
   const selected = createMemo(() => {
-    const wanted = agentId() ?? recentAgentId() ?? MACRO_PERSONA_ID;
-    return options().find((agent) => agent.id === wanted) ?? options()[0];
-  });
-  const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
-  const macroCatalog = createComposerModels(macro);
-  /** Preferred Macro model when it is still in the live in-memory catalog. */
-  const preferredInmemModel = () => {
-    const id = preferredInmem.model();
-    if (!id) return undefined;
-    const catalog = macroCatalog.models();
-    // Until discovery returns, keep the stored id so the trigger can label it.
-    if (catalog.length === 0) return id;
-    return catalog.some((option) => option.id === id) ? id : undefined;
-  };
-  /**
-   * Model shown on the agent control and sent with the next start. Coding
-   * agents use a one-shot override; Macro prefers an in-session pick, then
-   * the remembered Models choice.
-   */
-  const composerModelOverride = () => {
-    if (selected()?.id === MACRO_PERSONA_ID) {
-      return modelOverride() ?? preferredInmemModel();
+    for (const wanted of [agentId(), recentAgentId(), MACRO_PERSONA_ID]) {
+      const agent = options().find((option) => option.id === wanted);
+      if (agent) return agent;
     }
-    return modelOverride();
+    return options().find((agent) => !agent.unavailableReason) ?? options()[0];
+  });
+  const selectedCatalog = createComposerModels(selected);
+  /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
+  const composerModelOverride = () => {
+    const agent = selected();
+    if (agent?.harness !== 'macro-inmem' && agent?.harness !== 'in-memory')
+      return modelOverride();
+    const preferred =
+      modelOverride() ??
+      (agent.id === MACRO_PERSONA_ID
+        ? preferredInmem.model()
+        : agent.defaultModel);
+    return selectedCatalog.models().some((option) => option.id === preferred)
+      ? preferred
+      : selectedCatalog.currentModel();
   };
   const capabilityTarget = () => {
     const agent = selected();
@@ -125,7 +142,9 @@ export function NewChatPage(props: {
     if (harness !== 'in-memory' && harness !== 'cursor') return undefined;
     return {
       harness,
-      model: composerModelOverride() ?? agent?.defaultModel,
+      model:
+        composerModelOverride() ??
+        (harness === 'in-memory' ? undefined : agent?.defaultModel),
     } as const;
   };
   const capabilities = useAgentCapabilitiesQuery(capabilityTarget);
@@ -153,7 +172,7 @@ export function NewChatPage(props: {
       ? { configId: selection.configId, value: selection.value }
       : undefined;
   };
-  const coding = () => selected()?.kind === 'coder';
+  const coding = () => (props.kind ?? selected()?.kind) === 'coder';
   const localRuntime = () => selected()?.harness === 'macrod';
   const canSelectRepository = () =>
     selected()?.harness === 'cursor' || localRuntime();
@@ -184,16 +203,20 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker({
-    // Home supplies its own text draft; attachment persistence here is for Agents.
-    persistenceKey: props.onDraftChange
-      ? undefined
-      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  const attachmentTracker = createMemo(() => {
+    const identity = userId();
+    return createInputAttachmentTracker({
+      // Home owns its attachments; unknown identities never read shared storage.
+      persistenceKey:
+        !props.onDraftChange && identity
+          ? `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(identity)}`
+          : undefined,
+    });
   });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,
-      tracker: attachmentTracker,
+      tracker: attachmentTracker(),
       uploadFile: (file) =>
         uploadFile(file, 'static', { hideProgressIndicator: true }),
     });
@@ -204,25 +227,53 @@ export function NewChatPage(props: {
       (!prompt.trim() && attachments.length === 0) ||
       !persona ||
       blocked() ||
-      attachmentTracker.hasPending()
+      attachmentTracker().hasPending()
     )
       return;
     recentAgents.remember(persona.id);
     const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
     const model = composerModelOverride();
+    const inMemory =
+      persona.harness === 'macro-inmem' || persona.harness === 'in-memory';
+    const submittedTracker = attachmentTracker();
+    const submittedUserId = userId();
     props.onStart({
       prompt,
+      onFailure: () => {
+        if (userId() === submittedUserId && !draft()) setDraft(prompt);
+      },
       ...(attachments.length > 0
-        ? { attachments: promptActionOf(prompt, attachments).attachments }
+        ? {
+            attachments: promptActionOf(prompt, attachments).attachments,
+            onDelivered: () => {
+              const tracker =
+                userId() === submittedUserId
+                  ? attachmentTracker()
+                  : submittedTracker;
+              for (const attachment of attachments) {
+                tracker.removeAttachment(attachment.id);
+              }
+            },
+          }
         : {}),
       botId: persona.botId,
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
+      ...(inMemory && !model && selectedCatalog.pending()
+        ? { modelFallback: true }
+        : {}),
       effortOverride: effortOverride(),
+      ...(model && inMemory && acceleratedSpeed(model)
+        ? {
+            speedOverride: {
+              configId: 'speed',
+              value: speedForModel(model, fastModeEnabled()),
+            },
+          }
+        : {}),
     });
-    attachmentTracker.clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
     setEffortSelection(undefined);
@@ -273,7 +324,18 @@ export function NewChatPage(props: {
       draft={draft()}
       onDraftChange={setDraft}
       blockedReason={blocked()}
-      selector={agentSelector()}
+      selector={
+        <div class="flex min-w-0 items-center gap-1">
+          {agentSelector()}
+          <Show
+            when={['macro-inmem', 'in-memory'].includes(
+              selected()?.harness ?? ''
+            )}
+          >
+            <SpeedToggle model={composerModelOverride() ?? ''} />
+          </Show>
+        </div>
+      }
       drawer={
         <RepositoryPicker
           onOpenChange={setRepositoryPickerOpen}
@@ -297,10 +359,10 @@ export function NewChatPage(props: {
       drawerOpen={coding()}
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      attachments={attachmentTracker.attachments()}
+      attachments={attachmentTracker().attachments()}
       onAttachFiles={attachFiles}
       onRemoveAttachment={(attachment) =>
-        attachmentTracker.removeAttachment(attachment.id)
+        attachmentTracker().removeAttachment(attachment.id)
       }
     />
   );

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"DocumentInstance\" (\"documentId\", \"sha\", \"createdAt\", \"updatedAt\")\n            VALUES ($1, $2, NOW(), NOW())\n            RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e53dd219e78de6f92272433200e09f2d94ad20d9f6e193e1e92655d335a128d3"
+}

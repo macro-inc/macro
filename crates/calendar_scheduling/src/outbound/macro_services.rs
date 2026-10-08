@@ -86,10 +86,10 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             if rows.len() > 2000 {
                 return Err(Error::CalendarUnavailable);
             }
-            events.extend(
-                rows.into_iter()
-                    .map(|(event, occurrence)| (host.clone(), event, occurrence)),
-            );
+            events.extend(rows.into_iter().map(|listing| {
+                let (event, occurrence) = listing.into_occurrence_event();
+                (host.clone(), event, occurrence)
+            }));
         }
         let excluded_uid = events
             .iter()
@@ -111,6 +111,12 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
                 || event.transparency == EventTransparency::Transparent
                 || declined
             {
+                continue;
+            }
+            if !occurrence.time.is_valid() {
+                return Err(Error::CalendarUnavailable);
+            }
+            if !occurrence.time.has_positive_duration() {
                 continue;
             }
             let (start, end) = match occurrence.time {
@@ -295,6 +301,14 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
 /// Membership adapter over the owning teams repository port.
 pub struct MacroDirectory<T>(pub T);
 impl<T: TeamRepository> Directory for MacroDirectory<T> {
+    async fn user_teams(&self, user: &str) -> Result<Vec<Uuid>, Error> {
+        let user = user.try_into().map_err(|_| Error::Forbidden)?;
+        self.0
+            .get_user_teams(&user)
+            .await
+            .map(|teams| teams.into_iter().map(|team| *team.id()).collect())
+            .map_err(|_| Error::Unavailable)
+    }
     async fn members(&self, team: Uuid) -> Result<Vec<TeamMember>, Error> {
         Ok(self
             .0
@@ -307,5 +321,29 @@ impl<T: TeamRepository> Directory for MacroDirectory<T> {
                 admin: matches!(m.role, TeamRole::Owner | TeamRole::Admin),
             })
             .collect())
+    }
+}
+
+impl<O: CalendarOccurrenceService, M: calendar_events::domain::ports::CalendarMutationService>
+    crate::domain::ports::AttachmentReadiness for MacroCalendars<O, M>
+{
+    async fn ready(&self, host: &str) -> Result<(), Error> {
+        let calendars = self
+            .mutations
+            .list_visible_calendars(host)
+            .await
+            .map_err(|_| Error::CalendarUnavailable)?;
+        if calendars.iter().any(|c| c.sync_error.is_some())
+            || !calendars.iter().any(|c| c.is_primary && c.is_writable)
+            || self
+                .occurrences
+                .sync_status(host)
+                .await
+                .map_err(|_| Error::CalendarUnavailable)?
+                != CalendarSyncStatus::Ready
+        {
+            return Err(Error::CalendarUnavailable);
+        }
+        Ok(())
     }
 }

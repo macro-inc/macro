@@ -2,7 +2,7 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
 import type { UserName } from '@service-auth/generated/schemas/userName';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { authKeys } from './keys';
 
@@ -15,13 +15,20 @@ const OWN_USER_NAME_STALE_TIME = 15_000;
  * useUserNamesQuery (other users, batched by macro id).
  */
 export function useOwnUserNameQuery() {
-  return useQuery(() => ({
+  return useQuery(ownUserNameQueryOptions);
+}
+
+function fetchOwnUserName() {
+  return throwOnErr(() => authServiceClient.getUserName());
+}
+
+function ownUserNameQueryOptions() {
+  return queryOptions({
     queryKey: authKeys.userNameSelf.queryKey,
-    queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.getUserName()),
+    queryFn: fetchOwnUserName,
     staleTime: OWN_USER_NAME_STALE_TIME,
-    refetchOnWindowFocus: 'always' as const,
-  }));
+    refetchOnWindowFocus: 'always',
+  });
 }
 
 /**
@@ -42,8 +49,8 @@ export function useOwnUserName(): Accessor<UserName | undefined> {
 /**
  * Call after writing the name (putUserName). The write and every reader live
  * in the same tab, so invalidating here is what flips dependent surfaces —
- * e.g. the Getting Started checklist beside a settings Viewer, which would
- * otherwise have to poll.
+ * e.g. the sidebar name beside a settings Viewer, which would otherwise have
+ * to poll.
  */
 export function invalidateOwnUserName() {
   return queryClient.invalidateQueries({

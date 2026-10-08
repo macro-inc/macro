@@ -55,16 +55,17 @@ it('serves HTTPS and HMR with the existing CA and detected hostname', async () =
     });
     await expect(fetchPage(hostname, false)).rejects.toThrow();
 
-    // A real TLS WebSocket upgrade with Vite's browser origin/token checks.
-    const protocol = await new Promise<string | undefined>(
-      (resolve, reject) => {
+    // A real TLS WebSocket upgrade with Vite's browser origin/token checks,
+    // resolving to the negotiated protocol or the rejection status.
+    const upgradeHmr = (host: string) =>
+      new Promise<string | undefined>((resolve, reject) => {
         const req = request({
           ...options,
           servername: hostname,
           path: `/?token=${vite.config.webSocketToken}`,
           headers: {
-            host: `${hostname}:${address.port}`,
-            origin: `https://${hostname}:${address.port}`,
+            host,
+            origin: `https://${host}`,
             connection: 'Upgrade',
             upgrade: 'websocket',
             'sec-websocket-version': '13',
@@ -78,16 +79,22 @@ it('serves HTTPS and HMR with the existing CA and detected hostname', async () =
         req.on('error', reject);
         req.on('response', (res) => {
           res.resume();
-          reject(new Error(`HMR returned ${res.statusCode}`));
+          resolve(`HTTP ${res.statusCode}`);
         });
         req.on('upgrade', (res, socket) => {
           socket.destroy();
           resolve(res.headers['sec-websocket-protocol']);
         });
         req.end();
-      }
-    );
-    expect(protocol).toBe('vite-hmr');
+      });
+    for (const [host, expected] of [
+      [`${hostname}:${address.port}`, 'vite-hmr'],
+      // Tailscale Serve forwards the devbox's MagicDNS name as the Host.
+      ['devbox.example-tailnet.ts.net', 'vite-hmr'],
+      ['unrelated.example', 'HTTP 400'],
+    ]) {
+      expect(await upgradeHmr(host), host).toBe(expected);
+    }
   } finally {
     await vite.close();
   }

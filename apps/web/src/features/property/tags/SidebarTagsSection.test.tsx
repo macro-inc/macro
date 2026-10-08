@@ -139,6 +139,57 @@ describe('SidebarTagsSection', () => {
     );
   });
 
+  it('lists only the requested scopes, including nested team branches', () => {
+    const withTeam = [
+      ...TAG_SETS,
+      {
+        scope: 'team',
+        definition: { id: 'team-definition' },
+        options: [
+          {
+            id: 'shared',
+            propertyDefinitionId: 'team-definition',
+            displayOrder: 0,
+            value: { type: 'string', value: 'Shared' },
+          },
+          {
+            id: 'nested',
+            propertyDefinitionId: 'team-definition',
+            displayOrder: 1,
+            value: { type: 'string', value: 'Clients/Acme' },
+          },
+        ],
+      },
+    ] as TagSetResponse[];
+
+    renderSection({ scopes: ['user'] }, withTeam);
+
+    expect(screen.queryByText('Shared')).toBeNull();
+    expect(screen.queryByText('Clients')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Urgent' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Later' })).toBeTruthy();
+  });
+
+  it('lists team tags when no scopes are requested', () => {
+    renderSection({}, [
+      ...TAG_SETS,
+      {
+        scope: 'team',
+        definition: { id: 'team-definition' },
+        options: [
+          {
+            id: 'shared',
+            propertyDefinitionId: 'team-definition',
+            displayOrder: 0,
+            value: { type: 'string', value: 'Shared' },
+          },
+        ],
+      },
+    ] as TagSetResponse[]);
+
+    expect(screen.getByRole('button', { name: 'Shared' })).toBeTruthy();
+  });
+
   it('explains an empty list instead of rendering no rows', () => {
     renderSection({}, []);
 

@@ -5,7 +5,7 @@ use crate::document::{
     FieldNode, MissingVariable, Operation, OperationKind, Selection, resolve_args, resolve_args_key,
 };
 use crate::entity_resolver::EntityResolverLookup;
-use crate::meta::{self, FieldKind, TypeKind};
+use crate::meta::{FieldKind, TypeKind};
 use crate::value::{CacheValue, EntityKey, Record, field_key};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
@@ -81,15 +81,24 @@ struct WriteContext<'a, 'resolver> {
 /// nested entities are normalized as usual, but operation-root fields are
 /// discarded. Those roots are transient cache entry points, never read back.
 pub fn normalize(
+    schema: &crate::meta::Schema,
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     data: &Json,
 ) -> Result<RecordUpdates, NormalizeError> {
-    Ok(normalize_with_dependencies(op, variables, data, &EntityResolverLookup::default())?.updates)
+    Ok(normalize_with_dependencies(
+        schema,
+        op,
+        variables,
+        data,
+        &EntityResolverLookup::default(),
+    )?
+    .updates)
 }
 
 /// Normalizes a response and captures the records a cache read would depend on.
 pub(crate) fn normalize_with_dependencies(
+    schema: &crate::meta::Schema,
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     data: &Json,
@@ -97,7 +106,7 @@ pub(crate) fn normalize_with_dependencies(
 ) -> Result<NormalizeResult, NormalizeError> {
     let prepared = op.prepare(variables)?;
     let op = &prepared;
-    let root_type = operation_root_type(op)?;
+    let root_type = operation_root_type(schema, op)?;
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {
             type_name: root_type.to_string(),
@@ -114,6 +123,7 @@ pub(crate) fn normalize_with_dependencies(
     };
     let root_key = (op.kind == OperationKind::Query).then(EntityKey::root);
     write_object_fields(
+        schema,
         &op.selection_set,
         root_type,
         data,
@@ -138,10 +148,11 @@ pub(crate) fn normalize_with_dependencies(
 /// Projects fields not marked `@cacheOnly` directly from a network response.
 /// Cache-only branches are not traversed or cloned.
 pub fn project_hydration_response(
+    schema: &crate::meta::Schema,
     op: &Operation,
     data: &Json,
 ) -> Result<Option<Json>, NormalizeError> {
-    let root_type = operation_root_type(op)?;
+    let root_type = operation_root_type(schema, op)?;
     let Json::Object(data) = data else {
         return Err(NormalizeError::Shape {
             type_name: root_type.to_string(),
@@ -149,20 +160,26 @@ pub fn project_hydration_response(
             detail: "response data is not an object",
         });
     };
-    Ok(project_object_fields(&op.selection_set, root_type, data)?.map(Json::Object))
+    Ok(project_object_fields(schema, &op.selection_set, root_type, data)?.map(Json::Object))
 }
 
-fn operation_root_type(op: &Operation) -> Result<&'static str, NormalizeError> {
+fn operation_root_type<'schema>(
+    schema: &'schema crate::meta::Schema,
+    op: &Operation,
+) -> Result<&'schema str, NormalizeError> {
     match op.kind {
-        OperationKind::Query => Ok(meta::QUERY_ROOT_TYPE),
-        OperationKind::Mutation => meta::MUTATION_ROOT_TYPE
+        OperationKind::Query => Ok(schema.query_root()),
+        OperationKind::Mutation => schema
+            .mutation_root()
             .ok_or_else(|| NormalizeError::UnknownType("(mutation root)".to_string())),
-        OperationKind::Subscription => meta::SUBSCRIPTION_ROOT_TYPE
+        OperationKind::Subscription => schema
+            .subscription_root()
             .ok_or_else(|| NormalizeError::UnknownType("(subscription root)".to_string())),
     }
 }
 
 fn project_object_fields(
+    schema: &crate::meta::Schema,
     selections: &[Selection],
     type_name: &str,
     data: &serde_json::Map<String, Json>,
@@ -172,7 +189,7 @@ fn project_object_fields(
         _ => type_name,
     };
     let mut fields = Vec::new();
-    collect_fields(selections, concrete, &mut fields);
+    collect_fields(schema, selections, concrete, &mut fields);
     let mut projected = serde_json::Map::new();
     for field in fields {
         if field.cache_only {
@@ -185,13 +202,15 @@ fn project_object_fields(
             projected.insert(field.response_key.clone(), value.clone());
             continue;
         }
-        let field_meta = meta::field_meta(concrete, &field.name).ok_or_else(|| {
+        let field_meta = schema.field_meta(concrete, &field.name).ok_or_else(|| {
             NormalizeError::UnknownField {
                 type_name: concrete.to_string(),
                 field: field.name.clone(),
             }
         })?;
-        if let Some(value) = project_value(field, field_meta.ty.name, field_meta.ty.kind, value)? {
+        if let Some(value) =
+            project_value(schema, field, field_meta.ty.name, field_meta.ty.kind, value)?
+        {
             projected.insert(field.response_key.clone(), value);
         }
     }
@@ -199,6 +218,7 @@ fn project_object_fields(
 }
 
 fn project_value(
+    schema: &crate::meta::Schema,
     field: &FieldNode,
     named_type: &str,
     kind: FieldKind,
@@ -206,7 +226,10 @@ fn project_value(
 ) -> Result<Option<Json>, NormalizeError> {
     match (kind, value) {
         (FieldKind::Composite, Json::Object(object)) => {
-            Ok(project_object_fields(&field.selection_set, named_type, object)?.map(Json::Object))
+            Ok(
+                project_object_fields(schema, &field.selection_set, named_type, object)?
+                    .map(Json::Object),
+            )
         }
         (FieldKind::Composite, Json::Array(items)) => {
             if !field.selection_set.iter().any(selection_returns_data) {
@@ -217,7 +240,7 @@ fn project_value(
                 let item = match item {
                     Json::Null => Json::Null,
                     Json::Object(object) => {
-                        project_object_fields(&field.selection_set, named_type, object)?
+                        project_object_fields(schema, &field.selection_set, named_type, object)?
                             .map_or_else(|| Json::Object(serde_json::Map::new()), Json::Object)
                     }
                     _ => {
@@ -260,6 +283,7 @@ fn merge_into(records: &mut RecordUpdates, key: EntityKey<'static>, record: Reco
 
 /// Flattens fragments applicable to `concrete_type` and visits each field.
 fn collect_fields<'a>(
+    schema: &crate::meta::Schema,
     selections: &'a [Selection],
     concrete_type: &str,
     out: &mut Vec<&'a FieldNode>,
@@ -274,10 +298,10 @@ fn collect_fields<'a>(
             } => {
                 let applies = match type_condition {
                     None => true,
-                    Some(cond) => meta::type_matches(concrete_type, cond),
+                    Some(cond) => schema.type_matches(concrete_type, cond),
                 };
                 if applies {
-                    collect_fields(selection_set, concrete_type, out);
+                    collect_fields(schema, selection_set, concrete_type, out);
                 }
             }
         }
@@ -288,6 +312,7 @@ fn collect_fields<'a>(
 /// record's or embedded object's field map), normalizing children into
 /// `records`.
 fn write_object_fields(
+    schema: &crate::meta::Schema,
     selections: &[Selection],
     type_name: &str,
     data: &serde_json::Map<String, Json>,
@@ -313,17 +338,19 @@ fn write_object_fields(
     );
 
     let mut fields = Vec::new();
-    collect_fields(selections, concrete, &mut fields);
+    collect_fields(schema, selections, concrete, &mut fields);
 
     for f in fields {
         if f.name == "__typename" {
             continue; // handled above
         }
         let fmeta =
-            meta::field_meta(concrete, &f.name).ok_or_else(|| NormalizeError::UnknownField {
-                type_name: concrete.to_string(),
-                field: f.name.clone(),
-            })?;
+            schema
+                .field_meta(concrete, &f.name)
+                .ok_or_else(|| NormalizeError::UnknownField {
+                    type_name: concrete.to_string(),
+                    field: f.name.clone(),
+                })?;
         let args = resolve_args_key(f, context.variables)?;
         let storage_key = field_key(&f.name, args.as_deref());
         if let Some(owner) = owner {
@@ -341,12 +368,20 @@ fn write_object_fields(
             continue;
         };
 
-        let cache_value = write_value(f, fmeta.ty.name, fmeta.ty.kind, value, owner, context)
-            .map_err(|detail| NormalizeError::Shape {
-                type_name: concrete.to_string(),
-                field: f.name.clone(),
-                detail,
-            })??;
+        let cache_value = write_value(
+            schema,
+            f,
+            fmeta.ty.name,
+            fmeta.ty.kind,
+            value,
+            owner,
+            context,
+        )
+        .map_err(|detail| NormalizeError::Shape {
+            type_name: concrete.to_string(),
+            field: f.name.clone(),
+            detail,
+        })??;
 
         if let Some(resolver) = context.dependencies.entity_resolvers.get(concrete, &f.name) {
             let expected_key = resolve_args(f, context.variables)
@@ -375,6 +410,7 @@ fn write_object_fields(
 /// detail); inner carries nested structured errors.
 #[allow(clippy::type_complexity)]
 fn write_value(
+    schema: &crate::meta::Schema,
     field: &FieldNode,
     named_type: &str,
     kind: FieldKind,
@@ -387,7 +423,7 @@ fn write_value(
         Json::Array(items) => {
             let mut out = Vec::with_capacity(items.len());
             for item in items {
-                match write_value(field, named_type, kind, item, owner, context)? {
+                match write_value(schema, field, named_type, kind, item, owner, context)? {
                     Ok(v) => out.push(v),
                     Err(e) => return Ok(Err(e)),
                 }
@@ -413,7 +449,7 @@ fn write_value(
             FieldKind::OpaqueScalar => Ok(CacheValue::opaque(value)),
             FieldKind::Leaf => return Err("expected scalar, got object"),
             FieldKind::Composite => {
-                match normalize_object(field, named_type, obj, owner, context) {
+                match normalize_object(schema, field, named_type, obj, owner, context) {
                     Ok(v) => Ok(v),
                     Err(e) => return Ok(Err(e)),
                 }
@@ -425,13 +461,15 @@ fn write_value(
 /// Normalizes a composite response object: either into its own record
 /// (keyable → `Ref`) or an embedded object value.
 fn normalize_object(
+    schema: &crate::meta::Schema,
     field: &FieldNode,
     named_type: &str,
     obj: &serde_json::Map<String, Json>,
     owner: Option<&EntityKey<'static>>,
     context: &mut WriteContext<'_, '_>,
 ) -> Result<CacheValue, NormalizeError> {
-    let named_meta = meta::type_meta(named_type)
+    let named_meta = schema
+        .type_meta(named_type)
         .ok_or_else(|| NormalizeError::UnknownType(named_type.to_string()))?;
 
     let concrete: &str = match selected_typename(&field.selection_set, obj) {
@@ -443,16 +481,17 @@ fn normalize_object(
             });
         }
     };
-    let concrete_meta = meta::type_meta(concrete)
+    let concrete_meta = schema
+        .type_meta(concrete)
         .ok_or_else(|| NormalizeError::UnknownType(concrete.to_string()))?;
 
-    match concrete_meta.key_fields {
+    match &concrete_meta.key_fields {
         Some(key_fields) => {
             let mut key_values = Vec::with_capacity(key_fields.len());
             for kf in key_fields {
                 let mut selected = Vec::new();
-                collect_fields(&field.selection_set, concrete, &mut selected);
-                let key_value = obj.get(*kf).or_else(|| {
+                collect_fields(schema, &field.selection_set, concrete, &mut selected);
+                let key_value = obj.get(kf).or_else(|| {
                     selected
                         .iter()
                         .find(|field| field.name == *kf)
@@ -476,6 +515,7 @@ fn normalize_object(
             );
             let mut record = Record::default();
             write_object_fields(
+                schema,
                 &field.selection_set,
                 concrete,
                 obj,
@@ -489,6 +529,7 @@ fn normalize_object(
         None => {
             let mut embedded = BTreeMap::new();
             write_object_fields(
+                schema,
                 &field.selection_set,
                 concrete,
                 obj,

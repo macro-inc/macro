@@ -5,6 +5,81 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Connecting an app from an agent session
+
+When existing tools cannot handle a request, agent sessions can use
+`DiscoverConnectors` to search Pipedream by app name and inspect an app's actual
+tool list. Expand the discovery row to see the results. An app name alone does
+not establish that the requested action is supported.
+
+For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
+it opens the hosted authorization flow over the agent transcript. After the
+backend verifies and registers the connection, the agent session sends a visible
+continuation message in the same conversation. The native Macro runtime refreshes
+the session’s permitted connector tools before the next turn. The unsent draft
+is preserved. Closing authorization or a failed registration sends no message.
+If the conversation changed or was closed during auth, there is no automatic
+continuation; the connected app remains available for the next request.
+
+Verify with an unconnected app: inspect its tools, click Connect, cancel once,
+then complete authorization and check that exactly one continuation appears and
+the assistant can discover the app's tools. Also verify a disabled connection
+does not display as connected. Regular AI chat does not expose discovery or
+automatic continuation. A selected-app agent keeps its configured MCP scope;
+authorization does not add apps outside that scope.
+
+## Checking first-response latency
+
+From outside an editor, press `c`, then `a`, type a prompt, and press Enter.
+Repeat with the default model and with an explicit model/effort selection.
+The first visible output and the first answer text should appear as they arrive;
+later chunks can arrive in batches. Reasoning or a tool row should not delay the
+first prose. Verify a second prompt and a reload preserve the complete answer.
+A model selected before the first prompt is part of the create request, and the
+runtime starts on it; no model change appears in the new session's transcript.
+A selected effort is confirmed before the first prompt; settings the runtime
+already reports do not need another control request.
+
+Macro's in-process agent opens each reply with a line from a fast model
+(`gpt-5.4-mini`), usually within half a second of Enter. Small talk
+("hi there", "thanks") gets that line as the whole reply, and the chosen model,
+already started alongside it, is cancelled. A real task ("what is on my calendar tomorrow?") gets a short
+opener ("Let me check your calendar."), then the chosen model's answer after a
+blank line, with no second acknowledgement. The opener answers the user's
+words, never the prompt's hidden context. The sent prompt is fully opaque from
+the first paint, and its `Context` chip is already in place, so nothing shifts
+when the server confirms it.
+
+Repeat from a fresh tab using Home, Agents, and a document's Chat action.
+Focusing an agent composer prepares its transcript renderer locally; focus alone
+must not send a prompt. Record navigation and focus time separately from typing
+and Enter-to-first-answer time. Check the first readable agent words in the DOM,
+not a loading indicator or a bare Markdown delimiter.
+
+Repeat from Home, Agents, and the create menu with an already-ready session.
+The first prompt can be accepted before its destination mounts; navigating into
+the session must keep the same streamed turn without restarting its load. Also
+leave a pending destination, then reopen the session and confirm the sent prompt
+and complete answer remain available.
+
+The `agent.prompt` trace separates raw fold text (`first_text`) from mounted
+answer DOM (`text_mounted`), readable visible text (`first_text_rendered`), and
+its paint (`first_text_paint`). Only the final milestone is a visible-response
+success. Bare Markdown prefixes and code-toolbar labels do not count. With only
+a code toolbar visible at a scroll boundary, verify the milestone waits until
+the code itself scrolls into view. A hidden tab reports `hidden`; raw text without
+a visible renderer within ten seconds reports `not_rendered`, including whether
+a renderer mounted and stayed attached.
+`submit_surface` uses bounded composer categories, including explicit Home,
+Agents, and mobile origins so a neighboring split cannot mislabel the submit.
+The fallback recognizes Drive documents; an ambiguous split reports `other`.
+All milestones omit message contents. Compare these timings with created,
+loaded, configured, delivery, and fold timing to distinguish startup, transport,
+and rendering delays.
+The same stages are available immediately in DevTools as
+`performance.getEntriesByType('measure')` entries named `agent.prompt.*`, with
+session ID in `detail`; the `agent.prompt` entry includes the final outcome.
+
 ## Working with projects
 
 Project tools can list, read, create, update, delete, and share projects, and
@@ -524,7 +599,7 @@ documents:
 
 Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
 policy once configured by the host; it is independent of environment. Settlement
-(credit consumption and Stripe overage collection) is gated by the separate
+(credit consumption and automatic credit reloads) is gated by the separate
 default-off `ENABLE_AI_USAGE_BILLING` policy, also independent of environment.
 With admission enabled, cognition chat
 and structured completion return 402 for exhausted allowance or 503 with
@@ -557,7 +632,7 @@ protocol error with a stable `code` and `retryable` flag, not an HTTP status.
 A direct AI tool/MCP or AI-edit refusal is a failed tool result even if the outer
 transport succeeds. No worker/provider edit should happen after refusal. Ordinary
 manual editing, deterministic tools/imports, and the exempt Memory, AiProjection,
-CallSummary, and Dictation features are not blocked by quota. Optional naming or
+CallSummary, Dictation, and ChatRename features are not blocked by quota. Optional naming or
 trigger inference may be skipped without blocking successful primary work; it
 must not make a fallback model call. Managed sessions use their persisted owner
 for quota, not a collaborating sender. Externally funded runtimes skip session
@@ -580,7 +655,8 @@ answer 402 with code `ai_free_allowance_exhausted`. The dialog title is
 `You've used this month's free AI`; it says `Subscribe to a paid plan to keep
 going.` and offers `View plans`, which opens Billing. This upgrade path remains
 available while the usage summary loads or fails. Free users cannot buy credits
-or enable Auto-Reload. The cap resets with the UTC calendar month.
+or enable Auto-Reload. Enabling Auto-Reload is how paid payers turn on usage
+billing. The cap resets with the UTC calendar month.
 Each team seat has its own allowance; unused allowance never moves between
 members. The team owner's prepaid credits and usage-billing cap are shared.
 
@@ -680,10 +756,11 @@ Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 
 - Contenteditable composer (placeholder `Ask AI, @mention anything` / `Describe the edit…`).
-- Model picker button showing the current model (e.g. `Haiku 4.5`). Paid plans list
-  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`;
+- Model picker button showing the current model (e.g. `Gemini 3.8 Flash`). Paid plans list
+  `Sonnet 5.5`, `Opus 5.5`, `Haiku 4.5`, `GPT-6 Astra`, `GPT-5.6`, `GPT-5.6 mini`,
+  and `Gemini 3.8 Flash`;
   in dev, heavy models carry a `2.5× usage` / `5× usage` hint.
-  On the free plan everything but `Haiku 4.5` is
+  On the free plan everything but `Gemini 3.8 Flash` is
   dimmed with a lock and opens the `Smart models are premium` paywall when clicked.
 - `Send` button (disabled when empty). While streaming it becomes `Stop generating`.
 
@@ -795,14 +872,30 @@ in-process agent; sandboxed ones wait as long when their MCP client accepts prog
 four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
 reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
+## Forms authoring and sharing
+
+With Forms enabled, ask the agent to create a complete form, including ordered
+sections and qualification screeners. Creation starts closed and members-only.
+The expandable tool result shows the saved questions, builder link, respondent
+link, and actual response availability. Edits use granular CRDT updates
+to preserve unrelated human changes. Partial outcomes have recovery guidance;
+a link by itself is not a completed or open form.
+
+`SetFormAccess` executes immediately for the form owner, using the same settings
+and channel-sharing services as the browser. There is no custom review card.
+Channel Edit also grants access to the entire response database. Settings and
+channel grants are separate writes; inspect any partial outcome before retrying.
+See [Forms](forms.md#forms-through-the-ai-tools) for screeners, booking link reveal,
+supported edits and retry behavior.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
 the classic in-channel reply; with it, the same mention opens an **agent session** — a
 dedicated transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
-`@coder` / `@cursor` always open a session. There is only ever one Macro entry in the
-mention menu; which of the two answers is the rollout's decision, not a second choice in
-the menu.
+`@cursor` opens a session. Macro Coding Agent (`@coder`) is unavailable in mention
+suggestions. There is only ever one Macro entry in the mention menu; which of the
+two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
 
@@ -990,10 +1083,13 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
-the owner can change or remove a conversation's access. **Link sharing** offers
+the owner can change or remove a conversation's access. When that list holds
+nobody but the owner — what a participant who cannot read the other grants
+sees — the section is titled **Owner** instead. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
-People, and Link tabs. View and Comment allow reading; Edit also allows
+People, and Link tabs, and the People tab is likewise named Owner when only the
+owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
@@ -1398,3 +1494,88 @@ The chat's **Read skill** tool row expands to show the full instructions. When
 verifying this flow, invoke a saved skill by name, confirm the agent reads it,
 and expand the row to inspect the returned content. Document access permissions
 apply; ordinary documents and deleted skills cannot be read as skills.
+
+### Agent warm-up
+
+Home's agent composer and the Agents page issue a best-effort authenticated
+`POST /agent-sessions/warm`. It starts an unprompted in-memory session, hidden
+from history and lists. Opening either page must not add an empty conversation
+or execute a model/tool call. A warm response waits until ACP initialization
+and the shared MCP listing have finished. On first send, the default agent can claim the
+prepared session only when the user, model, and instructions match. Other
+personas and changed settings use normal creation. Warm failures must not block
+sending. Unclaimed sessions expire after ten minutes; a claimed conversation
+must remain visible and usable after that deadline.
+
+Taking a reservation clears it immediately, but replacement preparation waits
+until session creation succeeds. This lets a warm claim release its server
+reservation before requesting another. An active Home or Agents surface then
+prepares one replacement; otherwise preparation waits for the next mount. Verify
+a second conversation can reuse that replacement without waiting five minutes,
+including when another tab already holds the owner's other warm reservation.
+Successful cold creation also replenishes an empty cache left by an expired or
+failed reservation. A failed create does not trigger more warming.
+An already-started preparation stays in the shared cache across Home-to-Agents
+navigation, so mounting the next surface joins that request instead of warming
+another server session.
+Empty or failed warm responses do not trigger a refill loop, and mismatched
+agent settings leave a usable reservation available for the default agent.
+
+
+### Free-plan models in the new Macro agent
+
+The in-memory Macro runtime uses the session owner's current permissions.
+Free users see only Gemini 3.8 Flash in model discovery and the live session
+picker. New and resumed sessions replace an inaccessible saved model with Gemini.
+A direct request to select a paid model is rejected, and each prompt rechecks
+permissions before inference, including after a plan downgrade. Permission
+lookup failures prevent inference. Paid users retain the full supported catalog.
+Cursor, Claude Cloud, and paired external runtimes keep their own model rules.
+
+To verify, start a Macro conversation as a free user with a previously saved
+paid-model preference: the composer should show Gemini and send that model.
+In a live session, confirm the model options contain only Gemini. Backend tests
+also exercise direct ACP model-change requests, downgrade, and resume.
+
+## Booking links
+
+Ask the AI to find or reuse an existing booking link before creating another.
+`ListBookingLinks` returns personal links, current team IDs, full settings and
+shareable URLs (including paused links). It also supplies the revision used to
+protect edits from concurrent settings changes.
+
+Booking links are confirmed in conversation, with no special booking form. The AI
+first explains the proposed meeting details, ownership and named hosts, time zone,
+availability and date exceptions, booking rules, guest questions and whether the
+link accepts bookings. It asks whether to proceed and waits for your reply before
+calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a
+link is not approval of the proposal. IDs and revisions are discovered through
+tools; you should never be asked to enter a team ID, host ID or JSON.
+
+A successful result returns the saved URL. Link creation itself sends no calendar
+invitations; guests receive an invitation when they book. Editing hours affects
+only that link. If another edit makes the revision stale, the AI reads the latest
+settings and confirms a fresh proposal. Identical retries reuse the saved link.
+Old pending booking review requests can be dismissed so the agent can resume with
+conversational confirmation.
+
+## Accelerated model speed
+
+The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
+and GPT-6.1 Sol (6× token pricing), or Fast for Claude Opus 5.5 (2× token pricing).
+Its tooltip shows the mode, state, and usage multiplier before sending. Other
+models keep standard speed. The preference is saved in browser local storage and
+shared by legacy chat and native Macro agent composers. External coding agents
+use their own speed controls.
+
+Preview the controls at `/app/debug/ui?ui=speed-toggle`.
+Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Reload, change between supported models, and confirm the preference survives.
+Select an unsupported model and verify the bolt is hidden; switching back restores
+the preference. With reduced motion enabled, toggling changes the state without
+animation. Native sessions confirm speed configuration before sending the prompt;
+a rejected configuration must retain the unsent draft and attachments.
+
+Usage records follow the provider's delivered speed for each call, including tool
+loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
+call. Standard and accelerated rates have separate pricing keys.

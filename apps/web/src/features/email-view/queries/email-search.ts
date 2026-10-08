@@ -23,7 +23,6 @@ const nonEmailFilters: EntityFilters = {
   document_filters: { document_ids: [NIL_UUID] },
   foreign_entity_filters: { ids: [NIL_UUID] },
   project_filters: { project_ids: [NIL_UUID] },
-  reminder_filters: { ids: [NIL_UUID] },
 };
 
 // Search has no draft/sent scoping, so those tabs (like All) search the

@@ -1,7 +1,7 @@
 import { entityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
-  markReminderSeenOnOpen,
+  markCalendarNotificationSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -57,7 +57,7 @@ export function createDriveHostActions(options: {
       // Nested project/content targets reach this adapter. The main row
       // consumes Cmd/Ctrl itself for selection.
       if (event?.metaKey || event?.ctrlKey) {
-        markReminderSeenOnOpen(entity, notificationSource);
+        markCalendarNotificationSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
 
         return;
@@ -69,7 +69,7 @@ export function createDriveHostActions(options: {
         return;
       }
 
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
 
       if (entity.type === 'document' && !openInNewSplit && !location) {
         const target = entityDetailTarget.document({

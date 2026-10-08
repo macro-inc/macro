@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE forms SET trashed_at = COALESCE(trashed_at, $2) WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0c9d8d04c87c6947b50dbd97e02b8362ba500b09d88de877ba968326783cf5d"
+}

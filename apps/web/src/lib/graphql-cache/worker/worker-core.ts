@@ -10,6 +10,8 @@ import type {
   CacheRequest,
   CacheResponse,
   CacheRevisionResult,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
@@ -111,11 +113,14 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 }
 
 function isAuthoritativeWrite(request: CacheRequest): boolean {
+  // A calendar commit records coverage for data written just before it, so it
+  // must never overtake that write or hydration.
   return (
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
     request.kind === 'commit-optimistic-write' ||
-    request.kind === 'delete-records'
+    request.kind === 'delete-records' ||
+    request.kind === 'calendar-commit'
   );
 }
 
@@ -131,7 +136,12 @@ function revisionAdvancementCategory(
   | 'clear'
   | undefined {
   return match(request.kind)
-    .with('write', 'hydrate', () => 'authoritative-write' as const)
+    .with(
+      'write',
+      'hydrate',
+      'calendar-commit',
+      () => 'authoritative-write' as const
+    )
     .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
     .with('commit-optimistic-write', () => 'optimistic-commit' as const)
     .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
@@ -150,6 +160,7 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
+    request.kind === 'calendar-commit' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -528,6 +539,26 @@ export class CacheWorkerCore {
           ? result
           : { ...result, revision: parseCacheRevision(result.revision) };
       })
+      .with({ kind: 'calendar-range' }, async (request) => {
+        const result: CalendarRangeCacheResult =
+          await this.requireEngine().calendarRange(request.request);
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'calendar-commit' }, async (request) => {
+        const result = await this.requireEngine().calendarCommit(
+          request.commit
+        );
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const committed: CalendarCommitCacheResult = {
+          kind: 'committed',
+          revision: result.revision,
+          changed: result.changed,
+        };
+        return committed;
+      })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
@@ -594,7 +625,9 @@ export class CacheWorkerCore {
             request.createdAtMs,
             request.owner,
             request.nowMs,
-            request.leaseExpiresAtMs
+            request.leaseExpiresAtMs,
+            request.clientMetadata,
+            request.uncertainCalendarEventKeys
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -626,6 +659,10 @@ export class CacheWorkerCore {
           JSON.parse(JSON.stringify(request.variableFilters ?? []))
         );
       })
+      .with(
+        { kind: 'inspect-mutations' },
+        async () => await this.requireEngine().inspectMutations()
+      )
       .with({ kind: 'claim-next-mutation' }, async (request) => {
         const engine = this.requireEngine();
         return await engine.claimNextMutation(
@@ -641,7 +678,8 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration,
           request.nextAttemptAtMs,
-          request.error
+          request.error,
+          request.serverFailure ?? false
         );
         if (result.kind === 'discarded-superseded') {
           result.revision = parseCacheRevision(result.revision);

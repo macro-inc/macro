@@ -11,7 +11,12 @@ name: Build macOS DMG
 jobs:
   build-dmg:
     name: Build macOS DMG
-    runs-on: macos-15
+    runs-on:
+    - nscloud-macos-sequoia-arm64-6x14-with-cache
+    - nscloud-cache-tag-macro-desktop-macos
+    - nscloud-cache-size-100gb
+    env:
+      DESKTOP_NIX_CACHE_SIZE_GB: '100'
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -26,6 +31,11 @@ jobs:
           exit 1
         fi
       shell: bash
+    - name: Mount macOS Nix binary cache
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: ~/.cache/macro-desktop-nix
+      continue-on-error: true
     - name: Install Nix
       run: |
         set -euo pipefail
@@ -43,6 +53,40 @@ jobs:
         export NIX_REMOTE=daemon
         nix --version
       shell: bash
+    - id: nix-cache
+      name: Configure macOS Nix binary cache
+      run: |
+        set -euo pipefail
+
+        # The Apple linker/SDK live outside Nix. Do not reuse their outputs after the
+        # runner image changes its macOS or Xcode version.
+        toolchain_key=$(
+          { xcodebuild -version && sw_vers -buildVersion; } |
+            shasum -a 256 | awk '{print $1}'
+        )
+        cache_root="$HOME/.cache/macro-desktop-nix"
+        cache_dir="$cache_root/$toolchain_key"
+        mkdir -p "$cache_dir"
+        cache_url="file://$cache_dir?compression=zstd&trusted=true&priority=10"
+
+        # The mounted cache root is a symlink; the trailing slash measures its contents.
+        du -sk "$cache_root/" | awk '{printf "Restored macOS Nix cache: %.2f GiB\n", $1 / 1048576}'
+
+        # Initialize an empty cache before adding it as a substituter. Only this local,
+        # repository-specific cache accepts unsigned paths; public caches still require
+        # signatures. Keep the normal /nix store and its daemon-managed permissions.
+        nix store info --store "$cache_url" --json
+        {
+          echo "DESKTOP_NIX_CACHE_ROOT=$cache_root"
+          echo "DESKTOP_NIX_CACHE_DIR=$cache_dir"
+          echo "DESKTOP_NIX_CACHE_URL=$cache_url"
+          echo "NIX_CONFIG<<DESKTOP_NIX_CONFIG_EOF"
+          printf '%s\n' "${NIX_CONFIG:-}"
+          echo "extra-substituters = $cache_url"
+          echo "DESKTOP_NIX_CONFIG_EOF"
+        } >> "$GITHUB_ENV"
+      shell: bash
+      continue-on-error: true
     - name: Configure signing identity
       run: |
         set -euo pipefail
@@ -99,15 +143,165 @@ jobs:
       shell: bash
       env:
         RAW_REF: ${{ inputs.ref }}
+    - name: Prepare desktop release identity
+      run: nix develop --command bun apps/web/scripts/desktop-release.mjs prepare "$RAW_REF"
+      shell: bash
+      env:
+        RAW_REF: ${{ inputs.ref }}
     - name: Build DMG with Nix
       run: |
         set -euo pipefail
+
+        # Record the derivations before building so completed dependencies can be saved
+        # even if a later compilation or packaging step fails.
+        nix path-info --derivation --impure \
+          ".#packages.aarch64-darwin.tauri-desktop-apple-linker-smoke" \
+          ".#packages.aarch64-darwin.tauri-desktop-dmg" \
+          > "$RUNNER_TEMP/desktop-cache-roots"
 
         nix build --impure --option sandbox false --print-build-logs \
           ".#packages.aarch64-darwin.tauri-desktop-apple-linker-smoke"
         nix build --impure --option sandbox false --print-build-logs \
           ".#packages.aarch64-darwin.tauri-desktop-dmg"
       shell: bash
+    - name: Prune and save macOS Nix build dependencies
+      if: '!cancelled() && steps.nix-cache.outcome == ''success'''
+      run: |
+        set -euo pipefail
+        export LC_ALL=C
+
+        roots_file="$RUNNER_TEMP/desktop-cache-roots"
+        if [ ! -s "$roots_file" ]; then
+          exit 0
+        fi
+
+        cache_root="${DESKTOP_NIX_CACHE_ROOT:?}"
+        cache_dir="${DESKTOP_NIX_CACHE_DIR:?}"
+        toolchain_key="${cache_dir#"$cache_root/"}"
+        if [ "${#toolchain_key}" -ne 64 ] || [[ "$toolchain_key" == *[!0-9a-f]* ]] \
+          || [ "$cache_dir" != "$cache_root/$toolchain_key" ] \
+          || [ -L "$cache_dir" ] || [ -L "$cache_dir/nar" ]; then
+          echo "Refusing to prune an unexpected macOS Nix cache directory: $cache_dir" >&2
+          exit 1
+        fi
+
+        work_dir=$(mktemp -d "$RUNNER_TEMP/desktop-cache-prune.XXXXXX")
+        trap 'rm -rf "$work_dir"' EXIT
+        shopt -s nullglob dotglob
+
+        report_size() {
+          cache_size_kib=$(du -sk "$cache_root/" | awk '{print $1}')
+          local message
+          message=$(awk -v phase="$1" -v kib="$cache_size_kib" \
+            'BEGIN {printf "macOS Nix cache %s: %.2f GiB", phase, kib / 1048576}')
+          echo "$message"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            printf -- '- %s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+          fi
+        }
+        report_size "before pruning"
+
+        # A DMG's runtime closure omits build-only inputs such as Cargo artifacts and
+        # the toolchain. Walk its derivation closure and include every existing output,
+        # including successful dependencies of an otherwise failed build.
+        while IFS= read -r derivation; do
+          nix-store --query --requisites --include-outputs "$derivation"
+        done < "$roots_file" |
+          sort -u > "$work_dir/requisites"
+        awk '!/\.drv$/' "$work_dir/requisites" > "$work_dir/paths"
+
+        # Finish enumeration and validate metadata before deleting anything. An empty
+        # closure or a failed query must leave the previous cache intact.
+        if [ ! -s "$work_dir/paths" ]; then
+          echo "No completed Nix outputs to cache; leaving the cache intact."
+          exit 0
+        fi
+        # An early failure may leave current dependencies in the binary cache without
+        # having restored them locally. Keep their planned outputs too, while exporting
+        # only the realized paths above. Bound argv size for macOS's smaller limit.
+        awk '/\.drv$/' "$work_dir/requisites" > "$work_dir/derivations"
+        : > "$work_dir/planned-paths"
+        if [ -s "$work_dir/derivations" ]; then
+          xargs -n 128 nix-store --query --outputs < "$work_dir/derivations" > "$work_dir/planned-paths"
+        fi
+        awk -F/ '
+          NF != 4 || $2 != "nix" || $3 != "store" {exit 1}
+          {
+            split($4, parts, "-")
+            if (length(parts[1]) != 32 || parts[1] ~ /[^0123456789abcdfghijklmnpqrsvwxyz]/) exit 1
+            print parts[1] ".narinfo"
+          }
+        ' "$work_dir/paths" "$work_dir/planned-paths" | sort -u > "$work_dir/wanted-narinfos"
+        for metadata in "$cache_dir"/*.narinfo; do
+          printf '%s\n' "${metadata##*/}"
+        done | sort -u > "$work_dir/all-narinfos"
+        comm -12 "$work_dir/all-narinfos" "$work_dir/wanted-narinfos" > "$work_dir/retained-narinfos"
+        comm -23 "$work_dir/all-narinfos" "$work_dir/wanted-narinfos" > "$work_dir/remove-narinfos"
+        : > "$work_dir/retained-nars"
+
+        while IFS= read -r metadata; do
+          nar_url=""
+          store_path=""
+          while read -r field value; do
+            case "$field" in
+              URL:) nar_url="$value" ;;
+              StorePath:) store_path="$value" ;;
+            esac
+          done < "$cache_dir/$metadata"
+          nar_file="${nar_url#nar/}"
+          if [[ "$nar_url" != nar/* ]] || [[ "$nar_file" == *[!a-zA-Z0-9._-]* ]] \
+            || [[ "$nar_file" == .* ]] || [ -z "$nar_file" ] \
+            || [[ "$store_path" != /nix/store/"${metadata%.narinfo}"-* ]] \
+            || [ -L "$cache_dir/$metadata" ]; then
+            echo "Invalid retained Nix cache metadata: $metadata; leaving the cache intact." >&2
+            exit 1
+          fi
+          if [ -f "$cache_dir/$nar_url" ] && [ ! -L "$cache_dir/$nar_url" ]; then
+            printf '%s\n' "$nar_url" >> "$work_dir/retained-nars"
+          else
+            # Nix checks narinfo existence, not archive existence. Remove dangling
+            # metadata so the subsequent copy repairs this path instead of skipping it.
+            printf '%s\n' "$metadata" >> "$work_dir/remove-narinfos"
+          fi
+        done < "$work_dir/retained-narinfos"
+        sort -u -o "$work_dir/retained-nars" "$work_dir/retained-nars"
+        for archive in "$cache_dir"/nar/*; do
+          printf 'nar/%s\n' "${archive##*/}"
+        done | sort -u > "$work_dir/all-nars"
+        # Different store paths may share one compressed archive. Retain the union of
+        # their URLs so removing one obsolete narinfo cannot break a current path.
+        comm -23 "$work_dir/all-nars" "$work_dir/retained-nars" > "$work_dir/remove-nars"
+
+        while IFS= read -r metadata; do
+          rm -f "$cache_dir/$metadata"
+        done < "$work_dir/remove-narinfos"
+        while IFS= read -r archive; do
+          rm -f "$cache_dir/$archive"
+        done < "$work_dir/remove-nars"
+        for partition in "$cache_root"/*; do
+          partition_key="${partition##*/}"
+          if [ "${#partition_key}" -eq 64 ] && [[ "$partition_key" != *[!0-9a-f]* ]] \
+            && [ "$partition" != "$cache_dir" ] && [ -d "$partition" ] && [ ! -L "$partition" ]; then
+            rm -rf "$partition"
+          fi
+        done
+        printf 'Pruned %s metadata entries and %s archives; retaining %s current store paths.\n' \
+          "$(wc -l < "$work_dir/remove-narinfos" | tr -d ' ')" \
+          "$(wc -l < "$work_dir/remove-nars" | tr -d ' ')" \
+          "$(wc -l < "$work_dir/wanted-narinfos" | tr -d ' ')"
+        report_size "after pruning"
+
+        export_started=$SECONDS
+        copy_status=0
+        nix copy --stdin --to "$DESKTOP_NIX_CACHE_URL" < "$work_dir/paths" || copy_status=$?
+        echo "Nix cache export took $((SECONDS - export_started)) seconds."
+        report_size "after export"
+        if (( cache_size_kib * 1024 >= ${DESKTOP_NIX_CACHE_SIZE_GB:-100} * 1000000000 )); then
+          echo "::warning::The current Nix build closure exceeds the configured cache capacity even after pruning; Namespace may start the next build cold."
+        fi
+        exit "$copy_status"
+      shell: bash
+      continue-on-error: true
     - name: Collect DMG artifact
       run: |
         set -euo pipefail
@@ -122,6 +316,10 @@ jobs:
         cp -v "${dmgs[@]}" artifacts/
         # Nix outputs are read-only; stapler must write Apple's ticket into the copy.
         chmod u+w artifacts/*.dmg
+        mkdir -p updater-app
+        cp -a result/Macro.app updater-app/
+        chmod -R u+w updater-app/Macro.app
+        cp apps/web/tauri/desktop-release.json artifacts/darwin-aarch64.release.json
       shell: bash
     - name: Validate signed DMG
       run: |
@@ -199,6 +397,20 @@ jobs:
         xcrun stapler validate "$dmg"
         spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
 
+        # The updater ships the app rather than the DMG. Notarize and staple that exact
+        # final app too; stapling only the disk image does not staple the updater app.
+        ditto -c -k --keepParent updater-app/Macro.app "$credentials_dir/updater-app.zip"
+        xcrun notarytool submit "$credentials_dir/updater-app.zip" \
+          --key "$credentials_dir/AuthKey.p8" --key-id "$key_id" --issuer "$issuer" \
+          --wait --timeout 30m --output-format json > "$credentials_dir/app-submission.json"
+        jq -e '.status == "Accepted"' "$credentials_dir/app-submission.json" > /dev/null
+        xcrun stapler staple updater-app/Macro.app
+        xcrun stapler validate updater-app/Macro.app
+        codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
+        spctl --assess --type execute --verbose=2 updater-app/Macro.app
+        version=$(jq -er '.version' apps/web/tauri/desktop-release.json)
+        COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-aarch64-darwin.app.tar.gz" -C updater-app Macro.app
+
         # Stapling changes the DMG bytes, so checksum the final distributable.
         (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
@@ -211,37 +423,3 @@ jobs:
         path: artifacts/*
         if-no-files-found: error
         retention-days: '30'
-  publish-dmg:
-    needs:
-    - build-dmg
-    name: Upload Release Artifacts
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - id: metadata
-      name: Derive artifact metadata
-      run: |
-        set -euo pipefail
-        tag="${RAW_REF#refs/tags/}"
-        if [ -z "$tag" ]; then
-          tag="${GITHUB_REF_NAME:-untagged}"
-        fi
-        safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
-        echo "tag=$tag" >> "$GITHUB_OUTPUT"
-        echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
-      shell: bash
-      env:
-        RAW_REF: ${{ inputs.ref }}
-    - name: Download Build Artifacts
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
-      with:
-        path: release-artifacts
-        merge-multiple: 'true'
-    - name: Upload Release Artifacts
-      if: startsWith(steps.metadata.outputs.tag, 'v')
-      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
-      with:
-        tag_name: ${{ steps.metadata.outputs.tag }}
-        files: release-artifacts/*
-        fail_on_unmatched_files: 'true'

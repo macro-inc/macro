@@ -23,6 +23,8 @@ maybe_env_var! {
         PipedreamEnvironment,
         /// Base URL of the Pipedream API.
         PipedreamApiUrl,
+        /// Base URL of the Pipedream MCP server, shared with execution.
+        PipedreamMcpUrl,
     }
 }
 
@@ -69,7 +71,12 @@ pub fn pipedream_client_from_env() -> anyhow::Result<Option<Arc<PipedreamClient>
         environment,
         allowed_origins: Vec::new(),
         api_url,
-        mcp_url: DEFAULT_MCP_URL.to_owned(),
+        mcp_url: env
+            .pipedream_mcp_url
+            .as_ref()
+            .and_then(|value| value.value())
+            .unwrap_or(DEFAULT_MCP_URL)
+            .to_owned(),
     })
     .context("building Pipedream client for MCP app lookup")?;
     Ok(Some(Arc::new(client)))

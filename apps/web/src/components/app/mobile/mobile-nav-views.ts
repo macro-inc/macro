@@ -1,19 +1,19 @@
 /**
- * Views reachable from the mobile navigation pill row, in display order.
+ * Views reachable from mobile navigation, in display order.
  * `search` is the "All" pill, first in the scope pill row;
  * `settings` navigates through the settings state (not `openWithSplit`), and
- * `calendar` is additionally gated by the calendar UI flag.
+ * `calendar` and the drawer-only `reviews` shortcut are feature-gated.
  */
 export const MOBILE_NAV_VIEW_IDS = [
   'search',
   'home',
-  'reminders',
   'calendar',
   'mail',
   'channels',
   'documents',
   'agents',
   'tasks',
+  'reviews',
   'calls',
   'companies',
   'settings',

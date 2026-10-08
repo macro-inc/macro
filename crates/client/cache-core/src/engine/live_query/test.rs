@@ -49,6 +49,7 @@ fn spec() -> LiveQuerySpec {
         baseline: vec![],
         selection: Arc::new(
             RecordSelection::parse(
+                crate::meta::bundled_schema_ref(),
                 "fragment Item on GraphqlSoupEmailThread { id read: isRead }",
                 "Item",
             )
@@ -145,6 +146,7 @@ fn projection_changes_move_members_and_failed_optimism_restores_them() {
             .unwrap()
             .clone();
         let (id, _) = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+            client_metadata: None,
             uuid: "00000000-0000-4000-8000-000000000001",
             query: "mutation Read($input: MarkEmailThreadSeenInput!) { markEmailThreadSeen(input: $input) { id isRead } }",
             operation_name: None, variables: &variables, data: &json!({"markEmailThreadSeen":{"id":"b","isRead":true}}),
@@ -268,7 +270,7 @@ fn nested_entity_changes_patch_only_the_selected_alias() {
             .await
             .unwrap();
         let mut query = spec();
-        query.selection = Arc::new(RecordSelection::parse("fragment Item on GraphqlSoupEmailThread { id pending: notifications { id status: state } }", "Item").unwrap());
+        query.selection = Arc::new(RecordSelection::parse(crate::meta::bundled_schema_ref(), "fragment Item on GraphqlSoupEmailThread { id pending: notifications { id status: state } }", "Item").unwrap());
         let initial = engine
             .read_live_query("nested", query.clone(), None)
             .await

@@ -174,6 +174,7 @@ fn response_path(path: &[ResponsePath<'_>]) -> Vec<ResponsePathSegment> {
 
 impl ValueProjection {
     pub(super) fn compile<'a>(
+        schema: &'a crate::meta::Schema,
         value: Option<&CacheValue>,
         field: &'a FieldNode,
         ty: &meta::FieldType,
@@ -192,7 +193,7 @@ impl ValueProjection {
                 };
                 let mut fields = Vec::new();
                 for selected in plans
-                    .fields(&field.selection_set, concrete, variables, resolvers)?
+                    .fields(schema, &field.selection_set, concrete, variables, resolvers)?
                     .iter()
                 {
                     match &selected.source {
@@ -201,6 +202,7 @@ impl ValueProjection {
                             key: key.to_string(),
                             response_key: selected.node.response_key.clone(),
                             value: Self::compile(
+                                schema,
                                 values.get(key.as_ref()),
                                 selected.node,
                                 ty,
@@ -217,7 +219,9 @@ impl ValueProjection {
             Some(CacheValue::List(values)) => Self::List(
                 values
                     .iter()
-                    .map(|value| Self::compile(Some(value), field, ty, variables, resolvers, plans))
+                    .map(|value| {
+                        Self::compile(schema, Some(value), field, ty, variables, resolvers, plans)
+                    })
                     .collect::<Result<_, _>>()?,
             ),
             _ => Self::Structural,

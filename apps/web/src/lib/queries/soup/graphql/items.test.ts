@@ -1240,6 +1240,53 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps other pages when one page result omits its soup payload', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'a' }], next_cursor: 'next' })
+      );
+      const next = query.fetchNextPage();
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(2));
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [{ id: 'b' }], next_cursor: 'more' })
+      );
+      await next;
+      const ids = () => query.data()?.entities.map((entity) => entity.id);
+      expect(ids()).toEqual(['a', 'b']);
+
+      fake.executions[0].next({ user: { id: 'viewer' } });
+      expect(query.error()).toBeUndefined();
+      expect(ids()).toEqual(['b']);
+      expect(query.hasNextPage()).toBe(true);
+
+      fake.executions[1].next({ user: { id: 'viewer' } });
+      expect(query.error()).toBeUndefined();
+      expect(ids()).toEqual([]);
+      expect(query.hasNextPage()).toBe(false);
+
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'a' }], next_cursor: 'next' })
+      );
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [{ id: 'b' }], next_cursor: 'more' })
+      );
+      expect(query.error()).toBeUndefined();
+      expect(ids()).toEqual(['a', 'b']);
+      expect(query.hasNextPage()).toBe(true);
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains the page projection when only query activity changes', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

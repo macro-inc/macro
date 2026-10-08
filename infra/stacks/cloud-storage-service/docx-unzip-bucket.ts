@@ -7,12 +7,14 @@ export function attachPolicyToDocxUnzipBucket({
   bulkUploadLambdaRoleArn,
   convertServiceRoleArn,
   cloudStorageServiceRoleArn,
+  documentUploadFinalizerRoleArn,
   bucket,
 }: {
   docxUnzipLambdaRoleArn: pulumi.Output<string> | string;
   bulkUploadLambdaRoleArn: pulumi.Output<string> | string | undefined;
   convertServiceRoleArn: pulumi.Output<string> | string;
   cloudStorageServiceRoleArn: pulumi.Output<string> | string;
+  documentUploadFinalizerRoleArn: pulumi.Output<string> | string;
   bucket: aws.s3.Bucket;
 }) {
   const groupName = `document-store-admin-${stack}`;
@@ -34,6 +36,7 @@ export function attachPolicyToDocxUnzipBucket({
         docxUnzipLambdaRoleArn,
         cloudStorageServiceRoleArn,
         convertServiceRoleArn,
+        documentUploadFinalizerRoleArn,
       ];
       if (bulkUploadLambdaRoleArn) {
         arnsWithRoles.push(bulkUploadLambdaRoleArn);
@@ -59,6 +62,17 @@ export function attachPolicyToDocxUnzipBucket({
     },
     Action: ['s3:ListBucket', 's3:GetObject', 's3:PutObject'],
     Resource: [bucket.arn, pulumi.interpolate`${bucket.arn}/*`],
+  };
+
+  // Stages upgraded legacy `.doc` files for the DOCX pipeline.
+  const allowDocumentUploadFinalizerPolicyStatement: aws.iam.PolicyStatement = {
+    Sid: 'AllowDocumentUploadFinalizer',
+    Effect: 'Allow',
+    Principal: {
+      AWS: documentUploadFinalizerRoleArn,
+    },
+    Action: ['s3:PutObject'],
+    Resource: [pulumi.interpolate`${bucket.arn}/*`],
   };
 
   const allowDocxUnzipLambdaPolicyStatement: aws.iam.PolicyStatement = {
@@ -98,6 +112,7 @@ export function attachPolicyToDocxUnzipBucket({
     allowDocumentStorageServicePolicyStatement,
     allowConvertServicePolicyStatement,
     allowDocxUnzipLambdaPolicyStatement,
+    allowDocumentUploadFinalizerPolicyStatement,
     {
       Sid: 'DenyNonBucketPolicyAccessForNonAdmins',
       Effect: 'Deny',
@@ -133,6 +148,7 @@ export function attachPolicyToDocxUnzipBucket({
     allowDocumentStorageServicePolicyStatement,
     allowConvertServicePolicyStatement,
     allowDocxUnzipLambdaPolicyStatement,
+    allowDocumentUploadFinalizerPolicyStatement,
     {
       Sid: 'DenyNonAdminAccess',
       Effect: 'Deny',

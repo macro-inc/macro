@@ -300,6 +300,7 @@ fn overlapping_optimism_and_rollback_use_the_effective_value() {
             ("00000000-0000-4000-8000-000000000002", false),
         ] {
             engine.begin_optimistic_write(None, BeginOptimisticWrite {
+                client_metadata: None,
                 uuid, query: "mutation Read($input: MarkEmailThreadSeenInput!) { markEmailThreadSeen(input:$input) { id isRead } }",
                 operation_name: None, variables: &variables, data: &json!({"markEmailThreadSeen":{"id":"0","isRead":read}}),
                 link_patches: &[], revalidations: &[], identity_bindings: &[], created_at_ms: 0,

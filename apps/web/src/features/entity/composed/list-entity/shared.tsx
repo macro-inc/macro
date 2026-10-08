@@ -32,8 +32,10 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   actions?: JSX.Element;
   /** Persistent status/action immediately before the timestamp. */
   leadingAction?: JSX.Element;
-  /** Collection-owned completion of a reminder occurrence. */
-  onToggleReminderDone?: () => Promise<void>;
+  /** Caller-owned marker between the icon and the title, e.g. a priority. */
+  titleLeading?: JSX.Element;
+  /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
+  meta?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -68,6 +70,8 @@ export interface LayoutProps {
   scheduleStatus?: JSX.Element;
   actions?: JSX.Element;
   leadingAction?: JSX.Element;
+  titleLeading?: JSX.Element;
+  meta?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;

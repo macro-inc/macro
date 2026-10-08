@@ -57,6 +57,24 @@ it.each([undefined, 'DRAFT_ALREADY_SENT', 'INTERNAL', 42, null])(
   }
 );
 
+it.each([undefined, true, false, 'true', 1, null])(
+  'validates retry-budget classification %j',
+  (serverFailure) => {
+    expect(
+      isCacheRequest({
+        id: 1,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      })
+    ).toBe(serverFailure === undefined || typeof serverFailure === 'boolean');
+  }
+);
+
 const enginePort = {
   postMessage() {},
   close() {},
@@ -273,6 +291,76 @@ describe('coordinator runtime protocol', () => {
     expect(valid({ ...request, liveQuery: { ...liveQuery, id: '' } })).toBe(
       false
     );
+  });
+
+  it('validates calendar range, commit, and uncertain-event requests', () => {
+    const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
+    const rangeRequest = (request: unknown) =>
+      isCacheRequest({ id: 1, kind: 'calendar-range', request });
+    expect(rangeRequest(range)).toBe(true);
+    expect(
+      rangeRequest({ ...range, eventKey: 'GraphqlCalendarEvent:e1' })
+    ).toBe(true);
+    expect(rangeRequest({ ...range, endMs: -1 })).toBe(false);
+    expect(rangeRequest({ ...range, startDay: 0.5 })).toBe(false);
+    expect(rangeRequest({ ...range, eventKey: 'e1' })).toBe(false);
+    expect(rangeRequest({ ...range, extra: true })).toBe(false);
+
+    const commitRequest = (commit: unknown) =>
+      isCacheRequest({ id: 1, kind: 'calendar-commit', commit });
+    expect(commitRequest({})).toBe(true);
+    expect(
+      commitRequest({
+        coverage: [{ kind: 'allDay', start: 0, end: 7 }],
+        replacedEvents: [
+          {
+            eventKey: 'GraphqlCalendarEvent:e1',
+            occurrenceKeys: ['GraphqlCalendarOccurrence:e1:k'],
+          },
+        ],
+        deletedEventKeys: ['GraphqlCalendarEvent:e2'],
+        deletedCalendarKeys: ['GraphqlCalendar:c1'],
+        removedLinkIds: ['l2'],
+        watermark: {
+          kind: 'advance',
+          since: [{ linkId: 'l1', seq: '1' }],
+          to: [{ linkId: 'l1', seq: '9' }],
+        },
+        freshness: 'fresh',
+        reset: false,
+      })
+    ).toBe(true);
+    for (const invalid of [
+      { coverage: [{ kind: 'week', start: 0, end: 1 }] },
+      { deletedEventKeys: ['e2'] },
+      { removedLinkIds: [''] },
+      { watermark: { kind: 'merge', links: [{ linkId: 'l1', seq: 1 }] } },
+      { watermark: { kind: 'merge', links: [{ linkId: 'l1', seq: '-1' }] } },
+      { watermark: { kind: 'replace', links: [] } },
+      { freshness: 'unknown' },
+      { reset: 'yes' },
+      { extra: true },
+    ]) {
+      expect(commitRequest(invalid)).toBe(false);
+    }
+
+    const enqueue = (uncertainCalendarEventKeys: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: '00000000-0000-4000-8000-000000000001',
+        query: 'mutation M { m }',
+        data: {},
+        uncertainCalendarEventKeys,
+        createdAtMs: 0,
+        owner: 'runner',
+        nowMs: 0,
+        leaseExpiresAtMs: 1,
+      });
+    expect(enqueue(undefined)).toBe(true);
+    expect(enqueue(['GraphqlCalendarEvent:e1'])).toBe(true);
+    expect(enqueue(['e1'])).toBe(false);
+    expect(enqueue(Array(257).fill('GraphqlCalendarEvent:e1'))).toBe(false);
   });
 
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
@@ -737,13 +825,13 @@ describe('coordinator runtime protocol', () => {
   });
 
   it('derives the exact UTF-8 canonical turso-opfs lock name', () => {
-    // The current versions keep the unversioned name, and so the lock that
-    // builds before versioned names hold.
+    // The current versions moved past the unversioned name, so the lock
+    // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:19:graphql-cache:scope'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v3.t11'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:16:graphql-cache:é'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v3.t11'
     );
   });
 
@@ -793,13 +881,10 @@ describe('coordinator runtime protocol', () => {
     const own = cacheDatabaseIdentity('a');
     const versioned = (storage: number): string =>
       `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storage}`;
-    // The current versions still open the unversioned name.
-    expect(own).toBe('graphql-cache:a');
+    // The current versions moved past the unversioned name.
+    expect(own).toBe(versioned(storageSchemaVersion));
     expect(isStaleCacheDatabaseIdentity('a', own)).toBe(false);
-    // Another spelling of this build's own versions is never opened again.
-    expect(
-      isStaleCacheDatabaseIdentity('a', versioned(storageSchemaVersion))
-    ).toBe(true);
+    expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a')).toBe(true);
     expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a:s1.v2.t3')).toBe(
       true
     );

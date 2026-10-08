@@ -109,6 +109,10 @@ just run_local --no-doppler
 
 The local stack does not need Doppler. It uses the code-defined local configuration with dummy AWS credentials and fixed test secrets. Most contributors are not on the team, so this is the common path.
 
+Local authentication includes a working signing key pair for Macro API tokens,
+which settings actions such as enabling CRM require. New teams start with CRM
+disabled; enable it in Settings > CRM before creating pipelines.
+
 The stack boots with stubbed values for every config the services require, including the third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. The rest of the stack is fully functional: auth, documents, email, and search.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
@@ -215,10 +219,10 @@ A `--no-doppler` stack boots with deterministic stubs for every value the servic
 | --- | --- | --- |
 | Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service reports no Gmail grant and skips inbox syncing. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
-| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup still works: the create-user webhook detects the stub key and skips the real Stripe call. It stores a placeholder customer id instead. |
+| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
 
-The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
+The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `ACCOUNT_LINK_STATE_SECRET`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
 
 To turn on an integration, create a `local.env` with the real values. Then pass it
 to `run_local`:
@@ -314,10 +318,17 @@ use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
 Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
-a listening Vite port alone is insufficient. A 502 with a proxy log such as
-`dial tcp <host-gateway>:<vite-port>: i/o timeout` indicates this firewall path
-is blocked. Firewall rules must cover the current instance's Docker network
+a listening Vite port alone is insufficient. Persistent 502s with proxy logs such
+as `dial tcp <host-gateway>:<vite-port>: i/o timeout` can indicate this firewall
+path is blocked. Firewall rules must cover the current instance's Docker network
 and frontend port, which can differ between instances.
+
+If `/app/` succeeds but the page stays blank, inspect script requests as well as
+API requests. Intermittent 502s for Vite modules can come from the burst of
+Docker-to-host connections during startup. The generated proxy limits Vite to
+16 upstream connections so module requests queue instead of exhausting the host
+listener. After applying an updated proxy configuration, restart only the
+instance's proxy and reload the page; existing databases and volumes can stay.
 
 Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
 [certificate README](../infra/local/certs/README.md)), then open that URL.

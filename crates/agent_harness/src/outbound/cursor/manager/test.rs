@@ -68,6 +68,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the manager never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,

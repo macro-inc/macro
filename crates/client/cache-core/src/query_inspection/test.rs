@@ -23,6 +23,7 @@ fn concrete_union_member_outside_selected_fragment_is_absent() {
 
     let records = HashMap::new();
     let result = resolve_fields_owner(
+        crate::meta::bundled_schema_ref(),
         &records,
         &fields,
         "GraphqlSoupChannel",

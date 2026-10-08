@@ -861,6 +861,73 @@ describe('createGraphqlBulkSaveEntityPropertiesMutation', () => {
       'settled:test',
     ]);
   });
+
+  it('saves values requested by an editor that has already closed', async () => {
+    const onSettled = vi.fn();
+    const mutation = vi.fn(
+      (
+        _document: unknown,
+        _variables: unknown,
+        context: Record<string, unknown>
+      ) => ({
+        toPromise: async () => ({
+          operation: { kind: 'mutation', context } as Operation,
+          data: { setEntityProperty: { id: 'assignment-1' } },
+          stale: false,
+          hasNext: false,
+        }),
+      })
+    );
+    graphqlClientState.current = { mutation } as unknown as Client;
+    let save!: ReturnType<typeof createGraphqlBulkSaveEntityPropertiesMutation>;
+    // The project picker closes before its save settles, taking the owner of
+    // these mutations with it.
+    createRoot((rootDispose) => {
+      save = createGraphqlBulkSaveEntityPropertiesMutation({ onSettled });
+      rootDispose();
+    });
+
+    const result = await save.mutateAsync({
+      properties: [
+        {
+          entityType: 'TASK',
+          entityId: 'task-1',
+          property: {
+            propertyId: 'assignment-1',
+            propertyDefinitionId: 'project',
+            displayName: 'Project',
+            valueType: 'ENTITY',
+            isMultiSelect: false,
+          } as Property,
+          apiValues: {
+            valueType: 'ENTITY',
+            refs: [{ entity_id: 'project-1', entity_type: 'INITIATIVE' }],
+          },
+        },
+      ],
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(mutation).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        input: {
+          entityType: 'DOCUMENT',
+          entityId: 'task-1',
+          propertyDefinitionId: 'project',
+          value: {
+            entityReference: {
+              entityId: 'project-1',
+              entityType: 'INITIATIVE',
+              specificMessageId: null,
+            },
+          },
+        },
+      },
+      expect.anything()
+    );
+    expect(onSettled).toHaveBeenCalledOnce();
+  });
 });
 
 describe('createGraphqlEntityPropertiesQuery', () => {

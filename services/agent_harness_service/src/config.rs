@@ -158,9 +158,8 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
-    /// fall back to the agent loop's default model.
-    #[macro_config_default(String::from("claude-sonnet-5-5"))]
+    /// Provider-qualified model id stamped onto sessions the in-memory bot opens.
+    #[macro_config_default(String::from("anthropic/claude-sonnet-5-5"))]
     pub inmem_model: String,
     /// Harness slug stamped onto sessions the in-memory bot opens.
     #[macro_config_default(String::from("macro-inmem"))]

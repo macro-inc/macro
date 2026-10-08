@@ -1,7 +1,7 @@
 import { SidePanel } from '@components/app/side-panel';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button } from '@ui';
-import { createMemo, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CompanyContact } from '../core/contact';
@@ -30,7 +30,6 @@ export function Company(props: {
   companyId: string;
   section?: CompanySection;
   headerToggle?: boolean;
-  navigation?: JSX.Element;
   onHidden?: () => void;
   onOpenContact?: (contact: CompanyContact) => void;
 }) {
@@ -60,7 +59,6 @@ export function Company(props: {
       defaultOpen={false}
     >
       <div class="flex size-full min-h-0 min-w-0 flex-col">
-        {props.navigation}
         <div class="min-h-0 min-w-0 flex-1">
           <Switch>
             <Match when={section() === 'overview'}>
@@ -84,7 +82,10 @@ export function Company(props: {
                     onClick={() => {
                       const domain = company()?.domains[0]?.domain;
                       if (domain)
-                        openCreateContactModal(props.companyId, domain);
+                        openCreateContactModal({
+                          companyId: props.companyId,
+                          domain,
+                        });
                     }}
                   >
                     <PlusIcon class="size-3.5" />

@@ -9,7 +9,7 @@ import { createClient, type Exchange } from '@urql/core';
 import { okAsync } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
 import { empty, fromValue, mergeMap, pipe } from 'wonka';
-import type { DatabaseRelationSource } from '../context/relation-source';
+import type { DatabaseRelationSource } from '../../database/context/relation-source';
 import { createDatabaseRelations } from './database-relations';
 
 const transport = vi.hoisted(() => ({ get: vi.fn() }));

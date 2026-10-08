@@ -46,6 +46,14 @@ impl BillingService for FakeBilling {
     ) -> BillingResult<UsageSnapshot> {
         panic!("admission must not change settings")
     }
+    async fn update_auto_reload(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: bool,
+        _: crate::domain::AutoReloadThresholds,
+    ) -> BillingResult<UsageSnapshot> {
+        panic!("admission must not change settings")
+    }
     async fn create_credit_checkout(
         &self,
         _: &MacroUserIdStr<'_>,
@@ -73,6 +81,9 @@ impl BillingService for FakeBilling {
         panic!("admission must not sync periods")
     }
     async fn mark_overage_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
+        panic!("admission must not handle invoices")
+    }
+    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
 }
@@ -122,7 +133,7 @@ async fn enabled_admission_preserves_allowance_decisions() {
         for feature in [
             AiFeature::Chat,
             AiFeature::AiEditing,
-            AiFeature::ChatRename,
+            AiFeature::Automation,
             AiFeature::AgentRepositoryChoice,
         ] {
             let result = admission.admit(&user(), feature).await;

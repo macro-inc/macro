@@ -138,41 +138,59 @@ fn it_expands_file_associations() {
                     {
                       "|": [
                         {
-                          "l": {
-                            "ft": "ai"
-                          }
+                          "|": [
+                            {
+                              "|": [
+                                {
+                                  "l": {
+                                    "ft": "ai"
+                                  }
+                                },
+                                {
+                                  "l": {
+                                    "ft": "eps"
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "l": {
+                                "ft": "ps"
+                              }
+                            }
+                          ]
                         },
                         {
                           "l": {
-                            "ft": "eps"
+                            "ft": "dxf"
                           }
                         }
                       ]
                     },
                     {
                       "l": {
-                        "ft": "ps"
+                        "ft": "dwg"
                       }
                     }
                   ]
                 },
                 {
                   "l": {
-                    "ft": "dxf"
+                    "ft": "fig"
                   }
                 }
               ]
             },
             {
               "l": {
-                "ft": "dwg"
+                "ft": "psd"
               }
             }
           ]
         },
         {
           "l": {
-            "ft": "fig"
+            "ft": "psb"
           }
         }
       ]

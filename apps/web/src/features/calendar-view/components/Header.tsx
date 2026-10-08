@@ -39,7 +39,6 @@ import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateCallItem,
   CalendarCreateEventItem,
-  CalendarCreateReminderItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
@@ -164,7 +163,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     <>
       <CalendarCreateEventItem />
       <CalendarCreateCallItem />
-      <CalendarCreateReminderItem />
     </>
   );
   const headerCreateMenu = () => (

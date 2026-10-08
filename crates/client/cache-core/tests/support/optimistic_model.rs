@@ -485,6 +485,7 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                     .begin_optimistic_write(
                         None,
                         BeginOptimisticWrite {
+                            client_metadata: None,
                             uuid: &pending.uuid,
                             query: pending.query(),
                             operation_name: None,
@@ -559,6 +560,7 @@ impl<S: Storage, R: FnMut(&S) -> S> Scenario<S, R> {
                             claim,
                             self.now + 2,
                             "retry".into(),
+                            false,
                         )
                         .await
                         .unwrap();

@@ -10,6 +10,7 @@ consumer = [
   "dep:chat",
   "dep:documents",
   "dep:email",
+  "dep:github_pull_requests",
   "dep:initiative",
   "dep:kafka_util",
   "dep:models_properties",
@@ -23,6 +24,7 @@ consumer = [
 ]
 default = ["consumer", "outbound", "ports"]
 outbound = [
+  "dep:agent_session",
   "dep:entity_access",
   "ports",
 ]
@@ -36,6 +38,7 @@ ports = [
 ]
 
 [dependencies]
+agent_session = { path = "../agent_session", default-features = false, optional = true }
 broadcast = { path = "../broadcast", optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 messages = { path = "../messages", features = ["broker"] }
@@ -44,6 +47,7 @@ documents = { path = "../documents", default-features = false, features = ["serv
 email = { path = "../email", default-features = false, optional = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"], optional = true }
 futures = { workspace = true, optional = true }
+github_pull_requests = { path = "../github_pull_requests", default-features = false, optional = true }
 initiative = { path = "../initiative", default-features = false, optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }

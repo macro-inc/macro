@@ -83,10 +83,6 @@ vi.mock('@queries/notification/user-notifications', () => ({
   restoreUserNotifications: vi.fn(),
   snapshotUserNotifications: vi.fn(() => []),
 }));
-vi.mock('@queries/reminders/reminders', () => ({
-  invalidateRemindersById: vi.fn(),
-  setReminderCompleted: vi.fn(async () => {}),
-}));
 vi.mock('@queries/soup/cache', () => ({
   getSoupEntityById: vi.fn(),
   invalidateSoupEntity: operationMocks.invalidateSoupEntity,

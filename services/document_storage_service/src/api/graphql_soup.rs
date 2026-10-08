@@ -17,7 +17,7 @@ use bots::outbound::pg_bots_repo::PgBotsRepo;
 use complete_graph::GraphqlRequestParts;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use graphql_soup::{email_mutation_thread_loader, soup_item_loader};
+use graphql_soup::{email_mutation_thread_loader, soup_item_loader_with_team_access};
 use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
@@ -152,9 +152,10 @@ fn insert_graphql_context_data(
     );
     // Ordinary queries and subscription hydration use the replica-backed
     // Soup reader. The mutation-only loader below retains the primary reader.
-    let soup_item_loader = soup_item_loader(
+    let soup_item_loader = soup_item_loader_with_team_access(
         state.soup_router_state.service(),
         state.soup_router_state.email_service(),
+        state.entity_access_service.as_ref().clone(),
     );
     data.insert(macro_user_id.clone());
     data.insert(entity_mutation::EntityMutationActor {
@@ -171,7 +172,10 @@ fn insert_graphql_context_data(
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_initiative_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
+    data.insert(state.graphql_calendar_context.clone());
+    data.insert(state.graphql_calendar_mutation_context.clone());
     data.insert(state.graphql_initiative_entity_loader.clone());
+    data.insert(state.graphql_agent_session_entity_loader.clone());
     data.insert(graphql_initiative::initiative_detail_loader(
         state.graphql_initiative_context.clone(),
         macro_user_id.clone(),
@@ -193,12 +197,12 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::agent_session_bot_loader(PgBotsRepo::new(
         state.readonly_db.0.clone(),
     )));
+    // Read right after the session is created and after its subscription
+    // starts, so the log must hold every committed row: the primary.
     data.insert(complete_graph::agent_session_log_loader(
         PgAgentSessionRepo::new(
-            state.readonly_db.0.clone(),
-            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(
-                state.readonly_db.0.clone(),
-            ))),
+            state.db.clone(),
+            OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
         ),
     ));
     data.insert(complete_graph::entity_properties_loader(

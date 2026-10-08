@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild live queries and optimistic transactions against the current GraphQL schema.
-version = "0.6.42"
+# Rebuild live queries and optimistic transactions on runtime-loaded GraphQL SDL.
+version = "0.6.44"
 
 [features]
 default = []

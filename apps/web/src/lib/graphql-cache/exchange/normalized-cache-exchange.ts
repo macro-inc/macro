@@ -23,8 +23,9 @@
  * Mutations:
  * - With an optimistic response (see `executeOptimisticMutation`): the
  *   mutation and layer are durably queued before the ordered runner forwards
- *   it. Retryable failures retain optimism for background replay; permanent
- *   failures roll back. A caller whose operation is blocked behind the queue
+ *   it. Retryable failures retain optimism for background replay, but the tenth
+ *   server failure permanently rolls back; transport failures are not counted.
+ *   Other permanent failures roll back immediately. A caller blocked behind the queue
  *   head receives a synthetic `queued` disposition instead of waiting.
  * - Without one: forwarded normally; successful responses are normalized
  *   through the standard write path so dependent cached queries update.
@@ -37,6 +38,7 @@
 import {
   type Client,
   CombinedError,
+  createRequest,
   type Exchange,
   makeOperation,
   type Operation,
@@ -116,6 +118,25 @@ const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+const MAX_MUTATION_SERVER_FAILURES = 10;
+const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
+
+async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Mutation recovery timed out')),
+          MUTATION_LIFECYCLE_TIMEOUT_MS
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 
@@ -159,10 +180,20 @@ export function normalizedCacheResultMetadata(
       ? { cacheEffectsApplied }
       : {}),
     ...(isCacheRevision(revision) ? { revision } : {}),
-    ...(persistence instanceof Promise
+    ...(isThenable(persistence)
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
       : {}),
   };
+}
+
+// zone.js replaces the global Promise, so a native async function's promise
+// fails `instanceof Promise` in the app.
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function withResultMetadata(
@@ -179,10 +210,14 @@ function withResultMetadata(
 }
 
 type QueueAttemptContext = {
+  mutation?: ClaimedMutation;
   transactionId: string;
   leaseOwner: string;
   leaseGeneration: string;
   attemptCount: number;
+  serverFailureCount: number;
+  /** Transport-only metadata; urql drops the response on error-free payloads. */
+  response?: Response;
   storageGeneration: number;
 };
 
@@ -288,19 +323,22 @@ function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
 }
 
-/** Applies a hard network bound well inside the durable queue lease. */
+/** Bounds network time inside the lease and retains HTTP status for settlement. */
 function withQueueRequestTimeout(op: Operation): Operation {
   const operationFetch = op.context.fetch ?? globalThis.fetch;
+  const attempt = queueAttemptOf(op);
   return makeOperation(op.kind, op, {
     ...op.context,
-    fetch: (input, init) => {
+    fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
-      return operationFetch(input, {
+      const response = await operationFetch(input, {
         ...init,
         signal: init?.signal
           ? AbortSignal.any([init.signal, timeoutSignal])
           : timeoutSignal,
       });
+      if (attempt) attempt.response = response;
+      return response;
     },
   });
 }
@@ -452,6 +490,16 @@ function mutationErrorCode(
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Best-effort startup recovery before per-mutation admission. */
+  prepareMutationQueue?: () => Promise<void>;
+  /** False discards obsolete client intent without sending it to the server. */
+  beforeMutationAttempt?: (mutation: ClaimedMutation) => Promise<boolean>;
+  /** Persist domain recovery state for a replayed result, including when its UI is closed. */
+  onMutationAttemptResult?: (
+    mutation: ClaimedMutation,
+    result: OperationResult,
+    retry: boolean
+  ) => Promise<void>;
   /** Domain-specific deletions inferred from a successful server response. */
   deletedRecordKeys?: (result: OperationResult) => string[];
   /** Return true to transfer a committed query refresh to an active reader's queue.
@@ -915,6 +963,7 @@ export function normalizedCacheExchange(
       // is immediately resubscribed after a back/forward-cache restore.
       const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
+      let queuePreparation: Promise<void> | undefined;
       let drainRunning = false;
       let drainRequested = false;
       let deferredUntil: number | undefined;
@@ -953,15 +1002,17 @@ export function normalizedCacheExchange(
         generation: number
       ): Promise<void> {
         if (generation !== storageGeneration) return;
-        deferredUntil = undefined;
         const attempt: QueueAttemptContext = {
+          mutation: claimed,
           transactionId: claimed.transactionId,
           leaseOwner: queueOwner,
           leaseGeneration: claimed.leaseGeneration,
           attemptCount: claimed.attemptCount,
+          serverFailureCount: claimed.serverFailureCount ?? 0,
           storageGeneration: generation,
         };
         if (confirmedMutation?.transactionId === claimed.transactionId) {
+          deferredUntil = undefined;
           attemptInFlight = true;
           const result = confirmedMutation.result;
           await writeThrough({
@@ -977,11 +1028,90 @@ export function normalizedCacheExchange(
         // Claiming another head proves the previous one was removed, including
         // settlement by another runner or an identity/storage reset.
         confirmedMutation = undefined;
+        attemptInFlight = true;
+        try {
+          if (options.prepareMutationQueue) await prepareQueueRecovery();
+          if (
+            options.beforeMutationAttempt &&
+            !(await boundedMutationLifecycle(() =>
+              options.beforeMutationAttempt!(claimed)
+            ))
+          ) {
+            if (generation !== storageGeneration) return;
+            await host.rollbackOptimisticWrite(
+              claimed.transactionId,
+              { owner: queueOwner, generation: claimed.leaseGeneration },
+              'Obsolete local intent',
+              'LOCAL_SUPERSEDED'
+            );
+            if (generation !== storageGeneration) return;
+            attemptInFlight = false;
+            resolveLiveOperationsAsQueued();
+            scheduleDrain();
+            return;
+          }
+        } catch {
+          queuePreparation = undefined;
+          try {
+            if (generation !== storageGeneration) return;
+            const live = liveQueuedOps.get(claimed.transactionId);
+            const operation =
+              live?.operation ??
+              makeOperation(
+                'mutation',
+                createRequest(
+                  replayDocument(claimed.query, claimed.operationName),
+                  claimed.variables
+                ),
+                { url: '', requestPolicy: 'network-only' }
+              );
+            const failure = new CombinedError({
+              graphQLErrors: [
+                {
+                  message: 'Unable to prepare the saved mutation for replay',
+                  extensions: { code: 'LOCAL_RECOVERY_FAILED' },
+                },
+              ],
+            });
+            const result: OperationResult = {
+              operation,
+              data: undefined,
+              error: failure,
+              stale: false,
+              hasNext: false,
+            };
+            await recordAttemptResult(attempt, result, false);
+            await host.rollbackOptimisticWrite(
+              claimed.transactionId,
+              { owner: queueOwner, generation: claimed.leaseGeneration },
+              failure.message,
+              'LOCAL_RECOVERY_FAILED'
+            );
+            liveQueuedOps.delete(claimed.transactionId);
+            live?.resolveRoute(
+              withOptimisticMutationDisposition(result, {
+                kind: 'permanently-failed',
+                transactionId: claimed.transactionId,
+              })
+            );
+            deferredUntil = undefined;
+          } finally {
+            if (generation === storageGeneration) {
+              attemptInFlight = false;
+              resolveLiveOperationsAsQueued();
+              scheduleDrain();
+            }
+          }
+          return;
+        }
+        if (generation !== storageGeneration) return;
+        deferredUntil = undefined;
         // A superseded create can already exist on the server. Replay it to
         // recover its identity before sending the newer edit or discard.
         // Older hosts omit this flag: conservatively replay rather than loop
         // forever asking the engine to discard a write it must retain.
         if (claimed.superseded && claimed.requiresConfirmation === false) {
+          attemptInFlight = false;
           const discarded = await host.deferOptimisticWrite(
             claimed.transactionId,
             { owner: queueOwner, generation: claimed.leaseGeneration },
@@ -1081,6 +1211,7 @@ export function normalizedCacheExchange(
           // Restore can invalidate the generation while the host initializes.
           // Finish that handshake before tagging a claim or starting its lease.
           await host.currentRevision();
+          if (options.prepareMutationQueue) await prepareQueueRecovery();
           const now = Date.now();
           // A wakeup probes immediately, but must retain a future retry
           // deadline if the durable head is not eligible yet. Consume expired
@@ -1118,6 +1249,40 @@ export function normalizedCacheExchange(
         } finally {
           drainRunning = false;
           if (drainRequested) scheduleDrain();
+        }
+      }
+
+      async function prepareQueueRecovery(): Promise<void> {
+        try {
+          queuePreparation ??= boundedMutationLifecycle(() =>
+            options.prepareMutationQueue!()
+          );
+          await queuePreparation;
+        } catch (error) {
+          queuePreparation = undefined;
+          console.warn(
+            '[graphql-cache] Unable to prepare mutation recovery',
+            error
+          );
+        }
+      }
+
+      async function recordAttemptResult(
+        attempt: QueueAttemptContext,
+        result: OperationResult,
+        retry: boolean
+      ): Promise<void> {
+        if (!attempt.mutation || !options.onMutationAttemptResult) return;
+        try {
+          await boundedMutationLifecycle(() =>
+            options.onMutationAttemptResult!(attempt.mutation!, result, retry)
+          );
+        } catch (error) {
+          try {
+            options.onCacheError?.(error, result.operation);
+          } catch {
+            /* Diagnostics cannot retain a failed queue head. */
+          }
         }
       }
 
@@ -1303,6 +1468,8 @@ export function normalizedCacheExchange(
           linkPatches: optimistic.linkPatches,
           revalidations: optimistic.revalidations,
           identityBindings: optimistic.identityBindings,
+          clientMetadata: optimistic.clientMetadata,
+          uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
         const now = Date.now();
         const claim = {
@@ -1738,6 +1905,20 @@ export function normalizedCacheExchange(
               | 'superseded'
               | 'permanently-failed' = 'queued';
             try {
+              const response = result.error?.response ?? attempt.response;
+              const httpServerFailure = (response?.status ?? 0) >= 500;
+              // A valid GraphQL payload can arrive over HTTP 5xx without an
+              // urql error. Never commit it or bypass the retry policy.
+              if (httpServerFailure && !result.error) {
+                result = {
+                  ...result,
+                  data: undefined,
+                  error: new CombinedError({
+                    networkError: new Error(`HTTP ${response.status}`),
+                    response,
+                  }),
+                };
+              }
               if (result.error || result.data == null) {
                 let retry = false;
                 if (result.error && options.shouldRetryMutation) {
@@ -1748,13 +1929,40 @@ export function normalizedCacheExchange(
                   }
                 }
                 if (!isCurrent()) return detachedResult();
+                // urql represents HTTP 5xx as networkError too. Count actual
+                // server responses, never connection failures or timeouts.
+                const serverFailure =
+                  httpServerFailure ||
+                  (result.error?.graphQLErrors.length ?? 0) > 0;
+                if (
+                  retry &&
+                  serverFailure &&
+                  attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES
+                ) {
+                  retry = false;
+                  result = {
+                    ...result,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: `Mutation stopped after ${MAX_MUTATION_SERVER_FAILURES} server failures: ${result.error?.message}`,
+                          extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
+                        },
+                      ],
+                      response: result.error?.response,
+                    }),
+                  };
+                }
+                await recordAttemptResult(attempt, result, retry);
+                if (!isCurrent()) return detachedResult();
                 if (retry) {
                   retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
                   const deferred = await host.deferOptimisticWrite(
                     attempt.transactionId,
                     claim,
                     retryAt,
-                    result.error?.message ?? 'mutation returned no data'
+                    result.error?.message ?? 'mutation returned no data',
+                    serverFailure
                   );
                   if (!isCurrent()) return detachedResult();
                   settled = true;
@@ -1792,6 +2000,8 @@ export function normalizedCacheExchange(
                   transactionId: attempt.transactionId,
                   result,
                 };
+                await recordAttemptResult(attempt, result, false);
+                if (!isCurrent()) return detachedResult();
                 const committed = await host.commitOptimisticWrite(
                   attempt.transactionId,
                   claim,

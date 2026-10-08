@@ -21,6 +21,7 @@ mod model_providers;
 mod permission_policy;
 mod routine_sessions;
 mod runtime_commands;
+mod session_mcp;
 mod trigger;
 
 #[cfg(test)]
@@ -497,12 +498,23 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    // Every session's MCP tools, listed for its telemetry the way the harness
-    // itself lists them: through the egress proxy, in process.
+    // One connector for the agent and the telemetry catalog. It pools each
+    // server's session for the life of the egress token, so a replaced agent
+    // task and the catalog's listing reuse the handshake instead of opening
+    // a second set of clients and dropping them when the listing ends.
+    let mcp_connector = Arc::new(
+        AcpMcpConnector::new(EgressMcpClient::new(Arc::clone(&egress), &egress_base_url))
+            .with_source(Arc::new(session_mcp::SessionConnectors {
+                sessions: session_repo.clone(),
+                provisioner: Arc::new(EgressProvisioner::new(
+                    Arc::clone(&mcp_connections),
+                    Arc::clone(&mcp_servers),
+                    &egress_base_url,
+                )),
+            })),
+    );
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
-        Arc::new(McpToolCatalog::new(Arc::new(AcpMcpConnector::new(
-            EgressMcpClient::new(Arc::clone(&egress), &egress_base_url),
-        ))));
+        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
     let tool_context = ai_tools::build_tool_service_context_from_env(
@@ -549,14 +561,21 @@ async fn run() -> anyhow::Result<()> {
     // Cold attaches (fresh spawns and post-restart resumes) rebuild
     // their model context from the same log every frame lands in.
     let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
+    let permissions_repo = roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone());
+    let inmem_model_access: Arc<dyn agent_inmem::domain::model_access::InMemModelAccess> = Arc::new(
+        agent_inmem::domain::model_access::PermissionModelAccess::new(
+            roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+                permissions_repo.clone(),
+                permissions_repo,
+            ),
+        ),
+    );
     let inmem = InMemRuntime {
         manager: InMemAgentManager::new(
             Arc::clone(&inmem_model_engine),
             frames,
-            Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-                Arc::clone(&egress),
-                &egress_base_url,
-            ))),
+            mcp_connector,
+            Arc::clone(&inmem_model_access),
         )
         .with_admission(admission.clone())
         .with_dev_commands(enable_dev_commands),
@@ -572,7 +591,7 @@ async fn run() -> anyhow::Result<()> {
         lifecycle_publisher.clone(),
         replica,
     )
-    .with_tool_catalog(tool_catalog);
+    .with_tool_catalog(Arc::clone(&tool_catalog));
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -1014,8 +1033,17 @@ async fn run() -> anyhow::Result<()> {
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
         .with_admission(admission.clone())
-        .with_repositories(open_repositories),
+        .with_repositories(open_repositories)
+        .with_warm_sessions(Arc::new(session_repo.clone()), tool_catalog),
     );
+    let warm_cleanup = Arc::clone(&harness);
+    tokio::spawn(async move {
+        let mut ticks = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            ticks.tick().await;
+            warm_cleanup.reap_warm_sessions().await;
+        }
+    });
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
@@ -1120,6 +1148,7 @@ async fn run() -> anyhow::Result<()> {
                     InMemoryModels::new(
                         Some(Arc::clone(&inmem_model_engine)),
                         config.inmem_model.clone(),
+                        Arc::clone(&inmem_model_access),
                     ),
                     CursorModels::new(cursor_keys.clone(), cursor_api_base_url()),
                     macrod_models.clone(),
@@ -1132,7 +1161,11 @@ async fn run() -> anyhow::Result<()> {
     let model_service = Arc::new(
         AgentModelsServiceImpl::new(
             VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
-            InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
+            InMemoryModels::new(
+                Some(inmem_model_engine),
+                config.inmem_model.clone(),
+                inmem_model_access,
+            ),
             CursorModels::new(cursor_keys, cursor_api_base_url()),
             macrod_models,
             model_probe_timeout,

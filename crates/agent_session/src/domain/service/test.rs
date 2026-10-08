@@ -23,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
 
+mod first_output;
+
 struct Fixture {
     service: AgentSessionServiceImpl<
         InMemoryAgentSessionRepo,
@@ -566,6 +568,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
     }
 
     async fn preview(
@@ -2153,6 +2159,157 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     assert!(output.contains("It is noon."), "{output}");
     let input = attribute(attr::INPUT_MESSAGES).expect("input recorded");
     assert!(input.contains("what time is it?"), "{input}");
+}
+
+/// A command dequeued before the handshake finished says how long it waited
+/// for it; one dequeued on a live session waited for nothing.
+#[tokio::test]
+async fn a_command_span_records_its_wait_for_the_handshake() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: entered.clone(),
+        release: release.clone(),
+        hang_disconnect: false,
+        fail_restore_log: None,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        Vec::new(),
+        crate::domain::session::PermissionPolicy::AutoAccept,
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
+    let task = tokio::spawn(
+        run_session(
+            actor,
+            Arc::downgrade(&active),
+            Arc::new(()),
+            stopped_tx,
+            CancellationToken::new(),
+            repo.clone(),
+            claim,
+            Arc::new(crate::domain::ports::NoOpTurnObserver),
+        )
+        .with_current_subscriber(),
+    );
+    let send_prompt = |name: &'static str| {
+        let (completed, result) = oneshot::channel();
+        let command = SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt(name),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::info_span!(
+                "agent.session.command",
+                agent.command.name = name,
+                agent.command.queue_wait_ms = tracing::field::Empty,
+                agent.session.runtime_phase_at_dequeue = tracing::field::Empty,
+                agent.command.handshake_wait_ms = tracing::field::Empty,
+            ),
+            enqueued_at: tokio::time::Instant::now(),
+        };
+        (command, result)
+    };
+
+    // Queued before the runtime is even ready: it waits out the handshake.
+    let (early, early_result) = send_prompt("early");
+    commands.send(early).await.unwrap();
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+    entered.notified().await;
+    release.notify_one();
+    outbound_rx
+        .recv()
+        .await
+        .expect("early prompt is dispatched");
+    early_result
+        .await
+        .unwrap()
+        .expect("early delivery completes");
+
+    let (live, live_result) = send_prompt("live");
+    commands.send(live).await.unwrap();
+    entered.notified().await;
+    release.notify_one();
+    outbound_rx.recv().await.expect("live prompt is dispatched");
+    live_result.await.unwrap().expect("live delivery completes");
+
+    drop(inbound_tx);
+    task.await.unwrap();
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let attribute = |name: &str, key: &str| {
+        let span = spans
+            .iter()
+            .find(|span| {
+                span.name == "agent.session.command"
+                    && span.attributes.iter().any(|kv| {
+                        kv.key.as_str() == "agent.command.name" && kv.value.as_str() == name
+                    })
+            })
+            .unwrap_or_else(|| panic!("no {name} command span: {spans:#?}"));
+        span.attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.clone())
+    };
+    assert!(matches!(
+        attribute("early", "agent.session.runtime_phase_at_dequeue")
+            .expect("phase recorded")
+            .as_str()
+            .as_ref(),
+        "booting" | "handshaking"
+    ));
+    assert!(matches!(
+        attribute("early", "agent.command.handshake_wait_ms"),
+        Some(opentelemetry::Value::I64(wait)) if wait >= 0
+    ));
+    assert_eq!(
+        attribute("live", "agent.session.runtime_phase_at_dequeue")
+            .expect("phase recorded")
+            .as_str(),
+        "live"
+    );
+    assert_eq!(
+        attribute("live", "agent.command.handshake_wait_ms"),
+        Some(opentelemetry::Value::I64(0))
+    );
+    assert!(matches!(
+        attribute("live", "agent.command.queue_wait_ms"),
+        Some(opentelemetry::Value::I64(_))
+    ));
 }
 
 mod initial_model;

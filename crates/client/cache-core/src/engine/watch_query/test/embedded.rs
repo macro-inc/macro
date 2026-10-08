@@ -240,6 +240,7 @@ fn optimistic_embedded_values_and_rollback_stay_incremental() {
             .await
             .unwrap();
         engine.begin_optimistic_write(None, BeginOptimisticWrite {
+            client_metadata: None,
             uuid: "00000000-0000-4000-8000-000000000001",
             query: include_str!("property-mutation.graphql"), operation_name: None,
             variables: json!({"input": {"entityType": "DOCUMENT", "entityId": "doc-0", "propertyDefinitionId": "status", "value": {"selectOption": "pending"}}}).as_object().unwrap(),

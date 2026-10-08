@@ -53,6 +53,8 @@ topics! {
     MacroCallsTopic => "macro.calls",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
+    /// Committed GitHub pull request updates.
+    MacroGithubPullRequestsTopic => "macro.github_pull_requests",
     /// User-scoped full Soup items produced from entity updates.
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).
@@ -89,4 +91,6 @@ topics! {
     MacroAgentSessionLogTopic => "macro.agent_session_log",
     /// Database lifecycle (created, renamed, trashed, restored, purged) and table-change events.
     MacroDatabasesTopic => "macro.databases",
+    /// Form lifecycle (created, renamed, trashed, restored, purged), sharing and response events.
+    MacroFormsTopic => "macro.forms",
 }

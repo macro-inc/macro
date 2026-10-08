@@ -59,8 +59,8 @@ import {
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
+  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -174,7 +174,7 @@ export function HomeList(props: HomeListProps) {
   }
 
   function markEntitySeen(entity: WithNotification<EntityData>) {
-    markReminderSeenOnOpen(entity, notificationSource);
+    markCalendarNotificationSeenOnOpen(entity, notificationSource);
     if (!isNonMemberChannelEntity(entity)) {
       markChannelNotificationsSeenOnOpen(entity, notificationSource);
     }

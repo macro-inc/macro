@@ -57,6 +57,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
   expect(
     createInitiativeInput({
       name: 'Launch',
+      description: '  Ship it  ',
       shareWithTeam: false,
       properties: [
         {
@@ -75,6 +76,7 @@ it('sends drafted values with the create and leaves unset ones to the server', (
     })
   ).toEqual({
     name: 'Launch',
+    description: 'Ship it',
     shareWithTeam: false,
     propertyValues: [
       {
@@ -109,6 +111,7 @@ it('resolves as soon as the server answers and refreshes lists in the background
 
   const project = await mutation.mutateAsync({
     name: 'Launch',
+    description: '  ',
     shareWithTeam: true,
     properties: [],
   });
@@ -140,6 +143,7 @@ it('rejects without refreshing when the server refuses the create', async () => 
   await expect(
     mutation.mutateAsync({
       name: 'Launch',
+      description: '',
       shareWithTeam: true,
       properties: [],
     })
@@ -162,6 +166,7 @@ it('seeds the live query edge from an authoritative create without overwriting i
   });
   await mutation.mutateAsync({
     name: 'Launch',
+    description: '',
     shareWithTeam: true,
     properties: [],
   });
@@ -211,6 +216,7 @@ it('does not seed or refresh a create response after a storage reset', async () 
   });
   const pending = mutation.mutateAsync({
     name: 'Launch',
+    description: '',
     shareWithTeam: true,
     properties: [],
   });

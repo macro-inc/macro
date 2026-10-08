@@ -85,7 +85,8 @@ idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
-itertools = { version = "0.13" }
+itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
+itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -93,7 +94,10 @@ memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-bigint = { version = "0.4" }
+num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
+num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -104,6 +108,7 @@ phf = { version = "0.13", features = ["macros"] }
 phf_shared-594e8ee84c453af0 = { package = "phf_shared", version = "0.13" }
 phf_shared-93f6ce9d446188ac = { package = "phf_shared", version = "0.10" }
 phf_shared-a6292c17cd707f01 = { package = "phf_shared", version = "0.11" }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
@@ -152,9 +157,11 @@ tracing-log = { version = "0.2", default-features = false, features = ["log-trac
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
+twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 
@@ -231,7 +238,8 @@ idna = { version = "1" }
 indexmap = { version = "2", features = ["serde"] }
 inout = { version = "0.2", default-features = false, features = ["block-padding"] }
 insta = { version = "1", features = ["glob", "json"] }
-itertools = { version = "0.13" }
+itertools-594e8ee84c453af0 = { package = "itertools", version = "0.13" }
+itertools-5ef9efb8ec2df382 = { package = "itertools", version = "0.12" }
 lazy_static = { version = "1", default-features = false, features = ["spin_no_std"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 log = { version = "0.4", default-features = false, features = ["std"] }
@@ -239,7 +247,10 @@ memchr = { version = "2" }
 mime_guess = { version = "2" }
 miniz_oxide = { version = "0.8", features = ["simd"] }
 num-bigint = { version = "0.4" }
+num-complex = { version = "0.4" }
 num-integer = { version = "0.1", features = ["i128"] }
+num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
+num-rational = { version = "0.4", features = ["num-bigint-std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
@@ -305,9 +316,11 @@ tracing-log = { version = "0.2", default-features = false, features = ["log-trac
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
 tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
+twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
 

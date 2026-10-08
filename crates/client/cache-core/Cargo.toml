@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
@@ -19,7 +20,6 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [build-dependencies]
-apollo-compiler = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]

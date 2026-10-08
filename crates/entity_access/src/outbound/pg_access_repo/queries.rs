@@ -34,7 +34,9 @@ pub mod database_access;
 pub mod database_row_access;
 pub mod document_access;
 pub mod foreign_entity_access;
+pub mod form_access;
 pub mod initiative_access;
+pub mod pipeline_access;
 pub mod project_access;
 pub mod scheduled_action_access;
 pub mod team_access;
@@ -159,6 +161,9 @@ pub(in crate::outbound::pg_access_repo) async fn get_entity_users(
     entity_id: &uuid::Uuid,
     entity_type: EntityType,
 ) -> anyhow::Result<Vec<MacroUserIdStr<'static>>> {
+    if entity_type == EntityType::ForeignEntity {
+        return foreign_entity_access::get_foreign_entity_users(pool, entity_id).await;
+    }
     // because we don't store entity_access per email we need to also grab the owner
     // of the email to append to the list, plus any primary that delegates the inbox
     // via macro_user_links (shared inbox)

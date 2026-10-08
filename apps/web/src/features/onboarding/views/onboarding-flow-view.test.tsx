@@ -62,7 +62,7 @@ const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
 describe('onboarding flow', () => {
-  it('walks every step and finishes as a Guest', async () => {
+  it('walks every step and finishes with Free', async () => {
     const { fake, navigate } = setup({ next: '/channel/launch' });
 
     await heading('Create your workspace');
@@ -99,9 +99,9 @@ describe('onboarding flow', () => {
     );
 
     await heading('Free Claude & GPT for 30 days.');
-    // The scroll cue and the comparison share a label; the comparison's CTA finishes.
-    const guest = screen.getAllByRole('button', { name: 'Continue as Guest' });
-    fireEvent.click(guest[guest.length - 1]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
 
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith('/channel/launch')
@@ -172,6 +172,27 @@ describe('onboarding flow', () => {
     );
   });
 
+  it('preserves team inputs and focus when onboarding suggestions refresh', async () => {
+    const { fake } = setup({ resume: 'team' });
+    await heading('Built for teams.');
+    const name = screen.getByDisplayValue('Acme');
+    const email = screen.getByLabelText('Teammate 1 email');
+    fireEvent.input(name, { target: { value: 'My workspace' } });
+    fireEvent.input(email, { target: { value: 'chosen@example.com' } });
+    email.focus();
+
+    fake.update((world) => {
+      world.record.suggestedTeamDomain = 'updated.example.com';
+      world.contacts.push('new@updated.example.com');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('My workspace')).toBe(name);
+      expect(screen.getByDisplayValue('chosen@example.com')).toBe(email);
+      expect(document.activeElement).toBe(email);
+    });
+  });
+
   it('joins a pending team invite instead of creating a team', async () => {
     const { fake } = setup({
       resume: 'team',
@@ -198,7 +219,7 @@ describe('onboarding flow', () => {
     });
   });
 
-  it('finishes for a licensed team member without showing trial or Guest offers', async () => {
+  it('finishes for a licensed team member without showing trial or Free offers', async () => {
     const { navigate, redirect } = setup({
       resume: 'plan',
       world: {
@@ -217,7 +238,7 @@ describe('onboarding flow', () => {
     ).toBeNull();
     expect(screen.queryByRole('table')).toBeNull();
     expect(
-      screen.queryByRole('button', { name: 'Continue as Guest' })
+      screen.queryByRole('button', { name: 'Continue with Free' })
     ).toBeNull();
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')

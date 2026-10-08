@@ -47,15 +47,23 @@ export async function checkpoints(browser: Browser) {
   );
 }
 
-export async function waitForBackfill(browser: Browser, pages = 3) {
+const METADATA_LANES = [
+  ':email-signal-filter-metadata',
+  ':email-noise-filter-metadata',
+];
+
+export async function waitForBackfill(browser: Browser, pages: number) {
   await browser.waitUntil(
-    async () =>
-      (await checkpoints(browser)).some(
-        (checkpoint) =>
-          checkpoint.key.endsWith(':email-filter-metadata') &&
-          checkpoint.completed &&
-          checkpoint.pagesFetched === pages
-      ),
+    async () => {
+      const lanes = (await checkpoints(browser)).filter((checkpoint) =>
+        METADATA_LANES.some((suffix) => checkpoint.key.endsWith(suffix))
+      );
+      return (
+        lanes.length === METADATA_LANES.length &&
+        lanes.every((lane) => lane.completed) &&
+        lanes.reduce((total, lane) => total + lane.pagesFetched, 0) === pages
+      );
+    },
     {
       timeout: 120_000,
       timeoutMsg: `Real metadata backfill did not checkpoint all ${pages} pages`,

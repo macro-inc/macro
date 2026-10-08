@@ -147,9 +147,10 @@ impl Storage for OwnerOnlyStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         self.0
-            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .defer_mutation(id, claim, next_attempt_at_ms, error, server_failure)
             .await
     }
 
@@ -506,6 +507,7 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000002",
                     query: mutation,
                     operation_name: Some("SetEntityProperty"),

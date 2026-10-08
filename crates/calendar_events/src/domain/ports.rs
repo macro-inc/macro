@@ -12,12 +12,12 @@ use super::models::{
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent, CalendarEventDraft,
     CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert, CalendarGrantIntent,
     CalendarLinkTokenIdentity, CalendarMentionPreview, CalendarMentionRequestItem,
-    CalendarOccurrence, CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome,
-    CalendarReminderDispatchMessage, CalendarReminderFiring, CalendarReminderSweepSummary,
-    CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
-    GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
-    GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
-    StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
+    CalendarOccurrenceCursor, CalendarReminderDeliveryOutcome, CalendarReminderDispatchMessage,
+    CalendarReminderFiring, CalendarReminderSweepSummary, CalendarSyncStatus,
+    DisconnectedGoogleCalendar, DueCalendarReminder, GoogleCalendarSyncSnapshot,
+    GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet, GoogleSyncPlan, GoogleWatchChannel,
+    GoogleWatchConfig, OccurrenceListing, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+    TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -312,13 +312,20 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<OccurrenceListing>, Report>> + Send;
 
     /// Return the aggregate ingestion state of the requester's visible accounts.
     fn sync_status(
         &self,
         requester_id: &str,
     ) -> impl Future<Output = Result<CalendarSyncStatus, Report>> + Send;
+
+    /// List every calendar visible to the requester across owned and
+    /// delegated inboxes, primaries and writables first.
+    fn list_visible_calendars(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
     /// Resolve mentioned events to the requester's own projections, one
     /// result per requested item in order.
@@ -430,7 +437,7 @@ pub trait CalendarRepository: Send + Sync + 'static {
         range: OccurrenceRange,
         cursor: Option<CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> impl Future<Output = Result<Vec<(CalendarEvent, CalendarOccurrence)>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<OccurrenceListing>, Report>> + Send;
 
     /// Return the aggregate ingestion state across the requester's visible accounts.
     fn sync_status(
@@ -815,7 +822,8 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         key: CalendarBackfillJobKey,
     ) -> impl Future<Output = Result<CalendarBackfillClaim, Report>> + Send;
 
-    /// Mark the account as actively syncing after a successful claim.
+    /// Mark the account as actively syncing after a successful claim, preserving
+    /// any prior failure until successful completion establishes healthy coverage.
     fn mark_google_account_syncing(
         &self,
         key: CalendarBackfillJobKey,

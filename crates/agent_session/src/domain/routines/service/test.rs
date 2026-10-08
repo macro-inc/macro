@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use shared_entity_registry::OwnedPurgeOutcome;
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -62,6 +63,14 @@ struct Openings {
 }
 
 impl SessionOpener for Openings {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_managed_session(
         &self,
         request: OpenManagedSession,
@@ -125,6 +134,13 @@ impl AgentSessionNotificationRecipient for Controls {
         panic!("not a routine capability")
     }
     async fn session_deleted(&self, _: AgentSessionId) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
+    async fn purge_owned_session(
+        &self,
+        _: AgentSessionId,
+        _: &Owner,
+    ) -> SessionResult<OwnedPurgeOutcome> {
         panic!("not a routine capability")
     }
     async fn edit_queued_control(

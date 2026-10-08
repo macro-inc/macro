@@ -1,10 +1,4 @@
-import {
-  formatIncludedAi,
-  type IncludedAiCentsByTier,
-  PLANS,
-  type Plan,
-  type PlanTier,
-} from '@app/features/paywall/plans';
+import { PLANS } from '@app/features/paywall/plans';
 import { SlackImport } from '@app/features/slack-import/slack-import';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
@@ -16,6 +10,7 @@ import {
 } from '@core/component/TopBar/linkShare';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
@@ -41,7 +36,6 @@ import XIcon from '@phosphor/x.svg';
 import {
   useAiBillingSummaryQuery,
   useGithubLinkStatusQuery,
-  useIncludedAiCentsByTier,
 } from '@queries/auth';
 import {
   useJoinTeamMutation,
@@ -93,6 +87,7 @@ import {
   Switch,
 } from 'solid-js';
 import { z } from 'zod';
+import { ConnectAction } from './integration-ui';
 import {
   IntegrationRow,
   SettingsCard,
@@ -174,32 +169,24 @@ function RoleSelect(props: {
 
 type PlanOption = { value: PaidPlan; label: string; description: string };
 
-/** "$40 · $20 of AI" once the catalog has the allowance, otherwise "$40". */
-function planOption(plan: Plan, includedAi: string | undefined): PlanOption {
-  return {
-    value: plan.tier as PaidPlan,
-    label: plan.name,
-    description: includedAi
-      ? `$${plan.price} · ${includedAi} of AI`
-      : `$${plan.price}`,
-  };
-}
-
 /** Every paid plan a seat can be moved to, cheapest first. */
-function planOptionsFor(
-  includedAi: IncludedAiCentsByTier,
-  aiUsageBilling: boolean
-): PlanOption[] {
-  const allowance = (tier: PlanTier) =>
-    aiUsageBilling ? formatIncludedAi(includedAi[tier]) : undefined;
+function planOptionsFor(aiUsageBilling: boolean): PlanOption[] {
   return PLANS.flatMap((plan) =>
-    plan.tier === 'free' ? [] : [planOption(plan, allowance(plan.tier))]
+    plan.tier === 'free'
+      ? []
+      : [
+          {
+            value: plan.tier,
+            label: plan.name,
+            description: `$${plan.price}${aiUsageBilling && plan.tier === 'max' ? ' · 10× usage' : ''}`,
+          },
+        ]
   );
 }
 
 /**
  * The plan a member's seat is billed at. Until the generated `TeamMember`
- * schema carries `plan`, read it defensively; every seat starts on Premium.
+ * schema carries `plan`, read it defensively; every seat starts on Pro.
  */
 function memberPlan(member: TeamMember): PaidPlan {
   const plan = (member as TeamMember & { plan?: PaidPlan }).plan;
@@ -211,9 +198,8 @@ function PlanSelect(props: {
   onChange: (plan: PaidPlan) => void;
   disabled?: boolean;
 }) {
-  const includedAi = useIncludedAiCentsByTier();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
-  const options = () => planOptionsFor(includedAi(), aiUsageBilling().enabled);
+  const options = () => planOptionsFor(aiUsageBilling().enabled);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -951,6 +937,7 @@ function TeamManagement(props: {
   const teamQuery = useTeamQuery(() => props.teamId);
   const invitesQuery = useTeamInvitesQuery(() => props.teamId);
   const githubLink = useGithubLinkStatusQuery();
+  const { openSettings } = useSettingsState();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
@@ -1495,8 +1482,8 @@ function TeamManagement(props: {
         </SettingsSection>
 
         <SettingsSection title="Connections">
-          <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
           <SettingsCard>
+            <SlackImport teamId={props.teamId} isAdmin={isAdminOrOwner()} />
             <IntegrationRow
               icon={<GithubIcon />}
               title="GitHub App"
@@ -1504,15 +1491,21 @@ function TeamManagement(props: {
             >
               {/* The install callback rejects users without a linked GitHub
                   account, so don't offer the flow until they've connected one
-                  in their personal settings. */}
+                  on the Integrations page. */}
               <Show
                 when={githubLink.data?.status === 'linked'}
                 fallback={
-                  <span class="text-xs text-ink-muted">
-                    {githubLink.isLoading
-                      ? 'Loading…'
-                      : 'Connect your GitHub account first'}
-                  </span>
+                  <Show
+                    when={!githubLink.isLoading}
+                    fallback={
+                      <span class="text-xs text-ink-muted">Loading…</span>
+                    }
+                  >
+                    <ConnectAction
+                      label="Connect your GitHub account first"
+                      onClick={() => openSettings('Connected')}
+                    />
+                  </Show>
                 }
               >
                 <a

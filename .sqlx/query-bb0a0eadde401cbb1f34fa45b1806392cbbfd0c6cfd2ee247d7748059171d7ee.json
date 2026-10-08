@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO foreign_entity (id, foreign_entity_id, foreign_entity_source, metadata, stored_for_id, stored_for_auth_entity) VALUES ($1, 'macro/app/pull/7', 'github_pull_request', '{}', $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb0a0eadde401cbb1f34fa45b1806392cbbfd0c6cfd2ee247d7748059171d7ee"
+}

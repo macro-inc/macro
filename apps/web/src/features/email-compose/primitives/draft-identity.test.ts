@@ -19,7 +19,8 @@ function mount(
     draftId: 'local',
     threadId: 'local-thread',
     persistence: 'queued',
-  }
+  },
+  durableRecovery = false
 ) {
   let changed!: (settlement?: Settlement) => void;
   const unsubscribe = vi.fn();
@@ -33,6 +34,7 @@ function mount(
       {
         ...createComposeContext().drafts,
         readDraft,
+        retryDraft: durableRecovery ? vi.fn() : undefined,
         watchDrafts: (callback) => {
           changed = callback;
           return unsubscribe;
@@ -251,6 +253,26 @@ it('offers one explicit recovery and dismisses it when the session resets', asyn
     expect(root.notices.feedback.dismiss).toHaveBeenCalledWith(42);
     action?.onClick();
     expect(root.recover).toHaveBeenCalledOnce();
+  } finally {
+    root.dispose();
+  }
+});
+
+it('leaves durable draft recovery in the toolbar without a duplicate retry toast', async () => {
+  const root = mount(
+    async () => ({
+      draft: message('local'),
+      persistence: 'queued',
+      mutationUuid: 'local',
+    }),
+    undefined,
+    true
+  );
+  try {
+    root.changed({ mutationUuid: 'local', failed: true });
+    await vi.waitFor(() => expect(root.session.autosaveAllowed()).toBe(false));
+    expect(root.notices.feedback.failure).not.toHaveBeenCalled();
+    expect(root.report).toHaveBeenCalledOnce();
   } finally {
     root.dispose();
   }

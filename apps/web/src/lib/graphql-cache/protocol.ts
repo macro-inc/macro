@@ -176,6 +176,91 @@ export type LiveQueryUpdate = {
   optimistic: boolean;
 };
 
+/** Unit of a calendar span: UTC milliseconds, or local days since 1970-01-01. */
+export type CalendarSpanKind = 'timed' | 'allDay';
+
+/** Half-open `[start, end)` calendar span. */
+export type CalendarSpanWire = {
+  kind: CalendarSpanKind;
+  start: number;
+  end: number;
+};
+
+/** Applied change-log position of one email link; `seq` is a decimal i64. */
+export type CalendarLinkWatermarkWire = { linkId: string; seq: string };
+
+export type CalendarFreshness = 'fresh' | 'stale' | 'unknown';
+
+/**
+ * One calendar viewport over both span kinds. Empty spans read only the sync
+ * state (freshness and watermark).
+ */
+export type CalendarRangeCacheArgs = {
+  startMs: number;
+  endMs: number;
+  startDay: number;
+  endDay: number;
+  /** Restricts occurrences to one `GraphqlCalendarEvent:{id}` key. */
+  eventKey?: string;
+};
+
+export type CalendarRangeCacheResult =
+  | {
+      kind: 'range';
+      revision: CacheRevision;
+      /** `GraphqlCalendarOccurrence` keys ordered by kind, start, and key. */
+      occurrenceKeys: string[];
+      /** Requested spans never fetched from the server. */
+      gaps: CalendarSpanWire[];
+      freshness: CalendarFreshness;
+      /** Events whose occurrence set is unknown until a pending mutation settles. */
+      uncertainEventKeys: string[];
+      /** Whether a pending optimistic mutation shaped this result. */
+      optimistic: boolean;
+      /** Null until a commit carries a watermark. */
+      watermark: CalendarLinkWatermarkWire[] | null;
+    }
+  /** The native host predates calendar ranges; read calendars from the network. */
+  | { kind: 'unsupported' };
+
+/**
+ * `merge` lowers each link to a page's pre-read watermark; `advance` moves
+ * links still at `since` to the delta's `to` and keeps concurrent lowerings.
+ */
+export type CalendarWatermarkUpdateWire =
+  | { kind: 'merge'; links: CalendarLinkWatermarkWire[] }
+  | {
+      kind: 'advance';
+      since: CalendarLinkWatermarkWire[];
+      to: CalendarLinkWatermarkWire[];
+    };
+
+/** One atomic change to calendar coverage, cached calendar records, and sync state. */
+export type CalendarCommitArgs = {
+  /** Spans whose occurrences were fully fetched and written. */
+  coverage?: CalendarSpanWire[];
+  /** Events whose cached occurrences outside `occurrenceKeys` are deleted. */
+  replacedEvents?: Array<{ eventKey: string; occurrenceKeys: string[] }>;
+  /** Events deleted with every cached occurrence. */
+  deletedEventKeys?: string[];
+  deletedCalendarKeys?: string[];
+  /** Links no longer visible: their occurrences, events, and calendars are deleted. */
+  removedLinkIds?: string[];
+  watermark?: CalendarWatermarkUpdateWire;
+  freshness?: 'fresh' | 'stale';
+  /** Deletes every cached occurrence, event, coverage span, and the watermark first. */
+  reset?: boolean;
+};
+
+export type CalendarCommitCacheResult =
+  | {
+      kind: 'committed';
+      revision: CacheRevision;
+      /** Records the commit deleted. */
+      changed: string[];
+    }
+  | { kind: 'unsupported' };
+
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
@@ -268,6 +353,118 @@ export function isValidCacheSearchCursor(
     Object.hasOwn(value, 'recordKey') &&
     Number.isSafeInteger(value.timestampMs) &&
     isValidNormalizedRecordKey(value.recordKey)
+  );
+}
+
+const hasOnlyCalendarKeys = (
+  value: Record<string, unknown>,
+  keys: readonly string[]
+): boolean => Object.keys(value).every((key) => keys.includes(key));
+
+const isCalendarSpanWire = (value: unknown): value is CalendarSpanWire =>
+  isRecord(value) &&
+  hasOnlyCalendarKeys(value, ['kind', 'start', 'end']) &&
+  (value.kind === 'timed' || value.kind === 'allDay') &&
+  Number.isSafeInteger(value.start) &&
+  Number.isSafeInteger(value.end);
+
+const isCalendarWatermarkWire = (
+  value: unknown
+): value is CalendarLinkWatermarkWire[] =>
+  Array.isArray(value) &&
+  value.every(
+    (link) =>
+      isRecord(link) &&
+      hasOnlyCalendarKeys(link, ['linkId', 'seq']) &&
+      typeof link.linkId === 'string' &&
+      link.linkId.length > 0 &&
+      typeof link.seq === 'string' &&
+      /^[0-9]{1,19}$/.test(link.seq)
+  );
+
+const isOptionalWireArray = (
+  value: unknown,
+  item: (entry: unknown) => boolean
+): boolean =>
+  value === undefined || (Array.isArray(value) && value.every(item));
+
+const isCalendarWatermarkUpdateWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  ((value.kind === 'merge' &&
+    hasOnlyCalendarKeys(value, ['kind', 'links']) &&
+    isCalendarWatermarkWire(value.links)) ||
+    (value.kind === 'advance' &&
+      hasOnlyCalendarKeys(value, ['kind', 'since', 'to']) &&
+      isCalendarWatermarkWire(value.since) &&
+      isCalendarWatermarkWire(value.to)));
+
+/** Non-throwing calendar range validation for wire ingress. */
+export function isValidCalendarRangeArgs(
+  value: unknown
+): value is CalendarRangeCacheArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'startMs',
+      'endMs',
+      'startDay',
+      'endDay',
+      'eventKey',
+    ]) &&
+    Number.isSafeInteger(value.startMs) &&
+    Number.isSafeInteger(value.endMs) &&
+    Number.isSafeInteger(value.startDay) &&
+    Number.isSafeInteger(value.endDay) &&
+    (value.startMs as number) <= (value.endMs as number) &&
+    (value.startDay as number) <= (value.endDay as number) &&
+    (value.eventKey === undefined || isValidNormalizedRecordKey(value.eventKey))
+  );
+}
+
+/**
+ * Non-throwing calendar commit shape validation for wire ingress. The engine
+ * still validates typenames, duplicates, and size bounds.
+ */
+export function isValidCalendarCommitArgs(
+  value: unknown
+): value is CalendarCommitArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'coverage',
+      'replacedEvents',
+      'deletedEventKeys',
+      'deletedCalendarKeys',
+      'removedLinkIds',
+      'watermark',
+      'freshness',
+      'reset',
+    ]) &&
+    isOptionalWireArray(value.coverage, isCalendarSpanWire) &&
+    isOptionalWireArray(
+      value.replacedEvents,
+      (event) =>
+        isRecord(event) &&
+        hasOnlyCalendarKeys(event, ['eventKey', 'occurrenceKeys']) &&
+        isValidNormalizedRecordKey(event.eventKey) &&
+        Array.isArray(event.occurrenceKeys) &&
+        event.occurrenceKeys.every(isValidNormalizedRecordKey)
+    ) &&
+    isOptionalWireArray(value.deletedEventKeys, isValidNormalizedRecordKey) &&
+    isOptionalWireArray(
+      value.deletedCalendarKeys,
+      isValidNormalizedRecordKey
+    ) &&
+    isOptionalWireArray(
+      value.removedLinkIds,
+      (linkId) => typeof linkId === 'string' && linkId.length > 0
+    ) &&
+    (value.watermark === undefined ||
+      isCalendarWatermarkUpdateWire(value.watermark)) &&
+    (value.freshness === undefined ||
+      value.freshness === 'fresh' ||
+      value.freshness === 'stale') &&
+    (value.reset === undefined || typeof value.reset === 'boolean')
   );
 }
 
@@ -449,8 +646,21 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
+/** Read-only request snapshot; never contains a settlement lease token. */
+export type MutationInspection = Pick<
+  ClaimedMutation,
+  | 'transactionId'
+  | 'uuid'
+  | 'superseded'
+  | 'query'
+  | 'operationName'
+  | 'variables'
+  | 'clientMetadata'
+> & { optimisticData: unknown };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
+  clientMetadata?: Record<string, unknown> | null;
   transactionId: string;
   uuid: string;
   superseded: boolean;
@@ -463,6 +673,8 @@ export type ClaimedMutation = {
   /** Identity witness captured at enqueue time. */
   identity?: string;
   attemptCount: number;
+  /** Retryable server failures; transport failures do not consume this budget. */
+  serverFailureCount: number;
 };
 
 /** Outcome of the strict-head claim attempted immediately after enqueue. */
@@ -532,6 +744,7 @@ export type CacheRequest = { id: number } & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
       /** Incremental projection; requires a namespaced operation id. */
@@ -583,7 +796,9 @@ export type CacheRequest = { id: number } & (
       data: unknown;
       linkPatches?: OptimisticLinkPatchWire[];
       revalidations?: QueryRevalidationWire[];
+      clientMetadata?: Record<string, unknown>;
       identityBindings?: IdentityBindingWire[];
+      uncertainCalendarEventKeys?: string[];
       createdAtMs: number;
       owner: string;
       nowMs: number;
@@ -602,6 +817,7 @@ export type CacheRequest = { id: number } & (
       leaseGeneration: string;
       nextAttemptAtMs: number;
       error: string;
+      serverFailure?: boolean;
     }
   /** Atomically replace a claimed layer with the real network response. */
   | {
@@ -636,6 +852,15 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'entity-filter';
       request: EntityFilterCacheArgs;
+    }
+  | {
+      kind: 'calendar-range';
+      request: CalendarRangeCacheArgs;
+    }
+  /** Atomically apply calendar coverage, deletions, and sync state. */
+  | {
+      kind: 'calendar-commit';
+      commit: CalendarCommitArgs;
     }
   | {
       kind: 'inspect-query';

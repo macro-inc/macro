@@ -7,8 +7,8 @@ Opening **Ctrl-K** refreshes database discovery so a database created by AI or
 another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
 
-Creating from Home immediately shows the table tabs, **New table**, **Database
-actions**, and **AI**; no reload is needed to use them.
+Creating from Home immediately shows the table selector with its **+** menu, **Database
+actions**, and **AI** in the top bar; no reload is needed to use them.
 Databases open at
 `/app/database/<uuid>`. A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is an
@@ -56,6 +56,53 @@ PostHog unless the variable was set when it was built. With the flag off:
 
 `showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
 
+The table selector matches the inset project/channel navigation. In narrow panes,
+scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
+The **+** menu stays visible, and focusing or selecting a table reveals its tab.
+
+The grid’s sticky bottom summary shows the saved records in the current view.
+Choose **+ Add calculation** in a column’s footer for filled/unique counts, or
+sum, average, min, and max on numeric columns. Numeric columns default to Sum.
+Calculation choices are local to the open table, not saved with the view.
+
+## CRM pipelines
+
+Clicking a company/contact cell opens its picker while preserving the current
+label. Type to search for a replacement; Escape cancels and restores cell focus
+without changing the record. The picker opens without an entrance animation.
+
+Pipelines are created from the CRM sidebar's **New pipeline** action. Their
+records are read and edited through the pipeline's access; they are not standalone
+database app entities and do not appear in the Databases list. Use **Share → Team access**
+in the CRM to switch between **None** (private) and **Edit** (team). A pipeline's primary
+company/contact reference is required. The same company or contact can appear
+in multiple independent rows, including through the row menu's **Duplicate** action.
+The reference column and table are protected against removal or type changes. See
+[Customers (CRM)](surfaces.md#customers-crm--appcomponentcompanies) for the flow.
+
+Teams migrated from the legacy CRM have a team-shared **Sales** pipeline with
+their visible companies and copied Stage, Owner and Revenue values, including
+closed and unstaged companies. Hidden companies are excluded. The migration is
+a one-time copy: later edits to a company’s legacy properties do not synchronize
+with its pipeline row. The pipeline can be renamed, customized or trashed normally.
+
+Pipeline primary columns use the shared database column protections: their header
+must disable deletion and type changes. Renaming and reordering remain allowed.
+The primary column is non-nullable: inserting a row without its record, clearing
+its cell, or choosing an empty list fails without saving any of the batch.
+Company pipelines accept one company; contact pipelines accept one contact.
+The referenced record can belong to another team if the editor can access it;
+pipeline sharing does not grant access to the referenced record's details.
+
+Pipelines use the shared database editor. Verify that column-menu sorting orders
+all records, including records beyond the first page, and that opening a record
+keeps it available when a view filter excludes it. Cell edits and **Add column**
+use pipeline authorization. Viewer grants hide editing controls. The CRM editor
+fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
+adapter and shared provider against local test responses.
+Pipelines poll every five seconds. A poll that returns unchanged data must not
+remount company previews or request them again.
+
 ## Properties and records
 
 An embedded records editor can allow cell edits while its host controls the
@@ -88,7 +135,23 @@ type change never empties a value; only deleting a cell, row, column, table or
 option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
 text. Changing a placement never changes another table that uses the same property.
-A relation can hold multiple records. **Delete column** opens a confirmation;
+A relation can hold multiple records.
+
+**Formula columns.** **Change type → Formula** opens the formula editor under the
+header. On a new, never-filled column the formula column takes its place and name;
+on any other column it is added right after it (named "Formula"). Type the formula
+(`{Unit price} * Quantity`, `Due + 7`, `Due - Started`) or click the column and
+`+ − × ÷ ( )` buttons below the input; only number, date and other formula columns
+are offered. The line under the input says whether it gives a number or a date, or
+why it does not parse (`The formula ends too soon.`, `A date can't be multiplied
+by a number.`); **Save** stays disabled until it does, and Enter saves. Names with
+spaces go in braces. Numbers added to a date count days; a date minus a date is
+the days between them. An empty number counts as 0 unless every input is empty.
+Formula columns show an ƒ icon, their cells are read-only, and their header menu
+has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+at once, and sort and filter like numbers or dates. Deleting a column a formula uses
+is refused ("Total's formula uses Quantity; change that formula first").
+**Delete column** opens a confirmation;
 it removes this table’s column and values while preserving other tables.
 Drag a column header left or right to reorder it, or use **Move left / Move right**.
 To add a column next to another, right-click its header and choose **Insert left** or
@@ -120,6 +183,8 @@ focused (**Search or create…**). Typing filters the options; when the typed na
 not an option yet, a **Create “…”** row adds it, picks it, and keeps focus (on the
 cell for a single select, in the search for a multi-select, which stays open). Arrow
 keys move through the rows and Enter picks; **Clear value** empties the cell.
+From a freshly opened picker, Down starts at the first row and Up starts at the
+last; both wrap around at the ends.
 Multi-select pickers toggle each option and keep the others.
 
 Each option row has a **⋯** button (`Edit <option>`) that opens the option editor:
@@ -131,10 +196,12 @@ When the column's property is used outside this database, the editor says
 header's **Edit options** menu item and from a board lane header. Changes show at
 once and are rolled back if the server refuses them.
 
-**New table**, beside the table tabs in the toolbar under the split header, creates another table
-with a Name column. Enter a table name and press Enter. The table and its
-column are one request, so a failure creates neither and the dialog stays open
-to retry.
+**+ → New table**, at the right edge of the table selector in the split header,
+adds an inline name field to the tab strip and focuses it immediately. Enter a
+name and press Enter or leave the field to create the table with a Name column.
+Escape cancels the draft; leaving an empty name also cancels. Duplicate names
+are rejected inline. The table and its column are one request, so a failure
+creates neither and keeps the draft available to retry with Enter.
 To rename a table, right-click its tab and choose **Rename table**, double-click
 the tab, or focus it and press F2. These actions also work on inactive tabs.
 The tab itself becomes an input. Enter or leaving the input saves; Escape cancels.
@@ -162,7 +229,9 @@ skipped. Select values open the option picker; checkboxes change
 directly. Type on a selected select cell to search its options; Enter chooses a
 match, and Tab chooses the highlighted option or typed match before moving on.
 Number cells display thousands separators (for example, `100,000`); opening an
-editor shows the raw number for editing.
+editor shows the raw number for editing. Invalid numbers and integers outside the
+safe integer range stay in the editor with **Enter a valid number** instead of
+saving a rounded value. Signed decimals and scientific notation remain supported.
 
 Date cells open Macro's date selector (the one tasks use): type a date or phrase
 such as `tomorrow`, `3d`, or `feb 17` and press Enter, or pick **Custom date...**
@@ -239,10 +308,13 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) offers **Table** or **Board**, a name, and
-for a board **Group by**, then **Create view**. The new view starts from what is on
-screen (its filter and sort) and opens. A board groups by a single **Select**
-column; multi-selects and checkboxes cannot group one. Double-click a view tab, press
+**New view** (the **+** beside the tabs) opens a dropdown with **Table** and
+**Board**. Choosing one immediately creates and opens it with an available default
+name, keeping the current filter and sort. A board starts grouped by the first
+single-select or single-person column, or creates a Status column if there are
+none. After creation, use the **Group by** dropdown in the board toolbar to change
+the grouping column. Card settings stay; lane ordering resets for the new groups.
+Multi-selects and checkboxes cannot group a board. Double-click a view tab, press
 F2, or right-click it and choose **Rename view** to rename it in place (Enter saves,
 Escape cancels). **Delete view** asks for confirmation; the records stay. Drag a tab
 to reorder the views.
@@ -271,7 +343,7 @@ not show it. Escape closes the search and returns focus to where it was opened
 from. The term is kept while you switch tables.
 
 A view's layout, Table or Board, is chosen when the view is created. Creating a
-view closes the dialog and opens its tab immediately while saving. If saving
+view closes the menu and opens its tab immediately while saving. If saving
 fails, the view shows **Retry** and **Dismiss**; retry checks whether the first
 attempt committed before creating anything again. Columns
 cannot be hidden, and they are added only from **Add column** after the headers or
@@ -374,6 +446,9 @@ has six database tools: `ListDatabases`, `DescribeDatabase`, `QueryDatabase`,
 `QueryDatabase` reads and changes rows and handles schema changes through SQL
 (`CREATE`, `ALTER`, and `DROP`). The assistant reads the current schema before
 editing and checks actual results before reporting success.
+A supplied `databaseId` must refer to an accessible database before rows or
+schema changes resolve. Valid selections still allow qualified joins across
+accessible databases.
 
 Query tool rows say what the query did in words (**Read Invites**, **Updated 3
 rows in Guests**, **Changed Price to number**, or **Queried Party Planner**) and
@@ -463,8 +538,9 @@ completed import does not create a second table.
 
 ## Side panel and activity
 
-The split header's `Show Side Panel` toggle (or `]`) opens the database side panel,
-closed by default. **Details** shows the Owner and Created time. **Activity** (behind
+The split header's `Show Side Panel` toggle (or `]`) opens the shared floating details panel,
+closed by default. It overlays the database without resizing its content; click
+outside to dismiss it. **Details** shows the Owner and Created time. **Activity** (behind
 the `enable-entity-activity-section` flag, like documents) lists who created,
 renamed, edited, shared, trashed, or restored the database, with the same glyph rail
 and folding as a document's Activity section. Every write is one entry: a cell edit,
@@ -484,3 +560,16 @@ Schema edits update their UI optimistically and finish after the write commits;
 they do not wait for the background catalog refresh. A refused edit rolls back
 its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
+
+### Embedded database editors
+
+The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
+row queries and operation batches from that host's API. Verify cell edits and
+column edits on the host surface, not only in the Macro database block. A host
+without schema-edit permission offers no add, rename, delete or type-change
+actions. Board card dragging requires a supplied position writer; a board without
+one is still readable and must not report a successful move.
+
+For local UI regression coverage, the database browser fixtures include an API
+host with no Macro database entity. Its reads are paginated and its edits pass
+through the same controller used by the database block.

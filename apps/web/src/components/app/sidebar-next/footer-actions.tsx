@@ -1,17 +1,20 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
+import { rememberBootShell } from '@components/app/boot-shell';
 import { UserIcon } from '@core/component/UserIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
+import { useTauri } from '@macro/tauri';
 import GearIcon from '@phosphor/gear.svg';
 import GearFillIcon from '@phosphor-fill/gear-fill.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
-import { createMemo, Show } from 'solid-js';
+import { createEffect, createMemo, Show } from 'solid-js';
+import { NativeUpdateButton } from './native-update-button';
 import { NavGlyph } from './nav-glyph';
 
 /**
@@ -42,6 +45,10 @@ const MobileAppButton = () => {
   const isTabAvailable = useSettingsTabAvailable();
 
   const isActive = () => isSettingsActive() && activeTabId() === 'Mobile App';
+
+  createEffect(() =>
+    rememberBootShell({ mobileApp: isTabAvailable('Mobile App') })
+  );
 
   const open = (event: MouseEvent) => {
     event.preventDefault();
@@ -75,14 +82,15 @@ const MobileAppButton = () => {
 };
 
 /**
- * The rail's bottom actions: the mobile app link, then Settings, opened like
- * any other rail view. The gear carries the signed-in account's photo as a
- * badge, so people with several accounts can still tell which one they are in.
+ * The rail's bottom actions: a ready app update, the mobile app link, then
+ * Settings, opened like any other rail view. The gear carries the account photo
+ * as a badge, so people with several accounts can tell which one they are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
 }) => {
   const analytics = useAnalytics();
+  const tauri = useTauri();
   const { openSettings, openSettingsInSplit, settingsOpen, activeTabId } =
     useSettingsState();
   const userId = useUserId();
@@ -110,6 +118,16 @@ export const FooterActions = (props: {
 
   return (
     <div class="flex w-full shrink-0 flex-col items-center gap-1">
+      <Show when={tauri}>
+        {(native) => (
+          <Show when={native().nativeUpdateStatus().status === 'Ready'}>
+            <NativeUpdateButton
+              preparing={native().nativeUpdatePreparing()}
+              onRestart={() => void native().restartNativeUpdate()}
+            />
+          </Show>
+        )}
+      </Show>
       <MobileAppButton />
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}

@@ -25,7 +25,6 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
-  makeEditReminderAction,
   makeFavoriteAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -36,7 +35,6 @@ import {
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
-  markReminderTargetDone,
 } from './index';
 
 type UseEntityActionHotkeysOptions = {
@@ -103,7 +101,6 @@ export const useEntityActionHotkeys = (
   const copyBranchNameAction = makeCopyBranchNameAction();
 
   const copyEntityIdAction = makeCopyEntityIdAction();
-  const editReminderAction = makeEditReminderAction();
 
   const shareAction = makeShareAction();
 
@@ -149,13 +146,7 @@ export const useEntityActionHotkeys = (
     return options.viewContext().supportsMarkDone;
   };
 
-  // Declared here rather than with the other actions above because its
-  // mark-done follow-up advances the list the same way 'e' does, through
-  // `openNextEntity`. Setting a reminder puts the row down: it marks it done,
-  // so the list drops it and the reminder is what brings it back.
-  const createReminderAction = makeCreateReminderAction({
-    onCreated: markReminderTargetDone(markDone, openNextEntity),
-  });
+  const createReminderAction = makeCreateReminderAction();
 
   // Property editor setup
   const allProperties = useAllProperties();
@@ -336,39 +327,18 @@ export const useEntityActionHotkeys = (
     }).withGroup(group);
   }
 
-  /**
-   * Whether 'r' should open the reminder editor rather than rename.
-   *
-   * The two are mutually exclusive rather than merely unlikely to overlap:
-   * `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
-   * reminder row's `ownerId` is always `''` while `userId()` is a macro id or
-   * undefined — so rename never claims a reminder, and sharing the key beats
-   * leaving 'r' dead on one. Its name is its description, which only the
-   * reminders API can change.
-   */
-  const editsReminder = (): boolean => {
-    const entities = getEntitiesForAction();
-    return entities.length === 1 && editReminderAction.canExecute(entities[0]);
-  };
-
-  // Rename - 'r'. Edits the reminder instead when the row is one.
+  // Rename - 'r'.
   registerHotkey({
     hotkey: ['r'],
     hotkeyToken: TOKENS.entity.action.rename,
     scopeId,
     description: () => {
-      if (editsReminder()) return 'Edit reminder';
       const count = getEntitiesForAction().length;
       return count > 1 ? 'Rename items' : 'Rename item';
     },
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-
-      if (editsReminder()) {
-        editReminderAction.executeWithSoup(entities, list);
-        return true;
-      }
 
       if (!entities.every(renameAction.canExecute)) return false;
 
@@ -377,7 +347,6 @@ export const useEntityActionHotkeys = (
     },
     condition: () => {
       if (condition && !condition()) return false;
-      if (editsReminder()) return true;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(renameAction.canExecute);
     },

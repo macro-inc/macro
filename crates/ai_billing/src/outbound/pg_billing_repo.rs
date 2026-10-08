@@ -1,5 +1,6 @@
 //! Postgres adapter for the billing tables (`ai_billing_account`,
-//! `ai_credit_ledger`, `ai_overage_charge`, `ai_billing_period_allowance`).
+//! `ai_credit_ledger`, `ai_overage_charge`, `ai_credit_reload`,
+//! `ai_billing_period_allowance`).
 //!
 //! Frozen allowances live in `ai_billing_period_allowance.included_cost_cents_by_user`
 //! (cost cents). The legacy `included_cents_by_user` column predates the at-cost
@@ -14,9 +15,11 @@ mod test;
 use super::pg_funding_repo::{credit_commitments, lock_payer, postpaid_commitments};
 use crate::domain::financial::legacy_cap_remaining;
 use crate::domain::{
-    AiPricing, AllowanceStore, BillingError, BillingRepo, BillingSettings, OpenPeriodStart,
-    OverageChargeStatus, PendingCharge, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
-    SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState, plan_settlement,
+    AiPricing, AllowanceStore, AutoReloadThresholds, BillingError, BillingPeriod, BillingRepo,
+    BillingSettings, CreditReloadStatus, OpenPeriodStart, OverageChargeStatus, PendingCharge,
+    PendingReload, PeriodAllowance, PeriodLedger, ReloadState, ResolvedReload, Result,
+    SeatAllowance, SeatGeneration, SettlementOutcome, SettlementPolicy, SettlementState,
+    plan_reload, plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -45,6 +48,34 @@ fn storage(e: sqlx::Error) -> BillingError {
 
 fn funding_storage(e: ai_usage::domain::financial::FinancialError) -> BillingError {
     BillingError::Storage(anyhow::anyhow!(e))
+}
+
+fn invalid_payer(e: impl std::fmt::Display) -> BillingError {
+    BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}"))
+}
+
+async fn book_credit_reload(
+    conn: &mut sqlx::PgConnection,
+    payer: &MacroUserIdStr<'_>,
+    amount_cents: i64,
+    stripe_invoice_id: &str,
+) -> Result<bool> {
+    let id = macro_uuid::generate_uuid_v7();
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)
+        VALUES ($1, $2, 'purchase', $3, $4, 'Automatic reload')
+        ON CONFLICT (stripe_reference) WHERE stripe_reference IS NOT NULL DO NOTHING
+        "#,
+        id,
+        payer.as_ref(),
+        amount_cents,
+        stripe_invoice_id,
+    )
+    .execute(conn)
+    .await
+    .map_err(storage)?;
+    Ok(result.rows_affected() == 1)
 }
 
 impl BillingRepo for PgBillingRepo {
@@ -78,6 +109,8 @@ impl BillingRepo for PgBillingRepo {
         let row = sqlx::query!(
             r#"
             SELECT overage_enabled, overage_limit_cents, overage_suspended_at,
+                   auto_reload_minimum_cents, auto_reload_target_cents,
+                   auto_reload_monthly_limit_cents, auto_reload_suspended_at,
                    period_start, period_end, seat_generation
             FROM ai_billing_account
             WHERE user_id = $1
@@ -93,6 +126,12 @@ impl BillingRepo for PgBillingRepo {
                 overage_enabled: r.overage_enabled,
                 overage_limit_cents: r.overage_limit_cents,
                 overage_suspended_at: r.overage_suspended_at,
+                auto_reload: AutoReloadThresholds {
+                    minimum_cents: r.auto_reload_minimum_cents,
+                    target_cents: r.auto_reload_target_cents,
+                    monthly_limit_cents: r.auto_reload_monthly_limit_cents,
+                },
+                auto_reload_suspended_at: r.auto_reload_suspended_at,
                 period_anchor: r.period_start.zip(r.period_end),
                 seat_generation: SeatGeneration::from_raw(r.seat_generation),
             })
@@ -478,7 +517,8 @@ impl BillingRepo for PgBillingRepo {
             .map_err(funding_storage)?;
         let legacy_limit = legacy_cap_remaining(account.overage_limit_cents, committed_postpaid);
         let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
-        let overage_active = account.overage_enabled
+        let overage_active = policy.overage_active
+            && account.overage_enabled
             && account.overage_suspended_at.is_none()
             && account.overage_limit_cents > 0;
 
@@ -544,7 +584,9 @@ impl BillingRepo for PgBillingRepo {
         .fetch_all(&mut *tx)
         .await
         .map_err(storage)?;
-        let orphaned = owed.iter().find(|row| row.status == "pending");
+        let orphaned = owed
+            .iter()
+            .find(|row| policy.overage_active && row.status == "pending");
         let retryable = owed.iter().find(|row| {
             row.status == "failed"
                 && overage_active
@@ -655,11 +697,8 @@ impl BillingRepo for PgBillingRepo {
         .fetch_optional(&self.pool)
         .await
         .map_err(storage)?;
-        row.map(|r| {
-            MacroUserIdStr::try_from(r.user_id)
-                .map_err(|e| BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}")))
-        })
-        .transpose()
+        row.map(|r| MacroUserIdStr::try_from(r.user_id).map_err(invalid_payer))
+            .transpose()
     }
 
     async fn latest_charge_status(
@@ -686,6 +725,350 @@ impl BillingRepo for PgBillingRepo {
                 })
             })
             .transpose()
+    }
+
+    async fn update_auto_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        enabled: bool,
+        overage_limit_cents: i64,
+        thresholds: Option<&AutoReloadThresholds>,
+    ) -> Result<()> {
+        // A new row takes the defaults when no thresholds are given; an
+        // existing row keeps what it has.
+        let replace_thresholds = thresholds.is_some();
+        let thresholds = thresholds.copied().unwrap_or_default();
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_account (
+                user_id, overage_enabled, overage_limit_cents,
+                auto_reload_minimum_cents, auto_reload_target_cents,
+                auto_reload_monthly_limit_cents
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (user_id) DO UPDATE
+            SET overage_enabled = EXCLUDED.overage_enabled,
+                overage_limit_cents = EXCLUDED.overage_limit_cents,
+                auto_reload_minimum_cents = CASE
+                    WHEN $7 THEN EXCLUDED.auto_reload_minimum_cents
+                    ELSE ai_billing_account.auto_reload_minimum_cents
+                END,
+                auto_reload_target_cents = CASE
+                    WHEN $7 THEN EXCLUDED.auto_reload_target_cents
+                    ELSE ai_billing_account.auto_reload_target_cents
+                END,
+                auto_reload_monthly_limit_cents = CASE
+                    WHEN $7 THEN EXCLUDED.auto_reload_monthly_limit_cents
+                    ELSE ai_billing_account.auto_reload_monthly_limit_cents
+                END,
+                overage_suspended_at = NULL,
+                auto_reload_suspended_at = NULL,
+                updated_at = NOW()
+            "#,
+            payer.as_ref(),
+            enabled,
+            overage_limit_cents,
+            thresholds.minimum_cents,
+            thresholds.target_cents,
+            thresholds.monthly_limit_cents,
+            replace_thresholds,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
+    }
+
+    async fn reserve_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        chargeable_customer_cents: i64,
+        now: DateTime<Utc>,
+    ) -> Result<Option<PendingReload>> {
+        let payer = payer.as_ref();
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+
+        // Serialize reloads with settlements and purchases on the account row.
+        lock_payer(&mut tx, payer).await.map_err(funding_storage)?;
+        let account = sqlx::query!(
+            r#"
+            SELECT overage_enabled, overage_limit_cents, overage_suspended_at,
+                   auto_reload_minimum_cents, auto_reload_target_cents,
+                   auto_reload_monthly_limit_cents, auto_reload_suspended_at
+            FROM ai_billing_account
+            WHERE user_id = $1
+            "#,
+            payer,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?;
+        let settings = BillingSettings {
+            overage_enabled: account.overage_enabled,
+            overage_limit_cents: account.overage_limit_cents,
+            overage_suspended_at: account.overage_suspended_at,
+            auto_reload: AutoReloadThresholds {
+                minimum_cents: account.auto_reload_minimum_cents,
+                target_cents: account.auto_reload_target_cents,
+                monthly_limit_cents: account.auto_reload_monthly_limit_cents,
+            },
+            auto_reload_suspended_at: account.auto_reload_suspended_at,
+            ..Default::default()
+        };
+        if !settings.auto_reload_active() {
+            tx.rollback().await.map_err(storage)?;
+            return Ok(None);
+        }
+
+        // A reload still owed from an earlier pass comes first, so the retry
+        // reuses its id (and with it its Stripe idempotency keys and invoice)
+        // instead of reserving a second reload while the first can still
+        // collect. A pending reload whose collector died before opening an
+        // invoice is handed back as is. A failed reload that reached Stripe
+        // keeps its invoice open (`auto_advance`) and is retried on that same
+        // invoice now that the payer has re-enabled reloads. Any other
+        // pending reload is still with Stripe and blocks a new one until the
+        // webhook resolves it.
+        let open = sqlx::query!(
+            r#"
+            SELECT id, amount_cents, stripe_invoice_id, status::text AS "status!",
+                   (status = 'pending'
+                    AND stripe_invoice_id IS NULL
+                    AND updated_at < NOW() - INTERVAL '10 minutes') AS "orphaned!"
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND (status = 'pending'
+                   OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))
+            ORDER BY created_at
+            FOR UPDATE
+            "#,
+            payer,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(storage)?;
+        if let Some(row) = open.iter().find(|row| row.orphaned) {
+            tx.commit().await.map_err(storage)?;
+            return Ok(Some(PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            }));
+        }
+        if let Some(row) = open.iter().find(|row| row.status == "failed") {
+            sqlx::query!(
+                r#"
+                UPDATE ai_credit_reload
+                SET status = 'pending', updated_at = NOW()
+                WHERE id = $1
+                "#,
+                row.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+            tx.commit().await.map_err(storage)?;
+            return Ok(Some(PendingReload {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            }));
+        }
+        if !open.is_empty() {
+            tx.rollback().await.map_err(storage)?;
+            return Ok(None);
+        }
+
+        // Same balance as settlement: ledger sum less V1 funding commitments.
+        let balance = sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(SUM(delta_cents), 0)::bigint AS "balance!"
+            FROM ai_credit_ledger
+            WHERE user_id = $1
+            "#,
+            payer,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?;
+        let commitments = credit_commitments(&mut tx, payer)
+            .await
+            .map_err(funding_storage)?;
+        let balance = commitments
+            .legacy_available_cents(balance)
+            .map_err(funding_storage)?;
+        let ledger = read_period_ledger(&mut tx, payer, period_start).await?;
+        let covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
+        let uncovered_cents = (chargeable_customer_cents - covered).max(0);
+        // A failed reload that reached Stripe may still be collected by its
+        // retries, so it counts against the limit like a pending one.
+        let month = BillingPeriod::calendar_month(now);
+        let spent_this_month_cents = sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
+              AND created_at >= $2
+              AND created_at < $3
+            "#,
+            payer,
+            month.start,
+            month.end,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(storage)?;
+
+        let amount_cents = plan_reload(
+            ReloadState {
+                credit_balance_cents: balance,
+                uncovered_cents,
+                spent_this_month_cents,
+            },
+            &settings.auto_reload,
+        );
+        let Some(amount_cents) = amount_cents else {
+            tx.rollback().await.map_err(storage)?;
+            return Ok(None);
+        };
+
+        let id = macro_uuid::generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_credit_reload (id, user_id, amount_cents, status)
+            VALUES ($1, $2, $3, 'pending')
+            "#,
+            id,
+            payer,
+            amount_cents,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(storage)?;
+        tx.commit().await.map_err(storage)?;
+        Ok(Some(PendingReload {
+            id,
+            amount_cents,
+            stripe_invoice_id: None,
+        }))
+    }
+
+    async fn finish_credit_reload(
+        &self,
+        reload_id: Uuid,
+        stripe_invoice_id: Option<&str>,
+        status: CreditReloadStatus,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE ai_credit_reload
+            SET stripe_invoice_id = COALESCE($2, stripe_invoice_id),
+                status = ($3::text)::ai_credit_reload_status,
+                updated_at = NOW()
+            WHERE id = $1
+            "#,
+            reload_id,
+            stripe_invoice_id,
+            status.to_string(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
+    }
+
+    async fn record_credit_reload(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        amount_cents: i64,
+        stripe_invoice_id: &str,
+    ) -> Result<bool> {
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        lock_payer(&mut tx, payer.as_ref())
+            .await
+            .map_err(funding_storage)?;
+        let booked = book_credit_reload(&mut tx, payer, amount_cents, stripe_invoice_id).await?;
+        tx.commit().await.map_err(storage)?;
+        Ok(booked)
+    }
+
+    async fn resolve_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        status: CreditReloadStatus,
+    ) -> Result<Option<ResolvedReload>> {
+        let mut tx = self.pool.begin().await.map_err(storage)?;
+        let Some(payer) = sqlx::query_scalar!(
+            "SELECT user_id FROM ai_credit_reload WHERE stripe_invoice_id = $1",
+            stripe_invoice_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(storage)?
+        else {
+            return Ok(None);
+        };
+        let payer = MacroUserIdStr::try_from(payer).map_err(invalid_payer)?;
+        // Match the account-before-reload lock order used by reload reservation.
+        lock_payer(&mut tx, payer.as_ref())
+            .await
+            .map_err(funding_storage)?;
+        // `paid` is terminal and re-reporting the current status changes
+        // nothing, so a late or duplicate webhook cannot un-pay a reload or
+        // book its credits twice.
+        let Some(row) = sqlx::query!(
+            r#"
+            UPDATE ai_credit_reload
+            SET status = ($2::text)::ai_credit_reload_status, updated_at = NOW()
+            WHERE stripe_invoice_id = $1
+              AND status <> 'paid'
+              AND status <> ($2::text)::ai_credit_reload_status
+            RETURNING user_id, amount_cents
+            "#,
+            stripe_invoice_id,
+            status.to_string(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(storage)?
+        else {
+            return Ok(None);
+        };
+        let resolved = ResolvedReload {
+            payer: MacroUserIdStr::try_from(row.user_id).map_err(invalid_payer)?,
+            amount_cents: row.amount_cents,
+        };
+        if status == CreditReloadStatus::Paid {
+            book_credit_reload(
+                &mut tx,
+                &resolved.payer,
+                resolved.amount_cents,
+                stripe_invoice_id,
+            )
+            .await?;
+        }
+        tx.commit().await.map_err(storage)?;
+        Ok(Some(resolved))
+    }
+
+    async fn suspend_auto_reload(&self, payer: &MacroUserIdStr<'_>) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_account (user_id, auto_reload_suspended_at)
+            VALUES ($1, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET auto_reload_suspended_at
+                    = COALESCE(ai_billing_account.auto_reload_suspended_at, NOW()),
+                updated_at = NOW()
+            "#,
+            payer.as_ref(),
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
     }
 }
 

@@ -13,8 +13,8 @@ use crate::domain::error::EgressError;
 use crate::domain::model::{
     EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, ProxyRequest,
     ProxyResponse, SessionToken, TOOLS_CALL_METHOD, UpstreamCall, disconnected_tool_result,
-    ensure_method_allowed, is_macro_staff, not_connected_tool_result, peek_json_rpc,
-    sanitize_request_headers, sanitize_response_headers,
+    ensure_method_allowed, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
+    sanitize_response_headers,
 };
 use crate::domain::observed_body::{ObservedBody, StreamIdentity};
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
@@ -141,17 +141,6 @@ where
         let span = tracing::Span::current();
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
-
-        // Workspace and Git egress remain staff-only. Session-scoped preview tools
-        // are available to every session owner, like the internal MCP tools.
-        if !matches!(&target, EgressTarget::McpServer(McpDestination::Preview))
-            && !is_macro_staff(&grant.owner)
-        {
-            tracing::warn!(owner = %grant.owner, "refusing egress for a session owned outside macro.com");
-            return Err(EgressError::Unauthenticated(
-                "the session owner is not Macro staff",
-            ));
-        }
 
         let call = match &target {
             EgressTarget::McpServer(McpDestination::Preview) => {

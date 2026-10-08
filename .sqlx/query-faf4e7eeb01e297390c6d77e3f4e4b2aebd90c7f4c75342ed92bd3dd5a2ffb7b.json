@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT calendar.sync_token, calendar.synced_at, calendar.materialized_starts_at, source.provider_access_role FROM calendars calendar JOIN calendar_event_sources source ON source.calendar_id = calendar.id WHERE source.event_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "synced_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "materialized_starts_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider_access_role",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "faf4e7eeb01e297390c6d77e3f4e4b2aebd90c7f4c75342ed92bd3dd5a2ffb7b"
+}

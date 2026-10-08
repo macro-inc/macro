@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM database_rows WHERE table_id = $1\n                     AND ($2::uuid[] IS NULL OR id = ANY($2))\n                     AND ($3::uuid IS NULL OR id > $3) ORDER BY id LIMIT 1000",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3b505e6d80b018da1a1ade0143f3ce5ab67125262bea35d4078e850471726dd8"
+}

@@ -20,6 +20,7 @@ async fn edit(engine: &mut Engine<TursoStorage>, uuid: u128, value: &str) -> Mut
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: &uuid::Uuid::from_u128(uuid).to_string(),
                 query: MUTATION,
                 operation_name: None,
@@ -66,6 +67,7 @@ async fn apply(
     match op {
         Operation::Enqueue => {
             engine.begin_optimistic_write(None, BeginOptimisticWrite {
+                client_metadata: None,
                 uuid: &uuid::Uuid::from_u128(1).to_string(), query: MUTATION,
                 operation_name: None, variables: &Map::new(),
                 data: &json!({"setEntityProperty":{"id":"property","displayName":"replacement"}}),

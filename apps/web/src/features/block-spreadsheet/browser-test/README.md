@@ -31,12 +31,16 @@ sheet creation and rename, cross-sheet calculation, permission changes, and
 XLSX import/export through native browser file APIs. They also verify atomic
 import undo/redo, restoring a distant selection across tabs, and formatting
 without a calculation-status flash or grid remount. Further regressions cover
-immediate typing after adding or duplicating sheets, returning focus from toolbar
+immediate typing after the workbook loads (without taking focus from a control
+reached while loading) and after adding or duplicating sheets, returning focus from toolbar
 fields, range formatting/sorting, and footer controls down to a 360-pixel panel.
-Imported conditional formatting, validation lists and notes, imported charts
+Dropdowns added, used and removed from the toolbar and cell menus,
+imported conditional formatting, validation lists and notes, imported charts
 and images (drawn over their cells, following edits, deleted and restored with
 undo, and kept in the download), radar, bubble, stock and contour charts
 (imported, redrawn after edits, inserted from More charts and downloaded),
+100% stacked columns from the insert menu and combo charts chosen in
+Edit chart,
 shapes, text boxes, groups, SmartArt and an EMF logo (drawn, a linked text box
 following its cell, moved and downloaded), GETPIVOTDATA formulas of an imported
 pivot table (calculated, following an edit to the table and downloaded), pivot

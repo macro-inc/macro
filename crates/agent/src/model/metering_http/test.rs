@@ -120,6 +120,7 @@ fn admission(request: BeginInvocation) -> AuthorizedInvocation {
 struct Transport {
     calls: Arc<AtomicUsize>,
     bodies: Arc<Mutex<Vec<Value>>>,
+    headers: Arc<Mutex<Vec<http_client::HeaderMap>>>,
     response: Bytes,
     remaining: Arc<Mutex<std::collections::VecDeque<Bytes>>>,
     fail: bool,
@@ -146,6 +147,7 @@ impl Transport {
 
     fn called<T: Into<Bytes>>(&self, request: Request<T>) {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        self.headers.lock().unwrap().push(request.headers().clone());
         self.bodies
             .lock()
             .unwrap()
@@ -630,6 +632,7 @@ async fn rig_invalid_tool_retry_is_two_authorized_executions() {
 
 #[tokio::test]
 async fn routing_fallback_is_attributed_to_actual_provider_and_wire_model() {
+    use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
     use crate::model::router::{ModelRouter, RoutedModel};
     use rig_agent::agent::AgentBuilder;
     use rig_agent::completion::Prompt;
@@ -639,11 +642,11 @@ async fn routing_fallback_is_attributed_to_actual_provider_and_wire_model() {
     let transport = Transport::new(anthropic_response());
     let anthropic = anthropic::Client::builder()
         .api_key("test")
-        .http_client(MeteredHttpClient::new(
+        .http_client(AnthropicPromptLayout::new(MeteredHttpClient::new(
             transport.clone(),
             "anthropic",
             WireProtocol::Anthropic,
-        ))
+        )))
         .build()
         .unwrap();
     let openai = openai::Client::builder()
@@ -861,3 +864,72 @@ async fn provider_excess_is_not_clipped_to_the_authorized_budget() {
         UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(10, 1000, 0, 0, 0))
     );
 }
+
+#[tokio::test]
+async fn a_reshaped_anthropic_request_is_metered_with_its_cache_usage() {
+    use crate::model::anthropic_prompt_layout::AnthropicPromptLayout;
+
+    let journal = Arc::new(Journal::default());
+    let transport = Transport::new(concat!(
+        "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg\",\"usage\":{\"input_tokens\":4,\"cache_read_input_tokens\":30000,\"cache_creation_input_tokens\":250}}}\n\n",
+        "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n",
+        "data: {\"type\":\"message_stop\"}\n\n",
+    ));
+    let client = AnthropicPromptLayout::new(MeteredHttpClient::new(
+        transport.clone(),
+        "anthropic",
+        WireProtocol::Anthropic,
+    ));
+    let body = json!({
+        "model": "model",
+        "max_tokens": 50,
+        "tools": [
+            {"name": "LoadTools", "input_schema": {"type": "object"}, "cache_control": {"type": "ephemeral"}},
+            {"name": "EditPresentation", "input_schema": {"type": "object"}, "defer_loading": true},
+        ],
+        "system": [
+            {"type": "text", "text": "Shared"},
+            {"type": "text", "text": "Task A", "cache_control": {"type": "ephemeral"}},
+        ],
+        "messages": [
+            {"role": "user", "content": [{"type": "text", "text": "edit my deck"}]},
+            {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_load", "name": "LoadTools", "input": {}}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_load", "content": "loaded"}]},
+        ],
+        "cache_control": {"type": "ephemeral"},
+        "macro_prompt_layout": {
+            "cache_shared_system": true,
+            "tool_references": [{"tool_use_id": "toolu_load", "tool_names": ["EditPresentation"]}],
+        },
+    });
+    context(
+        journal.clone(),
+        WireProtocol::Anthropic,
+        "anthropic",
+        "model",
+    )
+    .scope(async {
+        let request = Request::builder()
+            .uri("https://example.test/v1/messages")
+            .body(Bytes::from(body.to_string()))
+            .unwrap();
+        let mut stream = client.send_streaming(request).await.unwrap().into_body();
+        while stream.next().await.is_some() {}
+    })
+    .await;
+
+    let sent = transport.bodies.lock().unwrap()[0].clone();
+    assert_eq!(sent.get("macro_prompt_layout"), None);
+    assert_eq!(
+        sent["messages"][2]["content"][0]["content"],
+        json!([{"type": "tool_reference", "tool_name": "EditPresentation"}])
+    );
+    let begins = journal.begins.lock().unwrap();
+    assert_eq!(begins.len(), 1, "metering admits the reshaped request");
+    assert_eq!(
+        journal.finals.lock().unwrap()[0].usage,
+        UsageEvidence::Reported(TrustedTokenUsage::from_disjoint(4, 7, 30000, 250, 0))
+    );
+}
+
+mod speed;

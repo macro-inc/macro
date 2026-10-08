@@ -35,6 +35,8 @@ export type ProjectPropertyDraft = {
 
 export type ProjectCreationInput = {
   name: string;
+  /** Markdown that seeds the description surface. */
+  description: string;
   shareWithTeam: boolean;
   properties: readonly ProjectPropertyDraft[];
 };

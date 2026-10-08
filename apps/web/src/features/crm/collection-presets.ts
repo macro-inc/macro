@@ -26,5 +26,12 @@ export const CRM_TAB_PRESETS: ViewTabConfig = {
         groupBy: `property:${SYSTEM_PROPERTY_IDS.STAGE}`,
       };
     },
+    people: () => ({
+      filters: defineQueryFilters(
+        { include: { crmContactHidden: false } },
+        { skipTargets: ['crmf'] }
+      ),
+      clientFilters: { and: ['crm-contact-active'] },
+    }),
   },
 };

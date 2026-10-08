@@ -44,8 +44,8 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -305,10 +305,7 @@ export const SoupView = (props: SoupViewProps) => {
         : undefined;
       let initialActiveTab = persistedActiveTab ?? persistedViewActiveTab;
 
-      if (
-        (initialActiveTab === undefined || contentId === 'reminders') &&
-        isListViewID(contentId)
-      ) {
+      if (initialActiveTab === undefined && isListViewID(contentId)) {
         initialActiveTab = VIEW_TAB_PRESETS[contentId].default;
       }
 
@@ -810,7 +807,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     userId,
     notificationSource: () => notificationSource,
   });
-  const markNotDoneAction = makeMarkNotDoneAction({
+  const _markNotDoneAction = makeMarkNotDoneAction({
     notificationSource: () => notificationSource,
   });
 
@@ -853,7 +850,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    markReminderSeenOnOpen(entity, notificationSource);
+    markCalendarNotificationSeenOnOpen(entity, notificationSource);
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
@@ -1385,24 +1382,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         source.deferRowInteractions?.() === true
                                       }
                                       entity={row.original}
-                                      onToggleReminderDone={
-                                        row.original.type === 'reminder'
-                                          ? async () => {
-                                              if (
-                                                row.original.type !== 'reminder'
-                                              )
-                                                return;
-                                              if (row.original.completedAt)
-                                                await markNotDoneAction.execute(
-                                                  [row.original]
-                                                );
-                                              else
-                                                await markDoneAction.execute([
-                                                  row.original,
-                                                ]);
-                                            }
-                                          : undefined
-                                      }
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {

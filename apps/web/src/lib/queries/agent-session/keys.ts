@@ -23,5 +23,14 @@ export const agentSessionPullRequestKeys = createQueryKeys(
   {
     forPullRequest: (url: string) => ({ queryKey: [url] }),
     forSession: (sessionId: string) => ({ queryKey: [sessionId] }),
+    /** Everything a batch of pull requests links to, keyed by their URLs. */
+    linksForPullRequests: (urls: readonly string[]) => ({
+      queryKey: [urls],
+    }),
   }
 );
+
+/** Speculative, hidden sessions prepared for the signed-in owner. */
+export const agentSessionWarmKeys = createQueryKeys('agentSessionWarm', {
+  owner: (userId: string | undefined) => ({ queryKey: [userId] }),
+});

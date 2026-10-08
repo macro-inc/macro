@@ -63,6 +63,8 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 
 ## Before handing off
 
+- Always use Conventional Commit syntax for PR titles: `type(scope): description`
+  (scope optional), for example `fix(onboarding): preserve team inputs`.
 - Test the affected packages/services individually before committing. Use the
   relevant guide for setup; there is no root `just test` recipe.
 - For code changes, run `just check` (format/lint/code rules scoped to changes).

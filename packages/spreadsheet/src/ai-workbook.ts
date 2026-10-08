@@ -8,6 +8,7 @@ import type {
   SpreadsheetReadCell,
   SpreadsheetReadRequest,
   SpreadsheetReadResponse,
+  SpreadsheetReadValidation,
   SpreadsheetSheetSummary,
   SpreadsheetValue,
 } from './ai-types';
@@ -17,6 +18,13 @@ import type {
   WorkbookCalculation,
 } from './calculation';
 import { fillCopies } from './cell-copy';
+import {
+  dropdownRule,
+  literalListItems,
+  overlappingValidations,
+  replaceValidations,
+  validationReference,
+} from './data-validation';
 import { validateSpreadsheetDocument } from './document-validation';
 import {
   type CellSelection,
@@ -48,7 +56,10 @@ import {
   readSpreadsheetWorkbook,
   renameSpreadsheetSheet,
   type SpreadsheetWorkbookSheet,
+  setSpreadsheetValidations,
 } from './workbook-document';
+
+const MAX_READ_VALIDATIONS = 50;
 
 export const SPREADSHEET_AI_LIMITS = {
   readCells: 500,
@@ -207,6 +218,37 @@ function readCell(
   };
 }
 
+function readValidations(
+  sheet: SpreadsheetWorkbookSheet,
+  selection: CellSelection
+): SpreadsheetReadValidation[] {
+  return overlappingValidations(
+    sheet.metadata?.validations,
+    rangeName(selection)
+  )
+    .slice(0, MAX_READ_VALIDATIONS)
+    .map((rule) => {
+      const [first] = rule.formulas ?? [];
+      const items =
+        rule.type === 'list' && first !== undefined
+          ? literalListItems(first)
+          : undefined;
+      return {
+        range: rule.range,
+        type: rule.type,
+        ...(items
+          ? { items }
+          : rule.type === 'list' && first !== undefined
+            ? { source: first }
+            : rule.formulas && { formulas: rule.formulas }),
+        ...(rule.operator && { operator: rule.operator }),
+        ...(rule.type === 'list' && { dropdown: rule.dropdown !== false }),
+        rejectInvalid:
+          !!rule.showError && (rule.errorStyle ?? 'stop') === 'stop',
+      };
+    });
+}
+
 export function readSpreadsheetForAi(
   doc: LoroDoc,
   revision: string,
@@ -244,11 +286,13 @@ export function readSpreadsheetForAi(
       remaining--;
       bytes -= size;
     }
+    const validations = readValidations(sheet, selection);
     return {
       sheetId: sheet.id,
       sheetName: sheet.name,
       range: rangeName(selection),
       cells,
+      ...(validations.length && { validations }),
       truncated,
     };
   });
@@ -526,6 +570,44 @@ export function prepareSpreadsheetEdit(
             }
             summary = `Resized ${operation.columns.length} column(s) in “${sheet.name}”.`;
             break;
+          case 'set_dropdown': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            if (
+              (operation.items === undefined) ===
+              (operation.source === undefined)
+            )
+              throw new Error(
+                'A dropdown needs exactly one of items (typed choices) or source (a range of cells holding the choices).'
+              );
+            const sourceSheet =
+              operation.source === undefined
+                ? undefined
+                : validationReference(operation.source)?.sheet;
+            if (sourceSheet !== undefined) resolveSheet(workbook, sourceSheet);
+            const rule = dropdownRule({
+              ...(operation.items === undefined
+                ? { range: operation.source ?? '' }
+                : { items: operation.items }),
+              rejectInvalid: operation.rejectInvalid,
+            });
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range, rule)
+            );
+            summary = `Added a dropdown to ${range} in “${sheet.name}”.`;
+            break;
+          }
+          case 'clear_validation': {
+            const range = rangeName(checkedRange(operation.range, sheet));
+            setSpreadsheetValidations(
+              fork,
+              sheet.id,
+              replaceValidations(sheet.metadata?.validations, range)
+            );
+            summary = `Removed data validation from ${range} in “${sheet.name}”.`;
+            break;
+          }
         }
       }
       const range = operationRange(operation);

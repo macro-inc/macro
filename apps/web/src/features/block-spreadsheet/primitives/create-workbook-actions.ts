@@ -78,9 +78,9 @@ export function createWorkbookActions(options: {
   }
   async function importExcel(file: File) {
     if (!options.store.canEdit()) return;
-    if (!/\.xlsx$/i.test(file.name)) {
+    if (!/\.xls[xm]$/i.test(file.name)) {
       setNotice(
-        'Choose an .xlsx Excel workbook. Other file formats are not supported here.'
+        'Choose an .xlsx or .xlsm Excel workbook. Other file formats are not supported here.'
       );
       return;
     }
@@ -234,5 +234,7 @@ export function createWorkbookActions(options: {
     addSheet: () => changeSheet(() => options.store.addSheet()),
     duplicateSheet: (id: string) =>
       changeSheet(() => options.store.duplicateSheet(id)),
+    moveSheet: (id: string, index: number) =>
+      changeSheet(() => options.store.moveSheet(id, index)),
   };
 }

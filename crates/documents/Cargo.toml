@@ -10,9 +10,17 @@ path = "src/bin/backfill_markdown_content_location.rs"
 required-features = ["backfill_binary"]
 
 [features]
-purge = ["ports", "outbound", "dep:macro_db_client", "dep:sqs_client", "dep:comms_db_client"]
+purge = [
+  "ports",
+  "outbound",
+  "dep:macro_db_client",
+  "dep:macro_sha_count_client",
+  "dep:sqs_client",
+  "dep:comms_db_client",
+]
 ai_tools = [
   "dep:ai_billing",
+  "dep:ai_engine",
   "dep:ai_toolset",
   "dep:ai_usage",
   "dep:fig_engine",
@@ -22,6 +30,7 @@ ai_tools = [
   "dep:macro_db_client",
   "dep:model_file_type",
   "dep:pptx_engine",
+  "dep:psd_engine",
   "dep:schemars",
   "dep:sha2",
   "document_create_adapters",
@@ -83,7 +92,7 @@ outbound = [
   "dep:sqlx",
   "ports",
 ]
-ports = ["dep:tokio", "dep:tokio-retry"]
+ports = ["dep:shared_entity_registry", "dep:tokio", "dep:tokio-retry"]
 schema = ["dep:utoipa", "macro_user_id/schema"]
 service = [
   "dep:entity_access_management",
@@ -94,6 +103,7 @@ service = [
 
 [dependencies]
 macro_db_client = { path = "../macro_db_client", optional = true }
+macro_sha_count_client = { path = "../macro_sha_count_client", optional = true }
 sqs_client = { path = "../sqs_client", optional = true }
 activity = { path = "../activity", default-features = false }
 bot_id = { path = "../bot_id" }
@@ -163,6 +173,7 @@ comms_db_client = { path = "../comms_db_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 entity_registry = { path = "../entity_registry/entity_registry", optional = true }
 entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
+shared_entity_registry = { path = "../entity_registry/shared_entity_registry", optional = true }
 model_owner = { path = "../model_owner" }
 futures = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
@@ -181,8 +192,10 @@ lexical_client = { path = "../lexical_client", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 messages = { path = "../messages", optional = true, features = ["ports"] }
 model_file_type = { path = "../model_file_type", optional = true }
+ai_engine = { path = "../ai_engine", optional = true }
 fig_engine = { path = "../fig_engine", optional = true }
 pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
+psd_engine = { path = "../psd_engine", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }

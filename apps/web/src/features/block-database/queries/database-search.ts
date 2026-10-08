@@ -13,10 +13,10 @@ import { match } from 'ts-pattern';
 import {
   type DatabaseSearchGroup,
   databaseSearchGroups,
-} from '../core/database-search';
-import { gridRows } from '../core/grid-cells';
-import { searchFilter } from '../core/view-query';
-import { allRecordsView } from '../core/views';
+} from '../../database/core/database-search';
+import { gridRows } from '../../database/core/grid-cells';
+import { searchFilter } from '../../database/core/view-query';
+import { allRecordsView } from '../../database/core/views';
 import { toViewColumn } from './table-rows';
 
 /**
