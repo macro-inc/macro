@@ -7,6 +7,7 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
+import { ChannelNotificationIndicator } from '@entity/components/ChannelNotificationIndicator';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatCircleIcon from '@phosphor/chat-circle.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
@@ -85,10 +86,6 @@ import {
 const CHANNEL_TABS = [
   { value: 'browse', label: 'All' },
   { value: 'recents', label: 'Recent' },
-];
-const CHANNEL_TABS_WITH_THREADS = [
-  ...CHANNEL_TABS,
-  { value: 'threads', label: 'Threads' },
 ];
 
 type ChannelRailSearch = {
@@ -330,10 +327,19 @@ function ChannelOption(props: {
             <ChannelCallIndicator
               status={item().incomingCallId ? undefined : item().callStatus}
             />
-            <Show when={item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
+            <Show
+              when={item().notificationKind !== undefined}
+              fallback={
+                <Show when={item().unread}>
+                  <span
+                    aria-label="Unread"
+                    class="size-2 shrink-0 rounded-full bg-accent"
+                  />
+                </Show>
+              }
+            >
+              <ChannelNotificationIndicator
+                kind={item().notificationKind ?? 'none'}
               />
             </Show>
             <Show when={!item().incomingCallId && timestamp()}>
@@ -376,6 +382,21 @@ function ChannelOption(props: {
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
+  const threadsKind = rail.threadsActivity.kind;
+  const tabsWithThreads = [
+    ...CHANNEL_TABS,
+    {
+      value: 'threads',
+      label: () => (
+        <span class="inline-flex items-center gap-1.5">
+          Threads
+          <span data-threads-unread={threadsKind() !== 'none' ? '' : undefined}>
+            <ChannelNotificationIndicator kind={threadsKind()} />
+          </span>
+        </span>
+      ),
+    },
+  ];
   const selectTab = (value: string) => {
     if (
       value === 'browse' ||
@@ -398,9 +419,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <ViewSidebar.Toolbar>
           <Tabs
             aria-label="Chat sidebar views"
-            list={
-              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
-            }
+            list={rail.threadsEnabled() ? tabsWithThreads : CHANNEL_TABS}
             value={rail.tab()}
             onChange={selectTab}
           />
@@ -882,6 +901,7 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         id={item().domId}
         class="border-b border-edge-muted"
         channel={props.channel}
+        notificationKind={item().notificationKind}
         senderId={props.channel.latestRootMessage?.senderId}
         mentionedCurrentUser={channelMentionsUser(
           props.channel,

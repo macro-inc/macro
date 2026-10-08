@@ -135,6 +135,12 @@ export type ChannelEntity = EntityBase & {
     state: 'unseen' | 'seen' | 'done';
     createdAt: DateValue;
   }[];
+  /** Bounded channel-wide activity and mention witnesses, not mutation input. */
+  notificationActivity?: {
+    id: string;
+    state: 'unseen' | 'seen' | 'done';
+    eventType: string;
+  }[];
   channelType: 'direct_message' | 'private' | 'public' | 'team';
   interactedAt?: DateValue | null;
   participantIds?: string[];

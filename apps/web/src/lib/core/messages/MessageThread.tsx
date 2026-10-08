@@ -50,6 +50,10 @@ type ThreadOptions = {
   onClearTarget?: () => void;
   expanded?: boolean;
   hideReplyInput?: boolean;
+  /** Keep the inline composer visible without focusing it on mount. */
+  keepReplyInputOpen?: boolean;
+  /** Display the latest two replies with an earlier-replies disclosure. */
+  collapsedReplyPreview?: 'latest-two';
   /** Reply through a composer owned by the enclosing surface. */
   onReply?: MessageActionHandler;
   hideRail?: boolean;
@@ -96,7 +100,7 @@ export function MessageThread(
     },
     onReply: (context) => {
       if (props.onReply) return props.onReply(context);
-      setExpanded(true);
+      if (!props.keepReplyInputOpen) setExpanded(true);
       setReplying(true);
       focus.request();
     },
@@ -122,9 +126,13 @@ export function MessageThread(
           isExpanded={() => expanded() || !!props.targetId}
           setIsExpanded={setExpanded}
           isReplying={() =>
-            props.canWrite && !props.hideReplyInput && replying()
+            props.canWrite &&
+            !props.hideReplyInput &&
+            (replying() || !!props.keepReplyInputOpen)
           }
           setIsReplying={setReplying}
+          keepReplyInputOpen={props.keepReplyInputOpen}
+          collapsedReplyPreview={props.collapsedReplyPreview}
           replyInputState={draft}
           setReplyInputState={setDraft}
           replyInputHandle={handle}

@@ -82,6 +82,8 @@ vi.mock('@channel/Thread/ChannelThread', () => ({
           Click linked message
         </button>
         <p>{props.isExpanded() ? 'expanded' : 'collapsed'}</p>
+        <button onClick={() => props.setIsReplying(false)}>Exit reply</button>
+        <p>{props.collapsedReplyPreview ?? 'grouped preview'}</p>
       </>
     );
   },
@@ -332,6 +334,55 @@ it('closes an active project reply composer and editor when comment access is lo
 
   expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
   expect(view.queryByText('Editor enabled')).toBeNull();
+});
+
+describe('persistent thread reply input', () => {
+  it('starts visible without expanding replies and stays visible on exit', () => {
+    const view = render(() => (
+      <MessageThread
+        data={message}
+        canWrite
+        keepReplyInputOpen
+        collapsedReplyPreview="latest-two"
+      />
+    ));
+    const composer = view.getByRole('textbox', { name: 'Reply composer' });
+    expect(composer).toBeTruthy();
+    expect(document.activeElement).not.toBe(composer);
+    expect(view.getByText('collapsed')).toBeTruthy();
+    expect(view.getByText('latest-two')).toBeTruthy();
+    openActions(view);
+    fireEvent.click(view.getByRole('button', { name: 'Reply' }));
+    expect(view.getByText('collapsed')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Exit reply' }));
+    expect(view.getByRole('textbox', { name: 'Reply composer' })).toBe(
+      composer
+    );
+  });
+
+  it('hides the persistent reply input when write access is lost', () => {
+    const [canWrite, setCanWrite] = createSignal(true);
+    const view = render(() => (
+      <MessageThread data={message} canWrite={canWrite()} keepReplyInputOpen />
+    ));
+    expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+    setCanWrite(false);
+    expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+    setCanWrite(true);
+    expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
+  });
+
+  it('respects an explicitly hidden reply input', () => {
+    const view = render(() => (
+      <MessageThread
+        data={message}
+        canWrite
+        keepReplyInputOpen
+        hideReplyInput
+      />
+    ));
+    expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+  });
 });
 
 it('does not offer deletion of another sender’s bot message outside a channel', () => {

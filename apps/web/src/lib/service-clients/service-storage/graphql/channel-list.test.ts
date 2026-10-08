@@ -1,4 +1,4 @@
-import { Kind, print, visit } from 'graphql';
+import { type FieldNode, Kind, print, visit } from 'graphql';
 import { describe, expect, it } from 'vitest';
 import {
   ChannelListItemFieldsFragmentDoc,
@@ -7,25 +7,49 @@ import {
   SoupDocument,
 } from './generated/graphql';
 
+const unreadWitnessAliases = [
+  'unreadNotifications',
+  'unreadChannelActivity',
+  'unreadChannelImportant',
+];
+
+function expectBoundedUnreadWitness(field: FieldNode) {
+  const alias = field.alias?.value;
+  expect(unreadWitnessAliases).toContain(alias);
+  expect(
+    field.arguments?.find((arg) => arg.name.value === 'limit')?.value
+  ).toMatchObject({ kind: Kind.INT, value: '1' });
+  const selection = print(field);
+  expect(selection).toContain('states: [UNSEEN]');
+  expect(selection).not.toContain('metadata');
+  if (alias === 'unreadNotifications') {
+    expect(selection).toContain('topLevelMessagesOnly: true');
+  } else {
+    expect(selection).not.toContain('topLevelMessagesOnly');
+    expect(selection).toContain('eventType');
+  }
+  if (alias === 'unreadChannelImportant') {
+    expect(selection).toContain(
+      'eventTypes: ["channel_mention", "channel_message_reply"]'
+    );
+  } else {
+    expect(selection).not.toContain('eventTypes:');
+  }
+}
+
 describe('bounded channel unread projection', () => {
   it.each([ChannelListSoupDocument, ChannelListItemFieldsFragmentDoc])(
-    'keeps the limited edge aliased in both query and reconciliation',
+    'keeps each limited witness aliased in both query and reconciliation',
     (document) => {
-      let count = 0;
+      const aliases: string[] = [];
       visit(document, {
         Field(field) {
           if (field.name.value !== 'notifications') return;
-          count += 1;
-          expect(field.alias?.value).toBe('unreadNotifications');
-          expect(
-            field.arguments?.find((arg) => arg.name.value === 'limit')?.value
-          ).toMatchObject({ kind: Kind.INT, value: '1' });
-          expect(print(field)).toContain('states: [UNSEEN]');
-          expect(print(field)).toContain('topLevelMessagesOnly: true');
-          expect(print(field)).not.toContain('metadata');
+          aliases.push(field.alias?.value ?? '');
+          expectBoundedUnreadWitness(field);
         },
       });
-      expect(count).toBe(1);
+      expect(aliases).toEqual(unreadWitnessAliases);
       expect(print(document)).not.toContain('ChannelListNotificationFields');
       expect(print(document)).not.toContain(
         'SoupNotificationNavigationMetadataFields'
@@ -41,16 +65,15 @@ describe('bounded channel unread projection', () => {
     }
   );
 
-  it('uses only IDs and bounded unread states for the sidebar badge', () => {
+  it('uses only IDs and bounded unread witnesses for the sidebar badge', () => {
     const fields: string[] = [];
+    const aliases: string[] = [];
     visit(ChannelUnreadPresenceDocument, {
       Field(field) {
         fields.push(field.name.value);
         if (field.name.value !== 'notifications') return;
-        expect(field.alias?.value).toBe('unreadNotifications');
-        expect(print(field)).toContain('limit: 1');
-        expect(print(field)).toContain('states: [UNSEEN]');
-        expect(print(field)).toContain('topLevelMessagesOnly: true');
+        aliases.push(field.alias?.value ?? '');
+        expectBoundedUnreadWitness(field);
       },
     });
     expect(new Set(fields)).toEqual(
@@ -62,9 +85,10 @@ describe('bounded channel unread projection', () => {
         'id',
         'notifications',
         'state',
+        'eventType',
       ])
     );
-    expect(fields.filter((field) => field === 'notifications')).toHaveLength(1);
+    expect(aliases).toEqual(unreadWitnessAliases);
   });
 
   it('leaves full notification reads unbounded and unfiltered', () => {

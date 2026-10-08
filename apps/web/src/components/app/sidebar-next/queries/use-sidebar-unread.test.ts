@@ -1,9 +1,10 @@
+import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
 import type { EmailEntity } from '@entity/types/entity';
 import type { UnifiedNotification } from '@notifications/types';
 import type { NotificationState } from '@service-storage/graphql/generated/graphql';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useSidebarUnread } from './use-sidebar-unread';
+import { useSidebarNotificationState } from './use-sidebar-unread';
 
 const mocks = vi.hoisted(() => ({
   home: vi.fn(),
@@ -14,13 +15,22 @@ const mocks = vi.hoisted(() => ({
   withLocalState: vi.fn(),
   hasUnreadEntity: vi.fn(),
   transformEntities: vi.fn(),
+  threadsUnread: vi.fn(),
+  threadsFlag: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => mocks.graphqlFlag,
+  useFeatureFlag: (flag: unknown) =>
+    flag === enableChannelThreadsPreview
+      ? mocks.threadsFlag
+      : mocks.graphqlFlag,
 }));
 vi.mock('@queries/channel/unread-presence', () => ({
   createChannelUnreadQuery: mocks.channels,
+}));
+vi.mock('@app/features/channels-view/queries/channel-threads-unread', () => ({
+  useChannelThreadsNotificationKind: (enabled: () => boolean) => () =>
+    enabled() && mocks.threadsUnread() ? 'activity' : 'none',
 }));
 
 vi.mock('@app/features/email-view/queries/email-query', () => ({
@@ -87,12 +97,16 @@ function setup(graphql = false) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [graphqlEnabled, setGraphqlEnabled] = createSignal(graphql);
+    const [threadsUnread, setThreadsUnread] = createSignal(false);
+    mocks.threadsUnread.mockImplementation(threadsUnread);
+    const [threadsEnabled, setThreadsEnabled] = createSignal(false);
+    mocks.threadsFlag.mockImplementation(() => ({ enabled: threadsEnabled() }));
     const [done, setDone] = createSignal(false);
     mocks.withLocalState.mockImplementation(({ state }) =>
       done() ? 'done' : state
     );
     const [witnesses, setWitnesses] = createSignal<
-      { id: string; state: NotificationState }[]
+      { id: string; state: NotificationState; eventType?: string }[]
     >([]);
     mocks.graphqlFlag.mockImplementation(() => ({ enabled: graphqlEnabled() }));
     const [loading, setLoading] = createSignal(true);
@@ -105,7 +119,7 @@ function setup(graphql = false) {
       },
       get data() {
         if (loading()) throw new Error('Read pending unread query');
-        return witnesses();
+        return { messages: witnesses(), activity: witnesses() };
       },
     });
     const [emails, setEmails] = createSignal<EmailEntity[]>([]);
@@ -131,14 +145,18 @@ function setup(graphql = false) {
     });
     mocks.email.mockReturnValue(query);
     mocks.notifications.mockImplementation(notifications);
+    const sidebar = useSidebarNotificationState();
     return {
-      unread: useSidebarUnread(),
+      unread: sidebar.hasUnread,
+      kind: sidebar.channelKind,
       setLoading,
       setEmails,
       setNotifications,
       setWitnesses,
       setGraphqlEnabled,
       setDone,
+      setThreadsUnread,
+      setThreadsEnabled,
     };
   });
 }
@@ -274,5 +292,42 @@ describe('sidebar unread presence', () => {
     expect(unread('channels')).toBe(true);
     setNotifications([]);
     expect(unread('channels')).toBe(false);
+  });
+
+  it('keeps the Chat dot for unread threads after top-level messages are read', () => {
+    const { unread, setLoading, setThreadsEnabled, setThreadsUnread } =
+      setup(true);
+    setThreadsEnabled(true);
+    setLoading(false);
+    expect(unread('channels')).toBe(false);
+    setThreadsUnread(true);
+    expect(unread('channels')).toBe(true);
+    expect(unread('mail')).toBe(false);
+    setThreadsUnread(false);
+    expect(unread('channels')).toBe(false);
+    setThreadsUnread(true);
+    setThreadsEnabled(false);
+    expect(unread('channels')).toBe(false);
+  });
+
+  it('shows a prominent mention only with the Threads flag and clears it on done', () => {
+    const f = setup(true);
+    f.setLoading(false);
+    f.setWitnesses([
+      { id: 'important', state: 'UNSEEN', eventType: 'channel_mention' },
+    ]);
+    expect(f.kind()).toBeUndefined();
+    f.setThreadsEnabled(true);
+    expect(f.kind()).toBe('important');
+    f.setDone(true);
+    expect(f.kind()).toBe('none');
+    expect(f.unread('channels')).toBe(false);
+    f.setDone(false);
+    f.setWitnesses([
+      { id: 'reply', state: 'UNSEEN', eventType: 'channel_message_reply' },
+    ]);
+    expect(f.kind()).toBe('important');
+    f.setThreadsEnabled(false);
+    expect(f.kind()).toBeUndefined();
   });
 });

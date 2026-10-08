@@ -24,6 +24,22 @@ fragment ChannelListItemFields on GraphqlSoupEntity {
 			state
 			createdAt
 		}
+		unreadChannelActivity: notifications(
+			filter: { states: [UNSEEN] }
+			limit: 1
+		) {
+			id
+			state
+			eventType
+		}
+		unreadChannelImportant: notifications(
+			filter: { states: [UNSEEN], eventTypes: ["channel_mention", "channel_message_reply"] }
+			limit: 1
+		) {
+			id
+			state
+			eventType
+		}
 	}
 }
 

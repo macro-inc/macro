@@ -27,7 +27,10 @@ import { Thread } from './Thread';
 import type { ThreadReplyListHandle } from './ThreadReplyList';
 import { ThreadTypingIndicator } from './ThreadTypingIndicator';
 import type { ThreadProps } from './types';
-import { channelReplyInputOffsetX } from './utils/thread-rail-geometry';
+import {
+  channelReplyInputOffsetX,
+  threadOffsetX,
+} from './utils/thread-rail-geometry';
 import {
   getCollapsedRepliesCount,
   getThreadLatestReplyAt,
@@ -89,6 +92,7 @@ export function ChannelThread(props: ThreadProps) {
       preview: () => thread().preview,
       loaded: queryReplies,
       isExpanded: props.isExpanded,
+      collapsedReplyPreview: props.collapsedReplyPreview,
     });
 
   // Thread-local reply selection
@@ -176,6 +180,12 @@ export function ChannelThread(props: ThreadProps) {
 
   const collapsedRepliesCount = () =>
     getCollapsedRepliesCount(thread().reply_count, visibleReplyCount());
+  const usesLatestReplyPreview = () =>
+    props.collapsedReplyPreview === 'latest-two';
+  const shouldShowEarlierReplies = () =>
+    usesLatestReplyPreview() &&
+    !props.isExpanded() &&
+    collapsedRepliesCount() > 0;
   const collapsedRepliesContainsNewMessages = () =>
     activeReplies()
       .slice(visibleReplyCount())
@@ -191,8 +201,13 @@ export function ChannelThread(props: ThreadProps) {
     props.isReplying() && props.inputMode !== 'unified';
   const rootRailVisible = () =>
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
+  const earlierRepliesRailLeft = () =>
+    `calc(var(--left-of-channel-rail) - ${props.monorail ? '0px' : threadOffsetX})`;
   const shouldShowCollapsedIndicator = () =>
-    !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
+    !usesLatestReplyPreview() &&
+    !isReplyingToThread() &&
+    !props.isExpanded() &&
+    collapsedRepliesCount() > 0;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
     hasReplies() &&
@@ -353,6 +368,24 @@ export function ChannelThread(props: ThreadProps) {
               </Show>
               <DebugSuspense name="ChannelThread.replies">
                 <Thread.RepliesContainer flat={props.monorail}>
+                  <Show when={shouldShowEarlierReplies()}>
+                    <div class="relative pb-1">
+                      <Show when={!props.hideRail}>
+                        <div
+                          class="pointer-events-none absolute top-0 -z-1 h-full channel-rail-left border-thread-rail"
+                          style={{
+                            left: earlierRepliesRailLeft(),
+                          }}
+                        />
+                      </Show>
+                      <div class="pl-(--message-padding-x)">
+                        <Thread.EarlierReplies
+                          count={collapsedRepliesCount()}
+                          onExpand={() => props.setIsExpanded(true)}
+                        />
+                      </div>
+                    </div>
+                  </Show>
                   <DebugSuspense name="ChannelThread.ReplyList">
                     <Thread.ReplyList
                       parent={props.parent()}
@@ -427,6 +460,7 @@ export function ChannelThread(props: ThreadProps) {
                         setReplyInputEl={props.setReplyInputEl}
                         setReplyInputHandle={props.setReplyInputHandle}
                         focusRequest={props.replyInputFocusRequest}
+                        keepOpen={props.keepReplyInputOpen}
                       />
                     </div>
                   </Show>

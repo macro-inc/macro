@@ -378,6 +378,12 @@ it('maps the unread alias without pretending it is the full notification edge', 
     cacheProjection: null,
     frecencyScore: null,
     isFavorited: false,
+    unreadChannelActivity: [
+      { id: 'one', state: 'UNSEEN', eventType: 'channel_message_send' },
+    ],
+    unreadChannelImportant: [
+      { id: 'important', state: 'UNSEEN', eventType: 'channel_mention' },
+    ],
     unreadNotifications: [
       { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
     ],
@@ -388,6 +394,10 @@ it('maps the unread alias without pretending it is the full notification edge', 
       notifications: undefined,
       unreadNotifications: [
         { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+      notificationActivity: [
+        { id: 'one', state: 'unseen', eventType: 'channel_message_send' },
+        { id: 'important', state: 'unseen', eventType: 'channel_mention' },
       ],
     },
   });

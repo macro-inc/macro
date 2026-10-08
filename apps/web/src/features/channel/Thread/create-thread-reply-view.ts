@@ -7,15 +7,18 @@ export function createThreadReplyView<T extends GroupableMessage>(options: {
   preview: Accessor<T[]>;
   loaded: Accessor<T[] | undefined>;
   isExpanded: Accessor<boolean>;
+  /** Latest-two previews do not use sender grouping to choose visible replies. */
+  collapsedReplyPreview?: 'latest-two';
 }) {
-  const previewCount = createMemo(() =>
-    getVisibleReplyCount(options.preview())
+  const previewReplies = createMemo(() =>
+    options.collapsedReplyPreview === 'latest-two'
+      ? (options.loaded() ?? options.preview()).slice(-2)
+      : options.preview().slice(0, getVisibleReplyCount(options.preview()))
   );
   const activeReplies = () => options.loaded() ?? options.preview();
   const displayReplies = createMemo(() =>
-    options.isExpanded()
-      ? activeReplies()
-      : options.preview().slice(0, previewCount())
+    options.isExpanded() ? activeReplies() : previewReplies()
   );
-  return { activeReplies, displayReplies, visibleReplyCount: previewCount };
+  const visibleReplyCount = () => previewReplies().length;
+  return { activeReplies, displayReplies, visibleReplyCount };
 }

@@ -14,6 +14,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
+import {
+  ChannelNotificationIndicator,
+  type ChannelNotificationKind,
+} from '@entity/components/ChannelNotificationIndicator';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
 import XIcon from '@phosphor/x.svg';
@@ -38,6 +42,7 @@ export type ChannelRailItemProps = {
   channel: ChannelEntity;
   unread: boolean;
   muted: boolean;
+  notificationKind?: ChannelNotificationKind;
   callStatus?: ChannelCallStatus;
   incomingCallId?: string;
   selected: boolean;
@@ -305,10 +310,19 @@ export function ConversationCard(props: ConversationCardProps) {
         <ChannelAvatar channel={props.channel} size="md" />
         <div class="min-w-0 flex-1 overflow-hidden">
           <span class="flex min-w-0 items-center gap-2">
-            <Show when={props.unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent touch:absolute touch:left-2 touch:top-7.5 touch:-translate-y-1/2"
+            <Show
+              when={props.notificationKind !== undefined}
+              fallback={
+                <Show when={props.unread}>
+                  <span
+                    aria-label="Unread"
+                    class="size-2 shrink-0 rounded-full bg-accent touch:absolute touch:left-2 touch:top-7.5 touch:-translate-y-1/2"
+                  />
+                </Show>
+              }
+            >
+              <ChannelNotificationIndicator
+                kind={props.notificationKind ?? 'none'}
               />
             </Show>
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">

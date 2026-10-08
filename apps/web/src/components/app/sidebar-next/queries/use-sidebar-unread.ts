@@ -1,3 +1,4 @@
+import { useChannelThreadsNotificationKind } from '@app/features/channels-view/queries/channel-threads-unread';
 import { buildEmailQuery } from '@app/features/email-view/queries/email-query';
 import { soupItemMatchesHomeTab } from '@app/features/home/queries/home-item-filter';
 import { useHomeEntitiesQuery } from '@app/features/home/queries/use-home-query';
@@ -9,8 +10,15 @@ import {
 import { EMPTY_TAG_FACET_CONTEXT } from '@app/features/soup/filters/facets/tag-facet';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { enableGraphqlSoup } from '@core/constant/featureFlags';
+import {
+  enableChannelThreadsPreview,
+  enableGraphqlSoup,
+} from '@core/constant/featureFlags';
 import { notificationIsRead } from '@entity/utils/notification';
+import {
+  channelNotificationKind,
+  channelNotificationWitness,
+} from '@notifications/channel-notification-kind';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
@@ -19,9 +27,13 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
-export function useSidebarUnread() {
+export function useSidebarNotificationState() {
   const notificationSource = useGlobalNotificationSource();
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
+  const threadsFlag = useFeatureFlag(enableChannelThreadsPreview);
+  const threadsKind = useChannelThreadsNotificationKind(
+    () => threadsFlag().enabled
+  );
   const channels = createChannelUnreadQuery(
     makeGraphqlSoupInput({
       // Preserve the previous feed's 500-entity candidate bound, but select
@@ -69,7 +81,7 @@ export function useSidebarUnread() {
   const channelsUnread = createMemo(() => {
     if (graphqlFlag().enabled) {
       if (!channels.isEnabled || channels.isLoading) return false;
-      return (channels.data ?? []).some((notification) => {
+      return (channels.data?.messages ?? []).some((notification) => {
         const state = notificationStateFromGraphql(notification.state);
         return (
           (notificationSource.withLocalState?.({
@@ -89,10 +101,41 @@ export function useSidebarUnread() {
       );
   });
 
-  return (id: string): boolean => {
+  const channelKind = createMemo(() => {
+    if (!threadsFlag().enabled) return undefined;
+    const notifications = graphqlFlag().enabled
+      ? channels.isEnabled && !channels.isLoading
+        ? (channels.data?.activity ?? []).map((notification) => ({
+            ...notification,
+            state: notificationStateFromGraphql(notification.state),
+          }))
+        : []
+      : notificationSource
+          .notifications()
+          .filter((notification) => notification.entity_type === 'channel')
+          .map(channelNotificationWitness);
+    const kind = channelNotificationKind(
+      notifications,
+      (notification) =>
+        notificationSource.withLocalState?.(notification) ?? notification.state
+    );
+    if (kind === 'important' || threadsKind() === 'important')
+      return 'important';
+    return kind !== 'none' || threadsKind() !== 'none' ? 'activity' : 'none';
+  });
+  const hasUnread = (id: string): boolean => {
     if (id === 'home') return homeUnread();
     if (id === 'mail') return emailUnread();
-    if (id === 'channels') return channelsUnread();
+    if (id === 'channels')
+      return threadsFlag().enabled
+        ? channelKind() !== 'none'
+        : channelsUnread();
     return false;
   };
+  return { hasUnread, channelKind };
+}
+
+/** Preserve the boolean API for callers that only need unread presence. */
+export function useSidebarUnread() {
+  return useSidebarNotificationState().hasUnread;
 }

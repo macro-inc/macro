@@ -14,7 +14,7 @@ import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
-import { useSidebarUnread } from './queries/use-sidebar-unread';
+import { useSidebarNotificationState } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 import { SidebarPrefsProvider } from './use-sidebar-prefs';
@@ -49,7 +49,7 @@ const SidebarRailContent = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
-  const hasUnread = useSidebarUnread();
+  const { hasUnread, channelKind } = useSidebarNotificationState();
 
   // The next load's boot shell draws this rail before any JS runs.
   createEffect(() =>
@@ -94,12 +94,17 @@ const SidebarRailContent = () => {
                   <Match when={item.id === 'channels'}>
                     <Suspense
                       fallback={
-                        <ListNav item={item} unread={hasUnread(item.id)} />
+                        <ListNav
+                          item={item}
+                          unread={hasUnread(item.id)}
+                          channelNotificationKind={channelKind()}
+                        />
                       }
                     >
                       <ChannelsListNav
                         item={item}
                         unread={hasUnread(item.id)}
+                        channelNotificationKind={channelKind()}
                       />
                     </Suspense>
                   </Match>

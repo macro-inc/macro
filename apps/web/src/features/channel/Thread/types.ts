@@ -57,6 +57,10 @@ export type ThreadProps = {
   parent: Accessor<MessageParent>;
   /** The enclosing view owns a floating input only in unified mode. */
   inputMode?: 'inline' | 'unified';
+  /** Keep the inline composer visible after sending or discarding a draft. */
+  keepReplyInputOpen?: boolean;
+  /** Latest-two previews show their disclosure before the replies. */
+  collapsedReplyPreview?: 'latest-two';
   getMessageActions?: (message: MessageData) => MessageActions | undefined;
   listMeta?: ChannelMessageListMeta;
   threadActions?: ThreadActions;

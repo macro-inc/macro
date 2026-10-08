@@ -1,0 +1,31 @@
+# Bounded thread badge evidence, not a complete notification feed.
+query ChannelThreadUnreadPresence($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupChannelMessage {
+					channelId
+					unreadThreadNotifications: notifications(
+						filter: { states: [UNSEEN] }
+						limit: 1
+					) {
+						id
+						state
+						eventType
+					}
+					unreadThreadImportant: notifications(
+						filter: { states: [UNSEEN], eventTypes: ["channel_mention", "channel_message_reply"] }
+						limit: 1
+					) {
+						id
+						state
+						eventType
+					}
+				}
+			}
+		}
+	}
+}

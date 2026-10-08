@@ -42,6 +42,11 @@ export function useChannelRailItemState(
         item_type: 'channel',
       }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
+      notificationKind: rail.threadsEnabled()
+        ? rail.tab() === 'threads'
+          ? rail.threadsActivity.forChannel(id)
+          : rail.channelActivity.notificationKind(id)
+        : undefined,
       callStatus: rail.channelActivity.callStatuses().get(id),
       incomingCallId: rail.channelActivity.incomingCallIds().get(id),
     };

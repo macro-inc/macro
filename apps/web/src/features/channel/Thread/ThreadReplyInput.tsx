@@ -23,6 +23,7 @@ type ThreadReplyInputProps = {
   setReplyInputEl?: Setter<HTMLElement | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
   focusRequest?: FocusRequest;
+  keepOpen?: boolean;
   /**
    * Render the rail connector chrome. On by default for inner-rail consumers
    * (standalone threads, discussions); channels have no inner rail.
@@ -79,6 +80,7 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
               replyInputHandle={props.replyInputHandle}
               setReplyInputHandle={props.setReplyInputHandle}
               focusRequest={props.focusRequest}
+              keepOpen={props.keepOpen}
               onReady={setLocalReplyInputHandle}
               onExit={() => props.setIsReplying(false)}
             />

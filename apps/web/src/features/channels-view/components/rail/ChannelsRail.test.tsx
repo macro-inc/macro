@@ -12,6 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
+vi.mock('../../queries/channel-threads-unread', () => ({
+  useChannelThreadsActivity: () => ({
+    kind: () => 'none',
+    forChannel: () => 'none',
+  }),
+}));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   favoriteId: undefined as string | undefined,

@@ -751,7 +751,11 @@ export function createGraphqlSoupAstItemsQuery(
         ? (query.data?.records() ?? []).flatMap((item) =>
             item.__typename === 'GraphqlSoupChannel' &&
             'unreadNotifications' in item
-              ? (item.unreadNotifications?.map((n) => n.id) ?? [])
+              ? [
+                  ...(item.unreadNotifications ?? []),
+                  ...(item.unreadChannelActivity ?? []),
+                  ...(item.unreadChannelImportant ?? []),
+                ].map((n) => n.id)
               : []
           )
         : [],

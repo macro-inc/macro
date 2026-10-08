@@ -1,7 +1,6 @@
 import { createUrqlQuery } from '@app/lib/urql-solid';
 import {
-  ChannelUnreadPresenceDocument,
-  type ChannelUnreadPresenceQuery,
+  ChannelThreadUnreadPresenceDocument,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -10,57 +9,51 @@ import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
 } from '../soup/graphql/active-queries';
-
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
-function unreadWitnesses(data: ChannelUnreadPresenceQuery) {
-  const channels = data.user.soup.items.filter(
-    (item) => item.__typename === 'GraphqlSoupChannel'
-  );
-  return {
-    messages: channels.flatMap((item) => item.unreadNotifications),
-    activity: channels.flatMap((item) => [
-      ...item.unreadChannelActivity,
-      ...item.unreadChannelImportant,
-    ]),
-  };
-}
-
-/** Bounded unread evidence for the sidebar, independent of the full feed. */
-export function createChannelUnreadQuery(
-  input: SoupInput,
+/** A bounded unread witness query shared by the sidebar and Threads tab. */
+export function createChannelThreadUnreadQuery(
+  input: Accessor<SoupInput>,
   enabled: Accessor<boolean>
 ) {
-  const variables = { input };
+  const descriptor = () => ({
+    document: ChannelThreadUnreadPresenceDocument,
+    variables: { input: input() },
+  });
   const query = createUrqlQuery(() => ({
-    query: ChannelUnreadPresenceDocument,
+    query: ChannelThreadUnreadPresenceDocument,
     client: getGraphqlSoupClient(),
-    variables,
+    variables: descriptor().variables,
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
-    select: unreadWitnesses,
+    select: (data) =>
+      data.user.soup.items.flatMap((item) =>
+        item.__typename === 'GraphqlSoupChannelMessage'
+          ? [
+              ...item.unreadThreadNotifications,
+              ...item.unreadThreadImportant,
+            ].map((notification) => ({
+              ...notification,
+              channelId: item.channelId,
+            }))
+          : []
+      ),
   }));
   onCleanup(
     registerGraphqlSoupRevalidations(
-      () =>
-        enabled()
-          ? [{ document: ChannelUnreadPresenceDocument, variables }]
-          : [],
+      () => (enabled() ? [descriptor()] : []),
       getGraphqlSoupClient
     )
   );
   const refresh = registerChannelNotificationRefresh(() => ({
     client: getGraphqlSoupClient(),
-    queries: [{ document: ChannelUnreadPresenceDocument, variables }],
+    queries: [descriptor()],
     reader: {
       enabled: enabled(),
       fetching: query.isFetching,
       filtered: true,
       notificationIds: query.isSuccess
-        ? [
-            ...(query.data?.messages ?? []),
-            ...(query.data?.activity ?? []),
-          ].map((n) => n.id)
+        ? (query.data ?? []).map((notification) => notification.id)
         : [],
     },
   }));

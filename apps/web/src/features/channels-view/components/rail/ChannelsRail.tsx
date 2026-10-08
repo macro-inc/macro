@@ -72,6 +72,7 @@ import {
   resolveReferencedChannels,
   useChannelsByIdsQuery,
 } from '../../queries';
+import { useChannelThreadsActivity } from '../../queries/channel-threads-unread';
 import type {
   ChannelsQueryScope,
   ChannelsRailSection,
@@ -147,6 +148,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsChannelId,
     setThreadsChannelId,
   } = useChannelsView();
+  const threadsActivity = useChannelThreadsActivity(threadsEnabled);
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -1176,6 +1178,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelById,
     selectedChannel,
     threadsEnabled,
+    threadsActivity,
     threadsChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),

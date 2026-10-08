@@ -1687,6 +1687,17 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
                     createdAt: notification.createdAt,
                   }))
                 : undefined,
+            notificationActivity:
+              'unreadChannelActivity' in entity
+                ? [
+                    ...entity.unreadChannelActivity,
+                    ...entity.unreadChannelImportant,
+                  ].map((notification) => ({
+                    id: notification.id,
+                    state: notificationStateFromGraphql(notification.state),
+                    eventType: notification.eventType,
+                  }))
+                : undefined,
           },
         }) as SoupApiItem
     )

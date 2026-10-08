@@ -40,6 +40,8 @@ type ThreadReplyChannelInputProps = {
   /** Where the reply input is hosted. Defaults to 'inline' (in the thread). */
   host?: 'inline' | 'unified';
   collapsible?: boolean;
+  /** Persistent composers stay mounted after sending or discarding a draft. */
+  keepOpen?: boolean;
   /** Observe the mounted input's handle (e.g. for entity drops). */
   onReady?: (handle: InputHandle) => void;
 };
@@ -134,7 +136,7 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
       }
       onClose={() => {
         props.setReplyInputState(undefined);
-        props.onExit();
+        if (!props.keepOpen) props.onExit();
       }}
       onSend={(snapshot) => {
         const senderId = userId();
@@ -164,10 +166,9 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
           }
         );
 
-        // Exit right away — the send is optimistic; the mutation's failure
-        // toast plus the draft restore above cover the error case.
+        // Clear the draft immediately; persistent composers stay open.
         props.setReplyInputState(undefined);
-        props.onExit();
+        if (!props.keepOpen) props.onExit();
       }}
     />
   );

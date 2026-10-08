@@ -2,6 +2,11 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
+import {
+  type ChannelNotificationKind,
+  channelNotificationKind,
+  channelNotificationWitness,
+} from '@notifications/channel-notification-kind';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -42,6 +47,30 @@ export function useChannelRailActivity(
 
   const notificationActivity = createMemo(() => {
     const unreadChannelIds = new Set<string>();
+    const notificationKinds = new Map<string, ChannelNotificationKind>();
+    for (const channel of channels()) {
+      const evidence =
+        channel.notificationActivity ?? channel.unreadNotifications;
+      const witnesses =
+        evidence ??
+        notificationSource
+          .notifications()
+          .filter(
+            (notification) =>
+              notification.entity_type === 'channel' &&
+              notification.entity_id === channel.id
+          )
+          .map(channelNotificationWitness);
+      notificationKinds.set(
+        channel.id,
+        channelNotificationKind(
+          witnesses,
+          (notification) =>
+            notificationSource.withLocalState?.(notification) ??
+            notification.state
+        )
+      );
+    }
     const unreadNotificationIds = new Set<string>();
     const unreadCounts: Record<ChannelsGroup, number> = {
       channels: 0,
@@ -119,6 +148,7 @@ export function useChannelRailActivity(
       unreadChannelIds,
       unreadNotificationIds,
       unreadCounts,
+      notificationKinds,
     };
   });
 
@@ -249,6 +279,8 @@ export function useChannelRailActivity(
     targetChannelId,
     targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,
+    notificationKind: (channelId: string): ChannelNotificationKind =>
+      notificationActivity().notificationKinds.get(channelId) ?? 'none',
     unreadCount: (group: ChannelsGroup) =>
       notificationActivity().unreadCounts[group],
   };

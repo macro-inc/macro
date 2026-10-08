@@ -52,6 +52,8 @@ function setup() {
                 __typename: 'GraphqlSoupChannel',
                 id: 'channel',
                 unreadNotifications: [{ id: 'one', state }],
+                unreadChannelActivity: [],
+                unreadChannelImportant: [],
               },
             ],
           },
@@ -74,9 +76,15 @@ describe('channel unread presence query', () => {
       );
       expect(f.operations[0].query).toEqual(ChannelUnreadPresenceDocument);
       f.respond('UNSEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'UNSEEN' }]);
+      expect(f.query.data).toEqual({
+        messages: [{ id: 'one', state: 'UNSEEN' }],
+        activity: [],
+      });
       f.respond('SEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
+      expect(f.query.data).toEqual({
+        messages: [{ id: 'one', state: 'SEEN' }],
+        activity: [],
+      });
       expect(getChannelListRevalidations()).toEqual([
         {
           document: ChannelUnreadPresenceDocument,
@@ -114,7 +122,10 @@ describe('channel unread presence query', () => {
         { requestPolicy: 'network-only' }
       );
       f.respond('SEEN');
-      expect(f.query.data).toEqual([{ id: 'one', state: 'SEEN' }]);
+      expect(f.query.data).toEqual({
+        messages: [{ id: 'one', state: 'SEEN' }],
+        activity: [],
+      });
     } finally {
       visible.mockRestore();
       f.dispose();

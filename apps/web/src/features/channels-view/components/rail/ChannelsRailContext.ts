@@ -133,6 +133,10 @@ export type ChannelsRailContext = {
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
+  threadsActivity: {
+    kind: Accessor<'none' | 'activity' | 'important'>;
+    forChannel: (channelId: string) => 'none' | 'activity' | 'important';
+  };
   /** Threads tab filter: the conversation whose threads are shown, or all. */
   threadsChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;

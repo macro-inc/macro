@@ -543,15 +543,42 @@ conversation. `All threads` clears the filter.
 The main pane is a virtualized list of channel threads the user takes part in,
 newest reply first. It loads more as it nears the end and returns to the top
 when the selected conversation changes. Messages the user sent that have no
-replies are hidden. Each card shows the root message with its replies collapsed
-the same way as a channel timeline: the first reply groups, then a
-`N more replies` control that expands the rest in place. In `All threads`, each
-card is labelled with its conversation. An icon button (`View in channel`)
-appears at a card's top right on hover or focus, and always on touch; it
-switches back to `All` and opens the channel at that thread. Shift-clicking a
-conversation row opens it in a new split. The filter lives in the view's state,
-not the URL: it survives back/forward within the split and reloads, but a
-copied link opens the Threads tab on `All threads`.
+replies are hidden. Each card shows the root message and the latest two replies,
+in chronological order. When earlier replies exist, a text control above the
+preview says `Show N earlier replies` (or `Show 1 earlier reply`). It expands the
+thread in place and disappears once the earlier replies are shown. Unlike the
+channel timeline, sender grouping does not expand the preview beyond two messages.
+Writable cards show an unfocused reply input by default, which stays open after
+sending. Read-only cards have no reply input;
+while channel metadata loads, the card waits before offering write controls.
+In `All threads`, each card is labelled with its conversation. An icon button
+(`View in channel`) appears at a card's top right on hover or focus, and always
+on touch; it switches back to `All` and opens the channel at that thread.
+Shift-clicking a conversation row opens it in a new split. The filter lives in
+the view's state, not the URL: it survives back/forward within the split and
+reloads, but a copied link opens the Threads tab on `All threads`.
+
+Thread cards have a `Mark thread done` check action on hover or focus (always on
+touch). It completes the viewer's current notifications for that root and its
+replies, not the thread for everyone. The card and reply input stay in place.
+A success toast offers Undo for the exact notifications completed; notifications
+that arrive later are not included in Undo or Redo. Read notifications remain
+actionable until done.
+
+While the Threads flag is enabled, Chat surfaces distinguish unread activity:
+a hollow dot with a low-opacity ink center means ordinary messages or reactions;
+a filled dot means a mention or a thread reply. Both dot types use the theme's
+accent color on light and dark sidebars. These styles appear on thread cards,
+channel rows, the Threads tab, and the app sidebar's Chat item. Conversation rows
+within Threads
+use only that channel's unread threads, never its ordinary channel-message unread
+state. The other channel tabs retain channel-wide activity indicators.
+GraphQL uses bounded activity and important-notification witnesses rather than
+loading the global notification feed. The shared Threads query is bounded to
+500 participant-scoped threads. Read/done changes update the dots optimistically.
+Opening the tab alone does not clear notifications for replies that remain
+hidden or off-screen; existing message visibility marking clears each
+notification as its message is read.
 
 ### Channel labels
 

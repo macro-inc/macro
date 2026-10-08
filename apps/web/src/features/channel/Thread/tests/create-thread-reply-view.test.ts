@@ -13,7 +13,10 @@ const replies: GroupableMessage[] = Array.from({ length: 10 }, (_, index) => ({
 }));
 const preview = replies.slice(0, 3);
 
-function fixture(initialLoaded?: GroupableMessage[]) {
+function fixture(
+  initialLoaded?: GroupableMessage[],
+  collapsedReplyPreview?: 'latest-two'
+) {
   return createRoot((dispose) => {
     const [loaded, setLoaded] = createSignal(initialLoaded);
     const [isExpanded, setExpanded] = createSignal(false);
@@ -21,6 +24,7 @@ function fixture(initialLoaded?: GroupableMessage[]) {
       preview: () => preview,
       loaded,
       isExpanded,
+      collapsedReplyPreview,
     });
     return { ...view, dispose, setLoaded, setExpanded };
   });
@@ -59,6 +63,54 @@ describe('thread preview and explicit expansion', () => {
       expect(view.displayReplies()).toEqual(replies);
       view.setExpanded(false);
       expect(view.displayReplies()).toEqual(preview);
+    } finally {
+      view.dispose();
+    }
+  });
+});
+
+describe('latest-two reply previews', () => {
+  it('shows exactly the latest two replies even when one sender wrote all replies', () => {
+    const view = fixture(replies, 'latest-two');
+    try {
+      expect(view.displayReplies()).toEqual(replies.slice(-2));
+      expect(view.visibleReplyCount()).toBe(2);
+      view.setExpanded(true);
+      expect(view.displayReplies()).toEqual(replies);
+      view.setExpanded(false);
+      expect(view.displayReplies()).toEqual(replies.slice(-2));
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it('uses the latest preview replies before the full thread loads', () => {
+    const view = fixture(undefined, 'latest-two');
+    try {
+      expect(view.displayReplies()).toEqual(preview.slice(-2));
+      view.setLoaded(replies);
+      expect(view.displayReplies()).toEqual(replies.slice(-2));
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it('includes new replies in a collapsed preview without expanding', () => {
+    const view = fixture(replies, 'latest-two');
+    try {
+      const updatedReplies = [...replies, { ...replies[0], id: 'new-reply' }];
+      view.setLoaded(updatedReplies);
+      expect(view.displayReplies()).toEqual(updatedReplies.slice(-2));
+    } finally {
+      view.dispose();
+    }
+  });
+
+  it.each([0, 1, 2])('shows all replies when only %i exist', (count) => {
+    const view = fixture(replies.slice(0, count), 'latest-two');
+    try {
+      expect(view.displayReplies()).toEqual(replies.slice(0, count));
+      expect(view.visibleReplyCount()).toBe(count);
     } finally {
       view.dispose();
     }

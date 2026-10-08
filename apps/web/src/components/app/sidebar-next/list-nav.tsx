@@ -9,6 +9,7 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ChannelNotificationKind } from '@entity/components/ChannelNotificationIndicator';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import { useLocation } from '@solidjs/router';
 import { Button, cn } from '@ui';
@@ -21,6 +22,7 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
 export type ListNavProps = {
   item: SidebarNextNavItem;
   unread?: boolean;
+  channelNotificationKind?: ChannelNotificationKind;
   activeCall?: boolean;
   /** A short status pill under the glyph, e.g. `Now` or `12m`. */
   badge?: string;
@@ -204,7 +206,13 @@ export const ListNav = (props: ListNavProps) => {
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        label={props.item.label}
+        label={
+          props.channelNotificationKind === 'important'
+            ? `${props.item.label}: Unread mention or thread reply`
+            : props.channelNotificationKind === 'activity'
+              ? `${props.item.label}: Unread activity`
+              : props.item.label
+        }
         aria-description={
           [
             props.unread && 'Unread items',
@@ -237,7 +245,12 @@ export const ListNav = (props: ListNavProps) => {
         />
         <Show
           when={props.activeCall}
-          fallback={<SidebarUnreadDot active={props.unread} />}
+          fallback={
+            <SidebarUnreadDot
+              active={props.unread}
+              kind={props.channelNotificationKind}
+            />
+          }
         >
           {/* Sits outside the button box: the glyph is inset from the
               corner, so a badge flush to it lands on the icon. The rail's

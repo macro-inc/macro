@@ -1,23 +1,20 @@
-# Sidebar presence only. Never use this witness as the complete mark-read input.
-query ChannelUnreadPresence($input: SoupInput!) {
+# Small per-card evidence. Completion uses the entity mutation, not these IDs.
+query ChannelThreadActivity($input: SoupInput!) {
 	user {
 		id
 		soup(input: $input) {
 			items {
 				__typename
 				id
-				... on GraphqlSoupChannel {
-					unreadNotifications: notifications(
-						filter: {
-							states: [UNSEEN]
-							topLevelMessagesOnly: true
-						}
+				... on GraphqlSoupChannelMessage {
+					pendingThreadNotifications: notifications(
+						filter: { states: [UNSEEN, SEEN] }
 						limit: 1
 					) {
 						id
 						state
 					}
-					unreadChannelActivity: notifications(
+					unreadThreadNotifications: notifications(
 						filter: { states: [UNSEEN] }
 						limit: 1
 					) {
@@ -25,7 +22,7 @@ query ChannelUnreadPresence($input: SoupInput!) {
 						state
 						eventType
 					}
-					unreadChannelImportant: notifications(
+					unreadThreadImportant: notifications(
 						filter: { states: [UNSEEN], eventTypes: ["channel_mention", "channel_message_reply"] }
 						limit: 1
 					) {

@@ -2,11 +2,14 @@ import { ViewShell } from '@app/components/view-shell';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import type { ChannelEntity, ChannelThreadEntity } from '@entity';
+import { ChannelNotificationIndicator } from '@entity/components/ChannelNotificationIndicator';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
+import CheckIcon from '@phosphor/check.svg';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import { Button, cn, Scroll } from '@ui';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { useChannelThreadActivity } from '../queries/channel-thread-activity';
 import { useChannelThreadsQuery } from '../queries/channel-threads';
 import { ChannelAvatar } from './rail/ChannelRailItems';
 
@@ -91,8 +94,8 @@ function ThreadCardBody(props: { query: ThreadQuery; canWrite: boolean }) {
         <MessageThread
           data={data()}
           canWrite={props.canWrite}
-          // Collapsed like a channel timeline: the first replies, then a "more
-          // replies" control that expands the rest.
+          collapsedReplyPreview="latest-two"
+          keepReplyInputOpen
           expanded={false}
         />
       )}
@@ -111,11 +114,13 @@ function ThreadCard(props: {
     id: props.thread.channelId,
   });
   const query = useMessageThreadQuery(parent, () => props.thread.id);
+  const activity = useChannelThreadActivity(() => props.thread.messageId);
 
   return (
     <article
       class={cn(CARD_CLASS, 'group/thread-card')}
       data-channel-thread={props.thread.id}
+      data-notification-kind={activity.kind()}
     >
       <Show when={props.showChannel && props.channel}>
         {(channel) => (
@@ -149,25 +154,43 @@ function ThreadCard(props: {
           >
             <ThreadCardBody
               query={query}
-              // Channels the rail knows about say whether the viewer can post;
-              // anything else is left to the server to refuse.
-              canWrite={props.channel?.isParticipant !== false}
+              // Wait for rail metadata before offering write controls. Legacy
+              // channel rows without the participant flag are treated as joined.
+              canWrite={
+                !!props.channel && props.channel.isParticipant !== false
+              }
             />
           </DebugSuspense>
         </Match>
       </Switch>
-      {/* The wrapper carries the position: the button's tooltip anchors to
-          it, and the thread keeps the card's full width underneath. It shows
-          on hover or keyboard focus, and always on touch, which cannot hover. */}
-      <div class="absolute top-2 right-2 opacity-0 transition-opacity group-hover/thread-card:opacity-100 group-focus-within/thread-card:opacity-100 touch:opacity-100 motion-reduce:transition-none">
-        <Button
-          variant="ghost"
-          size="icon-md"
-          label="View in channel"
-          onClick={() => props.onOpen()}
-        >
-          <ArrowSquareOutIcon />
-        </Button>
+      <div class="absolute top-2 right-2 flex items-center gap-1">
+        <ChannelNotificationIndicator kind={activity.kind()} />
+        <div class="flex items-center opacity-0 transition-opacity group-hover/thread-card:opacity-100 group-focus-within/thread-card:opacity-100 touch:opacity-100 motion-reduce:transition-none">
+          <Button
+            variant="ghost"
+            size="icon-md"
+            label={
+              activity.isPending()
+                ? 'Marking done'
+                : activity.isDone()
+                  ? 'Done'
+                  : 'Mark thread done'
+            }
+            disabled={activity.isPending() || activity.isDone()}
+            aria-pressed={activity.isDone()}
+            onClick={() => void activity.markDone()}
+          >
+            <CheckIcon />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-md"
+            label="View in channel"
+            onClick={() => props.onOpen()}
+          >
+            <ArrowSquareOutIcon />
+          </Button>
+        </div>
       </div>
     </article>
   );
