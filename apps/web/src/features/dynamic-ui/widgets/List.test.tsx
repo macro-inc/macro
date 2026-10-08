@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => ({
@@ -57,7 +58,7 @@ vi.mock('@entity/composed/ListEntity', () => ({
 vi.mock('@entity/components/CollapsibleList', () => ({
   CollapsibleList: (props: {
     items: unknown[];
-    children: (item: unknown) => unknown;
+    children: (item: unknown) => JSX.Element;
   }) => <div>{props.children(props.items[0])}</div>,
 }));
 

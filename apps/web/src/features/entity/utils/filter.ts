@@ -17,16 +17,18 @@ function attachedNotifications(entity: {
 }
 
 export function unreadFilterFn(entity: WithNotification<EntityData>) {
-  const notifications = attachedNotifications(entity);
   if (entity.type === 'email') {
+    // Mailbox unread is enough; skip attached notifications so list scans
+    // do not touch every unread email's reminder accessor.
+    if (!entity.isRead) return true;
     return (
-      !entity.isRead ||
-      (notifications?.some(
+      attachedNotifications(entity)?.some(
         (n) =>
           n.notification_event_type === 'reminder' && !notificationIsRead(n)
-      ) ??
-        false)
+      ) ?? false
     );
   }
-  return notifications?.some((n) => !notificationIsRead(n)) ?? false;
+  return (
+    attachedNotifications(entity)?.some((n) => !notificationIsRead(n)) ?? false
+  );
 }

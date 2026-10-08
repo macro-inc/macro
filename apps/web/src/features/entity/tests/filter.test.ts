@@ -122,7 +122,7 @@ describe('unreadFilterFn', () => {
       const entity = {
         ...document(),
         notifications: [notification()],
-      } as WithNotification<DocumentEntity>;
+      } as unknown as WithNotification<DocumentEntity>;
       expect(unreadFilterFn(entity)).toBe(true);
       expect(
         unreadFilterFn({
@@ -130,7 +130,7 @@ describe('unreadFilterFn', () => {
           notifications: [
             notification({ state: 'seen', viewed_at: firstView }),
           ],
-        })
+        } as unknown as WithNotification<DocumentEntity>)
       ).toBe(false);
     });
   });
