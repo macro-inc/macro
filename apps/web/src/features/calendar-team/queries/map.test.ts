@@ -1,5 +1,6 @@
 import type { TeamCalendarItem } from '@service-storage/generated/schemas/teamCalendarItem';
 import { describe, expect, it } from 'vitest';
+import { mapCalendarEventToFullCalendar } from '../../calendar/types';
 import { canEditCalendarEventTime } from '../../calendar/utils/event-interaction';
 import { mergeCalendarOverlays } from '../core/merge';
 import { mapTeamCalendarItem } from './map';
@@ -18,6 +19,35 @@ const busy = {
 } satisfies TeamCalendarItem;
 
 describe('team calendar grid projection', () => {
+  it('retains the exact nonbusy instant of a detailed shared point', () => {
+    const point = mapTeamCalendarItem(
+      {
+        ...busy,
+        kind: 'details',
+        contributesToAvailability: false,
+        time: { ...busy.time, endsAt: busy.time.startsAt },
+        details: {
+          title: 'Point event',
+          description: null,
+          location: null,
+          conferenceUrl: null,
+          organizerEmail: null,
+          organizerName: null,
+          attendees: [],
+          calendarName: 'Shared calendar',
+        },
+      },
+      'Alice'
+    );
+    const rendered = mapCalendarEventToFullCalendar(point);
+
+    expect(point.start).toBe(point.end);
+    expect(point.teamProjection?.contributesToAvailability).toBe(false);
+    expect(point.title).toBe('Alice: Point event');
+    expect(rendered.end).toBe('2026-10-07T12:00:00.001Z');
+    expect(rendered.startEditable).toBe(false);
+    expect(rendered.durationEditable).toBe(false);
+  });
   it('keeps redacted blocks separate from canonical event identities and provider actions', () => {
     const event = mapTeamCalendarItem(busy, 'Alice');
     expect(event.id).toBe(JSON.stringify(['team-calendar', 'alice', 'opaque']));

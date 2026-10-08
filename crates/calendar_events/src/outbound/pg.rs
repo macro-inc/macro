@@ -1016,6 +1016,8 @@ impl CalendarRepository for PgCalendarRepository {
               )
               AND (
                     occurrence.timed_span && tstzrange($2, $3, '[)')
+                    OR (occurrence.starts_at = occurrence.ends_at
+                        AND occurrence.starts_at >= $2 AND occurrence.starts_at < $3)
                     OR occurrence.day_span && daterange($4, $5, '[)')
               )
               AND (

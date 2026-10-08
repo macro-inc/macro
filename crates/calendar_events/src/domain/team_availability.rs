@@ -148,10 +148,7 @@ pub fn calculate(range: OccurrenceRange, sources: TeamAvailabilitySources) -> Te
         {
             continue;
         }
-        let time = source
-            .exception()
-            .map(|exception| &exception.time)
-            .unwrap_or(&source.occurrence.time);
+        let time = source.time();
         let interval = match interval(time, source.calendar_time_zone.as_deref()) {
             Ok(interval) => interval,
             Err(reason) => {
@@ -159,7 +156,10 @@ pub fn calculate(range: OccurrenceRange, sources: TeamAvailabilitySources) -> Te
                 continue;
             }
         };
-        if interval.end <= range.starts_at || interval.start >= range.ends_at {
+        if interval.start >= range.ends_at
+            || (interval.end <= range.starts_at
+                && !(interval.start == interval.end && interval.start == range.starts_at))
+        {
             continue;
         }
         member
@@ -263,6 +263,9 @@ fn interval(
     time: &EventTime,
     calendar_zone: Option<&str>,
 ) -> Result<AvailabilityInterval, AvailabilityUnknownReason> {
+    if !time.is_valid() {
+        return Err(AvailabilityUnknownReason::InvalidInterval);
+    }
     let (start, end) = match time {
         EventTime::Timed {
             starts_at, ends_at, ..
@@ -281,7 +284,7 @@ fn interval(
             )
         }
     };
-    if end <= start {
+    if end < start || (end == start && matches!(time, EventTime::AllDay { .. })) {
         return Err(AvailabilityUnknownReason::InvalidInterval);
     }
     Ok(AvailabilityInterval { start, end })

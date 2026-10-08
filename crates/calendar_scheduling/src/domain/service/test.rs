@@ -203,6 +203,7 @@ struct Calendar {
     lose_move_response: AtomicBool,
     lose_cancel_response: AtomicBool,
     events: Mutex<HashMap<Uuid, Uuid>>,
+    busy: Mutex<Vec<BusyRange>>,
 }
 impl Calendars for Arc<Calendar> {
     async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
@@ -215,7 +216,7 @@ impl Calendars for Arc<Calendar> {
         _: DateTime<Utc>,
         _: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
-        Ok(vec![])
+        Ok(self.busy.lock().unwrap().clone())
     }
     async fn create(&self, record: &BookingRecord, _: &EventType) -> Result<(Uuid, String), Error> {
         let id = *self
@@ -449,6 +450,42 @@ async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {
     ));
     assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
 }
+#[tokio::test]
+async fn pending_approval_ignores_points_but_rejects_reversed_calendar_facts() {
+    let calendars = Arc::new(Calendar::default());
+    let service = TestService::new(Arc::new(Memory::default()), calendars.clone(), Members);
+    let profile = service.save("admin", None, profile(None)).await.unwrap();
+    let mut record = service
+        .book(profile.id, profile.event_types[0].id, request())
+        .await
+        .unwrap();
+    record.booking.status = BookingStatus::Pending;
+    record.calendar_event_id = None;
+    let id = record.booking.id;
+    let point = record.booking.starts_at + Duration::minutes(5);
+    let host = record.booking.hosts[0].clone();
+    service
+        .repository
+        .bookings
+        .lock()
+        .unwrap()
+        .insert(id, record);
+    *calendars.busy.lock().unwrap() = vec![BusyRange {
+        host,
+        start: point,
+        end: point - Duration::seconds(1),
+    }];
+    assert!(matches!(
+        service.approve("admin", id).await,
+        Err(Error::CalendarUnavailable)
+    ));
+    calendars.busy.lock().unwrap()[0].end = point;
+    assert_eq!(
+        service.approve("admin", id).await.unwrap().status,
+        BookingStatus::Confirmed
+    );
+}
+
 #[tokio::test]
 async fn pending_booking_can_be_approved_after_link_is_removed() {
     let service = TestService::new(

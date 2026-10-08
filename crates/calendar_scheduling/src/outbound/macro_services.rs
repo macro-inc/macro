@@ -113,6 +113,12 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             {
                 continue;
             }
+            if !occurrence.time.is_valid() {
+                return Err(Error::CalendarUnavailable);
+            }
+            if !occurrence.time.has_positive_duration() {
+                continue;
+            }
             let (start, end) = match occurrence.time {
                 EventTime::Timed {
                     starts_at, ends_at, ..

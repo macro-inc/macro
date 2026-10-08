@@ -1188,7 +1188,9 @@ export const listOccurrencesResponse = zod
                     .object({
                       endsAt: zod.iso
                         .datetime({})
-                        .describe('Exclusive end instant.'),
+                        .describe(
+                          'Exclusive end instant; equal to the start for an imported point event.'
+                        ),
                       kind: zod.enum(['timed']),
                       startsAt: zod.iso
                         .datetime({})
@@ -1249,7 +1251,9 @@ export const listOccurrencesResponse = zod
                     .object({
                       endsAt: zod.iso
                         .datetime({})
-                        .describe('Exclusive end instant.'),
+                        .describe(
+                          'Exclusive end instant; equal to the start for an imported point event.'
+                        ),
                       kind: zod.enum(['timed']),
                       startsAt: zod.iso
                         .datetime({})
@@ -1369,7 +1373,9 @@ export const mentionPreviewsResponse = zod
                         .object({
                           endsAt: zod.iso
                             .datetime({})
-                            .describe('Exclusive end instant.'),
+                            .describe(
+                              'Exclusive end instant; equal to the start for an imported point event.'
+                            ),
                           kind: zod.enum(['timed']),
                           startsAt: zod.iso
                             .datetime({})
@@ -1561,7 +1567,9 @@ export const listTeamCalendarResponse = zod
                     .object({
                       endsAt: zod.iso
                         .datetime({})
-                        .describe('Exclusive end instant.'),
+                        .describe(
+                          'Exclusive end instant; equal to the start for an imported point event.'
+                        ),
                       kind: zod.enum(['timed']),
                       startsAt: zod.iso
                         .datetime({})
@@ -1665,7 +1673,9 @@ export const listTeamOutOfOfficeResponse = zod
                 .object({
                   endsAt: zod.iso
                     .datetime({})
-                    .describe('Exclusive end instant.'),
+                    .describe(
+                      'Exclusive end instant; equal to the start for an imported point event.'
+                    ),
                   kind: zod.enum(['timed']),
                   startsAt: zod.iso
                     .datetime({})

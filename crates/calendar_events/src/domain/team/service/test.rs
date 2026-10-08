@@ -93,6 +93,26 @@ fn subscribed_busy_block_is_shared_without_claiming_personal_busyness() {
 }
 
 #[test]
+fn details_can_show_a_point_without_inventing_masked_busy_time() {
+    let mut row = source();
+    if let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut row.occurrence.time
+    {
+        *ends_at = *starts_at;
+    }
+    let detailed = project(&row, TeamCalendarSharing::All, &[]).unwrap();
+    assert!(matches!(
+        detailed.content,
+        TeamCalendarContent::Details { .. }
+    ));
+    assert!(!detailed.contributes_to_availability);
+    assert!(project(&row, TeamCalendarSharing::BusyOnly, &[]).is_none());
+    row.event.visibility = EventVisibility::Private;
+    assert!(project(&row, TeamCalendarSharing::All, &[]).is_none());
+}
+
+#[test]
 fn detailed_attendee_flags_are_viewer_relative() {
     let row = source();
     let item = project(

@@ -1,5 +1,7 @@
 use super::*;
 
+mod points;
+
 #[test]
 fn calendar_access_role_is_reflected_on_mapped_events() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
@@ -211,7 +213,11 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
     );
 
     let mut invalid_interval = malformed_instance.clone();
-    invalid_interval.end = invalid_interval.start.clone();
+    invalid_interval.end = Some(GoogleEventDateTime {
+        date_time: Some("2026-07-24T13:00:00Z".to_owned()),
+        date: None,
+        time_zone: None,
+    });
     assert!(map_upsert(&target, master.clone(), Vec::new(), vec![invalid_interval]).is_err());
 
     let mut missing_identity = malformed_instance.clone();

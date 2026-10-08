@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::team::{CalendarTeamRepository, TeamCalendarCoverage};
+use crate::domain::{team::TeamAvailabilitySources, team_availability::calculate};
 use crate::outbound::pg_team::PgCalendarTeamRepository;
 
 struct SyncFixture {
@@ -202,6 +203,144 @@ impl SyncFixture {
             observed_provider_event_ids: None,
             cancelled_provider_event_ids: vec![],
         }
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn positive_to_point_sync_replaces_busy_without_changing_identity_or_source_grant(
+    pool: PgPool,
+) {
+    let fixture = SyncFixture::new(pool.clone(), "point-update").await;
+    let original = fixture.events[0].clone();
+    let before = fixture
+        .team
+        .sources(
+            &fixture.viewer,
+            july_2026_range(),
+            std::slice::from_ref(&fixture.owner),
+            None,
+            100,
+        )
+        .await
+        .unwrap();
+    let source_id = before
+        .iter()
+        .find(|row| row.event.ical_uid == "a")
+        .unwrap()
+        .source_id;
+    let event_id = before
+        .iter()
+        .find(|row| row.event.ical_uid == "a")
+        .unwrap()
+        .event
+        .id;
+
+    for (sequence, make_point) in [(2, true), (3, false)] {
+        let lease = fixture.begin_poll().await;
+        let mut changed = original.clone();
+        changed.event.sequence = sequence;
+        changed.event.updated_at += Duration::minutes(i64::from(sequence));
+        if make_point {
+            let EventTime::Timed {
+                starts_at, ends_at, ..
+            } = &mut changed.event.time
+            else {
+                panic!("timed fixture");
+            };
+            *ends_at = *starts_at;
+            for occurrence in &mut changed.occurrences {
+                let EventTime::Timed {
+                    starts_at, ends_at, ..
+                } = &mut occurrence.time
+                else {
+                    panic!("timed fixture");
+                };
+                *ends_at = *starts_at;
+            }
+        }
+        fixture
+            .repo
+            .upsert_event(CalendarEventWrite::GoogleBackfill {
+                key: fixture.key,
+                lease_token: lease,
+                upsert: changed,
+            })
+            .await
+            .unwrap();
+        fixture.assert_coverage(false, 0).await;
+        fixture
+            .repo
+            .commit_google_calendar_sync(
+                fixture.key,
+                lease,
+                fixture.account,
+                fixture.token_only(),
+                1,
+            )
+            .await
+            .unwrap();
+        fixture
+            .repo
+            .complete_google_backfill(fixture.key, lease)
+            .await
+            .unwrap();
+        fixture.assert_coverage(true, 2).await;
+        let sources = fixture
+            .team
+            .sources(
+                &fixture.viewer,
+                july_2026_range(),
+                std::slice::from_ref(&fixture.owner),
+                None,
+                100,
+            )
+            .await
+            .unwrap();
+        let replaced = sources
+            .iter()
+            .find(|row| row.event.ical_uid == "a")
+            .unwrap();
+        assert_eq!(replaced.source_id, source_id);
+        assert_eq!(replaced.event.id, event_id);
+        assert_eq!(
+            replaced.occurrence.occurrence_key,
+            original.occurrences[0].occurrence_key
+        );
+        assert_eq!(replaced.time().has_positive_duration(), !make_point);
+        let role = sqlx::query_scalar!(
+            "SELECT provider_access_role FROM calendar_event_sources WHERE id=$1",
+            source_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(role.as_deref(), Some("owner"));
+        let members = fixture
+            .team
+            .members(&fixture.viewer, false, &july_2026_range())
+            .await
+            .unwrap();
+        let result = calculate(
+            july_2026_range(),
+            TeamAvailabilitySources {
+                members,
+                sources,
+                complete: true,
+                unknown_user_ids: vec![],
+            },
+        );
+        assert!(result.complete);
+        assert_eq!(result.members[0].busy.len(), 1);
+        let expected_hour = if make_point { 10 } else { 9 };
+        assert_eq!(
+            result.members[0].busy[0].start,
+            Utc.with_ymd_and_hms(2026, 7, 24, expected_hour, 0, 0)
+                .unwrap()
+        );
+        assert_eq!(
+            result.members[0].busy[0].end,
+            Utc.with_ymd_and_hms(2026, 7, 24, 11, 0, 0).unwrap()
+        );
     }
 }
 

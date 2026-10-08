@@ -642,7 +642,7 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         {
             return Err(Error::Conflict);
         }
-        if self
+        let busy = self
             .calendars
             .busy(
                 &record.booking.hosts,
@@ -650,9 +650,13 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
                 record.busy_end,
                 None,
             )
-            .await?
+            .await?;
+        if busy.iter().any(|interval| interval.end < interval.start) {
+            return Err(Error::CalendarUnavailable);
+        }
+        if busy
             .iter()
-            .any(|b| b.start < record.busy_end && b.end > record.busy_start)
+            .any(|b| b.start < b.end && b.start < record.busy_end && b.end > record.busy_start)
         {
             return Err(Error::Conflict);
         }

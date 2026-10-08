@@ -1223,6 +1223,16 @@ Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Re
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
 handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
 
+Imported timed events with identical start and end are points: they show a compact
+chip with one time and `No duration` in details, and do not block availability.
+Future points also appear in Upcoming events, without becoming ongoing meetings.
+Grid dragging and resizing are disabled for points. An owned point's metadata,
+RSVP, and deletion still work; metadata saves preserve its exact provider time.
+Creating an event or changing its time requires positive duration. Shared points
+remain read-only and appear only when their details are shared.
+An existing Macro call can keep its schedule during point metadata edits; adding
+a new Macro call requires giving the event a duration first.
+
 Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
 and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
 for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST

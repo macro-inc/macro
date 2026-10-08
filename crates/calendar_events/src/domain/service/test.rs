@@ -16,7 +16,7 @@ use crate::domain::{
         GoogleCalendarProvider, GoogleEventSyncContext, GoogleProviderError,
     },
 };
-use chrono::{TimeZone, Utc};
+use chrono::{Duration, TimeZone, Utc};
 use macro_event_broker::NoopMacroEventBroker;
 use std::sync::{Arc, Mutex};
 
@@ -354,7 +354,7 @@ fn accepts_valid_event() {
 }
 
 #[test]
-fn rejects_invalid_occurrence_time() {
+fn accepts_point_occurrence_but_rejects_reversed_time() {
     let mut upsert = valid_upsert();
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
     upsert.occurrences[0].time = EventTime::Timed {
@@ -363,6 +363,10 @@ fn rejects_invalid_occurrence_time() {
         time_zone: None,
     };
 
+    assert!(validate_upsert(&upsert).is_ok());
+    if let EventTime::Timed { ends_at, .. } = &mut upsert.occurrences[0].time {
+        *ends_at -= Duration::seconds(1);
+    }
     assert!(validate_upsert(&upsert).is_err());
 }
 
@@ -1608,7 +1612,7 @@ impl GoogleCalendarProvider for InvalidNormalizedGoogleProvider {
             let start = Utc.with_ymd_and_hms(2026, 7, 24, 14, 0, 0).unwrap();
             valid.occurrences[0].time = EventTime::Timed {
                 starts_at: start,
-                ends_at: start,
+                ends_at: start - Duration::seconds(1),
                 time_zone: None,
             };
             upserts.push(valid);

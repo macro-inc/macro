@@ -4,6 +4,10 @@ This harness loads the complete bundled app and intercepts auth, team, and calen
 
 It uses a live clock and checks that loading placeholders disappear and event chips are opaque and in the viewport before capture. It exercises sharing and availability settings, read-only event details, revocation, membership loss, a viewer without any connected Google account, and automatic data/popover expiry while refresh requests hang. The expiry check waits up to 65 seconds with the browser clock running normally.
 
+Imported own and shared point events must render compactly with a single time,
+without drag/resize. Editing the own point's title must omit time from its request.
+Adding a Macro call to a point must show a duration error before any mutation.
+
 From `apps/web`, with Chromium installed:
 
 ```sh

@@ -88,6 +88,13 @@ pub struct TeamSourceOccurrence {
 }
 
 impl TeamSourceOccurrence {
+    /// The effective interval from this source's exact occurrence or exception.
+    pub fn time(&self) -> &EventTime {
+        self.exception()
+            .map(|exception| &exception.time)
+            .unwrap_or(&self.occurrence.time)
+    }
+
     /// Visibility used by a team view. An instance can restrict disclosure,
     /// but cannot unhide content from a private series snapshot.
     pub fn visibility(&self) -> EventVisibility {
@@ -109,7 +116,9 @@ impl TeamSourceOccurrence {
             .unwrap_or(self.event.transparency)
     }
 
-    /// Whether this source occurrence blocks its source calendar at all.
+    /// Whether this source occurrence is eligible to contribute busy time.
+    /// Keep points eligible here so conflicting positive copies are detected;
+    /// projection and interval merging separately exclude their empty duration.
     pub fn is_busy(&self) -> bool {
         !self.occurrence.is_cancelled
             && self.event.status != EventStatus::Cancelled
@@ -135,7 +144,8 @@ impl TeamSourceOccurrence {
             .unwrap_or(&self.event.attendees)
     }
 
-    /// Whether the occurrence represents this person's busy time.
+    /// Whether this person's calendar/attendance makes the occurrence eligible
+    /// for availability, before checking its duration or reconciling copies.
     pub fn is_personally_busy(&self) -> bool {
         if !self.is_busy() {
             return false;

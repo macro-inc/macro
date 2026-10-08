@@ -319,7 +319,7 @@ fn project(
             },
         }
     } else {
-        if !source.is_busy() {
+        if !source.is_busy() || !source.time().has_positive_duration() {
             return None;
         }
         TeamCalendarContent::Busy
@@ -334,8 +334,9 @@ fn project(
     Some(TeamCalendarItem {
         id: Uuid::new_v5(&Uuid::NAMESPACE_OID, &identity).to_string(),
         owner_id: source.shared_by.clone(),
-        time: source.occurrence.time.clone(),
-        contributes_to_availability: source.is_personally_busy(),
+        time: source.time().clone(),
+        contributes_to_availability: source.is_personally_busy()
+            && source.time().has_positive_duration(),
         content,
     })
 }

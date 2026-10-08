@@ -73,6 +73,35 @@ const time = (hour: number) => ({
   endsAt: `${fixtureDate}T${hour + 1}:00:00Z`,
   timeZone: 'UTC',
 });
+const pointTime = (hour: number) => ({
+  ...time(hour),
+  endsAt: time(hour).startsAt,
+});
+const ownPoint = {
+  event: {
+    id: '00000000-0000-0000-0000-000000009001',
+    ownerId: USER_ID,
+    icalUid: 'synthetic-point',
+    calendarId: 'primary',
+    title: 'Imported point',
+    time: pointTime(11),
+    status: 'confirmed',
+    eventType: 'default',
+    transparency: 'opaque',
+    visibility: 'default',
+    isReadOnly: false,
+    attendees: [],
+    recurrenceLines: [],
+    sources: [],
+  },
+  occurrence: {
+    eventId: '00000000-0000-0000-0000-000000009001',
+    occurrenceKey: pointTime(11).startsAt,
+    recurrenceId: null,
+    isCancelled: false,
+    time: pointTime(11),
+  },
+};
 const items = [
   {
     id: 'opaque-details',
@@ -105,6 +134,23 @@ const items = [
     kind: 'busy',
     time: time(12),
     contributesToAvailability: true,
+  },
+  {
+    id: 'opaque-point',
+    ownerId: ALICE,
+    kind: 'details',
+    time: pointTime(13),
+    contributesToAvailability: false,
+    details: {
+      title: 'Shared point',
+      description: null,
+      location: null,
+      conferenceUrl: null,
+      organizerEmail: null,
+      organizerName: null,
+      attendees: [],
+      calendarName: 'Alice primary',
+    },
   },
   {
     id: 'opaque-followed',
@@ -216,9 +262,18 @@ await page.route('**/*', async (route) => {
   }
   if (path === '/dss/calendar-events/team-out-of-office')
     return respond({ items: [], hasMore: false });
+  if (
+    path === `/calendar/events/${ownPoint.event.id}` &&
+    request.method() === 'PATCH'
+  ) {
+    const body = request.postDataJSON();
+    mutations.push({ eventPatch: body });
+    if (body.title) ownPoint.event.title = body.title;
+    return respond(ownPoint.event);
+  }
   if (path === '/dss/calendar-events')
     return respond({
-      items: [],
+      items: connected ? [ownPoint] : [],
       hasMore: false,
       nextCursor: null,
       syncStatus: 'ready',
@@ -289,6 +344,98 @@ try {
     path: '/tmp/calendar-team-grid.png',
     fullPage: true,
   });
+  const activeCalendar = page
+    .getByRole('region', { name: 'Calendar periods' })
+    .locator('.pager-page[aria-hidden="false"]');
+  const pointChip = activeCalendar
+    .getByText('Imported point', { exact: true })
+    .locator(
+      'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " fc-event ")][1]'
+    );
+  await expect(pointChip).toBeInViewport();
+  const pointBounds = await pointChip.boundingBox();
+  assert.ok(
+    pointBounds && pointBounds.height > 0 && pointBounds.height < 30,
+    'Point must have a compact footprint, not an invented hour'
+  );
+  await expect(pointChip).not.toHaveClass(
+    /fc-event-draggable|fc-event-resizable/
+  );
+  await expect(pointChip).toContainText('11:00');
+  await expect(pointChip).not.toContainText('12:00');
+  // Upcoming uses the exact point instant, and never treats it as ongoing.
+  if (Date.now() < Date.parse(ownPoint.event.time.startsAt)) {
+    await expect(
+      page.getByRole('button', { name: 'Open Imported point', exact: true })
+    ).toBeVisible();
+  }
+  await pointChip.click();
+  await expect(page.getByText(/No duration/).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Edit event', exact: true }).click();
+  await page
+    .getByRole('textbox', { name: 'Title', exact: true })
+    .fill('Imported point updated');
+  await page.getByText('Add meeting link', { exact: true }).click();
+  await page.getByRole('option', { name: 'Macro call', exact: true }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Give this event a duration before adding a Macro call.'
+  );
+  assert.deepEqual(
+    mutations,
+    [],
+    'Rejected point call must not save calendar changes'
+  );
+  await page.getByText('Macro call', { exact: true }).click();
+  await page
+    .getByRole('option', { name: 'No meeting link', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect
+    .poll(() =>
+      mutations.some(
+        (entry) =>
+          typeof entry === 'object' && entry !== null && 'eventPatch' in entry
+      )
+    )
+    .toBe(true);
+  const savedPoint = mutations.find(
+    (entry): entry is { eventPatch: Record<string, unknown> } =>
+      typeof entry === 'object' && entry !== null && 'eventPatch' in entry
+  );
+  assert.equal(savedPoint?.eventPatch.title, 'Imported point updated');
+  assert.equal('time' in (savedPoint?.eventPatch ?? {}), false);
+  await expect(
+    page.getByRole('textbox', { name: 'Title', exact: true })
+  ).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  const sharedPointChip = activeCalendar
+    .getByText('Alice Fixture: Shared point', { exact: true })
+    .locator(
+      'xpath=ancestor::*[contains(concat(" ", normalize-space(@class), " "), " fc-event ")][1]'
+    );
+  await expect(sharedPointChip).toBeInViewport();
+  const sharedPointBounds = await sharedPointChip.boundingBox();
+  assert.ok(
+    sharedPointBounds &&
+      sharedPointBounds.height > 0 &&
+      sharedPointBounds.height < 30
+  );
+  await expect(sharedPointChip).not.toHaveClass(
+    /fc-event-draggable|fc-event-resizable/
+  );
+  await sharedPointChip.click();
+  await expect(
+    page.locator('section[aria-label="Shared event details"]')
+  ).toContainText('No duration');
+  await expect(
+    page.locator('section[aria-label="Shared event details"]')
+  ).toContainText('Does not count toward their busy time');
+  await page.screenshot({
+    path: '/tmp/calendar-team-points.png',
+    fullPage: true,
+  });
+  await page.keyboard.press('Escape');
   await page.getByText('Team planning', { exact: false }).first().click();
   const detail = page.locator('section[aria-label="Shared event details"]');
   await expect(detail).toContainText('Shared in Macro · Read only');
@@ -441,7 +588,7 @@ try {
   assert.deepEqual(errors, []);
   assert.deepEqual(requestFailures, []);
   console.log(
-    'PASS: full-app team settings, sanitized blocks, read-only details, revoked-data removal, membership loss, viewer without Google, and expiry during hung refresh'
+    'PASS: imported own/shared points and metadata-only edit, full-app team settings, sanitized blocks, read-only details, revoked-data removal, membership loss, viewer without Google, and expiry during hung refresh'
   );
 } catch (error) {
   console.error(error);

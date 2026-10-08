@@ -26,6 +26,10 @@ use crate::domain::{
 };
 
 const GOOGLE_CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
+// Events.list excludes the lower end bound and ignores fractional seconds.
+// A full second of padding admits points at the requested inclusive start;
+// normalization still filters occurrences against the exact requested range.
+const LIST_LOWER_BOUND_PADDING: chrono::Duration = chrono::Duration::seconds(1);
 
 /// Consulted before every Google Calendar HTTP request so deployments can
 /// enforce the per-user API quota. Denials surface as transient provider
@@ -126,7 +130,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     ("maxResults", "2500".to_string()),
                     ("singleEvents", single_events.to_string()),
                     ("showDeleted", "false".to_string()),
-                    ("timeMin", range.starts_at.to_rfc3339()),
+                    (
+                        "timeMin",
+                        (range.starts_at - LIST_LOWER_BOUND_PADDING).to_rfc3339(),
+                    ),
                     ("timeMax", range.ends_at.to_rfc3339()),
                     ("timeZone", "UTC".to_string()),
                 ]);
@@ -179,7 +186,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                 // past only: a timeMax would be encoded into the token and
                 // silently hide events created beyond it once the maintained
                 // window extends.
-                request = request.query(&[("timeMin", window.starts_at.to_rfc3339())]);
+                request = request.query(&[(
+                    "timeMin",
+                    (window.starts_at - LIST_LOWER_BOUND_PADDING).to_rfc3339(),
+                )]);
             }
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);

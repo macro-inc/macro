@@ -1,6 +1,9 @@
 import { createMemo, For, Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../../calendar/types';
-import { parseLocalDate } from '../../calendar/utils/calendar-date';
+import {
+  isTimedPointEvent,
+  parseLocalDate,
+} from '../../calendar/utils/calendar-date';
 import { sanitizeCalendarDescription } from '../../calendar/utils/calendar-description';
 import { safeConferenceUrl } from '../../calendar/utils/conference-link';
 
@@ -39,7 +42,9 @@ export function TeamEventDetails(props: {
             hour12: props.timeFormat === '12-hour',
           }),
     });
-    return `${format.format(start)} – ${format.format(end)}${event.allDay ? ' · All day' : ''}`;
+    return isTimedPointEvent(event)
+      ? `${format.format(start)} · No duration`
+      : `${format.format(start)} – ${format.format(end)}${event.allDay ? ' · All day' : ''}`;
   };
   return (
     <section

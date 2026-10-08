@@ -119,10 +119,20 @@ block time. All-day intervals use each source calendar's IANA timezone, includin
 23/25-hour days and transitions that skip midnight; there is no UTC or requester
 timezone fallback for a missing source timezone.
 
+Google timed events whose start equals their end are preserved as point events.
+They appear in direct calendar reads and permitted detail-sharing views when
+their instant is at or after the query start and before its end. They occupy no
+busy time and produce no busy-only or private masked block. The grid displays a
+point marker without inventing a duration; creating or changing an event's time
+still requires a positive duration.
+
 Copies are correlated by the sharing person, event UID, and original recurrence
 identity. Equal intervals collapse. Disagreeing copies contribute their known
 busy intervals conservatively and make free time unknown. Moving one occurrence
 does not make it a different original recurrence instance.
+A point copy disagreeing with a positive-duration copy remains a conflict. A
+point recurring master does not erase its positive-duration exceptions, and a
+provider update from a duration to a point removes the previous busy interval.
 
 `GetTeamAvailability` always includes the requester. With `userIds` omitted it
 includes the current team; a supplied list narrows to those teammates plus the
@@ -277,10 +287,11 @@ Release checks:
   cached details; a remaining independent entitlement is preserved.
 - [ ] Real Google fixtures confirm role-downgrade/redaction and recurrence payload
   behavior. Synthetic normalization tests alone do not establish provider behavior.
-- [ ] Real Google fixtures establish point-event and `endTimeUnspecified` payload
-  behavior. Existing storage rejects equal start/end times; unsupported payloads
-  must leave coverage unknown, never imply free time. Supporting point events
-  requires coordinated storage, query, and normalization changes.
+- [ ] Timed point events reconcile successfully, appear at query boundaries, and
+  never create busy duration. Read-only DEV provider checks confirmed three
+  equal-endpoint timed events with `endTimeUnspecified` absent. Fixtures for
+  explicit `endTimeUnspecified` payloads remain required; unsupported payloads
+  must leave coverage unknown, never imply free time.
 - [ ] Relevant Rust tests, SQLx preparation, generated API/tool/SDK artifacts,
   TypeScript checking, `just check`, and browser verification pass.
 

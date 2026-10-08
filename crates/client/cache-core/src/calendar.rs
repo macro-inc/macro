@@ -35,7 +35,7 @@ const ALL_DAY_TYPENAME: &str = "GraphqlAllDayEventTime";
 
 /// Revision of the derived range rows. Storage adapters rebuild existing rows
 /// from normalized records when this changes; records and coverage stay valid.
-pub const CALENDAR_PROJECTION_VERSION: u32 = 1;
+pub const CALENDAR_PROJECTION_VERSION: u32 = 2;
 
 /// Maximum number of keys, spans, and links accepted by one commit.
 pub const MAX_CALENDAR_COMMIT_ITEMS: usize = 20_000;
@@ -81,7 +81,7 @@ impl CalendarSpanKind {
     }
 }
 
-/// Half-open `[start, end)` span of one kind.
+/// Half-open `[start, end)` span, or a timed point when both bounds are equal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarSpan {
@@ -94,9 +94,23 @@ pub struct CalendarSpan {
 }
 
 impl CalendarSpan {
-    /// Whether two spans of the same kind share any point.
+    /// Whether spans intersect, including a timed point within a positive span.
     pub fn overlaps(&self, other: &CalendarSpan) -> bool {
-        self.kind == other.kind && self.start < other.end && self.end > other.start
+        if self.kind != other.kind || self.end < self.start || other.end < other.start {
+            return false;
+        }
+        if self.kind == CalendarSpanKind::Timed {
+            if self.start == self.end {
+                return other.start <= self.start && self.start < other.end;
+            }
+            if other.start == other.end {
+                return self.start <= other.start && other.start < self.end;
+            }
+        }
+        self.start < self.end
+            && other.start < other.end
+            && self.start < other.end
+            && self.end > other.start
     }
 }
 
@@ -163,10 +177,14 @@ fn project_time(time: &BTreeMap<String, CacheValue>) -> Option<CalendarSpan> {
         _ => None,
     };
     let timed = || {
-        Some(CalendarSpan {
+        let start = chrono::DateTime::parse_from_rfc3339(text("startsAt")?).ok()?;
+        let end = chrono::DateTime::parse_from_rfc3339(text("endsAt")?).ok()?;
+        // Validate before millisecond projection so a reversed sub-millisecond
+        // interval cannot round into an apparently valid point.
+        (end >= start).then_some(CalendarSpan {
             kind: CalendarSpanKind::Timed,
-            start: parse_instant_ms(text("startsAt")?)?,
-            end: parse_instant_ms(text("endsAt")?)?,
+            start: start.timestamp_millis(),
+            end: end.timestamp_millis(),
         })
     };
     let all_day = || {
@@ -182,7 +200,8 @@ fn project_time(time: &BTreeMap<String, CacheValue>) -> Option<CalendarSpan> {
         Some(_) => return None,
         None => timed().or_else(all_day)?,
     };
-    (span.end > span.start).then_some(span)
+    (span.end > span.start || (span.kind == CalendarSpanKind::Timed && span.end == span.start))
+        .then_some(span)
 }
 
 fn string_field<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
@@ -190,12 +209,6 @@ fn string_field<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
         Some(CacheValue::String(value)) if !value.is_empty() => Some(value),
         _ => None,
     }
-}
-
-fn parse_instant_ms(value: &str) -> Option<i64> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .ok()
-        .map(|instant| instant.timestamp_millis())
 }
 
 fn parse_epoch_day(value: &str) -> Option<i64> {
@@ -278,7 +291,10 @@ impl CalendarRangeRequest {
         self.event_key
             .as_ref()
             .is_none_or(|event_key| *event_key == row.event_key)
-            && self.spans().iter().any(|span| span.overlaps(&row.span))
+            && self
+                .spans()
+                .iter()
+                .any(|span| span.start < span.end && span.overlaps(&row.span))
     }
 
     /// Rejects inverted spans and foreign event keys. An empty span is valid

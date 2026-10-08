@@ -29,7 +29,7 @@ const RANGE_UPSERT: &str = "INSERT INTO calendar_ranges (record_key, event_key, 
 const RANGE_DELETE: &str = "DELETE FROM calendar_ranges WHERE record_key = ?1";
 // A short row ends at most one short span after it starts, so its start is
 // bounded on both sides and the scan stays on the (kind, long, start) prefix.
-const RANGE_SHORT: &str = "SELECT record_key, event_key, link_id, kind, start, end FROM calendar_ranges INDEXED BY calendar_ranges_scan_idx WHERE kind = ?1 AND long = 0 AND start >= ?2 AND start < ?3 AND end > ?4";
+const RANGE_SHORT: &str = "SELECT record_key, event_key, link_id, kind, start, end FROM calendar_ranges INDEXED BY calendar_ranges_scan_idx WHERE kind = ?1 AND long = 0 AND start >= ?2 AND start < ?3 AND (end > ?4 OR (kind = 0 AND start = end AND start >= ?4))";
 const RANGE_LONG: &str = "SELECT record_key, event_key, link_id, kind, start, end FROM calendar_ranges INDEXED BY calendar_ranges_scan_idx WHERE kind = ?1 AND long = 1 AND start < ?2 AND end > ?3";
 const RANGE_BY_EVENT: &str = "SELECT record_key, event_key, link_id, kind, start, end FROM calendar_ranges INDEXED BY calendar_ranges_event_idx WHERE event_key = ?1";
 const RANGE_KEYS_BY_EVENT: &str = "SELECT record_key FROM calendar_ranges INDEXED BY calendar_ranges_event_idx WHERE event_key = ?1";

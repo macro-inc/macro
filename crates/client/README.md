@@ -122,6 +122,12 @@ first-error propagation retain their existing semantics.
 
 ## Projection refreshes
 
+Calendar range projections retain imported timed points with equal start and end.
+Points belong to a viewport when its start is at or before the point and its end
+is after it; empty viewports still return no occurrences. Projection version 2
+rebuilds derived calendar rows once on open, preserving normalized records,
+coverage, watermarks, and queued mutations. All-day spans remain positive.
+
 Hydration folds authoritative index mutations in order and writes only final
 states that differ from stored state. An updated normalized record does not force
 unchanged index facts to be deleted and reinserted. Pending optimistic projections

@@ -193,7 +193,9 @@ impl CalendarTeamRepository for PgCalendarTeamRepository {
               AND (
                 ((occurrence.value->'time'->>'kind') = 'timed'
                   AND (occurrence.value->'time'->>'startsAt')::timestamptz < $4
-                  AND (occurrence.value->'time'->>'endsAt')::timestamptz > $3)
+                  AND ((occurrence.value->'time'->>'endsAt')::timestamptz > $3
+                    OR ((occurrence.value->'time'->>'startsAt')::timestamptz = (occurrence.value->'time'->>'endsAt')::timestamptz
+                      AND (occurrence.value->'time'->>'startsAt')::timestamptz >= $3)))
                 OR ((occurrence.value->'time'->>'kind') = 'allDay'
                   AND (occurrence.value->'time'->>'startDate')::date < $6
                   AND (occurrence.value->'time'->>'endDate')::date > $5)

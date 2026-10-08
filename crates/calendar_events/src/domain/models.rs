@@ -135,7 +135,7 @@ pub enum EventTime {
     Timed {
         /// Inclusive start instant.
         starts_at: DateTime<Utc>,
-        /// Exclusive end instant.
+        /// Exclusive end instant; equal to the start for an imported point event.
         ends_at: DateTime<Utc>,
         /// Original IANA time-zone identifier, when supplied.
         time_zone: Option<String>,
@@ -151,8 +151,21 @@ pub enum EventTime {
 }
 
 impl EventTime {
-    /// Validate the exclusive end is later than the start.
+    /// Validate a stored event, including a timed point with no occupied duration.
     pub fn is_valid(&self) -> bool {
+        match self {
+            Self::Timed {
+                starts_at, ends_at, ..
+            } => ends_at >= starts_at,
+            Self::AllDay {
+                start_date,
+                end_date,
+            } => end_date > start_date,
+        }
+    }
+
+    /// Whether the event occupies a positive duration. User time writes require this.
+    pub fn has_positive_duration(&self) -> bool {
         match self {
             Self::Timed {
                 starts_at, ends_at, ..
@@ -172,12 +185,16 @@ impl EventTime {
         }
     }
 
-    /// Return whether this span overlaps an occurrence query range.
+    /// Query membership: spans overlap the range and points use [start, end).
     pub fn overlaps(&self, range: &OccurrenceRange) -> bool {
         match self {
             Self::Timed {
                 starts_at, ends_at, ..
-            } => starts_at < &range.ends_at && ends_at > &range.starts_at,
+            } => {
+                starts_at < &range.ends_at
+                    && (ends_at > &range.starts_at
+                        || (ends_at == starts_at && starts_at >= &range.starts_at))
+            }
             Self::AllDay {
                 start_date,
                 end_date,

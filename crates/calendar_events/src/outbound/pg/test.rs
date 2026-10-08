@@ -1,4 +1,5 @@
 use super::*;
+mod point_events;
 mod snapshot_coverage;
 mod team_sharing;
 mod team_sync_coverage;

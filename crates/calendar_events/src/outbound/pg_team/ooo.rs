@@ -48,6 +48,7 @@ pub(in crate::outbound) async fn list_team_out_of_office(
               AND NOT COALESCE((occurrence.value->>'isCancelled')::boolean,false)
               AND (
                 (occurrence.value->'time'->>'kind'='timed'
+                    AND (occurrence.value->'time'->>'endsAt')::timestamptz>(occurrence.value->'time'->>'startsAt')::timestamptz
                     AND (occurrence.value->'time'->>'startsAt')::timestamptz<$3
                     AND (occurrence.value->'time'->>'endsAt')::timestamptz>$2)
                 OR (occurrence.value->'time'->>'kind'='allDay'

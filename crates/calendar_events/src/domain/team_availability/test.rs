@@ -135,6 +135,78 @@ fn inputs(
 }
 
 #[test]
+fn skipped_all_day_date_is_unknown_instead_of_becoming_a_timed_point() {
+    let mut row = source("a", "skipped-day", all_day("2011-12-30", "2011-12-31"));
+    row.calendar_time_zone = Some("Pacific/Apia".to_owned());
+    let result = calculate(
+        range("2011-12-29T00:00:00Z", "2012-01-01T00:00:00Z"),
+        inputs(vec![member("a")], vec![row]),
+    );
+    assert!(!result.complete);
+    assert!(result.free_windows.is_none());
+    assert_eq!(
+        result.members[0].unknown_reasons,
+        vec![AvailabilityUnknownReason::InvalidInterval]
+    );
+}
+
+#[test]
+fn points_add_no_busy_duration_but_cannot_erase_a_conflicting_positive_copy() {
+    let point = source(
+        "a",
+        "same-identity",
+        timed("2026-10-07T09:00:00Z", "2026-10-07T09:00:00Z"),
+    );
+    let only_points = calculate(
+        window(),
+        inputs(vec![member("a")], vec![point.clone(), point.clone()]),
+    );
+    assert!(only_points.complete);
+    assert!(only_points.members[0].busy.is_empty());
+    assert_eq!(
+        only_points.free_windows.unwrap(),
+        vec![span("2026-10-07T09:00:00Z", "2026-10-07T17:00:00Z")]
+    );
+
+    let positive = source(
+        "a",
+        "same-identity",
+        timed("2026-10-07T09:00:00Z", "2026-10-07T10:00:00Z"),
+    );
+    for copies in [vec![point.clone(), positive.clone()], vec![positive, point]] {
+        let conflict = calculate(window(), inputs(vec![member("a")], copies));
+        assert!(!conflict.complete);
+        assert!(conflict.free_windows.is_none());
+        assert_eq!(
+            conflict.members[0].busy,
+            vec![span("2026-10-07T09:00:00Z", "2026-10-07T10:00:00Z")]
+        );
+        assert_eq!(
+            conflict.members[0].unknown_reasons,
+            vec![AvailabilityUnknownReason::ConflictingCopies]
+        );
+    }
+}
+
+#[test]
+fn point_series_master_does_not_hide_a_positive_occurrence() {
+    let mut row = source(
+        "a",
+        "series",
+        timed("2026-10-07T10:00:00Z", "2026-10-07T11:00:00Z"),
+    );
+    row.event.time = timed("2026-10-07T09:00:00Z", "2026-10-07T09:00:00Z");
+    row.event.recurrence_lines = vec!["RRULE:FREQ=DAILY".into()];
+    row.occurrence.recurrence_id = Some("2026-10-07T09:00:00Z".into());
+    let result = calculate(window(), inputs(vec![member("a")], vec![row]));
+    assert!(result.complete);
+    assert_eq!(
+        result.members[0].busy,
+        vec![span("2026-10-07T10:00:00Z", "2026-10-07T11:00:00Z")]
+    );
+}
+
+#[test]
 fn merges_busy_copies_and_clips_common_free_to_requested_range() {
     let first = source(
         "a",
