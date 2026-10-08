@@ -148,7 +148,7 @@ function PipelineRecords(props: { pipeline: Pipeline }) {
       >
         <PipelineRefresh />
         <DatabaseRecords
-          contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted"
+          contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:m-0 touch:rounded-none touch:border-0"
           view={view()}
           stored={!!selectedView()}
           onViewChange={changeView}

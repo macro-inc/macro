@@ -1,4 +1,5 @@
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import PencilIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
@@ -47,63 +48,65 @@ export function PipelineView(props: {
     input?.select();
   };
   return (
-    <div class="flex size-full min-h-0 flex-col">
-      <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-4">
-        {props.navigation}
-        <Show
-          when={canEdit()}
-          fallback={
-            <h1 class="min-w-0 truncate px-1 text-sm font-semibold">
-              {props.pipeline.name}
-            </h1>
-          }
-        >
-          <span ref={title} class="flex min-w-0 px-1">
-            <InlineTitleEditor
-              value={props.pipeline.name}
-              placeholder="Untitled pipeline"
-              ariaLabel="Pipeline name"
-              class="text-sm"
-              onRename={(name) =>
-                void save(() => props.source.rename(props.pipeline.id, name))
-              }
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col touch:pb-[max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))]">
+      <Show when={!isTouchDevice()}>
+        <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-4">
+          {props.navigation}
+          <Show
+            when={canEdit()}
+            fallback={
+              <h1 class="min-w-0 truncate px-1 text-sm font-semibold">
+                {props.pipeline.name}
+              </h1>
+            }
+          >
+            <span ref={title} class="flex min-w-0 px-1">
+              <InlineTitleEditor
+                value={props.pipeline.name}
+                placeholder="Untitled pipeline"
+                ariaLabel="Pipeline name"
+                class="text-sm"
+                onRename={(name) =>
+                  void save(() => props.source.rename(props.pipeline.id, name))
+                }
+              />
+            </span>
+          </Show>
+          <Show when={canEdit() || isOwner()}>
+            <Dropdown placement="bottom-start">
+              <Dropdown.Trigger
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Pipeline actions"
+                class="shrink-0"
+                disabled={pending()}
+              >
+                <DotsThreeIcon class="size-4" />
+              </Dropdown.Trigger>
+              <Dropdown.Content class="min-w-44">
+                <Show when={canEdit()}>
+                  <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
+                    <PencilIcon class="size-4" />
+                    Rename
+                  </Dropdown.Item>
+                </Show>
+                <Show when={isOwner()}>
+                  <Dropdown.Item onSelect={() => setDeleting(true)}>
+                    <TrashIcon class="size-4" />
+                    Trash pipeline
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Content>
+            </Dropdown>
+          </Show>
+          <div class="ml-auto flex shrink-0 items-center gap-1">
+            <props.Sharing
+              pipeline={props.pipeline}
+              onCopyLink={props.onCopyLink}
             />
-          </span>
-        </Show>
-        <Show when={canEdit() || isOwner()}>
-          <Dropdown placement="bottom-start">
-            <Dropdown.Trigger
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Pipeline actions"
-              class="shrink-0"
-              disabled={pending()}
-            >
-              <DotsThreeIcon class="size-4" />
-            </Dropdown.Trigger>
-            <Dropdown.Content class="min-w-44">
-              <Show when={canEdit()}>
-                <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
-                  <PencilIcon class="size-4" />
-                  Rename
-                </Dropdown.Item>
-              </Show>
-              <Show when={isOwner()}>
-                <Dropdown.Item onSelect={() => setDeleting(true)}>
-                  <TrashIcon class="size-4" />
-                  Trash pipeline
-                </Dropdown.Item>
-              </Show>
-            </Dropdown.Content>
-          </Dropdown>
-        </Show>
-        <div class="ml-auto flex shrink-0 items-center gap-1">
-          <props.Sharing
-            pipeline={props.pipeline}
-            onCopyLink={props.onCopyLink}
-          />
+          </div>
         </div>
-      </div>
+      </Show>
       <Show when={error()}>
         <p role="alert" class="px-4 pb-2 text-sm text-failure-ink">
           {error()}

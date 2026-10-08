@@ -7,7 +7,9 @@ import {
 import { VIEW_SHELL_TOUR } from '@app/components/view-shell/tour';
 import { NIL_UUID } from '@app/features/next-soup/filters/filter-store';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { MobileFilterDrawer } from '@app/features/next-soup/soup-view/filters-bar/mobile-filter-drawer';
 import { SoupActiveFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-active-filters-bar';
+import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-group';
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
@@ -33,6 +35,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { CrmListDialog } from '../components/company-list-dialog';
+import { CrmMobileTabs } from '../components/crm-mobile-tabs';
 import { CrmSidebar } from '../components/crm-sidebar';
 import { PipelineDialog } from '../components/pipeline-dialog';
 import { PipelineSidebar } from '../components/pipeline-sidebar';
@@ -61,7 +64,7 @@ function NavigationToggle(props: {
   // CRM collapses its own sidebar, so its toggle stands in for the shell's.
   const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   return (
-    <Show when={shell.aside.isCollapsed()}>
+    <Show when={!isTouchDevice() && shell.aside.isCollapsed()}>
       <Show
         when={shell.breakpoints.narrow?.()}
         fallback={
@@ -83,12 +86,10 @@ function NavigationToggle(props: {
             <Dropdown.Trigger
               variant="ghost"
               size="icon-sm"
-              depth={isTouchDevice() ? 3 : undefined}
-              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:bg-chrome"
               aria-label="Show CRM navigation"
               ref={toggleTarget}
             >
-              <ListIcon class="size-4 touch:size-6" />
+              <ListIcon class="size-4" />
             </Dropdown.Trigger>
           </Tooltip>
           <Dropdown.Content class="w-55 max-h-[80vh] overflow-auto p-0">
@@ -195,7 +196,6 @@ function CrmFilterChips(props: { onReset: () => void }) {
 export function CrmWorkspaceView(props: {
   children: (options: {
     onOpenEntity?: (entity: EntityData) => boolean;
-    mobileHeaderLeading?: JSX.Element;
   }) => JSX.Element;
 }) {
   const {
@@ -362,6 +362,32 @@ export function CrmWorkspaceView(props: {
         </Suspense>
       </ViewShell.Aside>
       <ViewShell.Main>
+        <Show when={isTouchDevice() && !selectedRecord()}>
+          <ViewShell.Header>
+            <CrmMobileTabs
+              active={activeRecord()}
+              pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
+              lists={listsEnabled() ? lists.lists() : []}
+              onNavigate={(id) =>
+                id.startsWith('pipeline:')
+                  ? selectPipeline(id.slice('pipeline:'.length))
+                  : navigate(id)
+              }
+              leading={
+                <Show when={!peopleActive() && !pipelineId()}>
+                  <Suspense>
+                    <MobileFilterDrawer />
+                  </Suspense>
+                </Show>
+              }
+            />
+          </ViewShell.Header>
+          <Show when={!peopleActive() && !pipelineId()}>
+            <Suspense>
+              <SoupFiltersBar />
+            </Suspense>
+          </Show>
+        </Show>
         <Show when={selectedRecord()} keyed>
           {(record) => (
             <CrmRecordDetail
@@ -393,9 +419,11 @@ export function CrmWorkspaceView(props: {
                   }
                   onTrashed={() => navigate('active')}
                   navigation={
-                    <NavigationToggle onExpand={() => setCollapsed(false)}>
-                      <Suspense>{sidebar()}</Suspense>
-                    </NavigationToggle>
+                    <Show when={!isTouchDevice()}>
+                      <NavigationToggle onExpand={() => setCollapsed(false)}>
+                        <Suspense>{sidebar()}</Suspense>
+                      </NavigationToggle>
+                    </Show>
                   }
                 />
               )}
@@ -418,21 +446,23 @@ export function CrmWorkspaceView(props: {
         </Show>
         <Show when={!selectedRecord() && !pipelineId()}>
           <Show when={!isTouchDevice() || peopleActive()}>
-            <div class="flex h-12 shrink-0 items-center gap-3 px-4">
-              <NavigationToggle onExpand={() => setCollapsed(false)}>
-                <Suspense>{sidebar()}</Suspense>
-              </NavigationToggle>
-              <h1
-                class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
-                title={title()}
-              >
-                <span class="truncate">{title()}</span>
-              </h1>
-            </div>
+            <Show when={!isTouchDevice()}>
+              <div class="flex h-12 shrink-0 items-center gap-3 px-4">
+                <NavigationToggle onExpand={() => setCollapsed(false)}>
+                  <Suspense>{sidebar()}</Suspense>
+                </NavigationToggle>
+                <h1
+                  class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
+                  title={title()}
+                >
+                  <span class="truncate">{title()}</span>
+                </h1>
+              </div>
+            </Show>
             <Show
               when={!peopleActive()}
               fallback={
-                <ViewShell.Header>
+                <ViewShell.Header class="touch:pt-0">
                   <div class="flex min-w-0 items-center justify-between gap-3">
                     <PeopleSearchBar />
                     <Button
@@ -490,11 +520,6 @@ export function CrmWorkspaceView(props: {
           <div class="flex min-h-0 min-w-0 flex-1 flex-col">
             {props.children({
               onOpenEntity: isTouchDevice() ? undefined : openRecord,
-              mobileHeaderLeading: isTouchDevice() ? (
-                <NavigationToggle onExpand={() => setCollapsed(false)}>
-                  <Suspense>{sidebar()}</Suspense>
-                </NavigationToggle>
-              ) : undefined,
             })}
           </div>
         </Show>

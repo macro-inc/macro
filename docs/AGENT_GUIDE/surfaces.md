@@ -1903,11 +1903,15 @@ domain; **Add contact** on a company's Team tab skips the company field.
 `Search companies` and `Search people` use the shared Email/Tasks search bar.
 Command-F focuses it, `Clear search` resets it, and Escape leaves the field.
 
-On touch devices, Companies uses the same full-frame list layout as the other
-mobile views: floating CRM-navigation and filter buttons and the global
-**+ Company** action above the dock. People keeps its title row, search and
-**New contact**. The navigation button opens the CRM records, pipelines and
-lists; the embedded detail stack stays out of the mobile flow, so selecting a
+On touch devices, CRM uses the same scrollable pill tabs as Tasks in the top
+header: Companies, People, available pipelines, and enabled lists. Swipe the
+strip horizontally to reach every destination; the selected tab stays visible.
+The tabs remain available inside pipelines, with no hamburger button. Company
+filters lead the strip when available. On mobile, pipelines omit their title
+and sharing row and use an edge-to-edge table, below the top safe area and above
+the bottom dock. Companies uses the full-frame list with the global **+ Company**
+action above the dock. People keeps its search and **New contact** below the tab
+strip. The embedded detail stack stays out of the mobile flow, so selecting a
 row navigates in place.
 
 On desktop, clicking a company or a person in the list (or pressing Enter on a
