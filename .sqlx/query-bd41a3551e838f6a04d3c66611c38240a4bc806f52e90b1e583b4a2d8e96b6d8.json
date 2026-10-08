@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT\n                    m.parent_entity_id::uuid         AS \"channel_id!: uuid::Uuid\",\n                    c.name                           AS \"channel_name?\",\n                    m.id                             AS \"message_id: uuid::Uuid\",\n                    m.thread_id                      AS \"thread_id?: uuid::Uuid\",\n                    m.sender_id                      AS \"sender_id!\",\n                    m.content                        AS \"message_content!\",\n                    m.created_at                     AS \"message_created_at!: chrono::DateTime<chrono::Utc>\",\n                    s.created_at                     AS \"attachment_created_at!: chrono::DateTime<chrono::Utc>\"\n                FROM agent_session s\n                JOIN comms_messages m ON m.id = s.originating_message_id\n                JOIN comms_channels c ON m.parent_entity_type = 'channel' AND m.parent_entity_id = c.id::text\n                JOIN comms_channel_participants cp ON cp.channel_id = c.id\n                WHERE s.id = $1\n                  AND cp.user_id = $2\n                  AND cp.left_at IS NULL\n                  AND m.deleted_at IS NULL\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id!: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id?: uuid::Uuid",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "sender_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "message_content!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "attachment_created_at!: chrono::DateTime<chrono::Utc>",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bd41a3551e838f6a04d3c66611c38240a4bc806f52e90b1e583b4a2d8e96b6d8"
+}

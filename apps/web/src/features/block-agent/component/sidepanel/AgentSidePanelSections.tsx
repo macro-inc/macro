@@ -176,9 +176,10 @@ export function AgentSidePanelSections() {
 }
 
 /**
- * Where this session is referenced: channel messages that mention or attach
- * it, and documents that mention it. Same section the markdown, email, and
- * call blocks show; hidden until at least one reference exists.
+ * Where this session is referenced: the channel message it was created from,
+ * later channel messages that mention or attach it, and documents that
+ * mention it. Same section the markdown, email, and call blocks show; hidden
+ * until at least one reference exists.
  */
 function ReferencesSectionConditional(props: { sessionId?: string }) {
   const references = useAttachmentReferencesQuery(
