@@ -1,5 +1,9 @@
-import { Button } from '@ui';
+import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import DotsThreeIcon from '@phosphor/dots-three.svg';
+import PencilIcon from '@phosphor/pencil-line.svg';
+import TrashIcon from '@phosphor/trash-simple.svg';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
+import { Dropdown } from '@ui/components/Dropdown';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type {
   PipelineEditor,
@@ -8,6 +12,7 @@ import type {
 } from '../context/pipelines';
 import type { Pipeline } from '../core/pipeline';
 
+/** A pipeline's page: its name, sharing and actions above its one table. */
 export function PipelineView(props: {
   pipeline: Pipeline;
   source: PipelinesSource;
@@ -15,13 +20,15 @@ export function PipelineView(props: {
   Editor: PipelineEditor;
   Sharing: PipelineSharing;
   onCopyLink(): void;
-  onBack(): void;
+  /** After the pipeline moves to trash, leave its page. */
+  onTrashed(): void;
 }) {
-  const [draftName, setDraftName] = createSignal<string>();
-  const name = () => draftName() ?? props.pipeline.name;
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
   const [deleting, setDeleting] = createSignal(false);
+  let title: HTMLSpanElement | undefined;
+  const canEdit = () => ['owner', 'edit'].includes(props.pipeline.grant);
+  const isOwner = () => props.pipeline.grant === 'owner';
   async function save(action: () => Promise<void>) {
     if (pending()) return;
     setPending(true);
@@ -34,70 +41,71 @@ export function PipelineView(props: {
       setPending(false);
     }
   }
+  const editTitle = () => {
+    const input = title?.querySelector('input');
+    input?.focus();
+    input?.select();
+  };
   return (
     <div class="flex size-full min-h-0 flex-col">
-      <div class="flex flex-wrap items-center gap-3 border-b border-edge-muted p-3">
+      <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-4">
         {props.navigation}
-        <Button variant="ghost" size="sm" onClick={props.onBack}>
-          Back to companies
-        </Button>
-        <form
-          class="flex min-w-0 flex-1 items-center gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save(async () => {
-              await props.source.rename(props.pipeline.id, name().trim());
-              setDraftName(undefined);
-            });
-          }}
-        >
-          <input
-            aria-label="Pipeline name"
-            value={name()}
-            maxlength={200}
-            required
-            disabled={
-              pending() || !['owner', 'edit'].includes(props.pipeline.grant)
-            }
-            onInput={(event) => setDraftName(event.currentTarget.value)}
-            class="min-w-0 flex-1 rounded border border-transparent bg-transparent px-2 py-1 text-sm font-semibold outline-none focus:border-accent"
-          />
-          <Show when={name().trim() !== props.pipeline.name}>
-            <Button
-              size="sm"
-              type="submit"
-              disabled={pending() || !name().trim()}
-            >
-              Save name
-            </Button>
-          </Show>
-        </form>
-        <props.Sharing
-          pipeline={props.pipeline}
-          onCopyLink={props.onCopyLink}
-        />
         <Show
-          when={props.pipeline.grant === 'owner'}
+          when={canEdit()}
           fallback={
-            <span class="text-xs text-ink-muted">
-              {props.pipeline.sharing === 'team'
-                ? 'Shared with team'
-                : 'Private'}
-            </span>
+            <h1 class="min-w-0 truncate px-1 text-sm font-semibold">
+              {props.pipeline.name}
+            </h1>
           }
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={pending()}
-            onClick={() => setDeleting(true)}
-          >
-            Trash pipeline
-          </Button>
+          <span ref={title} class="flex min-w-0 px-1">
+            <InlineTitleEditor
+              value={props.pipeline.name}
+              placeholder="Untitled pipeline"
+              ariaLabel="Pipeline name"
+              class="text-sm"
+              onRename={(name) =>
+                void save(() => props.source.rename(props.pipeline.id, name))
+              }
+            />
+          </span>
         </Show>
+        <Show when={canEdit() || isOwner()}>
+          <Dropdown placement="bottom-start">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Pipeline actions"
+              class="shrink-0"
+              disabled={pending()}
+            >
+              <DotsThreeIcon class="size-4" />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="min-w-44">
+              <Show when={canEdit()}>
+                <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
+                  <PencilIcon class="size-4" />
+                  Rename
+                </Dropdown.Item>
+              </Show>
+              <Show when={isOwner()}>
+                <Dropdown.Item onSelect={() => setDeleting(true)}>
+                  <TrashIcon class="size-4" />
+                  Trash pipeline
+                </Dropdown.Item>
+              </Show>
+            </Dropdown.Content>
+          </Dropdown>
+        </Show>
+        <div class="ml-auto flex shrink-0 items-center gap-1">
+          <props.Sharing
+            pipeline={props.pipeline}
+            onCopyLink={props.onCopyLink}
+          />
+        </div>
       </div>
       <Show when={error()}>
-        <p role="alert" class="px-4 py-2 text-sm text-failure-ink">
+        <p role="alert" class="px-4 pb-2 text-sm text-failure-ink">
           {error()}
         </p>
       </Show>
@@ -116,7 +124,7 @@ export function PipelineView(props: {
         onDelete={() =>
           void save(async () => {
             await props.source.trash(props.pipeline.id);
-            props.onBack();
+            props.onTrashed();
           })
         }
       />

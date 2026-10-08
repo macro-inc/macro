@@ -16,9 +16,16 @@ import {
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
-import { type JSX, Match, Show, Switch, useContext } from 'solid-js';
+import {
+  type Component,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+  useContext,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useCrmContext } from '../context/crm-context';
-import { CompanyGridLayout } from './company-grid-layout';
 
 function MaybeEntityRow(props: {
   entityId: string;
@@ -42,11 +49,12 @@ function MaybeEntityRow(props: {
 }
 
 /**
- * Customers-list row that renders CRM properties (Stage, Owner, Revenue)
- * in fixed-width grid columns so they line up vertically across rows,
- * mirroring `TaskListEntity`.
+ * CRM list row: selection, drag, and swipe chrome around a record-specific
+ * grid layout whose columns line up across rows, mirroring `TaskListEntity`.
  */
-export function CompanyListEntity(props: BaseListEntityProps) {
+export function CrmListRow(
+  props: BaseListEntityProps & { layout: Component<LayoutProps> }
+) {
   const unread = () => unreadFilterFn(props.entity);
 
   const layoutProps = (): LayoutProps => ({
@@ -107,7 +115,7 @@ export function CompanyListEntity(props: BaseListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <CompanyGridLayout {...layoutProps()} />
+            <Dynamic component={props.layout} {...layoutProps()} />
           </MaybeEntityRow>
         </Match>
         <Match when={true}>

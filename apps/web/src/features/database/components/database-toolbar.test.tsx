@@ -106,6 +106,43 @@ describe('database toolbar views', () => {
     expect(select).toHaveBeenLastCalledWith();
   });
 
+  it('shows a host action after the view controls', () => {
+    const view: DatabaseView = {
+      id: 'table',
+      databaseId: 'database',
+      tableId: 'table',
+      name: 'All records',
+      position: '80',
+      query: { filter: null, sort: [] },
+      layout: { kind: 'table', columns: [] },
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    };
+    const add = vi.fn();
+    render(() => (
+      <DatabaseToolbar
+        columns={[]}
+        views={[]}
+        view={view}
+        canEdit
+        onSelectView={vi.fn()}
+        onChangeView={vi.fn()}
+        onCreateView={vi.fn(() => okAsync(undefined))}
+        onRenameView={vi.fn(() => okAsync(undefined))}
+        onShowViewAs={vi.fn()}
+        onDeleteView={vi.fn(() => okAsync(undefined))}
+        actions={
+          <button type="button" onClick={add}>
+            Add company
+          </button>
+        }
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Add company' }));
+    expect(add).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'New record' })).toBeNull();
+  });
+
   it('renames a view inline from a double click, saving on Enter', async () => {
     const rename = vi.fn(() => okAsync(undefined));
     const select = vi.fn();

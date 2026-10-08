@@ -1,7 +1,6 @@
 import { usePreference } from '@app/preferences/use-preference';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { idToDisplayName } from '@core/user/util';
 import { isCrmCompanyEntity } from '@entity';
 import { COMPANY_STAGE_OPTIONS } from '@entity/utils/task-properties';
@@ -62,7 +61,7 @@ export function createCrmWorkspace(
       }),
       selectFilters: filters.facets,
       groupOptions: {
-        visible: () => filters.state.viewMode() === 'list',
+        visible: () => true,
         options: COMPANY_GROUP_OPTIONS,
       },
     },
@@ -164,9 +163,6 @@ export function createCrmWorkspace(
         if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
           soup.predicates.toggle({ and: ['company-owner'] });
         }
-        soupView.setViewMode(
-          initialCrmView.viewMode ?? (isTouchDevice() ? 'list' : 'board')
-        );
       }
     });
   });

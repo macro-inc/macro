@@ -8,6 +8,4 @@ export type CrmViewCommands = {
   setSort(value: string[]): void;
   setStageFilter(value: string[]): void;
   setOwnerFilter(value: string[]): void;
-  setViewMode(value: 'list' | 'board'): void;
-  defaultMode(): 'list' | 'board';
 };

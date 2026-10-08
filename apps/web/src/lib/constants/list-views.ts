@@ -116,7 +116,11 @@ export const soupItemMatchesListView = (
       'recent',
       () => item.touched_at != null || hasOwnTouchFloor(soupItemEntityId(item))
     )
-    .with('companies', () => item.tag === 'crmCompany')
+    // Customers lists companies and, on its People tab, contacts.
+    .with(
+      'companies',
+      () => item.tag === 'crmCompany' || item.tag === 'crmContact'
+    )
     .exhaustive();
 
 const propertiesMatchTagFilter = (

@@ -491,10 +491,8 @@ directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
 
-Fresh mobile CRM visits default to list view, including when
-applying a default saved view; explicitly selected saved views and back/forward
-navigation retain their layout. The mobile **+ Company** button opens the
-company-creation sheet.
+CRM Companies and People are list-only on every device. The mobile
+**+ Company** button opens the company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,

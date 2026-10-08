@@ -3,7 +3,14 @@ import UserPlusIcon from '@phosphor/user-plus.svg';
 import XIcon from '@phosphor/x.svg';
 import { Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { useCreateContactMutation } from './use-crm';
+import {
+  type CompanyOption,
+  CompanySelect,
+} from '../components/company-select';
+import {
+  useCreateContactMutation,
+  useQuickAccessCrmCompaniesQuery,
+} from './use-crm';
 
 // The part before the @: non-empty, no whitespace or a second @.
 const LOCAL_PART_PATTERN = /^[^\s@]+$/;
@@ -20,27 +27,69 @@ function createErrorMessage(cause: unknown): string {
   return 'Failed to create contact. Try again.';
 }
 
+/** Companies without a domain cannot hold contacts, whose emails must match one. */
+function ContactCompanySelect(props: {
+  value: CompanyOption | undefined;
+  onChange: (company: CompanyOption) => void;
+}) {
+  const suggestions = useQuickAccessCrmCompaniesQuery();
+  const options = createMemo(() =>
+    suggestions.companies().flatMap((company) =>
+      company.domains[0]
+        ? [
+            {
+              id: company.id,
+              name: company.name,
+              domain: company.domains[0].domain,
+            },
+          ]
+        : []
+    )
+  );
+  return (
+    <CompanySelect
+      id="new-contact-company"
+      companies={options()}
+      value={props.value}
+      onChange={props.onChange}
+      loading={suggestions.query.isLoading}
+      portalScope="local"
+    />
+  );
+}
+
 export function CreateContactModal(props: {
-  target?: { companyId: string; domain: string };
+  /** Opens the dialog; without a company, the dialog asks for one. */
+  target?: { company?: { companyId: string; domain: string } };
   onClose(): void;
   onCreated(id: string): void;
 }) {
   const createContactMutation = useCreateContactMutation();
   const [name, setName] = createSignal('');
   const [localPart, setLocalPart] = createSignal('');
+  const [pickedCompany, setPickedCompany] = createSignal<CompanyOption>();
   const [error, setError] = createSignal<string>();
+  const company = () => {
+    const picked = pickedCompany();
+    return (
+      props.target?.company ??
+      (picked && { companyId: picked.id, domain: picked.domain })
+    );
+  };
   const contactName = createMemo(() => name().trim());
   const emailLocalPart = createMemo(() => localPart().trim().toLowerCase());
   const canSubmit = createMemo(
     () =>
       contactName().length > 0 &&
       emailLocalPart().length > 0 &&
+      company() !== undefined &&
       !createContactMutation.isPending
   );
 
   function reset() {
     setName('');
     setLocalPart('');
+    setPickedCompany(undefined);
     setError(undefined);
   }
 
@@ -57,7 +106,7 @@ export function CreateContactModal(props: {
   // Pasting a full address is common — strip our fixed suffix so
   // "jane@acme.com" collapses to "jane" instead of failing validation.
   function handleLocalPartInput(value: string) {
-    const domain = props.target?.domain;
+    const domain = company()?.domain;
     const suffix = domain ? `@${domain}` : undefined;
     setLocalPart(
       suffix && value.toLowerCase().endsWith(suffix)
@@ -69,8 +118,11 @@ export function CreateContactModal(props: {
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    const target = props.target;
-    if (!target) return;
+    const target = company();
+    if (!target) {
+      setError('Choose a company');
+      return;
+    }
     if (!contactName()) {
       setError('Enter a name');
       return;
@@ -143,6 +195,24 @@ export function CreateContactModal(props: {
                 />
               </div>
 
+              <Show when={!props.target?.company}>
+                <div class="flex flex-col gap-2 px-2">
+                  <label
+                    for="new-contact-company"
+                    class="text-xs font-medium text-ink-muted"
+                  >
+                    Company
+                  </label>
+                  <ContactCompanySelect
+                    value={pickedCompany()}
+                    onChange={(picked) => {
+                      setPickedCompany(picked);
+                      setError(undefined);
+                    }}
+                  />
+                </div>
+              </Show>
+
               <div class="flex flex-col gap-2 px-2">
                 <label
                   for="new-contact-email"
@@ -168,7 +238,7 @@ export function CreateContactModal(props: {
                     class="h-full min-w-0 flex-1 border-none bg-transparent pl-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
                   />
                   <span class="shrink-0 select-none pr-3 pl-0.5 text-sm text-ink-placeholder">
-                    @{props.target?.domain}
+                    @{company()?.domain ?? 'company domain'}
                   </span>
                 </div>
               </div>
