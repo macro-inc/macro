@@ -482,7 +482,9 @@ function TextCell(props: {
   onBeginEdit: (seed?: string, event?: Event) => void;
   onClearEntity: () => void;
 }) {
-  const formatted = () => formatCellValue(props.column, props.value);
+  // Refreshes rebuild row objects; only a changed value may rerun renderers and remount previews.
+  const value = createMemo(() => props.value);
+  const formatted = () => formatCellValue(props.column, value());
   return (
     <button
       ref={props.ref}
@@ -490,7 +492,7 @@ function TextCell(props: {
       class="flex min-h-9 w-full min-w-0 items-center rounded px-2.5 py-1.5 text-left text-[13px] leading-5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
       classList={{
         'text-ink-muted': !props.editable,
-        'text-ink-placeholder': props.value === null && !props.mentionPreview,
+        'text-ink-placeholder': value() === null && !props.mentionPreview,
         'font-medium': props.column.dataType === 'STRING',
       }}
       aria-label={
@@ -553,9 +555,9 @@ function TextCell(props: {
         <Switch
           fallback={
             (props.column.dataType === 'STRING' &&
-            typeof props.value === 'string' &&
+            typeof value() === 'string' &&
             props.renderTextValue
-              ? props.renderTextValue(props.value)
+              ? props.renderTextValue(String(value()))
               : formatted()) || (
               <span class="opacity-40">{props.emptyLabel || '—'}</span>
             )
@@ -567,16 +569,14 @@ function TextCell(props: {
           <Match
             when={
               props.isEntity &&
-              typeof props.value === 'string' &&
+              typeof value() === 'string' &&
               props.renderMentionValue
                 ? props.column.specificEntityType
                 : undefined
             }
           >
             {(entityType) => (
-              <>
-                {props.renderMentionValue?.(String(props.value), entityType())}
-              </>
+              <>{props.renderMentionValue?.(String(value()), entityType())}</>
             )}
           </Match>
         </Switch>

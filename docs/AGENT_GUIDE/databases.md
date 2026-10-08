@@ -96,6 +96,8 @@ keeps it available when a view filter excludes it. Cell edits and **Add column**
 use pipeline authorization. Viewer grants hide editing controls. The CRM editor
 fixture (`features/crm/browser-test/editor.html`) covers the real pipeline API
 adapter and shared provider against local test responses.
+Pipelines poll every five seconds. A poll that returns unchanged data must not
+remount company previews or request them again.
 
 ## Properties and records
 
