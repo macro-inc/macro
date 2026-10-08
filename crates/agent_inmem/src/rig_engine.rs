@@ -297,12 +297,34 @@ async fn drive_turn(
     // Started before anything else so its line is out before the turn's
     // model has a first token.
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
-    let mut opening_line = opener::spawn(
-        base_context.recorder.clone(),
-        usage_ctx.clone(),
-        &native_tools.tool_names,
-        &messages,
+    let agent = identity.as_ref().map_or_else(
+        || "Macro".to_owned(),
+        |identity| format!("{} (@{})", identity.name, identity.handle),
     );
+    // How the race went, on one span per turn. `outcome` is `complete` (the
+    // line was the whole reply), `opening` (the line opened the turn's
+    // reply), `turn_first` (the turn's model spoke first), `no_verdict` (the
+    // fast model failed or answered without one) or `timeout`.
+    let opener_span = tracing::info_span!(
+        "agent.opener",
+        agent.opener.model = opener::MODEL,
+        agent.opener.outcome = tracing::field::Empty,
+        agent.opener.verdict_ms = tracing::field::Empty,
+        agent.opener.line_chars = tracing::field::Empty,
+        agent.opener.turn_first_part_ms = tracing::field::Empty,
+    );
+    let mut opening_line = opener_span.in_scope(|| {
+        opener::spawn(
+            base_context.recorder.clone(),
+            usage_ctx.clone(),
+            &opener::Speaker {
+                agent: &agent,
+                model: crate::domain::models::display_name(&model),
+            },
+            &native_tools.tool_names,
+            &messages,
+        )
+    });
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
@@ -398,26 +420,33 @@ async fn drive_turn(
             opening = tokio::time::timeout(
                 opener::VERDICT_TIMEOUT,
                 opener::verdict(&mut opening_line),
-            ) => Race::Opening(opening.ok().flatten()),
+            ) => Race::Opening(opening),
         };
         let mut separate = false;
         match race {
-            Race::TurnFirst(None) => return Ok(()),
+            Race::TurnFirst(None) => {
+                opener_span.record("agent.opener.outcome", "turn_first");
+                return Ok(());
+            }
             Race::TurnFirst(Some(part)) => {
+                opener_span.record("agent.opener.outcome", "turn_first");
                 if parts.send(part).await.is_err() {
                     loop_cancel.cancel();
                     return Ok(());
                 }
             }
-            Race::Opening(Some(opener::Opening { complete, head })) => {
-                tracing::info!(
-                    complete,
-                    verdict_ms = started.elapsed().as_millis(),
-                    "the opening line's model answered first"
+            Race::Opening(Ok(Some(opener::Opening { complete, head }))) => {
+                opener_span.record(
+                    "agent.opener.outcome",
+                    if complete { "complete" } else { "opening" },
                 );
+                opener_span.record("agent.opener.verdict_ms", elapsed_ms(started));
                 let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
+                let mut line_chars = 0;
                 let mut delta = Some(head);
                 while let Some(text) = delta {
+                    line_chars += text.chars().count();
+                    opener_span.record("agent.opener.line_chars", line_chars);
                     if !text.is_empty() && parts.send(Ok(StreamPart::Content(text))).await.is_err()
                     {
                         loop_cancel.cancel();
@@ -434,17 +463,19 @@ async fn drive_turn(
                 }
                 separate = true;
             }
-            Race::Opening(None) => {}
+            Race::Opening(Ok(None)) => {
+                opener_span.record("agent.opener.outcome", "no_verdict");
+            }
+            Race::Opening(Err(_)) => {
+                opener_span.record("agent.opener.outcome", "timeout");
+            }
         }
         drop(opening_line);
         let mut turn_spoke = false;
         while let Some(part) = stream.next().await {
             if !turn_spoke {
                 turn_spoke = true;
-                tracing::info!(
-                    first_part_ms = started.elapsed().as_millis(),
-                    "the turn's own model streamed its first part"
-                );
+                opener_span.record("agent.opener.turn_first_part_ms", elapsed_ms(started));
             }
             let part = match part {
                 Ok(StreamPart::Content(text)) if separate && !text.trim().is_empty() => {
@@ -470,7 +501,12 @@ async fn drive_turn(
 /// Which spoke first: the turn's own model, or the opening line's.
 enum Race {
     TurnFirst(Option<Result<StreamPart, AgentError>>),
-    Opening(Option<opener::Opening>),
+    /// The verdict, `None` without one, or `Err` past the verdict timeout.
+    Opening(Result<Option<opener::Opening>, tokio::time::error::Elapsed>),
+}
+
+fn elapsed_ms(since: tokio::time::Instant) -> u64 {
+    u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 /// The turn's system prompt: the agent's identity, the agent-session

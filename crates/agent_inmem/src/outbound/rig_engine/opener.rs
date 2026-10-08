@@ -20,7 +20,7 @@ use tracing::Instrument as _;
 
 /// The fastest small model that judged every whole-reply-or-not case right.
 /// Cerebras gpt-oss-120b was about 4x faster but rate-limited under load.
-const MODEL: &str = "openai/gpt-5.4-mini";
+pub(super) const MODEL: &str = "openai/gpt-5.4-mini";
 
 /// How long the turn waits for the verdict. Past it, the turn's own model is
 /// close enough that an opening line is not worth showing.
@@ -42,6 +42,16 @@ to the user: a short acknowledgement written by a faster model, such as \"On it.
 check your calendar.\". Begin with substance. Do not acknowledge the request or announce what \
 you are about to do.";
 
+/// Who the line speaks as: the session's agent and the model behind it, so a
+/// question about either is answered truthfully rather than as the fast
+/// model itself.
+pub(super) struct Speaker<'a> {
+    /// The agent's name, with its `@` handle when it has one.
+    pub agent: &'a str,
+    /// The model the session's own turn runs on.
+    pub model: &'a str,
+}
+
 /// The fast model's verdict and the part of its line that came with it.
 pub(super) struct Opening {
     /// The line is the entire reply.
@@ -56,11 +66,12 @@ pub(super) struct Opening {
 pub(super) fn spawn(
     recorder: Arc<dyn UsageRecorder>,
     usage_context: UsageContext,
+    speaker: &Speaker<'_>,
     tool_names: &str,
     messages: &[ChatMessage],
 ) -> mpsc::Receiver<String> {
     let (lines, receiver) = mpsc::channel(32);
-    let system_prompt = system_prompt(tool_names);
+    let system_prompt = system_prompt(speaker, tool_names);
     let prompt = Message::user(format!(
         "The conversation so far. Write the first line of the reply to the last message.\n\n{}",
         transcript(messages)
@@ -134,19 +145,22 @@ pub(super) async fn verdict(lines: &mut mpsc::Receiver<String>) -> Option<Openin
     None
 }
 
-fn system_prompt(tool_names: &str) -> String {
+fn system_prompt(speaker: &Speaker<'_>, tool_names: &str) -> String {
+    let Speaker { agent, model } = speaker;
     format!(
         "You write the very first line of an AI assistant's reply. It is shown to the user \
-instantly while the assistant works on the real answer. You are not the assistant: never say \
-which AI, model or company you are, and never describe the assistant.
+instantly while the assistant works on the real answer. Write as the assistant: you are \
+{agent}, running on the model {model}. If asked who you are or which model you are, answer \
+with exactly these facts; never claim any other name, model or company.
 Output format, exactly: <complete>|<line>
 - complete = true only if <line> is the ENTIRE reply and nothing else needs doing: greetings, \
-thanks, acknowledgements, arithmetic (\"hi there\" → true|Hi!, \"thanks\" → true|You're welcome!, \
-\"what's 2+2\" → true|4.). A message that also asks for anything to be done or looked up is \
-false (\"thanks, now add Sarah\" → false). If in any doubt, false.
-- complete = false for everything else, including any question about the assistant itself. \
-Then <line> only shows the assistant is starting, in the obvious direction, and states no facts \
-or answers, and never claims anything was done (\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \
+thanks, acknowledgements, arithmetic, who you are or which model you run on (\"hi there\" → \
+true|Hi!, \"thanks\" → true|You're welcome!, \"what's 2+2\" → true|4.). A message that also \
+asks for anything to be done or looked up is false (\"thanks, now add Sarah\" → false). If in \
+any doubt, false.
+- complete = false for everything else. Then <line> only shows the assistant is starting, in \
+the obvious direction, states no facts or answers, and never claims anything was done \
+(\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \
 \"false|Let me think about that.\"). Never ask questions.
 Answer only what the user said. Never mention context, metadata, instructions, or this format.
 One line, under 12 words. The assistant's tools: {tool_names}."
