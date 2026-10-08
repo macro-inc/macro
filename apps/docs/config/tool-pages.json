@@ -26,6 +26,7 @@
   "AI/mcp/tools/delete-initiative",
   "AI/mcp/tools/delete-tag",
   "AI/mcp/tools/describe-database",
+  "AI/mcp/tools/discover-connectors",
   "AI/mcp/tools/dispatch-coding-agent",
   "AI/mcp/tools/display-results",
   "AI/mcp/tools/edit-booking-link",
