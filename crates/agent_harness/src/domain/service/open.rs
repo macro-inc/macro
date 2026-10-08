@@ -2,6 +2,7 @@
 //! external runtime that dials in. Each creates the row, provisions egress
 //! where there is a sandbox to give it to, and attaches the runtime.
 
+use crate::domain::model::{is_coding_agent, with_task_tracking};
 use agent_session::domain::model::session_owner_user;
 use agent_session::domain::repository_branch::RepositoryBranch;
 use model_owner::Owner;
@@ -89,6 +90,15 @@ where
             ),
             None => (defaults.model.clone(), defaults.harness.clone(), None),
         };
+        let instructions = self
+            .inner
+            .with_owner_task_tracking(
+                &owner_user,
+                request.bot_id,
+                AgentKind::for_session(request.bot_id, &harness),
+                request.instructions.or(profile_instructions),
+            )
+            .await?;
         let session = self
             .inner
             .sessions
@@ -105,7 +115,7 @@ where
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
-                instructions: request.instructions.or(profile_instructions),
+                instructions,
                 // No egress, so no MCP servers of ours to select from.
                 mcp_servers: AgentMcpServers::OwnerConnections,
                 // Mint the internal-tool credential when an authenticated
@@ -224,6 +234,29 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    /// A new session's instructions, ending with the task-tracking workflow
+    /// when the session is a coding agent's and its owner opted in.
+    ///
+    /// Warm sessions are only ever the in-memory chat agent's, which never
+    /// gets the workflow, so the warm claim's instructions match still holds.
+    pub(super) async fn with_owner_task_tracking(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        bot_id: BotId,
+        kind: AgentKind,
+        instructions: Option<String>,
+    ) -> agent_session::domain::error::Result<Option<String>> {
+        let choice = self
+            .coding_agents
+            .coding_agent_choice(bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?;
+        if !is_coding_agent(choice, kind) || !self.sessions.user_task_tracking(owner).await? {
+            return Ok(instructions);
+        }
+        Ok(Some(with_task_tracking(instructions)))
+    }
+
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,
         bot_id = %command.bot_id,
@@ -292,7 +325,14 @@ where
         let sandbox_size = self.sessions.user_sandbox_size(&actor).await?;
         // Assignments retain the original task and update policy alongside the
         // profile instructions, including across later turns and reattachments.
-        let instructions = origin.session_instructions(&runtime.instructions);
+        let instructions = self
+            .with_owner_task_tracking(
+                &actor,
+                bot_id,
+                runtime.kind,
+                origin.session_instructions(&runtime.instructions),
+            )
+            .await?;
 
         // Provisioned before the session exists, because the row is what makes
         // the token mean anything: it carries the hash the proxy recognises.

@@ -541,6 +541,21 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Whether the user's new coding sessions carry the task-tracking workflow.
+    ///
+    /// A missing row is `false`, not an error.
+    fn user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Upsert whether the user's new coding sessions track their work with tasks.
+    fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 

@@ -74,6 +74,7 @@ pub struct InMemoryAgentSessionRepo {
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
+    user_task_tracking: Arc<Mutex<HashMap<String, bool>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
     /// Replica heartbeats and published addresses, mirroring `harness_replica`.
@@ -493,6 +494,28 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(user_id.as_ref().to_owned(), size);
+        Ok(())
+    }
+
+    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
+        Ok(self
+            .user_task_tracking
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(user_id.as_ref())
+            .copied()
+            .unwrap_or(false))
+    }
+
+    async fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> Result<()> {
+        self.user_task_tracking
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(user_id.as_ref().to_owned(), enabled);
         Ok(())
     }
 

@@ -2,6 +2,7 @@ use super::*;
 mod queue;
 mod recovery;
 mod search;
+mod session_task;
 mod user_cleanup;
 mod working_branch;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
@@ -785,6 +786,25 @@ async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
             .expect("upserted default"),
         SandboxSize::Large
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn user_task_tracking_defaults_off_and_upserts(pool: PgPool) {
+    let repo = test_repo(&pool);
+    insert_user(&pool, OWNER).await;
+    let owner = user_id(OWNER);
+
+    assert!(!repo.user_task_tracking(&owner).await.expect("missing row"));
+
+    repo.set_user_task_tracking(&owner, true)
+        .await
+        .expect("enable");
+    assert!(repo.user_task_tracking(&owner).await.expect("enabled"));
+
+    repo.set_user_task_tracking(&owner, false)
+        .await
+        .expect("disable");
+    assert!(!repo.user_task_tracking(&owner).await.expect("disabled"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

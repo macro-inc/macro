@@ -17,6 +17,8 @@ mod sandbox_size;
 pub mod search;
 pub mod service;
 pub mod session;
+/// The task a session works on, and linking its pull request to it.
+pub mod session_task;
 /// Session link, channel, and team sharing.
 pub mod sharing;
 

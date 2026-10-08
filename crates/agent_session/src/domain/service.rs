@@ -348,6 +348,21 @@ pub trait AgentSessionService: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'static>,
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Whether the user's new coding sessions carry the task-tracking workflow.
+    ///
+    /// A missing preference is `false`.
+    fn user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Upsert whether the user's new coding sessions track their work with tasks.
+    fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Agent session service backed by one durable repository and local actors.
@@ -1070,6 +1085,18 @@ where
     ) -> Result<()> {
         self.repo.set_user_sandbox_size(user_id, size).await
     }
+
+    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
+        self.repo.user_task_tracking(user_id).await
+    }
+
+    async fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> Result<()> {
+        self.repo.set_user_task_tracking(user_id, enabled).await
+    }
 }
 
 async fn initial_prompt_for_rename<Folds>(
@@ -1774,6 +1801,18 @@ where
         size: SandboxSize,
     ) -> Result<()> {
         self.repo.set_user_sandbox_size(user_id, size).await
+    }
+
+    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
+        self.repo.user_task_tracking(user_id).await
+    }
+
+    async fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> Result<()> {
+        self.repo.set_user_task_tracking(user_id, enabled).await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

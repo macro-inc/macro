@@ -54,4 +54,14 @@ export class AgentSessionNamespace {
   setDefaultSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     return AgentSession.setDefaultSandboxSize(this.client, size);
   }
+
+  /** Whether the caller's new coding sessions track their work with Macro tasks. */
+  taskTracking(): Promise<boolean> {
+    return AgentSession.taskTracking(this.client);
+  }
+
+  /** Set whether the caller's new coding sessions track their work with Macro tasks. */
+  setTaskTracking(enabled: boolean): Promise<boolean> {
+    return AgentSession.setTaskTracking(this.client, enabled);
+  }
 }

@@ -12,6 +12,7 @@ mod test;
 mod pull_request;
 mod queue;
 mod recovery;
+mod session_task;
 mod sharing;
 mod turn_state;
 mod working_branch;
@@ -1047,6 +1048,43 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .execute(&self.pool)
         .await
         .context("failed to persist user sandbox size")?;
+        Ok(())
+    }
+
+    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
+        let enabled = sqlx::query_scalar!(
+            r#"
+            SELECT enabled
+            FROM user_agent_task_tracking
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read user task tracking")?;
+        Ok(enabled.unwrap_or(false))
+    }
+
+    async fn set_user_task_tracking(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        enabled: bool,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_agent_task_tracking (user_id, enabled, modified_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET enabled = EXCLUDED.enabled,
+                modified_at = NOW()
+            "#,
+            user_id.as_ref(),
+            enabled,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist user task tracking")?;
         Ok(())
     }
 

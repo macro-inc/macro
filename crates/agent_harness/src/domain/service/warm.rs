@@ -205,6 +205,10 @@ where
             }
             return Ok(session);
         }
+        let instructions = self
+            .inner
+            .with_owner_task_tracking(&owner_user, bot_id, kind, instructions)
+            .await?;
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self
             .inner

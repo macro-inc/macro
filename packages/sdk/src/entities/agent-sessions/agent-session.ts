@@ -287,6 +287,23 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     ).size;
   }
 
+  /** Whether the caller's new coding sessions track their work with Macro tasks. */
+  static async taskTracking(client: MacroClient): Promise<boolean> {
+    return unwrap(await client.agentHarness.getAgentTaskTracking()).enabled;
+  }
+
+  /** Set whether the caller's new coding sessions track their work with Macro tasks. */
+  static async setTaskTracking(
+    client: MacroClient,
+    enabled: boolean
+  ): Promise<boolean> {
+    return unwrap(
+      await client.agentHarness.putAgentTaskTracking({
+        body: { enabled },
+      })
+    ).enabled;
+  }
+
   /**
    * Send a prompt or lifecycle operation to the live agent session.
    *

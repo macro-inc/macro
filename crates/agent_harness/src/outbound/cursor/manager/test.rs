@@ -223,6 +223,18 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("resizing is the harness service's job")
     }
 
+    async fn user_task_tracking(&self, _owner: &MacroUserIdStr<'static>) -> SessionResult<bool> {
+        unimplemented!("task tracking is read when a session opens")
+    }
+
+    async fn set_user_task_tracking(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _enabled: bool,
+    ) -> SessionResult<()> {
+        unimplemented!("task tracking is read when a session opens")
+    }
+
     async fn list_queued_actions(
         &self,
         _id: AgentSessionId,

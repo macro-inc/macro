@@ -191,6 +191,31 @@ describe('AgentSession', () => {
     ]);
   });
 
+  test('reads and writes the caller task-tracking setting', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request.clone());
+      return Response.json({ enabled: true }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(macro.agentSessions.taskTracking()).resolves.toBe(true);
+    await expect(macro.agentSessions.setTaskTracking(true)).resolves.toBe(
+      true
+    );
+
+    expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
+    expect(requests.map((request) => request.url)).toEqual([
+      'https://agent.example.test/agent-task-tracking',
+      'https://agent.example.test/agent-task-tracking',
+    ]);
+    await expect(requests[1]?.json()).resolves.toEqual({ enabled: true });
+  });
+
   test('lists one repository branches through the agent-harness service', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

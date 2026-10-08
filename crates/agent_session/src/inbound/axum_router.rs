@@ -292,6 +292,25 @@ where
         .with_state(state)
 }
 
+/// Build the caller's task-tracking setting router. Mount at `/agent-task-tracking`.
+pub fn agent_task_tracking_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
+where
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/agent-task-tracking",
+            get(get_agent_task_tracking_handler::<T, Access, Auth>)
+                .put(put_agent_task_tracking_handler::<T, Access, Auth>),
+        )
+        .with_state(state)
+}
+
 /// Transport error for agent session handlers.
 #[derive(Debug)]
 pub enum AgentSessionApiError {
@@ -1384,6 +1403,76 @@ pub async fn put_agent_sandbox_size_handler<
     state
         .service
         .set_user_sandbox_size(&caller.authorization.user.macro_user_id, req.size)
+        .await?;
+    Ok(Json(req))
+}
+
+/// Request or response body for the caller's task-tracking setting.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskTrackingBody {
+    /// Whether new coding sessions track their work with Macro tasks.
+    pub enabled: bool,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-task-tracking",
+    tag = "agent-sessions",
+    operation_id = "get_agent_task_tracking",
+    responses(
+        (status = 200, body = TaskTrackingBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Read whether the caller's new coding sessions track their work with tasks.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn get_agent_task_tracking_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<TaskTrackingBody>, AgentSessionApiError> {
+    let enabled = state
+        .service
+        .user_task_tracking(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(TaskTrackingBody { enabled }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-task-tracking",
+    tag = "agent-sessions",
+    operation_id = "put_agent_task_tracking",
+    request_body = TaskTrackingBody,
+    responses(
+        (status = 200, body = TaskTrackingBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Set whether the caller's new coding sessions track their work with tasks.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), enabled = req.enabled),
+    err(Debug)
+)]
+pub async fn put_agent_task_tracking_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(req): Json<TaskTrackingBody>,
+) -> Result<Json<TaskTrackingBody>, AgentSessionApiError> {
+    state
+        .service
+        .set_user_task_tracking(&caller.authorization.user.macro_user_id, req.enabled)
         .await?;
     Ok(Json(req))
 }

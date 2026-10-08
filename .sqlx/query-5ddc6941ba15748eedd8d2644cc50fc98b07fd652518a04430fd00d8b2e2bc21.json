@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_agent_task_tracking (user_id, enabled, modified_at)\n            VALUES ($1, $2, NOW())\n            ON CONFLICT (user_id) DO UPDATE\n            SET enabled = EXCLUDED.enabled,\n                modified_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ddc6941ba15748eedd8d2644cc50fc98b07fd652518a04430fd00d8b2e2bc21"
+}
