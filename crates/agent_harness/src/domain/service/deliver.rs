@@ -173,13 +173,6 @@ where
             return Ok(());
         };
         let session = self.sessions.get_session(session_id).await?;
-        // Every prompt names the owner and its sender, so the agent can tell
-        // a request from the person whose access it spends from anyone
-        // else's. A session owned by a bot or team has no person to name.
-        let people = session.owner_id.as_user().map(|owner| PromptPeople {
-            owner: owner.clone(),
-            sender: actor.cloned(),
-        });
         let raw_prompt = prompt.prompt.clone();
         let instructions = Some(&session)
             .filter(|session| {
@@ -188,6 +181,16 @@ where
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
+        // Identity accompanies origin context or fallback instructions; it
+        // must not create a context node on an ordinary session prompt.
+        let people = session
+            .owner_id
+            .as_user()
+            .filter(|_| announce.is_some() || instructions.is_some())
+            .map(|owner| PromptPeople {
+                owner: owner.clone(),
+                sender: actor.cloned(),
+            });
         let context = if let Some(origin) = announce {
             Some(self.load_prompt_context(origin, actor).await?)
         } else {

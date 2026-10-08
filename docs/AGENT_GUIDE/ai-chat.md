@@ -837,7 +837,7 @@ transcript shows the same action (`Read your email`) with `Approved by …`, `Al
 by …`, `Declined by …`, `Cancelled`, or `Not approved in time` (30 minutes for the
 in-process agent; sandboxed ones wait as long when their MCP client accepts progress, about
 four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
-reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
+reads `Waiting for approval`. Origin context names the owner and the prompter.
 
 ## Forms authoring and sharing
 
@@ -865,6 +865,13 @@ suggestions. There is only ever one Macro entry in the mention menu; which of th
 two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
+
+Prompts sent from a channel or document carry origin context. A harness without
+system-prompt support also receives its instructions in the first prompt's context.
+Ordinary prompts sent directly in the session do not add context just to name the
+owner. When present, **Agent context** appears as a collapsed action line above
+the user message. Click it to inspect the full context text, then click again to
+collapse it; the user's message stays visible below.
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or

@@ -3486,6 +3486,42 @@ async fn open_spawns_at_the_users_default_size() {
 }
 
 #[tokio::test]
+async fn explicit_prompts_only_carry_context_for_fallback_instructions() {
+    for harness in [
+        "macro-inmem",
+        "claude-cloud",
+        "codex-cloud",
+        "cursor",
+        "external",
+    ] {
+        for first_turn in [true, false] {
+            for instructions in [None, Some("  "), Some("Be helpful")] {
+                let composer = PromptComposerMock::default();
+                let (service, repo, _, _, _) =
+                    harness_with_edges(PromptContextMock::default(), composer.clone());
+                let id = AgentSessionId::new();
+                let mut session = agent_session::testing::test_agent_session(id);
+                session.harness = harness.to_owned();
+                session.instructions = instructions.map(str::to_owned);
+                repo.insert_session(session);
+                let mut action = AgentAction::prompt("hello");
+                service
+                    .inner
+                    .compose_action(id, &mut action, Some(&sender()), None, first_turn)
+                    .await
+                    .unwrap();
+                let expected = first_turn
+                    && AgentKind::from_harness(harness).folds_instructions()
+                    && instructions.is_some_and(|value| !value.trim().is_empty());
+                assert_eq!(composer.people()[0].is_some(), expected, "{harness}");
+                assert_eq!(composer.calls()[0].1.is_some(), expected, "{harness}");
+                assert!(composer.calls()[0].2.is_none());
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn managed_open_composes_its_prompt_without_channel_context() {
     let composer = PromptComposerMock::failing("lexical unavailable");
     let (service, _repo, containers, _announcer, _runtimes) =
@@ -3505,6 +3541,7 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
         .await;
 
     assert!(result.is_err(), "composition failure must stop delivery");
+    assert_eq!(composer.people(), [None]);
     assert_eq!(
         composer.calls(),
         [(

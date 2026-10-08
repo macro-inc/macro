@@ -7,6 +7,16 @@ import { ActionLine } from './ActionLine';
 afterEach(cleanup);
 
 describe('ActionLine', () => {
+  it('reveals context as literal text with neutral styling', () => {
+    const detail = '<script>untrusted content</script>';
+    const view = render(() => (
+      <ActionLine label="Agent context" detail={detail} />
+    ));
+    fireEvent.click(view.getByRole('button', { name: /Agent context/ }));
+    expect(view.getByText(detail).classList.contains('bg-hover')).toBe(true);
+    expect(view.container.querySelector('script')).toBeNull();
+  });
+
   it('expands to show the full detail when its label is clicked', () => {
     const detail =
       'herdr agent start failed: {"error":{"code":"agent_pane_busy"}}';

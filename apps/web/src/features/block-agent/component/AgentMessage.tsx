@@ -18,11 +18,20 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
-import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  For,
+  Index,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
+import { splitPromptContext } from '../state/prompt-context';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
@@ -256,6 +265,17 @@ function promptAuthorName(
 function UserMessage(props: { message: FoldedMessage }) {
   const userId = useUserId();
   const authorName = () => promptAuthorName(props.message.author, userId());
+  const context = createMemo(() => {
+    const first = props.message.parts[0];
+    return first?.kind === 'text' ? splitPromptContext(first.text) : undefined;
+  });
+  const parts = createMemo(() =>
+    props.message.parts.map((part, index) =>
+      index === 0 && part.kind === 'text'
+        ? { ...part, text: context()?.text ?? part.text }
+        : part
+    )
+  );
 
   return (
     <div
@@ -272,6 +292,9 @@ function UserMessage(props: { message: FoldedMessage }) {
         )
       }
     >
+      <Show when={context()?.context}>
+        {(detail) => <ActionLine label="Agent context" detail={detail()} />}
+      </Show>
       <Show when={authorName()}>
         {(name) => (
           <div class="text-xs text-ink-extra-muted" data-testid="prompt-author">
@@ -280,7 +303,7 @@ function UserMessage(props: { message: FoldedMessage }) {
         )}
       </Show>
       <UserMessageBubble>
-        <For each={props.message.parts}>
+        <For each={parts()}>
           {(part, index) => (
             <AgentMessagePart
               part={part}

@@ -19,7 +19,7 @@ export interface ActionLineProps {
    */
   failed?: boolean;
   /**
-   * Verbatim detail behind the label — a runtime's error message. Collapsed
+   * Verbatim detail behind the label — context or a runtime's error. Collapsed
    * behind the label rather than inline: the line is punctuation between
    * turns, and an arbitrarily long message would make it the loudest thing in
    * the transcript. Clicking the label expands it.
@@ -79,7 +79,13 @@ export function ActionLine(props: ActionLineProps) {
       </div>
       <Show when={expanded() && props.detail}>
         {(detail) => (
-          <pre class="mt-1.5 max-h-64 overflow-auto rounded-md bg-failure-bg px-3 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap wrap-break-word select-text">
+          <pre
+            class="mt-1.5 max-h-64 overflow-auto rounded-md px-3 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap wrap-break-word select-text"
+            classList={{
+              'bg-failure-bg': props.failed,
+              'bg-hover': !props.failed,
+            }}
+          >
             {detail()}
           </pre>
         )}

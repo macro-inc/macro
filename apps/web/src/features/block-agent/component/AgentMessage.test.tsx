@@ -169,6 +169,23 @@ const message = (
 });
 
 describe('Message tool grouping', () => {
+  it('renders leading prompt context above the user bubble', () => {
+    const context = '<session>Owner and origin</session>';
+    const prompt = `<m-agent-context>${JSON.stringify({ version: 1, text: context })}</m-agent-context>\n\nHello`;
+    const userMessage = {
+      ...message([text(prompt)]),
+      author: { kind: 'user' as const, userId: null },
+    };
+    const view = render(() => (
+      <Message message={userMessage} inFlight={false} />
+    ));
+    const line = view.getByTestId('action-line');
+    expect(line.textContent).toBe('Agent context');
+    expect(line.getAttribute('data-detail')).toBe(context);
+    expect(view.getByTestId('bubble').contains(line)).toBe(false);
+    expect(view.getByTestId('text').textContent).toBe('Hello');
+  });
+
   it('observes only agent answer DOM on the existing session and matching turn', () => {
     renderTelemetry.context.mockReturnValue({
       observeRenderedText: renderTelemetry.observe,
