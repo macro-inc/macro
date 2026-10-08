@@ -6,6 +6,7 @@ use super::*;
 mod test;
 
 pub(super) fn resolve_field(
+    schema: &crate::meta::Schema,
     selections: &[Selection],
     type_name: &str,
     variables: &serde_json::Map<String, Json>,
@@ -14,7 +15,7 @@ pub(super) fn resolve_field(
     let LinkOperation::UpsertByField { where_field, .. } = operation else {
         return Ok(None);
     };
-    let selected = selected_field(selections, type_name, where_field)?;
+    let selected = selected_field(schema, selections, type_name, where_field)?;
     if !selected.selection_set.is_empty() {
         return Err(LinkPatchError::WrongShape);
     }

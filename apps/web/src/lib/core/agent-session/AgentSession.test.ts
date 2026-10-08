@@ -36,6 +36,7 @@ const logSource = vi.hoisted(() => {
   const source = {
     Unavailable,
     cached: vi.fn(),
+    cacheMiss: vi.fn(),
     fetched: vi.fn(),
     forget: vi.fn(),
     watch: vi.fn(),
@@ -50,6 +51,7 @@ const logSource = vi.hoisted(() => {
       source.follow = follow;
       return {
         cached: source.cached(),
+        cacheMiss: source.cacheMiss,
         fetched: source.fetched(),
         stop: source.stop,
       };
@@ -113,6 +115,10 @@ vi.mock('@macro-inc/observability', () => ({
 }));
 const promptSpans = () =>
   telemetry.spans.filter((span) => span.name === 'agent.prompt');
+const loadSpans = () =>
+  telemetry.spans.filter((span) => span.name === 'agent.session.load');
+const renderSpans = () =>
+  telemetry.spans.filter((span) => span.name === 'agent.session.render');
 
 const updates = vi.hoisted(() => ({
   listeners: new Set<(event: { agentSessionId: string }) => void>(),
@@ -992,6 +998,168 @@ describe('AgentSession', () => {
     await live.load();
     expect(logSource.watch).toHaveBeenCalledTimes(2);
     live.release();
+  });
+
+  describe('load telemetry', () => {
+    const nextPaint = () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      );
+
+    it('says why the cache missed', async () => {
+      logSource.cacheMiss.mockReturnValue('network_first');
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      expect(loadSpans()[0].attributes).toMatchObject({
+        'agent.session.load.cache_hit': false,
+        'agent.session.load.cache_miss': 'network_first',
+      });
+      live.release();
+    });
+
+    it('says why a load failed', async () => {
+      harness.get.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
+      const live = AgentSession.acquire(SESSION);
+      await expect(live.load()).rejects.toThrow();
+
+      logSource.fetched.mockRejectedValueOnce(
+        new logSource.Unavailable(SESSION, 'failed')
+      );
+      await expect(live.load()).rejects.toThrow();
+
+      harness.get.mockResolvedValueOnce(err([{ code: 'UNAUTHORIZED' }]));
+      await expect(live.load()).rejects.toThrow();
+
+      fold.readSession.mockRejectedValueOnce(new Error('worker died'));
+      await expect(live.load()).rejects.toThrow('worker died');
+
+      expect(
+        loadSpans().map((span) => [
+          span.attributes['agent.session.load.outcome'],
+          span.attributes['agent.session.load.failure'],
+        ])
+      ).toEqual([
+        ['failed', 'session_fetch'],
+        ['failed', 'log_fetch'],
+        ['failed', 'access_denied'],
+        ['failed', 'fold'],
+      ]);
+      live.release();
+    });
+
+    it('holds the render span open until the transcript has painted', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+
+      live.rendered('fetched', [
+        {
+          agentSessionId: SESSION,
+          turn: 0,
+          author: { kind: 'user', userId: null },
+          requestId: null,
+          parts: [{ kind: 'text', text: 'Hi' }],
+          stop: null,
+          pending: false,
+        },
+        {
+          agentSessionId: SESSION,
+          turn: 0,
+          author: { kind: 'agent' },
+          requestId: null,
+          parts: [
+            { kind: 'thought', text: 'hmm' },
+            { kind: 'text', text: 'Hello' },
+          ],
+          stop: null,
+          pending: false,
+        },
+      ]);
+      const [span] = renderSpans();
+      expect(span.ends).toBe(0);
+      expect(span.attributes).toMatchObject({
+        'agent.session.render.kind': 'fetched',
+        'agent.session.load.transcript_messages': 2,
+        'agent.session.load.transcript_turns': 1,
+        'agent.session.load.transcript_chars': 10,
+      });
+
+      await nextPaint();
+
+      expect(span.ends).toBe(1);
+      expect(
+        span.attributes['agent.session.load.painted_at_ms']
+      ).toBeGreaterThanOrEqual(
+        span.attributes['agent.session.render.since_load_ms'] as number
+      );
+      expect(span.attributes['agent.session.load.paint_ms']).toEqual(
+        expect.any(Number)
+      );
+      live.release();
+    });
+
+    it('attributes the long animation frames before the paint', async () => {
+      const observed: { deliver?: (entries: unknown[]) => void } = {};
+      class FakeObserver {
+        static supportedEntryTypes = ['long-animation-frame'];
+        constructor(callback: (list: { getEntries: () => unknown[] }) => void) {
+          observed.deliver = (entries) =>
+            callback({ getEntries: () => entries });
+        }
+        observe() {}
+        takeRecords() {
+          return [];
+        }
+        disconnect() {}
+      }
+      vi.stubGlobal('PerformanceObserver', FakeObserver);
+      onTestFinished(() => {
+        vi.unstubAllGlobals();
+      });
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const now = performance.now();
+      const frame = (duration: number, scripts: unknown[]) => ({
+        entryType: 'long-animation-frame',
+        startTime: now - duration,
+        duration,
+        blockingDuration: duration - 50,
+        scripts,
+      });
+      observed.deliver?.([
+        frame(80, []),
+        frame(500, [
+          { duration: 100, invoker: 'small', sourceURL: 'a.js' },
+          {
+            duration: 300,
+            invoker: 'ThreadList.positionInitial',
+            sourceURL: `https://app/${'x'.repeat(300)}.js`,
+          },
+        ]),
+      ]);
+
+      live.rendered('fetched', []);
+      await nextPaint();
+      const [span] = renderSpans();
+      // Ended once the frames before the paint have been reported.
+      expect(span.ends).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      expect(span.ends).toBe(1);
+      expect(span.attributes).toMatchObject({
+        'agent.session.load.loaf_count': 2,
+        'agent.session.load.loaf_total_ms': 580,
+        'agent.session.load.loaf_max_ms': 500,
+        'agent.session.load.loaf_blocking_ms': 480,
+        'agent.session.load.loaf_top_script_invoker':
+          'ThreadList.positionInitial',
+        'agent.session.load.loaf_top_script_ms': 300,
+      });
+      expect(
+        span.attributes['agent.session.load.loaf_top_script_source']
+      ).toHaveLength(200);
+      live.release();
+    });
   });
 
   describe('prompt telemetry', () => {

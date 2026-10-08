@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getVisibleHeadingIndexes, shouldShowOutline } from './MarkdownOutline';
+import {
+  getVisibleHeadingIndexes,
+  MARKDOWN_OUTLINE_INSET,
+  MARKDOWN_OUTLINE_WIDTH,
+  outlineFitsGutter,
+  shouldShowOutline,
+} from './MarkdownOutline';
 
 describe('getVisibleHeadingIndexes', () => {
   it('highlights every section overlapping the viewport', () => {
@@ -47,5 +53,24 @@ describe('shouldShowOutline', () => {
     expect(shouldShowOutline(2, true)).toBe(false);
     expect(shouldShowOutline(3, false)).toBe(false);
     expect(shouldShowOutline(3, true)).toBe(true);
+  });
+});
+
+describe('outlineFitsGutter', () => {
+  const fits = MARKDOWN_OUTLINE_INSET + MARKDOWN_OUTLINE_WIDTH;
+
+  it('needs the whole rail to sit left of the text column', () => {
+    expect(outlineFitsGutter(fits)).toBe(true);
+    expect(outlineFitsGutter(fits - 1)).toBe(false);
+  });
+
+  it('rejects the gutters comment layouts leave for the text column', () => {
+    // CommentLayoutMode.md and .xs pin the column to the container padding.
+    expect(outlineFitsGutter(32)).toBe(false);
+    expect(outlineFitsGutter(24)).toBe(false);
+  });
+
+  it('is unmeasured until the notebook has laid out', () => {
+    expect(outlineFitsGutter(0)).toBe(false);
   });
 });

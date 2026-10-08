@@ -29,13 +29,13 @@ use crate::domain::ports::{
 /// The name a new database's table takes.
 const RESPONSES_TABLE: &str = "Responses";
 /// The date column each submission stamps.
-const SUBMITTED_COLUMN: &str = "Submitted";
+pub(super) const SUBMITTED_COLUMN: &str = "Submitted";
 /// The person column each signed-in submission names its respondent in.
-const RESPONDENT_COLUMN: &str = "Respondent";
+pub(super) const RESPONDENT_COLUMN: &str = "Respondent";
 
 /// A column the form writes itself: one the table already has, reused, or
 /// one to create.
-enum ManagedColumn {
+pub(super) enum ManagedColumn {
     Existing(ColumnId),
     New { id: ColumnId, name: String },
 }
@@ -51,7 +51,7 @@ impl ManagedColumn {
 /// Find the table's column named `base` (or `base 2`, `base 3`, … when an
 /// earlier name is taken by a column of another type) of `kind`; otherwise use
 /// the first free name for a new column.
-fn managed_column(table: &TableDetail, base: &str, kind: ColumnKind) -> ManagedColumn {
+pub(super) fn managed_column(table: &TableDetail, base: &str, kind: ColumnKind) -> ManagedColumn {
     let columns = question_columns(table);
     let named = |name: &str| {
         table
@@ -105,6 +105,14 @@ fn create_op(table: &TableDetail, column: &ManagedColumn, kind: ColumnKind) -> O
     })
 }
 
+/// Interactive creation retains its existing rollback policy; AI workflows keep
+/// allocated identities for inspection after an interrupted multi-service write.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum CreationPolicy {
+    Interactive,
+    Authoring,
+}
+
 impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
     FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
 where
@@ -121,11 +129,29 @@ where
         creator: Viewer,
         command: CreateFormCommand,
     ) -> Result<FormDetail, FormError> {
+        self.create_with_identity(creator, command, FormId::new(), CreationPolicy::Interactive)
+            .await
+    }
+
+    pub(super) async fn create_with_identity(
+        &self,
+        creator: Viewer,
+        command: CreateFormCommand,
+        id: FormId,
+        policy: CreationPolicy,
+    ) -> Result<FormDetail, FormError> {
+        let status = match policy {
+            CreationPolicy::Interactive => FormStatus::Open,
+            CreationPolicy::Authoring => FormStatus::Closed,
+        };
         let name = validated_name(&command.name)?;
         match command.source {
-            CreateSource::NewDatabase => self.create_over_new_database(creator, name).await,
+            CreateSource::NewDatabase => {
+                self.create_over_new_database(creator, name, id, status, policy)
+                    .await
+            }
             CreateSource::Table { receipt, table_id } => {
-                self.create_over_table(creator, name, receipt, table_id)
+                self.create_over_table(creator, name, receipt, table_id, id, status)
                     .await
             }
         }
@@ -138,6 +164,9 @@ where
         &self,
         creator: Viewer,
         name: String,
+        id: FormId,
+        status: FormStatus,
+        policy: CreationPolicy,
     ) -> Result<FormDetail, FormError> {
         let database = self
             .databases
@@ -149,11 +178,17 @@ where
             .await
             .map_err(database_error)?;
         match self
-            .attach_to_new_database(&creator, database.name, database.id)
+            .attach_to_new_database(&creator, database.name, database.id, id, status, policy)
             .await
         {
             Ok(detail) => Ok(detail),
             Err(error) => {
+                if policy == CreationPolicy::Authoring {
+                    return Err(FormError::DatabaseRetained {
+                        database_id: database.id,
+                        source: Box::new(error),
+                    });
+                }
                 self.remove_new_database(database.id).await;
                 Err(error)
             }
@@ -165,6 +200,9 @@ where
         creator: &Viewer,
         name: String,
         database_id: DatabaseId,
+        id: FormId,
+        status: FormStatus,
+        policy: CreationPolicy,
     ) -> Result<FormDetail, FormError> {
         let detail = self
             .databases
@@ -176,6 +214,24 @@ where
             .into_iter()
             .next()
             .ok_or_else(|| FormError::DatabaseContract("a new database has no table"))?;
+        if policy == CreationPolicy::Authoring
+            && (self
+                .repository
+                .table_has_form(table.table.id)
+                .await
+                .map_err(repository_error)?
+                || self
+                    .databases
+                    .row_count(
+                        internal_receipt::<ViewAccessLevel>(database_id),
+                        table.table.id,
+                    )
+                    .await
+                    .map_err(database_error)?
+                    != 0)
+        {
+            return Err(FormError::Conflict);
+        }
         let submitted = ManagedColumn::New {
             id: ColumnId::new(),
             name: SUBMITTED_COLUMN.to_string(),
@@ -210,7 +266,14 @@ where
             .apply_ops(
                 internal_receipt::<EditAccessLevel>(database_id),
                 creator.clone(),
-                OpBatch::from(ops),
+                OpBatch {
+                    ops,
+                    base_versions: if policy == CreationPolicy::Authoring {
+                        [(table.table.id, table.table.version)].into()
+                    } else {
+                        Default::default()
+                    },
+                },
             )
             .await
             .map_err(database_error)?;
@@ -229,6 +292,8 @@ where
             layout,
             &table,
             true,
+            id,
+            status,
         )
         .await
     }
@@ -253,6 +318,8 @@ where
         name: String,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         table_id: TableId,
+        id: FormId,
+        status: FormStatus,
     ) -> Result<FormDetail, FormError> {
         // The receipt must be for a database; the table is looked up in it.
         receipt_database_id(&receipt)?;
@@ -331,6 +398,8 @@ where
             layout,
             &table,
             false,
+            id,
+            status,
         )
         .await
     }
@@ -338,6 +407,10 @@ where
     /// Store a new form over `table`, owned by its creator, writing its two
     /// managed columns. A form over a database it created goes by that
     /// database's name, which `name` is at creation.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Creation binds the saved identity, initial access and managed columns in one write"
+    )]
     async fn store_new_form(
         &self,
         creator: &Viewer,
@@ -346,11 +419,13 @@ where
         layout: FormLayout,
         table: &TableDetail,
         name_follows_database: bool,
+        id: FormId,
+        status: FormStatus,
     ) -> Result<FormDetail, FormError> {
         let now = self.now();
         let database_id = table.table.database_id;
         let form = Form {
-            id: FormId::new(),
+            id,
             name,
             description: String::new(),
             owner_id: creator.user_id.to_string(),
@@ -360,7 +435,7 @@ where
             respondent_column_id: Some(respondent),
             audience: Audience::Members,
             tally_visible: false,
-            status: FormStatus::Open,
+            status,
             closes_at: None,
             confirmation_message: String::new(),
             created_at: now,

@@ -59,6 +59,7 @@ export type CrmContext = {
     openEntity(entity: import('@entity').EntityData): void;
   };
   listsEnabled(): Accessor<boolean>;
+  pipelinesEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(

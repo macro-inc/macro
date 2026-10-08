@@ -177,9 +177,10 @@ const asError = (error: unknown): Error =>
 class CacheResponseError extends Error {
   constructor(
     message: string,
-    readonly errorCode?: CacheResponseErrorCode
+    readonly errorCode?: CacheResponseErrorCode,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = 'CacheResponseError';
   }
 }
@@ -573,7 +574,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         entry.reject(
           new CacheResponseError(
             `${error.message}: admitted optimistic enqueue outcome is uncertain`,
-            ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE
+            ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
+            { cause: error }
           )
         );
       } else {

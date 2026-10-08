@@ -1,11 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { Dropdown } from '@ui/components/Dropdown';
 import { okAsync } from 'neverthrow';
-import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DatabaseFormEditors,
   DatabaseFormsEntry,
-  useTableFormCreation,
 } from './database-forms-entry';
 
 const forms = vi.hoisted(() => ({
@@ -28,8 +27,12 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({ openWithSplit }),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
   forms.listed = [];
   forms.createForm.mockReset();
   replaceOrInsertSplit.mockReset();
@@ -41,24 +44,24 @@ describe('DatabaseFormsEntry', () => {
       { id: 'form-1', name: 'RSVP', tableId: 'table-1', status: 'open' },
     ];
     render(() => (
-      <DatabaseFormsEntry
-        databaseId="database-1"
-        tableId="table-1"
-        tableName="Guests"
-        canCreate
-        enabled
-      />
+      <Dropdown open>
+        <Dropdown.Trigger>Add</Dropdown.Trigger>
+        <Dropdown.Content>
+          <DatabaseFormsEntry
+            databaseId="database-1"
+            tableId="table-1"
+            tableName="Guests"
+            canCreate
+            enabled
+          />
+        </Dropdown.Content>
+      </Dropdown>
     ));
-    const trigger = screen.getByRole('button', { name: 'Forms over Guests' });
-    trigger.focus();
-    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     const form = await screen.findByRole('menuitem', { name: 'RSVP Open' });
     expect(
       screen.getByRole('group', { name: 'Forms writing to Guests' })
     ).toBeTruthy();
-    expect(
-      screen.queryByRole('menuitem', { name: 'New form from this table' })
-    ).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'New form' })).toBeNull();
     form.focus();
     fireEvent.keyDown(form, { key: 'Enter' });
     expect(replaceOrInsertSplit).toHaveBeenCalledWith({
@@ -67,95 +70,74 @@ describe('DatabaseFormsEntry', () => {
     });
   });
 
-  it('offers + Form to the database owner when no form writes to the table', () => {
+  it('creates a form over the current table from the add menu', async () => {
+    forms.createForm.mockReturnValue(okAsync({ form: { id: 'form-new' } }));
     render(() => (
-      <DatabaseFormsEntry
-        databaseId="database-1"
-        tableId="table-1"
-        tableName="Guests"
-        canCreate
-        enabled
-      />
+      <Dropdown open>
+        <Dropdown.Trigger>Add</Dropdown.Trigger>
+        <Dropdown.Content>
+          <DatabaseFormsEntry
+            databaseId="database-1"
+            tableId="table-1"
+            tableName="Guests"
+            canCreate
+            enabled
+          />
+        </Dropdown.Content>
+      </Dropdown>
     ));
-    expect(screen.getByRole('button', { name: /Form/ })).toBeTruthy();
+    const create = screen.getByRole('menuitem', { name: 'New form' });
+    fireEvent.keyDown(create, { key: 'Enter' });
+    expect(forms.createForm).toHaveBeenCalledWith(
+      {
+        name: 'Guests form',
+        source: { kind: 'table', databaseId: 'database-1', tableId: 'table-1' },
+      },
+      'database'
+    );
+    await vi.waitFor(() =>
+      expect(replaceOrInsertSplit).toHaveBeenCalledWith({
+        type: 'form',
+        id: 'form-new',
+      })
+    );
   });
 
   it('offers editors no creation, but keeps the forms that exist', () => {
     const { unmount } = render(() => (
-      <DatabaseFormsEntry
-        databaseId="database-1"
-        tableId="table-1"
-        tableName="Guests"
-        canCreate={false}
-        enabled
-      />
+      <Dropdown open>
+        <Dropdown.Trigger>Add</Dropdown.Trigger>
+        <Dropdown.Content>
+          <DatabaseFormsEntry
+            databaseId="database-1"
+            tableId="table-1"
+            tableName="Guests"
+            canCreate={false}
+            enabled
+          />
+        </Dropdown.Content>
+      </Dropdown>
     ));
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'New form' })).toBeNull();
     unmount();
     forms.listed = [
       { id: 'form-1', name: 'RSVP', tableId: 'table-1', status: 'open' },
     ];
     render(() => (
-      <DatabaseFormsEntry
-        databaseId="database-1"
-        tableId="table-1"
-        tableName="Guests"
-        canCreate={false}
-        enabled
-      />
+      <Dropdown open>
+        <Dropdown.Trigger>Add</Dropdown.Trigger>
+        <Dropdown.Content>
+          <DatabaseFormsEntry
+            databaseId="database-1"
+            tableId="table-1"
+            tableName="Guests"
+            canCreate={false}
+            enabled
+          />
+        </Dropdown.Content>
+      </Dropdown>
     ));
-    expect(
-      screen.getByRole('button', { name: 'Forms over Guests' }).textContent
-    ).toContain('1 form');
-  });
-});
-
-describe('useTableFormCreation', () => {
-  it('gives owners a Form choice that creates over the table and opens it', async () => {
-    forms.createForm.mockReturnValue(
-      okAsync({ form: { id: 'form-new', name: 'RSVP' } })
-    );
-    await createRoot(async (dispose) => {
-      const choice = useTableFormCreation({
-        databaseId: () => 'database-1',
-        tableId: () => 'table-1',
-        tableName: () => 'Guests',
-        isOwner: () => true,
-        enabled: () => true,
-      });
-      expect(choice()?.initialName).toBe('Guests form');
-      expect(await choice()?.onCreate('RSVP')).toBeUndefined();
-      expect(forms.createForm).toHaveBeenCalledWith(
-        {
-          name: 'RSVP',
-          source: {
-            kind: 'table',
-            databaseId: 'database-1',
-            tableId: 'table-1',
-          },
-        },
-        'database'
-      );
-      expect(replaceOrInsertSplit).toHaveBeenCalledWith({
-        type: 'form',
-        id: 'form-new',
-      });
-      dispose();
-    });
-  });
-
-  it('gives editors no Form choice', () => {
-    createRoot((dispose) => {
-      const choice = useTableFormCreation({
-        databaseId: () => 'database-1',
-        tableId: () => 'table-1',
-        tableName: () => 'Guests',
-        isOwner: () => false,
-        enabled: () => true,
-      });
-      expect(choice()).toBeUndefined();
-      dispose();
-    });
+    expect(screen.getByRole('menuitem', { name: 'RSVP Open' })).toBeTruthy();
   });
 });
 

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts SET sync_status=$2,last_synced_at=CASE WHEN $3 THEN now()-interval '16 minutes' ELSE now() END,last_sync_error=$4 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2e37770ebdaebc9783b9151906507abeafbfe023185b1dfd99ec8359863eadc8"
+}

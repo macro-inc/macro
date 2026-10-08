@@ -21,7 +21,13 @@ vi.mock('@service-storage/client', () => ({
 import type { ResultError } from '@core/util/result';
 import type { EnrichedGithubPullRequest } from '@service-auth/generated/schemas';
 import type { GithubPullRequest } from '@service-storage/generated/schemas';
-import { fetchDocumentGithubPullRequests } from './github-pull-requests';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { createRoot } from 'solid-js';
+import {
+  fetchDocumentGithubPullRequests,
+  useRefreshGithubPullRequest,
+} from './github-pull-requests';
+import { githubPullRequestRefreshKeys } from './keys';
 
 const rawPullRequest: GithubPullRequest = {
   displayName: 'macro/macro#42',
@@ -228,5 +234,78 @@ describe('fetchDocumentGithubPullRequests', () => {
         },
       ],
     });
+  });
+});
+
+describe('useRefreshGithubPullRequest', () => {
+  const refreshedKeys = [
+    ['pr-foreign-entity', 'foreign-entity-1'],
+    ['summary'],
+  ];
+
+  function mountRefresh(client: QueryClient) {
+    return createRoot((dispose) => {
+      QueryClientProvider({
+        client,
+        get children() {
+          useRefreshGithubPullRequest(
+            () => rawPullRequest,
+            () => refreshedKeys
+          );
+          return null;
+        },
+      });
+      return dispose;
+    });
+  }
+
+  it('invalidates the refreshed keys after a successful refresh', async () => {
+    mocks.enrichGithubPullRequests.mockResolvedValue(resultOk([]));
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const dispose = mountRefresh(client);
+
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: refreshedKeys[0] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: refreshedKeys[1] });
+    dispose();
+  });
+
+  it('still invalidates when the refresh finishes after unmount', async () => {
+    let resolveEnrichment: (value: unknown) => void = () => {};
+    mocks.enrichGithubPullRequests.mockReturnValue(
+      new Promise((resolve) => {
+        resolveEnrichment = resolve;
+      })
+    );
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const dispose = mountRefresh(client);
+
+    await vi.waitFor(() =>
+      expect(mocks.enrichGithubPullRequests).toHaveBeenCalledTimes(1)
+    );
+    dispose();
+    resolveEnrichment(resultOk([]));
+
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: refreshedKeys[0] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: refreshedKeys[1] });
+  });
+
+  it('leaves the stored copy alone when the refresh fails', async () => {
+    mocks.enrichGithubPullRequests.mockResolvedValue(
+      resultErr([createError('UNAUTHORIZED')])
+    );
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const dispose = mountRefresh(client);
+
+    const refreshKey = githubPullRequestRefreshKeys.refresh(
+      rawPullRequest.githubKey
+    ).queryKey;
+    await vi.waitFor(() => expect(client.getQueryData(refreshKey)).toBe(false));
+    expect(invalidate).not.toHaveBeenCalled();
+    dispose();
   });
 });

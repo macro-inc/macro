@@ -15,7 +15,7 @@ import type { CalendarEventSourceContent } from '@service-storage/generated/sche
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
-import { graphqlCalendarHost } from './graphql/flag';
+import { answeringGraphqlCalendarHost } from './graphql/flag';
 import {
   committedEvent,
   executeGraphqlCreate,
@@ -256,7 +256,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
     mutationKey: RSVP_MUTATION_KEY,
     mutationFn: async (args: RsvpCalendarEventArgs) => {
-      const host = graphqlCalendarHost();
+      const host = answeringGraphqlCalendarHost();
       if (host) return committedEvent(await executeGraphqlRsvp(host, args));
       return await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
@@ -437,7 +437,7 @@ type DeleteCallbacks = MutationCallbacks<
 export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: DeleteCalendarEventArgs) => {
-      const host = graphqlCalendarHost();
+      const host = answeringGraphqlCalendarHost();
       if (host) {
         await executeGraphqlDelete(host, args);
         return;
@@ -566,7 +566,7 @@ function applyEventPatch(
 export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: UpdateCalendarEventArgs) => {
-      const host = graphqlCalendarHost();
+      const host = answeringGraphqlCalendarHost();
       if (host) return committedEvent(await executeGraphqlUpdate(host, args));
       return await throwOnErr(() =>
         emailClient.updateCalendarEvent(args.eventId, {
@@ -625,7 +625,7 @@ type CreateCallbacks = MutationCallbacks<
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: CreateCalendarEventRequest) => {
-      if (graphqlCalendarHost())
+      if (answeringGraphqlCalendarHost())
         return (await executeGraphqlCreate(args)).event;
       return await throwOnErr(() => emailClient.createCalendarEvent(args));
     },

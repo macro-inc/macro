@@ -59,7 +59,6 @@ export const authExcluded = [
   'createMergeRequest',
   'createPortalSession',
   'createTeam',
-  'createUser',
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
@@ -143,8 +142,13 @@ export const calendarExcluded = [
   'healthHandler',
 ] as const satisfies readonly (keyof CalendarSdk)[];
 
-export const calendarBacklog =
-  [] as const satisfies readonly (keyof CalendarSdk)[];
+export const calendarBacklog = [
+  // Team sharing and availability preferences use the generated client for now.
+  'getAvailabilityCalendars',
+  'getTeamSharing',
+  'setAvailabilityCalendar',
+  'setTeamSharing',
+] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
   'addMcpServer',
@@ -445,6 +449,8 @@ export const storageBacklog = [
   'listHarnesses',
   'listInitiatives',
   'listOccurrences',
+  // Read-only team projections use the generated client for now.
+  'listTeamCalendar',
   'listTeamOutOfOffice',
   'listUserApiKeys',
   // Meeting management uses the generated client.
@@ -458,6 +464,8 @@ export const storageBacklog = [
   'meetingLookup',
   'meetingShare',
   'meetingUpdate',
+  // Mixed message and activity timelines; Channel.messages() reads messages only.
+  'messageTimelineEntries',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',

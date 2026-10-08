@@ -14,7 +14,7 @@ import { useBlockId } from '@core/block';
 import { DATABASE_MODEL, modelsForPlan } from '@core/component/AI/constant';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { toast } from '@core/component/Toast/Toast';
-import { enableDatabases, enableForms } from '@core/constant/featureFlags';
+import { enableDatabases } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -38,20 +38,15 @@ import {
   createSignal,
   ErrorBoundary,
   For,
-  lazy,
   onCleanup,
   Show,
-  Suspense,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { DatabaseSearch } from '../../database/components/database-search';
 import type { ShownLayout } from '../../database/components/database-toolbar';
 import { DatabaseToolbar } from '../../database/components/database-toolbar';
-import type {
-  NewFormChoice,
-  NewView,
-} from '../../database/components/new-view-dialog';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
+import type { NewView } from '../../database/core/view-creation';
 import type { ViewChange } from '../../database/core/view-state';
 import { allRecordsView, boardLayout } from '../../database/core/views';
 import { databaseOpMessage } from '../../database/core/write-failure';
@@ -74,12 +69,6 @@ import { DatabaseGrid } from './DatabaseGrid';
 import { DatabasePageShell } from './DatabasePageShell';
 import { DatabaseSidePanelSections } from './sidepanel/DatabaseSidePanelSections';
 import { TopBar } from './TopBar';
-
-// Forms load only when the flag is on, and only through this boundary.
-const DatabaseFormCreation = lazy(async () => ({
-  default: (await import('@app/features/block-form/database-forms-entry'))
-    .DatabaseFormCreation,
-}));
 
 const Block: Component = () => {
   const databaseId = useBlockId();
@@ -199,8 +188,6 @@ const Block: Component = () => {
     () => detail()?.grant === 'edit' || detail()?.grant === 'owner'
   );
   const columns = () => activeTable()?.columns.map(toViewColumn) ?? [];
-  const formsFlag = useFeatureFlag(enableForms);
-  const [newForm, setNewForm] = createSignal<NewFormChoice>();
   const creations = createViewCreation();
   const storedViews = () => {
     const drafts = creations
@@ -340,17 +327,6 @@ const Block: Component = () => {
           databaseId={databaseId}
           database={detail()?.database}
         />
-        <Show when={formsFlag().enabled}>
-          <Suspense>
-            <DatabaseFormCreation
-              databaseId={databaseId}
-              tableId={activeTableId()}
-              tableName={activeTable()?.table.name}
-              isOwner={detail()?.grant === 'owner'}
-              onChoice={setNewForm}
-            />
-          </Suspense>
-        </Show>
         <TopBar
           databaseId={databaseId}
           detail={detail()}
@@ -503,7 +479,6 @@ const Block: Component = () => {
                                 view={shown().view}
                                 selectedViewId={selectedView()?.id}
                                 canEdit={canEdit() && !activeCreation()}
-                                newForm={newForm()}
                                 search={
                                   <DatabaseSearch
                                     term={search.term()}

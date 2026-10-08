@@ -1,6 +1,10 @@
 //! Migration coverage with real source properties, database constraints and access.
 #![cfg(feature = "outbound")]
 
+use databases::{
+    domain::storage::DatabaseStorageService,
+    outbound::gateway_event_publisher::NoOpTableEventPublisher, wiring::build_service,
+};
 use entity_access::{
     domain::{
         models::{EntityType as AccessEntityType, ViewAccessLevel},
@@ -10,11 +14,14 @@ use entity_access::{
     outbound::PgAccessRepository,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_databases::{DatabaseId, TableId};
 use models_properties::{EntityReference, EntityType, service::property_value::PropertyValue};
 use properties::{PropertiesPgRepo, domain::database_cell_writer::DatabaseCellWriter};
 use serde_json::json;
 use sqlx::PgPool;
+use std::sync::Arc;
 use system_properties::{StageOption, SystemPropertyKey};
 use uuid::Uuid;
 
@@ -129,6 +136,18 @@ async fn pipeline(pool: &PgPool, team: Uuid) -> (Uuid, Uuid, Uuid) {
     (row.id, row.database_id, row.table_id)
 }
 
+async fn other_database_column(pool: &PgPool, position: &str) -> Uuid {
+    let [database, table, definition, column] = [(); 4].map(|_| macro_uuid::generate_uuid_v7());
+    sqlx::query!("INSERT INTO databases (id) VALUES ($1)", database)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query!("INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Notes', '80')", table, database).execute(pool).await.unwrap();
+    sqlx::query!("INSERT INTO property_definitions (id, database_id, display_name, data_type, is_multi_select) VALUES ($1, $2, 'Note', 'STRING', false)", definition, database).execute(pool).await.unwrap();
+    sqlx::query!("INSERT INTO database_columns (id, table_id, property_definition_id, position) VALUES ($1, $2, $3, $4)", column, table, definition, position).execute(pool).await.unwrap();
+    column
+}
+
 async fn cell(pool: &PgPool, company: Uuid, column: &str) -> Option<serde_json::Value> {
     sqlx::query_scalar!(
         r#"SELECT ep.values FROM crm_pipeline_entities primary_column
@@ -162,7 +181,7 @@ async fn stage_label(pool: &PgPool, company: Uuid) -> Option<String> {
 }
 
 #[sqlx::test(migrations = false)]
-async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) {
+async fn copies_populated_visible_companies_with_values_and_team_access(pool: PgPool) {
     let team = fixture(&pool).await;
     let open = company(&pool, team, false).await;
     let won = company(&pool, team, false).await;
@@ -198,12 +217,12 @@ async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) 
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(4)
+        Some(3)
     );
     assert_eq!(stage_label(&pool, open).await.as_deref(), Some("Demo"));
     assert_eq!(stage_label(&pool, won).await.as_deref(), Some("Customer"));
     assert_eq!(stage_label(&pool, lost).await.as_deref(), Some("Churned"));
-    assert_eq!(stage_label(&pool, unstaged).await, None);
+    assert_eq!(cell(&pool, unstaged, "Company").await, None);
     assert_eq!(cell(&pool, hidden, "Company").await, None);
     assert_eq!(
         cell(&pool, open, "Owner").await,
@@ -254,6 +273,44 @@ async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) 
             "core storage must not grant database app access"
         );
     }
+}
+
+#[sqlx::test(migrations = false)]
+async fn copied_pipelines_open_in_order_and_other_databases_are_untouched(pool: PgPool) {
+    let team = fixture(&pool).await;
+    company(&pool, team, false).await;
+    let other = other_database_column(&pool, "20").await;
+    migrate(&pool).await.unwrap();
+    let (_, database, table) = pipeline(&pool, team).await;
+    let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let tables = build_service(
+        pool.clone(),
+        access,
+        NoOpTableEventPublisher,
+        NoopMacroEventBroker,
+    )
+    .storage_tables(DatabaseId::from_uuid(database))
+    .await
+    .unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0].table.id, TableId::from_uuid(table));
+    assert_eq!(
+        tables[0]
+            .columns
+            .iter()
+            .map(|column| column.definition.definition.display_name.as_str())
+            .collect::<Vec<_>>(),
+        ["Company", "Stage", "Owner", "Revenue"]
+    );
+    assert_eq!(
+        sqlx::query_scalar!("SELECT position FROM database_columns WHERE id = $1", other)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        "20"
+    );
 }
 
 #[sqlx::test(migrations = false)]
@@ -387,6 +444,9 @@ async fn invalid_values_roll_back_the_entire_copy_and_can_retry(pool: PgPool) {
         .map(|_| macro_uuid::generate_uuid_v7())
         .collect::<Vec<_>>();
     sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) SELECT id, $1, now(), now() FROM UNNEST($2::uuid[]) AS input(id)", team, &ids).execute(&pool).await.unwrap();
+    for id in &ids {
+        stage(&pool, *id, StageOption::Lead).await;
+    }
     let last = *ids.iter().max().unwrap();
     // Legacy property writes permit bad types; the migration must detect them.
     value(

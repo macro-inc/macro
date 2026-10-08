@@ -111,7 +111,15 @@ impl MessageRepository for Repo {
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
         let included = self.message.parent == *parent
-            && (query.ids.is_empty() || query.ids.contains(&self.message.id));
+            && (query.ids.is_empty() || query.ids.contains(&self.message.id))
+            && query.cursor.as_ref().is_none_or(|cursor| {
+                let key = (self.message.created_at, self.message.id);
+                let boundary = (cursor.created_at, cursor.id);
+                match query.direction {
+                    MessageDirection::Older => key < boundary,
+                    MessageDirection::Newer => key > boundary,
+                }
+            });
         Ok(MessagePage {
             items: if included {
                 vec![MessageListItem {
@@ -1467,6 +1475,300 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
         *checks.checked.lock().unwrap(),
         vec![(EntityType::AgentSession, Uuid::from_u128(10).to_string())]
     );
+}
+
+#[derive(Clone)]
+struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
+impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+    fn read<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(query.entity_type, activity::EntityType::Channel);
+            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(query.selection, CHANNEL_TIMELINE);
+            let mut rows: Vec<_> = self
+                .0
+                .iter()
+                .filter(|row| {
+                    query.cursor.is_none_or(|cursor| {
+                        let key = (row.occurred_at, row.id);
+                        if query.newer {
+                            key > cursor
+                        } else {
+                            key < cursor
+                        }
+                    })
+                })
+                .cloned()
+                .collect();
+            rows.sort_by_key(|row| (row.occurred_at, row.id));
+            if !query.newer {
+                rows.reverse();
+            }
+            rows.truncate(usize::from(query.limit));
+            Ok(rows)
+        })
+    }
+}
+
+/// Records each activity read's limit, to show how much a window reads.
+#[derive(Clone)]
+struct CountedFacts(TimelineFacts, Arc<Mutex<Vec<u16>>>);
+impl activity::domain::timeline::ActivityTimeline for CountedFacts {
+    fn read<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        self.1.lock().unwrap().push(query.limit);
+        self.0.read(query)
+    }
+}
+
+/// A channel message with system activity at the given second offsets.
+fn centered_channel(
+    offsets: impl IntoIterator<Item = i64>,
+) -> (Repo, Vec<activity::domain::timeline::TimelineActivity>) {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let facts = offsets
+        .into_iter()
+        .enumerate()
+        .map(
+            |(id, seconds)| activity::domain::timeline::TimelineActivity {
+                id: Uuid::from_u128(1_000 + id as u128),
+                actor_id: "macro|author@example.com".into(),
+                occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+                action: "picture_changed".into(),
+                payload: None,
+            },
+        )
+        .collect();
+    (repo, facts)
+}
+
+async fn around(
+    repo: &Repo,
+    facts: Vec<activity::domain::timeline::TimelineActivity>,
+    limit: u16,
+) -> (MessageTimelinePage, Vec<u16>) {
+    let reads = Arc::new(Mutex::new(Vec::new()));
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(CountedFacts(TimelineFacts(facts), reads.clone()));
+    let page = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(limit),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let reads = reads.lock().unwrap().clone();
+    (page, reads)
+}
+
+#[tokio::test]
+async fn centered_window_reads_each_sides_share_not_a_page_per_side() {
+    let (repo, facts) = centered_channel((-40..=-1).chain(1..=40));
+    let (page, reads) = around(&repo, facts, 51).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 51);
+    assert_eq!(ids[25], repo.message.id, "anchor sits in the middle");
+    assert!(page.next_cursor.is_some() && page.previous_cursor.is_some());
+    // 25 per side plus one lookahead, instead of 51 per side.
+    assert_eq!(reads, [26, 26]);
+}
+
+#[tokio::test]
+async fn a_short_side_lends_its_room_to_the_other() {
+    let (repo, facts) = centered_channel(-10..=-1);
+    let (page, reads) = around(&repo, facts, 7).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 7);
+    assert_eq!(ids[0], repo.message.id, "nothing is newer than the anchor");
+    assert!(page.next_cursor.is_some() && page.previous_cursor.is_none());
+    assert_eq!(reads, [4, 4, 4], "only the older side reads further");
+
+    let (repo, facts) = centered_channel(1..=10);
+    let (page, _) = around(&repo, facts, 7).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 7);
+    assert_eq!(ids[6], repo.message.id, "nothing is older than the anchor");
+    assert!(page.previous_cursor.is_some() && page.next_cursor.is_none());
+
+    // Both sides short: everything fits and neither side continues.
+    let (repo, facts) = centered_channel([-2, -1, 1]);
+    let (page, _) = around(&repo, facts, 7).await;
+    assert_eq!(entry_ids(&page).len(), 4);
+    assert!(page.next_cursor.is_none() && page.previous_cursor.is_none());
+}
+
+fn entry_ids(page: &MessageTimelinePage) -> Vec<Uuid> {
+    page.entries
+        .iter()
+        .map(|entry| entry.position().1)
+        .collect()
+}
+
+#[tokio::test]
+async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let facts: Vec<_> = [-2, -1, 1, 2]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(id, seconds)| activity::domain::timeline::TimelineActivity {
+                id: Uuid::from_u128(100 + id as u128),
+                actor_id: "macro|author@example.com".into(),
+                occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+                action: "picture_changed".into(),
+                payload: None,
+            },
+        )
+        .collect();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(TimelineFacts(facts.clone()));
+    let view = || {
+        channel_access()
+            .try_into_requirement::<MessageView>()
+            .unwrap()
+    };
+    let center = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entry_ids(&center),
+        [facts[2].id, repo.message.id, facts[1].id]
+    );
+    let older = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                cursor: center.next_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&older), [facts[0].id]);
+    assert!(older.next_cursor.is_none());
+    let newer = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                direction: MessageDirection::Newer,
+                cursor: center.previous_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&newer), [facts[3].id]);
+    assert!(newer.previous_cursor.is_none());
+    let anchor = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&anchor), [repo.message.id]);
+    assert!(anchor.next_cursor.is_some() && anchor.previous_cursor.is_some());
+
+    // The message list stays message-only for clients that never asked for activity.
+    let messages = service
+        .timeline(view(), MessageTimelineQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(messages.items.len(), 1);
+    assert!(messages.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_only() {
+    let service =
+        MessageService::new(fixture(), Events::default()).with_activity(TimelineFacts(vec![]));
+    let result = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                ids: vec![Uuid::from_u128(1)],
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Invalid(_))));
+    // Tombstones sit on the same keyset, so they combine with activity.
+    let result = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                include_deleted_threads: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = service
+        .timeline_entries(
+            access("macro|author@example.com", "doc", AccessLevel::Comment)
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery::default(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result.entries[..],
+        [MessageTimelineEntry::Message { .. }]
+    ));
 }
 
 #[test]

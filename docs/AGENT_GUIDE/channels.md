@@ -55,6 +55,18 @@ whole thread. Check a thread with more than three consecutive replies from one
 sender (all remain visible), then one with four groups (the first three groups
 remain visible in full). Standalone thread previews follow the same rule.
 
+Channel timelines show system updates alongside messages: participant additions
+and removals, renames, profile picture changes, and completed calls with their
+duration. These rows have no reply, edit, or reaction actions. Long descriptions
+stay on one line; hover to read the full text. Dates, message navigation, and
+scrolling through older history include these updates. A call's completed row
+appears when the call ends; active calls retain their existing live indicator.
+To verify live updates, scroll into history and change the channel from another
+session. The visible message should stay at the same position. Return to latest
+and reload to verify that the system entry persists in chronological order.
+Also reload a short channel containing mostly system updates. Every entry should
+remain visible when the entire timeline fits without scrolling.
+
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
@@ -376,6 +388,8 @@ else's message. Check both root messages and thread replies from a Home split:
 an incoming selection must not mark the Home item done or edit the thread root.
 Press `Escape` to clear selection; the parent Home shortcut is then available
 again. Typing `e` in the composer or inline editor should still enter text.
+Verify a message link in a fresh browser tab as well as inside an open channel:
+the initial page should center the requested message, including older history.
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs and returning restores the Messages position,
 expanded threads, and pending reply from when the tab was left. The `Scroll to bottom` control appears when scrolling down through history;

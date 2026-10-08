@@ -48,6 +48,12 @@ clears it, and switching tabs clears it like any other filter. On mobile, the ta
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
+Mobile does not show the separate layout, sort, group, and filter toolbar.
+Use the compact sliders drawer for task-list controls; project task lists use the
+same drawer. Mobile supports List only. Opening a Board link or restoring a Board
+entry automatically selects List and replaces that host's layout URL parameter,
+without adding a history entry or clearing search, sorting, grouping, or filters.
+The desktop Board layout remains available.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
@@ -175,8 +181,9 @@ those older results must not hide a failure for the new, uncached query.
 
 ## Reviews view
 
-With `enable-tasks-reviews` enabled (on by default in development), a
-`Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
+With `enable-tasks-reviews` enabled (on by default in development),
+`Reviews` is available in desktop navigation and the mobile bottom dock's
+`More views` drawer, not the mobile Tasks tabs.
 It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
@@ -367,16 +374,20 @@ hosted data.
 
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
-with a project name and the shared property pills for Status, Priority,
-Assignees, and Due date. Team sharing is enabled by default.
+with a project name, a Markdown description (`Add description...`), and the
+shared property pills for Status, Priority, Assignees, and Due date. Team
+sharing is enabled by default. As in the task composer, Enter or ArrowDown in
+the name moves to the description instead of creating the project; Escape, or
+ArrowUp/Shift+Tab at the start of the description, returns to the name. The
+description seeds the project's Overview description.
 Project Status offers `Not Started`, `In Progress`, and `Completed` in the
 composer, list, and detail/side-panel pickers. The Status filter uses the same
 three choices. Task statuses are unchanged. Existing project values from the
 previous status catalog remain visible until an editor changes them.
 
 Submit with
-`Create Project` or Cmd/Ctrl+Enter. `Continue editing in split` preserves the
-name, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
+`Create Project` or Cmd/Ctrl+Enter from the name or description. `Continue
+editing in split` preserves the name, description, properties, and sharing choice; `Clear Draft` resets an uncreated draft.
 Leaving a property unset keeps its normal server default.
 Submitting closes the composer at once; a full composer returns its split to
 Projects, and Back skips the submitted composer. One request creates the project

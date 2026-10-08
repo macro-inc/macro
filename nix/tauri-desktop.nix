@@ -18,7 +18,16 @@
       isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
-      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/package.json)).version;
+      desktopRelease = builtins.fromJSON (builtins.readFile ../apps/web/tauri/desktop-release.json);
+      appVersion = desktopRelease.version;
+      desktopPlugins = {
+        desktop-update.enabled = desktopRelease.enabled;
+        macro-bundle-updater.nativeBuild = desktopRelease.nativeBuild;
+        updater = {
+          pubkey = desktopRelease.publicKey;
+          endpoints = [ desktopRelease.endpoint ];
+        };
+      };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
@@ -128,7 +137,7 @@
               cd apps/web
               MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
               printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-              BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+              BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
             )
 
             runHook postBuild
@@ -498,6 +507,8 @@
         rootPaths = tauriRuntimeLibraries ++ tauri.commonArgs.buildInputs;
       };
       tauriAppImageConfig = builtins.toJSON {
+        version = appVersion;
+        plugins = desktopPlugins;
         build = {
           frontendDist = "${frontend}";
           beforeBuildCommand = "";
@@ -581,6 +592,8 @@
       tauriDesktopDmgConfig = builtins.toJSON (
         lib.recursiveUpdate
           {
+            version = appVersion;
+            plugins = desktopPlugins;
             build = {
               frontendDist = "${frontend}";
               beforeBuildCommand = "";
@@ -723,6 +736,9 @@
             sign_darwin_app "$appPath"
 
             mkdir -p "$out"
+            # Export the final, relocated and signed app for updater packaging.
+            # Notarization, stapling and updater signing happen outside the store.
+            cp -a "$appPath" "$out/Macro.app"
             dmgPath="$out/Macro-${appVersion}-${system}.dmg"
             # Package a drag-to-install volume, including Finder's icon layout.
             dmgRoot=$(mktemp -d "$TMPDIR/macro-dmg.XXXXXX")

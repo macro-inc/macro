@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT content_source_id = calendar_event_canonical_source_id(id) AS \"mirrors!\"\n        FROM calendar_events\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mirrors!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "177b005aa26af6953e523b6f53355b396bef5ed052e2aabdc3bed06a80389779"
+}

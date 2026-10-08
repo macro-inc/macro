@@ -98,6 +98,12 @@ export const enableCanvasNext = defineFlag({
   default: LOCAL_ONLY ? false : undefined,
 });
 
+/** Opt into the carousel create menu; otherwise use the detailed launcher. */
+export const enableCarouselCreateMenu = defineFlag({
+  key: 'enable-carousel-create-menu',
+  env: 'ENABLE_CAROUSEL_CREATE_MENU',
+});
+
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
  * or `false` if flags have not loaded or the key is unknown.
@@ -473,6 +479,13 @@ export const enableCrmLists = defineFlag({
   default: false,
 });
 
+// Pipelines roll out per team; while off the CRM tab hides them without touching stored pipelines.
+export const enableCrmPipelines = defineFlag({
+  key: 'enable-crm-pipelines',
+  env: 'ENABLE_CRM_PIPELINES',
+  default: onInDev,
+});
+
 // Native Projects frontend: navigation, creation, task assignment and project
 // views. Enabled in development; PostHog controls production rollout. Override
 // with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
@@ -663,6 +676,13 @@ export const enableCalendarPromptWeb = defineFlag({
 export const enableCalendarTeamOoo = defineFlag({
   key: 'enable-calendar-team-ooo',
   env: 'ENABLE_CALENDAR_TEAM_OOO',
+  default: onInDev,
+});
+
+// Read-only team calendar projections; the server separately controls rollout.
+export const enableCalendarTeamSharing = defineFlag({
+  key: 'enable-calendar-team-sharing',
+  env: 'ENABLE_CALENDAR_TEAM_SHARING',
   default: onInDev,
 });
 

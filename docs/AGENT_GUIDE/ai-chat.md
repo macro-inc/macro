@@ -589,7 +589,7 @@ documents:
 
 Quota admission uses the backend's default-off `ENABLE_AI_USAGE_ENFORCEMENT`
 policy once configured by the host; it is independent of environment. Settlement
-(credit consumption and Stripe overage collection) is gated by the separate
+(credit consumption and automatic credit reloads) is gated by the separate
 default-off `ENABLE_AI_USAGE_BILLING` policy, also independent of environment.
 With admission enabled, cognition chat
 and structured completion return 402 for exhausted allowance or 503 with
@@ -862,6 +862,22 @@ in-process agent; sandboxed ones wait as long when their MCP client accepts prog
 four minutes otherwise). A declined or cancelled call does not run and the agent says so. The Magic Chip
 reads `Waiting for approval`. The agent's hidden context names the owner and the prompter.
 
+## Forms authoring and sharing
+
+With Forms enabled, ask the agent to create a complete form, including ordered
+sections and qualification screeners. Creation starts closed and members-only.
+The expandable tool result shows the saved questions, builder link, respondent
+link, and actual response availability. Edits use granular CRDT updates
+to preserve unrelated human changes. Partial outcomes have recovery guidance;
+a link by itself is not a completed or open form.
+
+`SetFormAccess` executes immediately for the form owner, using the same settings
+and channel-sharing services as the browser. There is no custom review card.
+Channel Edit also grants access to the entire response database. Settings and
+channel grants are separate writes; inspect any partial outcome before retrying.
+See [Forms](forms.md#forms-through-the-ai-tools) for screeners, booking link reveal,
+supported edits and retry behavior.
+
 ## In channels
 
 Mention `@Macro` in any channel message. Without the `enable-chat-v3-agents` rollout it is
@@ -1057,10 +1073,13 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
-the owner can change or remove a conversation's access. **Link sharing** offers
+the owner can change or remove a conversation's access. When that list holds
+nobody but the owner — what a participant who cannot read the other grants
+sees — the section is titled **Owner** instead. **Link sharing** offers
 None / Public / Team and an access level. **Team access** shares directly with
 the owner's team when one exists. On mobile these controls are in the Share,
-People, and Link tabs. View and Comment allow reading; Edit also allows
+People, and Link tabs, and the People tab is likewise named Owner when only the
+owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
 and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.

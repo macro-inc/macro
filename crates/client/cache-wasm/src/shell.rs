@@ -571,12 +571,39 @@ fn storage_version(unversioned: &str, identity: &str) -> Option<(u32, u32, u32)>
     parts.next().is_none().then_some((epoch, format, storage))
 }
 
+thread_local! {
+    static RUNTIME_SCHEMA: std::cell::RefCell<Option<std::sync::Arc<cache_core::meta::Schema>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Parses bundle SDL once per worker, before opening its engine.
+#[wasm_bindgen(js_name = configureCacheSchema)]
+pub fn configure_cache_schema(schema_sdl: &str) -> Result<(), JsValue> {
+    let schema = cache_core::meta::Schema::from_sdl(schema_sdl).map_err(err_js)?;
+    RUNTIME_SCHEMA.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if let Some(existing) = slot.as_ref() {
+            if existing.hash() != schema.hash() {
+                return Err(err_js("schema changed within a running cache worker"));
+            }
+        } else {
+            *slot = Some(schema);
+        }
+        Ok(())
+    })
+}
+
 fn build_engine(storage: TursoStorage, hot_capacity: Option<u32>) -> BrowserEngine {
     let storage = wrap_storage(storage);
-    match hot_capacity {
-        Some(capacity) => Engine::with_capacity(storage, capacity as usize),
-        None => Engine::new(storage),
-    }
+    let schema = RUNTIME_SCHEMA.with(|slot| {
+        slot.borrow_mut()
+            .get_or_insert_with(cache_core::meta::bundled_schema)
+            .clone()
+    });
+    Engine::with_schema(
+        storage,
+        hot_capacity.map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+        schema,
+    )
 }
 
 fn validate_hot_capacity(hot_capacity: Option<u32>) -> Result<(), JsValue> {
@@ -1321,9 +1348,10 @@ impl CacheEngine {
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
+            let schema = state.engine_mut()?.schema_snapshot();
             let selection = state
                 .selections
-                .get(document, fragment_name)
+                .get(&schema, document, fragment_name)
                 .map_err(err_js)?;
             let keys: Vec<String> = parse_vec(keys)?;
             let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -1498,14 +1526,19 @@ impl CacheEngine {
                 let op_id = ops.borrow_mut().intern(&registration.op_id);
                 (op_id, registration.entity_resolvers)
             });
-            let mut projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
-                    .map_err(err_js)?;
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
             if reuse_stored_identity {
                 projections.extend(
                     notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
                         state.engine_mut()?.storage(),
                         &query,
                         operation_name.as_deref(),
@@ -1518,6 +1551,7 @@ impl CacheEngine {
             }
             projections.extend(
                 soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1529,6 +1563,7 @@ impl CacheEngine {
                 .map_err(|error| state.mail_projection_error(error))?,
             );
             let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
                 state.engine_mut()?.storage(),
                 &query,
                 operation_name.as_deref(),
@@ -1582,14 +1617,19 @@ impl CacheEngine {
             state.ensure_callable()?;
             let variables = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let mut projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
-                    .map_err(err_js)?;
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
             if reuse_stored_identity {
                 projections.extend(
                     notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
                         state.engine_mut()?.storage(),
                         &query,
                         operation_name.as_deref(),
@@ -1602,6 +1642,7 @@ impl CacheEngine {
             }
             projections.extend(
                 soup_filter_cache_adapter::mail::projection_updates_for_write(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1613,6 +1654,7 @@ impl CacheEngine {
                 .map_err(|error| state.mail_projection_error(error))?,
             );
             let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
                 state.engine_mut()?.storage(),
                 &query,
                 operation_name.as_deref(),
@@ -1697,6 +1739,7 @@ impl CacheEngine {
             projection_mutations.extend(
                 optimistic_notification_updates(
                     notification_projection_updates(
+                        &state.engine_mut()?.schema_snapshot(),
                         state.engine_mut()?.storage(),
                         &query,
                         operation_name.as_deref(),
@@ -1710,6 +1753,7 @@ impl CacheEngine {
             );
             projection_mutations.extend(soup_filter_cache_adapter::mail::optimistic_updates(
                 soup_filter_cache_adapter::mail::projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1721,6 +1765,7 @@ impl CacheEngine {
             ));
             projection_mutations.extend(
                 soup_filter_cache_adapter::mail::draft_optimistic_updates(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1731,6 +1776,7 @@ impl CacheEngine {
                 .map_err(|error| state.mail_projection_error(error))?,
             );
             let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
+                &state.engine_mut()?.schema_snapshot(),
                 state.engine_mut()?.storage(),
                 &query,
                 operation_name.as_deref(),
@@ -1956,11 +2002,16 @@ impl CacheEngine {
             };
             let vars = parse_variables(variables)?;
             let data: serde_json::Value = serde_wasm_bindgen::from_value(data).map_err(err_js)?;
-            let mut projections =
-                authoritative_projection_mutations(&query, operation_name.as_deref(), &data)
-                    .map_err(err_js)?;
+            let mut projections = authoritative_projection_mutations(
+                &state.engine_mut()?.schema_snapshot(),
+                &query,
+                operation_name.as_deref(),
+                &data,
+            )
+            .map_err(err_js)?;
             projections.extend(
                 notification_projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1972,6 +2023,7 @@ impl CacheEngine {
             );
             projections.extend(
                 soup_filter_cache_adapter::mail::projection_updates(
+                    &state.engine_mut()?.schema_snapshot(),
                     state.engine_mut()?.storage(),
                     &query,
                     operation_name.as_deref(),
@@ -1982,6 +2034,7 @@ impl CacheEngine {
                 .map_err(|error| state.mail_projection_error(error))?,
             );
             let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                &state.engine_mut()?.schema_snapshot(),
                 state.engine_mut()?.storage(),
                 &query,
                 operation_name.as_deref(),

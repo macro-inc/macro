@@ -12,7 +12,7 @@ use thiserror::Error;
 use utoipa::ToSchema;
 
 /// Whether usage past a payer's allowance is settled: prepaid credits consumed
-/// and overage collected through Stripe. Hosts load it from
+/// and automatic credit reloads collected through Stripe. Hosts load it from
 /// `ENABLE_AI_USAGE_BILLING` at startup. It is independent of quota admission
 /// ([`AiUsageEnforcement`](ai_usage::AiUsageEnforcement)) and of the deployment
 /// environment.
@@ -21,7 +21,7 @@ pub enum AiUsageBilling {
     /// Never consume credits, reserve overage, or collect payment.
     #[default]
     Disabled,
-    /// Settle uncovered usage from credits, then collect overage.
+    /// Settle uncovered usage from credits, with optional automatic reloads.
     Enabled,
 }
 
@@ -38,7 +38,7 @@ impl AiUsageBilling {
 #[serde(rename_all = "snake_case")]
 pub enum UsagePolicy {
     /// Aggregate per-period settlement in [`super::ledger`]: the at-cost
-    /// allowance, then credits and overage at the markup.
+    /// allowance, then prepaid credits at the markup.
     Legacy,
     /// Per-attempt exact-money policy in [`super::policy`]: the same allowance
     /// at public price, then public usage at the same markup.
@@ -423,8 +423,7 @@ impl Entitlement {
 
 /// When and how far a payer's credit balance is automatically reloaded.
 ///
-/// Reloads piggyback on the overage opt-in: they only run while
-/// [`BillingSettings::overage_active`] holds.
+/// The legacy `overage_enabled` storage field now controls only automatic reloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AutoReloadThresholds {
     /// Reload once the effective balance drops below this, in customer cents.
@@ -465,9 +464,7 @@ impl AutoReloadThresholds {
                 "target balance exceeds the largest offered reload",
             ));
         }
-        // The monthly limit doubles as the per-period overage cap, which is
-        // clamped into the offered range: a smaller limit would be raised to
-        // the cap minimum and the payer billed more than they set.
+        // Keep the offered minimum monthly reload budget.
         if self
             .monthly_limit_cents
             .is_some_and(|limit| limit < OVERAGE_LIMIT_MIN_CENTS)
@@ -483,7 +480,7 @@ impl AutoReloadThresholds {
 /// The payer's overage settings, Stripe period anchor, and open-seat generation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BillingSettings {
-    /// Whether usage past allowance and credits is billed as overage.
+    /// Legacy storage name for the automatic reload opt-in. Never authorizes direct charges.
     pub overage_enabled: bool,
     /// Per-period cap on overage, in customer cents.
     pub overage_limit_cents: i64,
@@ -500,15 +497,15 @@ pub struct BillingSettings {
 }
 
 impl BillingSettings {
-    /// Whether overage can currently be charged.
+    /// Direct usage charges are permanently disabled, regardless of stored legacy settings.
     pub fn overage_active(&self) -> bool {
-        self.overage_enabled && self.overage_suspended_at.is_none() && self.overage_limit_cents > 0
+        false
     }
 
-    /// Whether credits are automatically reloaded: overage is on and no
+    /// Whether credits are automatically reloaded: the payer opted in and no
     /// reload has failed since the payer last re-enabled it.
     pub fn auto_reload_active(&self) -> bool {
-        self.overage_active() && self.auto_reload_suspended_at.is_none()
+        self.overage_enabled && self.auto_reload_suspended_at.is_none()
     }
 }
 
@@ -595,7 +592,7 @@ impl DenyReason {
     pub fn message(self) -> &'static str {
         match self {
             DenyReason::AllowanceExhausted => {
-                "You've used this period's included AI. Add credits or turn on usage billing to keep going."
+                "You've used this period's included AI. Add credits or turn on automatic reload to keep going."
             }
             DenyReason::FreeAllowanceExhausted => {
                 "You've used this month's free AI. Upgrade to a paid plan to keep going."
@@ -604,7 +601,7 @@ impl DenyReason {
                 "You've reached your AI spending limit for this period. Raise the limit or add credits to keep going."
             }
             DenyReason::OveragePaymentFailed => {
-                "Your last AI usage charge didn't go through. Update your payment method and re-enable usage billing."
+                "Your last automatic credit reload didn't go through. Update your payment method and re-enable automatic reload."
             }
         }
     }
@@ -631,7 +628,7 @@ pub struct AutoReloadSnapshot {
     pub monthly_spend_limit_cents: Option<i64>,
     /// Whether reloads are paused after a failed reload charge.
     pub suspended: bool,
-    /// Whether reloads will fire: overage is on and reloads are not suspended.
+    /// Whether reloads will fire: the payer opted in and reloads are not suspended.
     pub active: bool,
 }
 
@@ -662,7 +659,7 @@ pub struct UsageSnapshot {
     pub credits_consumed_cents: i64,
     /// Shared prepaid credit balance, in customer cents.
     pub credit_balance_cents: i64,
-    /// Whether overage billing is on.
+    /// Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
     pub overage_enabled: bool,
     /// Per-period overage cap, in customer cents.
     pub overage_limit_cents: i64,
@@ -670,7 +667,7 @@ pub struct UsageSnapshot {
     pub overage_charged_cents: i64,
     /// Whether overage is paused after a failed charge.
     pub overage_suspended: bool,
-    /// Automatic credit reload settings. `active` means overage is on and
+    /// Automatic credit reload settings. `active` means the payer opted in and
     /// reloads are not suspended.
     pub auto_reload: AutoReloadSnapshot,
     /// Team-wide usage beyond per-seat allowances, at the overage markup, that
@@ -701,6 +698,9 @@ pub enum BillingError {
     /// Outside the allowed overage cap range.
     #[error("overage limit must be between ${} and ${}", OVERAGE_LIMIT_MIN_CENTS / 100, OVERAGE_LIMIT_MAX_CENTS / 100)]
     InvalidOverageLimit,
+    /// Direct usage billing has been retired; only prepaid credits fund extra usage.
+    #[error("direct usage billing is no longer available; use automatic credit reload")]
+    DirectUsageBillingDisabled,
     /// Automatic reload thresholds that could never charge or exceed the
     /// offered range ([`AutoReloadThresholds::validate`]).
     #[error("invalid automatic reload settings: {0}")]

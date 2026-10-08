@@ -161,7 +161,13 @@ fn hidden_or_incomplete_occurrences_do_not_project() {
         ("time", CacheValue::Null),
         (
             "time",
-            timed("2026-10-06T13:00:00Z", "2026-10-06T13:00:00Z"),
+            timed("2026-10-06T13:00:00Z", "2026-10-06T12:00:00Z"),
+        ),
+        ("time", all_day("2026-10-06", "2026-10-06")),
+        ("time", all_day("2026-10-07", "2026-10-06")),
+        (
+            "time",
+            timed("2026-10-06T13:00:00.0009Z", "2026-10-06T13:00:00.0001Z"),
         ),
         ("time", timed("not a date", "2026-10-06T13:00:00Z")),
         (
@@ -177,6 +183,39 @@ fn hidden_or_incomplete_occurrences_do_not_project() {
             "{field} should hide the occurrence"
         );
     }
+}
+
+#[test]
+fn timed_points_project_and_use_left_inclusive_right_exclusive_membership() {
+    let occurrence_key = key("GraphqlCalendarOccurrence:e1:point");
+    let projected = project_calendar_range(
+        &occurrence_key,
+        &occurrence(timed("2026-10-06T08:00:00-04:00", "2026-10-06T12:00:00Z")),
+    )
+    .unwrap();
+    assert_eq!(
+        projected.span,
+        timed_span(1_791_288_000_000, 1_791_288_000_000)
+    );
+    assert!(!projected.is_long());
+
+    let viewport = timed_span(10, 20);
+    for (at, expected) in [(9, false), (10, true), (15, true), (20, false)] {
+        let point = timed_span(at, at);
+        assert_eq!(point.overlaps(&viewport), expected);
+        assert_eq!(viewport.overlaps(&point), expected);
+        assert_eq!(
+            request(10, 20).includes(&row("point", "e1", point)),
+            expected
+        );
+    }
+    assert!(!request(15, 15).includes(&row("point", "e1", timed_span(15, 15))));
+    assert!(!request(15, 15).includes(&row("duration", "e1", timed_span(10, 20))));
+    assert!(!span(CalendarSpanKind::AllDay, 15, 15).overlaps(&span(
+        CalendarSpanKind::AllDay,
+        10,
+        20
+    )));
 }
 
 #[test]

@@ -103,6 +103,8 @@ type MentionsMenuProps = {
   includeGroups?: boolean;
   /** Disable CRM references for fields that only store Macro user identities. */
   includeContacts?: boolean;
+  /** Repeated cell editing opens immediately instead of animating each picker. */
+  animate?: boolean;
 } & (
   | { editor: LexicalEditor; onPick?: never }
   | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
@@ -683,7 +685,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
-          class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
+          class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content"
+          classList={{ 'menu-open-animation': props.animate !== false }}
           on:touchstart={(e) => e.stopPropagation()}
           onPointerDown={(event) => {
             if (props.onPick) event.preventDefault();

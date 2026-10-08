@@ -23,6 +23,7 @@ import { NewChatPage } from './NewChatPage';
 const mocks = vi.hoisted(() => ({
   touch: false,
   freePlan: false,
+  modelsPending: false,
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -117,10 +118,10 @@ vi.mock('@queries/agents/models', () => ({
     enabled: () => boolean
   ) => ({
     get isSuccess() {
-      return enabled();
+      return enabled() && !mocks.modelsPending;
     },
     get isPending() {
-      return false;
+      return mocks.modelsPending;
     },
     get isError() {
       return false;
@@ -274,6 +275,7 @@ describe('agent-led new conversation', () => {
   beforeEach(() => {
     mocks.capabilitiesPending = false;
     mocks.freePlan = false;
+    mocks.modelsPending = false;
     mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
@@ -369,6 +371,17 @@ describe('agent-led new conversation', () => {
       botId: undefined,
       repoUrl: undefined,
       modelOverride: 'chat-default',
+    });
+  });
+  it('flags a send before the model catalog loads as a model fallback', () => {
+    mocks.modelsPending = true;
+    const send = page();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith({
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelFallback: true,
     });
   });
   it('selects a coding agent, keeps the draft, and only sends the repository to coding agents', async () => {

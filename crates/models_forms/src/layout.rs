@@ -9,6 +9,7 @@ use crate::ids::{BookingEventTypeId, BookingProfileId, FormQuestionId, FormSecti
 use crate::widget::Widget;
 
 /// Every section of a form, in order.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FormLayout {
@@ -17,6 +18,7 @@ pub struct FormLayout {
 }
 
 /// An existing native Macro scheduling event offered after an accepted response.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BookingTarget {
@@ -30,6 +32,7 @@ pub struct BookingTarget {
 
 /// One section of a layout: questions on one screen, or a gate the answers
 /// so far must pass.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
     Clone,
@@ -103,6 +106,7 @@ impl FormSection {
 }
 
 /// How one column of the table is asked.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct QuestionLayout {

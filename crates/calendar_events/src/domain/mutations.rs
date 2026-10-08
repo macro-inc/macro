@@ -632,7 +632,7 @@ where
 }
 
 fn validate_time(time: &EventTime) -> Result<(), CalendarMutationError> {
-    if !time.is_valid() {
+    if !time.has_positive_duration() {
         return Err(CalendarMutationError::InvalidInput(
             "event end must be after its start".to_string(),
         ));

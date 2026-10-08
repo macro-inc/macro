@@ -13,17 +13,19 @@
 //!
 //! Only the wasm-bindgen glue lives here; the engine knows nothing of it.
 
-use models_databases::DatabaseId;
 use models_databases::position::{self, Position};
+use models_databases::views::ViewProblem;
 use models_databases::views::{CardPosition, DatabaseView};
+use models_databases::{ColumnId, DatabaseId, Formula, TableId};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
-use crate::catalog::{Catalog, Schema, build};
+use crate::catalog::{Catalog, Schema, Table, build};
 use crate::engine::{Engine, Step};
 use crate::fold::Bin;
+use crate::formula;
 use crate::run::{EngineError, Input, Outcome, Page, RunError};
 use crate::view;
 
@@ -140,6 +142,65 @@ pub fn board(
         &view::board(&view, &catalog, &outcome, &positions)
             .map_err(|problem| thrown(problem.into()))?,
     )
+}
+
+/// What `text` reads as, a `FormulaReading`, typed as the formula of a
+/// derived column of the table `table` (an id) in `catalog`; `own` is that
+/// column's placement id once it exists, so the formula cannot read itself.
+///
+/// # Errors
+///
+/// Throws an `EngineError` when the catalog cannot be read or has no such
+/// table.
+#[wasm_bindgen(js_name = readFormula)]
+pub fn read_formula(
+    catalog: JsValue,
+    table: &str,
+    own: Option<String>,
+    text: &str,
+) -> Result<JsValue, JsValue> {
+    let catalog: Catalog = read(Input::Catalog, catalog)?;
+    let table = formula_table(&catalog, table)?;
+    let own = own
+        .map(|own| own.parse::<ColumnId>())
+        .transpose()
+        .map_err(|error| unreadable(Input::Formula, error))?;
+    to_js(&formula::read(table, own, text))
+}
+
+/// `formula` (a `Formula` as JSON) as users write it, with the current
+/// names of the columns of `table` (an id) in `catalog`.
+///
+/// # Errors
+///
+/// Throws an `EngineError` when an argument cannot be read or the catalog
+/// has no such table.
+#[wasm_bindgen(js_name = renderFormula)]
+pub fn render_formula(catalog: JsValue, table: &str, formula: JsValue) -> Result<String, JsValue> {
+    let catalog: Catalog = read(Input::Catalog, catalog)?;
+    let formula: Formula = read(Input::Formula, formula)?;
+    Ok(formula::render(formula_table(&catalog, table)?, &formula))
+}
+
+fn formula_table<'catalog>(
+    catalog: &'catalog Catalog,
+    table: &str,
+) -> Result<&'catalog Table, JsValue> {
+    let id = table
+        .parse::<TableId>()
+        .map_err(|error| unreadable(Input::Formula, error))?;
+    catalog
+        .tables
+        .iter()
+        .find(|candidate| candidate.id == id)
+        .ok_or_else(|| thrown(RunError::from(ViewProblem::UnknownTable { table: id })))
+}
+
+fn unreadable(what: Input, error: impl std::fmt::Display) -> JsValue {
+    thrown(RunError::Unreadable {
+        what,
+        message: error.to_string(),
+    })
 }
 
 /// A position key that sorts after `before` and before `after`; leave one

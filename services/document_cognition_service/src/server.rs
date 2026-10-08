@@ -694,6 +694,24 @@ pub async fn run() -> anyhow::Result<()> {
         db.clone(),
     );
 
+    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+        db.clone(),
+        CalendarServiceUrl::new()?,
+        internal_api_key.clone(),
+    );
+    let forms_tool_context = ai_tools::build_forms_tool_context(
+        db.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(channels_connection_gateway.as_ref().clone()),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        ai_tools::FormsToolConfig {
+            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: config.ai_editing_worker_url.clone(),
+        },
+    );
+
     let tool_service_context = ai_tools::ToolServiceContext {
         connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
         search_service_client: search_service_client.clone(),
@@ -718,13 +736,16 @@ pub async fn run() -> anyhow::Result<()> {
             db.clone(),
             config.environment,
         ),
-        calendar_tool_context: ai_tools::build_calendar_tool_context(
+        calendar_tool_context,
+        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(
             db.clone(),
-            CalendarServiceUrl::new()?,
-            internal_api_key.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
         ),
         notification_tool_context: notification_tool_context.clone(),
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),

@@ -5,6 +5,7 @@ import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { createSignal, Suspense } from 'solid-js';
+import { CalendarTeamSettings } from '../calendar-team/calendar-team';
 import { SettingsPage } from '../settings/primitives';
 import {
   type ConnectedCalendarAccount,
@@ -133,6 +134,7 @@ export function CalendarSettings() {
       description="Manage your connected accounts, calendar visibility, and colors."
     >
       <CalendarConnectionSettings />
+      <CalendarTeamSettings />
     </SettingsPage>
   );
 }
