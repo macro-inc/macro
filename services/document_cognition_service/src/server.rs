@@ -680,7 +680,12 @@ pub async fn run() -> anyhow::Result<()> {
             )?,
         )))
         .with_admission(admission.clone())
-        .with_notifier(import_notify),
+        .with_notifier(import_notify)
+        .with_active_import_notifier(
+            import::outbound::home_notifier::notification_active_import_notify(
+                notification_ingress_service.clone(),
+            ),
+        ),
     );
 
     // No boot-time recovery: running batches heartbeat their rows, and the

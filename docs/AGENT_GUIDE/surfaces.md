@@ -203,6 +203,13 @@ loading settles, including when the list itself uses REST (notified-at sorting).
 Email alone is not sufficient verification: its inbox membership does not require
 the global notification feed.
 
+Items the onboarding import brought in appear on Signal when the user is
+actively working on them (Notion pages they edited in the last two weeks,
+Linear issues in progress or updated in the last two weeks; at most ten per
+source). Their rows read **<title> · From Notion** / **· From Linear**;
+opening one opens the document or task, and **Done** removes it like any other
+notification. Items imported before are never re-added.
+
 Check live Home recency with two accounts: leave the recipient on Home without
 opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, including when

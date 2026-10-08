@@ -2127,6 +2127,11 @@
         ],
         "description": "Metadata for a notification that the user's review was requested on a GitHub pull request."
       },
+      "ImportedFrom": {
+        "type": "string",
+        "description": "Where an imported item came from.",
+        "enum": ["notion", "linear"]
+      },
       "InboxReauthRequiredMetadata": {
         "type": "object",
         "description": "Metadata for a notification that a linked inbox's grant has died and the\ninbox must be reconnected. Fanned out to the inbox owner and every delegate,\nsince any of them holding the Google grant can restore sync.",
@@ -2221,6 +2226,21 @@
           "teamName": {
             "type": "string",
             "description": "The name of the team being invited to"
+          }
+        }
+      },
+      "ItemImportedMetadata": {
+        "type": "object",
+        "description": "Metadata for a notification that an import brought in an item the user is\nactively working on. Self-addressed: it puts the item on Home, labelled\nwith where it came from.",
+        "required": ["source", "itemName"],
+        "properties": {
+          "itemName": {
+            "type": "string",
+            "description": "The imported item's name."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportedFrom",
+            "description": "The source system."
           }
         }
       },
@@ -2760,6 +2780,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["channel_message_reaction"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An item the user is actively working on was imported into Macro.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ItemImportedMetadata",
+                "description": "An item the user is actively working on was imported into Macro."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["item_imported"]
               }
             }
           }

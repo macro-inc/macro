@@ -17,10 +17,10 @@ use model_notifications::{
     CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
     GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
     GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, ImportedFrom,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemImportedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
+    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -738,6 +738,41 @@ impl GraphqlInboxReauthRequiredMetadata {
     }
 }
 
+/// GraphQL source of an imported item.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlImportedFrom {
+    /// Notion.
+    Notion,
+    /// Linear.
+    Linear,
+}
+
+impl From<ImportedFrom> for GraphqlImportedFrom {
+    fn from(value: ImportedFrom) -> Self {
+        match value {
+            ImportedFrom::Notion => Self::Notion,
+            ImportedFrom::Linear => Self::Linear,
+        }
+    }
+}
+
+/// GraphQL wrapper for imported-item metadata.
+pub struct GraphqlItemImportedMetadata(ItemImportedMetadata);
+
+/// Metadata for an item imported into Macro from another tool.
+#[Object]
+impl GraphqlItemImportedMetadata {
+    /// Where the item came from.
+    async fn source(&self) -> GraphqlImportedFrom {
+        self.0.source.into()
+    }
+
+    /// The item's name.
+    async fn item_name(&self) -> &str {
+        &self.0.item_name
+    }
+}
+
 /// GraphQL wrapper for team invitation metadata.
 pub struct GraphqlInviteToTeamMetadata(InviteToTeamMetadata);
 
@@ -1290,6 +1325,8 @@ pub enum GraphqlNotifEvent {
     AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
     /// Agent session mention metadata.
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
+    /// Imported-item metadata.
+    ItemImported(GraphqlItemImportedMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
@@ -1374,6 +1411,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             ),
             NotifEvent::AgentSessionMentioned(metadata) => {
                 Self::AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata(metadata))
+            }
+            NotifEvent::ItemImported(metadata) => {
+                Self::ItemImported(GraphqlItemImportedMetadata(metadata))
             }
         }
     }

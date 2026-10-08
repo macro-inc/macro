@@ -124,6 +124,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('reminder', () => 'reminder')
       .with('calendar_event_reminder', () => 'upcoming event')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      .with('item_imported', () => 'imported')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
@@ -175,6 +176,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('reminder', () => (count === 1 ? 'reminder' : 'reminders'))
     .with('calendar_event_reminder', () => (count === 1 ? 'event' : 'events'))
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
+    .with('item_imported', () =>
+      count === 1 ? 'imported item' : 'imported items'
+    )
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'
     )

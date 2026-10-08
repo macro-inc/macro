@@ -794,6 +794,11 @@ export type GithubReviewRequested = GithubPrNotificationCommon & {
 };
 
 /**
+ * Where an imported item came from.
+ */
+export type ImportedFrom = 'notion' | 'linear';
+
+/**
  * Metadata for a notification that a linked inbox's grant has died and the
  * inbox must be reconnected. Fanned out to the inbox owner and every delegate,
  * since any of them holding the Google grant can restore sync.
@@ -877,6 +882,22 @@ export type InviteToTeamMetadata = {
      * The name of the team being invited to
      */
     teamName: string;
+};
+
+/**
+ * Metadata for a notification that an import brought in an item the user is
+ * actively working on. Self-addressed: it puts the item on Home, labelled
+ * with where it came from.
+ */
+export type ItemImportedMetadata = {
+    /**
+     * The imported item's name.
+     */
+    itemName: string;
+    /**
+     * The source system.
+     */
+    source: ImportedFrom;
 };
 
 /**
@@ -1138,6 +1159,12 @@ export type NotifEvent = {
      */
     content: ChannelMessageReactionMetadata;
     tag: 'channel_message_reaction';
+} | {
+    /**
+     * An item the user is actively working on was imported into Macro.
+     */
+    content: ItemImportedMetadata;
+    tag: 'item_imported';
 };
 
 /**

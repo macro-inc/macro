@@ -2,6 +2,7 @@
 
 pub mod document_properties;
 pub mod gateway_notifier;
+pub mod home_notifier;
 pub mod linear_api_source;
 pub mod mcp_slack_source;
 pub mod notion_api_source;

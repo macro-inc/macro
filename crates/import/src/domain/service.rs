@@ -29,6 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
+mod active;
 mod admission;
 mod apis;
 mod linear;
@@ -38,6 +39,7 @@ mod rate_limit;
 mod slack;
 mod slack_discovery;
 
+pub use active::ActiveImport;
 pub use apis::{ApiSources, NoApiSources};
 #[cfg(test)]
 pub(crate) use linear::{MAX_LINEAR_ISSUES, linear_issue_meta, select_linear_issues};
@@ -161,6 +163,15 @@ const IMPORT_HEARTBEAT: Duration = Duration::from_secs(30);
 /// back to `staged`. Several missed beats, so a slow DB or a paused runtime
 /// never reaps a live batch.
 const STALE_IMPORT_AFTER: Duration = Duration::from_secs(IMPORT_HEARTBEAT.as_secs() * 6);
+
+/// Surfaces items an import run brought in that the user is actively
+/// working on (Home). A closure, like [`ImportNotify`], so this crate's
+/// domain stays free of notification-service types.
+pub type ActiveImportNotify = Arc<
+    dyn Fn(MacroUserIdStr<'static>, Vec<ActiveImport>) -> Pin<Box<dyn Future<Output = ()> + Send>>
+        + Send
+        + Sync,
+>;
 
 /// Pushes an "import state changed" nudge to the user's connected clients.
 /// A closure so this crate stays free of gateway dependencies; hosts without
@@ -367,6 +378,7 @@ pub struct ImportServiceImpl<R, S, C, W = NoSlackSource, A = NoApiSources> {
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
+    active_notifier: Option<ActiveImportNotify>,
 }
 
 impl<R: Clone, S, C, W: SlackWorkspaceSource, A> Clone for ImportServiceImpl<R, S, C, W, A> {
@@ -382,6 +394,7 @@ impl<R: Clone, S, C, W: SlackWorkspaceSource, A> Clone for ImportServiceImpl<R, 
             recorder: self.recorder.clone(),
             admission: self.admission.clone(),
             notifier: self.notifier.clone(),
+            active_notifier: self.active_notifier.clone(),
         }
     }
 }
@@ -405,6 +418,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
             recorder,
             admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
+            active_notifier: None,
         }
     }
 }
@@ -422,6 +436,7 @@ impl<R, S, C, W: SlackWorkspaceSource, A> ImportServiceImpl<R, S, C, W, A> {
             recorder: self.recorder,
             admission: self.admission,
             notifier: self.notifier,
+            active_notifier: self.active_notifier,
             slack_source: source,
             apis: self.apis,
             folder_locks: self.folder_locks,
@@ -442,6 +457,7 @@ impl<R, S, C, W: SlackWorkspaceSource, A> ImportServiceImpl<R, S, C, W, A> {
             recorder: self.recorder,
             admission: self.admission,
             notifier: self.notifier,
+            active_notifier: self.active_notifier,
             slack_source: self.slack_source,
             apis,
             folder_locks: self.folder_locks,
@@ -452,6 +468,12 @@ impl<R, S, C, W: SlackWorkspaceSource, A> ImportServiceImpl<R, S, C, W, A> {
     /// Push state-change nudges through the given notifier.
     pub fn with_notifier(mut self, notifier: ImportNotify) -> Self {
         self.notifier = Some(notifier);
+        self
+    }
+
+    /// Surface an automatic run's active items on Home through `notifier`.
+    pub fn with_active_import_notifier(mut self, notifier: ActiveImportNotify) -> Self {
+        self.active_notifier = Some(notifier);
         self
     }
 
@@ -807,6 +829,43 @@ where
         outcome
     }
 
+    /// Put the items this run imported that the user is actively working on
+    /// on Home. Only automatic runs do this: it fires once per run, for the
+    /// rows that run imported, never for items imported before.
+    async fn surface_active_imports(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        batch_ids: &[Uuid],
+    ) {
+        let Some(notifier) = &self.active_notifier else {
+            return;
+        };
+        if source == ImportSource::Slack {
+            return;
+        }
+        let rows = match self
+            .repo
+            .list(user, Some(source), Some(ImportStatus::Imported))
+            .await
+        {
+            Ok(rows) => rows,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read imported rows for Home");
+                return;
+            }
+        };
+        let imported: Vec<ImportEntity> = rows
+            .into_iter()
+            .filter(|row| batch_ids.contains(&row.id) && row.user_id == user.as_ref())
+            .collect();
+        let active = active::select_active_imports(&imported, chrono::Utc::now());
+        if active.is_empty() {
+            return;
+        }
+        notifier(user.clone(), active).await;
+    }
+
     /// Run a claimed import batch in the background. Manual batches only
     /// update their entity rows; automatic batches also settle their owning
     /// run after every row reaches a terminal state. Each row fails on its
@@ -887,6 +946,9 @@ where
             if let Some(source) = auto_run {
                 service
                     .finish_auto_import_batch(&user, source, &batch_ids)
+                    .await;
+                service
+                    .surface_active_imports(&user, source, &batch_ids)
                     .await;
             }
         });

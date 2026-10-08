@@ -25,7 +25,9 @@ macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }
 mcp_select = { path = "../mcp_select" }
 model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
 models_properties = { path = "../models_properties" }
+notification = { path = "../notification" }
 pipedream_mcp = { path = "../pipedream_mcp" }
 properties = { path = "../properties", default-features = false, features = [
   "ports",

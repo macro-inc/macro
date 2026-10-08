@@ -1,4 +1,4 @@
-use crate::{ColleagueJoinedMacro, InviteToTeamMetadata, NewEmailMetadata};
+use crate::{ColleagueJoinedMacro, InviteToTeamMetadata, ItemImportedMetadata, NewEmailMetadata};
 use invite_email::InviteToMacro;
 use notification::domain::models::email_notification_digest::{
     EmailBlockList, NotificationSetBuilder,
@@ -14,4 +14,6 @@ pub fn digest_email_block_list() -> EmailBlockList {
         .append::<InviteToMacro>()
         .append::<invite_email::CallInvite>()
         .append::<ColleagueJoinedMacro>()
+        // Imports notify the importing user about their own work, in bulk.
+        .append::<ItemImportedMetadata>()
 }

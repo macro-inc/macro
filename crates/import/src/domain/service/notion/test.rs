@@ -3,7 +3,9 @@ use crate::domain::models::{ImportTargetReservation, Initiator};
 use crate::domain::models::{NotionAnnotations, NotionRichText, NotionRichTextKind};
 use crate::domain::ports::{ImportedDocumentProperties, ImportedTaskProperties};
 use crate::domain::service::test::admission::{NoConnector, Repo, user};
-use crate::domain::service::{ApiSources, ImportServiceImpl, NoLinearSource, NoSlackSource};
+use crate::domain::service::{
+    ActiveImport, ApiSources, ImportServiceImpl, NoLinearSource, NoSlackSource,
+};
 use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -929,4 +931,69 @@ async fn titles_of_ancestors_label_links_to_unimported_pages() {
         docs[0].markdown,
         format!("[🏠 Team Home](https://www.notion.so/{})", nid(1))
     );
+}
+
+#[tokio::test]
+async fn a_run_surfaces_only_its_own_active_imports_on_home() {
+    let mut workspace = nested_workspace();
+    // Every page was edited yesterday, Checklist and Plan by the user.
+    let yesterday = chrono::Utc::now() - chrono::Duration::days(1);
+    for page in workspace.pages.values_mut() {
+        page.last_edited_time = yesterday;
+    }
+    // Row was last edited by a teammate: not the user's active work.
+    workspace.pages.get_mut(&nid(5)).unwrap().last_edited_by = Some("teammate".into());
+    let surfaced: Arc<Mutex<Vec<ActiveImport>>> = Arc::default();
+    let service = notion_service(workspace, FakeImages::default()).with_active_import_notifier({
+        let surfaced = surfaced.clone();
+        Arc::new(move |_, items| {
+            surfaced.lock().unwrap().extend(items);
+            Box::pin(async {})
+        })
+    });
+
+    // An earlier import of Checklist is not part of this run.
+    import_batch(&service, &[3]).await;
+    let mut run = Vec::new();
+    for n in [2, 5] {
+        let page = service.apis.notion().0.pages[&nid(n)].clone();
+        let metadata =
+            serde_json::to_value(notion_doc_meta(&page, &NotionOwner::User("me".into()))).unwrap();
+        service
+            .stage_inner(
+                &user(),
+                Initiator::Onboarding,
+                ImportSource::Notion,
+                nid(n).as_str(),
+                metadata,
+                false,
+            )
+            .await
+            .unwrap();
+        let row = service
+            .repo
+            .rows()
+            .into_iter()
+            .find(|row| row.foreign_id == nid(n).as_str())
+            .unwrap();
+        run.push(
+            service
+                .repo
+                .mark_importing(&user(), &[row.id])
+                .await
+                .unwrap()
+                .pop()
+                .unwrap(),
+        );
+    }
+    let ids: Vec<uuid::Uuid> = run.iter().map(|row| row.id).collect();
+    import_notion_rows(&service, &user(), run, 3).await;
+    service
+        .surface_active_imports(&user(), ImportSource::Notion, &ids)
+        .await;
+
+    let surfaced = surfaced.lock().unwrap();
+    assert_eq!(surfaced.len(), 1);
+    assert_eq!(surfaced[0].name, "Plan");
+    assert_eq!(surfaced[0].source, ImportSource::Notion);
 }

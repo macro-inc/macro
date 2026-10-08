@@ -1992,6 +1992,25 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          itemName: zod
+                            .string()
+                            .describe("The imported item's name."),
+                          source: zod
+                            .enum(['notion', 'linear'])
+                            .describe('Where an imported item came from.'),
+                        })
+                        .describe(
+                          'Metadata for a notification that an import brought in an item the user is\nactively working on. Self-addressed: it puts the item on Home, labelled\nwith where it came from.'
+                        ),
+                      tag: zod.enum(['item_imported']),
+                    })
+                    .describe(
+                      'An item the user is actively working on was imported into Macro.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -3888,6 +3907,25 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          itemName: zod
+                            .string()
+                            .describe("The imported item's name."),
+                          source: zod
+                            .enum(['notion', 'linear'])
+                            .describe('Where an imported item came from.'),
+                        })
+                        .describe(
+                          'Metadata for a notification that an import brought in an item the user is\nactively working on. Self-addressed: it puts the item on Home, labelled\nwith where it came from.'
+                        ),
+                      tag: zod.enum(['item_imported']),
+                    })
+                    .describe(
+                      'An item the user is actively working on was imported into Macro.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -5778,6 +5816,25 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          itemName: zod
+                            .string()
+                            .describe("The imported item's name."),
+                          source: zod
+                            .enum(['notion', 'linear'])
+                            .describe('Where an imported item came from.'),
+                        })
+                        .describe(
+                          'Metadata for a notification that an import brought in an item the user is\nactively working on. Self-addressed: it puts the item on Home, labelled\nwith where it came from.'
+                        ),
+                      tag: zod.enum(['item_imported']),
+                    })
+                    .describe(
+                      'An item the user is actively working on was imported into Macro.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -7536,6 +7593,23 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['channel_message_reaction']),
             })
             .describe("Someone reacted to one of the user's channel messages."),
+          zod
+            .object({
+              content: zod
+                .object({
+                  itemName: zod.string().describe("The imported item's name."),
+                  source: zod
+                    .enum(['notion', 'linear'])
+                    .describe('Where an imported item came from.'),
+                })
+                .describe(
+                  'Metadata for a notification that an import brought in an item the user is\nactively working on. Self-addressed: it puts the item on Home, labelled\nwith where it came from.'
+                ),
+              tag: zod.enum(['item_imported']),
+            })
+            .describe(
+              'An item the user is actively working on was imported into Macro.'
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
