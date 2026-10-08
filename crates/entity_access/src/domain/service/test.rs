@@ -35,6 +35,7 @@ struct MockRepo {
     scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
     accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
+    agent_session_exists: Arc<Mutex<bool>>,
     pipeline_access: Arc<Mutex<Option<AccessLevel>>>,
     pipeline_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     database_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -90,6 +91,9 @@ impl MockRepo {
             scheduled_action_access: Arc::new(Mutex::new(None)),
             accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
             agent_session_parent: Arc::default(),
+            // Existing by default: the interesting half of these tests is who
+            // may see a session, not whether it is there.
+            agent_session_exists: Arc::new(Mutex::new(true)),
             pipeline_access: Arc::default(),
             pipeline_access_list: Arc::default(),
             database_access: Arc::new(Mutex::new(None)),
@@ -168,6 +172,12 @@ impl MockRepo {
 
     fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
         self.agent_session_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    /// No session row under the asked-for id: never created, or deleted since.
+    fn without_agent_session_row(mut self) -> Self {
+        self.agent_session_exists = Arc::new(Mutex::new(false));
         self
     }
 
@@ -315,6 +325,10 @@ impl AccessRepository for MockRepo {
         _: &str,
     ) -> Result<Option<AgentSessionParent>, AccessError> {
         Ok(self.agent_session_parent.lock().await.clone())
+    }
+
+    async fn agent_session_exists(&self, _: &str) -> Result<bool, AccessError> {
+        Ok(*self.agent_session_exists.lock().await)
     }
 
     async fn get_document_access(
@@ -1003,6 +1017,8 @@ async fn test_get_entity_permission_agent_session_returns_access_level() {
     ));
 }
 
+/// A session that is there, held by someone else: a refusal, and the caller
+/// is told to stop asking.
 #[tokio::test]
 async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized() {
     let service = EntityAccessServiceImpl::new(MockRepo::new());
@@ -1018,6 +1034,54 @@ async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+/// No row under that id - never created, or deleted since. Answered apart
+/// from a refusal so a client reading a session whose create has not landed
+/// can tell "not yet" from "not yours" and try again.
+#[tokio::test]
+async fn test_get_entity_permission_agent_session_missing_row_returns_not_found() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new().without_agent_session_row());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::NotFound(_))));
+}
+
+/// Existence is a cost only a refusal pays: a granted read must not spend a
+/// round trip proving what the grant already implies.
+#[tokio::test]
+async fn test_get_entity_permission_agent_session_with_access_skips_existence_check() {
+    let repo = MockRepo::new()
+        .with_agent_session_access(AccessLevel::Owner)
+        .without_agent_session_row();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::AgentSession,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
 }
 
 #[tokio::test]

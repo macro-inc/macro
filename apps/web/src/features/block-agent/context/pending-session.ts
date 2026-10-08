@@ -28,6 +28,7 @@ import {
   type PromptSubmitSurface,
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
+import { markSessionCreated } from '@core/agent-session/recently-created';
 import {
   replenishWarmAgentSession,
   takeWarmAgentSession,
@@ -198,6 +199,11 @@ export function startPendingSession(
         trace?.stage('created');
         // Normally the id this tab minted; an older service may mint its own.
         const created = result.value.session.id;
+        // Before anything acquires it: `AgentSession`'s constructor reads the
+        // session row at once, and that read can arrive before the create's
+        // writes are readable. Marked first, a refusal to that read is waited
+        // out rather than reported as a session that is not ours.
+        markSessionCreated(created);
         // A warm claim releases its server reservation before creation answers.
         replenishWarmAgentSession(result.value.session.ownerId);
         void refetchSoupEntity(created, 'agentSession', { created: true });

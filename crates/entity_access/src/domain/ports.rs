@@ -104,6 +104,18 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
+    /// Whether a session row exists at all, for anyone.
+    ///
+    /// Asked only once a viewer has turned out to hold no grant, to tell
+    /// "there is no such session" apart from "this one is not yours". The two
+    /// used to answer alike, which made a session read before its create had
+    /// landed - and a session that had since been deleted - indistinguishable
+    /// from a refusal.
+    fn agent_session_exists(
+        &self,
+        agent_session_id: &str,
+    ) -> impl Future<Output = Result<bool, AccessError>> + Send;
+
     /// Highest grant on a CRM pipeline.
     fn get_pipeline_access(
         &self,

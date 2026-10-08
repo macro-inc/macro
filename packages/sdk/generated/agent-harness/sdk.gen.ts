@@ -221,6 +221,11 @@ export class Sdk extends HeyApiClient {
     
     /**
      * Get an agent session by id.
+     *
+     * A caller holding no grant is answered 401; an id with no session behind it
+     * at all is answered 404. They used to be the same answer, which left a
+     * client that read a session before its create had landed unable to tell a
+     * race it should retry from a refusal it should not.
      */
     public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });

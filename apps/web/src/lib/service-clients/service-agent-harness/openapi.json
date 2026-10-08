@@ -588,6 +588,7 @@
       "get": {
         "tags": ["agent-sessions"],
         "summary": "Get an agent session by id.",
+        "description": "A caller holding no grant is answered 401; an id with no session behind it\nat all is answered 404. They used to be the same answer, which left a\nclient that read a session before its create had landed unable to tell a\nrace it should retry from a refusal it should not.",
         "operationId": "get_agent_session",
         "parameters": [
           {
@@ -613,7 +614,7 @@
             }
           },
           "401": {
-            "description": "",
+            "description": "the session exists but is not this caller's",
             "content": {
               "text/plain": {
                 "schema": {
@@ -624,6 +625,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no session with this id: not created yet, or deleted since",
             "content": {
               "text/plain": {
                 "schema": {
