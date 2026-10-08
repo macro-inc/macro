@@ -1,15 +1,12 @@
 use super::*;
 
 #[test]
-fn deploy_build_uses_remote_sccache_and_wasm_cache() {
-    let yaml = deploy_web_app().to_string().expect("workflow yaml");
-    let job = yaml
-        .split("\n  build-deploy:\n")
-        .nth(1)
-        .expect("build-deploy job");
+fn build_uses_remote_sccache_and_wasm_cache() {
+    let yaml = build_web_app().to_string().expect("workflow yaml");
+    let job = yaml.split("\n  build:\n").nth(1).expect("build job");
     assert!(
         job.contains("nsc cache sccache setup --cache_name web-ci"),
-        "deploy must use the shared web-ci remote sccache: {job}"
+        "build must use the shared web-ci remote sccache: {job}"
     );
     let configure = job
         .find("nsc cache sccache setup")
@@ -21,10 +18,10 @@ fn deploy_build_uses_remote_sccache_and_wasm_cache() {
     assert!(configure < start && start < build_command);
     assert!(
         job.contains(".wasm-pack"),
-        "deploy must persist wasm-pack's wasm-opt cache: {job}"
+        "build must persist wasm-pack's wasm-opt cache: {job}"
     );
     assert!(
         job.contains("just build-${{ inputs.environment }}"),
-        "deploy still builds via just: {job}"
+        "build still runs via just: {job}"
     );
 }

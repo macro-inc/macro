@@ -1,5 +1,7 @@
-//! `Deploy Web App` — builds apps/web and deploys it via the web-app pulumi
-//! stack; reusable (workflow_call) and manually dispatchable. Generated into
+//! `Deploy Web App` — builds apps/web (via [`crate::workflows::build_web_app`])
+//! and deploys it via the web-app pulumi stack; reusable (workflow_call) and
+//! manually dispatchable. A caller that already ran the build in the same run
+//! passes `prebuilt: true` to skip straight to the upload. Generated into
 //! `deploy_web_app.yml` (replaces the hand-written `deploy-web-app.yml`;
 //! dispatch identity is the workflow *name*, so the rename doesn't affect
 //! anyone's dispatch habits).
@@ -10,10 +12,7 @@ use gh_workflow::{
     WorkflowDispatch,
 };
 
-use crate::workflows::{runners, steps, vars};
-
-#[cfg(test)]
-mod test;
+use crate::workflows::{build_web_app, runners, steps, vars};
 
 /// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
 /// are filled in by [`patch`] (choice options + ordered maps).
@@ -33,13 +32,12 @@ pub fn deploy_web_app() -> Workflow {
             Concurrency::new(Expression::new("deploy-web-app-${{ inputs.environment }}"))
                 .cancel_in_progress(false),
         )
-        .add_job("build-deploy", build_deploy())
+        .add_job("build", build())
+        .add_job("deploy", deploy())
 }
 
-/// Fill in the ordered dispatch/call input blocks.
-///
-/// The build uses the shared Namespace `web-ci` sccache cache, so no sccache
-/// backend secret is needed here.
+/// Fill in the ordered dispatch/call input blocks and the build call's
+/// `with:`/`secrets:`.
 pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
     let on = root
         .get_mut("on")
@@ -73,6 +71,11 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
               notify:
                 required: false
                 type: boolean
+              prebuilt:
+                required: false
+                type: boolean
+                default: false
+                description: The caller already ran build_web_app.yml in this run
             secrets:
               AWS_ACCESS_KEY:
                 required: true
@@ -90,21 +93,47 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
         "#})?,
     );
+
+    let build = crate::workflows::job_mut(root, "build")?;
+    build.remove("runs-on");
+    build.insert(
+        "with".into(),
+        crate::workflows::yaml_fragment("environment: ${{ inputs.environment }}")?,
+    );
+    build.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
+            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        "#})?,
+    );
     Ok(())
 }
 
-fn build_deploy() -> Job {
+/// `inputs.prebuilt` is unset under workflow_dispatch, so dispatches build.
+fn build() -> Job {
     Job::default()
+        .name("Build")
+        .cond(Expression::new("${{ !inputs.prebuilt }}"))
+        .uses("./.github/workflows/build_web_app.yml")
+}
+
+/// Runs after either this run's build or the caller's: a skipped build means
+/// `prebuilt`, but the default `success()` would skip this job with it.
+fn deploy() -> Job {
+    Job::default()
+        .name("Deploy")
+        .needs(vec!["build".to_string()])
+        .cond(Expression::new(
+            "${{ !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}",
+        ))
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
-        .add_step(checkout())
+        .add_step(build_web_app::checkout())
         .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
-        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
-        .add_step(steps::start_sccache_server())
-        .add_step(build())
-        .add_step(steps::show_sccache_stats())
+        .add_step(download_dist())
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
         .add_step(pulumi_up())
@@ -113,34 +142,15 @@ fn build_deploy() -> Job {
         .add_step(steps::teardown_nix())
 }
 
-fn checkout() -> Step<Use> {
-    Step::new("Checkout Repo")
+fn download_dist() -> Step<Use> {
+    Step::new("Download dist")
         .uses(
             "actions",
-            "checkout",
-            "df4cb1c069e1874edd31b4311f1884172cec0e10",
-        ) // v6
-        // The pushed commit, not the branch tip: a merge that lands while this
-        // run's backend deploys must not ship its frontend against the older
-        // backend.
-        .add_with(("ref", "${{ github.sha }}"))
-}
-
-/// Build identical across dev/prod up to `MODE` (`just build-<env>`).
-fn build() -> Step<Run> {
-    Step::new("Build")
-        .run("just build-${{ inputs.environment }}")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env(Env::new("VITE_SEGMENT_WRITE_KEY", vars::SEGMENT_WRITE_KEY))
-        .add_env(Env::new("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env(Env::new(
-            "VITE_OTEL_EXPORTER_URL",
-            "${{ inputs.environment == 'prod' && 'https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces' || 'https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces' }}",
-        ))
-        .add_env(Env::new(
-            "VITE_OTEL_ENV",
-            "${{ inputs.environment == 'prod' && 'prod' || 'development' }}",
-        ))
+            "download-artifact",
+            "634f93cb2916e3fdff6788551b99b062d0335ce0",
+        ) // v5
+        .add_with(("name", build_web_app::ARTIFACT))
+        .add_with(("path", xtask_paths::runtime_path!("apps/web/dist").as_str()))
 }
 
 fn install_infra_dependencies() -> Step<Run> {
