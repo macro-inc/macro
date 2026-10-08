@@ -69,6 +69,7 @@ vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: { children: unknown }) => props.children,
   useChatInputContext: () => ({
     model: () => Model.gpt56,
+    setModel: vi.fn(),
     attachments: {},
   }),
 }));
@@ -85,6 +86,20 @@ vi.mock('@core/component/AI/util/storage', () => ({
   getSoupInputStoredModel: () => undefined,
   storeSoupInputModel: vi.fn(),
   storeChatStateImmediate: mocks.storeModel,
+  explicitSoupModel: () => undefined,
+  rememberSoupModelChoice: vi.fn(),
+  resolveSoupInitialModel: () => undefined,
+}));
+vi.mock('@core/component/AI/util/saw-free-plan', () => ({
+  hasSawFreePlan: () => false,
+  noteSawFreePlan: vi.fn(),
+}));
+vi.mock('@core/component/AI/util/plan-model', () => ({
+  UPGRADE_MODEL: 'anthropic/claude-opus-5-5',
+}));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user',
+  useLicenseStatus: () => () => 'active',
 }));
 vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: {},

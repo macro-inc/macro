@@ -26,6 +26,7 @@ import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
+import { useNoteFreePlanForModelDefault } from '@core/component/AI/util/use-note-free-plan';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -232,6 +233,7 @@ function UserInfoSideEffects() {
   const posthog = usePosthog();
 
   useSyncLoginCookie();
+  useNoteFreePlanForModelDefault();
 
   // A signup that started from a GTM invite link finishes its attribution on
   // the first authenticated load (the welcome page parked the token).

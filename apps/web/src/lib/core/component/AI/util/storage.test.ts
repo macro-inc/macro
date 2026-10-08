@@ -5,9 +5,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_MODEL, Model } from '../constant';
 import { resolveChatInputModel } from './parse';
 import {
+  explicitSoupModel,
   getChatInputStoredState,
   getChatStoredModel,
+  rememberSoupModelChoice,
+  resolveSoupInitialModel,
   storeChatStateImmediate,
+  storeSoupInputModel,
 } from './storage';
 
 beforeEach(() => {
@@ -62,6 +66,29 @@ describe('chat input storage: model defaults', () => {
     );
     expect(resolveChatInputModel(undefined, restored.model)).toBe(
       DEFAULT_MODEL
+    );
+  });
+
+  it('upgrades to Opus unless the soup composer model was actually chosen', () => {
+    storeSoupInputModel(Model.sonnet55);
+    expect(explicitSoupModel()).toBe(Model.sonnet55);
+    expect(resolveSoupInitialModel({ paid: true, sawFreePlan: true })).toBe(
+      Model.sonnet55
+    );
+
+    storeSoupInputModel(Model.gemini38Flash);
+    expect(explicitSoupModel()).toBeUndefined();
+    expect(resolveSoupInitialModel({ paid: true, sawFreePlan: true })).toBe(
+      Model.opus55
+    );
+    expect(resolveSoupInitialModel({ paid: false, sawFreePlan: true })).toBe(
+      Model.gemini38Flash
+    );
+
+    rememberSoupModelChoice(Model.gemini38Flash);
+    expect(explicitSoupModel()).toBe(Model.gemini38Flash);
+    expect(resolveSoupInitialModel({ paid: true, sawFreePlan: true })).toBe(
+      Model.gemini38Flash
     );
   });
 });

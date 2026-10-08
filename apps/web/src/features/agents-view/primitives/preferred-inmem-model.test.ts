@@ -30,6 +30,57 @@ describe('preferred in-memory model', () => {
     });
   });
 
+  it('does not treat stored Gemini as a choice unless it was picked', () => {
+    window.localStorage.setItem(
+      'agents-view-inmem-model-v1:user-a',
+      'google/gemini-3.8-flash'
+    );
+    createRoot((dispose) => {
+      const preferred = createPreferredInmemModel('user-a');
+      expect(preferred.model()).toBe('google/gemini-3.8-flash');
+      expect(preferred.explicit()).toBe(false);
+      dispose();
+    });
+  });
+
+  it('treats a stored paid model as a choice and remembers an explicit Gemini pick', () => {
+    window.localStorage.setItem(
+      'agents-view-inmem-model-v1:user-a',
+      'anthropic/claude-sonnet-5-5'
+    );
+    createRoot((dispose) => {
+      expect(createPreferredInmemModel('user-a').explicit()).toBe(true);
+      dispose();
+    });
+    createRoot((dispose) => {
+      const preferred = createPreferredInmemModel('user-a');
+      preferred.remember('google/gemini-3.8-flash');
+      expect(preferred.explicit()).toBe(true);
+      dispose();
+    });
+    createRoot((dispose) => {
+      const preferred = createPreferredInmemModel('user-a');
+      expect(preferred.model()).toBe('google/gemini-3.8-flash');
+      expect(preferred.explicit()).toBe(true);
+      dispose();
+    });
+  });
+
+  it('remembers that this user was on the free plan', () => {
+    createRoot((dispose) => {
+      const preferred = createPreferredInmemModel('user-a');
+      expect(preferred.sawFreePlan()).toBe(false);
+      preferred.noteFreePlan();
+      expect(preferred.sawFreePlan()).toBe(true);
+      dispose();
+    });
+    createRoot((dispose) => {
+      expect(createPreferredInmemModel('user-a').sawFreePlan()).toBe(true);
+      expect(createPreferredInmemModel('user-b').sawFreePlan()).toBe(false);
+      dispose();
+    });
+  });
+
   it('keeps working when storage cannot be written', () => {
     const write = vi
       .spyOn(Storage.prototype, 'setItem')

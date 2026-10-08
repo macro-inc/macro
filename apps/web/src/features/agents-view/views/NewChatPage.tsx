@@ -6,13 +6,18 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { useHasPaidAccess } from '@core/auth/license';
+import {
+  catalogOffersModelChoice,
+  resolveUpgradedModel,
+} from '@core/component/AI/util/plan-model';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useUserId } from '@core/context/user';
+import { useLicenseStatus, useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import {
   type EffortChoice,
   effortConfigOption,
@@ -69,10 +74,24 @@ export function NewChatPage(props: {
   onOpenRoster: (kind: AgentKind) => void;
 }) {
   const userId = useUserId();
+  const licenseStatus = useLicenseStatus();
+  const hasPaidAccess = useHasPaidAccess();
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
+  // License is external. Record a known free plan on this composer too, so an
+  // upgrade in the same visit sees it without waiting for a remount.
+  createEffect(
+    on(
+      () => [userId(), licenseStatus()] as const,
+      ([id, status]) => {
+        if (!id || !status) return;
+        if (status === 'active' || status === 'trialing') return;
+        preferredInmem.noteFreePlan();
+      }
+    )
+  );
   const options = () => {
     const kind = props.kind;
     return kind
@@ -82,6 +101,8 @@ export function NewChatPage(props: {
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
+  /** True when {@link modelOverride} was picked from a catalog with a real choice. */
+  const [sessionExplicit, setSessionExplicit] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
@@ -112,19 +133,34 @@ export function NewChatPage(props: {
     return options().find((agent) => !agent.unavailableReason) ?? options()[0];
   });
   const selectedCatalog = createComposerModels(selected);
+  const macroAgent = () =>
+    options().find((agent) => agent.id === MACRO_PERSONA_ID);
+  const macroCatalog = createComposerModels(macroAgent);
   /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
   const composerModelOverride = () => {
     const agent = selected();
-    if (agent?.harness !== 'macro-inmem' && agent?.harness !== 'in-memory')
+    if (!agent) return;
+    if (agent.harness !== 'macro-inmem' && agent.harness !== 'in-memory')
       return modelOverride();
-    const preferred =
-      modelOverride() ??
-      (agent.id === MACRO_PERSONA_ID
-        ? preferredInmem.model()
-        : agent.defaultModel);
-    return selectedCatalog.models().some((option) => option.id === preferred)
-      ? preferred
-      : selectedCatalog.currentModel();
+    const catalog = selectedCatalog.models().map((option) => option.id);
+    if (agent.id !== MACRO_PERSONA_ID) {
+      const session = modelOverride();
+      if (session && catalog.includes(session)) return session;
+      const preferred = agent.defaultModel;
+      return preferred && catalog.includes(preferred)
+        ? preferred
+        : selectedCatalog.currentModel();
+    }
+    return resolveUpgradedModel({
+      paid: hasPaidAccess(),
+      sawFreePlan: preferredInmem.sawFreePlan(),
+      preferred: preferredInmem.model(),
+      explicit: preferredInmem.explicit(),
+      catalog,
+      currentModel: selectedCatalog.currentModel(),
+      sessionModel: modelOverride(),
+      sessionExplicit: sessionExplicit(),
+    });
   };
   const capabilityTarget = () => {
     const agent = selected();
@@ -239,6 +275,7 @@ export function NewChatPage(props: {
     });
     attachmentTracker.clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
+    setSessionExplicit(false);
     setModelOverride(undefined);
     setEffortSelection(undefined);
   };
@@ -250,11 +287,19 @@ export function NewChatPage(props: {
   ) => {
     setAgentId(agent.id);
     if (agent.id === MACRO_PERSONA_ID) {
-      if (model) preferredInmem.remember(model);
+      // Gemini is the only free model, so clicking it does not record a choice.
+      const choice =
+        Boolean(model) &&
+        catalogOffersModelChoice(
+          macroCatalog.models().map((option) => option.id)
+        );
+      if (model && choice) preferredInmem.remember(model);
+      setSessionExplicit(choice);
       // Still set the override so the trigger updates when Macro was
       // already selected (agent id unchanged would otherwise skip a render).
-      setModelOverride(model);
+      setModelOverride(choice ? model : undefined);
     } else {
+      setSessionExplicit(false);
       setModelOverride(model);
     }
     setEffortSelection(

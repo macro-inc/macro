@@ -3,6 +3,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, untrack } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { parseModel } from './parse';
+import { modelChoiceIsExplicit, UPGRADE_MODEL } from './plan-model';
 
 export type StoredStuff = {
   input: string;
@@ -96,10 +97,45 @@ const [soupModel, setSoupModel] = makePersisted(
   }
 );
 
+const [soupModelExplicit, setSoupModelExplicit] = makePersisted(
+  createSignal(false),
+  { name: 'soup-chat-input-model-explicit' }
+);
+
 export function getSoupInputStoredModel(): Model | undefined {
   return parseModel(untrack(soupModel));
 }
 
 export function storeSoupInputModel(model: Model) {
   setSoupModel(model);
+}
+
+/** Record a model the user picked while other models were available. */
+export function rememberSoupModelChoice(model: Model) {
+  setSoupModel(model);
+  setSoupModelExplicit(true);
+}
+
+/**
+ * The stored soup model when it is a real choice. Gemini left behind by the
+ * free plan is not one, unless the user later picked it from a paid catalog.
+ */
+export function explicitSoupModel(): Model | undefined {
+  const stored = parseModel(soupModel());
+  if (!modelChoiceIsExplicit(stored, soupModelExplicit())) return;
+  return stored;
+}
+
+/**
+ * Initial model for the new-chat composer. An explicit pick is restored.
+ * After a free plan with no pick, the composer starts on Opus.
+ */
+export function resolveSoupInitialModel(input: {
+  paid: boolean;
+  sawFreePlan: boolean;
+}): Model | undefined {
+  const chosen = untrack(explicitSoupModel);
+  if (chosen) return chosen;
+  if (input.paid && input.sawFreePlan) return UPGRADE_MODEL;
+  return getSoupInputStoredModel();
 }

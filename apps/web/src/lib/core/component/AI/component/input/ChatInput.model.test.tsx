@@ -132,6 +132,10 @@ vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
   }),
 }));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'soup-model-test-user',
+  useLicenseStatus: () => () => 'active',
+}));
 vi.mock('@core/component/AI/signal/attachment', () => ({
   useAttachments: () => ({ attached: () => [], setAttached: vi.fn() }),
   useGetChatAttachmentInfo: () => ({}),

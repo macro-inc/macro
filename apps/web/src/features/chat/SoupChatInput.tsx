@@ -12,25 +12,54 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { UPGRADE_MODEL } from '@core/component/AI/util/plan-model';
 import {
-  getSoupInputStoredModel,
+  hasSawFreePlan,
+  noteSawFreePlan,
+} from '@core/component/AI/util/saw-free-plan';
+import {
+  explicitSoupModel,
+  rememberSoupModelChoice,
+  resolveSoupInitialModel,
   storeChatStateImmediate,
-  storeSoupInputModel,
 } from '@core/component/AI/util/storage';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
+import { useLicenseStatus, useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect, Show } from 'solid-js';
+import { createEffect, on, Show } from 'solid-js';
 import { MobileAgentComposer } from '../agents-view/mobile-agent-composer';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
+  const userId = useUserId();
+  const licenseStatus = useLicenseStatus();
+
+  // License is external. A free visit is recorded, and becoming paid restores
+  // an explicit model or lands on Opus when the user never picked one.
+  createEffect(
+    on(licenseStatus, (status) => {
+      if (!status) return;
+      const paid = status === 'active' || status === 'trialing';
+      if (!paid) {
+        noteSawFreePlan(userId());
+        return;
+      }
+      const chosen = explicitSoupModel();
+      if (chosen) {
+        if (input.model() !== chosen) input.setModel(chosen);
+        return;
+      }
+      if (!hasSawFreePlan(userId())) return;
+      if (input.model() !== UPGRADE_MODEL) input.setModel(UPGRADE_MODEL);
+    })
+  );
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
   const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
@@ -44,14 +73,6 @@ function SoupChatInputInner() {
       block: 'chat',
       showOpenTabs: true,
     });
-
-  // Persist the model the user picks in the new-chat composer so it survives
-  // reload/navigation, matching how the existing-chat draft model is restored.
-  // ChatInput may reconcile to an available model if the user isn't entitled to
-  // the stored one, and that corrected value flows through here too.
-  createEffect(() => {
-    storeSoupInputModel(input.model());
-  });
 
   const [attachHotkeys] = useHotkeyDOMScope('soup.chatInput');
 
@@ -127,6 +148,7 @@ function SoupChatInputInner() {
         variant="default"
         collapseOnBlur
         editor={editor}
+        onModelChosen={rememberSoupModelChoice}
         onSend={handleSend}
         onEscape={() => {
           splitPanelContext.panelRef()?.focus();
@@ -151,10 +173,20 @@ export function SoupChatInput() {
 }
 
 function LegacySoupChatInput() {
+  const userId = useUserId();
+  const licenseStatus = useLicenseStatus();
+  const paid = () => {
+    const status = licenseStatus();
+    return status === 'active' || status === 'trialing';
+  };
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
-  // to DEFAULT_MODEL when this is undefined.
-  const initialModel = getSoupInputStoredModel();
+  // to DEFAULT_MODEL when this is undefined. A free plan with no real pick
+  // starts on Opus once the user has upgraded.
+  const initialModel = resolveSoupInitialModel({
+    paid: paid(),
+    sawFreePlan: hasSawFreePlan(userId()),
+  });
   return (
     <ChatInputProvider model={initialModel}>
       <SoupChatInputInner />

@@ -19,6 +19,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
+import { catalogOffersModelChoice } from '@core/component/AI/util/plan-model';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
@@ -53,6 +54,11 @@ type ChatInputProps = {
   showActiveTabs?: boolean;
   autoFocusOnMount?: boolean;
   chatId?: string;
+  /**
+   * Called when the user picks a model from a catalog that offered a choice.
+   * The free plan's only model does not call this.
+   */
+  onModelChosen?: (model: Model) => void;
 };
 
 type ChatInputComponentProps = {
@@ -314,7 +320,13 @@ export function ChatInput(props: ChatInputComponentProps) {
       <ModelSelector
         selectedModel={model()}
         models={modelOptions()}
-        onSelect={(m) => input.setModel(m)}
+        onSelect={(m) => {
+          const available = modelOptions()
+            .filter((option) => option.available)
+            .map((option) => option.id);
+          if (catalogOffersModelChoice(available)) props.onModelChosen?.(m);
+          input.setModel(m);
+        }}
         onLocked={() => showPaywall(PaywallKey.O1_LIMIT)}
         compact={compactSelector()}
       />

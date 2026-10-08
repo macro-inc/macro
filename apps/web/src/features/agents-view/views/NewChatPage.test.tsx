@@ -30,8 +30,11 @@ const mocks = vi.hoisted(() => ({
   recentIds: [] as string[],
   recentUrls: [] as string[],
   preferredInmemModel: undefined as string | undefined,
+  preferredExplicit: false,
+  sawFreePlan: false,
   rememberInmemModel: vi.fn((id: string) => {
     mocks.preferredInmemModel = id;
+    mocks.preferredExplicit = true;
   }),
   repositories: [] as { url: string; defaultBranch?: string }[],
 }));
@@ -43,7 +46,10 @@ vi.mock('@channel/Input', async () => ({
   ...(await import('../../channel/Input/attachment-tracker')),
   uploadInputAttachments: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user',
+  useLicenseStatus: () => () => (mocks.freePlan ? 'inactive' : 'active'),
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
@@ -62,6 +68,16 @@ vi.mock('../primitives/recent-repositories', () => ({
 vi.mock('../primitives/preferred-inmem-model', () => ({
   createPreferredInmemModel: () => ({
     model: () => mocks.preferredInmemModel,
+    explicit: () =>
+      mocks.preferredExplicit ||
+      Boolean(
+        mocks.preferredInmemModel &&
+          mocks.preferredInmemModel !== 'google/gemini-3.8-flash'
+      ),
+    sawFreePlan: () => mocks.sawFreePlan,
+    noteFreePlan: () => {
+      mocks.sawFreePlan = true;
+    },
     remember: mocks.rememberInmemModel,
   }),
 }));
@@ -281,6 +297,8 @@ describe('agent-led new conversation', () => {
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.recentUrls = [];
     mocks.preferredInmemModel = undefined;
+    mocks.preferredExplicit = false;
+    mocks.sawFreePlan = false;
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
     ];
@@ -827,6 +845,52 @@ describe('agent-led new conversation', () => {
     page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
       'Sonnet 5.5'
+    );
+  });
+  it('switches to Opus after upgrade when no model was chosen', () => {
+    mocks.sawFreePlan = true;
+    const send = page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Opus 5.5'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'anthropic/claude-opus-5-5',
+      })
+    );
+  });
+  it('keeps Gemini chosen from a paid catalog after upgrade', () => {
+    mocks.sawFreePlan = true;
+    mocks.preferredInmemModel = 'google/gemini-3.8-flash';
+    mocks.preferredExplicit = true;
+    const send = page();
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toBe(
+      'Gemini 3.8 Flash'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'google/gemini-3.8-flash',
+      })
+    );
+  });
+  it('does not record Gemini while it is the only free model', async () => {
+    mocks.freePlan = true;
+    const send = page();
+    openAgents();
+    await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy());
+    const gemini = within(screen.getByRole('menu')).getByTitle(
+      'Gemini 3.8 Flash'
+    );
+    gemini.focus();
+    fireEvent.keyDown(gemini, { key: 'Enter' });
+    expect(mocks.rememberInmemModel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelOverride: 'google/gemini-3.8-flash',
+      })
     );
   });
   it('uses the free catalog default instead of a persisted paid model', async () => {
