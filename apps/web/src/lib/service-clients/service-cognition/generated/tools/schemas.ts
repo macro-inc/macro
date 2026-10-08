@@ -3995,6 +3995,7 @@ export const ToolDatabaseSchema = z.object({
               z.null(),
             ])
             .optional(),
+          formula: z.union([z.string(), z.null()]).optional(),
           safeTypes: z.array(z.string()).optional(),
           checkedTypes: z.array(z.string()).optional(),
         })

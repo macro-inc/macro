@@ -7316,6 +7316,11 @@ export interface ToolColumn {
    */
   relation?: ToolRelation | null;
   /**
+   * A derived column's formula: SQL reads its values, nothing writes
+   * them.
+   */
+  formula?: string | null;
+  /**
    * Types ALTER COLUMN TYPE converts every value to, spelled as SQL types
    * (`select[]` is a multi-valued select, `entity(USER)` a person).
    */
