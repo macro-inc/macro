@@ -29,12 +29,13 @@ import type {
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SharePermissionV2,
+  TaskTrackingBody,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { SandboxSize, SandboxSizeBody };
+export type { SandboxSize, SandboxSizeBody, TaskTrackingBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -292,6 +293,26 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ size }),
+      }
+    );
+  },
+
+  getTaskTracking() {
+    return fetchWithToken<TaskTrackingBody>(
+      `${agentHarnessHost}/agent-task-tracking`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+
+  setTaskTracking(enabled: boolean) {
+    return fetchWithToken<TaskTrackingBody>(
+      `${agentHarnessHost}/agent-task-tracking`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
       }
     );
   },

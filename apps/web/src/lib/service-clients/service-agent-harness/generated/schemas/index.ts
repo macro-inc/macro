@@ -214,6 +214,7 @@ export * from './sharePermissionV2LinkShareAccessLevel';
 export * from './sharePermissionV2TeamShareAccessLevel';
 export * from './startResponse';
 export * from './statusResponse';
+export * from './taskTrackingBody';
 export * from './toolApprovalAnswerDto';
 export * from './toolApprovalStatusDto';
 export * from './unlinkAgentSessionPullRequestParams';

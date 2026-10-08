@@ -2035,6 +2035,92 @@
         }
       }
     },
+    "/agent-task-tracking": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read whether the caller's new coding sessions track their work with tasks.",
+        "operationId": "get_agent_task_tracking",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTrackingBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Set whether the caller's new coding sessions track their work with tasks.",
+        "operationId": "put_agent_task_tracking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskTrackingBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskTrackingBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/claude-auth": {
       "get": {
         "tags": ["claude-auth"],
@@ -4105,6 +4191,17 @@
           "ephemeral": {
             "type": "boolean",
             "description": "Whether reconnecting after service restart is required."
+          }
+        }
+      },
+      "TaskTrackingBody": {
+        "type": "object",
+        "description": "Request or response body for the caller's task-tracking setting.",
+        "required": ["enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether new coding sessions track their work with Macro tasks."
           }
         }
       },

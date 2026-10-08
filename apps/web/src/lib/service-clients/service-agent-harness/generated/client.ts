@@ -40,6 +40,7 @@ import type {
   SharePermissionV2,
   StartResponse,
   StatusResponse,
+  TaskTrackingBody,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
@@ -2256,6 +2257,123 @@ export const answerAgentSessionToolApproval = async (
     status: res.status,
     headers: res.headers,
   } as answerAgentSessionToolApprovalResponse;
+};
+
+/**
+ * @summary Read whether the caller's new coding sessions track their work with tasks.
+ */
+export type getAgentTaskTrackingResponse200 = {
+  data: TaskTrackingBody;
+  status: 200;
+};
+
+export type getAgentTaskTrackingResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getAgentTaskTrackingResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type getAgentTaskTrackingResponseSuccess =
+  getAgentTaskTrackingResponse200 & {
+    headers: Headers;
+  };
+export type getAgentTaskTrackingResponseError = (
+  | getAgentTaskTrackingResponse401
+  | getAgentTaskTrackingResponse500
+) & {
+  headers: Headers;
+};
+
+export type getAgentTaskTrackingResponse =
+  | getAgentTaskTrackingResponseSuccess
+  | getAgentTaskTrackingResponseError;
+
+export const getGetAgentTaskTrackingUrl = () => {
+  return `/agent-task-tracking`;
+};
+
+export const getAgentTaskTracking = async (
+  options?: RequestInit
+): Promise<getAgentTaskTrackingResponse> => {
+  const res = await fetch(getGetAgentTaskTrackingUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentTaskTrackingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentTaskTrackingResponse;
+};
+
+/**
+ * @summary Set whether the caller's new coding sessions track their work with tasks.
+ */
+export type putAgentTaskTrackingResponse200 = {
+  data: TaskTrackingBody;
+  status: 200;
+};
+
+export type putAgentTaskTrackingResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putAgentTaskTrackingResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type putAgentTaskTrackingResponseSuccess =
+  putAgentTaskTrackingResponse200 & {
+    headers: Headers;
+  };
+export type putAgentTaskTrackingResponseError = (
+  | putAgentTaskTrackingResponse401
+  | putAgentTaskTrackingResponse500
+) & {
+  headers: Headers;
+};
+
+export type putAgentTaskTrackingResponse =
+  | putAgentTaskTrackingResponseSuccess
+  | putAgentTaskTrackingResponseError;
+
+export const getPutAgentTaskTrackingUrl = () => {
+  return `/agent-task-tracking`;
+};
+
+export const putAgentTaskTracking = async (
+  taskTrackingBody: TaskTrackingBody,
+  options?: RequestInit
+): Promise<putAgentTaskTrackingResponse> => {
+  const res = await fetch(getPutAgentTaskTrackingUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(taskTrackingBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putAgentTaskTrackingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putAgentTaskTrackingResponse;
 };
 
 /**

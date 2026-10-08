@@ -41,6 +41,11 @@ vi.mock('./components/instructions-editor', () => ({
   ),
 }));
 
+// Covered by its own suite; it owns a live query.
+vi.mock('./components/task-tracking-setting', () => ({
+  TaskTrackingSetting: () => null,
+}));
+
 const claudeFlag = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => {
