@@ -2933,6 +2933,10 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
+          "taskId": {
+            "type": ["string", "null"],
+            "description": "The Macro task the session was linked to."
+          },
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",

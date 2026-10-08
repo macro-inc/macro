@@ -645,6 +645,10 @@ async fn run() -> anyhow::Result<()> {
             GithubSyncClientImpl::default(),
         ),
     ));
+    let session_metadata_realtime = ConnectionGatewayAgentSessionRealtime::new(
+        connection_gateway.clone(),
+        session_audience.clone(),
+    );
     let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
         agent_session::domain::session_task::SessionTaskService::new(
             session_repo.clone(),
@@ -655,6 +659,7 @@ async fn run() -> anyhow::Result<()> {
                     pool.clone(),
                 )),
             ),
+            session_metadata_realtime.clone(),
             macro_service_urls::AppServiceUrl::new()?.as_ref(),
         ),
     );
@@ -662,10 +667,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(
             agent_session::domain::pull_request::SessionPullRequestService::new(
                 session_repo.clone(),
-                ConnectionGatewayAgentSessionRealtime::new(
-                    connection_gateway.clone(),
-                    session_audience.clone(),
-                ),
+                session_metadata_realtime,
                 session_tasks.clone(),
             ),
         );

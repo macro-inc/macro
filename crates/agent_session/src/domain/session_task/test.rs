@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use super::*;
@@ -74,11 +73,10 @@ impl TaskPullRequestLinker for RecordingLinker {
     }
 }
 
-/// Session tasks beside the in-memory session store, reading its pull request URL.
+/// Session tasks stored on the in-memory session store's sessions.
 #[derive(Clone, Default)]
 struct InMemorySessionTasks {
     sessions: InMemoryAgentSessionRepo,
-    tasks: Arc<Mutex<HashMap<AgentSessionId, TaskDocumentId>>>,
 }
 
 impl SessionTaskRepo for InMemorySessionTasks {
@@ -87,20 +85,31 @@ impl SessionTaskRepo for InMemorySessionTasks {
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         task: &TaskDocumentId,
-    ) -> Result<Option<String>, AgentSessionError> {
-        let stored = self.sessions.get(session).await?;
+    ) -> Result<SessionTaskWrite, AgentSessionError> {
+        let mut stored = self.sessions.get(session).await?;
         if !stored.owner_id.is_user(owner) {
             return Err(AgentSessionError::Forbidden);
         }
-        self.tasks.lock().unwrap().insert(session, task.clone());
-        Ok(stored.pull_request_url)
+        let changed = stored.task_id.as_deref() != Some(task.as_str());
+        stored.task_id = Some(task.as_str().to_owned());
+        let pull_request_url = stored.pull_request_url.clone();
+        self.sessions.insert_session(stored);
+        Ok(SessionTaskWrite {
+            changed,
+            pull_request_url,
+        })
     }
 
     async fn task(
         &self,
         session: AgentSessionId,
     ) -> Result<Option<TaskDocumentId>, AgentSessionError> {
-        Ok(self.tasks.lock().unwrap().get(&session).cloned())
+        Ok(self
+            .sessions
+            .get(session)
+            .await?
+            .task_id
+            .map(TaskDocumentId::from_stored))
     }
 }
 
@@ -108,21 +117,30 @@ struct Harness {
     sessions: InMemoryAgentSessionRepo,
     links: InMemorySessionTasks,
     linker: RecordingLinker,
+    realtime: RecordingRealtime,
     tasks: Arc<dyn SessionTasks>,
     pull_requests: SessionPullRequestService<InMemoryAgentSessionRepo, RecordingRealtime>,
 }
 
 fn harness(linker: RecordingLinker, directory: FakeDirectory) -> Harness {
+    harness_publishing_to(linker, directory, RecordingRealtime::new())
+}
+
+fn harness_publishing_to(
+    linker: RecordingLinker,
+    directory: FakeDirectory,
+    realtime: RecordingRealtime,
+) -> Harness {
     let sessions = InMemoryAgentSessionRepo::new();
     let links = InMemorySessionTasks {
         sessions: sessions.clone(),
-        tasks: Arc::default(),
     };
     let tasks: Arc<dyn SessionTasks> = Arc::new(SessionTaskService::new(
         sessions.clone(),
         links.clone(),
         directory,
         linker.clone(),
+        realtime.clone(),
         "https://macro.com/",
     ));
     let pull_requests =
@@ -131,6 +149,7 @@ fn harness(linker: RecordingLinker, directory: FakeDirectory) -> Harness {
         sessions,
         links,
         linker,
+        realtime,
         tasks,
         pull_requests,
     }
@@ -233,6 +252,70 @@ async fn relinking_replaces_the_session_task() {
 }
 
 #[tokio::test]
+async fn publishes_a_session_update_only_when_the_task_changes() {
+    let harness = harness(RecordingLinker::default(), FakeDirectory::default());
+    let session = seeded(&harness);
+    let owner = session.owner_user().unwrap();
+
+    harness
+        .tasks
+        .link_task(session.id, owner, TASK)
+        .await
+        .unwrap();
+    assert_eq!(harness.realtime.updated(), [session.id]);
+    assert_eq!(
+        harness
+            .sessions
+            .get(session.id)
+            .await
+            .unwrap()
+            .task_id
+            .as_deref(),
+        Some(TASK)
+    );
+
+    harness
+        .tasks
+        .link_task(
+            session.id,
+            owner,
+            &format!("https://macro.com/app/task/{TASK}"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(harness.realtime.updated(), [session.id]);
+
+    harness
+        .tasks
+        .link_task(session.id, owner, OTHER_TASK)
+        .await
+        .unwrap();
+    assert_eq!(harness.realtime.updated(), [session.id, session.id]);
+}
+
+#[tokio::test]
+async fn links_the_task_when_the_session_update_cannot_be_published() {
+    let harness = harness_publishing_to(
+        RecordingLinker::default(),
+        FakeDirectory::default(),
+        RecordingRealtime::down(),
+    );
+    let session = seeded(&harness);
+
+    let linked = harness
+        .tasks
+        .link_task(session.id, session.owner_user().unwrap(), TASK)
+        .await
+        .unwrap();
+
+    assert_eq!(linked.task_id, TASK);
+    assert_eq!(
+        harness.links.task(session.id).await.unwrap(),
+        Some(TaskDocumentId(TASK.to_owned()))
+    );
+}
+
+#[tokio::test]
 async fn refuses_another_owner_a_document_that_is_not_a_task_and_a_hidden_task() {
     let harness = harness(RecordingLinker::default(), FakeDirectory::default());
     let session = seeded(&harness);
@@ -256,6 +339,7 @@ async fn refuses_another_owner_a_document_that_is_not_a_task_and_a_hidden_task()
         Err(SessionTaskError::InvalidTaskReference)
     ));
     assert_eq!(harness.links.task(session.id).await.unwrap(), None);
+    assert!(harness.realtime.updated().is_empty());
 }
 
 #[tokio::test]

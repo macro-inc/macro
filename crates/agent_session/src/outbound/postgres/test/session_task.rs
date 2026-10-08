@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::pull_request::SessionPullRequestRepo;
-use crate::domain::session_task::{SessionTaskRepo, TaskDocumentId};
+use crate::domain::session_task::{SessionTaskRepo, SessionTaskWrite, TaskDocumentId};
 
 async fn insert_task(pool: &PgPool, id: &str) {
     sqlx::query!(
@@ -27,20 +27,38 @@ async fn stores_one_task_per_session_and_returns_the_pull_request(pool: PgPool) 
     assert_eq!(repo.task(session.id).await.unwrap(), None);
     assert_eq!(
         repo.set_task(session.id, owner, &first).await.unwrap(),
-        None
+        SessionTaskWrite {
+            changed: true,
+            pull_request_url: None,
+        }
+    );
+    assert_eq!(
+        repo.set_task(session.id, owner, &first).await.unwrap(),
+        SessionTaskWrite {
+            changed: false,
+            pull_request_url: None,
+        }
     );
     let url = "https://github.com/org/repo/pull/7";
     repo.record_pull_request(session.id, owner, url, None)
         .await
         .unwrap();
     assert_eq!(
-        repo.set_task(session.id, owner, &second)
-            .await
-            .unwrap()
-            .as_deref(),
-        Some(url)
+        repo.set_task(session.id, owner, &second).await.unwrap(),
+        SessionTaskWrite {
+            changed: true,
+            pull_request_url: Some(url.to_owned()),
+        }
     );
     assert_eq!(repo.task(session.id).await.unwrap(), Some(second.clone()));
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .task_id
+            .as_deref(),
+        Some(second.as_str())
+    );
 
     let other = user_id("macro|someone-else@example.com");
     assert!(matches!(
@@ -55,4 +73,11 @@ async fn stores_one_task_per_session_and_returns_the_pull_request(pool: PgPool) 
         .await
         .unwrap();
     assert_eq!(repo.task(session.id).await.unwrap(), None);
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .task_id,
+        None
+    );
 }

@@ -100,6 +100,7 @@ impl AgentSessionRepo for StubSessions {
                 .as_ref()
                 .map(|_| "https://github.com/macro-inc/macro".into()),
             pull_request_url: None,
+            task_id: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,

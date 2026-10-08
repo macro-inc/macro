@@ -178,6 +178,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = AgentSession {
             repo_branch: params.repo_branch,
             pull_request_url: None,
+            task_id: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             is_archived: false,
@@ -957,6 +958,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     AgentSession {
         repo_branch: None,
         pull_request_url: None,
+        task_id: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
         is_archived: false,

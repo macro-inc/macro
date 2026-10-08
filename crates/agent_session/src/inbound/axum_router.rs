@@ -615,6 +615,8 @@ pub struct AgentSessionResponse {
     pub repo_url: Option<String>,
     /// The session's linked pull request.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was linked to.
+    pub task_id: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier of the managed sandbox.
@@ -691,6 +693,7 @@ impl AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             pull_request_url: session.pull_request_url,
+            task_id: session.task_id,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             instructions: session.instructions,

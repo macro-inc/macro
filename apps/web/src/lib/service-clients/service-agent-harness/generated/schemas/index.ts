@@ -79,6 +79,7 @@ export * from './agentSessionResponseInstructions';
 export * from './agentSessionResponseOriginatingMessageId';
 export * from './agentSessionResponsePullRequestUrl';
 export * from './agentSessionResponseRepoUrl';
+export * from './agentSessionResponseTaskId';
 export * from './agentSessionResponseThreadChannelId';
 export * from './agentSessionResponseThreadId';
 export * from './agentSessionResponseThreadParent';

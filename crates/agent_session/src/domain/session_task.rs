@@ -12,7 +12,7 @@ use tracing::Instrument;
 
 use super::error::AgentSessionError;
 use super::model::AgentSessionId;
-use super::ports::AgentSessionRepo;
+use super::ports::{AgentSessionRealtime, AgentSessionRepo};
 
 #[cfg(test)]
 mod test;
@@ -172,16 +172,25 @@ pub trait TaskPullRequestLinker: Send + Sync {
     fn link(&self, github_key: &str, task: &TaskFacts) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// What replacing a session's task wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionTaskWrite {
+    /// Whether the session was linked to a different task before.
+    pub changed: bool,
+    /// The session's pull request URL as of the write, so a pull request recorded
+    /// concurrently is never missed.
+    pub pull_request_url: Option<String>,
+}
+
 /// Persist a session's task.
 pub trait SessionTaskRepo: Send + Sync {
-    /// Replace the owner's session task, returning the session's pull request URL as of the
-    /// write so a pull request recorded concurrently is never missed.
+    /// Replace the owner's session task.
     fn set_task(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         task: &TaskDocumentId,
-    ) -> impl Future<Output = Result<Option<String>, AgentSessionError>> + Send;
+    ) -> impl Future<Output = Result<SessionTaskWrite, AgentSessionError>> + Send;
 
     /// The task the session was explicitly linked to.
     fn task(
@@ -218,22 +227,27 @@ pub trait SessionTasks: Send + Sync {
     ) -> BoxFuture<'a, Result<()>>;
 }
 
-/// [`SessionTasks`] over the session store and the task and GitHub domains.
-pub struct SessionTaskService<Sessions, Links, Directory, Linker> {
+/// [`SessionTasks`] over the session store, its realtime publisher, and the task and
+/// GitHub domains.
+pub struct SessionTaskService<Sessions, Links, Directory, Linker, Realtime> {
     sessions: Sessions,
     links: Links,
     directory: Directory,
     linker: Linker,
+    realtime: Realtime,
     task_url_base: String,
 }
 
-impl<Sessions, Links, Directory, Linker> SessionTaskService<Sessions, Links, Directory, Linker> {
+impl<Sessions, Links, Directory, Linker, Realtime>
+    SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
+{
     /// Build the service. Task links are `{app_url}/app/task/{id}`.
     pub fn new(
         sessions: Sessions,
         links: Links,
         directory: Directory,
         linker: Linker,
+        realtime: Realtime,
         app_url: &str,
     ) -> Self {
         Self {
@@ -241,12 +255,14 @@ impl<Sessions, Links, Directory, Linker> SessionTaskService<Sessions, Links, Dir
             links,
             directory,
             linker,
+            realtime,
             task_url_base: format!("{}/app/task", app_url.trim_end_matches('/')),
         }
     }
 }
 
-impl<Sessions, Links, Directory, Linker> SessionTaskService<Sessions, Links, Directory, Linker>
+impl<Sessions, Links, Directory, Linker, Realtime>
+    SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
 where
     Sessions: AgentSessionRepo,
     Linker: TaskPullRequestLinker,
@@ -271,13 +287,14 @@ where
     }
 }
 
-impl<Sessions, Links, Directory, Linker> SessionTasks
-    for SessionTaskService<Sessions, Links, Directory, Linker>
+impl<Sessions, Links, Directory, Linker, Realtime> SessionTasks
+    for SessionTaskService<Sessions, Links, Directory, Linker, Realtime>
 where
     Sessions: AgentSessionRepo,
     Links: SessionTaskRepo,
     Directory: TaskDirectory,
     Linker: TaskPullRequestLinker,
+    Realtime: AgentSessionRealtime + Send + Sync,
 {
     fn link_task<'a>(
         &'a self,
@@ -291,7 +308,16 @@ where
                 self.owned_session(session, owner).await?;
                 let task = TaskDocumentId::parse(task)?;
                 let facts = self.directory.task(owner, &task).await?;
-                let pull_request = self.links.set_task(session, owner, &facts.id).await?;
+                let SessionTaskWrite {
+                    changed,
+                    pull_request_url: pull_request,
+                } = self.links.set_task(session, owner, &facts.id).await?;
+                if changed {
+                    // Persistence is authoritative; viewers refetch on reconnect.
+                    if let Err(error) = self.realtime.publish_updated(session).await {
+                        tracing::warn!(?error, "could not publish session metadata update");
+                    }
+                }
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }

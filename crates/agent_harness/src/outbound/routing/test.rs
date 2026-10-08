@@ -144,6 +144,7 @@ impl AgentSessionRepo for FixedBotSessions {
         Ok(AgentSession {
             repo_branch: None,
             pull_request_url: None,
+            task_id: None,
             id,
             owner_id: model_owner::Owner::User(
                 MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
