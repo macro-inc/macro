@@ -154,6 +154,10 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_search_enabled: bool,
 
+    /// Enable read-only calendar projections shared with current teammates.
+    #[macro_config_default(false)]
+    pub calendar_team_sharing_enabled: bool,
+
     /// Enable Slack import creation and uploads. Existing receipts remain
     /// readable, finalizable and cancellable when this switch is off.
     #[macro_config_default(false)]

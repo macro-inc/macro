@@ -6,7 +6,7 @@ import { channelKeys } from './channel/keys';
 import { messageKeys } from './messages/keys';
 import { type PersistScope, setupQueryPersistence } from './persistence';
 import type {
-  PerQueryPersistence,
+  ClearablePerQueryPersistence,
   PersistedQueryEntry,
 } from './persistence/per-query-idb';
 import {
@@ -19,7 +19,7 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => true }));
 
-function createMockStore(): PerQueryPersistence & {
+function createMockStore(): ClearablePerQueryPersistence & {
   entries: Map<string, PersistedQueryEntry>;
   get: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
@@ -37,12 +37,15 @@ function createMockStore(): PerQueryPersistence & {
       entries.delete(hash);
     }),
     flush: vi.fn(async () => {}),
+    clear: vi.fn(async () => {
+      entries.clear();
+    }),
   };
 }
 
 function createScope(
   prefix: readonly unknown[],
-  store: PerQueryPersistence,
+  store: ClearablePerQueryPersistence,
   overrides?: Partial<PersistScope>
 ): PersistScope {
   return {
@@ -608,5 +611,63 @@ describe('setupQueryPersistence', () => {
 
     queryClient.removeQueries({ queryKey: ['channel', 'a'] });
     expect(store.remove).toHaveBeenCalledWith('["channel","a"]');
+  });
+});
+
+describe('account persistence reset', () => {
+  it('clears entries that were never hydrated and fences a pending old-account read', async () => {
+    const store = createMockStore();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], store)],
+    });
+    const entry: PersistedQueryEntry = {
+      queryHash: '["private","alice"]',
+      queryKey: ['private', 'alice'],
+      data: { owner: 'alice' },
+      dataUpdatedAt: Date.now(),
+      persistedAt: Date.now(),
+      buster: 'test',
+    };
+    store.entries.set(entry.queryHash, entry);
+    store.entries.set('["private","unhydrated"]', {
+      ...entry,
+      queryHash: '["private","unhydrated"]',
+      queryKey: ['private', 'unhydrated'],
+    });
+    let finishRead!: (entry: PersistedQueryEntry) => void;
+    store.get.mockImplementationOnce(
+      () =>
+        new Promise<PersistedQueryEntry>((resolve) => {
+          finishRead = resolve;
+        })
+    );
+    const restore = persistence.restoreQuery(entry.queryKey);
+    await persistence.clear();
+    queryClient.setQueryData(entry.queryKey, { owner: 'bob' });
+    finishRead(entry);
+    await restore;
+    expect(queryClient.getQueryData(entry.queryKey)).toEqual({ owner: 'bob' });
+    expect(store.entries.has('["private","unhydrated"]')).toBe(false);
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('attempts every durable wipe even when one store fails', async () => {
+    const failing = createMockStore();
+    failing.clear = vi.fn(async () => {
+      throw new Error('disk failure');
+    });
+    const other = createMockStore();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['a'], failing), createScope(['b'], other)],
+    });
+    await expect(persistence.clear()).rejects.toThrow('disk failure');
+    expect(other.entries.size).toBe(0);
+    persistence.dispose();
+    queryClient.clear();
   });
 });

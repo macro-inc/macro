@@ -40,8 +40,14 @@ use macro_service_urls::{
     EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
 use mcp_auth_proxy::{
-    domain::service::McpAuthProxyServiceImpl,
-    outbound::{fusionauth::FusionAuthOAuthProvider, redis::RedisInflightAuth},
+    domain::{
+        redirect_uri::RedirectUriPolicy,
+        service::{McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
+    },
+    outbound::{
+        fusionauth::FusionAuthOAuthProvider,
+        redis::{RedisClientRegistry, RedisInflightAuth},
+    },
 };
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
@@ -53,7 +59,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use sync_service_client::SyncServiceClient;
 use tokio_util::task::TaskTracker;
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS};
 
 #[derive(Clone)]
 pub struct McpContext {
@@ -299,7 +305,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         (*entity_access_service).clone(),
         lexical_client_for_tools,
         sync_service_client.clone(),
-        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url),
+        ReqwestEditingWorkerClient::from_url(ai_editing_worker_url.clone()),
         config.document_permission_jwt.to_string(),
         ai_tools::build_message_service_with_side_effects(
             db.clone(),
@@ -424,10 +430,29 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         db.clone(),
     );
 
+    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+        db.clone(),
+        CalendarServiceUrl::new()?,
+        config.internal_api_key.to_string(),
+    );
+    let forms_tool_context = ai_tools::build_forms_tool_context(
+        db.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(side_effect_clients.connection_gateway.as_ref().clone()),
+        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        ai_tools::FormsToolConfig {
+            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: ai_editing_worker_url,
+        },
+    );
+
     let recorder =
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
 
     let tool_context = ToolServiceContext {
+        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
@@ -452,13 +477,16 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             db.clone(),
             config.environment,
         ),
-        calendar_tool_context: ai_tools::build_calendar_tool_context(
+        calendar_tool_context,
+        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(
             db.clone(),
-            CalendarServiceUrl::new()?,
-            config.internal_api_key.to_string(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
         ),
         notification_tool_context,
         databases_tool_context,
+        forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
@@ -544,10 +572,29 @@ async fn build_auth_proxy(
         .context("failed to initialize MCP auth provider")?;
     let redis_client = redis::Client::open(config.redis_url.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
+    let client_registry = Arc::new(RedisClientRegistry::new(redis_client.clone()));
 
-    Ok(McpAuthProxyServiceImpl::new(
-        mcp_public_url,
-        Arc::new(RedisInflightAuth::new(redis_client)),
-        Arc::new(auth_provider),
-    ))
+    let redirect_uri_policy = build_redirect_uri_policy(config);
+    tracing::info!(
+        allowed_https_redirect_hosts = ?redirect_uri_policy.allowed_https_hosts().collect::<Vec<_>>(),
+        "initialized MCP OAuth redirect URI policy"
+    );
+
+    Ok(McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
+        public_url: mcp_public_url,
+        redirect_uri_policy,
+        inflight_auth: Arc::new(RedisInflightAuth::new(redis_client)),
+        client_registrations: client_registry.clone(),
+        refresh_token_bindings: client_registry,
+        oauth_provider: Arc::new(auth_provider),
+    }))
+}
+
+/// Builds the redirect URI policy the broker enforces at registration and at
+/// authorize, from the configured host list or the built-in default.
+fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
+    match config.mcp_allowed_redirect_hosts.value() {
+        Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
+        None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
+    }
 }

@@ -104,6 +104,7 @@ async fn with_model_access<Engine: TurnEngine, Out>(
         turn_lock: tokio::sync::Mutex::new(()),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
         enable_dev_commands: true,
@@ -959,6 +960,7 @@ async fn serve_with_mcp(
         enable_dev_commands: false,
         mcp,
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -984,6 +986,83 @@ async fn serve_with_mcp(
         .await
         .expect("initialize and session/new should succeed");
     (connection, session, abort)
+}
+
+#[derive(Default)]
+struct RefreshingConnector {
+    connected: AtomicBool,
+    fail: AtomicBool,
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<RefreshingConnector> {
+    async fn refresh(
+        &self,
+        _: AgentSessionId,
+        advertised: Vec<AcpMcpServer>,
+    ) -> anyhow::Result<Option<Vec<AcpMcpServer>>> {
+        anyhow::ensure!(!self.fail.load(Ordering::SeqCst), "refresh failed");
+        assert!(
+            !advertised.is_empty(),
+            "retain the attached session credential"
+        );
+        let servers = if self.connected.load(Ordering::SeqCst) {
+            vec![AcpMcpServer::Http(
+                agent_client_protocol::schema::v1::McpServerHttp::new(
+                    "notion",
+                    "https://egress.test/mcp/notion",
+                ),
+            )]
+        } else {
+            vec![]
+        };
+        Ok(Some(servers))
+    }
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+#[tokio::test]
+async fn each_turn_refreshes_newly_connected_apps_without_recreating_the_session() {
+    let connector = Arc::new(RefreshingConnector::default());
+    let state = Arc::new(AgentState {
+        session_id: AgentSessionId::new(),
+        owner: model_owner::Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap()),
+        engine: Arc::new(ScriptedEngine::new(vec![])),
+        admission: Arc::new(DisabledAiAdmissionService),
+        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
+        store: Arc::new(SessionStore::new()),
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
+        mcp: Arc::new(connector.clone()),
+        mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
+        mcp_connect: std::sync::Mutex::new(None),
+        client_renders_forms: AtomicBool::new(false),
+    });
+    state.start_connect_mcp(test_mcp_servers());
+    state.mcp_tools_for_turn().await.unwrap();
+    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
+    connector.connected.store(true, Ordering::SeqCst);
+    state.mcp_tools_for_turn().await.unwrap();
+    assert_eq!(
+        connector.asked.lock().unwrap().last().unwrap(),
+        &vec!["notion".to_string()]
+    );
+    connector.connected.store(false, Ordering::SeqCst);
+    state.mcp_tools_for_turn().await.unwrap();
+    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
+    connector.fail.store(true, Ordering::SeqCst);
+    assert!(state.mcp_tools_for_turn().await.is_err());
 }
 
 /// The servers `session/new` carries are dialed in the background, minus
@@ -1015,6 +1094,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1104,6 +1184,7 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&connector)),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1208,6 +1289,7 @@ where
         client_renders_forms: AtomicBool::new(false),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         enable_dev_commands,
     });

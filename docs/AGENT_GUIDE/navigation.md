@@ -108,6 +108,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
@@ -431,6 +432,33 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+On desktop, the rail **Create** button, **C**, and the command menu’s **Create**
+entry open the detailed launcher at standard dialog width. Selecting **Create**
+closes the command menu and hands focus to the launcher; individual creation
+commands remain searchable in the command menu. The left list starts with up to three **Recents** from
+actual launcher usage, followed by the remaining choices grouped by category.
+Recent items do not repeat in their categories. With no history, the list starts
+with categories. Hover or keyboard navigation updates the right detail panel;
+click a row or press Enter to start that creation flow. The detail panel is
+top-aligned, shares the list background, and is separated by a vertical divider.
+
+The **Search mode** toggle (or **/**) switches between direct entity shortcuts
+shown beside each choice and the standard create search input. The preference
+persists across opens. Search filters both Recents and categories. Up/Down moves
+through the displayed order and scrolls the selected row into view; Left/Right
+edits the search input. Enter creates the selected item, Shift+Enter opens it in a
+new split where supported, and Escape closes the launcher. Typing in search mode
+never runs an entity shortcut. Switching modes preserves selection and dimensions.
+
+The detailed layout replaces the old desktop launcher, including the onboarding
+Create lesson. The PostHog flag `enable-carousel-create-menu` opts into the
+carousel instead; when off, unknown, or loading, the detailed layout is used.
+For local testing, set `VITE_ENABLE_CAROUSEL_CREATE_MENU=true` (or `false` to force
+the detailed layout). The carousel shares creation actions, recents ordering,
+search mode, and shortcuts; Left/Right also navigates its cards outside search.
+The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
+without creating data. Mobile continues to use its create sheet.
+
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
@@ -463,10 +491,8 @@ directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
 
-Fresh mobile CRM visits default to list view, including when
-applying a default saved view; explicitly selected saved views and back/forward
-navigation retain their layout. The mobile **+ Company** button opens the
-company-creation sheet.
+CRM Companies and People are list-only on every device. The mobile
+**+ Company** button opens the company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
@@ -786,6 +812,13 @@ Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).
 Use the item menu to delete an item from Home.
 
+Home and Agents unsent composer storage follows the current account identity.
+Before identity is available, it uses memory only and does not restore legacy
+shared drafts or attachment projections. Logout
+clears composer drafts and attachment projections, including legacy keys. When
+checking Android draft recovery, verify the actual editor text after process
+death; storage unit tests alone do not establish lifecycle recovery.
+
 `C A` (Create → Agent) opens the Agents new-conversation page and focuses its
 message input; `C Shift+A` requests a new split. It does not open a modal or
 create a session before the user sends. Repeating it focuses the existing draft.
@@ -858,3 +891,12 @@ retry errors inline. See [Email reminders](reminders.md).
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+
+### Native update-required dialog
+
+When newer frontend JS requires a newer native app, the mobile shell offers
+**Update app** and **OK**. Update app uses the native opener; Android targets the
+HTTPS Play listing for `com.macro.app.prod`, allowing a browser when the Store app
+is absent. An opener failure displays an inline error and the dialog stays
+dismissible. A missing listing is handled in the external store/browser: return
+to Macro, dismiss, and retry later. Task 07 verifies the live listing.

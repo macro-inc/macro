@@ -111,3 +111,13 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
         app_slug: &str,
     ) -> impl Future<Output = anyhow::Result<Option<CatalogEntry>>> + Send;
 }
+
+/// Read an app's advertised capabilities without invoking any of its tools.
+pub trait ConnectorCapabilities: Send + Sync + 'static {
+    /// List tools, including for apps this user has not connected yet.
+    fn tools(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<super::service::discovery::ConnectorTool>>> + Send;
+}

@@ -18,6 +18,7 @@ interface EntityIconProps {
   suppressClick?: boolean;
   showTooltip?: boolean;
   weight?: CoreEntityIconProps['weight'];
+  theme?: CoreEntityIconProps['theme'];
 }
 
 function DirectMessageIcon(props: {
@@ -86,6 +87,7 @@ export function EntityIcon(props: EntityIconProps) {
           size="fill"
           class={props.class}
           weight={props.weight}
+          theme={props.theme}
         />
       }
     >
@@ -109,6 +111,7 @@ export function EntityIcon(props: EntityIconProps) {
                 size="fill"
                 class={props.class}
                 weight={props.weight}
+                theme={props.theme}
               />
             }
           />

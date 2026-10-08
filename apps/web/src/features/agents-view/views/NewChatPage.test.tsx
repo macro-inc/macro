@@ -9,7 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentKind } from '../core/agent-kind';
 import {
@@ -22,8 +22,10 @@ import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
+  userId: () => 'user' as string | undefined,
   touch: false,
   freePlan: false,
+  modelsPending: false,
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -43,7 +45,9 @@ vi.mock('@channel/Input', async () => ({
   ...(await import('../../channel/Input/attachment-tracker')),
   uploadInputAttachments: vi.fn(),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => mocks.userId(),
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
@@ -118,10 +122,10 @@ vi.mock('@queries/agents/models', () => ({
     enabled: () => boolean
   ) => ({
     get isSuccess() {
-      return enabled();
+      return enabled() && !mocks.modelsPending;
     },
     get isPending() {
-      return false;
+      return mocks.modelsPending;
     },
     get isError() {
       return false;
@@ -176,6 +180,7 @@ type ComposerProps = {
   drawer: JSX.Element;
   drawerOpen: boolean;
   draft: string;
+  attachments: InputAttachmentData[];
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
@@ -183,6 +188,9 @@ vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
     <>
       {props.selector}
+      <output data-testid="attachments">
+        {props.attachments.map((a) => a.name).join(',')}
+      </output>
       <div data-testid="drawer" hidden={!props.drawerOpen}>
         {props.drawer}
       </div>
@@ -207,6 +215,7 @@ vi.mock('../components/ChatComposer', () => ({
 
 beforeEach(() => {
   localStorage.clear();
+  mocks.userId = () => 'user';
 });
 
 function page(
@@ -275,6 +284,7 @@ describe('agent-led new conversation', () => {
   beforeEach(() => {
     mocks.capabilitiesPending = false;
     mocks.freePlan = false;
+    mocks.modelsPending = false;
     mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
@@ -372,6 +382,18 @@ describe('agent-led new conversation', () => {
       botId: undefined,
       repoUrl: undefined,
       modelOverride: 'chat-default',
+    });
+  });
+  it('flags a send before the model catalog loads as a model fallback', () => {
+    mocks.modelsPending = true;
+    const send = page();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
+      prompt: 'Prompt',
+      botId: undefined,
+      repoUrl: undefined,
+      modelFallback: true,
     });
   });
   it('selects a coding agent, keeps the draft, and only sends the repository to coding agents', async () => {
@@ -962,20 +984,84 @@ it('retains uploaded attachments until first delivery is accepted', () => {
     },
   ];
   localStorage.setItem(
-    NEW_CONVERSATION_ATTACHMENTS_KEY,
+    `${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`,
     JSON.stringify(mocks.attachments)
   );
   const start = page();
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(
-    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
   ).toEqual(mocks.attachments);
   start.mock.calls[0][0].onFailure();
   expect(
-    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
   ).toEqual(mocks.attachments);
   start.mock.calls[0][0].onDelivered();
   expect(
-    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+    JSON.parse(
+      localStorage.getItem(`${NEW_CONVERSATION_ATTACHMENTS_KEY}:user`)!
+    )
   ).toEqual([]);
+});
+
+it('isolates drafts and attachment projections as identity arrives and changes', () => {
+  const [identity, setIdentity] = createSignal<string>();
+  mocks.userId = identity;
+  const base = 'attachment-tracker-agents-new-conversation-persist-v0';
+  const attachment = { id: 'private', name: 'alice-only.txt', kind: 'file' };
+  localStorage.setItem(`${base}:`, JSON.stringify([attachment]));
+  localStorage.setItem(`${base}:alice`, JSON.stringify([attachment]));
+  page();
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'anonymous' },
+  });
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('alice-only.txt');
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'Alice private' },
+  });
+  setIdentity('bob');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+  expect(screen.getByTestId('attachments').textContent).toBe('');
+  setIdentity('alice');
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe(
+    'Alice private'
+  );
+});
+
+it('does not restore a failed first prompt into another account', () => {
+  const [identity, setIdentity] = createSignal<string | undefined>('alice');
+  mocks.userId = identity;
+  mocks.attachments = [];
+  const start = page();
+  fireEvent.input(screen.getByLabelText('Draft'), {
+    target: { value: 'Alice prompt' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  setIdentity('bob');
+  start.mock.calls[0][0].onFailure();
+  expect((screen.getByLabelText('Draft') as HTMLInputElement).value).toBe('');
+});
+
+it('clears delivered attachments after switching away and back to the submitting account', () => {
+  const [identity, setIdentity] = createSignal<string | undefined>('alice');
+  mocks.userId = identity;
+  mocks.attachments = [{ id: 'sent-file', name: 'sent.txt', kind: 'document' }];
+  localStorage.setItem(
+    `${NEW_CONVERSATION_ATTACHMENTS_KEY}:alice`,
+    JSON.stringify(mocks.attachments)
+  );
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  setIdentity('bob');
+  setIdentity('alice');
+  expect(screen.getByTestId('attachments').textContent).toBe('sent.txt');
+  start.mock.calls[0][0].onDelivered();
+  expect(screen.getByTestId('attachments').textContent).toBe('');
 });

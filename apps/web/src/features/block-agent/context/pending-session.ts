@@ -28,6 +28,7 @@ import {
   type PromptSubmitSurface,
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
+import { markSessionCreated } from '@core/agent-session/recently-created';
 import {
   replenishWarmAgentSession,
   takeWarmAgentSession,
@@ -89,6 +90,8 @@ export type StartPendingSessionOptions = {
   submitSurface?: PromptSubmitSurface;
   /** Model to run on instead of the persona's, set as the session is created. */
   modelOverride?: string;
+  /** The composer's model catalog was still loading, so the persona default runs. */
+  modelFallback?: boolean;
   /**
    * Context the surface opening the session gives the agent: its runtime reads it as
    * instructions, so neither the composer nor the sent prompt shows it.
@@ -120,7 +123,7 @@ export type StartPendingSessionOptions = {
 export function startPendingSession(
   options: StartPendingSessionOptions = {}
 ): string {
-  const warmId = takeWarmAgentSession(options);
+  const { id: warmId, claim: warmClaim } = takeWarmAgentSession(options);
   const id = warmId ?? uuidv7();
   const prompt = options.prompt?.trim() ?? '';
   // Started before the create so the whole wait up to the first output,
@@ -130,6 +133,12 @@ export function startPendingSession(
       ? new PromptTrace(id, {
           newSession: true,
           submitSurface: options.submitSurface,
+          create: {
+            warmClaim,
+            modelOverride: options.modelOverride !== undefined,
+            modelFallback: options.modelFallback ?? false,
+            effort: options.effortOverride?.value,
+          },
         })
       : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
@@ -197,6 +206,11 @@ export function startPendingSession(
         trace?.stage('created');
         // Normally the id this tab minted; an older service may mint its own.
         const created = result.value.session.id;
+        // Before anything acquires it: `AgentSession`'s constructor reads the
+        // session row at once, and that read can arrive before the create's
+        // writes are readable. Marked first, a refusal to that read is waited
+        // out rather than reported as a session that is not ours.
+        markSessionCreated(created);
         // A warm claim releases its server reservation before creation answers.
         replenishWarmAgentSession(result.value.session.ownerId);
         void refetchSoupEntity(created, 'agentSession', { created: true });

@@ -5,10 +5,6 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from '@components/app/split-layout/components/SplitToolbar';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -102,6 +98,43 @@ export function TopBar(props: {
             </Show>
           }
         />
+        <Show when={props.detail}>
+          {(detail) => (
+            <>
+              <DatabasePageActions
+                detail={detail()}
+                table={props.activeTable}
+                onRename={() => editTitle?.()}
+                onDelete={props.onDelete}
+                onImported={props.onSelectTable}
+              />
+              <div class="ml-2 min-w-0 max-w-xl shrink">
+                <TableTabs
+                  databaseId={databaseId}
+                  tables={detail().tables}
+                  activeTableId={props.activeTable?.table.id}
+                  canEdit={props.canEdit}
+                  onSelect={props.onSelectTable}
+                  menuItems={
+                    formsFlag().enabled && props.activeTable
+                      ? () => (
+                          <Suspense>
+                            <DatabaseFormsEntry
+                              databaseId={databaseId}
+                              tableId={props.activeTable?.table.id}
+                              tableName={props.activeTable?.table.name}
+                              canCreate={props.detail?.grant === 'owner'}
+                              enabled
+                            />
+                          </Suspense>
+                        )
+                      : undefined
+                  }
+                />
+              </div>
+            </>
+          )}
+        </Show>
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />
@@ -111,51 +144,20 @@ export function TopBar(props: {
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <Show when={props.detail}>
-        {(detail) => (
-          <>
-            <SplitToolbarLeft class="min-w-0">
-              <TableTabs
-                databaseId={databaseId}
-                tables={detail().tables}
-                activeTableId={props.activeTable?.table.id}
-                canEdit={props.canEdit}
-                onSelect={props.onSelectTable}
-              />
-              <Show when={formsFlag().enabled}>
-                <Suspense>
-                  <DatabaseFormsEntry
-                    databaseId={databaseId}
-                    tableId={props.activeTable?.table.id}
-                    tableName={props.activeTable?.table.name}
-                    canCreate={props.detail?.grant === 'owner'}
-                    enabled
-                  />
-                </Suspense>
-              </Show>
-            </SplitToolbarLeft>
-            <SplitToolbarRight>
-              <DatabasePageActions
-                detail={detail()}
-                table={props.activeTable}
-                onRename={() => editTitle?.()}
-                onDelete={props.onDelete}
-                onImported={props.onSelectTable}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                class="gap-1.5 px-2 text-xs"
-                disabled={props.openingChat}
-                aria-label="Database AI"
-                aria-busy={props.openingChat}
-                onClick={props.onOpenChat}
-              >
-                <SparkleIcon class="size-4" />
-                <span>AI</span>
-              </Button>
-            </SplitToolbarRight>
-          </>
-        )}
+        <SplitHeaderRight>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="gap-1.5 px-2 text-xs"
+            disabled={props.openingChat}
+            aria-label="Database AI"
+            aria-busy={props.openingChat}
+            onClick={props.onOpenChat}
+          >
+            <SparkleIcon class="size-4" />
+            <span>AI</span>
+          </Button>
+        </SplitHeaderRight>
       </Show>
     </>
   );

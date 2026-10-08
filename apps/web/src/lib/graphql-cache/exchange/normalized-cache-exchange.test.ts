@@ -2489,6 +2489,28 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(1);
     });
 
+    it('hands calendar events it cannot predict to the queue', async () => {
+      const enqueue = vi.spyOn(host, 'enqueueOptimisticMutation');
+      const { client } = harness(host);
+      await executeOptimisticMutation(
+        client,
+        MUTATION,
+        { input: {} },
+        optimistic,
+        {
+          uuid: crypto.randomUUID(),
+          uncertainCalendarEventKeys: ['GraphqlCalendarEvent:event-1'],
+        }
+      ).toPromise();
+      await tick();
+      expect(enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uncertainCalendarEventKeys: ['GraphqlCalendarEvent:event-1'],
+        }),
+        expect.anything()
+      );
+    });
+
     it.each([false, true])(
       'rolls back rejected favorites rather than committing list patches (replay=%s)',
       async (replay) => {

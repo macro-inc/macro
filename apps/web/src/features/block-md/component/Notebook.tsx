@@ -39,8 +39,10 @@ import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
+  MARKDOWN_OUTLINE_INSET,
   MARKDOWN_OUTLINE_WIDTH,
   MarkdownOutline,
+  outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
@@ -64,9 +66,6 @@ const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;
 const GapTargetWidth = 24;
 const MinimizedCommentTargetWidth = 48;
-const OutlineEdgeInset = 16;
-const OutlineMinWidth =
-  NoteTargetWidth + 2 * (MARKDOWN_OUTLINE_WIDTH + OutlineEdgeInset);
 
 enum CommentLayoutMode {
   lg = 'lg',
@@ -115,11 +114,12 @@ export function Notebook(props: {
 
   const [width, setWidth] = createSignal<number>();
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const [contentInset, setContentInset] = createSignal(0);
   const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
   const outline = useMarkdownOutline({
     editor: () => md.editor,
-    enabled: () => (width() ?? 0) >= OutlineMinWidth && !isMobile(),
+    enabled: () => outlineFitsGutter(contentInset()) && !isMobile(),
   });
 
   const hasComment = createMemo(() => {
@@ -187,13 +187,17 @@ export function Notebook(props: {
     const observeCallback = () => {
       const { width, left } = notebookRef.getBoundingClientRect();
       setWidth(width);
-      const leftFloat =
-        contentRef.getBoundingClientRect().right - left + GapTargetWidth;
-      setLeftFloatX(leftFloat);
+      const content = contentRef.getBoundingClientRect();
+      setContentInset(content.left - left);
+      setLeftFloatX(content.right - left + GapTargetWidth);
     };
     const { observe } = makeResizeObserver(observeCallback);
     observeCallback();
     observe(notebookRef);
+    // A comment layout change resizes the text column without resizing the
+    // notebook, and it is the column's own geometry the outline is placed
+    // against.
+    observe(contentRef);
   });
 
   createEffect(() => {
@@ -331,7 +335,7 @@ export function Notebook(props: {
         <div
           class="pointer-events-none absolute inset-y-0 z-1"
           style={{
-            left: `${OutlineEdgeInset}px`,
+            left: `${MARKDOWN_OUTLINE_INSET}px`,
             width: `${MARKDOWN_OUTLINE_WIDTH}px`,
           }}
         >

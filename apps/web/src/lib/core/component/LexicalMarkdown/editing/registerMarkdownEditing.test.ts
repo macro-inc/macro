@@ -58,6 +58,12 @@ vi.mock('../plugins/checkbox-to-task', () => ({
   CONVERT_CHECKBOXES_TO_TASKS: 'convert',
   checkboxToTaskPlugin: factory('checkboxToTask'),
 }));
+vi.mock('../plugins/checklist-controls', () => ({
+  createChecklistControls: () => ({
+    data: {},
+    plugin: factory('checklistControls')(),
+  }),
+}));
 vi.mock('../plugins/code/codePlugin', () => ({ codePlugin: factory('code') }));
 vi.mock('../plugins/emojis/emojisPlugin', () => ({
   emojisPlugin: factory('emojis'),
@@ -171,6 +177,7 @@ describe('registerMarkdownEditing', () => {
       'diff',
       'generate',
       'code',
+      'checklistControls',
       'listToTable',
     ]);
   });
@@ -184,6 +191,7 @@ describe('registerMarkdownEditing', () => {
       'await',
       'peerId',
       'code',
+      'checklistControls',
       'listToTable',
     ]);
   });

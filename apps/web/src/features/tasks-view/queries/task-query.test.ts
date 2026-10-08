@@ -53,3 +53,25 @@ describe('task reference scope', () => {
     ]);
   });
 });
+
+it('uses the initiative Project property for board columns without changing legacy list grouping', () => {
+  const boardQuery = buildTaskQuery({
+    ...options,
+    groupBy: 'project',
+    board: true,
+  });
+  const listQuery = buildTaskQuery({ ...options, groupBy: 'project' });
+  const sortedBoardQuery = buildTaskQuery({ ...options, board: true });
+
+  expect(boardQuery.groupBy).toEqual({
+    type: 'property',
+    propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+  });
+  expect(listQuery.groupBy).toEqual({
+    type: 'project',
+  });
+  expect(sortedBoardQuery.params).toMatchObject({
+    sort_method: 'updated_at',
+    sort_direction: 'asc',
+  });
+});

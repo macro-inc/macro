@@ -1334,9 +1334,11 @@ describe('createWorkerCacheHost', () => {
       },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
+    const transportError = new Error('coordinator MessagePort messageerror');
     const mutationRejected = expect(mutation).rejects.toMatchObject({
       message: expect.stringContaining('coordinator MessagePort messageerror'),
       errorCode: 'admitted-enqueue-uncertain',
+      cause: transportError,
     });
     await vi.waitFor(() =>
       expect(
@@ -1346,7 +1348,7 @@ describe('createWorkerCacheHost', () => {
       ).toHaveLength(1)
     );
 
-    adapter.terminalError(new Error('coordinator MessagePort messageerror'));
+    adapter.terminalError(transportError);
     await mutationRejected;
     adapter.terminalError(new Error('duplicate terminal callback'));
     adapter.replace(2);
@@ -2027,6 +2029,7 @@ describe('createWorkerCacheHost', () => {
     );
     const rejected = expect(mutation).rejects.toMatchObject({
       errorCode: 'admitted-enqueue-uncertain',
+      cause: expect.any(CacheNavigationError),
     });
     await vi.waitFor(() =>
       expect(old.requests.at(-1)?.kind).toBe('enqueue-optimistic-mutation')
@@ -2061,6 +2064,7 @@ describe('createWorkerCacheHost', () => {
     const rejected = expect(mutation).rejects.toMatchObject({
       message: expect.stringContaining('disposed for page navigation'),
       errorCode: 'admitted-enqueue-uncertain',
+      cause: expect.any(CacheNavigationError),
     });
     await vi.waitFor(() =>
       expect(

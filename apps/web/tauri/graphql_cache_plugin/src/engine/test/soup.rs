@@ -40,7 +40,7 @@ fn row(n: u16) -> Value {
         "__typename": "GraphqlSoupEmailThread", "id": id(n), "name": format!("Mail {n}"),
         "ownerId": VIEWER, "linkId": id(1000), "isRead": n.is_multiple_of(4),
         "inboxVisible": n.is_multiple_of(2), "isSignal": n.is_multiple_of(3), "isFavorited": false,
-        "cacheProjection": capsule, "latestInboundMessageTs": TIMESTAMP, "updatedAt": TIMESTAMP, "properties": [],
+        "cacheProjection": capsule, "latestInboundMessageTs": TIMESTAMP, "reminderReturnedAt": null, "updatedAt": TIMESTAMP, "properties": [],
         "mailAllPreview": preview(n, 1000),
         "mailDraftPreview": n.is_multiple_of(3).then(|| preview(n, 2000)),
         "mailSentPreview": n.is_multiple_of(4).then(|| preview(n, 3000)),
@@ -62,7 +62,7 @@ fn filters() -> Value {
         "calendarEventFilter": {"literal": {"id": nil}},
         "channelFilter": {"literal": {"channelId": nil}},
         "channelThreadFilter": {"literal": {"channelId": nil}},
-        "reminderFilter": {"literal": {"id": nil}},
+        "crmContactFilter": {"literal": {"id": nil}},
         "agentSessionFilter": {"literal": {"id": nil}},
         "callFilter": {"literal": {"callId": nil}},
         "crmCompanyFilter": {"literal": {"id": nil}},
@@ -414,7 +414,7 @@ fn native_mail_confinement_never_admits_nonempty_deferred_partitions() {
     let handle = spawn_handle();
     hydrate(&handle);
     for (partition, id_field) in [
-        ("reminderFilter", "id"),
+        ("crmContactFilter", "id"),
         ("agentSessionFilter", "id"),
         ("channelThreadFilter", "channelId"),
     ] {

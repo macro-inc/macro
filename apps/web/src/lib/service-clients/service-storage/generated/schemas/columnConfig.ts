@@ -5,8 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ColumnConfigOneOf } from './columnConfigOneOf';
+import type { ColumnConfigOneOfThree } from './columnConfigOneOfThree';
 
 /**
  * Column-kind specific configuration stored on the placement.
  */
-export type ColumnConfig = ColumnConfigOneOf;
+export type ColumnConfig = ColumnConfigOneOf | ColumnConfigOneOfThree;

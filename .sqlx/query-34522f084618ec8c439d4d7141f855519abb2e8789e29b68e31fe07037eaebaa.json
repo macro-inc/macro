@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET snapshot_normalization_version=1 WHERE account_id IN (SELECT id FROM calendar_accounts WHERE owner_id=ANY($1::text[]))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "34522f084618ec8c439d4d7141f855519abb2e8789e29b68e31fe07037eaebaa"
+}

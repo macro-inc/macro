@@ -1,3 +1,4 @@
+import type { Formula } from '@core/database-sql/generated/types';
 import type { DataType } from '@service-storage/generated/schemas/dataType';
 import type { DatabaseEntityType } from './column-inference';
 import { relatedRowIds } from './database-relations';
@@ -30,6 +31,8 @@ export type DatabaseViewColumn = {
   protections?: ('delete' | 'change_type')[];
   /** The column's definition is used beyond this database, so its options change everywhere. */
   sharedOutsideDatabase?: boolean;
+  /** A derived column's formula: its cells are computed, and nothing writes them. */
+  formula?: Formula;
   /** A relationship points to rows in a table, independently of the property's scalar type. */
   relation?: {
     databaseId: string;

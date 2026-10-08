@@ -40,7 +40,7 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadSnapshot = {
     /**
-     * Whether reloads will fire: overage is on and reloads are not suspended.
+     * Whether reloads will fire: the payer opted in and reloads are not suspended.
      */
     active: boolean;
     /**
@@ -300,27 +300,6 @@ export type CreateTeamRequest = {
      * The name of the team
      */
     name: string;
-};
-
-/**
- * The request body to create a new user in fusionauth
- * NOTE: Never derive debug here as we don't want to accidentally log the password
- */
-export type CreateUserRequest = {
-    /**
-     * The primary email address of the user.
-     * This will be the user's root "profile".
-     */
-    email: string;
-    /**
-     * The password for the user.
-     * TODO: configure password policy and validate password before attempting to create user
-     */
-    password: string;
-    /**
-     * The unique username for the user.
-     */
-    username: string;
 };
 
 /**
@@ -1568,8 +1547,7 @@ export type ToggleNonAdminInvitesResponse = {
  */
 export type UpdateAutoReloadRequest = {
     /**
-     * Reload credits automatically, billing usage past allowance and
-     * credits to the payer's card. Turning this off also turns off overage.
+     * Purchase prepaid credits automatically using the payer's card.
      */
     enabled: boolean;
     /**
@@ -1578,9 +1556,7 @@ export type UpdateAutoReloadRequest = {
     minimumBalanceCents: number;
     /**
      * Most to reload per calendar month, cents. Omit or `null` for no limit.
-     * Also serves as the per-period overage cap, so it must be at least the
-     * catalog's `overage_limit_min_cents`; larger values are capped at
-     * `overage_limit_max_cents`.
+     * Must be at least the catalog's `overage_limit_min_cents` (legacy name).
      */
     monthlySpendLimitCents?: number | null;
     /**
@@ -1610,7 +1586,7 @@ export type UpdateOverageRequest = {
  */
 export type UsageSnapshot = {
     /**
-     * Automatic credit reload settings. `active` means overage is on and
+     * Automatic credit reload settings. `active` means the payer opted in and
      * reloads are not suspended.
      */
     auto_reload: AutoReloadSnapshot;
@@ -1636,7 +1612,7 @@ export type UsageSnapshot = {
      */
     overage_charged_cents: number;
     /**
-     * Whether overage billing is on.
+     * Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
      */
     overage_enabled: boolean;
     /**
@@ -3402,27 +3378,6 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
-
-export type CreateUserData = {
-    body: CreateUserRequest;
-    path?: never;
-    query?: never;
-    url: '/user';
-};
-
-export type CreateUserErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
-
-export type CreateUserResponses = {
-    200: EmptyResponse;
-};
-
-export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;

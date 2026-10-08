@@ -4,16 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { ColumnChangeOneOfOnefourKind } from './columnChangeOneOfOnefourKind';
+import type { Formula } from './formula';
 
 /**
- * Remove one option of a select or tag column, and take it out of every
-cell holding it: a single-valued cell is emptied, a multi-valued one
-keeps its other options. Like [`ColumnChange::UpdateOption`], an
-option of a shared property goes everywhere it is used.
+ * Give a derived column a new formula. Its cells follow at once: it
+stores none.
  */
 export type ColumnChangeOneOfOnefour = {
+  /** The formula, over the table's other columns. */
+  formula: Formula;
   kind: ColumnChangeOneOfOnefourKind;
-  /** The option. */
-  option: string;
 };

@@ -1,5 +1,7 @@
 use super::*;
 
+mod points;
+
 #[test]
 fn calendar_access_role_is_reflected_on_mapped_events() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
@@ -24,6 +26,7 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
     };
 
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("reader".to_owned()),
         owner_id: "macro|readonly@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -35,6 +38,11 @@ fn calendar_access_role_is_reflected_on_mapped_events() {
     let upsert = map_upsert(&target, master, Vec::new(), Vec::new()).unwrap();
 
     assert!(upsert.event.is_read_only);
+    let CalendarEventSource::Google(source) = &upsert.source;
+    assert_eq!(source.observed_access_role.as_deref(), Some("reader"));
+    assert_eq!(source.account_id, target.account_id);
+    assert_eq!(source.calendar_id, target.calendar_id);
+    assert_eq!(source.email_link_id, target.email_link_id);
 }
 
 #[test]
@@ -50,6 +58,7 @@ fn event_type_is_mapped_with_an_unknown_fallback() {
         end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|office@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -114,6 +123,7 @@ fn creator_is_mapped_separately_from_the_organizer() {
         end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|jackson@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -172,6 +182,7 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|recurring@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -181,8 +192,46 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
         range,
     };
 
-    let upsert = map_upsert(&target, master, Vec::new(), vec![malformed_instance]).unwrap();
-    assert!(upsert.occurrences.is_empty());
+    assert!(
+        map_upsert(
+            &target,
+            master.clone(),
+            Vec::new(),
+            vec![malformed_instance.clone()]
+        )
+        .is_err()
+    );
+    assert!(
+        map_upsert(
+            &target,
+            master.clone(),
+            vec![malformed_instance.clone()],
+            Vec::new()
+        )
+        .is_err(),
+        "an invalid exception cannot disappear from a complete snapshot"
+    );
+
+    let mut invalid_interval = malformed_instance.clone();
+    invalid_interval.end = Some(GoogleEventDateTime {
+        date_time: Some("2026-07-24T13:00:00Z".to_owned()),
+        date: None,
+        time_zone: None,
+    });
+    assert!(map_upsert(&target, master.clone(), Vec::new(), vec![invalid_interval]).is_err());
+
+    let mut missing_identity = malformed_instance.clone();
+    missing_identity.end = master.end.clone();
+    missing_identity.original_start_time = None;
+    assert!(map_upsert(&target, master.clone(), Vec::new(), vec![missing_identity]).is_err());
+
+    let mut tombstone = malformed_instance;
+    tombstone.status = Some("cancelled".to_owned());
+    let upsert = map_upsert(&target, master, vec![tombstone.clone()], vec![tombstone]).unwrap();
+    assert!(
+        upsert.occurrences.is_empty(),
+        "cancelled tombstones need no end time"
+    );
 }
 
 /// Google's `instances` feed can return two entries that resolve to the same
@@ -235,6 +284,7 @@ fn duplicate_instances_collapse_to_one_live_occurrence() {
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|recurring@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -276,8 +326,8 @@ fn duplicate_instances_collapse_to_one_live_occurrence() {
     );
 }
 
-#[test]
-fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
+#[tokio::test]
+async fn malformed_master_rejects_snapshot_and_incremental_batch_until_repaired() {
     let valid: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "valid-provider-event",
         "iCalUID": "valid@example.com",
@@ -298,6 +348,7 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
         .unwrap()
         .with_timezone(&Utc);
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|quarantine@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -312,16 +363,37 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
         },
     };
 
-    let mapped = map_snapshot(&target, vec![valid, malformed], Vec::new());
+    assert!(map_snapshot(&target, vec![valid.clone(), malformed.clone()], Vec::new()).is_err());
+    let client = GoogleCalendarClient::new(Client::new());
+    let result = client
+        .apply_change_feed("unused", &target, vec![valid.clone(), malformed.clone()])
+        .await;
+    assert!(matches!(result, Err(error) if error.kind() == GoogleProviderErrorKind::Transient));
 
-    assert_eq!(mapped.upserts.len(), 1);
-    assert_eq!(
-        mapped.observed_provider_event_ids,
-        vec![
-            "malformed-provider-event".to_string(),
-            "valid-provider-event".to_string()
-        ]
+    let mut repaired = malformed;
+    repaired.end = valid.end.clone();
+    let mapped = map_snapshot(&target, vec![valid.clone(), repaired.clone()], Vec::new()).unwrap();
+    assert_eq!(mapped.upserts.len(), 2);
+
+    let mut orphan = valid.clone();
+    orphan.recurring_event_id = Some("unreturned-master".to_owned());
+    orphan.original_start_time = orphan.start.clone();
+    assert!(map_snapshot(&target, vec![orphan.clone()], Vec::new()).is_err());
+    orphan.start.as_mut().unwrap().date_time =
+        Some((target.range.ends_at + chrono::Duration::hours(1)).to_rfc3339());
+    orphan.end.as_mut().unwrap().date_time =
+        Some((target.range.ends_at + chrono::Duration::hours(2)).to_rfc3339());
+    let outside = map_snapshot(&target, vec![orphan], Vec::new()).unwrap();
+    assert!(
+        outside.upserts.is_empty(),
+        "an exception moved outside the window needs no in-window occurrence"
     );
+
+    let applied = client
+        .apply_change_feed("unused", &target, vec![valid, repaired])
+        .await
+        .unwrap();
+    assert_eq!(applied.upserts.len(), 2);
 }
 
 #[test]
@@ -752,7 +824,7 @@ fn occurrence_keys_parse_back_to_starts() {
 /// the decline onto the exception instance, so the exception's attendee list
 /// must survive mapping — it is the only record that the occurrence changed.
 #[test]
-fn exception_attendees_are_carried_onto_the_override() {
+fn exception_attendees_and_access_fields_are_carried_onto_the_override() {
     let master: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "provider-master",
         "iCalUID": "declined@example.com",
@@ -777,6 +849,8 @@ fn exception_attendees_are_carried_onto_the_override() {
         "start": {"dateTime": "2026-08-14T22:00:00Z", "timeZone": "UTC"},
         "end": {"dateTime": "2026-08-14T22:30:00Z", "timeZone": "UTC"},
         "status": "confirmed",
+        "visibility": "private",
+        "transparency": "transparent",
         "attendees": [
             {
                 "email": "self@example.com",
@@ -801,6 +875,7 @@ fn exception_attendees_are_carried_onto_the_override() {
         end_date: NaiveDate::from_ymd_opt(2026, 9, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|self@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -811,6 +886,15 @@ fn exception_attendees_are_carried_onto_the_override() {
     };
 
     let upsert = map_upsert(&target, master, vec![exception], Vec::new()).unwrap();
+
+    assert_eq!(
+        upsert.overrides[0].visibility,
+        Some(EventVisibility::Private)
+    );
+    assert_eq!(
+        upsert.overrides[0].transparency,
+        Some(EventTransparency::Transparent)
+    );
 
     // The series answer is unchanged: only the one occurrence declined.
     let series_self = upsert
@@ -952,6 +1036,7 @@ fn reminders_round_trip_between_google_and_the_domain() {
         end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
     };
     let target = GoogleCalendarTarget {
+        observed_access_role: Some("owner".to_owned()),
         owner_id: "macro|alarms@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -1433,6 +1518,7 @@ async fn keyed_create_recovers_lost_response_and_duplicate_conflict_without_seco
             api_base: endpoint,
         };
         let target = GoogleCalendarTarget {
+            observed_access_role: Some("owner".to_owned()),
             owner_id: "macro|test@example.test".into(),
             email_link_id: Uuid::now_v7(),
             account_id: Uuid::now_v7(),

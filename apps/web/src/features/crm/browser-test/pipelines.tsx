@@ -142,7 +142,7 @@ function Fixture() {
                     Editor={Editor}
                     Sharing={() => null}
                     onCopyLink={() => {}}
-                    onBack={() => setSelected(undefined)}
+                    onTrashed={() => setSelected(undefined)}
                   />
                 )}
               </Show>

@@ -12,6 +12,7 @@
 
 #![deny(missing_docs)]
 
+pub mod broker;
 pub mod domain;
 
 #[cfg(feature = "inbound")]

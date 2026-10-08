@@ -390,7 +390,7 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 /// A port rather than domain code because both halves are adapter work the
 /// domain has no business knowing: signing a JWT needs a key, and enumerating
 /// the owner's MCP servers needs their rows. What the domain keeps is *when* -
-/// once, at spawn, for the session's own owner.
+/// at spawn and native turn boundaries, for the session's own owner and policy.
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// Internal session tools at an address reachable by an external runtime.
     fn external_mcp_servers(

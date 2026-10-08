@@ -190,6 +190,15 @@ impl From<RecordedAction> for GraphqlActivityAction {
             }
             RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
+            RecordedAction::Known(
+                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown(GraphqlActivityUnknownAction {
+                    tag: tag.to_owned(),
+                    payload: payload.map(Json),
+                })
+            }
             RecordedAction::Unknown { tag, payload } => {
                 Self::Unknown(GraphqlActivityUnknownAction {
                     tag,

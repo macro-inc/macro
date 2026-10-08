@@ -11,7 +11,7 @@ spreadsheet, then choose **Import…**.
 The document title sits above a compact formatting ribbon. **Paste special** offers
 paste and values-only paste; **View options** toggles gridlines, the formula bar,
 and formula display. **Functions** inserts formulas, while **Format and data**
-contains sorting, whitespace trimming, fill, and clear actions. **Find and replace**
+contains sorting, whitespace trimming, Goal Seek, fill, and clear actions. **Find and replace**
 is a direct ribbon button. The footer's **Import and export** button also contains
 Excel and CSV downloads and stays visible beside horizontally scrolling sheet tabs.
 
@@ -137,7 +137,13 @@ the same sheet prefix. `spreadsheetSheetNames`, `spreadsheetSheetOrder`, and
 sheet keeps independent cells, formatting, and layout. Active tabs and remembered
 selections are local; presence includes a sheet ID and shows only on that sheet.
 
-Adding, renaming, duplicating, and deleting sheets participate in local undo.
+Dragging a tab with a mouse or pen moves its sheet; touch presses keep
+scrolling the tab strip, and every tab menu offers **Move left** and **Move
+right**. A move writes only the moved sheet's order, between its new neighbors,
+so collaborators moving other sheets at the same time keep both moves. Sheets
+whose orders tie are renumbered.
+
+Adding, renaming, duplicating, moving, and deleting sheets participate in local undo.
 Duplicate copies raw formulas, styles, and layout at the same coordinates.
 Deletion retains the sheet's CRDT data so undo can recover it and concurrent
 edits. The last visible sheet cannot be deleted locally; simultaneous deletes
@@ -320,6 +326,9 @@ compare formula, error, and formatting behavior before replacing it.
   dialog changes a chart's type, title, legend and data. Edited charts are
   exported as Macro writes them, without the part Excel saved. Ctrl+Alt+5
   selects a drawing from the grid and Tab moves between them.
+- **Format and data → Goal Seek…** finds the number that makes a formula cell
+  reach a typed value, then writes it when confirmed. The search runs on a copy
+  of the calculated workbook, so cancel leaves every cell as it was.
 - Filters, editing named ranges, automatic spill expansion, and drag
   auto-scroll remain future work.
 - CSV import writes a validated rectangle at the active cell, appending rows when
@@ -364,7 +373,12 @@ Import keeps what Excel calculates and shows:
   number, date, time and text-length rules that show an error alert: a stop alert
   rejects the entry, warnings and information accept it, and each shows the
   rule's message in the footer. List rules offer their values in a dropdown on the
-  active cell (Alt+Down). Input messages and notes show beside the active cell.
+  active cell (Alt+Down), and every cell they cover shows an arrow that opens it.
+  `components/DropdownDialog.tsx` (Format and data → Dropdown…, or the cell menu)
+  adds, edits and removes list rules on the selection through
+  `packages/spreadsheet/src/data-validation.ts`, which the AI `set_dropdown` and
+  `clear_validation` operations share: a new rule takes its range out of the rules
+  it overlaps, since a cell has one rule. Input messages and notes show beside the active cell.
   Inserting or deleting rows and columns moves rule ranges, rule formulas and
   notes.
 - Images and charts. `core/xlsx-drawings.ts` reads a sheet's drawing part

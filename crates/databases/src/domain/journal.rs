@@ -135,6 +135,9 @@ pub struct RestoredColumn {
     /// Whether this column permits absent values.
     #[serde(default = "super::models::column_nullable_default")]
     pub nullable: bool,
+    /// A derived column's formula.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula: Option<models_databases::Formula>,
 }
 
 /// A row a delete removed: its id and place.
@@ -192,6 +195,8 @@ pub enum ColumnChangeKind {
     Rename,
     /// Its type changed, and its cells with it.
     ChangeType,
+    /// Its formula changed.
+    SetFormula,
     /// It was removed.
     Delete,
     /// It gained options.
@@ -388,6 +393,8 @@ pub struct ColumnImage {
     pub kind: Option<ColumnKind>,
     /// Its options, in order.
     pub options: Vec<OptionImage>,
+    /// A derived column's formula.
+    pub formula: Option<models_databases::Formula>,
 }
 
 /// An option as the planner read it.

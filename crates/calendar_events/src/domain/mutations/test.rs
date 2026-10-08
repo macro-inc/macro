@@ -22,6 +22,7 @@ fn token_identity() -> CalendarLinkTokenIdentity {
 
 fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
     CalendarEventMutationTarget {
+        observed_access_role: Some(if is_read_only { "reader" } else { "owner" }.to_owned()),
         event_id: Uuid::now_v7(),
         is_read_only,
         provider_event_id: "instance-id".to_string(),
@@ -50,6 +51,7 @@ fn echo_attendee(email: &str, is_self: bool) -> CalendarAttendee {
 
 fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
     CalendarCreationTarget {
+        observed_access_role: Some(if is_read_only { "reader" } else { "owner" }.to_owned()),
         owner_id: "macro|self@example.com".to_string(),
         email_link_id: Uuid::now_v7(),
         account_id: Uuid::now_v7(),
@@ -103,6 +105,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             updated_at: Utc::now(),
         },
         source: CalendarEventSource::Google(GoogleEventSource {
+            observed_access_role: Some("owner".to_owned()),
             email_link_id: Uuid::now_v7(),
             account_id: Uuid::now_v7(),
             calendar_id: Uuid::now_v7(),
@@ -430,6 +433,7 @@ struct FakeProvider {
     rsvp_self_emails: Arc<Mutex<Vec<Vec<String>>>>,
     echo_attendees: Vec<CalendarAttendee>,
     echo_overrides: Vec<CalendarEventOverride>,
+    echo_time: Option<EventTime>,
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
     updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
 }
@@ -442,6 +446,7 @@ impl FakeProvider {
             rsvp_self_emails: Arc::new(Mutex::new(Vec::new())),
             echo_attendees: Vec::new(),
             echo_overrides: Vec::new(),
+            echo_time: None,
             created_drafts: Arc::new(Mutex::new(Vec::new())),
             updated_patches: Arc::new(Mutex::new(Vec::new())),
         }
@@ -451,6 +456,12 @@ impl FakeProvider {
         let mut upsert = echo_upsert(owner_id);
         upsert.event.attendees = self.echo_attendees.clone();
         upsert.overrides = self.echo_overrides.clone();
+        if let Some(time) = &self.echo_time {
+            upsert.event.time = time.clone();
+            for occurrence in &mut upsert.occurrences {
+                occurrence.time = time.clone();
+            }
+        }
         upsert
     }
 
@@ -1261,6 +1272,33 @@ async fn create_rejects_invalid_input_before_reaching_the_provider() {
         Err(CalendarMutationError::InvalidInput(_))
     ));
 
+    let point = EventTime::Timed {
+        starts_at,
+        ends_at: starts_at,
+        time_zone: None,
+    };
+    let mut point_draft = draft();
+    point_draft.time = point.clone();
+    assert!(matches!(
+        svc.create_event("macro|user", None, None, point_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(matches!(
+        svc.update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            CalendarEventPatch {
+                time: Some(point),
+                ..Default::default()
+            },
+            CalendarUpdateScope::All
+        )
+        .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+
     let mut bad_email = draft();
     bad_email.attendees[0].email = "not-an-email".to_string();
     assert!(matches!(
@@ -1403,6 +1441,51 @@ async fn create_out_of_office_rejects_all_day_spans_and_attendees() {
             .await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
+}
+
+#[tokio::test]
+async fn imported_point_accepts_metadata_and_rsvp_provider_echoes() {
+    let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let starts_at = Utc.with_ymd_and_hms(2026, 8, 6, 14, 0, 0).unwrap();
+    let point = EventTime::Timed {
+        starts_at,
+        ends_at: starts_at,
+        time_zone: Some("UTC".to_owned()),
+    };
+    provider.echo_time = Some(point.clone());
+    let repo = FakeRepo {
+        mutation_target: Some(mutation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let service = service(repo, provider, FakeTokens::ok());
+    service
+        .update_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            CalendarEventPatch {
+                title: Some("Renamed point".to_owned()),
+                ..CalendarEventPatch::default()
+            },
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+    service
+        .respond_to_event(
+            "macro|user",
+            Uuid::now_v7(),
+            None,
+            AttendeeResponseStatus::Accepted,
+            CalendarRsvpScope::All,
+            None,
+        )
+        .await
+        .unwrap();
+    let writes = upserts.lock().unwrap();
+    assert_eq!(writes.len(), 2);
+    assert!(writes.iter().all(|upsert| upsert.event.time == point));
 }
 
 #[tokio::test]
@@ -1655,6 +1738,8 @@ fn echo_override(
 ) -> CalendarEventOverride {
     let original_start = Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap();
     CalendarEventOverride {
+        visibility: None,
+        transparency: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: recurrence_id.to_string(),

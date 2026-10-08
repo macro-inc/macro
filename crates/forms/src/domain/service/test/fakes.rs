@@ -49,6 +49,8 @@ pub(crate) struct World {
     pub(crate) draft_states: HashMap<FormId, crate::domain::drafts::LayoutDraftState>,
     pub(crate) retired_drafts: Vec<FormId>,
     pub(crate) fail_drafts: bool,
+    /// A human CRDT update landing between validation and the next conditional write.
+    pub(crate) draft_update_before_next_write: Option<Vec<u8>>,
     /// Owner grants the repository wrote with each new form.
     pub(crate) owner_grants: Vec<(FormId, String)>,
     pub(crate) ledger: Vec<LedgerEntry>,
@@ -82,6 +84,7 @@ pub(crate) struct World {
     /// A grid change that commits just before the next cell read.
     pub(crate) grid_change_before_next_cell_read: Option<GridChange>,
     /// Refuse the next batch with this error.
+    pub(crate) adopt_new_database_before_next_batch: bool,
     pub(crate) refuse_next_batch: Option<::databases::domain::models::DatabaseError>,
     /// Every database rename the service asked for, refused ones included.
     pub(crate) database_renames: Vec<RecordedDatabaseRename>,
@@ -105,6 +108,7 @@ impl World {
             draft_states: HashMap::new(),
             retired_drafts: vec![],
             fail_drafts: false,
+            draft_update_before_next_write: None,
             owner_grants: vec![],
             ledger: vec![],
             channel_grants: HashMap::new(),
@@ -121,6 +125,7 @@ impl World {
             layout_before_next_update: None,
             competing_submission: None,
             grid_change_before_next_cell_read: None,
+            adopt_new_database_before_next_batch: false,
             refuse_next_batch: None,
             database_renames: vec![],
             refuse_next_database_rename: None,

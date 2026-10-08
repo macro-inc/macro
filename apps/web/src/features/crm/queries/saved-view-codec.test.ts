@@ -9,7 +9,6 @@ describe('CRM saved state boundary', () => {
       searchText: 'Zoë 日本',
       groupBy: null,
       stageFilter: ['qualified'],
-      viewMode: 'board' as const,
     };
     expect(decodeCrmViewParam(encodeCrmViewParam(view))).toEqual(view);
   });
@@ -17,6 +16,12 @@ describe('CRM saved state boundary', () => {
     expect(
       decodeCrmViewParam(btoa(JSON.stringify({ kind: 'crm', future: true })))
     ).toEqual({ kind: 'crm', future: true });
+    // Links from before Customers became list-only still open.
+    expect(
+      decodeCrmViewParam(
+        btoa(JSON.stringify({ kind: 'crm', viewMode: 'board' }))
+      )
+    ).toEqual({ kind: 'crm', viewMode: 'board' });
   });
   it.each([
     { stageFilter: 42 },
@@ -24,7 +29,6 @@ describe('CRM saved state boundary', () => {
     { sort: 'updated_at' },
     { clientFilters: [] },
     { clientFilters: { and: 'company-stage' } },
-    { viewMode: 'grid' },
     { searchText: { text: 'acme' } },
   ])('rejects malformed known state %j', (invalid) => {
     expect(

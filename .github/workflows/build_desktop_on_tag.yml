@@ -102,6 +102,11 @@ jobs:
       shell: bash
       env:
         RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Prepare desktop release identity
+      run: nix develop --command bun apps/web/scripts/desktop-release.mjs prepare "$RAW_REF"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
     - name: Build AppImage with Nix
       run: |
         set -euo pipefail
@@ -168,6 +173,7 @@ jobs:
         fi
         cp -v "${appimages[@]}" artifacts/
         chmod 0755 artifacts/*.AppImage
+        cp apps/web/tauri/desktop-release.json artifacts/linux-x86_64.release.json
         (cd artifacts && sha256sum -- *.AppImage > macro-appimage-SHA256SUMS)
       shell: bash
     - name: Upload macro-appimage-${{ steps.metadata.outputs.safe_tag }} artifact
@@ -313,6 +319,11 @@ jobs:
         safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
         echo "tag=$tag" >> "$GITHUB_OUTPUT"
         echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+      shell: bash
+      env:
+        RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
+    - name: Prepare desktop release identity
+      run: nix develop --command bun apps/web/scripts/desktop-release.mjs prepare "$RAW_REF"
       shell: bash
       env:
         RAW_REF: ${{ needs.resolve-ref.outputs.ref }}
@@ -484,6 +495,10 @@ jobs:
         cp -v "${dmgs[@]}" artifacts/
         # Nix outputs are read-only; stapler must write Apple's ticket into the copy.
         chmod u+w artifacts/*.dmg
+        mkdir -p updater-app
+        cp -a result/Macro.app updater-app/
+        chmod -R u+w updater-app/Macro.app
+        cp apps/web/tauri/desktop-release.json artifacts/darwin-aarch64.release.json
       shell: bash
     - name: Validate signed DMG
       run: |
@@ -561,6 +576,20 @@ jobs:
         xcrun stapler validate "$dmg"
         spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
 
+        # The updater ships the app rather than the DMG. Notarize and staple that exact
+        # final app too; stapling only the disk image does not staple the updater app.
+        ditto -c -k --keepParent updater-app/Macro.app "$credentials_dir/updater-app.zip"
+        xcrun notarytool submit "$credentials_dir/updater-app.zip" \
+          --key "$credentials_dir/AuthKey.p8" --key-id "$key_id" --issuer "$issuer" \
+          --wait --timeout 30m --output-format json > "$credentials_dir/app-submission.json"
+        jq -e '.status == "Accepted"' "$credentials_dir/app-submission.json" > /dev/null
+        xcrun stapler staple updater-app/Macro.app
+        xcrun stapler validate updater-app/Macro.app
+        codesign --verify --deep --strict --verbose=2 updater-app/Macro.app
+        spctl --assess --type execute --verbose=2 updater-app/Macro.app
+        version=$(jq -er '.version' apps/web/tauri/desktop-release.json)
+        COPYFILE_DISABLE=1 tar -czf "artifacts/Macro-${version}-aarch64-darwin.app.tar.gz" -C updater-app Macro.app
+
         # Stapling changes the DMG bytes, so checksum the final distributable.
         (cd artifacts && shasum -a 256 -- *.dmg > macro-dmg-SHA256SUMS)
       shell: bash
@@ -578,11 +607,22 @@ jobs:
     - resolve-ref
     - build-appimage
     - build-dmg
-    name: Upload Release Artifacts
+    if: startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v')
+    name: Sign and publish desktop updates
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: desktop-stable-publish
+      cancel-in-progress: false
     steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ needs.resolve-ref.outputs.ref }}
+        persist-credentials: 'false'
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
     - id: metadata
       name: Derive artifact metadata
       run: |
@@ -602,13 +642,128 @@ jobs:
       with:
         path: release-artifacts
         merge-multiple: 'true'
-    - name: Upload Release Artifacts
-      if: startsWith(steps.metadata.outputs.tag, 'v')
-      uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
-      with:
-        tag_name: ${{ steps.metadata.outputs.tag }}
-        files: release-artifacts/*
-        fail_on_unmatched_files: 'true'
+    - name: Sign updater artifacts
+      run: |
+        set -euo pipefail
+
+        # All private material stays on the ephemeral runner, outside Nix derivations.
+        umask 077
+        credentials_dir=$(mktemp -d)
+        trap 'rm -rf "$credentials_dir"' EXIT
+        curl --fail --silent --show-error --retry 3 \
+          --header "Authorization: Bearer $DOPPLER_TOKEN" \
+          'https://api.doppler.com/v3/configs/config/secrets/download?project=macos-release&config=prd&format=json&secrets=TAURI_SIGNING_PRIVATE_KEY,TAURI_SIGNING_PRIVATE_KEY_PASSWORD' \
+          > "$credentials_dir/secrets.json"
+        jq -er '.TAURI_SIGNING_PRIVATE_KEY | strings | select(length > 0)' \
+          "$credentials_dir/secrets.json" > "$credentials_dir/updater.key"
+        export TAURI_SIGNING_PRIVATE_KEY_PATH="$credentials_dir/updater.key"
+        TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(jq -r '.TAURI_SIGNING_PRIVATE_KEY_PASSWORD // ""' "$credentials_dir/secrets.json")
+        export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+
+        # Verify against the public key compiled into BOTH packages before publishing.
+        jq -er '.publicKey | select(length > 0)' release-artifacts/darwin-aarch64.release.json > "$credentials_dir/mac.pub"
+        jq -er '.publicKey | select(length > 0)' release-artifacts/linux-x86_64.release.json > "$credentials_dir/linux.pub"
+        cmp "$credentials_dir/mac.pub" "$credentials_dir/linux.pub"
+        base64 --decode "$credentials_dir/mac.pub" > "$credentials_dir/minisign.pub"
+        if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets > "$credentials_dir/release.json"; then
+          # Reading the collection must succeed before treating the version as absent.
+          gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases" > "$credentials_dir/releases.json"
+          if jq -e --arg tag "$RELEASE_TAG" '.[][] | select(.tag_name == $tag)' "$credentials_dir/releases.json" >/dev/null; then
+            echo "Could not inspect existing release assets" >&2
+            exit 1
+          fi
+          printf '{"assets":[]}' > "$credentials_dir/release.json"
+        fi
+        shopt -s nullglob
+        artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage)
+        if [ "${#artifacts[@]}" -ne 2 ]; then
+          echo "Expected one macOS and one Linux updater artifact" >&2
+          exit 1
+        fi
+        for artifact in "${artifacts[@]}"; do
+          name=$(basename "$artifact")
+          if jq -e --arg name "$name.sig" '.assets | any(.name == $name)' "$credentials_dir/release.json" >/dev/null; then
+            # Signatures include signing time. Reuse a previously published signature
+            # only after checking both the immutable package bytes and its signature.
+            gh release download "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --pattern "$name" --pattern "$name.sig" --dir "$credentials_dir"
+            cmp "$artifact" "$credentials_dir/$name"
+            cp "$credentials_dir/$name.sig" "$artifact.sig"
+          else
+            nix shell --inputs-from . nixpkgs#cargo-tauri --command cargo-tauri signer sign "$artifact"
+          fi
+          base64 --decode "$artifact.sig" > "$credentials_dir/artifact.minisig"
+          nix shell --inputs-from . nixpkgs#minisign --command minisign \
+            -Vm "$artifact" -p "$credentials_dir/minisign.pub" -x "$credentials_dir/artifact.minisig"
+        done
+      shell: bash
+      env:
+        DOPPLER_TOKEN: ${{ secrets.MACOS_RELEASE_DOPPLER_TOKEN }}
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+        RELEASE_REPOSITORY: ${{ github.repository }}
+    - name: Publish desktop release and update feed
+      run: |
+        set -euo pipefail
+
+        nix develop --command bun apps/web/scripts/desktop-release.mjs manifest \
+          release-artifacts "$RELEASE_TAG" "$RELEASE_REPOSITORY"
+
+        # Refuse to overwrite release assets: the manifest may already reference them.
+        # A failed publication can be resumed if every existing asset has identical bytes.
+        if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
+          gh release create "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --verify-tag \
+            --title "Macro $RELEASE_TAG" --notes "Desktop release $RELEASE_TAG" --latest=false
+        fi
+        work_dir=$(mktemp -d)
+        trap 'rm -rf "$work_dir"' EXIT
+        gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets > "$work_dir/release.json"
+        for file in release-artifacts/*; do
+          name=$(basename "$file")
+          # The mutable feed is published only after the immutable packages.
+          [ "$name" != latest.json ] || continue
+          if jq -e --arg name "$name" '.assets | any(.name == $name)' "$work_dir/release.json" >/dev/null; then
+            gh release download "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --pattern "$name" --dir "$work_dir"
+            cmp "$file" "$work_dir/$name"
+          else
+            gh release upload "$RELEASE_TAG" "$file" --repo "$RELEASE_REPOSITORY"
+          fi
+        done
+
+        # A dedicated prerelease hosts only the mutable pointer. It never becomes the
+        # public download page's latest release, nor follows SDK/daemon release tags.
+        if gh release view desktop-stable --repo "$RELEASE_REPOSITORY" --json assets > "$work_dir/channel.json"; then
+          if jq -e '.assets | any(.name == "latest.json")' "$work_dir/channel.json" >/dev/null; then
+            gh release download desktop-stable --repo "$RELEASE_REPOSITORY" --pattern latest.json --dir "$work_dir"
+            result=0
+            nix develop --command bun apps/web/scripts/desktop-release.mjs newer \
+              release-artifacts/latest.json "$work_dir/latest.json" || result=$?
+            if [ "$result" -eq 2 ]; then
+              echo "A matching or newer desktop release is already promoted."
+              exit 0
+            fi
+            [ "$result" -eq 0 ] || exit "$result"
+          fi
+        else
+          # Do not mistake an authentication/network error for an absent release.
+          gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases" > "$work_dir/releases.json"
+          if jq -e '.[][] | select(.tag_name == "desktop-stable")' "$work_dir/releases.json" >/dev/null; then
+            echo "Could not read the existing desktop update channel" >&2
+            exit 1
+          fi
+          gh release create desktop-stable --repo "$RELEASE_REPOSITORY" --target "$RELEASE_TAG" \
+            --prerelease --latest=false --title "Desktop stable update feed" \
+            --notes "Update metadata only. Download installers from a versioned desktop release."
+        fi
+        gh release upload desktop-stable release-artifacts/latest.json --repo "$RELEASE_REPOSITORY" --clobber
+        gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --latest
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
+        RELEASE_REPOSITORY: ${{ github.repository }}
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
 concurrency:
   group: desktop-${{ inputs.ref || (github.event.ref_type == 'tag' && github.event.ref || github.ref_name) }}
   cancel-in-progress: true

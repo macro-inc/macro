@@ -50,6 +50,8 @@ export type StartConversation = {
   repoUrl?: string;
   repoBranch?: string;
   modelOverride?: string;
+  /** The catalog was still loading, so an in-memory agent runs its persona default. */
+  modelFallback?: boolean;
   effortOverride?: { configId: string; value: string };
   speedOverride?: { configId: string; value: string };
   onDelivered?: () => void;
@@ -92,7 +94,7 @@ export function NewChatPage(props: {
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   // A new conversation starts on Automatic until the caller picks a repository.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
-  const persistedDraft = createPersistedComposerDraft();
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
@@ -201,16 +203,20 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const attachmentTracker = createInputAttachmentTracker({
-    // Home supplies its own text draft; attachment persistence here is for Agents.
-    persistenceKey: props.onDraftChange
-      ? undefined
-      : NEW_CONVERSATION_ATTACHMENTS_KEY,
+  const attachmentTracker = createMemo(() => {
+    const identity = userId();
+    return createInputAttachmentTracker({
+      // Home owns its attachments; unknown identities never read shared storage.
+      persistenceKey:
+        !props.onDraftChange && identity
+          ? `${NEW_CONVERSATION_ATTACHMENTS_KEY}:${encodeURIComponent(identity)}`
+          : undefined,
+    });
   });
   const attachFiles = (files: File[]) =>
     void uploadInputAttachments({
       files,
-      tracker: attachmentTracker,
+      tracker: attachmentTracker(),
       uploadFile: (file) =>
         uploadFile(file, 'static', { hideProgressIndicator: true }),
     });
@@ -221,22 +227,32 @@ export function NewChatPage(props: {
       (!prompt.trim() && attachments.length === 0) ||
       !persona ||
       blocked() ||
-      attachmentTracker.hasPending()
+      attachmentTracker().hasPending()
     )
       return;
     recentAgents.remember(persona.id);
     const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
     const model = composerModelOverride();
+    const inMemory =
+      persona.harness === 'macro-inmem' || persona.harness === 'in-memory';
+    const submittedTracker = attachmentTracker();
+    const submittedUserId = userId();
     props.onStart({
       prompt,
-      onFailure: () => setDraft(prompt),
+      onFailure: () => {
+        if (userId() === submittedUserId && !draft()) setDraft(prompt);
+      },
       ...(attachments.length > 0
         ? {
             attachments: promptActionOf(prompt, attachments).attachments,
             onDelivered: () => {
+              const tracker =
+                userId() === submittedUserId
+                  ? attachmentTracker()
+                  : submittedTracker;
               for (const attachment of attachments) {
-                attachmentTracker.removeAttachment(attachment.id);
+                tracker.removeAttachment(attachment.id);
               }
             },
           }
@@ -245,10 +261,11 @@ export function NewChatPage(props: {
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
+      ...(inMemory && !model && selectedCatalog.pending()
+        ? { modelFallback: true }
+        : {}),
       effortOverride: effortOverride(),
-      ...(model &&
-      ['macro-inmem', 'in-memory'].includes(selected()?.harness ?? '') &&
-      acceleratedSpeed(model)
+      ...(model && inMemory && acceleratedSpeed(model)
         ? {
             speedOverride: {
               configId: 'speed',
@@ -342,10 +359,10 @@ export function NewChatPage(props: {
       drawerOpen={coding()}
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
-      attachments={attachmentTracker.attachments()}
+      attachments={attachmentTracker().attachments()}
       onAttachFiles={attachFiles}
       onRemoveAttachment={(attachment) =>
-        attachmentTracker.removeAttachment(attachment.id)
+        attachmentTracker().removeAttachment(attachment.id)
       }
     />
   );

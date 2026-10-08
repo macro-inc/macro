@@ -673,7 +673,7 @@ async fn update_auto_reload_persists_thresholds_and_clears_both_suspensions(pool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn reserve_credit_reload_requires_active_overage_and_unsuspended_reloads(pool: PgPool) {
+async fn reserve_credit_reload_requires_opt_in_and_unsuspended_reloads(pool: PgPool) {
     let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let now = Utc::now();
     let period_start = now - chrono::Duration::days(10);
@@ -688,15 +688,13 @@ async fn reserve_credit_reload_requires_active_overage_and_unsuspended_reloads(p
             .unwrap()
             .is_none()
     );
-    // Overage on but suspended.
-    enable_auto_reload(&repo, &thresholds(None)).await;
+    // Historical direct-charge suspension does not affect reload eligibility.
+    // Saving with a zero direct-charge cap still allows reloads.
+    repo.update_auto_reload(&payer(), true, 0, Some(&thresholds(None)))
+        .await
+        .unwrap();
     repo.suspend_overage(&payer()).await.unwrap();
-    assert!(
-        repo.reserve_credit_reload(&payer(), period_start, 0, now)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert!(repo.settings(&payer()).await.unwrap().auto_reload_active());
     // Reloads suspended after a failed collection.
     enable_auto_reload(&repo, &thresholds(None)).await;
     repo.suspend_auto_reload(&payer()).await.unwrap();
@@ -1013,6 +1011,7 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
         .expect("status changed");
     assert_eq!(paid.payer.as_ref(), payer().as_ref());
     assert_eq!(paid.amount_cents, 10_000);
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     assert!(
         repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
             .await
@@ -1025,6 +1024,98 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
             .await
             .unwrap()
             .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reserved.id, Some("in_retry"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+
+    // Force the ledger INSERT to fail after the paid-status UPDATE executes.
+    sqlx::query!(
+        "ALTER TABLE ai_credit_ledger ADD CONSTRAINT reject_test_reload
+         CHECK (stripe_reference <> 'in_retry')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .is_err()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 0);
+    let status = sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_credit_reload WHERE stripe_invoice_id = $1"#,
+        "in_retry",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "pending");
+
+    sqlx::query!("ALTER TABLE ai_credit_ledger DROP CONSTRAINT reject_test_reload")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+    // Re-delivery cannot issue the purchased credits twice.
+    assert!(
+        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_webhook_deduplicates_credits_booked_by_collector(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool, AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(
+        reserved.id,
+        Some("in_collector"),
+        CreditReloadStatus::Pending,
+    )
+    .await
+    .unwrap();
+    repo.record_credit_reload(&payer(), reserved.amount_cents, "in_collector")
+        .await
+        .unwrap();
+
+    assert!(
+        repo.resolve_credit_reload_invoice("in_collector", CreditReloadStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(
+        repo.credit_balance_cents(&payer()).await.unwrap(),
+        reserved.amount_cents
     );
 }
 
@@ -1413,4 +1504,50 @@ async fn rows_frozen_before_the_cost_column_read_as_the_current_allowance(pool: 
     assert_eq!(raw.billed_users, vec![payer.as_ref().to_string()]);
     assert_eq!(raw.included_cents_by_user, vec![4_000]);
     assert_eq!(raw.included_cost_cents_by_user, None);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credit_only_settlement_never_reserves_or_retries_direct_charges(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    let mut credit_only = policy(false);
+    credit_only.overage_active = false;
+    let outcome = repo
+        .apply_settlement(&payer(), period_start, 5_000, credit_only)
+        .await
+        .unwrap();
+    assert!(outcome.pending_charge.is_none());
+    assert_eq!(charge_rows(&pool).await, 0);
+
+    // Seed historical rows through the legacy policy, then retire collection.
+    let historical = repo
+        .apply_settlement(&payer(), period_start, 5_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .unwrap();
+    for (status, invoice) in [
+        (OverageChargeStatus::Pending, None),
+        (OverageChargeStatus::Failed, None),
+        (OverageChargeStatus::Failed, Some("in_legacy")),
+    ] {
+        repo.finish_overage_charge(historical.id, invoice, status)
+            .await
+            .unwrap();
+        sqlx::query!(
+            "UPDATE ai_overage_charge SET updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1",
+            historical.id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        repo.update_overage(&payer(), true, 10_000).await.unwrap();
+        let outcome = repo
+            .apply_settlement(&payer(), period_start, 8_000, credit_only)
+            .await
+            .unwrap();
+        assert!(outcome.pending_charge.is_none());
+        assert_eq!(charge_rows(&pool).await, 1);
+    }
 }

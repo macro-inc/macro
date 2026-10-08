@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE ai_credit_ledger DROP CONSTRAINT reject_test_reload",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "59cfeed91e1becaca22994e1a481dbdf9ff112bc2150f1d33590aa10d3649704"
+}

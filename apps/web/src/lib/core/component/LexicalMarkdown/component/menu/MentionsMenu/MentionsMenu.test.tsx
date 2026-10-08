@@ -167,3 +167,21 @@ it('offers CRM companies and contacts', () => {
   expect(mocks.requestedBuckets).toContain('crm_company');
   expect(mocks.requestedBuckets).toContain('crm_contact');
 });
+
+it('opens cell pickers without replaying the menu entrance animation', () => {
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const { container } = render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+      animate={false}
+    />
+  ));
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(container.querySelector('.menu-open-animation')).toBeNull();
+});

@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
-const DEFAULT_MAX_TURNS: usize = 16;
+const DEFAULT_MAX_TURNS: usize = 200;
 const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session

@@ -33,9 +33,10 @@ export const calendarKeys = createQueryKeys('calendar', {
   }),
   teamOutOfOffice: (
     userId: string,
-    range: CalendarOccurrenceQueryRange | undefined
+    range: CalendarOccurrenceQueryRange | undefined,
+    teamId?: string
   ) => ({
-    queryKey: [userId, range],
+    queryKey: [userId, range, teamId],
   }),
   mentionPreview: (eventId: string, occurrenceKey: string | undefined) => ({
     queryKey: [eventId, occurrenceKey],

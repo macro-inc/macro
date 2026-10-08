@@ -239,8 +239,10 @@ pub async fn apply_completed_update_from<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
+    // Keep application and reload dispatch in one critical section. Native
+    // installation holds this same lock while shutting down the webview/cache.
+    let mut service = service_state.lock().await;
     let apply_result = {
-        let mut service = service_state.lock().await;
         let result = service
             .apply_update(&cache_dir)
             .await
@@ -261,14 +263,14 @@ pub async fn apply_completed_update_from<R: Runtime>(
                     error=?e,
                     "[bundle-update] failed to dispatch webview reload"
                 );
-                service_state.lock().await.unmark_update_reload_dispatched();
+                service.unmark_update_reload_dispatched();
             }
         } else {
             tracing::warn!(
                 source,
                 "[bundle-update] completed bundle update applied but no webview was available to reload"
             );
-            service_state.lock().await.unmark_update_reload_dispatched();
+            service.unmark_update_reload_dispatched();
         }
     }
     Ok(apply_result != ApplyUpdateResult::NoUpdate)
@@ -352,8 +354,8 @@ pub async fn clear_bundle<R: Runtime>(
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
 
+    let mut service = service.lock().await;
     let apply_result = {
-        let mut service = service.lock().await;
         let result = service
             .revert_to_embedded(&cache_dir)
             .await
@@ -368,11 +370,11 @@ pub async fn clear_bundle<R: Runtime>(
         if let Some(webview) = app_handle.webview_windows().values().next() {
             if let Err(error) = webview.eval("window.location.reload();") {
                 tracing::warn!(error=?error, "[bundle-update] failed to reload after clearing bundle");
-                service.lock().await.unmark_update_reload_dispatched();
+                service.unmark_update_reload_dispatched();
             }
         } else {
             tracing::warn!("[bundle-update] bundle cleared but no webview was available to reload");
-            service.lock().await.unmark_update_reload_dispatched();
+            service.unmark_update_reload_dispatched();
         }
     }
     Ok(())
@@ -386,11 +388,20 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
     fn initialize(
         &mut self,
         app: &tauri::AppHandle<R>,
-        _config: serde_json::Value,
+        config: serde_json::Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let client = BundleClient::new(self.base_url.clone());
         let fs = FileSystem;
-        let native_build = native_build();
+        // Desktop release builds embed their compatibility number in Tauri config.
+        // Mobile continues to use CFBundleVersion / Android versionCode.
+        let native_build = if cfg!(not(any(target_os = "ios", target_os = "android"))) {
+            config
+                .get("nativeBuild")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+        } else {
+            native_build()
+        };
         let system_info = SystemInfo::new(app.clone(), native_build);
 
         let mut service = Service::new::<_, _, TauriTaskSpawner>(

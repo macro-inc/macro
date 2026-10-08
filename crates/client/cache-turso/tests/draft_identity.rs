@@ -116,6 +116,7 @@ async fn read(
     id: &str,
 ) -> Vec<cache_core::record_selection::SelectedRecord> {
     let selection = RecordSelection::parse(
+        cache_core::meta::bundled_schema_ref(),
         "fragment Draft on GraphqlSoupEmailMessage { id threadId bodyHtmlSanitized }",
         "Draft",
     )
@@ -129,6 +130,7 @@ async fn read(
 
 async fn preview_visible(engine: &mut Engine<TursoStorage>) -> bool {
     let selection = RecordSelection::parse(
+        cache_core::meta::bundled_schema_ref(),
         "fragment Preview on GraphqlMailPreviewMessage { id subject }",
         "Preview",
     )

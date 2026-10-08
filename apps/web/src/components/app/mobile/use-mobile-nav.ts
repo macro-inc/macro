@@ -1,5 +1,10 @@
 import type { ListView } from '@app/constants/list-views';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import {
+  reviewsTabSearch,
+  reviewsTabSearchCodec,
+} from '@app/features/reviews-view/reviews-tab-search';
+import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -12,9 +17,35 @@ import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
  * only reachable through the Views menu or the dynamic nav button (folders,
  * companies, …).
  */
-export type MobileDockNavId = ListView | 'calendar' | 'settings';
+export type MobileDockNavId = ListView | 'calendar' | 'reviews' | 'settings';
 
 function mobileNavContent(id: Exclude<MobileDockNavId, 'settings'>) {
+  if (id === 'documents') {
+    return {
+      type: 'component' as const,
+      id,
+      entryMetadata: {
+        route: paneRoute(
+          { id: 'drive', params: {} },
+          { id: 'drive-tab', params: { tab: 'recent' } }
+        ),
+      },
+    };
+  }
+
+  if (id === 'reviews') {
+    return {
+      type: 'component' as const,
+      id,
+      entryMetadata: {
+        search: {
+          [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({
+            tab: 'all',
+          }),
+        },
+      },
+    };
+  }
   return {
     type: 'component' as const,
     id: id === 'calendar' ? CALENDAR_VIEW_ID : id,
@@ -56,6 +87,10 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();
     const isOnNavView = fgContent?.type === 'component';
-    openWithSplit(content, { mergeHistory: isOnNavView });
+    openWithSplit(content, {
+      mergeHistory: isOnNavView,
+      // Route through the router so an existing pane receives the default tab.
+      search: id === 'documents' || id === 'reviews' ? {} : undefined,
+    });
   };
 }

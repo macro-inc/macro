@@ -5,11 +5,14 @@
  * in for one being created — resolved into the one the block consumes.
  */
 
+import type { WarmClaim } from '@queries/agent-session/warm';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const takeWarm = vi.hoisted(() => vi.fn<() => string | undefined>());
+const takeWarm = vi.hoisted(() =>
+  vi.fn<() => { id?: string; claim: WarmClaim }>()
+);
 const replenishWarm = vi.hoisted(() => vi.fn<(userId: string) => void>());
 vi.mock('@queries/agent-session/warm', () => ({
   takeWarmAgentSession: takeWarm,
@@ -139,6 +142,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   takeWarm.mockReset();
+  takeWarm.mockReturnValue({ claim: 'miss_none_ready' });
   replenishWarm.mockReset();
   refetchSoupEntity.mockClear();
   create.control.mockReset();
@@ -515,7 +519,7 @@ it.each([undefined, 'explicit-user'])(
 );
 
 it('falls back to a cold session when claiming a warm session fails', async () => {
-  takeWarm.mockReturnValueOnce('stale-warm');
+  takeWarm.mockReturnValueOnce({ id: 'stale-warm', claim: 'hit' });
   const placeholder = startPendingSession();
   expect(placeholder).toBe('stale-warm');
   create.reject?.();
@@ -537,7 +541,10 @@ it('falls back to a cold session when claiming a warm session fails', async () =
 it.each([undefined, 'ready-warm'])(
   'replenishes only after successful creation when the reservation is %s',
   async (warmId) => {
-    takeWarm.mockReturnValueOnce(warmId);
+    takeWarm.mockReturnValueOnce({
+      id: warmId,
+      claim: warmId ? 'hit' : 'miss_none_ready',
+    });
     startPendingSession({ userId: 'session-owner' });
     await flush();
     expect(replenishWarm).not.toHaveBeenCalled();
@@ -548,7 +555,7 @@ it.each([undefined, 'ready-warm'])(
 );
 
 it('does not replenish when both the warm claim and fallback creation fail', async () => {
-  takeWarm.mockReturnValueOnce('stale-warm');
+  takeWarm.mockReturnValueOnce({ id: 'stale-warm', claim: 'hit' });
   const placeholder = startPendingSession({ userId: 'session-owner' });
   create.reject?.();
   await vi.waitFor(() =>
