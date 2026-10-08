@@ -3,7 +3,10 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCrmLists } from '@core/constant/featureFlags';
+import {
+  enableCrmLists,
+  enableCrmPipelines,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
@@ -163,6 +166,10 @@ export function createAppCrmContext(): CrmContext {
     copyViewLink: copyCrmViewLink,
     listsEnabled() {
       const flag = useFeatureFlag(enableCrmLists);
+      return () => flag().enabled;
+    },
+    pipelinesEnabled() {
+      const flag = useFeatureFlag(enableCrmPipelines);
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>

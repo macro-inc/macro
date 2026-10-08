@@ -479,6 +479,13 @@ export const enableCrmLists = defineFlag({
   default: false,
 });
 
+// Pipelines roll out per team; while off the CRM tab hides them without touching stored pipelines.
+export const enableCrmPipelines = defineFlag({
+  key: 'enable-crm-pipelines',
+  env: 'ENABLE_CRM_PIPELINES',
+  default: onInDev,
+});
+
 // Native Projects frontend: navigation, creation, task assignment and project
 // views. Enabled in development; PostHog controls production rollout. Override
 // with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.
