@@ -42,6 +42,8 @@ use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
+#[path = "outbound/rig_engine/opener.rs"]
+mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
@@ -189,6 +191,9 @@ struct NativeTools {
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
     deferred: Arc<[ai_toolset::SearchableTool]>,
+    /// Every native tool's name, for the opening line's model to guess the
+    /// direction a reply will take.
+    tool_names: String,
 }
 
 impl NativeTools {
@@ -198,11 +203,20 @@ impl NativeTools {
             .expect("tools_for should return a fresh, uniquely owned collection");
         let other_tools = Arc::into_inner(tools_for(AiHost::AgentSession).toolset)
             .expect("tools_for should return a fresh, uniquely owned collection");
+        let with_user_input = tools_for_turn(base_tools, true);
+        let tool_names = with_user_input
+            .tools
+            .keys()
+            .map(String::as_str)
+            .chain(tools.deferred.iter().map(|tool| tool.name.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ");
         Self {
-            with_user_input: Arc::new(tools_for_turn(base_tools, true)),
+            with_user_input: Arc::new(with_user_input),
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
             prompt: tools.prompt.to_string(),
             deferred: tools.deferred,
+            tool_names,
         }
     }
 
@@ -263,6 +277,7 @@ async fn drive_turn(
         user_input,
         reviewer,
     } = request;
+    let started = tokio::time::Instant::now();
 
     // A turn runs as a person: tools act with the owner's identity, the
     // memory is theirs, and usage is billed to them. A session owned by
@@ -279,6 +294,15 @@ async fn drive_turn(
         }
     };
 
+    // Started before anything else so its line is out before the turn's
+    // model has a first token.
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let mut opening_line = opener::spawn(
+        base_context.recorder.clone(),
+        usage_ctx.clone(),
+        &native_tools.tool_names,
+        &messages,
+    );
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
@@ -291,7 +315,6 @@ async fn drive_turn(
     );
 
     let toolset = native_tools.for_turn(user_input.is_some());
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
@@ -366,7 +389,70 @@ async fn drive_turn(
     let rig_messages = agent::to_rig_messages(&messages);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
+        // The opening line's model usually has its verdict long before this
+        // one's first token. Should this one speak first, its own opening
+        // stands and the line is dropped.
+        let race = tokio::select! {
+            biased;
+            part = stream.next() => Race::TurnFirst(part),
+            opening = tokio::time::timeout(
+                opener::VERDICT_TIMEOUT,
+                opener::verdict(&mut opening_line),
+            ) => Race::Opening(opening.ok().flatten()),
+        };
+        let mut separate = false;
+        match race {
+            Race::TurnFirst(None) => return Ok(()),
+            Race::TurnFirst(Some(part)) => {
+                if parts.send(part).await.is_err() {
+                    loop_cancel.cancel();
+                    return Ok(());
+                }
+            }
+            Race::Opening(Some(opener::Opening { complete, head })) => {
+                tracing::info!(
+                    complete,
+                    verdict_ms = started.elapsed().as_millis(),
+                    "the opening line's model answered first"
+                );
+                let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
+                let mut delta = Some(head);
+                while let Some(text) = delta {
+                    if !text.is_empty() && parts.send(Ok(StreamPart::Content(text))).await.is_err()
+                    {
+                        loop_cancel.cancel();
+                        return Ok(());
+                    }
+                    delta = tokio::time::timeout_at(deadline, opening_line.recv())
+                        .await
+                        .ok()
+                        .flatten();
+                }
+                if complete {
+                    loop_cancel.cancel();
+                    return Ok(());
+                }
+                separate = true;
+            }
+            Race::Opening(None) => {}
+        }
+        drop(opening_line);
+        let mut turn_spoke = false;
         while let Some(part) = stream.next().await {
+            if !turn_spoke {
+                turn_spoke = true;
+                tracing::info!(
+                    first_part_ms = started.elapsed().as_millis(),
+                    "the turn's own model streamed its first part"
+                );
+            }
+            let part = match part {
+                Ok(StreamPart::Content(text)) if separate && !text.trim().is_empty() => {
+                    separate = false;
+                    Ok(StreamPart::Content(format!("\n\n{}", text.trim_start())))
+                }
+                other => other,
+            };
             if parts.send(part).await.is_err() {
                 // The consumer is gone; stop the loop rather than keep
                 // spending tokens into the void.
@@ -381,8 +467,15 @@ async fn drive_turn(
     result
 }
 
+/// Which spoke first: the turn's own model, or the opening line's.
+enum Race {
+    TurnFirst(Option<Result<StreamPart, AgentError>>),
+    Opening(Option<opener::Opening>),
+}
+
 /// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the static Macro prompt (how to use the product: mentions,
+/// preamble, the note that an opening line is already out (see [`opener`]),
+/// the static Macro prompt (how to use the product: mentions,
 /// tools, terminology), then the session's own instructions and the owner's
 /// memory when there are any.
 ///
@@ -411,6 +504,8 @@ fn system_prompt(
         shared.push('\n');
     }
     shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push('\n');
+    shared.push_str(opener::ALREADY_OPENED);
     shared.push('\n');
     shared.push_str(&tools_prompt.to_string());
     let mut rest = String::new();
