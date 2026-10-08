@@ -3,8 +3,12 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import PencilIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
+import { ActionDialogShell } from '@ui/components/ActionDialogShell';
+import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
+import { Dialog } from '@ui/components/Dialog';
 import { Dropdown } from '@ui/components/Dropdown';
+import { Input } from '@ui/components/Input';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type {
   PipelineEditor,
@@ -27,17 +31,23 @@ export function PipelineView(props: {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
   const [deleting, setDeleting] = createSignal(false);
+  const [actionsOpen, setActionsOpen] = createSignal(false);
+  const [renaming, setRenaming] = createSignal(false);
+  const [name, setName] = createSignal('');
   let title: HTMLSpanElement | undefined;
+  let mobileNameInput: HTMLInputElement | undefined;
   const canEdit = () => ['owner', 'edit'].includes(props.pipeline.grant);
   const isOwner = () => props.pipeline.grant === 'owner';
   async function save(action: () => Promise<void>) {
-    if (pending()) return;
+    if (pending()) return false;
     setPending(true);
     setError('');
     try {
       await action();
+      return true;
     } catch {
       setError('Could not save this change. Please try again.');
+      return false;
     } finally {
       setPending(false);
     }
@@ -46,6 +56,27 @@ export function PipelineView(props: {
     const input = title?.querySelector('input');
     input?.focus();
     input?.select();
+  };
+  const openActions = () => {
+    setName(props.pipeline.name);
+    setError('');
+    setRenaming(false);
+    setActionsOpen(true);
+  };
+  const startRenaming = () => {
+    setRenaming(true);
+    queueMicrotask(() => {
+      mobileNameInput?.focus();
+      mobileNameInput?.select();
+    });
+  };
+  const rename = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const nextName = name().trim();
+    if (!canEdit() || !nextName || nextName === props.pipeline.name) return;
+    if (await save(() => props.source.rename(props.pipeline.id, nextName))) {
+      setActionsOpen(false);
+    }
   };
   return (
     <div class="flex min-h-0 min-w-0 flex-1 flex-col touch:pb-[max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))]">
@@ -107,12 +138,118 @@ export function PipelineView(props: {
           </div>
         </div>
       </Show>
-      <Show when={error()}>
+      <Show when={error() && !actionsOpen()}>
         <p role="alert" class="px-4 pb-2 text-sm text-failure-ink">
           {error()}
         </p>
       </Show>
-      <props.Editor pipeline={props.pipeline} />
+      <props.Editor
+        pipeline={props.pipeline}
+        actions={
+          <Show when={isTouchDevice()}>
+            <Button
+              variant="ghost"
+              size="icon-md"
+              label="Pipeline actions"
+              onClick={openActions}
+            >
+              <DotsThreeIcon class="size-4" />
+            </Button>
+          </Show>
+        }
+      />
+      <Dialog
+        open={actionsOpen()}
+        onOpenChange={(open) => !pending() && setActionsOpen(open)}
+        class="w-96 max-w-[calc(100vw-2rem)]"
+      >
+        <ActionDialogShell>
+          <ActionDialogShell.Body>
+            <ActionDialogShell.Header>
+              <ActionDialogShell.Title>
+                Pipeline actions
+              </ActionDialogShell.Title>
+            </ActionDialogShell.Header>
+            <Show when={canEdit()}>
+              <Show
+                when={renaming()}
+                fallback={
+                  <Button
+                    variant="ghost"
+                    class="w-full justify-start"
+                    onClick={startRenaming}
+                  >
+                    <PencilIcon class="size-4" />
+                    Rename pipeline
+                  </Button>
+                }
+              >
+                <form
+                  class="flex flex-col gap-3"
+                  onSubmit={(event) => void rename(event)}
+                >
+                  <label class="flex flex-col gap-1.5 text-sm">
+                    Pipeline name
+                    <Input
+                      ref={mobileNameInput}
+                      value={name()}
+                      onInput={(event) => setName(event.currentTarget.value)}
+                      disabled={pending()}
+                      maxlength={200}
+                      required
+                    />
+                  </label>
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={
+                      pending() ||
+                      !name().trim() ||
+                      name().trim() === props.pipeline.name
+                    }
+                  >
+                    Save name
+                  </Button>
+                </form>
+              </Show>
+            </Show>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm">Sharing</span>
+              <props.Sharing
+                pipeline={props.pipeline}
+                onCopyLink={props.onCopyLink}
+              />
+            </div>
+            <Show when={isOwner()}>
+              <Button
+                variant="danger"
+                disabled={pending()}
+                onClick={() => {
+                  setActionsOpen(false);
+                  setDeleting(true);
+                }}
+              >
+                <TrashIcon class="size-4" />
+                Trash pipeline
+              </Button>
+            </Show>
+            <Show when={error()}>
+              <p role="alert" class="text-sm text-failure-ink">
+                {error()}
+              </p>
+            </Show>
+          </ActionDialogShell.Body>
+          <ActionDialogShell.Footer>
+            <Button
+              variant="ghost"
+              disabled={pending()}
+              onClick={() => setActionsOpen(false)}
+            >
+              Done
+            </Button>
+          </ActionDialogShell.Footer>
+        </ActionDialogShell>
+      </Dialog>
       <DeleteDialog
         open={deleting()}
         onOpenChange={setDeleting}

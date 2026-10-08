@@ -1909,8 +1909,10 @@ strip horizontally to reach every destination; the selected tab stays visible.
 The tabs remain available inside pipelines, with no hamburger button. Company
 filters lead the strip when available. On mobile, pipelines omit their title
 and sharing row and use an edge-to-edge table, below the top safe area and above
-the bottom dock. Companies uses the full-frame list with the global **+ Company**
-action above the dock. People keeps its search and **New contact** below the tab
+the bottom dock. The compact **Pipeline actions** button in the table toolbar
+opens rename and sharing controls; only owners see **Trash pipeline**, which
+requires confirmation. Sharing opens the existing share dialog. Companies uses
+the full-frame list with the global **+ Company** action above the dock. People keeps its search and **New contact** below the tab
 strip. The embedded detail stack stays out of the mobile flow, so selecting a
 row navigates in place.
 
