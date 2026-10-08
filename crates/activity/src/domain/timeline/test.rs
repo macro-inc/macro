@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{NameChange, PropertyChange};
 
-const STATUS: Uuid = Uuid::from_u128(1);
+const STATUS: Uuid = Uuid::from_u128(0xab);
 const ASSIGNEE: Uuid = Uuid::from_u128(2);
 
 fn property_changed(property: &str) -> Action {
@@ -35,6 +35,8 @@ fn properties_narrow_property_changes_only() {
     assert!(selection.includes(&property_changed(&ASSIGNEE.to_string())));
     assert!(!selection.includes(&property_changed(&Uuid::from_u128(3).to_string())));
     assert!(!selection.includes(&property_changed("not-a-uuid")));
+    // Storage compares text, so a differently formatted id matches neither.
+    assert!(!selection.includes(&property_changed(&STATUS.to_string().to_uppercase())));
     assert!(selection.includes(&Action::Created));
     assert_eq!(
         selection.property_ids(),

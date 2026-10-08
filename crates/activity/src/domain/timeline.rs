@@ -86,12 +86,13 @@ impl TimelineSelection {
     pub fn includes(&self, action: &Action) -> bool {
         self.actions.contains(&ActionTag::from(action))
             && match action {
+                // Compare the stored text exactly as storage does.
                 Action::PropertyChanged(change) => {
                     self.properties.is_empty()
-                        || change
-                            .property
-                            .parse()
-                            .is_ok_and(|property| self.properties.contains(&property))
+                        || self
+                            .properties
+                            .iter()
+                            .any(|property| property.to_string() == change.property)
                 }
                 _ => true,
             }

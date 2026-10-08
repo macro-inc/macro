@@ -1,122 +1,129 @@
 //! Best-effort realtime delivery is isolated from durable activity ingestion.
 use activity::domain::timeline::TimelineActivity;
-use channels::domain::ports::ChannelRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
+use messages::domain::delivery::{MessageAudienceAccess, MessageRealtime};
 use messages::domain::models::MessageParent;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 const QUEUE_CAPACITY: usize = 256;
 const DELIVERY_CONCURRENCY: usize = 16;
 
-/// One channel's newly committed timeline activity.
-type ChannelActivities = (Uuid, Vec<TimelineActivity>);
+/// One timeline's newly committed activity.
+type TimelineActivities = (MessageParent, Vec<TimelineActivity>);
 
-/// Enqueues committed channel activity; delivery resolves the channel's participants.
-pub(crate) struct ChannelTimelinePublisher(mpsc::Sender<ChannelActivities>);
+/// Enqueues committed timeline activity; delivery reaches the same audience as
+/// live messages on that parent.
+pub(crate) struct TimelinePublisher(mpsc::Sender<TimelineActivities>);
 
-impl ChannelTimelinePublisher {
+impl TimelinePublisher {
     /// Compose a bounded delivery worker for the service's tracked task lifecycle.
-    pub(crate) fn new<R: ChannelRepo>(
+    pub(crate) fn new<R: MessageRealtime, A: MessageAudienceAccess>(
         client: ConnectionGatewayClient,
-        channels: R,
+        realtime: R,
+        access: A,
     ) -> (Self, impl Future<Output = ()> + Send) {
         let (sender, receiver) = mpsc::channel(QUEUE_CAPACITY);
-        (Self(sender), deliver(receiver, client, channels))
+        (Self(sender), deliver(receiver, client, realtime, access))
     }
 }
 
-impl activity::domain::ports::ActivityRealtimePublisher for ChannelTimelinePublisher {
+impl activity::domain::ports::ActivityRealtimePublisher for TimelinePublisher {
     async fn publish_recorded(&self, activities: &[activity::Activity]) {
-        // The messages domain decides which timeline shows a fact. Only
-        // channel timelines have participants to deliver to here.
+        // The messages domain decides which timeline, if any, shows a fact.
         let timeline = activities.iter().filter_map(|event| {
-            match messages::domain::ports::timeline_parent(event)? {
-                MessageParent::Channel(channel_id) => {
-                    Some((channel_id, vec![TimelineActivity::from(event)]))
-                }
-                _ => None,
-            }
+            let parent = messages::domain::ports::timeline_parent(event)?;
+            Some((parent, vec![TimelineActivity::from(event)]))
         });
-        for (channel_id, activities) in by_channel(timeline) {
+        for (parent, activities) in by_parent(timeline) {
             // Storage must keep progressing even when realtime delivery is unavailable.
-            if let Err(error) = self.0.try_send((channel_id, activities)) {
+            if let Err(error) = self.0.try_send((parent.clone(), activities)) {
                 tracing::warn!(
                     ?error,
-                    %channel_id,
+                    ?parent,
                     "activity persisted but timeline delivery could not be queued"
                 );
             }
         }
     }
 
-    /// Purges accompany entity deletion; no channel timeline remains to update.
+    /// Purges accompany entity deletion; no timeline remains to update.
     async fn publish_invalidated(&self) {}
 }
 
-fn by_channel(
-    items: impl IntoIterator<Item = ChannelActivities>,
-) -> HashMap<Uuid, Vec<TimelineActivity>> {
-    let mut channels = HashMap::<_, Vec<_>>::new();
-    for (channel_id, activities) in items {
-        channels.entry(channel_id).or_default().extend(activities);
+fn by_parent(
+    items: impl IntoIterator<Item = TimelineActivities>,
+) -> HashMap<MessageParent, Vec<TimelineActivity>> {
+    let mut parents = HashMap::<_, Vec<_>>::new();
+    for (parent, activities) in items {
+        parents.entry(parent).or_default().extend(activities);
     }
-    channels
+    parents
 }
 
-async fn deliver<R: ChannelRepo>(
-    mut receiver: mpsc::Receiver<ChannelActivities>,
+async fn deliver<R: MessageRealtime, A: MessageAudienceAccess>(
+    mut receiver: mpsc::Receiver<TimelineActivities>,
     client: ConnectionGatewayClient,
-    channels: R,
+    realtime: R,
+    access: A,
 ) {
     let mut batch = Vec::with_capacity(QUEUE_CAPACITY);
     while receiver.recv_many(&mut batch, QUEUE_CAPACITY).await > 0 {
-        futures::stream::iter(by_channel(batch.drain(..)))
-            .for_each_concurrent(DELIVERY_CONCURRENCY, |(channel_id, activities)| {
-                deliver_to_participants(&client, &channels, channel_id, activities)
+        futures::stream::iter(by_parent(batch.drain(..)))
+            .for_each_concurrent(DELIVERY_CONCURRENCY, |(parent, activities)| {
+                deliver_to_viewers(&client, &realtime, &access, parent, activities)
             })
             .await;
     }
 }
 
-/// Only participants receive activity, since it names who joined, left, or renamed.
-/// The payload names the timeline's parent so clients file it like a message.
-async fn deliver_to_participants<R: ChannelRepo>(
+/// Users watching the parent who can still view it.
+async fn viewers<R: MessageRealtime, A: MessageAudienceAccess>(
+    realtime: &R,
+    access: &A,
+    parent: &MessageParent,
+) -> Result<HashSet<String>, rootcause::Report> {
+    let candidates = realtime.subscribers(parent).await?;
+    if candidates.is_empty() {
+        return Ok(candidates);
+    }
+    access.viewers(parent, candidates).await
+}
+
+/// Like `message_update`, only users watching the parent who can still view it
+/// receive the facts. Anyone else reads them with the timeline.
+async fn deliver_to_viewers<R: MessageRealtime, A: MessageAudienceAccess>(
     client: &ConnectionGatewayClient,
-    channels: &R,
-    channel_id: Uuid,
+    realtime: &R,
+    access: &A,
+    parent: MessageParent,
     activities: Vec<TimelineActivity>,
 ) {
-    let participants = match channels.get_participants(channel_id).await {
-        Ok(participants) => participants,
+    let viewers = match viewers(realtime, access, &parent).await {
+        Ok(viewers) if viewers.is_empty() => return,
+        Ok(viewers) => viewers,
         Err(error) => {
-            let error: anyhow::Error = error.into();
-            tracing::warn!(?error, %channel_id, "failed to read timeline activity recipients");
+            tracing::warn!(
+                ?error,
+                ?parent,
+                "failed to resolve timeline activity viewers"
+            );
             return;
         }
     };
-    if participants.is_empty() {
-        return;
-    }
     let _ = client
         .batch_send_message(
             "timeline_activity".into(),
-            serde_json::json!({
-                "parent": MessageParent::Channel(channel_id),
-                "activities": activities,
-            }),
-            participants
-                .iter()
-                .map(|participant| {
-                    model_entity::EntityType::User.with_entity_str(&participant.user_id)
-                })
+            serde_json::json!({ "parent": parent, "activities": activities }),
+            viewers
+                .into_iter()
+                .map(|user| model_entity::EntityType::User.with_entity_string(user))
                 .collect(),
         )
         .await
         .inspect_err(|error| {
-            tracing::warn!(?error, %channel_id, "failed to deliver timeline activity");
+            tracing::warn!(?error, ?parent, "failed to deliver timeline activity");
         });
 }
 

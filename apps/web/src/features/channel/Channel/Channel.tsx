@@ -728,6 +728,7 @@ export function Channel(props: ChannelProps) {
                       <ChannelUnreadNotifications
                         channelId={props.channelId}
                         messages={messages}
+                        activities={() => messageIndex.activityByKey}
                         scrollState={threadListScrollState}
                         container={threadListContainerEl}
                         insets={threadListScrollInsets}

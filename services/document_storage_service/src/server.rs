@@ -967,11 +967,15 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
-    let (timeline_publisher, timeline_delivery) =
-        crate::service::activity::ChannelTimelinePublisher::new(
+    let (timeline_publisher, timeline_delivery) = crate::service::activity::TimelinePublisher::new(
+        conn_gateway_client.clone(),
+        messages::outbound::connection_gateway::ConnectionGatewayMessages(Arc::new(
             conn_gateway_client.clone(),
-            PgChannelsRepo::new(db.clone()),
-        );
+        )),
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+            (*entity_access_service).clone(),
+        ),
+    );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
         async move {

@@ -767,6 +767,32 @@ describe('live timeline activity', () => {
         )
       );
 
+  it('refetches a bottom page that is still loading when activity arrives', async () => {
+    const latest = getMessageTimelineQueryKey(parent);
+    let resolveFetch: (data: MessageTimelineData) => void = () => {};
+    const fetching = testQueryClient.fetchQuery({
+      queryKey: latest,
+      queryFn: () =>
+        new Promise<MessageTimelineData>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    });
+    const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+    handleTimelineActivity({
+      parent,
+      activities: [activity],
+    });
+    expect(invalidate).not.toHaveBeenCalled();
+    resolveFetch({
+      pageParams: [null],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
+    });
+    await fetching.catch(() => undefined);
+    await vi.waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: latest, exact: true })
+    );
+  });
+
   it('places activity by position in windows that contain it', () => {
     const latest = getMessageTimelineQueryKey(parent);
     const history = getMessageTimelineQueryKey(parent, 'older');

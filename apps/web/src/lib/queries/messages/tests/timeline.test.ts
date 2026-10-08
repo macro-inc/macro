@@ -13,6 +13,7 @@ import type {
 } from '@service-storage/messages';
 import { QueryClient } from '@tanstack/solid-query';
 import { createRoot } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -45,6 +46,7 @@ vi.mock('../subscription', () => ({
 import { channelKeys } from '../../channel/keys';
 import { normalizeChannelMessageSender } from '../message-sender';
 import {
+  buildMessageIndex,
   createMessageIndex,
   findTopLevelMessageSnapshotInMessageTimeline,
   getMessageTimelineQueryKey,
@@ -648,6 +650,27 @@ describe('channel activity entries', () => {
       expect(index.activityByKey.get('activity:older')?.id).toBe('older');
       dispose();
     });
+  });
+
+  it('re-indexing reordered rows never writes into cached entries', () => {
+    const [m, n, b] = entries([
+      createMessage('m', '2026-09-10T15:00:00Z'),
+      createMessage('n', '2026-09-10T14:00:00Z'),
+      createMessage('b', '2026-09-10T16:00:00Z'),
+    ]);
+    const page = (pageEntries: MessageTimelineEntry[]) => [
+      { entries: pageEntries, next_cursor: null, previous_cursor: null },
+    ];
+    // The same store update createMessageIndex applies on every cache change.
+    const [index, setIndex] = createStore(buildMessageIndex(page([m, n])));
+    expect(index.entryKeys).toEqual(['n', 'm']);
+    // Cache updaters copy the entries array but keep its entry objects. Here a
+    // page left out of order gains a row, so surviving entries shift while
+    // another is inserted.
+    setIndex(reconcile(buildMessageIndex(page([b, n, m]))));
+    expect(index.entryKeys).toEqual(['m', 'n', 'b']);
+    expect([m, n, b].map(timelineEntryKey)).toEqual(['m', 'n', 'b']);
+    expect(index.byId.get('n')?.content).toBe('Message n');
   });
 
   it('keeps activity in place through message removal and rollback', () => {

@@ -75,6 +75,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 MessageTimelineQuery {
                     around: Some(anchor),
                     limit: Some(1),
+                    include_deleted_threads: query.include_deleted_threads,
                     ..Default::default()
                 },
             )
@@ -194,10 +195,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         source: TimelineActivitySource,
         query: MessageTimelineQuery,
     ) -> Result<MessageTimelinePage, MessageError> {
-        let activity = self
-            .activity
-            .as_ref()
-            .ok_or(MessageError::Invalid("activity timeline is unavailable"))?;
+        let activity = self.activity.as_ref().ok_or_else(|| {
+            MessageError::Repository(rootcause::report!(
+                "activity timeline reader is not configured"
+            ))
+        })?;
         let activity_query = ActivityTimelineQuery {
             entity_type: source.entity_type,
             entity_id: parent.entity_id(),

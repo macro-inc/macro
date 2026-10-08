@@ -35,6 +35,10 @@ export function handleTimelineActivity(event: {
   parent: MessageParent;
   activities: TimelineActivity[];
 }) {
+  // A fact committed before the bottom page's first fetch resolved may be
+  // missing from a response the server already computed. Loaded windows still
+  // take it below.
+  refetchTimelineAwaitingFirstPage(event.parent);
   queryClient.setQueriesData<MessageTimelineData>(
     { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
     (data) => insertActivitiesIntoMessageTimeline(data, event.activities)

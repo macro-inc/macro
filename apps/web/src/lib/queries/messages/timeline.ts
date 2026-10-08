@@ -750,46 +750,53 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
  * Pages arrive newest-first, entries within each page are newest-first,
  * so we reverse both layers in one pass.
  */
+/** The rows a timeline renders, oldest first, from its cached pages. */
+export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
+  /**
+   * New objects carrying their row key as `id`, so `reconcile` pairs each
+   * entry with its own previous copy. Without an `id` it pairs by position
+   * and writes one entry's fields into another, which are the query cache's
+   * own objects.
+   */
+  const entries: (MessageTimelineEntry & { id: string })[] = [];
+  /** Every rendered row, messages and activity. */
+  const entryKeys: string[] = [];
+  /** Message ids only: selection and navigation skip activity. */
+  const keys: string[] = [];
+  const byId = new Map<string, MessageListItem>();
+  const activityByKey = new Map<string, TimelineActivity>();
+
+  if (!pages?.length) return { entries, entryKeys, keys, byId, activityByKey };
+
+  const seen = new Set<string>();
+  for (let i = pages.length - 1; i >= 0; i--) {
+    const pageEntries = pages[i].entries;
+    for (let j = pageEntries.length - 1; j >= 0; j--) {
+      const entry = pageEntries[j];
+      const key = timelineEntryKey(entry);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ ...entry, id: key });
+      entryKeys.push(key);
+      if (entry.type === 'activity') {
+        activityByKey.set(key, entry.activity);
+        continue;
+      }
+      keys.push(key);
+      byId.set(key, entry.message);
+    }
+  }
+
+  return { entries, entryKeys, keys, byId, activityByKey };
+}
+
+/** A reactive index over a timeline query's cached pages. */
 export function createMessageIndex(
   data: Accessor<MessageTimelineData | undefined>
 ) {
-  const buildIndex = () => {
-    const pages = data()?.pages;
-
-    const entries: MessageTimelineEntry[] = [];
-    /** Every rendered row, messages and activity. */
-    const entryKeys: string[] = [];
-    /** Message ids only: selection and navigation skip activity. */
-    const keys: string[] = [];
-    const byId = new Map<string, MessageListItem>();
-    const activityByKey = new Map<string, TimelineActivity>();
-
-    if (!pages?.length)
-      return { entries, entryKeys, keys, byId, activityByKey };
-
-    const seen = new Set<string>();
-    for (let i = pages.length - 1; i >= 0; i--) {
-      const pageEntries = pages[i].entries;
-      for (let j = pageEntries.length - 1; j >= 0; j--) {
-        const entry = pageEntries[j];
-        const key = timelineEntryKey(entry);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        entries.push(entry);
-        entryKeys.push(key);
-        if (entry.type === 'activity') {
-          activityByKey.set(key, entry.activity);
-          continue;
-        }
-        keys.push(key);
-        byId.set(key, entry.message);
-      }
-    }
-
-    return { entries, entryKeys, keys, byId, activityByKey };
-  };
-
-  const [messageIndex, setMessageIndex] = createStore(buildIndex());
+  const [messageIndex, setMessageIndex] = createStore(
+    buildMessageIndex(data()?.pages)
+  );
 
   createEffect(
     on(data, () => {
@@ -797,7 +804,7 @@ export function createMessageIndex(
       if (!data()) {
         return;
       }
-      setMessageIndex(reconcile(buildIndex()));
+      setMessageIndex(reconcile(buildMessageIndex(data()?.pages)));
     })
   );
 
