@@ -305,10 +305,10 @@ fn cargo_clippy() -> Step<Run> {
         ))
 }
 
-/// pgvector service container, tuned env preserved.
+/// Match production's PostgreSQL major version so CI rejects incompatible migrations.
 fn postgres_service() -> Container {
     Container::default()
-        .image("pgvector/pgvector:pg18")
+        .image("pgvector/pgvector:pg14")
         .env(
             Env::new("POSTGRES_USER", "user")
                 .add("POSTGRES_PASSWORD", "password")

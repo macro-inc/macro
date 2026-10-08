@@ -245,6 +245,7 @@ dependencies = [
 name = "app"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "clap",
  "graphql_cache_plugin",
  "http",
@@ -257,6 +258,9 @@ dependencies = [
  "navigation_plugin",
  "nom",
  "objc2 0.5.2",
+ "objc2 0.6.4",
+ "objc2-foundation",
+ "objc2-user-notifications",
  "reqwest",
  "rootcause",
  "rustls-platform-verifier",
@@ -4316,6 +4320,8 @@ version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9df9128cbbfef73cda168416ccf7f837b62737d748333bfe9ab71c245d76613e"
 dependencies = [
+ "bitflags 2.11.1",
+ "block2",
  "objc2 0.6.4",
  "objc2-foundation",
 ]

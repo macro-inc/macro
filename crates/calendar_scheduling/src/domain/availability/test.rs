@@ -42,6 +42,31 @@ fn event() -> EventType {
     }
 }
 use uuid::Uuid;
+
+#[test]
+fn point_inside_a_slot_does_not_block_it_and_reversed_busy_is_unavailable() {
+    let day = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();
+    let now = Utc.with_ymd_and_hms(2026, 9, 20, 0, 0, 0).unwrap();
+    let point = Utc.with_ymd_and_hms(2026, 9, 21, 13, 15, 0).unwrap();
+    let mut busy = BusyRange {
+        host: "a".into(),
+        start: point,
+        end: point,
+    };
+    let slots = slots_for_date(&event(), &schedule(), day, now, &[busy.clone()]).unwrap();
+    assert_eq!(
+        slots.len(),
+        slots_for_date(&event(), &schedule(), day, now, &[])
+            .unwrap()
+            .len()
+    );
+    assert_eq!(slots[0].hosts, vec!["a", "b"]);
+    busy.end -= Duration::seconds(1);
+    assert!(matches!(
+        slots_for_date(&event(), &schedule(), day, now, &[busy]),
+        Err(Error::CalendarUnavailable)
+    ));
+}
 #[test]
 fn collective_intersects_and_round_robin_unions_host_availability() {
     let day = NaiveDate::from_ymd_opt(2026, 9, 21).unwrap();

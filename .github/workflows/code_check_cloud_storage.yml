@@ -503,7 +503,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
       postgres:
-        image: pgvector/pgvector:pg18
+        image: pgvector/pgvector:pg14
         env:
           POSTGRES_USER: user
           POSTGRES_PASSWORD: password
@@ -564,9 +564,9 @@ jobs:
       run: sccache --start-server
     - name: configure postgres for concurrent tests
       run: |
-        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg18" { print $1; exit }')"
+        postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"
         if [ -z "$postgres_container" ]; then
-          echo "pgvector/pgvector:pg18 service container not found" >&2
+          echo "pgvector/pgvector:pg14 service container not found" >&2
           docker ps
           exit 1
         fi

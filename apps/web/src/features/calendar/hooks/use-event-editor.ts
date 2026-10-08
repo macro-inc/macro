@@ -25,6 +25,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
   reminderCalendarIdOf,
 } from '../types';
+import { isTimedPointEvent } from '../utils/calendar-date';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,
@@ -59,7 +60,9 @@ function hasTimeChanged(
 ) {
   // Compare at the editor's precision, which omits seconds. An unchanged
   // occurrence must not replace the series start or its provider time zone.
-  const initial = buildEventTime(calendarEventToEditorInitialValues(event));
+  const initialValues = calendarEventToEditorInitialValues(event);
+  const initial =
+    buildEventTime(initialValues) ?? initialValues.importedPointTime;
   return match([initial, time])
     .with(
       [{ kind: 'timed' }, { kind: 'timed' }],
@@ -184,11 +187,14 @@ export function useEventEditor(props: UseEventEditorProps) {
   ) => {
     const meeting = await fetchMeeting(shareToken);
     if (!props.macroCallsEnabled()) return;
+    const event = props.event();
+    const preservesPoint =
+      event && isTimedPointEvent(event) && !hasTimeChanged(event, values.time);
     await updateMeeting.mutateAsync({
       meetingId: meeting.id,
       ...(values.time.kind === 'allDay' ? { clearSchedule: true } : {}),
       title: values.title,
-      ...meetingSchedule(values),
+      ...(preservesPoint ? {} : meetingSchedule(values)),
     });
   };
 
@@ -213,6 +219,17 @@ export function useEventEditor(props: UseEventEditorProps) {
       (!event.isReadOnly &&
         editsPrimaryCopy(event) &&
         viewerCanEditGuests(event));
+    if (
+      needsCall() &&
+      canManageCall &&
+      !existingMeetingUrl &&
+      values.time.kind === 'timed' &&
+      Date.parse(values.time.endsAt) <= Date.parse(values.time.startsAt)
+    ) {
+      setSaveError('Give this event a duration before adding a Macro call.');
+      setPending(false);
+      return;
+    }
     // Older events can carry both a generated Macro link and provider
     // conferencing. Use the saved provider state when clearing either choice.
     const conference =

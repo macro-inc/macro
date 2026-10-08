@@ -451,6 +451,7 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::ScheduledAction
         | EntityType::Initiative
         | EntityType::Database
+        | EntityType::CrmPipeline
         | EntityType::DatabaseRow
         | EntityType::Form => {}
     }

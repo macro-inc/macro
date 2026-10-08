@@ -11,6 +11,7 @@ import {
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
+import { useCalendarCache } from '@app/lib/queries/calendar/graphql/use-calendar-cache';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
@@ -220,6 +221,11 @@ function SoupBackfillSideEffect(props: { userId: string }) {
   return null;
 }
 
+function CalendarCacheSideEffect() {
+  useCalendarCache();
+  return null;
+}
+
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
   const analytics = useAnalytics();
@@ -279,7 +285,12 @@ function UserInfoSideEffects() {
 
   return (
     <Show when={userInfo()?.id} keyed>
-      {(userId) => <SoupBackfillSideEffect userId={userId} />}
+      {(userId) => (
+        <>
+          <SoupBackfillSideEffect userId={userId} />
+          <CalendarCacheSideEffect />
+        </>
+      )}
     </Show>
   );
 }

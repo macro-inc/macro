@@ -36,6 +36,8 @@ use url::Url;
 mod device;
 mod diagnostics;
 mod logging;
+#[cfg(target_os = "macos")]
+mod macos_notification_permission;
 mod share_target;
 mod staged_upload;
 
@@ -263,13 +265,20 @@ pub fn run() {
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             diagnostics::read_desktop_diagnostics,
+            #[cfg(target_os = "macos")]
+            macos_notification_permission::get_macos_notification_permission,
+            #[cfg(target_os = "macos")]
+            macos_notification_permission::request_macos_notification_permission,
             graphql_cache_plugin::commands::graphql_cache_init,
+            graphql_cache_plugin::commands::graphql_cache_init_with_schema,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
+            graphql_cache_plugin::commands::graphql_cache_calendar_range,
+            graphql_cache_plugin::commands::graphql_cache_calendar_commit,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,

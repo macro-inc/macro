@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Serialize};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -146,7 +145,7 @@ fn authorize_url_uses_configured_tenant_and_secondary_account_parameters() {
     let url = microsoft_client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
@@ -169,34 +168,23 @@ fn authorize_url_uses_configured_tenant_and_secondary_account_parameters() {
     assert_eq!(query.get("prompt").unwrap(), "select_account");
 }
 
-#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct TestState {
-    identity_provider_id: String,
-    link_id: String,
-}
-
 #[test]
-fn authorize_url_serializes_state_as_json() {
-    let state = TestState {
-        identity_provider_id: "identity-provider-id".into(),
-        link_id: "link-id".into(),
-    };
+fn authorize_url_carries_state_through_unchanged() {
+    // Callers hand over an already-signed token; it must round-trip byte for byte.
+    let state = "eyJwcm92aWRlciI6Im1pY3Jvc29mdCJ9.c2lnbmF0dXJl+/=&?";
     let url = microsoft_client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &state,
+            state,
         )
         .unwrap();
     let url = reqwest::Url::parse(&url).unwrap();
-    let serialized_state = url
+    let returned_state = url
         .query_pairs()
         .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
         .unwrap();
 
-    assert_eq!(
-        serde_json::from_str::<TestState>(&serialized_state).unwrap(),
-        state
-    );
+    assert_eq!(returned_state, state);
 }
 
 #[test]
@@ -204,7 +192,7 @@ fn microsoft_oauth_configuration_is_optional_and_secret_is_redacted() {
     let error = client()
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap_err();
     assert!(matches!(
@@ -218,7 +206,7 @@ fn microsoft_oauth_configuration_is_optional_and_secret_is_redacted() {
     cloned_client
         .construct_microsoft_authorize_url(
             "https://auth.example.com/oauth2/microsoft/callback",
-            &"state",
+            "state",
         )
         .unwrap();
 }

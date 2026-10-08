@@ -1,5 +1,5 @@
 import type { OpColumnKind } from '@core/database-sql/generated/types';
-import type { DatabaseColumnKind } from '../core/column-schema';
+import type { DatabaseColumnKind } from '../../database/core/column-schema';
 
 /** The op's spelling of a kind; a relation's rows live in this database. */
 export function opColumnKind(

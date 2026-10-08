@@ -1,6 +1,38 @@
 use super::*;
 use chrono::TimeZone;
 
+#[test]
+fn timed_points_are_valid_and_use_start_inclusive_end_exclusive_membership() {
+    let start = Utc.with_ymd_and_hms(2026, 10, 8, 9, 0, 0).unwrap();
+    let window = range(start, start + chrono::Duration::hours(1));
+    for (offset, included) in [(-1, false), (0, true), (30, true), (60, false)] {
+        let point = start + chrono::Duration::minutes(offset);
+        let time = EventTime::Timed {
+            starts_at: point,
+            ends_at: point,
+            time_zone: None,
+        };
+        assert!(time.is_valid());
+        assert!(!time.has_positive_duration());
+        assert_eq!(time.overlaps(&window), included);
+    }
+    assert!(
+        !EventTime::Timed {
+            starts_at: start,
+            ends_at: start - chrono::Duration::seconds(1),
+            time_zone: None
+        }
+        .is_valid()
+    );
+    assert!(
+        !EventTime::AllDay {
+            start_date: start.date_naive(),
+            end_date: start.date_naive()
+        }
+        .is_valid()
+    );
+}
+
 fn range(starts_at: DateTime<Utc>, ends_at: DateTime<Utc>) -> OccurrenceRange {
     OccurrenceRange {
         starts_at,

@@ -108,6 +108,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
@@ -431,6 +432,33 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+On desktop, the rail **Create** button, **C**, and the command menu’s **Create**
+entry open the detailed launcher at standard dialog width. Selecting **Create**
+closes the command menu and hands focus to the launcher; individual creation
+commands remain searchable in the command menu. The left list starts with up to three **Recents** from
+actual launcher usage, followed by the remaining choices grouped by category.
+Recent items do not repeat in their categories. With no history, the list starts
+with categories. Hover or keyboard navigation updates the right detail panel;
+click a row or press Enter to start that creation flow. The detail panel is
+top-aligned, shares the list background, and is separated by a vertical divider.
+
+The **Search mode** toggle (or **/**) switches between direct entity shortcuts
+shown beside each choice and the standard create search input. The preference
+persists across opens. Search filters both Recents and categories. Up/Down moves
+through the displayed order and scrolls the selected row into view; Left/Right
+edits the search input. Enter creates the selected item, Shift+Enter opens it in a
+new split where supported, and Escape closes the launcher. Typing in search mode
+never runs an entity shortcut. Switching modes preserves selection and dimensions.
+
+The detailed layout replaces the old desktop launcher, including the onboarding
+Create lesson. The PostHog flag `enable-carousel-create-menu` opts into the
+carousel instead; when off, unknown, or loading, the detailed layout is used.
+For local testing, set `VITE_ENABLE_CAROUSEL_CREATE_MENU=true` (or `false` to force
+the detailed layout). The carousel shares creation actions, recents ordering,
+search mode, and shortcuts; Left/Right also navigates its cards outside search.
+The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
+without creating data. Mobile continues to use its create sheet.
+
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
@@ -687,6 +715,23 @@ Macro user with the same email takes precedence and keeps normal user-mention
 notifications. External contacts insert a link to their original CRM record;
 they do not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only.
+
+Cmd+K **People** and a typed **All** query also find CRM contacts, using the same
+accessible-team search, hidden-record exclusions, and full-email collapsing as
+mentions. Cached contacts appear at once; the server search starts about 250 ms
+after typing stops and pages 100 contacts at a time, so contacts beyond the first
+500 cached records are found too. An empty query keeps People and All on their
+usual recency lists without contacts. A contact whose email belongs to a Macro user
+appears as that person instead, even when only the CRM name matched: their existing
+direct message when you have one, otherwise the person, and selecting them opens a
+direct message. Other contacts show their email and open the contact page; Enter and
+click open in place, Shift+Enter in a new split. A server match that arrives after
+typing takes the default selection from the Search for… row. Global Search does not
+list CRM contacts; Search for… from People still opens the Channels search. Verify
+a contact outside the cached rows, an email-only query, rapid query changes (rows
+from an earlier query must disappear unless they still match), scrolling or Down
+past the last row to load more, and that Files/Tasks/Channels/Agents never show
+contacts.
 
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update

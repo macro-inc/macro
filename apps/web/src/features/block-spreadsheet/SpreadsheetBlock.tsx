@@ -9,6 +9,11 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  useCanAutofocusSplitContent,
+  useSplitPanel,
+} from '@components/app/split-layout/layoutUtils';
+import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
@@ -25,6 +30,7 @@ import { useUserId } from '@core/context/user';
 import { blockDataSignal } from '@core/internal/BlockLoader';
 import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
+import { blockElementSignal } from '@core/signal/blockElement';
 import { blockHandleSignal, blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -34,6 +40,7 @@ import IconShared from '@icon/share.svg';
 import { Badge } from '@ui';
 import { onMount, Show } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
+import { clipboardTargetInScope } from './core/clipboard-scope';
 import type { SpreadsheetData } from './definition';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
@@ -71,6 +78,20 @@ function SpreadsheetBlockContent(props: { share?: string }) {
   const canEdit = useCanEdit();
   const userId = useUserId();
   const permissions = useGetPermissions();
+  const splitPanel = useSplitPanel();
+  const blockElement = blockElementSignal.get;
+  const ownsClipboard = (event: ClipboardEvent) =>
+    !!splitPanel?.isPanelActive() &&
+    clipboardTargetInScope(event.target, {
+      block: blockElement(),
+      // An inline preview shares its host's panel with the host's own content.
+      panel: splitPanel.isInlinePreview
+        ? undefined
+        : (splitPanel.panelRef() ?? undefined),
+      chrome: Object.values(splitPanel.layoutRefs),
+    });
+  const canAutofocus = useCanAutofocusSplitContent();
+  const { navigatedFromJK } = useNavigatedFromJK();
   const openShare = useShareModal(() => ({
     id: documentId,
     blockAlias: 'spreadsheet',
@@ -173,8 +194,10 @@ function SpreadsheetBlockContent(props: { share?: string }) {
                 <SpreadsheetComments documentId={documentId} store={store}>
                   {(commentLocation, comments) => (
                     <SpreadsheetEditor
+                      autoFocus={canAutofocus && !navigatedFromJK()}
                       commentLocation={commentLocation()}
                       comments={comments}
+                      ownsClipboard={ownsClipboard}
                       mentions={spreadsheetMentions}
                       store={store}
                       name={name()}

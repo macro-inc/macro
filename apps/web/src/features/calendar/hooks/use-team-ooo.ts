@@ -59,6 +59,7 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     id: JSON.stringify([item.eventId, item.occurrenceKey]),
     eventId: item.eventId,
     occurrenceKey: item.occurrenceKey,
+    teamProjection: { ownerId: item.ownerId, kind: 'details' },
     isCancelled: false,
     isReadOnly: true,
     attendees: [],
@@ -110,6 +111,7 @@ export function useTeamOooEvents(
       !teamOooEnabled() ||
       !isRangeSupported() ||
       !query.isSuccess ||
+      query.isPaused ||
       query.isPlaceholderData
     ) {
       return [];
@@ -165,7 +167,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const windows = createMemo<TeamOooWindow[]>(() => {
     // Read data only on success so a pending query never hits the suspending
     // resource read and an errored refetch never surfaces stale rows.
-    if (!query.isSuccess) return [];
+    if (!query.isSuccess || query.isPaused) return [];
     return query.data.map((item) => {
       const time = item.time;
       const [start, end, allDay] =
@@ -189,6 +191,6 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   return {
     windows,
     isPending: () => query.isPending,
-    isError: () => query.isError,
+    isError: () => query.isError || query.isPaused,
   };
 }

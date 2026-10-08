@@ -114,10 +114,16 @@ according to `tauri.conf.json`.
 
 From `apps/web`, use `just ios-build` for a release build or
 `just ios-build --no-update` to disable automatic bundle updates.
-`just ios-build-no-update` remains a compatibility alias. Both modes build the
-frontend with the current shell's toolchain, then select Xcode's compiler,
-linker, and tools for the native build and the opened Xcode session. This avoids
-Nix's macOS compiler wrapper injecting `-mmacos-version-min` into an iOS build.
+`just ios-build-no-update` remains a compatibility alias. Both modes use
+`VITE_POSTHOG_API_KEY` from the environment, fetching it from
+Doppler `web-release/prd` if it is unset or empty. Install the Doppler CLI and
+authenticate with read access to that config, or supply the variable explicitly.
+An unavailable or empty key stops the build before frontend compilation.
+
+Both modes build the frontend with the current shell's toolchain, then select
+Xcode's compiler, linker, and tools for the native build and the opened Xcode
+session. This avoids Nix's macOS compiler wrapper injecting
+`-mmacos-version-min` into an iOS build.
 The system `xcode-select` selection is used unless `DEVELOPER_DIR` explicitly
 selects an Xcode installation. Keep the recipe running while building in Xcode
 so Tauri's options server can supply the build configuration and tool paths.
@@ -145,6 +151,12 @@ its initializer to remain unresolved only in the unused iOS dylib. The final
 Xcode app link must still resolve `init_plugin_call_kit` from the Swift package.
 Do not remove Android's `cdylib` output or disable undefined-symbol checking
 globally to work around an iOS link failure.
+
+GraphQL schema SDL is loaded from the frontend bundle through
+`graphql_cache_init_with_schema`; the cache engine and Turso remain native.
+Set `MIN_NATIVE_BUILD` to the first native release containing this command before
+shipping the corresponding OTA bundle. See [runtime schema behavior](../../../../crates/client/README.md#runtime-graphql-schema)
+for compatible additions, queued work, and rollback behavior.
 
 GraphQL hydration checkpoints require the native
 `graphql_cache_current_storage_generation` command. When shipping this frontend

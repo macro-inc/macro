@@ -88,7 +88,12 @@ fn projects_cold_links_and_skips_incomplete_explicit_keys() {
             .await
             .unwrap();
         let mut engine = Engine::with_capacity(storage, 1);
-        let selection = RecordSelection::parse(ITEM_FRAGMENT, "SoupItemFields").unwrap();
+        let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            ITEM_FRAGMENT,
+            "SoupItemFields",
+        )
+        .unwrap();
 
         let selected = engine
             .read_records_by_keys(
@@ -126,9 +131,12 @@ fn explicit_key_projection_preserves_rank_order_without_scanning() {
             .await
             .unwrap();
         let mut engine = Engine::new(storage);
-        let selection =
-            RecordSelection::parse("fragment Item on GraphqlSoupDocument { id name }", "Item")
-                .unwrap();
+        let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Item on GraphqlSoupDocument { id name }",
+            "Item",
+        )
+        .unwrap();
 
         let selected = engine
             .read_records_by_keys(
@@ -194,6 +202,7 @@ fn reads_schema_incomplete_objects_in_explicit_input_order() {
             .unwrap();
         let mut engine = Engine::new(storage);
         let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             r#"fragment Entity on GraphqlSoupEntity {
                 __typename
                 ... on GraphqlSoupDocument { id name }
@@ -264,6 +273,7 @@ fn merges_optimistic_updates_with_cold_linked_bases() {
             .unwrap();
         let mut engine = Engine::with_capacity(storage, 1);
         let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             r#"fragment Item on GraphqlSoupDocument {
                 id
                 properties { id propertyDefinitionId displayName }
@@ -328,6 +338,7 @@ fn includes_optimistic_only_records() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             "fragment Property on GraphqlProperty { id displayName }",
             "Property",
         )

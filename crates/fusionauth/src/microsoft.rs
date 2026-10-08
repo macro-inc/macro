@@ -46,14 +46,14 @@ impl FusionAuthClient {
     }
 
     /// Constructs a tenant-specific Microsoft OAuth authorization URL.
-    pub fn construct_microsoft_authorize_url<T>(
+    ///
+    /// `state` is the opaque, already-encoded value the callback expects
+    /// back; it is placed in the URL as-is.
+    pub fn construct_microsoft_authorize_url(
         &self,
         redirect_uri: &str,
-        state: &T,
-    ) -> Result<String>
-    where
-        T: serde::Serialize + ?Sized,
-    {
+        state: &str,
+    ) -> Result<String> {
         let credentials = self.microsoft_credentials()?;
         oauth::construct_authorize_url(
             &credentials.client_id,

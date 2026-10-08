@@ -104,6 +104,19 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
+    /// Highest grant on a CRM pipeline.
+    fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// All pipeline grants for the caller's current sharing sources.
+    fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
     /// Get the highest access level a user has for a database.
     fn get_database_access(
         &self,
@@ -716,4 +729,13 @@ impl EntityAccessService for NoOpEntityAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(None)
     }
+}
+
+/// Directory of pipeline grants for CRM navigation.
+pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
+    /// Highest effective grant on each accessible pipeline.
+    fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }

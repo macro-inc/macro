@@ -27,6 +27,7 @@ macro_rules! form_id {
             utoipa::ToSchema,
             specta::Type,
         )]
+        #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
         #[serde(transparent)]
         #[specta(transparent)]
         #[schema(value_type = Uuid)]

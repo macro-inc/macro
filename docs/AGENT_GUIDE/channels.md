@@ -483,8 +483,14 @@ seen without moving the conversation. No notification read marking runs
 from an abbreviated list result, even if that result is empty. Access failures
 show **Conversation unavailable** and stay hidden during retry until access is
 confirmed. A route without cached channel metadata shows **Loading conversation**
-until its channel arrives. Mobile and opening in a new split retain the block
-host's existing notification-before-navigation flow.
+until its channel arrives. On mobile, opening from Recent, Channels, or DMs
+also navigates immediately: a slow or failed notification lookup must not prevent
+messages and the composer from loading. Full-edge notification hydration runs
+only after navigation is accepted; failure leaves unread state unchanged and
+must not show an “Unable to open conversation” toast. A late response must not
+reopen the channel or mark it read after the user leaves its mobile pane. Message
+loading retains its own access/error states. Verify with the notification request
+held, then failed, and with rapid back-navigation while it is pending.
 
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title.

@@ -23,6 +23,13 @@ export class TaskNamespace {
     return Task.create(this.client, opts);
   }
 
+  /**
+   * The tasks the GitHub pull request at `url` references, oldest link first.
+   */
+  forPullRequest(url: string): Promise<Task[]> {
+    return Task.forPullRequest(this.client, url);
+  }
+
   /** Search tasks by name and content, most relevant first, auto-paginated. */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Task> {
     return Task.search(this.client, query, opts);

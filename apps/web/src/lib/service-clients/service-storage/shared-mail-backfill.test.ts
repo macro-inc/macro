@@ -39,7 +39,7 @@ describe('Shared Mail scope refresh', () => {
   it('continues Shared hydration when native entity filtering is unavailable', async () => {
     invokeMock.mockReset();
     invokeMock.mockImplementation(async (command: string) => {
-      if (command === 'graphql_cache_init') return null;
+      if (command === 'graphql_cache_init_with_schema') return null;
       if (command === 'graphql_cache_inspect_mutations') return [];
       if (command === 'graphql_cache_read')
         return { kind: 'hit', data: { user: { id: 'viewer' } } };

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const listenMock = vi.hoisted(() => vi.fn());
@@ -43,6 +43,10 @@ describe('createTauriCacheHost', () => {
   let eventCallbacks: Map<string, EventCallback>;
   const unlisten = vi.fn();
 
+  afterEach(async () => {
+    await vi.dynamicImportSettled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     eventCallbacks = new Map();
@@ -62,7 +66,7 @@ describe('createTauriCacheHost', () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await expect(host.currentStorageGeneration()).resolves.toBe(generation);
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
-      'graphql_cache_init',
+      'graphql_cache_init_with_schema',
       'graphql_cache_inspect_mutations',
       'graphql_cache_current_storage_generation',
     ]);
@@ -104,9 +108,10 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual({ kind: 'miss' });
 
-    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init', {
+    expect(invokeMock).toHaveBeenCalledWith('graphql_cache_init_with_schema', {
       scope: 'scope-1',
       hotCapacity: 42,
+      schemaSdl: expect.stringContaining('type GraphqlUser'),
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_read', {
       opId: `${host.clientId}:7`,
@@ -120,7 +125,7 @@ describe('createTauriCacheHost', () => {
   it('reports asynchronous native initialization failures', async () => {
     const onInitializationError = vi.fn();
     invokeMock.mockImplementation((command: string) =>
-      command === 'graphql_cache_init'
+      command === 'graphql_cache_init_with_schema'
         ? Promise.reject(new Error('init failed'))
         : Promise.resolve(null)
     );
@@ -169,7 +174,7 @@ describe('createTauriCacheHost', () => {
       })
     );
     expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
-      'graphql_cache_init',
+      'graphql_cache_init_with_schema',
       'graphql_cache_inspect_mutations',
     ]);
     host.dispose();
@@ -248,7 +253,7 @@ describe('createTauriCacheHost', () => {
       optimistic: false,
     };
     invokeMock.mockImplementation((command: string) =>
-      command === 'graphql_cache_init'
+      command === 'graphql_cache_init_with_schema'
         ? new Promise<void>((resolve) => {
             initialize = resolve;
           })
@@ -263,7 +268,7 @@ describe('createTauriCacheHost', () => {
       mail: { view: 'INBOX', cursor: 'previous-local-cursor' },
     };
     const pending = host.entityFilter(args);
-    await Promise.resolve();
+    await vi.dynamicImportSettled();
     expect(invokeMock).toHaveBeenCalledTimes(1);
     initialize();
     await expect(pending).resolves.toEqual(page);
@@ -391,6 +396,7 @@ describe('createTauriCacheHost', () => {
       const assertion = expect(host.entityFilter(filterArgs)).rejects.toThrow(
         'graphql cache ipc timeout: graphql_cache_entity_filter'
       );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
       invokeMock.mockResolvedValue({ kind: 'unsupported' });
@@ -896,7 +902,7 @@ describe('createTauriCacheHost', () => {
         requestTimeoutMs: 50,
       });
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init' ||
+        command === 'graphql_cache_init_with_schema' ||
         command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
@@ -906,6 +912,7 @@ describe('createTauriCacheHost', () => {
       const assertion = expect(read).rejects.toThrow(
         'graphql cache ipc timeout: graphql_cache_read'
       );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
       await assertion;
     } finally {
@@ -917,7 +924,7 @@ describe('createTauriCacheHost', () => {
     vi.useFakeTimers();
     try {
       invokeMock.mockImplementation((command: string) =>
-        command === 'graphql_cache_init' ||
+        command === 'graphql_cache_init_with_schema' ||
         command === 'graphql_cache_inspect_mutations'
           ? Promise.resolve(null)
           : new Promise(() => {})
@@ -945,6 +952,7 @@ describe('createTauriCacheHost', () => {
             settled = true;
           }
         );
+      await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
 
       expect(settled).toBe(false);
@@ -980,5 +988,121 @@ describe('createTauriCacheHost', () => {
     host.dispose();
     await Promise.resolve();
     expect(unlisten).toHaveBeenCalled();
+  });
+
+  describe('calendar ranges', () => {
+    const rangeArgs = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
+    const range = {
+      kind: 'range',
+      revision: '4',
+      occurrenceKeys: ['GraphqlCalendarOccurrence:e1:k'],
+      gaps: [],
+      freshness: 'fresh',
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: [{ linkId: 'l1', seq: '3' }],
+    };
+
+    it('reads ranges, commits, and forwards uncertain calendar events', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range') return range;
+        if (command === 'graphql_cache_calendar_commit')
+          return {
+            revision: '5',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarEvent:e2'],
+            affectedOps: [],
+            reset: false,
+            revalidations: [],
+          };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'calendar-native' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual(range);
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_calendar_range',
+          { request: rangeArgs }
+        );
+        const commit = { deletedEventKeys: ['GraphqlCalendarEvent:e2'] };
+        await expect(host.calendarCommit(commit)).resolves.toEqual({
+          kind: 'committed',
+          revision: '5',
+          changed: ['GraphqlCalendarEvent:e2'],
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_calendar_commit',
+          { commit }
+        );
+        invokeMock.mockResolvedValue(null);
+        void host.enqueueOptimisticMutation(
+          {
+            query: 'mutation M { m }',
+            data: {},
+            uuid: '00000000-0000-4000-8000-000000000001',
+            uncertainCalendarEventKeys: ['GraphqlCalendarEvent:e1'],
+          },
+          { owner: 'runner', nowMs: 0, leaseExpiresAtMs: 1 }
+        );
+        await vi.waitFor(() =>
+          expect(invokeMock).toHaveBeenLastCalledWith(
+            'graphql_cache_enqueue_optimistic_mutation',
+            expect.objectContaining({
+              uncertainCalendarEventKeys: ['GraphqlCalendarEvent:e1'],
+            })
+          )
+        );
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('reports old native binaries as unsupported and stops probing them', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range')
+          throw 'Command graphql_cache_calendar_range not found';
+        if (command === 'graphql_cache_read') return { kind: 'miss' };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native-calendar' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        await expect(host.calendarCommit({ reset: true })).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        expect(
+          invokeMock.mock.calls.filter(([command]) =>
+            String(command).startsWith('graphql_cache_calendar_')
+          )
+        ).toHaveLength(1);
+        await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+          kind: 'miss',
+        });
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('does not mistake other calendar failures for a missing command', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_calendar_range')
+          throw 'invalid calendar cache key';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'calendar-error' });
+      try {
+        await expect(host.calendarRange(rangeArgs)).rejects.toThrow(
+          'invalid calendar cache key'
+        );
+        invokeMock.mockImplementation(async (command: string) =>
+          command === 'graphql_cache_calendar_range' ? range : null
+        );
+        await expect(host.calendarRange(rangeArgs)).resolves.toEqual(range);
+      } finally {
+        host.dispose();
+      }
+    });
   });
 });

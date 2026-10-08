@@ -2,9 +2,11 @@
 //! and dependency tracking together behind the API the hosts (wasm worker /
 //! Tauri) expose over RPC.
 
+mod calendar;
 #[cfg(test)]
 mod test;
 
+use crate::calendar::{CalendarError, EVENT_TYPENAME};
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
 use crate::deps::{
     DepIndex, OpId, QueryDependencies, ViewerFieldUpdate, ViewerFields, changed_viewer_fields,
@@ -80,6 +82,8 @@ pub enum EngineError<S: std::error::Error + 'static> {
     RecordSelection(#[from] RecordSelectionError),
     #[error(transparent)]
     Search(#[from] SearchError),
+    #[error(transparent)]
+    Calendar(#[from] CalendarError),
     #[error("unknown or already-settled optimistic transaction {0}")]
     UnknownTransaction(OptimisticTransactionId),
     #[error("stale claim for optimistic transaction {0}")]
@@ -304,6 +308,7 @@ struct OptimisticLayer {
     link_patches: Vec<OptimisticLinkPatch>,
     revalidations: Vec<QueryRevalidation>,
     projection_mutations: Vec<OptimisticProjectionMutation>,
+    uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
 }
 
 struct BegunOptimisticWrite {
@@ -336,11 +341,15 @@ enum IdentityState {
 /// hardening-phase refinement).
 pub const DEFAULT_HOT_CAPACITY: usize = 10_000;
 
+/// Bound on the uncertain calendar events one optimistic layer may declare.
+const MAX_UNCERTAIN_CALENDAR_EVENTS: usize = 256;
+
 // Parsed plans contain no cached user data. Bound dynamic document churn while
 // leaving room for the production operation catalog and fragment variants.
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
 pub struct Engine<S: Storage> {
+    schema: std::sync::Arc<crate::meta::Schema>,
     storage: S,
     revision: CacheRevision,
     hot: LruCache<EntityKey<'static>, Record>,
@@ -361,7 +370,17 @@ impl<S: Storage> Engine<S> {
     }
 
     pub fn with_capacity(storage: S, hot_capacity: usize) -> Self {
+        Self::with_schema(storage, hot_capacity, crate::meta::bundled_schema())
+    }
+
+    /// Creates an engine with immutable metadata supplied by its host.
+    pub fn with_schema(
+        storage: S,
+        hot_capacity: usize,
+        schema: std::sync::Arc<crate::meta::Schema>,
+    ) -> Self {
         Engine {
+            schema,
             storage,
             revision: CacheRevision::ZERO,
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
@@ -377,6 +396,25 @@ impl<S: Storage> Engine<S> {
     /// Returns the current effective-view revision of this engine generation.
     pub fn current_revision(&self) -> CacheRevision {
         self.revision
+    }
+
+    /// Installs a compatible superset without discarding records or queued mutations.
+    pub fn install_schema(
+        &mut self,
+        schema: &crate::meta::Schema,
+    ) -> Result<(), crate::meta::SchemaError> {
+        self.schema = self.schema.merge(schema)?;
+        Ok(())
+    }
+
+    /// Shared immutable snapshot for host plan validation.
+    pub fn schema_snapshot(&self) -> std::sync::Arc<crate::meta::Schema> {
+        std::sync::Arc::clone(&self.schema)
+    }
+
+    /// Metadata used for every operation in this engine instance.
+    pub fn schema(&self) -> &crate::meta::Schema {
+        &self.schema
     }
 
     /// Returns the durable identity of the currently stored cache data.
@@ -547,17 +585,18 @@ impl<S: Storage> Engine<S> {
             let operation =
                 document.operation(queued.mutation.request.operation_name.as_deref())?;
             let mut updates = identity::remap_updates(
-                normalize(operation, &variables, &source.mutation_data)?,
+                normalize(&self.schema, operation, &variables, &source.mutation_data)?,
                 &source.identity_bindings,
                 &identities,
             );
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
-            let patches = deduplicate_patches(&source.link_patches).map_err(|error| {
-                EngineError::InvalidQueuedMutation {
-                    id: queued.id,
-                    detail: error.to_string(),
-                }
-            })?;
+            let patches =
+                deduplicate_patches(&self.schema, &source.link_patches).map_err(|error| {
+                    EngineError::InvalidQueuedMutation {
+                        id: queued.id,
+                        detail: error.to_string(),
+                    }
+                })?;
             let candidates: BTreeSet<EntityKey<'static>> = updates.keys().cloned().collect();
             let (candidates, bases) = self
                 .load_link_patch_bases(candidates, &layers, &updates, &patches)
@@ -569,6 +608,7 @@ impl<S: Storage> Engine<S> {
             // recreated from stale recipes during hydration. A newly submitted
             // tail remains strict so invalid caller patches cannot be persisted.
             apply_link_patches(
+                &self.schema,
                 &mut effective,
                 &mut updates,
                 &patches,
@@ -601,6 +641,11 @@ impl<S: Storage> Engine<S> {
                 link_patches: patches,
                 revalidations,
                 projection_mutations: source.projection_mutations,
+                uncertain_calendar_event_keys: source
+                    .uncertain_calendar_event_keys
+                    .into_iter()
+                    .map(|key| identities.get(&key).cloned().unwrap_or(key))
+                    .collect(),
             });
         }
         Ok(layers)
@@ -727,7 +772,7 @@ impl<S: Storage> Engine<S> {
         variables: &serde_json::Map<String, Json>,
         entity_resolvers: &[EntityResolver],
     ) -> Result<ReadResult, EngineError<S::Error>> {
-        let entity_resolvers = EntityResolverLookup::compile(entity_resolvers)?;
+        let entity_resolvers = EntityResolverLookup::compile(&self.schema, entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
@@ -762,8 +807,9 @@ impl<S: Storage> Engine<S> {
 
         let mut plans = ReadPlans::default();
         let mut session = ReadSession::new(
+            &self.schema,
             &EntityKey::root(),
-            crate::meta::QUERY_ROOT_TYPE,
+            self.schema.query_root(),
             &op.selection_set,
         );
         let outcome = loop {
@@ -970,6 +1016,7 @@ impl<S: Storage> Engine<S> {
                 (
                     key.clone(),
                     ReadSession::new(
+                        &self.schema,
                         key,
                         key.typename().unwrap_or_default(),
                         selection.selection_set(),
@@ -1255,6 +1302,7 @@ impl<S: Storage> Engine<S> {
         } = input;
         self.hydrate_optimistic().await?;
         let entity_resolvers = EntityResolverLookup::compile(
+            &self.schema,
             registration.map_or(&[][..], |registration| registration.entity_resolvers),
         )?;
         let doc = Self::document(&mut self.docs, query)?;
@@ -1268,7 +1316,8 @@ impl<S: Storage> Engine<S> {
             ));
         }
         let is_query = op.kind == OperationKind::Query;
-        let normalized = normalize_with_dependencies(op, variables, data, &entity_resolvers)?;
+        let normalized =
+            normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
         if !retain_pages {
             crate::page_retention::omit_hydration_pages(&mut updates);
@@ -1437,7 +1486,7 @@ impl<S: Storage> Engine<S> {
                     )),
                 ));
             }
-            project_hydration_response(op, data)?
+            project_hydration_response(&self.schema, op, data)?
         };
         let (write_result, search_changed_buckets) = self
             .write_network(
@@ -1615,7 +1664,7 @@ impl<S: Storage> Engine<S> {
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<(OptimisticTransactionId, WriteResult), EngineError<S::Error>> {
         let begun = self
-            .upsert_optimistic_write(origin_op, input, projection_mutations)
+            .upsert_optimistic_write(origin_op, input, projection_mutations, Vec::new())
             .await?;
         Ok((begun.transaction_id, begun.write_result))
     }
@@ -1625,6 +1674,7 @@ impl<S: Storage> Engine<S> {
         origin_op: Option<OpId>,
         input: BeginOptimisticWrite<'_>,
         projection_mutations: Vec<OptimisticProjectionMutation>,
+        uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
     ) -> Result<BegunOptimisticWrite, EngineError<S::Error>> {
         let uuid = Uuid::parse_str(input.uuid)
             .map_err(|_| EngineError::InvalidMutationUuid(input.uuid.to_owned()))?;
@@ -1642,6 +1692,13 @@ impl<S: Storage> Engine<S> {
             identity_bindings,
         } = input;
         identity::validate(identity_bindings).map_err(EngineError::InvalidOptimisticProjection)?;
+        if uncertain_calendar_event_keys.len() > MAX_UNCERTAIN_CALENDAR_EVENTS
+            || uncertain_calendar_event_keys
+                .iter()
+                .any(|key| key.typename() != Some(EVENT_TYPENAME))
+        {
+            return Err(CalendarError::InvalidKey.into());
+        }
         self.hydrate_optimistic().await?;
 
         let queued = self
@@ -1674,7 +1731,7 @@ impl<S: Storage> Engine<S> {
             Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
         };
 
-        let patches = deduplicate_patches(link_patches)?;
+        let patches = deduplicate_patches(&self.schema, link_patches)?;
         let revalidations = deduplicate_revalidations(
             revalidations
                 .iter()
@@ -1697,6 +1754,7 @@ impl<S: Storage> Engine<S> {
             link_patches: patches,
             revalidations,
             projection_mutations,
+            uncertain_calendar_event_keys,
         };
         let mut entry = NewQueuedMutation {
             uuid,
@@ -1870,8 +1928,33 @@ impl<S: Storage> Engine<S> {
         claim: MutationClaimRequest,
         projection_mutations: Vec<OptimisticProjectionMutation>,
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
+        self.enqueue_optimistic_mutation_with_calendar(
+            origin_op,
+            input,
+            claim,
+            projection_mutations,
+            Vec::new(),
+        )
+        .await
+    }
+
+    /// Durably enqueue optimism, projection overlays, and the calendar events
+    /// whose occurrence sets stay uncertain until the mutation settles.
+    pub async fn enqueue_optimistic_mutation_with_calendar(
+        &mut self,
+        origin_op: Option<OpId>,
+        input: BeginOptimisticWrite<'_>,
+        claim: MutationClaimRequest,
+        projection_mutations: Vec<OptimisticProjectionMutation>,
+        uncertain_calendar_event_keys: Vec<EntityKey<'static>>,
+    ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
         let begun = self
-            .upsert_optimistic_write(origin_op, input, projection_mutations)
+            .upsert_optimistic_write(
+                origin_op,
+                input,
+                projection_mutations,
+                uncertain_calendar_event_keys,
+            )
             .await?;
         let initial_claim = match self.claim_next_mutation(claim).await {
             Ok(Some(claimed)) => InitialClaimOutcome::Claimed(Box::new(claimed)),
@@ -2281,7 +2364,7 @@ impl<S: Storage> Engine<S> {
         };
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?;
-        let mut updates = match normalize(op, variables, data) {
+        let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
             Err(error) if identity_errors.is_empty() => return Err(error.into()),
             Err(error) => {
@@ -2354,7 +2437,7 @@ impl<S: Storage> Engine<S> {
         // and recovered by the returned revalidations.
         let mut effective = bases.clone();
         merge_updates_into_effective(&mut effective, &updates);
-        apply_link_patches(&mut effective, &mut updates, &recipes, true)?;
+        apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         let (durable_changed, entries) = stage_updates(&bases, updates);
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
@@ -2534,7 +2617,7 @@ impl<S: Storage> Engine<S> {
             // loop from retrying it.
             let missing: BTreeSet<_> = patches
                 .iter()
-                .flat_map(|patch| missing_patch_records(&effective, patch))
+                .flat_map(|patch| missing_patch_records(&self.schema, &effective, patch))
                 .chain(patches.iter().filter_map(|patch| {
                     let inserted = patch.operation.inserted_entity_key()?;
                     (!effective.contains_key(inserted)).then(|| inserted.clone())
@@ -2591,14 +2674,14 @@ impl<S: Storage> Engine<S> {
         let operation = Self::document(&mut self.docs, &inspection.query)?
             .operation(inspection.operation_name.as_deref())?
             .clone();
-        let prepared = prepare(&operation, &inspection.path)?;
+        let prepared = prepare(&self.schema, &operation, &inspection.path)?;
 
         let mut candidates = BTreeSet::from([EntityKey::root()]);
         let variants = loop {
             let bases = self.load_bases(&candidates).await?;
             let effective =
                 present_records(effective_records(&bases, &self.optimistic, &candidates));
-            match resolve_owner(&effective, &operation, &inspection.path)? {
+            match resolve_owner(&self.schema, &effective, &operation, &inspection.path)? {
                 OwnerResolution::Owner(owner) => break recover_variants(&owner, &prepared)?,
                 OwnerResolution::Absent => return Ok(Vec::new()),
                 OwnerResolution::NeedRecord(key) if !candidates.contains(&key) => {

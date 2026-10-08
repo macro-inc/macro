@@ -98,6 +98,12 @@ export const enableCanvasNext = defineFlag({
   default: LOCAL_ONLY ? false : undefined,
 });
 
+/** Opt into the carousel create menu; otherwise use the detailed launcher. */
+export const enableCarouselCreateMenu = defineFlag({
+  key: 'enable-carousel-create-menu',
+  env: 'ENABLE_CAROUSEL_CREATE_MENU',
+});
+
 /**
  * Imperative snapshot. Env/`default` override wins. Otherwise PostHog,
  * or `false` if flags have not loaded or the key is unknown.
@@ -560,6 +566,13 @@ export const enableGraphqlSoup = defineFlag({
   env: 'ENABLE_GRAPHQL_SOUP',
 });
 
+/** Serves calendar reads from the normalized cache; requires GraphQL Soup. */
+export const enableGraphqlCalendar = defineFlag({
+  key: 'enable-graphql-calendar',
+  env: 'ENABLE_GRAPHQL_CALENDAR',
+  default: DEV_MODE_ENV || undefined,
+});
+
 /** Independent emergency stop. Any true env/PostHog source wins. */
 export const disableBrowserTursoCache = defineFlag({
   key: 'disable-browser-turso-cache',
@@ -656,6 +669,13 @@ export const enableCalendarPromptWeb = defineFlag({
 export const enableCalendarTeamOoo = defineFlag({
   key: 'enable-calendar-team-ooo',
   env: 'ENABLE_CALENDAR_TEAM_OOO',
+  default: onInDev,
+});
+
+// Read-only team calendar projections; the server separately controls rollout.
+export const enableCalendarTeamSharing = defineFlag({
+  key: 'enable-calendar-team-sharing',
+  env: 'ENABLE_CALENDAR_TEAM_SHARING',
   default: onInDev,
 });
 

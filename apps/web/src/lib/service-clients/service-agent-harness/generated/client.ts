@@ -30,7 +30,9 @@ import type {
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
+  PullRequestsSessionsResponse,
   PullRequestUrl,
+  PullRequestUrls,
   RenameAgentSessionRequest,
   SandboxSizeBody,
   SessionPullRequestsResponse,
@@ -627,6 +629,73 @@ export const agentSessionsForPullRequest = async (
     status: res.status,
     headers: res.headers,
   } as agentSessionsForPullRequestResponse;
+};
+
+/**
+ * @summary List the sessions associated with each of up to 100 pull requests that the caller can view,
+with the thread each session was started from.
+ */
+export type agentSessionsForPullRequestsResponse200 = {
+  data: PullRequestsSessionsResponse;
+  status: 200;
+};
+
+export type agentSessionsForPullRequestsResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type agentSessionsForPullRequestsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type agentSessionsForPullRequestsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type agentSessionsForPullRequestsResponseSuccess =
+  agentSessionsForPullRequestsResponse200 & {
+    headers: Headers;
+  };
+export type agentSessionsForPullRequestsResponseError = (
+  | agentSessionsForPullRequestsResponse400
+  | agentSessionsForPullRequestsResponse401
+  | agentSessionsForPullRequestsResponse500
+) & {
+  headers: Headers;
+};
+
+export type agentSessionsForPullRequestsResponse =
+  | agentSessionsForPullRequestsResponseSuccess
+  | agentSessionsForPullRequestsResponseError;
+
+export const getAgentSessionsForPullRequestsUrl = () => {
+  return `/agent-sessions/by-pull-requests`;
+};
+
+export const agentSessionsForPullRequests = async (
+  pullRequestUrls: PullRequestUrls,
+  options?: RequestInit
+): Promise<agentSessionsForPullRequestsResponse> => {
+  const res = await fetch(getAgentSessionsForPullRequestsUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pullRequestUrls),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentSessionsForPullRequestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentSessionsForPullRequestsResponse;
 };
 
 /**

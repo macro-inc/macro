@@ -1,13 +1,20 @@
+import { DocumentOutline } from '@app/components/DocumentOutline';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import CalendarCheck from '@phosphor/calendar-check.svg';
 import Database from '@phosphor/database.svg';
 import Plus from '@phosphor/plus.svg';
-import Rows from '@phosphor/rows.svg';
 import ShieldCheck from '@phosphor/shield-check.svg';
 import Warning from '@phosphor/warning.svg';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { Key } from '@solid-primitives/keyed';
-import { Button, Dialog, Dropdown, Panel } from '@ui';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import {
+  Badge,
+  Button,
+  badgeTriggerClasses,
+  Dialog,
+  Dropdown,
+  Panel,
+} from '@ui';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
@@ -30,19 +37,17 @@ import {
 } from '../components/builder/booking-card';
 import { BookingLinkDialog } from '../components/builder/booking-link-dialog';
 import {
-  BuilderPalette,
-  BuilderSidebar,
   BuilderSkeleton,
   ConversionNotice,
   DropIndicator,
   HiddenColumns,
-  OutlineSection,
   TitleCard,
 } from '../components/builder/builder-chrome';
 import {
   DragHandle,
   DragInstructions,
 } from '../components/builder/drag-handle';
+import { InsertionPoint } from '../components/builder/insertion-point';
 import { OptionListEditor } from '../components/builder/option-list-editor';
 import { QuestionPreview } from '../components/builder/question-body';
 import { QuestionFooter } from '../components/builder/question-footer';
@@ -83,6 +88,7 @@ import type {
   FormSection,
   SectionKind,
 } from '../core/form-model';
+import { availabilityLine, formAvailability } from '../core/form-status';
 import {
   placementDescription,
   routingLine,
@@ -271,7 +277,7 @@ function BuilderCanvas(
   const [editingRules, setEditingRules] = createSignal<string>();
   const [choosingBooking, setChoosingBooking] = createSignal(false);
   let afterMenuClose: (() => void) | undefined;
-  let compactAddTrigger: HTMLButtonElement | undefined;
+  const sectionAddTriggers = new Map<string, HTMLButtonElement>();
   let dialogReturnFocus: HTMLButtonElement | undefined;
   const [pendingRelation, setPendingRelation] = createSignal<{
     choice: QuestionTypeChoice;
@@ -280,6 +286,11 @@ function BuilderCanvas(
   // One per mount: the same form can be built in two splits.
   const instructionsId = createUniqueId();
   let viewport: HTMLDivElement | undefined;
+  const [outlineViewport, setOutlineViewport] = createSignal<HTMLDivElement>();
+  const [viewportHeight, setViewportHeight] = createSignal(0);
+  createResizeObserver(outlineViewport, (entries) => {
+    setViewportHeight(entries.height);
+  });
   let column: HTMLDivElement | undefined;
 
   const layout = props.layout;
@@ -458,9 +469,6 @@ function BuilderCanvas(
     builder.removeSection(section.id);
   }
 
-  const gateCount = () =>
-    layout().sections.filter((section) => section.kind === 'gate').length;
-
   const booking = () => bookingStep(layout());
   const bookingLinks = context.booking.createLinks(
     () => !props.detail.tableGone
@@ -494,11 +502,6 @@ function BuilderCanvas(
       card?.focus({ preventScroll: true });
     });
 
-  const addBooking = (target: FormBookingTarget) => {
-    const result = builder.addBooking(target);
-    if (result) revealBooking(result.sectionId);
-  };
-
   const bookingMenu = (menuProps: {
     trigger: JSX.Element;
     triggerLabel?: string;
@@ -529,14 +532,13 @@ function BuilderCanvas(
       label: questionTypeLabel(hidden.kind, null),
     }));
 
-  const addAllHidden = () => {
-    for (const hidden of builder.hiddenColumns())
-      builder.addExistingColumn(hidden.id);
-  };
-
   return (
     <div
-      ref={viewport}
+      ref={(element) => {
+        viewport = element;
+        setOutlineViewport(element);
+        setViewportHeight(element.clientHeight);
+      }}
       data-form-builder-background
       class="@container/builder relative h-full min-h-0 overflow-y-auto bg-canvas-base touch:pb-(--mobile-content-inset-bottom)"
       onClick={(event) => {
@@ -557,26 +559,40 @@ function BuilderCanvas(
       <div aria-live="assertive" aria-atomic="true" class="sr-only">
         {drag.announcement()}
       </div>
-      <div
-        data-form-builder-background
-        class="mx-auto grid w-full max-w-[1320px] grid-cols-1 items-start justify-center gap-5 p-4 @3xl/builder:grid-cols-[minmax(0,680px)_272px] @5xl/builder:grid-cols-[272px_minmax(0,680px)_272px] @5xl/builder:py-6"
-      >
-        <div class="mx-auto w-full max-w-[680px] @3xl/builder:col-span-full @3xl/builder:max-w-none">
+      <div data-form-builder-background class="relative min-h-full px-6">
+        <div class="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-6 pt-12 pb-24">
           <TitleCard
             databaseLink={
-              <Button
-                variant="outline"
-                class="max-w-full gap-2"
-                aria-label={`Open database ${table.databaseName() ?? 'Database'}`}
-                tooltip={table.databaseName() ?? 'Database'}
-                onClick={() => props.onOpenDatabase(form().databaseId)}
-              >
-                <Database class="size-4 text-code" aria-hidden="true" />
-                <span class="truncate">
-                  {table.databaseName() ?? 'Database'}
-                </span>
-                <ArrowSquareOut class="size-3.5" aria-hidden="true" />
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class={badgeTriggerClasses({
+                    variant: 'outline',
+                    size: 'sm',
+                    class: 'max-w-full text-ink-muted',
+                  })}
+                  aria-label={`Open database ${table.databaseName() ?? 'Database'}`}
+                  tooltip={table.databaseName() ?? 'Database'}
+                  onClick={() => props.onOpenDatabase(form().databaseId)}
+                >
+                  <Database class="size-3 text-code" aria-hidden="true" />
+                  <span class="truncate">
+                    {table.databaseName() ?? 'Database'}
+                  </span>
+                  <ArrowSquareOut class="size-3" aria-hidden="true" />
+                </Button>
+                <Badge variant="outline" size="sm">
+                  {availabilityLine(
+                    formAvailability(
+                      form(),
+                      props.detail.tableGone,
+                      new Date()
+                    ),
+                    new Date()
+                  )}
+                </Badge>
+              </>
             }
             name={form().name}
             description={form().description}
@@ -606,280 +622,331 @@ function BuilderCanvas(
                 )
               )
             }
-            meta={
-              <>
-                <li>
-                  {form().audience === 'public'
-                    ? 'Anyone with the link'
-                    : 'Invited people'}
-                </li>
-                <li>
-                  {questionSections().length === 1
-                    ? '1 section'
-                    : `${questionSections().length} sections`}
-                </li>
-                <Show when={gateCount() > 0}>
-                  <li>
-                    {gateCount() === 1
-                      ? '1 screener'
-                      : `${gateCount()} screeners`}
-                  </li>
-                </Show>
-                <Show when={booking()}>
-                  <li>Ends with booking</li>
-                </Show>
-              </>
-            }
           />
-        </div>
-        <BuilderSidebar
-          outline={
-            <ul class="flex flex-col gap-2">
-              <Key each={layout().sections} by="id">
-                {(section) => (
-                  <OutlineSection
-                    name={sectionName(layout(), section().id)}
-                    kind={section().kind}
-                    number={sectionPosition(layout(), section().id)}
-                    selected={builder.targetSectionId() === section().id}
-                    onSelectSection={() => {
-                      builder.focusSection(section().id);
-                      viewport
-                        ?.querySelector(`[data-form-section="${section().id}"]`)
-                        ?.scrollIntoView({
-                          block: 'start',
-                          behavior: 'smooth',
-                        });
-                    }}
-                    questions={section().questions.map((question) => ({
-                      id: question.id,
-                      title: columnTitle(question.columnId),
-                      selected: builder.selectedId() === question.id,
-                    }))}
-                    onSelectQuestion={(questionId) => {
-                      builder.select(questionId);
-                      viewport
-                        ?.querySelector(`[data-form-question="${questionId}"]`)
-                        ?.scrollIntoView({
-                          block: 'center',
-                          behavior: 'smooth',
-                        });
-                    }}
-                  />
-                )}
-              </Key>
-            </ul>
-          }
-        />
-        <div
-          role="region"
-          aria-label="Form canvas"
-          data-form-builder-background
-          class="mx-auto flex w-full max-w-[680px] min-w-0 flex-col gap-4"
-        >
-          <Show when={props.detail.tableGone}>
-            <div
-              role="alert"
-              class="flex items-start gap-2 rounded-lg border border-failure bg-failure-bg px-3 py-2.5 text-sm text-failure-ink"
-            >
-              <Warning class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              This form’s table was deleted or its database is in the trash. It
-              can’t take responses until the database is restored.
-            </div>
-          </Show>
-          <Show when={props.failure}>
-            {(message) => <LayoutFailure message={message()} />}
-          </Show>
-          <Show when={props.collaboration.publicationError()}>
-            {(problem) => (
-              <LayoutFailure
-                message={`Respondents still see the last valid version of this form. ${problem()}`}
-              />
-            )}
-          </Show>
-          <Show when={saveNotice(props.collaboration)}>
-            {(notice) => (
-              <p
-                role="status"
-                class="rounded-lg border border-edge-muted bg-panel px-3 py-2 text-sm text-ink-muted"
+          <div
+            role="region"
+            aria-label="Form canvas"
+            data-form-builder-background
+            class="flex w-full min-w-0 flex-col gap-4"
+          >
+            <Show when={props.detail.tableGone}>
+              <div
+                role="alert"
+                class="flex items-start gap-2 rounded-lg border border-failure bg-failure-bg px-3 py-2.5 text-sm text-failure-ink"
               >
-                {notice()}
-              </p>
-            )}
-          </Show>
-          <Show when={builder.conversion()}>
-            {(pending) => (
-              <ConversionNotice
-                message={pending().message}
-                label={pending().label}
-                onConvert={() => void builder.convertQuestion()}
-                onDismiss={builder.dismissConversion}
-              />
-            )}
-          </Show>
-          <div ref={column} class="relative flex min-h-60 flex-col gap-6">
-            <Show when={layout().sections.length === 0}>
-              <div class="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-edge bg-surface p-6 text-sm text-ink-muted">
-                Click a question type or drag it here.
+                <Warning class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                This form’s table was deleted or its database is in the trash.
+                It can’t take responses until the database is restored.
               </div>
             </Show>
-            <For each={sectionIds()}>
-              {(sectionId) => {
-                const section = () => sectionById(sectionId);
-                const index = () =>
-                  layout().sections.findIndex((item) => item.id === sectionId);
-                const sectionTarget: DragTarget = {
-                  kind: 'section',
-                  id: sectionId,
-                };
-                const handle = () => (
-                  <DragHandle
-                    instructionsId={instructionsId}
-                    data-drag-handle={`section:${sectionId}`}
-                    label={`Move ${sectionName(layout(), sectionId)}`}
-                    dragging={drag.isDragging(sectionTarget)}
-                    disabled={props.detail.tableGone}
-                    handle={drag.handleProps(() => sectionTarget)}
-                  />
-                );
-                const menu = () => (
-                  <SectionMenu
-                    label={`${sectionName(layout(), sectionId)} actions`}
-                    canMoveUp={
-                      index() > 0 &&
-                      !builder.sectionMoveRefusal(sectionId, index() - 1)
-                    }
-                    canMoveDown={
-                      index() < layout().sections.length - 1 &&
-                      !builder.sectionMoveRefusal(sectionId, index() + 1)
-                    }
-                    deleteLabel={
-                      section()?.kind === 'gate'
-                        ? 'Delete screener'
-                        : 'Delete section'
-                    }
-                    onMoveUp={() => builder.moveSection(sectionId, index() - 1)}
-                    onMoveDown={() =>
-                      builder.moveSection(sectionId, index() + 1)
-                    }
-                    onDelete={() => {
-                      const current = section();
-                      if (current) void confirmRemoveSection(current);
-                    }}
-                  />
-                );
-                return (
-                  <Show when={section()}>
-                    {(current) => (
-                      <Switch>
-                        <Match when={current().kind === 'gate'}>
-                          <GateCard
-                            sectionId={sectionId}
-                            eyebrow={`Screener ${sectionPosition(layout(), sectionId)}`}
-                            title={current().title}
-                            sentence={rulesSentence(
-                              current().gateRules,
-                              builder.columns()
-                            )}
-                            message={current().gateMessage}
-                            dragging={drag.isDragging(sectionTarget)}
-                            editingRules={editingRules() === sectionId}
-                            brokenRules={
-                              brokenGateColumns(layout(), sectionId).length
-                            }
-                            onRepair={() => builder.repairGate(sectionId)}
-                            handle={handle()}
-                            menu={menu()}
-                            noQuestionsBefore={
-                              gateColumns(layout(), sectionId).length === 0
-                            }
-                            onEditRules={() => setEditingRules(sectionId)}
-                            onTitle={(title) =>
-                              builder.updateSection(sectionId, { title })
-                            }
-                            onMessage={(gateMessage) =>
-                              builder.updateSection(sectionId, { gateMessage })
-                            }
-                            ruleEditor={
-                              <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
-                                {
-                                  // Rendered once per opening, its props read
-                                  // live: a save must not remount the editor
-                                  // and drop a condition still being filled.
-                                  untrack(() =>
-                                    context.ui.renderConditionEditor({
-                                      get columns() {
-                                        return gateColumns(
-                                          layout(),
-                                          sectionId
-                                        ).flatMap((columnId): FormColumn[] => {
-                                          const found =
-                                            builder.column(columnId);
-                                          return found ? [found] : [];
-                                        });
-                                      },
-                                      get rules() {
-                                        return current().gateRules;
-                                      },
-                                      onChange: (gateRules) =>
-                                        builder.updateSection(sectionId, {
-                                          gateRules: gateRules ?? {
-                                            conjunction: 'and',
-                                            conditions: [],
-                                          },
-                                        }),
-                                    })
-                                  )
+            <Show when={props.failure}>
+              {(message) => <LayoutFailure message={message()} />}
+            </Show>
+            <Show when={props.collaboration.publicationError()}>
+              {(problem) => (
+                <LayoutFailure
+                  message={`Respondents still see the last valid version of this form. ${problem()}`}
+                />
+              )}
+            </Show>
+            <Show when={saveNotice(props.collaboration)}>
+              {(notice) => (
+                <p
+                  role="status"
+                  class="rounded-lg border border-edge-muted bg-panel px-3 py-2 text-sm text-ink-muted"
+                >
+                  {notice()}
+                </p>
+              )}
+            </Show>
+            <Show when={builder.conversion()}>
+              {(pending) => (
+                <ConversionNotice
+                  message={pending().message}
+                  label={pending().label}
+                  onConvert={() => void builder.convertQuestion()}
+                  onDismiss={builder.dismissConversion}
+                />
+              )}
+            </Show>
+            <div ref={column} class="relative flex flex-col gap-10">
+              <Show when={layout().sections.length === 0}>
+                <div class="flex min-h-72 items-center justify-center rounded-xl border border-dashed border-edge bg-surface p-6 text-sm text-ink-muted">
+                  Click a question type or drag it here.
+                </div>
+              </Show>
+              <For each={sectionIds()}>
+                {(sectionId) => {
+                  const section = () => sectionById(sectionId);
+                  const index = () =>
+                    layout().sections.findIndex(
+                      (item) => item.id === sectionId
+                    );
+                  const sectionTarget: DragTarget = {
+                    kind: 'section',
+                    id: sectionId,
+                  };
+                  const handle = () => (
+                    <DragHandle
+                      instructionsId={instructionsId}
+                      data-drag-handle={`section:${sectionId}`}
+                      label={`Move ${sectionName(layout(), sectionId)}`}
+                      dragging={drag.isDragging(sectionTarget)}
+                      disabled={props.detail.tableGone}
+                      handle={drag.handleProps(() => sectionTarget)}
+                    />
+                  );
+                  const menu = () => (
+                    <SectionMenu
+                      label={`${sectionName(layout(), sectionId)} actions`}
+                      canMoveUp={
+                        index() > 0 &&
+                        !builder.sectionMoveRefusal(sectionId, index() - 1)
+                      }
+                      canMoveDown={
+                        index() < layout().sections.length - 1 &&
+                        !builder.sectionMoveRefusal(sectionId, index() + 1)
+                      }
+                      deleteLabel={
+                        section()?.kind === 'gate'
+                          ? 'Delete screener'
+                          : 'Delete section'
+                      }
+                      onMoveUp={() =>
+                        builder.moveSection(sectionId, index() - 1)
+                      }
+                      onMoveDown={() =>
+                        builder.moveSection(sectionId, index() + 1)
+                      }
+                      onDelete={() => {
+                        const current = section();
+                        if (current) void confirmRemoveSection(current);
+                      }}
+                    />
+                  );
+                  return (
+                    <div class="relative min-w-0">
+                      <Show when={index() > 0 && !props.detail.tableGone}>
+                        <InsertionPoint betweenSections>
+                          <Dropdown>
+                            <Dropdown.Trigger
+                              variant="outline"
+                              size="sm"
+                              class="h-6 shrink-0 bg-surface px-2"
+                              aria-label={`Insert before ${sectionName(layout(), sectionId)}`}
+                            >
+                              <Plus class="size-3.5" />
+                              Add
+                            </Dropdown.Trigger>
+                            <Dropdown.Content onCloseAutoFocus={runAfterClose}>
+                              <Dropdown.Item
+                                onSelect={() =>
+                                  insertSectionBefore('questions', sectionId)
                                 }
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  class="self-end"
-                                  onClick={() => setEditingRules(undefined)}
-                                >
-                                  Done
-                                </Button>
-                              </div>
-                            }
-                          />
-                        </Match>
-                        <Match when={current().kind === 'booking' && current()}>
-                          {(booking) => {
-                            const link = bookingLinkState(
-                              () => booking().bookingTarget ?? undefined
-                            );
-                            return (
-                              <BookingCard
+                              >
+                                <Plus class="size-4" />
+                                Section
+                              </Dropdown.Item>
+                              <Dropdown.Item
+                                onSelect={() =>
+                                  insertSectionBefore('gate', sectionId)
+                                }
+                              >
+                                <ShieldCheck class="size-4" />
+                                Gate
+                              </Dropdown.Item>
+                            </Dropdown.Content>
+                          </Dropdown>
+                        </InsertionPoint>
+                      </Show>
+                      <Show when={section()}>
+                        {(current) => (
+                          <Switch>
+                            <Match when={current().kind === 'gate'}>
+                              <GateCard
                                 sectionId={sectionId}
+                                eyebrow={`Screener ${sectionPosition(layout(), sectionId)}`}
+                                title={current().title}
+                                sentence={rulesSentence(
+                                  current().gateRules,
+                                  builder.columns()
+                                )}
+                                message={current().gateMessage}
+                                dragging={drag.isDragging(sectionTarget)}
+                                editingRules={editingRules() === sectionId}
+                                brokenRules={
+                                  brokenGateColumns(layout(), sectionId).length
+                                }
+                                onRepair={() => builder.repairGate(sectionId)}
+                                handle={handle()}
+                                menu={menu()}
+                                noQuestionsBefore={
+                                  gateColumns(layout(), sectionId).length === 0
+                                }
+                                onEditRules={() => setEditingRules(sectionId)}
+                                onTitle={(title) =>
+                                  builder.updateSection(sectionId, { title })
+                                }
+                                onMessage={(gateMessage) =>
+                                  builder.updateSection(sectionId, {
+                                    gateMessage,
+                                  })
+                                }
+                                ruleEditor={
+                                  <div class="flex flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3">
+                                    {
+                                      // Rendered once per opening, its props read
+                                      // live: a save must not remount the editor
+                                      // and drop a condition still being filled.
+                                      untrack(() =>
+                                        context.ui.renderConditionEditor({
+                                          get columns() {
+                                            return gateColumns(
+                                              layout(),
+                                              sectionId
+                                            ).flatMap(
+                                              (columnId): FormColumn[] => {
+                                                const found =
+                                                  builder.column(columnId);
+                                                return found ? [found] : [];
+                                              }
+                                            );
+                                          },
+                                          get rules() {
+                                            return current().gateRules;
+                                          },
+                                          onChange: (gateRules) =>
+                                            builder.updateSection(sectionId, {
+                                              gateRules: gateRules ?? {
+                                                conjunction: 'and',
+                                                conditions: [],
+                                              },
+                                            }),
+                                        })
+                                      )
+                                    }
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      class="self-end"
+                                      onClick={() => setEditingRules(undefined)}
+                                    >
+                                      Done
+                                    </Button>
+                                  </div>
+                                }
+                              />
+                            </Match>
+                            <Match
+                              when={current().kind === 'booking' && current()}
+                            >
+                              {(booking) => {
+                                const link = bookingLinkState(
+                                  () => booking().bookingTarget ?? undefined
+                                );
+                                return (
+                                  <BookingCard
+                                    sectionId={sectionId}
+                                    title={current().title}
+                                    description={current().description}
+                                    link={link()}
+                                    menu={
+                                      <SectionMenu
+                                        label={`${sectionName(layout(), sectionId)} actions`}
+                                        canMoveUp={false}
+                                        canMoveDown={false}
+                                        deleteLabel="Remove booking step"
+                                        onMoveUp={() => {}}
+                                        onMoveDown={() => {}}
+                                        onDelete={() =>
+                                          builder.removeSection(sectionId)
+                                        }
+                                      />
+                                    }
+                                    change={bookingMenu({
+                                      trigger: 'Change',
+                                      triggerLabel: 'Change booking link',
+                                      triggerClass: 'shrink-0',
+                                      triggerVariant: 'outline',
+                                      selected:
+                                        current().bookingTarget ?? undefined,
+                                      onChoose: (target) =>
+                                        builder.changeBookingTarget(
+                                          sectionId,
+                                          target
+                                        ),
+                                    })}
+                                    onTitle={(title) =>
+                                      builder.updateSection(sectionId, {
+                                        title,
+                                      })
+                                    }
+                                    onDescription={(description) =>
+                                      builder.updateSection(sectionId, {
+                                        description,
+                                      })
+                                    }
+                                  />
+                                );
+                              }}
+                            </Match>
+                            <Match when={current().kind === 'questions'}>
+                              <SectionCard
+                                sectionId={sectionId}
+                                eyebrow={`Section ${sectionPosition(layout(), sectionId)} of ${questionSections().length}`}
                                 title={current().title}
                                 description={current().description}
-                                link={link()}
-                                menu={
-                                  <SectionMenu
-                                    label={`${sectionName(layout(), sectionId)} actions`}
-                                    canMoveUp={false}
-                                    canMoveDown={false}
-                                    deleteLabel="Remove booking step"
-                                    onMoveUp={() => {}}
-                                    onMoveDown={() => {}}
-                                    onDelete={() =>
-                                      builder.removeSection(sectionId)
+                                questionCount={current().questions.length}
+                                empty={current().questions.length === 0}
+                                dragging={drag.isDragging(sectionTarget)}
+                                targeted={
+                                  builder.targetSectionId() === sectionId
+                                }
+                                onTarget={() => builder.focusSection(sectionId)}
+                                addQuestion={
+                                  <AddQuestionMenu
+                                    triggerClass="h-14 rounded-none border-0 bg-transparent px-5 text-sm"
+                                    triggerRef={(element) => {
+                                      sectionAddTriggers.set(
+                                        sectionId,
+                                        element
+                                      );
+                                    }}
+                                    trigger={
+                                      <>
+                                        <Plus class="size-3.5" />
+                                        Add question
+                                      </>
+                                    }
+                                    tables={relationTables()}
+                                    hiddenColumns={hiddenColumnRows()}
+                                    disabled={props.detail.tableGone}
+                                    onChoose={(choice, relation) => {
+                                      afterMenuClose = () => {
+                                        dialogReturnFocus =
+                                          sectionAddTriggers.get(sectionId);
+                                        void insertQuestion(
+                                          choice,
+                                          {
+                                            sectionId,
+                                            index: current().questions.length,
+                                          },
+                                          relation
+                                        );
+                                      };
+                                    }}
+                                    onCloseAutoFocus={runAfterClose}
+                                    onAddColumn={(columnId) =>
+                                      builder.addExistingColumn(columnId, {
+                                        sectionId,
+                                        index: current().questions.length,
+                                      })
                                     }
                                   />
                                 }
-                                change={bookingMenu({
-                                  trigger: 'Change',
-                                  triggerLabel: 'Change booking link',
-                                  triggerClass: 'shrink-0',
-                                  triggerVariant: 'outline',
-                                  selected:
-                                    current().bookingTarget ?? undefined,
-                                  onChoose: (target) =>
-                                    builder.changeBookingTarget(
-                                      sectionId,
-                                      target
-                                    ),
-                                })}
+                                handle={handle()}
+                                menu={menu()}
+                                editors={editors(sectionId, null)}
                                 onTitle={(title) =>
                                   builder.updateSection(sectionId, { title })
                                 }
@@ -888,245 +955,155 @@ function BuilderCanvas(
                                     description,
                                   })
                                 }
-                              />
-                            );
-                          }}
-                        </Match>
-                        <Match when={current().kind === 'questions'}>
-                          <SectionCard
-                            sectionId={sectionId}
-                            eyebrow={`Section ${sectionPosition(layout(), sectionId)} of ${questionSections().length}`}
-                            title={current().title}
-                            description={current().description}
-                            questionCount={current().questions.length}
-                            empty={current().questions.length === 0}
-                            dragging={drag.isDragging(sectionTarget)}
-                            targeted={builder.targetSectionId() === sectionId}
-                            onTarget={() => builder.focusSection(sectionId)}
-                            addQuestion={
-                              <AddQuestionMenu
-                                trigger={
-                                  <>
-                                    <Plus class="size-3.5" />
-                                    Add question
-                                  </>
+                                routing={
+                                  <RoutingFooter
+                                    next={routingLine(layout(), sectionId)}
+                                  />
                                 }
-                                tables={relationTables()}
-                                hiddenColumns={hiddenColumnRows()}
-                                disabled={props.detail.tableGone}
-                                onChoose={(choice, relation) => {
-                                  afterMenuClose = () =>
-                                    void insertQuestion(
-                                      choice,
-                                      { sectionId, index: 0 },
-                                      relation
-                                    );
-                                }}
-                                onCloseAutoFocus={runAfterClose}
-                                onAddColumn={(columnId) =>
-                                  builder.addExistingColumn(columnId, {
-                                    sectionId,
-                                    index: 0,
-                                  })
-                                }
-                              />
-                            }
-                            handle={handle()}
-                            menu={menu()}
-                            editors={editors(sectionId, null)}
-                            onTitle={(title) =>
-                              builder.updateSection(sectionId, { title })
-                            }
-                            onDescription={(description) =>
-                              builder.updateSection(sectionId, { description })
-                            }
-                            routing={
-                              <RoutingFooter
-                                next={routingLine(layout(), sectionId)}
-                              />
-                            }
-                          >
-                            <For
-                              each={current().questions.map(
-                                (question) => question.id
-                              )}
-                            >
-                              {(questionId) => (
-                                <QuestionItem
-                                  questionId={questionId}
-                                  sectionId={sectionId}
-                                />
-                              )}
-                            </For>
-                          </SectionCard>
-                        </Match>
-                      </Switch>
-                    )}
-                  </Show>
-                );
-              }}
-            </For>
-            <Show when={indicatorTop() !== undefined}>
-              <DropIndicator
-                top={indicatorTop() ?? 0}
-                refusal={drag.session()?.refusal}
-              />
-            </Show>
-          </div>
-          <HiddenColumns
-            columns={hiddenColumnRows()}
-            onAdd={(columnId) => builder.addExistingColumn(columnId)}
-          />
-          <div class="@3xl/builder:hidden">
-            <AddQuestionMenu
-              triggerRef={(element) => {
-                compactAddTrigger = element;
-              }}
-              trigger={
-                <>
-                  <Plus class="size-4" />
-                  Add question
-                </>
-              }
-              disabled={props.detail.tableGone}
-              tables={relationTables()}
-              hiddenColumns={hiddenColumnRows()}
-              onChoose={(choice, table) => {
-                afterMenuClose = () => {
-                  if (choice.kind === 'pick-table' && !table) {
-                    dialogReturnFocus = compactAddTrigger;
-                  }
-                  void insertQuestion(choice, undefined, table);
-                };
-              }}
-              onAddColumn={(columnId) => builder.addExistingColumn(columnId)}
-              onAddAllColumns={addAllHidden}
-              onCloseAutoFocus={runAfterClose}
-            >
-              <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Form flow</Dropdown.GroupLabel>
-                <Dropdown.Item onSelect={() => addSectionFromMenu('questions')}>
-                  <Rows class="size-4" />
-                  Section
-                </Dropdown.Item>
-                <Dropdown.Item onSelect={() => addSectionFromMenu('gate')}>
-                  <ShieldCheck class="size-4" />
-                  Screener
-                </Dropdown.Item>
-                <Show
-                  when={booking()}
-                  fallback={
-                    <Show when={context.booking.available()}>
-                      <Dropdown.Item
-                        onSelect={() => {
-                          afterMenuClose = () => {
-                            dialogReturnFocus = compactAddTrigger;
-                            setChoosingBooking(true);
-                          };
-                        }}
-                      >
-                        <CalendarCheck class="size-4" />
-                        Booking
-                      </Dropdown.Item>
-                    </Show>
-                  }
-                >
-                  {(existing) => (
-                    <Dropdown.Item
-                      onSelect={() => {
-                        afterMenuClose = () => revealBooking(existing().id);
-                      }}
-                    >
-                      <CalendarCheck class="size-4" />
-                      Booking
-                    </Dropdown.Item>
-                  )}
-                </Show>
-              </Dropdown.Group>
-            </AddQuestionMenu>
-          </div>
-        </div>
-        <BuilderPalette
-          question={(choice) => <AddQuestionButton choice={choice} />}
-          structure={
-            <div class="flex flex-col gap-0.5">
-              <div class="grid grid-cols-2 gap-0.5">
-                <AddSectionButton kind="questions">
-                  <Rows class="size-3.5" />
-                  Section
-                </AddSectionButton>
-                <AddSectionButton kind="gate">
-                  <ShieldCheck class="size-3.5" />
-                  Screener
-                </AddSectionButton>
-              </div>
-              <Show
-                when={booking()}
-                fallback={
-                  <Show when={context.booking.available()}>
-                    {bookingMenu({
-                      trigger: (
-                        <>
-                          <CalendarCheck class="size-3.5" />
-                          Booking
-                        </>
-                      ),
-                      triggerClass:
-                        'w-full justify-start gap-1 rounded-md px-1 text-xs',
-                      triggerVariant: 'ghost',
-                      onChoose: addBooking,
-                    })}
-                  </Show>
-                }
-              >
-                {(existing) => (
-                  <Button
-                    variant="ghost"
-                    size="md"
-                    class="w-full justify-start gap-1 rounded-md px-1 text-xs"
-                    onClick={() => revealBooking(existing().id)}
-                  >
-                    <CalendarCheck class="size-3.5" />
-                    Booking
-                  </Button>
-                )}
+                              >
+                                <For
+                                  each={current().questions.map(
+                                    (question) => question.id
+                                  )}
+                                >
+                                  {(questionId, questionIndex) => (
+                                    <div class="relative min-w-0">
+                                      <Show
+                                        when={
+                                          questionIndex() > 0 &&
+                                          !props.detail.tableGone
+                                        }
+                                      >
+                                        <QuestionInsertion
+                                          sectionId={sectionId}
+                                          beforeId={questionId}
+                                        />
+                                      </Show>
+                                      <QuestionItem
+                                        questionId={questionId}
+                                        sectionId={sectionId}
+                                      />
+                                    </div>
+                                  )}
+                                </For>
+                              </SectionCard>
+                            </Match>
+                          </Switch>
+                        )}
+                      </Show>
+                    </div>
+                  );
+                }}
+              </For>
+              <Show when={indicatorTop() !== undefined}>
+                <DropIndicator
+                  top={indicatorTop() ?? 0}
+                  refusal={drag.session()?.refusal}
+                />
               </Show>
             </div>
-          }
-          database={
-            <Dropdown>
-              <Dropdown.Trigger
-                variant="ghost"
+            <HiddenColumns
+              columns={hiddenColumnRows()}
+              onAdd={(columnId) => builder.addExistingColumn(columnId)}
+            />
+            <div
+              class="mt-6 flex flex-wrap gap-3"
+              role="group"
+              aria-label="Add to form"
+            >
+              <Button
+                variant="outline"
                 size="md"
-                class="w-full justify-start gap-1 rounded-md px-1 text-xs"
-                disabled={hiddenColumnRows().length === 0}
+                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
+                disabled={props.detail.tableGone}
+                onClick={() => addSectionAndFocus('questions')}
               >
-                <Database class="size-3.5" />
-                From database
-              </Dropdown.Trigger>
-              <Dropdown.Content class="w-60">
-                <Dropdown.Item onSelect={addAllHidden}>
-                  <Plus class="size-4" />
-                  <span class="flex-1">
-                    Add all {hiddenColumnRows().length} columns
-                  </span>
-                </Dropdown.Item>
-                <Dropdown.Separator class="my-1 h-px bg-edge-divider" />
-                <For each={hiddenColumnRows()}>
-                  {(hidden) => (
-                    <Dropdown.Item
-                      onSelect={() => builder.addExistingColumn(hidden.id)}
-                    >
-                      <QuestionTypeIcon type={hidden.type} />
-                      <span class="flex-1 truncate">{hidden.name}</span>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Content>
-            </Dropdown>
-          }
-        />
+                <Plus class="size-4" />
+                Add section
+              </Button>
+              <Button
+                variant="outline"
+                size="md"
+                class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
+                disabled={props.detail.tableGone}
+                onClick={() => addSectionAndFocus('gate')}
+              >
+                <ShieldCheck class="size-4" />
+                Add gate
+              </Button>
+              <Show when={booking() || context.booking.available()}>
+                <Button
+                  variant="outline"
+                  size="md"
+                  class="h-14 flex-1 justify-start gap-2 rounded-xl px-5"
+                  disabled={props.detail.tableGone}
+                  onClick={(event) => {
+                    const existing = booking();
+                    if (existing) {
+                      revealBooking(existing.id);
+                    } else {
+                      dialogReturnFocus = event.currentTarget;
+                      setChoosingBooking(true);
+                    }
+                  }}
+                >
+                  <CalendarCheck class="size-4" />
+                  {booking() ? 'View meeting link' : 'Add meeting link'}
+                </Button>
+              </Show>
+            </div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-y-0 left-4 z-1 hidden w-10 @min-[880px]/builder:block">
+          <Show when={outlineViewport()}>
+            {(mount) => (
+              <DocumentOutline
+                label="Form outline"
+                items={layout().sections.flatMap((section) => [
+                  {
+                    key: section.id,
+                    text: sectionName(layout(), section.id),
+                    preview: section.questions
+                      .map((q) => columnTitle(q.columnId))
+                      .join(' · '),
+                  },
+                  ...section.questions.map((question) => ({
+                    key: question.id,
+                    text: columnTitle(question.columnId),
+                    preview: questionTypeLabel(
+                      builder.column(question.columnId)?.kind ?? {
+                        type: 'text',
+                      },
+                      question.widget
+                    ),
+                  })),
+                ])}
+                activeKeys={
+                  new Set(
+                    [builder.selectedId() ?? builder.targetSectionId()].filter(
+                      (id): id is string => !!id
+                    )
+                  )
+                }
+                viewportHeight={viewportHeight()}
+                portalMount={mount()}
+                onSelect={(key) => {
+                  const section = sectionById(key);
+                  if (section) builder.focusSection(key);
+                  else builder.select(key);
+                  viewport
+                    ?.querySelector(
+                      `[data-form-${section ? 'section' : 'question'}="${key}"]`
+                    )
+                    ?.scrollIntoView({
+                      block: section ? 'start' : 'center',
+                      behavior: 'instant',
+                    });
+                }}
+              />
+            )}
+          </Show>
+        </div>
       </div>
       <Show when={choosingBooking()}>
         <BookingLinkDialog
@@ -1200,44 +1177,8 @@ function BuilderCanvas(
     </div>
   );
 
-  function AddQuestionButton(buttonProps: { choice: QuestionTypeChoice }) {
-    const target = (): DragTarget => ({
-      kind: 'new-question',
-      id: buttonProps.choice.id,
-    });
-    const handle = drag.handleProps(target);
-    return (
-      <Button
-        variant="ghost"
-        size="md"
-        class="w-full touch-none justify-start gap-1 rounded-md px-1 text-xs"
-        aria-label={`Add ${buttonProps.choice.label}`}
-        data-drag-source
-        data-drag-handle={`new-question:${buttonProps.choice.id}`}
-        disabled={
-          props.detail.tableGone ||
-          (buttonProps.choice.kind === 'pick-table' &&
-            relationTables().length === 0)
-        }
-        onPointerDown={handle.onPointerDown}
-        onKeyDown={handle.onKeyDown}
-        onBlur={handle.onBlur}
-        onClick={(event) => {
-          handle.onClick(event);
-          if (!event.defaultPrevented) void insertQuestion(buttonProps.choice);
-        }}
-      >
-        <QuestionTypeIcon
-          type={buttonProps.choice.id}
-          class="size-3.5 text-ink-muted"
-        />
-        <span>{buttonProps.choice.label}</span>
-      </Button>
-    );
-  }
-
   function addSection(kind: NewSectionKind) {
-    const id = builder.addSection(kind);
+    const id = builder.addSection(kind, layout().sections.length);
     if (!id) return;
     if (kind === 'gate') setEditingRules(id);
     return id;
@@ -1264,40 +1205,69 @@ function BuilderCanvas(
     }
   }
 
-  function addSectionFromMenu(kind: NewSectionKind) {
+  function addSectionAndFocus(kind: NewSectionKind) {
     const id = addSection(kind);
-    if (id) afterMenuClose = () => focusHandle({ kind: 'section', id });
+    if (id) queueMicrotask(() => focusHandle({ kind: 'section', id }));
   }
 
-  function AddSectionButton(buttonProps: {
-    kind: NewSectionKind;
-    children: JSX.Element;
+  function insertSectionBefore(kind: NewSectionKind, beforeId: string) {
+    const index = layout().sections.findIndex(
+      (section) => section.id === beforeId
+    );
+    if (index < 0) return;
+    const id = builder.addSection(kind, index);
+    if (!id) return;
+    if (kind === 'gate') setEditingRules(id);
+    afterMenuClose = () => focusHandle({ kind: 'section', id });
+  }
+
+  function QuestionInsertion(insertion: {
+    sectionId: string;
+    beforeId: string;
   }) {
-    const target = (): DragTarget => ({
-      kind: 'new-section',
-      id: buttonProps.kind,
-    });
-    const handle = drag.handleProps(target);
+    let trigger: HTMLButtonElement | undefined;
+    const placement = (): QuestionPlacement | undefined => {
+      const index = sectionById(insertion.sectionId)?.questions.findIndex(
+        (question) => question.id === insertion.beforeId
+      );
+      return index !== undefined && index >= 0
+        ? { sectionId: insertion.sectionId, index }
+        : undefined;
+    };
     return (
-      <Button
-        variant="ghost"
-        size="md"
-        class="w-full touch-none justify-start gap-1 rounded-md px-1 text-xs"
-        data-drag-source
-        data-drag-handle={`new-section:${buttonProps.kind}`}
-        disabled={props.detail.tableGone}
-        onPointerDown={handle.onPointerDown}
-        onKeyDown={handle.onKeyDown}
-        onBlur={handle.onBlur}
-        onClick={(event) => {
-          handle.onClick(event);
-          if (event.defaultPrevented) return;
-          const id = addSection(buttonProps.kind);
-          if (id) drag.refocus({ kind: 'section', id });
-        }}
-      >
-        {buttonProps.children}
-      </Button>
+      <InsertionPoint>
+        <AddQuestionMenu
+          triggerClass="h-6 w-auto! shrink-0 bg-surface px-2 text-xs"
+          triggerRef={(element) => {
+            trigger = element;
+          }}
+          trigger={
+            <>
+              <Plus class="size-3.5" />
+              <span class="sr-only">
+                Insert question before {questionTitle(insertion.beforeId)}
+              </span>
+            </>
+          }
+          tables={relationTables()}
+          hiddenColumns={hiddenColumnRows()}
+          onChoose={(choice, relation) => {
+            afterMenuClose = () => {
+              const at = placement();
+              if (!at) return;
+              dialogReturnFocus = trigger;
+              void insertQuestion(choice, at, relation);
+            };
+          }}
+          onAddColumn={(columnId) => {
+            afterMenuClose = () => {
+              const at = placement();
+              if (at) void builder.addExistingColumn(columnId, at);
+            };
+          }}
+          onCloseAutoFocus={runAfterClose}
+        />
+      </InsertionPoint>
     );
   }
 

@@ -124,6 +124,7 @@ describe('spreadsheet toolbar', () => {
     ['Format and data', 'Sort selected range A → Z', 'sort-asc'],
     ['Format and data', 'Fill down', 'fill-down'],
     ['Format and data', 'Clear formatting', 'clear-formatting'],
+    ['Format and data', 'Goal Seek…', 'goal-seek'],
   ])(
     'keeps %s / %s reachable with the keyboard',
     async (trigger, item, command) => {

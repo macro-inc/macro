@@ -21,3 +21,6 @@ pub mod service;
 
 #[cfg(feature = "ports")]
 pub mod sharing;
+
+#[cfg(feature = "ports")]
+pub mod authoring;

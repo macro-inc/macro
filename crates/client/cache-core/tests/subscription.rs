@@ -45,6 +45,7 @@ fn subscription_normalization_persists_entities_but_not_the_root() {
     assert_eq!(operation.kind, OperationKind::Subscription);
 
     let updates = normalize(
+        cache_core::meta::bundled_schema_ref(),
         operation,
         &serde_json::Map::new(),
         &updated_document("Updated"),

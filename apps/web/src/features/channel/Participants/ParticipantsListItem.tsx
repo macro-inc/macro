@@ -71,7 +71,7 @@ export function ParticipantsListItem(props: {
         </Item>
       </a>
       <Show when={props.editable}>
-        <div class="absolute right-3 top-1/2 -translate-y-1/2">
+        <div class="absolute right-4 top-1/2 -translate-y-1/2">
           <Button
             label={
               canRemove() ? 'Remove participant' : 'Cannot remove participant'

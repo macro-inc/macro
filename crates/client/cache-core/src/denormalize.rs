@@ -68,12 +68,14 @@ pub enum ReadOutcome {
 /// Attempts to answer `op` from `source`. `deps` accumulates every entity
 /// key touched (for dependency tracking), regardless of outcome.
 pub fn denormalize(
+    schema: &crate::meta::Schema,
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
     deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_with_entity_resolvers(
+        schema,
         op,
         variables,
         source,
@@ -84,6 +86,7 @@ pub fn denormalize(
 
 /// Attempts to answer `op` while applying validated read-only entity links.
 pub fn denormalize_with_entity_resolvers(
+    schema: &crate::meta::Schema,
     op: &Operation,
     variables: &serde_json::Map<String, Json>,
     source: &impl RecordSource,
@@ -91,8 +94,9 @@ pub fn denormalize_with_entity_resolvers(
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
+        schema,
         &EntityKey::root(),
-        meta::QUERY_ROOT_TYPE,
+        schema.query_root(),
         &op.selection_set,
         variables,
         source,
@@ -103,6 +107,7 @@ pub fn denormalize_with_entity_resolvers(
 
 /// Projects one normalized record through a fragment selection.
 pub fn denormalize_record(
+    schema: &crate::meta::Schema,
     key: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
@@ -111,6 +116,7 @@ pub fn denormalize_record(
     deps: &mut impl DependencyTracker,
 ) -> Result<ReadOutcome, DenormalizeError> {
     denormalize_record_with_entity_resolvers(
+        schema,
         key,
         type_name,
         selections,
@@ -121,7 +127,12 @@ pub fn denormalize_record(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "explicit schema and read dependencies"
+)]
 fn denormalize_record_with_entity_resolvers(
+    schema: &crate::meta::Schema,
     key: &EntityKey<'static>,
     type_name: &str,
     selections: &[Selection],
@@ -130,7 +141,7 @@ fn denormalize_record_with_entity_resolvers(
     deps: &mut impl DependencyTracker,
     entity_resolvers: &EntityResolverLookup,
 ) -> Result<ReadOutcome, DenormalizeError> {
-    ReadSession::new(key, type_name, selections).resume(
+    ReadSession::new(schema, key, type_name, selections).resume(
         variables,
         source,
         deps,
@@ -143,6 +154,7 @@ fn denormalize_record_with_entity_resolvers(
 /// completed fields and list positions survive storage hydration rounds.
 /// The source must remain an immutable logical snapshot until completion.
 pub(crate) struct ReadSession<'a> {
+    schema: &'a crate::meta::Schema,
     data: Json,
     pending: Vec<PendingRecord<'a>>,
     deleted_items: BTreeSet<Vec<ResponsePath<'a>>>,
@@ -175,11 +187,13 @@ struct PendingRecord<'a> {
 
 impl<'a> ReadSession<'a> {
     pub(crate) fn new(
+        schema: &'a crate::meta::Schema,
         key: &EntityKey<'static>,
         type_name: &'a str,
         selections: &'a [Selection],
     ) -> Self {
         Self {
+            schema,
             data: Json::Null,
             pending: vec![PendingRecord {
                 key: key.clone(),
@@ -205,6 +219,7 @@ impl<'a> ReadSession<'a> {
         for pending in std::mem::take(&mut self.pending) {
             let retain_output = pending.destination.is_some();
             let mut walk = Walk {
+                schema: self.schema,
                 variables,
                 source,
                 deps,
@@ -269,6 +284,7 @@ impl<'a> ReadSession<'a> {
 }
 
 struct Walk<'a, 'document, S: RecordSource, D: DependencyTracker> {
+    schema: &'document crate::meta::Schema,
     variables: &'a serde_json::Map<String, Json>,
     source: &'a S,
     deps: &'a mut D,
@@ -337,9 +353,13 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         concrete: &str,
         selections: &'document [Selection],
     ) -> Result<Json, DenormalizeError> {
-        let fields_plan =
-            self.plans
-                .fields(selections, concrete, self.variables, self.entity_resolvers)?;
+        let fields_plan = self.plans.fields(
+            self.schema,
+            selections,
+            concrete,
+            self.variables,
+            self.entity_resolvers,
+        )?;
         let pending_start = self.pending.len();
         let mut out = serde_json::Map::new();
         for planned_field in fields_plan.iter() {
@@ -424,7 +444,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
         &mut self,
         owner: &EntityKey<'static>,
         field: &'document FieldNode,
-        ty: &meta::FieldType,
+        ty: &meta::FieldType<'document>,
         value: &CacheValue,
     ) -> Result<Json, DenormalizeError> {
         Ok(match value {
@@ -472,6 +492,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
 }
 
 fn collect_fields<'a>(
+    schema: &crate::meta::Schema,
     selections: &'a [Selection],
     concrete_type: &str,
     out: &mut Vec<&'a FieldNode>,
@@ -485,10 +506,10 @@ fn collect_fields<'a>(
             } => {
                 let applies = match type_condition {
                     None => true,
-                    Some(cond) => meta::type_matches(concrete_type, cond),
+                    Some(cond) => schema.type_matches(concrete_type, cond),
                 };
                 if applies {
-                    collect_fields(selection_set, concrete_type, out);
+                    collect_fields(schema, selection_set, concrete_type, out);
                 }
             }
         }

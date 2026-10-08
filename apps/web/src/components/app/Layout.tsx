@@ -85,7 +85,7 @@ import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const StarterDatabase = lazy(async () => {
   const module = await import(
-    '@app/features/block-database/views/starter-database'
+    '../../features/block-database/views/starter-database'
   );
   return { default: module.StarterDatabase };
 });

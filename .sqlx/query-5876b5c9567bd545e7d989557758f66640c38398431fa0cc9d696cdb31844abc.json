@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts SET last_sync_error='provider failure' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5876b5c9567bd545e7d989557758f66640c38398431fa0cc9d696cdb31844abc"
+}

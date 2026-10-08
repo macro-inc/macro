@@ -102,11 +102,34 @@ other entity partitions, and notified-at sorting still use the network path.
 The Mark done action (`e`, row menu) hides its rows at once from GraphQL lists that
 exclude done items, such as Email Important/Noise and Home Signal, without waiting
 for the server. Email All keeps the row and flips its done indicator immediately.
-Undo restores a previously admitted row even after the cache has removed it,
+GraphQL Undo is offered as soon as Done applies locally, even while its initial
+write is pending. Undo restores the row and focus immediately; its server write
+waits for the initial outcomes and uses only acknowledged notification IDs.
+A late Done reply must not settle or overwrite the newer Undo display intent.
+Undo also restores a previously admitted row after the cache has removed it,
 without waiting for the reversal's server reply; changing filters/sort clears
 those view-local restoration snapshots. Home's separate recent-activity inclusion
 rules are unchanged. Test Done/Undo/Redo with delayed replies and verify both flat
 and grouped rows/counts. A failure must roll back only its own local intent.
+Test mixed committed/queued/rejected archives and notification writes,
+including an archive that fails while its notifications succeed (and vice versa). Accepted writes retain Undo; rejected siblings must neither
+reappear in its request nor be retried by Redo. Partial feedback keeps an Undo
+action. A reply with no matching notification IDs must release that target's
+optimistic hide and notification overrides immediately, even if Undo was never
+clicked and mounted readers remain stale. Do not wait for acknowledgement or a
+timer when there is no receipt. Accepted siblings keep their own display intent;
+a no-op target cannot borrow their IDs to restore its row. Mixed accepted/no-op
+results replace the optimistic full-count toast with the actual completed count
+and retain Undo for accepted writes. An empty notification receipt alone must not
+make a successfully archived email or completed reminder look partially failed.
+Partial Undo/Redo failures retry only the failed writes.
+If every initial write fails, retire its pending Undo/Redo entry and unwind both
+Done and any early Undo overrides. Disposal or clearing history while a reversal
+is pending must not resurrect that entry when its response arrives. Also delay
+Redo, then perform a new action: the late Redo's success or failure must not
+repopulate either history stack or show its stale completion toast. The next Undo
+must still target the newer action; already-dispatched network writes are not
+cancelled by this history fence.
 Newer in-scope activity can re-admit a row, but loading an older notification or
 activity in a separate channel thread must not. Redo targets the original exact
 notification IDs, not notifications received since the original action. A newer
@@ -118,6 +141,14 @@ Login/logout retires old buckets; even same-account native reauthentication must
 not let old overlay Undo/Redo handles or a late refresh republish old intent.
 Verify account changes with overlapping entity IDs and a pending/failed refresh.
 After a successful Done, verify that the row stays gone after a reload.
+Test GraphQL list optimism independently of REST: block REST Soup, email-thread,
+and user-notification data endpoints before page initialization, then confirm
+GraphQL alone populates the list. Hold GraphQL mutation replies while testing
+Done/Undo/Redo and rejection: row feedback must not depend on REST cache reads,
+patches, cancellation, or invalidation. Auth/account metadata is outside this
+row-data boundary. Test the REST path separately, not as a GraphQL fallback.
+Email Reminders contains original email rows: Done archives those conversations,
+with the same immediate GraphQL Undo behavior as the other email tabs.
 In Tasks, Email, Home and Drive, rows keep their DOM when the list updates. A
 property edit or a rename updates the edited row in place instead of rebuilding
 every visible row. To verify, watch the row nodes with a `MutationObserver` while
@@ -361,7 +392,11 @@ focus without opening a task until activation. In an open task detail, they
 replace it with the next or previous task in the same filtered order.
 
 When `enable-tasks-reviews` is enabled, `Reviews` appears above `My Tasks` as a
-shortcut to the separate Reviews view. It lists relevant open GitHub pull requests;
+shortcut to the separate Reviews view. It lists accessible GitHub pull requests;
+Open/Closed tabs below search and filters default to Open; Closed includes merged
+PRs. Status also remains in the filter menu. Custom multi-status selections hide
+the tabs except for the combined Closed preset.
+The list topbar says Reviews at narrow widths or with its sidebar collapsed;
 selecting one opens `/app/reviews/pr/<foreignEntityId>` with a Reviews breadcrumb.
 See [Tasks](tasks.md#reviews-view) for verification.
 
@@ -1104,7 +1139,18 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. In a folder
+The New menu and drag/drop uploads target the selected folder. **New → Folder**
+and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
+choose **Add tags**, and stage files or nested folders in the large drop area
+(or use **Add files** / **Add folder**). Staged items can be removed before
+**Create Folder** (Cmd/Ctrl+Enter); nothing uploads until submission. Confirmation
+closes the composer immediately while creation and uploads finish in the background.
+On touch devices, the folder composer uses the same bottom drawer as Task, with
+the name and tags fields; the upload area and file/folder picker buttons are hidden.
+Expanding into a split keeps the draft. Creation preserves the current location
+and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
+action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft
+without submitting when verifying against hosted dev data. In a folder
 opened in its own split or an inline preview, drop files from the computer onto
 the empty state or file list, then reopen the folder to verify membership.
 Check both one file and multiple files; the nested list drop target must retain
@@ -1162,7 +1208,13 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+pill. On a cold reload, the first event paint waits for calendar metadata so events
+appear in their configured colors. A REST/GraphQL handoff for the same user and
+date range keeps the visible events and calendar list while the new reader loads;
+changing the user or date range must not retain the old events. Verify both handoff
+directions with delayed responses and delay calendar metadata past occurrences.
+If metadata fails, events remain usable with the default calendar presentation.
+Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 Errors retain the separate retry state. Verify delayed occurrence
@@ -1170,6 +1222,32 @@ responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
 handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+Imported timed events with identical start and end are points: they show a compact
+chip with one time and `No duration` in details, and do not block availability.
+Future points also appear in Upcoming events, without becoming ongoing meetings.
+Grid dragging and resizing are disabled for points. An owned point's metadata,
+RSVP, and deletion still work; metadata saves preserve its exact provider time.
+Creating an event or changing its time requires positive duration. Shared points
+remain read-only and appear only when their details are shared.
+An existing Macro call can keep its schedule during point metadata edits; adding
+a new Macro call requires giving the event a duration first.
+
+Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
+and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
+for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+path). A range the cache has covered renders with no occurrence request, and a far
+jump fetches only the uncovered weeks. A `refresh_calendar` poke, reconnecting,
+coming online, or returning to the tab runs one `CalendarChanges` delta that
+applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+through the durable mutation queue: a rejected write rolls back with the usual
+error, and a write made offline stays visible and replays on reconnect. Native
+apps whose engine lacks the calendar cache commands keep the REST path. Until the
+cache answers its first calendar read, viewports wait at most a second and then
+read from REST, and writes use REST, so a cache that is slow to start or fails
+("Local cache unavailable") never leaves the calendar on skeletons. Writes in
+that window behave as on the REST path: offline, they roll back with an error
+instead of replaying.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
@@ -1312,6 +1390,52 @@ beside the bottom AI input offers Event, feature-gated Call, and feature-gated
 Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
+
+With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
+**Team sharing**: `Busy blocks` (the default), `Event details`, and `Nothing`.
+These are Macro read permissions. They do not change Google Calendar ACLs,
+invite teammates to meetings, or let teammates edit, RSVP, or manage reminders.
+The sharing choice covers every currently authorized calendar synced to Macro.
+Private/confidential events only expose generic time blocks; event details
+come from one authorized source copy. Disconnecting an account or losing
+source access removes its team projection.
+
+**Calendars that count as busy** controls which calendars represent the user's
+personal schedule. Primary calendars count by default; other calendars require
+explicit inclusion. Meetings the user attends also contribute, except declined
+meetings. Following a coworker's calendar does not automatically make that
+coworker's events occupy the user's time. In team overlays, `Busy` means the
+block contributes to that teammate's availability; `Shared calendar block`
+means it belongs to a calendar the teammate can access and does not count
+toward their busy time. Event details show the same distinction explicitly.
+
+The sidebar's **Team calendars** section has a master `Show team calendars`
+switch and per-teammate checkboxes; Settings exposes the same display controls.
+Display toggles affect this viewer's grid only. Team chips are prefixed with
+the sharer's name and open read-only details. Copy-event links, guest-email
+actions, RSVP, editing, and deletion are unavailable on team projections.
+A directly accessible copy retains its own actions; another person's projection
+of the same meeting may appear separately, with its sharing provenance.
+Distinct authorized source copies may also appear separately for the same
+teammate and meeting: their detail masking and availability contribution can differ.
+Team projections and availability use server-confirmed copies. An offline queued
+edit appears in the editor's own calendar, but reaches teammates only after the
+server commits the provider-backed change and their shared projection refreshes.
+An unavailable team fetch displays a warning and removes stale shared details.
+Sharing-change notifications clear open shared details before refetching;
+focus/reconnect and a 30-second refresh provide a fallback. Shared details also
+disappear when an offline refresh is paused; they are not persisted for offline
+use. While the app is running, team responses and in-flight requests expire
+after 60 seconds, so a hung refresh cannot retain old details. Replacing a login
+session clears team data and open shared details before the new identity loads.
+Legacy out-of-office rows are read-only status displays and do not claim
+that every absence blocks availability.
+
+The `GetTeamAvailability` AI tool checks the requester together with the selected
+teammates. It reports confirmed free windows only when every participant has
+complete availability coverage. Hidden, disconnected, stale, or incomplete
+calendars are reported as unknown, never free. Busy blocks contain no event
+titles or private event metadata.
 
 The in-view desktop Calendar header uses one responsive top bar. The viewed
 month and year stay on the left in a heading that scales from 16px in narrow
@@ -1519,6 +1643,14 @@ GitHub's permissions and branch protections decide; a refusal appears as a toast
 with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
 GitHub account the toast points to Settings. Merged and closed PRs have no Merge
 button. PRs are not tasks and do not appear in the Tasks list.
+The metadata pills beneath the PR title include linked agent sessions, using the
+agent sparkle icon. A single session shows its name; several sessions show a
+count chip opening a session list. Selecting a session opens it, with Shift-click
+on the single-session chip opening another split. The same chip appears in PR
+list metadata without activating its containing PR row. Empty links show no chip;
+loading or inaccessible session previews are not navigable. PR status pills stay
+passive; status filtering uses the Reviews list's Open/Closed sliding tabs and
+filter menu.
 Opening **Changes** slides a full-height pane in from the right beside the PR details,
 including beside the PR top bar rather than underneath it. The PR details shrink
 alongside the entry slide instead of eagerly jumping narrower. The Changes pane
@@ -1814,6 +1946,34 @@ editors without changing hosted data.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
 The sidebar's Views and Lists sections can also collapse independently.
 
+**Pipelines** in the CRM sidebar hold company or contact entries in the shared
+records editor. They have their own identity, ownership and sharing; their
+storage does not appear as a separate database in navigation.
+**New pipeline** is disabled until the team's CRM is enabled. For a new team,
+use **Open CRM settings** in the empty state to enable CRM, then return to
+Customers to create a pipeline. Verify this with a newly created team as well as
+an existing CRM-enabled team.
+Choose **New pipeline**, enter a name, choose **Companies** or **Contacts**, and
+choose **Just me** (the default) or **My team**. Creating opens the pipeline's
+editable table. Team members can edit shared pipelines; the creator owns them
+and can change access later through the standard **Share** dialog. Under
+**Team access**, choose **Edit** to share with the team or **None** to make the
+pipeline private. **Copy Link** copies a CRM link that opens this pipeline for
+anyone who has access. On mobile, team access is in the **Team** tab.
+
+The first column is a required company/contact reference. The same company or
+contact can occur in multiple rows in a pipeline and can also belong to other
+pipelines. Each row has its own field values; **Duplicate** copies a row into a new
+entry referencing the same company or contact. The reference column
+can be renamed but cannot be removed or changed to another type. Stage, Owner,
+and Revenue are independent pipeline fields; editing them does not modify the
+company's CRM fields. Use **Add column** or a column header's menu to customize
+columns. Pipeline Stage options initially copy the team's current deal stages. Open
+pipelines refresh other editors' changes periodically; a local edit refreshes
+immediately after saving.
+**Trash pipeline** removes its table from navigation without deleting the linked
+companies or contacts. **Back to companies** returns to the main CRM views.
+
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
 Existing list data is preserved; a restored list view returns to All companies while
@@ -2047,6 +2207,9 @@ Free-team joins do not create a paid subscription, bill a seat, or grant premium
 roles. Teams with an existing paid subscription retain their per-seat billing;
 enterprise teams retain their billing bypass.
 
+On a local stack started with `--no-doppler`, verify free-team creation from a
+fresh passwordless signup. It must work without Stripe credentials.
+
 Under **Team**, owners/admins can turn **Auto-join on domain** off and can restrict
 invitations to admins with **Members can invite**. These controls still apply.
 To verify the membership flow, use a local free team with five members: invite
@@ -2160,11 +2323,43 @@ Usage controls, including usage-limit dialogs. Dev tools remain interactive:
 Free and paid previews can be combined with this state, and `Reset preview`
 restores the normal dev view.
 
-`Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
-users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
-on Premium, and a `Switch to Premium` link on Max. On a team, a plan change moves
-only the viewer's own seat. Plan allowance copy uses the backend catalog and
-still follows the `enable-ai-usage-billing` flag; usage controls live in Usage.
+`Billing` shows the current plan and `Manage`. Free users see separate Pro
+(`Get Pro`) and Max (`Get Max`) cards, side by side when the panel is wide enough
+and stacked on narrow panels. The Pro card shows `Free for one month!` for Free
+users. `Get Pro` requests the same server-validated 30-day first-subscription
+trial as onboarding; checkout redirects only after the server confirms the trial.
+Ineligible accounts see the rejection reason and are not silently charged.
+`Get Max` keeps standard paid terms. Prices read `/ month` for solo users and
+`per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
+the price when narrow. Free lists 2 connected email accounts; Pro and Max list
+unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
+users see a Pro card (`Switch to Pro`). Cards appear only for users who can
+manage their subscription. Team-paid members see no plan options, including
+on Free seats. Member options stay hidden until the billing summary confirms
+they pay for their own seat. On a team, a plan change moves only the viewer's
+own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
+still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+The upgrade modal and Billing use the same plan cards and benefits, including
+the same flag-gated AI usage label and responsive card layout. The modal offers
+Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
+Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
+`Manage plan` closes the modal and opens Billing settings, where checkout and
+plan changes take place. Team-paid members see a message
+to contact their team owner. Plan options wait for the billing summary and team
+lookup; failed lookups show `Try again` rather than guessed upgrade options.
+
+On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
+Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
+and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
+billing summary status, billing permission, active/trialing license, AI usage
+flag, and pending plan actions. The preview uses the real Billing UI with local
+fixtures; checkout, plan changes, Manage, and Team settings only show preview
+status messages. `Preview paywall` opens the same modal for the selected state,
+without developer controls inside it. Dismissing the modal returns to Billing
+with the selection preserved. `Manage plan` returns to the selected Billing preview.
+`Reset preview` restores Solo/Free; `Exit preview` restores
+the signed-in account. State is not persisted and resets on leaving Billing.
+These controls are excluded from deployed builds, including dev.macro.com.
 
 `Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Premium and Max with the `Seat plan`
@@ -2270,6 +2465,21 @@ mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
 
 ## Notifications
+
+In the desktop app, **Settings → Notifications → Delivery → Desktop notifications**
+controls system notification delivery for this installation. When the Notifications
+page is disabled by its feature flag, the existing **Account → Notifications**
+switch controls the same preference.
+Turning it off takes effect immediately and persists across app restarts; turning
+it on requests permission and resumes delivery when authorized. On macOS the
+switch reads the actual system authorization, and enabling it requests macOS
+permission if it has not been decided. If macOS reports denial, enabling the switch
+shows directions to **System Settings → Notifications → Macro → Allow notifications**
+without requesting permission again; returning to Macro refreshes the switch.
+It does not change inbox items or other devices. Focus and presentation settings
+can still suppress alerts even when authorization is granted.
+Verify off/on and persistence after restarting; on the Notifications page, a failed
+toggle should show an error toast and allow retry.
 
 On native Android, enable notifications in Settings while signed in. Android 13+
 also asks for system permission; the system's **Activity** notification channel
