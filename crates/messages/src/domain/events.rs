@@ -8,6 +8,7 @@
 use super::models::{Message, MessageParent, SimpleMention};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -63,6 +64,16 @@ pub struct MessagePostedMetadata {
 }
 
 impl MessagePostedMetadata {
+    /// User authorizing this invocation, including a trusted bot's attribution.
+    /// Autonomous bot posts have no invoking user and cannot start paid sessions.
+    pub fn invoking_user(&self) -> Option<MacroUserIdStr<'static>> {
+        self.sender.as_user().cloned().or_else(|| {
+            MacroUserIdStr::parse_from_str(self.triggered_by.as_deref()?)
+                .ok()
+                .map(CowLike::into_owned)
+        })
+    }
+
     /// Build the event from the persisted message, never from client parent claims.
     pub fn from_message(message: &Message, mentions: Vec<SimpleMention>) -> Self {
         Self {
@@ -116,6 +127,10 @@ pub struct MessageMentionedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessagePatchedMetadata {
+    /// Completed bot answer eligible for explicit mention routing. Ordinary edits
+    /// omit this; older producers remain compatible with the trigger consumer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_reply: Option<MessagePostedMetadata>,
     /// Entity that owns the message.
     pub parent: MessageParent,
     /// The id of the patched message.

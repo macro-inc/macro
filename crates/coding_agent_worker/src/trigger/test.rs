@@ -182,7 +182,7 @@ fn a_follow_up_becomes_prompt_existing() {
 }
 
 #[test]
-fn a_bots_own_message_is_skipped() {
+fn an_unattributed_bot_message_is_skipped() {
     let mut event = mention("self talk");
     if let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) =
         &mut event
@@ -271,5 +271,27 @@ async fn failed_work_is_returned() {
         handle_event(Event::new(mention("fix it")), &executor)
             .await
             .is_err()
+    );
+}
+
+#[test]
+fn attributed_bot_mentions_open_and_prompt_with_the_invoking_user() {
+    let mut open = mention("fix the test");
+    if let AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(event)) = &mut open {
+        event.message.sender = ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
+        event.message.triggered_by = Some(sender().to_string());
+    }
+    assert!(
+        matches!(trigger_to_work(open).unwrap(), TriggerWork::OpenAndPrompt { sender: actor, .. } if actor == sender())
+    );
+    let mut follow_up = follow_up("continue");
+    if let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(event)) =
+        &mut follow_up
+    {
+        event.message.sender = ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
+        event.message.triggered_by = Some(sender().to_string());
+    }
+    assert!(
+        matches!(trigger_to_work(follow_up).unwrap(), TriggerWork::PromptExisting { sender: actor, .. } if actor == sender())
     );
 }

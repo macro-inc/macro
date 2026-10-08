@@ -312,7 +312,7 @@ async fn a_private_global_agent_is_unavailable_to_another_user() {
 }
 
 #[tokio::test]
-async fn a_bot_authored_mention_cannot_trigger_an_agent() {
+async fn an_unattributed_bot_mention_cannot_trigger_an_agent() {
     let mut posted = message(vec![mention_of(BotId::TEST_A)]);
     posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
     let (replies, judge) = no_implicit();
@@ -1303,5 +1303,136 @@ async fn a_crm_discussion_cannot_invoke_another_users_private_agent() {
             .once()
             .return_once(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
         assert!(!mention_yields_event(&posted, bots).await);
+    }
+}
+
+#[tokio::test]
+async fn attributed_bot_mentions_open_or_resume_the_target_session() {
+    for (source, target) in [
+        (bot_id::MACRO_NEW_BOT_ID, bot_id::CURSOR_BOT_ID),
+        (bot_id::CURSOR_BOT_ID, bot_id::MACRO_NEW_BOT_ID),
+        (BotId::TEST_A, bot_id::MACRO_NEW_BOT_ID),
+    ] {
+        for existing in [false, true] {
+            let mut posted = message(vec![mention_of(target)]);
+            posted.sender = ChannelSender::new_from_bot(source);
+            posted.triggered_by = Some(user().to_string());
+            let mut sessions = MockAgentSessionRepo::new();
+            let id = AgentSessionId::TEST_A;
+            sessions
+                .expect_find_for_thread()
+                .once()
+                .returning(move |thread, bot| {
+                    assert_eq!(thread, Some(Uuid::from_u128(3)));
+                    assert_eq!(bot, Some(target));
+                    Box::pin(async move {
+                        Ok(if existing {
+                            ThreadSession::CreatedFromThread(thread_session(id, target))
+                        } else {
+                            ThreadSession::None
+                        })
+                    })
+                });
+            let mut bots = MockAgentBotLookup::new();
+            bots.expect_get_agent()
+                .returning(|_| Box::pin(async { Ok(None) }));
+            bots.expect_get_bot()
+                .returning(|bot| Box::pin(async move { Ok(Some(system_bot(bot))) }));
+            let mut history = MockThreadHistory::new();
+            history
+                .expect_authorize_invocation()
+                .once()
+                .returning(|actor, parent, root| {
+                    assert_eq!(actor, &user());
+                    allow_invocation(actor, parent, root)
+                });
+            let (replies, judge) = no_implicit();
+            let events = service_reading(sessions, bots, replies, judge, history)
+                .evaluate(&posted)
+                .await
+                .unwrap();
+            assert_eq!(
+                events,
+                vec![if existing {
+                    TriggerDecision::Existing {
+                        bot_id: target,
+                        session_id: id,
+                        kind: ThreadMessageKind::MentionThread,
+                        message: posted,
+                    }
+                } else {
+                    TriggerDecision::Open {
+                        bot_id: target,
+                        message: posted,
+                    }
+                }]
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn attributed_bots_cannot_bypass_access_or_trigger_themselves() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+    posted.triggered_by = Some(user().to_string());
+    let mut history = MockThreadHistory::new();
+    history
+        .expect_authorize_invocation()
+        .once()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    let (replies, judge) = no_implicit();
+    assert!(
+        service_reading(
+            MockAgentSessionRepo::new(),
+            MockAgentBotLookup::new(),
+            replies,
+            judge,
+            history
+        )
+        .evaluate(&posted)
+        .await
+        .unwrap()
+        .is_empty()
+    );
+
+    for (source, actor) in [
+        (BotId::TEST_A, user().to_string()),
+        (BotId::TEST_B, "macro|outsider@example.com".into()),
+    ] {
+        posted.sender = ChannelSender::new_from_bot(source);
+        posted.triggered_by = Some(actor);
+        let mut bots = MockAgentBotLookup::new();
+        bots.expect_get_agent()
+            .once()
+            .returning(|bot| Box::pin(async move { Ok(Some(private_agent(bot))) }));
+        assert!(!mention_yields_event(&posted, bots).await);
+    }
+}
+
+#[tokio::test]
+async fn unattributed_or_unmentioned_bot_messages_do_not_trigger() {
+    for (attribution, mentions) in [
+        (None, vec![mention_of(BotId::TEST_A)]),
+        (Some("invalid".to_owned()), vec![mention_of(BotId::TEST_A)]),
+        (Some(user().to_string()), vec![]),
+    ] {
+        let mut posted = message(mentions);
+        posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+        posted.triggered_by = attribution;
+        let (replies, judge) = no_implicit();
+        assert!(
+            service_reading(
+                MockAgentSessionRepo::new(),
+                MockAgentBotLookup::new(),
+                replies,
+                judge,
+                MockThreadHistory::new()
+            )
+            .evaluate(&posted)
+            .await
+            .unwrap()
+            .is_empty()
+        );
     }
 }

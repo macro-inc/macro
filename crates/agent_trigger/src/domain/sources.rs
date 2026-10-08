@@ -3,7 +3,8 @@
 //!
 //! `message.posted` on `macro.messages` is the source of record: it carries the
 //! persisted parent, so a mention in a document discussion routes like one in a
-//! channel. The consumer also reads property changes for task assignments,
+//! channel. Finalized bot replies carry the same candidate on their edit event.
+//! The consumer also reads property changes for task assignments,
 //! including a task joining a project through its Project property.
 
 #[cfg(test)]
@@ -56,7 +57,13 @@ impl TriggerEvents for MessageTriggerEvents {
                     channel_type: None,
                 }),
             ),
-            MessageTopicEvent::Patched(_) => ("message.patched", None),
+            MessageTopicEvent::Patched(patched) => (
+                "message.patched",
+                patched.completed_reply.clone().map(|posted| TriggerInput {
+                    posted,
+                    channel_type: None,
+                }),
+            ),
             MessageTopicEvent::Deleted(_) => ("message.deleted", None),
             MessageTopicEvent::Mentioned(_) => ("message.mentioned", None),
             MessageTopicEvent::AttachmentCreated(_) => ("message.attachment_created", None),

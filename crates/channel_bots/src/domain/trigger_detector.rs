@@ -21,8 +21,8 @@ use super::sender_label;
 /// * the thread already contains a Macro AI message,
 /// * the classifier judges that the message expects an agent response.
 ///
-/// Bot-authored messages never trigger anything; classifier failures resolve
-/// to no trigger.
+/// Attributed bot messages require an explicit mention of another bot;
+/// classifier failures resolve to no trigger.
 pub struct MentionOrInferredDetector<I> {
     messages: Arc<dyn MessageReader>,
     access: Arc<dyn ConversationAccess>,
@@ -150,15 +150,12 @@ where
     I: InferredTriggerClassifier,
 {
     async fn detect(&self, candidate: &MessagePostedMetadata) -> Vec<BotInvocation> {
-        if candidate.sender.as_user().is_none() {
-            return Vec::new();
-        }
-        let Some(user) = candidate.sender.as_user() else {
+        let Some(user) = candidate.invoking_user() else {
             return Vec::new();
         };
         if self
             .access
-            .user_write(user, &candidate.parent)
+            .user_write(&user, &candidate.parent)
             .await
             .is_err()
         {
@@ -168,6 +165,9 @@ where
         if !mentioned.is_empty() {
             return mentioned
                 .into_iter()
+                .filter(|bot_id| {
+                    candidate.sender.as_bot().map(|sender| sender.bot_id()) != Some(*bot_id)
+                })
                 .map(|bot_id| BotInvocation {
                     bot_id,
                     trigger: BotTrigger::Mention,

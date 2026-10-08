@@ -800,6 +800,7 @@ fn message_event_cases() -> Vec<(MessageTopicEvent, MessageEventDescription)> {
         ),
         (
             MessageTopicEvent::Patched(MessagePatchedMetadata {
+                completed_reply: None,
                 parent: channel.clone(),
                 message_id: MESSAGE_ID,
                 thread_id: None,

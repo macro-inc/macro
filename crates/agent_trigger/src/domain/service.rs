@@ -21,7 +21,6 @@ use messages::domain::service::MessageWrite;
 use messages::domain::{events::MessagePostedMetadata, models::MessageParent};
 
 use channel_sender::ChannelSender;
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
@@ -232,7 +231,7 @@ where
         posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
-        let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(caller) = posted.invoking_user() else {
             return Ok(false);
         };
 
@@ -353,9 +352,12 @@ where
         agent.mention.bot_count = tracing::field::Empty,
     ))]
     pub async fn evaluate(&self, posted: &MessagePostedMetadata) -> Result<Vec<TriggerDecision>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(Vec::new());
         };
+        if posted.sender.as_bot().is_some() && bot_mention_ids(&posted.mentions).is_empty() {
+            return Ok(Vec::new());
+        }
         let Some(invocation) = self
             .history
             .authorize_invocation(&user, &posted.parent, posted.root_id())

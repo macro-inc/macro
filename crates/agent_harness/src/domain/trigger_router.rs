@@ -29,8 +29,8 @@ pub enum Skipped {
     /// The event is another deployment's to act on: an open for a bot whose
     /// runtime opens its own sessions, or managed traffic that is not ours.
     ForeignBot,
-    /// The sender is not a user, so there is nobody to own the session.
-    NotFromUser,
+    /// Neither a user sender nor trusted bot attribution names a session owner.
+    MissingInvokingUser,
     /// An event shape this harness does not recognise yet - the trigger's
     /// vocabulary is non-exhaustive on purpose, and unknown shapes are
     /// skipped rather than wedging the partition.
@@ -83,10 +83,8 @@ pub fn route_agent_trigger(
                 return Err(Skipped::ForeignBot);
             };
             let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+                .invoking_user()
+                .ok_or(Skipped::MissingInvokingUser)?;
             Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
@@ -115,6 +113,7 @@ pub fn route_agent_trigger(
             else {
                 return Err(Skipped::Unrecognized);
             };
+            let sender = message.invoking_user();
             let origin = AnnounceOrigin {
                 reuse_origin_message: false,
                 parent: message.parent,
@@ -132,16 +131,12 @@ pub fn route_agent_trigger(
                             message.content,
                             links.prompt_attachments(&message.attachments),
                         ),
-                        message.sender.as_user().cloned(),
+                        sender.clone(),
                         Some(origin),
                     )),
                 ));
             }
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = sender.ok_or(Skipped::MissingInvokingUser)?;
             Ok(RoutedTrigger::Announce(
                 session_id,
                 AnnouncePrompt {

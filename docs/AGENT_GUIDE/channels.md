@@ -202,6 +202,18 @@ an agent session; follow-up
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
+
+Agents can explicitly mention another agent to start or continue its session in the
+same thread. The originating user's permissions, connected runtime, and usage
+allowance apply through the bot message's server-recorded attribution. Autonomous
+webhook posts without that attribution do not start sessions. Bot messages never
+trigger inferred replies or their own bot. Mentions in finalized bot answers are
+also routed; streaming updates and ordinary edits are not.
+To verify, ask session-backed `@Macro` to post a mention of `@cursor`, then have
+Cursor post a mention of session-backed Macro in the same thread. Check that the
+first mention opens Cursor and the return mention continues Macro's existing
+session. Repeat with revoked channel access and confirm no new work starts.
+
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
 `ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),

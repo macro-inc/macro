@@ -73,7 +73,7 @@ async fn document_mention_triggers_each_canonical_bot_once_without_classificatio
     assert_eq!(admission.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 #[tokio::test]
-async fn bot_authored_messages_never_trigger_another_response() {
+async fn unattributed_bot_messages_never_trigger_another_response() {
     let mut trigger = message(1, None, "@macro help");
     trigger.sender_id = channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
     trigger.mentions = vec![SimpleMention {
@@ -180,4 +180,39 @@ async fn unavailable_history_cannot_be_replaced_by_an_unverified_event_transcrip
             .is_empty()
     );
     assert!(classifier.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn attributed_bots_require_an_explicit_other_bot_mention_and_current_access() {
+    for (source, mention, revoked, expected) in [
+        (bot_id::CURSOR_BOT_ID, true, false, true),
+        (bot_id::MACRO_AI_BOT_ID, true, false, false),
+        (bot_id::CURSOR_BOT_ID, false, false, false),
+        (bot_id::CURSOR_BOT_ID, true, true, false),
+    ] {
+        let mut trigger = message(2, Some(Uuid::from_u128(1)), "help");
+        trigger.sender_id = channel_sender::ChannelSender::new_from_bot(source);
+        trigger.triggered_by = Some(user().to_string());
+        if mention {
+            trigger.mentions = vec![SimpleMention {
+                entity_type: "bot".into(),
+                entity_id: bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string(),
+            }];
+        }
+        let access = Arc::new(Access::default());
+        if revoked {
+            access.revoke();
+        }
+        let classifier = classifier(Ok(true));
+        let detector = MentionOrInferredDetector::new(
+            Arc::new(MockMessageServiceApi::new()),
+            access,
+            classifier.clone(),
+        );
+        assert_eq!(
+            !detector.detect(&event(&trigger)).await.is_empty(),
+            expected
+        );
+        assert!(classifier.calls.lock().unwrap().is_empty());
+    }
 }

@@ -292,6 +292,34 @@ pub enum MessageChange {
     },
 }
 
+impl MessageEvent {
+    /// A posted message or finalized bot reply to evaluate for agent mentions.
+    /// Streaming and ordinary edits must never wake an agent.
+    pub fn agent_trigger(&self) -> Option<super::events::MessagePostedMetadata> {
+        let (message, mentions) = match &self.change {
+            MessageChange::Posted {
+                message, mentions, ..
+            } => (message, mentions),
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } if message.sender_id.as_bot().is_some()
+                && self.actor == message.sender_id.as_ref()
+                && !super::mentions::bot_mention_ids(mentions).is_empty() =>
+            {
+                (message, mentions)
+            }
+            _ => return None,
+        };
+        Some(super::events::MessagePostedMetadata::from_message(
+            message,
+            mentions.clone(),
+        ))
+    }
+}
+
 /// Persisted reaction state and whether this operation changed membership.
 pub struct ReactionResult {
     /// Current message, including its reactions.
