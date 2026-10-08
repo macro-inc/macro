@@ -3,6 +3,7 @@ use activity::domain::timeline::TimelineActivity;
 use channels::domain::ports::ChannelRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
+use messages::domain::models::MessageParent;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -29,15 +30,15 @@ impl ChannelTimelinePublisher {
 
 impl activity::domain::ports::ActivityRealtimePublisher for ChannelTimelinePublisher {
     async fn publish_recorded(&self, activities: &[activity::Activity]) {
+        // The messages domain decides which timeline shows a fact. Only
+        // channel timelines have participants to deliver to here.
         let timeline = activities.iter().filter_map(|event| {
-            if event.entity_type != activity::EntityType::Channel
-                || !messages::domain::ports::CHANNEL_TIMELINE_ACTIONS
-                    .contains(&event.action.to_columns().0)
-            {
-                return None;
+            match messages::domain::ports::timeline_parent(event)? {
+                MessageParent::Channel(channel_id) => {
+                    Some((channel_id, vec![TimelineActivity::from(event)]))
+                }
+                _ => None,
             }
-            let channel_id = event.entity_id.parse().ok()?;
-            Some((channel_id, vec![TimelineActivity::from(event)]))
         });
         for (channel_id, activities) in by_channel(timeline) {
             // Storage must keep progressing even when realtime delivery is unavailable.
@@ -103,7 +104,7 @@ async fn deliver_to_participants<R: ChannelRepo>(
         .batch_send_message(
             "timeline_activity".into(),
             serde_json::json!({
-                "parent": messages::domain::models::MessageParent::Channel(channel_id),
+                "parent": MessageParent::Channel(channel_id),
                 "activities": activities,
             }),
             participants

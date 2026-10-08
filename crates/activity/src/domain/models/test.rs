@@ -84,6 +84,9 @@ fn every_action_maps_to_stable_columns() {
     for (action, expected_tag, expected_payload) in cases {
         let (tag, payload) = action.to_columns();
         assert_eq!(tag, expected_tag, "tag for {action:?}");
+        // Reads select by `ActionTag`; it must name the same stored string.
+        let selected: &str = ActionTag::from(&action).into();
+        assert_eq!(selected, expected_tag, "ActionTag for {action:?}");
         assert_eq!(payload, expected_payload, "payload for {action:?}");
         // VIEW_ACTION_TAGS is the SQL-side mirror of is_view: every variant
         // must agree so tag-filtering queries classify rows identically.

@@ -106,11 +106,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let Some(source) = timeline_activity(&parent) else {
             return self.repo.timeline(&parent, query).await.map(Into::into);
         };
+        // These filters select a subset of roots, and activity has no matching
+        // filter, so the merged window would be wrong. Including deleted threads
+        // only adds tombstones on the same keyset, so it combines with activity.
         if !query.ids.is_empty()
             || query.anchored.is_some()
             || query.activity_after.is_some()
             || query.activity_before.is_some()
-            || query.include_deleted_threads
         {
             return Err(MessageError::Invalid(
                 "activity timelines cannot be combined with message filters",

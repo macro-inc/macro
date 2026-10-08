@@ -1,8 +1,12 @@
 use super::models::*;
+use activity::{ActionTag, domain::timeline::TimelineSelection};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 /// Message use-case failure.
 #[derive(Debug, thiserror::Error)]
@@ -519,21 +523,24 @@ impl MessageGroupRecipients for NoMessageGroups {
 }
 
 /// Channel facts displayed inline; message/view actions would duplicate content.
-pub const CHANNEL_TIMELINE_ACTIONS: &[&str] = &[
-    "renamed",
-    "picture_changed",
-    "participant_added",
-    "participant_removed",
-    "call_ended",
-];
+pub const CHANNEL_TIMELINE: TimelineSelection = TimelineSelection::new(
+    &[
+        ActionTag::Renamed,
+        ActionTag::PictureChanged,
+        ActionTag::ParticipantAdded,
+        ActionTag::ParticipantRemoved,
+        ActionTag::CallEnded,
+    ],
+    &[],
+);
 
 /// The activity a parent's timeline shows next to its messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimelineActivitySource {
     /// Activity entity type that records facts about the parent.
     pub entity_type: activity::EntityType,
-    /// Actions shown inline; anything else stays in the activity feed.
-    pub actions: &'static [&'static str],
+    /// What is shown inline; anything else stays in the activity feed.
+    pub selection: TimelineSelection,
 }
 
 /// Which activity, if any, belongs in a parent's timeline. Parents without a
@@ -542,7 +549,7 @@ pub fn timeline_activity(parent: &MessageParent) -> Option<TimelineActivitySourc
     match parent {
         MessageParent::Channel(_) => Some(TimelineActivitySource {
             entity_type: activity::EntityType::Channel,
-            actions: CHANNEL_TIMELINE_ACTIONS,
+            selection: CHANNEL_TIMELINE,
         }),
         MessageParent::Document(_)
         | MessageParent::Initiative(_)
@@ -550,6 +557,18 @@ pub fn timeline_activity(parent: &MessageParent) -> Option<TimelineActivitySourc
         | MessageParent::CrmContact(_)
         | MessageParent::Call(_) => None,
     }
+}
+
+/// The timeline, if any, that shows this activity: the same declaration as
+/// [`timeline_activity`], so live delivery and reads never disagree.
+pub fn timeline_parent(activity: &activity::Activity) -> Option<MessageParent> {
+    let parent = match activity.entity_type {
+        activity::EntityType::Channel => MessageParent::Channel(activity.entity_id.parse().ok()?),
+        _ => return None,
+    };
+    let source = timeline_activity(&parent)?;
+    (source.entity_type == activity.entity_type && source.selection.includes(&activity.action))
+        .then_some(parent)
 }
 
 /// Identity of a CRM company or contact that hosts a discussion.

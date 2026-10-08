@@ -177,9 +177,11 @@ pub struct InitiativeTaskChange {
 #[strum(serialize_all = "snake_case")]
 #[strum_discriminants(
     name(ActionTag),
-    vis(pub(crate)),
-    derive(strum::EnumString),
-    strum(serialize_all = "snake_case")
+    vis(pub),
+    derive(Hash, strum::EnumString, strum::IntoStaticStr),
+    strum(serialize_all = "snake_case"),
+    doc = "An [`Action`] without its payload: the stored `action` tag, for",
+    doc = "selecting which actions a read returns."
 )]
 pub enum Action {
     /// The entity was created.
@@ -300,8 +302,8 @@ impl Action {
     /// A payload on a payload-free tag is ignored — a newer writer may have
     /// started attaching one, and old readers must keep decoding the tag they
     /// know. The tag vocabulary is the same strum derivation `to_columns`
-    /// writes with (the crate-private `ActionTag` discriminant enum, derived
-    /// from the variant names), and the match below is exhaustive on it — a
+    /// writes with (the [`ActionTag`] discriminant enum, derived from the
+    /// variant names), and the match below is exhaustive on it — a
     /// new variant fails compilation here until its decode is written.
     pub fn from_columns(tag: &str, payload: Option<&Value>) -> Result<Self, ActionDecodeError> {
         // Deserializing from `&Value` borrows; no payload clone on the read
