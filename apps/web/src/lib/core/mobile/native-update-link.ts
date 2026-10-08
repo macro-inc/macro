@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 /** HTTPS works even when the Play Store app is absent. */
 export function nativeUpdateLink(platform: 'ios' | 'android'): string {
   return platform === 'android'
-    ? 'https://play.google.com/store/apps/details?id=com.macro.app.prod'
+    ? 'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile'
     : 'https://apps.apple.com/us/app/macro-app/id6743133649';
 }
 

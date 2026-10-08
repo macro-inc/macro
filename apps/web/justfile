@@ -7,6 +7,10 @@ android-dev *ARGS:
 android-build *ARGS:
     bash scripts/android.sh build "$@"
 
+# Increment and commit before preparing the next native APK or Play AAB release.
+android-bump:
+    bun scripts/android-release.ts bump
+
 # iOS: dev-facing, for testing in Simulator. Honors PORT like the web dev
 # server (`PORT=3001 just ios-dev`): the vite server picks PORT up through
 # beforeDevCommand's environment, and the --config merge points the webview's

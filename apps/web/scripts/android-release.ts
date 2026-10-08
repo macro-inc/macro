@@ -5,12 +5,33 @@ import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 
-export const androidPackage = 'com.macro.app.prod';
+export const androidPackage = 'com.macro.workspace.mobile';
 
-export function androidReleaseMetadata(tag: string) {
-  const match = /^v(20\d{2})\.(\d{1,2})\.(\d{1,2})\.(\d{1,2})$/.exec(tag);
-  if (!match) throw new Error('Expected release tag vYYYY.M.D.N (N: 0–99)');
-  const [year, month, day, revision] = match.slice(1).map(Number);
+const androidConfigPath = new URL(
+  '../tauri/src-tauri/tauri.android.conf.json',
+  import.meta.url
+);
+const maxVersionCode = 2_100_000_000;
+const releaseConfigSchema = z
+  .object({
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    bundle: z
+      .object({
+        android: z
+          .object({
+            versionCode: z.number().int().min(1).max(maxVersionCode),
+          })
+          .passthrough(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export function androidReleaseMetadata(tag: string, config: unknown) {
+  const match = /^v(20\d{2})\.(\d{1,2})\.(\d{1,2})(?:\.(\d{1,2}))?$/.exec(tag);
+  if (!match || match[0] !== tag)
+    throw new Error('Expected release tag vYYYY.M.D or vYYYY.M.D.N (N: 0–99)');
+  const [year, month, day] = match.slice(1, 4).map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
   if (
     date.getUTCFullYear() !== year ||
@@ -18,14 +39,26 @@ export function androidReleaseMetadata(tag: string) {
     date.getUTCDate() !== day
   )
     throw new Error('Release tag must contain a valid calendar date');
-  // YYYYMMDDNN stays below Android's 2,100,000,000 limit through 2099.
-  // Rebuilding a tag keeps its code; later dated releases always increase it.
-  const versionCode = (year * 10000 + month * 100 + day) * 100 + revision;
+  const release = releaseConfigSchema.parse(config);
   return {
-    version: `${year}.${month}.${day}-${revision}`,
-    versionCode,
+    version: release.version,
+    versionCode: release.bundle.android.versionCode,
     filename: `macro-${tag}-android-arm64.apk`,
   };
+}
+
+export async function bumpAndroidVersionCode(
+  path: string | URL = androidConfigPath
+) {
+  const config = releaseConfigSchema.parse(
+    JSON.parse(await readFile(path, 'utf8'))
+  );
+  if (config.bundle.android.versionCode === maxVersionCode) {
+    throw new Error('Android versionCode has reached the Google Play limit');
+  }
+  config.bundle.android.versionCode += 1;
+  await writeFile(path, `${JSON.stringify(config, null, 2)}\n`);
+  return config.bundle.android.versionCode;
 }
 
 const signingSchema = z.object({
@@ -108,7 +141,7 @@ function fetchSigning() {
       [
         'secrets',
         'get',
-        'ANDROID_UPLOAD_SIGNING_JSON',
+        'ANDROID_UPLOAD_SIGNING_JSON_V2',
         '--project',
         'android-release',
         '--config',
@@ -201,9 +234,14 @@ export function verifyAndroidApk(
 if (import.meta.main) {
   const [command, ...args] = process.argv.slice(2);
   try {
-    if (command === 'metadata' && args.length === 2) {
+    if (command === 'bump' && args.length === 0) {
+      console.log(await bumpAndroidVersionCode());
+    } else if (command === 'metadata' && args.length === 2) {
       const [tag, destination] = args;
-      const metadata = androidReleaseMetadata(tag);
+      const metadata = androidReleaseMetadata(
+        tag,
+        JSON.parse(await readFile(androidConfigPath, 'utf8'))
+      );
       await writeFile(
         destination,
         JSON.stringify({
@@ -222,11 +260,14 @@ if (import.meta.main) {
         apk,
         buildTools,
         await readFile(certificateFile, 'utf8'),
-        androidReleaseMetadata(tag)
+        androidReleaseMetadata(
+          tag,
+          JSON.parse(await readFile(androidConfigPath, 'utf8'))
+        )
       );
     } else {
       throw new Error(
-        'Usage: android-release.ts metadata TAG CONFIG | signing DIRECTORY PROPERTIES | ensure-signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
+        'Usage: android-release.ts bump | metadata TAG CONFIG | signing DIRECTORY PROPERTIES | ensure-signing DIRECTORY PROPERTIES | verify TAG APK BUILD_TOOLS CERTIFICATE_FILE'
       );
     }
   } catch (error) {

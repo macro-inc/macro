@@ -10,7 +10,7 @@ console.log(JSON.stringify([{
   relation: ['delegate_permission/common.handle_all_urls'],
   target: {
     namespace: 'android_app',
-    package_name: 'com.macro.app.prod',
+    package_name: 'com.macro.workspace.mobile',
     sha256_cert_fingerprints: [...new Set(fingerprints)],
   },
 }], null, 2));

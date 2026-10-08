@@ -1,4 +1,4 @@
-package com.macro.app.prod
+package com.macro.workspace.mobile
 
 import android.os.Bundle
 import android.content.Context

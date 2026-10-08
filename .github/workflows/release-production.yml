@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing published production release to rebuild Android for (vYYYY.M.D.N)
+        description: Existing published production release to rebuild Android for (vYYYY.M.D or vYYYY.M.D.N)
         required: true
         type: string
       publish_android:
@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$RELEASE_TAG" =~ ^v20[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]]
+          [[ "$RELEASE_TAG" =~ ^v20[0-9]{2}\.[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]{1,2})?$ ]]
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease \
             | jq -e '.isDraft == false and .isPrerelease == false'
       - name: Checkout release
@@ -236,6 +236,8 @@ jobs:
         working-directory: apps/web
         run: just build-prod
         env:
+          MIN_NATIVE_BUILD_ANDROID: "1"
+          MIN_NATIVE_BUILD_IOS: "185"
           VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
           VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
           VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces

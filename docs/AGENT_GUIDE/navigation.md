@@ -896,7 +896,7 @@ The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons,
 
 When newer frontend JS requires a newer native app, the mobile shell offers
 **Update app** and **OK**. Update app uses the native opener; Android targets the
-HTTPS Play listing for `com.macro.app.prod`, allowing a browser when the Store app
+HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return
 to Macro, dismiss, and retry later. Task 07 verifies the live listing.
