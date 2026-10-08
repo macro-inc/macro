@@ -1,5 +1,6 @@
 import { getPreferredCalendarPeriodView } from '@app/features/calendar/calendar-preferences';
 import type { CalendarPeriodView } from '@app/features/calendar/types';
+import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type {
   OpenSplitResult,
@@ -52,9 +53,7 @@ export function calendarViewContent(
     id: CALENDAR_VIEW_ID,
     ...(params ? { params: { ...params } } : {}),
     entryMetadata: {
-      route: {
-        matches: [{ id: CALENDAR_ROUTE_ID, params: { period } }],
-      },
+      route: paneRoute({ id: CALENDAR_ROUTE_ID, params: { period } }),
       ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
     },
   };

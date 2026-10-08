@@ -36,11 +36,13 @@ type CreateCloudStorageServiceServiceArgs = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   documentStorageBucketArn: pulumi.Output<string> | string;
   docxUploadBucketArn: pulumi.Output<string> | string;
+  githubPullRequestPatchBucketArn: pulumi.Output<string> | string;
   serviceContainerPort: number;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   secretKeyArns: (pulumi.Output<string> | string)[];
   queueArns: (pulumi.Output<string> | string)[];
+  slackImportUploadPolicyArn: pulumi.Output<string> | string;
   callRecordingCrudPolicyArn: pulumi.Output<string> | string;
   snsPlatformArns: (pulumi.Output<string> | string)[];
   tags: { [key: string]: string };
@@ -63,12 +65,14 @@ export class CloudStorageService extends pulumi.ComponentResource {
       platform,
       documentStorageBucketArn,
       docxUploadBucketArn,
+      githubPullRequestPatchBucketArn,
       serviceContainerPort,
       healthCheckPath,
       containerEnvVars,
       cloudStorageClusterName,
       secretKeyArns,
       queueArns,
+      slackImportUploadPolicyArn,
       callRecordingCrudPolicyArn,
       snsPlatformArns,
       tags,
@@ -105,6 +109,8 @@ export class CloudStorageService extends pulumi.ComponentResource {
                 pulumi.interpolate`${documentStorageBucketArn}/*`,
                 docxUploadBucketArn,
                 pulumi.interpolate`${docxUploadBucketArn}/*`,
+                githubPullRequestPatchBucketArn,
+                pulumi.interpolate`${githubPullRequestPatchBucketArn}/*`,
               ],
               Effect: 'Allow',
             },
@@ -243,6 +249,15 @@ export class CloudStorageService extends pulumi.ComponentResource {
         policyArn: queuePolicy.arn,
       },
       { parent: this, dependsOn: [queuePolicy, this.role] }
+    );
+
+    new aws.iam.RolePolicyAttachment(
+      `${BASE_NAME}-role-slack-import-upload-att-${stack}`,
+      {
+        role: this.role,
+        policyArn: slackImportUploadPolicyArn,
+      },
+      { parent: this }
     );
 
     new aws.iam.RolePolicyAttachment(

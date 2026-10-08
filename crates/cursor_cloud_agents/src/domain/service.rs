@@ -155,9 +155,32 @@ const STREAM_RECONNECT_DELAYS: [std::time::Duration; 5] = [
 ];
 
 /// Reconnects before a run gives up on its stream and polls instead. Counted
-/// since the last reconnect that delivered content, so a long run that drops
-/// repeatedly but recovers each time is never rationed.
+/// since the last reconnect that delivered content and then stayed up (see
+/// [`STREAM_HEALTHY_RESUME`]), so a long run that drops repeatedly but
+/// recovers each time is never rationed.
 const STREAM_RECONNECT_ATTEMPTS: usize = 5;
+
+/// How long a resumed connection has to stay up, once it has delivered,
+/// before it counts as the transport working again and refills the budget.
+///
+/// Every resume in one day's incidents (prod, 2026-09-26, eight runs)
+/// delivered its whole backlog in a burst and failed within the second, from
+/// the very id it had just advanced to. Refilling on delivery alone made
+/// each of those a fresh first attempt: the budget never ran down, the
+/// attempt counter in every log line read `1`, and nothing could say "this
+/// transport has been failing for an hour". A connection that outlives this
+/// after delivering is one the provider is genuinely streaming on.
+const STREAM_HEALTHY_RESUME: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Connects that stall before their headers, on a run whose stream never
+/// opened, before the turn stops trying and polls the record instead.
+///
+/// Once a stream has opened, stalls are not counted against anything: the
+/// run's record is checked on each, so a finished run ends its turn within
+/// a stall of finishing, and a run still going is still worth the stream.
+/// Before it has ever opened there is nothing to resume, and a connect that
+/// stalls three times running is a stream that is not going to open.
+const STALLED_CONNECTS_BEFORE_POLLING: u32 = 3;
 
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
@@ -338,6 +361,8 @@ fn explain_rejection(error: SessionError) -> SessionError {
 fn is_prompt_rejection(error: &SessionError) -> bool {
     match error {
         SessionError::Rejected(_) => true,
+        #[cfg(feature = "postgres")]
+        SessionError::Admission(_) => true,
         SessionError::Cursor(report) => report
             .downcast_current_context::<crate::domain::error::PromptRejected>()
             .is_some(),
@@ -1152,9 +1177,14 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(PromptRefusal::plain(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
-                        )))
+                        let error = SessionError::from(error);
+                        match error {
+                            #[cfg(feature = "postgres")]
+                            SessionError::Admission(_) => Err(error),
+                            _ => Err(SessionError::Rejected(PromptRefusal::plain(
+                                "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                            ))),
+                        }
                     }
                 }
             }
@@ -1173,6 +1203,11 @@ where
                     .await?;
                     if cancel.is_cancelled() {
                         return Ok(StopReason::Cancelled);
+                    }
+                    // Quota-refused prompts must not be silently bundled into a later run.
+                    #[cfg(feature = "postgres")]
+                    if matches!(error, SessionError::Admission(_)) {
+                        return Err(error);
                     }
                     // Only a create's refusal is carried: a follow-up run
                     // refused on an existing agent is already in a conversation
@@ -1594,6 +1629,19 @@ where
         // The run's latest `status` frame, kept to recognize the sticky copy
         // Cursor re-sends at the top of every reconnect.
         let mut last_status: Option<crate::domain::journal::NativeRecord> = None;
+        // Connects in a row that stalled before their headers; a connection
+        // that opens resets it.
+        let mut stalled_connects: u32 = 0;
+        // Whether the record was found terminal behind a stalled stream and
+        // the one connect allowed to drain that stream has been spent.
+        let mut drained_after_terminal = false;
+        // When the transport last broke, and when a record last arrived on
+        // any connection: together they say how long the transcript has
+        // been behind, which is the figure a person watching a frozen chip
+        // needs from the logs.
+        let started_at = tokio::time::Instant::now();
+        let mut interrupted_at: Option<tokio::time::Instant> = None;
+        let mut last_record_at: Option<tokio::time::Instant> = None;
         loop {
             // The connected stream borrows the position it resumed from, so
             // the position this iteration sends is its own owned copy.
@@ -1603,6 +1651,68 @@ where
                 .raw_stream(agent, run, resuming.as_deref())
                 .await
             {
+                // The stream said nothing, but the record still answers: a
+                // run that finished behind a wedged stream must not wait on
+                // another stall to end its turn. Hydration takes the strict
+                // arm below; it has no record to fall back on.
+                Err(StreamConnectError::Stalled(detail)) if !strict => {
+                    stalled_connects += 1;
+                    let raw = self
+                        .fetch_run_record(session_id, agent, run, cancel)
+                        .await?;
+                    let outcome = Self::run_outcome(&raw)?;
+                    if outcome.is_terminal()
+                        && !std::mem::replace(&mut drained_after_terminal, true)
+                    {
+                        // Observed: what a stalled stream held back arrives
+                        // the instant the run ends, so the stream gets one
+                        // more connect to deliver it - and its terminal
+                        // frame - itself. The record is deliberately not
+                        // captured yet: its final text would reach the
+                        // transcript now and then again from the stream.
+                        tracing::info!(
+                            cursor.run.id = %run,
+                            cursor.stream.stalled_connects = stalled_connects,
+                            cursor.stream.last_event_id = last_event_id,
+                            "Cursor run ended behind a stalled stream; connecting once more to drain it"
+                        );
+                    } else {
+                        self.capture(
+                            session_id,
+                            session,
+                            Some(run),
+                            JournalInput::Poll(raw),
+                            emit,
+                        )
+                        .await?;
+                        if outcome.is_terminal() {
+                            // A second stall past the run's end: the
+                            // record's account stands.
+                            terminal = Some(outcome.status);
+                            tracing::warn!(
+                                cursor.run.id = %run,
+                                cursor.stream.stalled_connects = stalled_connects,
+                                cursor.stream.last_event_id = last_event_id,
+                                "Cursor stream still stalled after the run ended; keeping the record's account"
+                            );
+                            break;
+                        }
+                    }
+                    if cancel.is_cancelled() {
+                        break;
+                    }
+                    Some(Interruption {
+                        reason: format!("{detail} (stalled connect {stalled_connects})"),
+                        recoverable: ever_connected
+                            || stalled_connects < STALLED_CONNECTS_BEFORE_POLLING,
+                        quiet: true,
+                    })
+                }
+                Err(StreamConnectError::Stalled(detail)) => Some(Interruption {
+                    reason: detail,
+                    recoverable: false,
+                    quiet: false,
+                }),
                 Err(StreamConnectError::InvalidResumePosition(detail))
                     if blind_reconnect_available && resuming.is_some() =>
                 {
@@ -1633,6 +1743,9 @@ where
                 Ok(connected) => {
                     let resumed = resuming.is_some();
                     ever_connected = true;
+                    stalled_connects = 0;
+                    let opened_at = tokio::time::Instant::now();
+                    let mut first_record_at: Option<tokio::time::Instant> = None;
                     let retention_seconds = connected.retention_seconds;
                     let records = connected.records;
                     pin_mut!(records);
@@ -1652,6 +1765,9 @@ where
                         {
                             Ok(Some(Ok(record))) => {
                                 silence = std::time::Duration::ZERO;
+                                let now = tokio::time::Instant::now();
+                                first_record_at.get_or_insert(now);
+                                last_record_at = Some(now);
                                 record
                             }
                             Ok(Some(Err(error))) => {
@@ -1780,18 +1896,33 @@ where
                         }
                     };
                     if resumed {
+                        let connection = opened_at.elapsed();
+                        // A resume that delivered and then stayed up is a
+                        // working stream again, so the next drop gets the
+                        // full budget rather than whatever a much earlier one
+                        // left over. One that delivered its backlog and died
+                        // at once is the same failure continuing, and spends.
+                        let healthy = received_content > 0
+                            && (interruption.is_none() || connection >= STREAM_HEALTHY_RESUME);
                         tracing::info!(
                             cursor.run.id = %run,
                             cursor.stream.attempt = reconnects,
                             cursor.stream.last_event_id = last_event_id,
                             cursor.stream.retention_seconds = retention_seconds,
                             cursor.stream.resumed_records = received,
+                            cursor.stream.resumed_content = received_content,
+                            cursor.stream.waited_ms = interrupted_at.map(|at| {
+                                first_record_at
+                                    .unwrap_or_else(tokio::time::Instant::now)
+                                    .saturating_duration_since(at)
+                                    .as_millis() as u64
+                            }),
+                            cursor.stream.connection_ms = connection.as_millis() as u64,
+                            cursor.stream.healthy = healthy,
+                            cursor.stream.fast_failed = interruption.is_some() && !healthy,
                             "Cursor stream resumed"
                         );
-                        // A resume that delivered is a working stream again,
-                        // so the next drop gets the full budget rather than
-                        // whatever a much earlier one left over.
-                        if received_content > 0 {
+                        if healthy {
                             reconnects = 0;
                         }
                     }
@@ -1807,7 +1938,15 @@ where
                 break;
             };
             fell_back_to_poll = true;
-            if !ever_connected {
+            interrupted_at = Some(tokio::time::Instant::now());
+            // How long the transcript has been behind: since the last record
+            // on any connection, or since this attempt began if none came.
+            let silent_ms = last_record_at.unwrap_or(started_at).elapsed().as_millis() as u64;
+            // A connect that stalled is tried again a bounded number of
+            // times before this gives up on the stream, because a stall is
+            // the one connect failure the client did not already retry.
+            let retrying_a_stall = quiet && recoverable;
+            if !ever_connected && !retrying_a_stall {
                 // Nothing to resume: the stream never opened, and the client
                 // has already retried an unavailable one on its own.
                 self.capture(
@@ -1821,6 +1960,8 @@ where
                 tracing::warn!(
                     cursor.run.id = %run,
                     cursor.stream.reason = %reason,
+                    cursor.stream.stalled_connects = stalled_connects,
+                    cursor.stream.silent_ms = silent_ms,
                     "Cursor stream never connected; polling the run record instead"
                 );
                 break;
@@ -1851,6 +1992,8 @@ where
                     cursor.stream.last_event_id = last_event_id,
                     cursor.stream.attempt = attempt,
                     cursor.stream.reason = %reason,
+                    cursor.stream.silent_ms = silent_ms,
+                    cursor.stream.stalled_connects = stalled_connects,
                     "Cursor stream is not resumable; polling the run record instead"
                 );
                 break;
@@ -1860,6 +2003,9 @@ where
                 cursor.stream.last_event_id = last_event_id,
                 cursor.stream.attempt = attempt,
                 cursor.stream.reason = %reason,
+                cursor.stream.quiet = quiet,
+                cursor.stream.silent_ms = silent_ms,
+                cursor.stream.stalled_connects = stalled_connects,
                 "Cursor stream interrupted; reconnecting"
             );
             let delay = STREAM_RECONNECT_DELAYS
@@ -1978,18 +2124,6 @@ where
     ///
     /// `debug` because the loop runs as often as [`POLL_DELAYS`] says; the turn span
     /// above carries the outcome, this carries the liveness.
-    #[tracing::instrument(
-        name = "cursor.run.poll",
-        level = "debug",
-        skip_all,
-        fields(
-            agent.acp.session_id = ?session_id,
-            cursor.agent.id = %agent,
-            cursor.run.id = %run,
-            cursor.run.status = tracing::field::Empty,
-        ),
-        err,
-    )]
     async fn poll_once(
         &self,
         session_id: &SessionId,
@@ -1999,23 +2133,9 @@ where
         cancel: &tokio_util::sync::CancellationToken,
         emit: Emit,
     ) -> Result<crate::domain::model::RunOutcome, SessionError> {
-        let mut raw = None;
-        for attempt in 0..=POLL_ERROR_TOLERANCE {
-            match self.cursor.raw_result(agent, run).await {
-                Ok(value) => {
-                    raw = Some(value);
-                    break;
-                }
-                Err(error) if attempt == POLL_ERROR_TOLERANCE => return Err(error.into()),
-                Err(error) => {
-                    tracing::warn!(error = ?error, "Cursor poll failed; retrying");
-                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
-                        return Err(SessionError::Cursor(error));
-                    }
-                }
-            }
-        }
-        let raw = raw.expect("poll returned or failed");
+        let raw = self
+            .fetch_run_record(session_id, agent, run, cancel)
+            .await?;
         self.capture(
             session_id,
             session,
@@ -2024,8 +2144,50 @@ where
             emit,
         )
         .await?;
+        Self::run_outcome(&raw)
+    }
+
+    /// The run's record as Cursor holds it, retried through transient
+    /// failures. Not captured: [`Self::poll_once`] does that, and the one
+    /// caller that reads the record without capturing it — a stalled stream
+    /// checking whether its run has ended — says why there.
+    #[tracing::instrument(
+        name = "cursor.run.poll",
+        level = "debug",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = %agent,
+            cursor.run.id = %run,
+        ),
+        err,
+    )]
+    async fn fetch_run_record(
+        &self,
+        session_id: &SessionId,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<String, SessionError> {
+        for _tolerated in 0..POLL_ERROR_TOLERANCE {
+            match self.cursor.raw_result(agent, run).await {
+                Ok(value) => return Ok(value),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "Cursor poll failed; retrying");
+                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                        return Err(SessionError::Cursor(error));
+                    }
+                }
+            }
+        }
+        // The last try past the tolerance is the one whose failure is final.
+        self.cursor.raw_result(agent, run).await.map_err(Into::into)
+    }
+
+    /// The outcome a run record states.
+    fn run_outcome(raw: &str) -> Result<crate::domain::model::RunOutcome, SessionError> {
         let value: serde_json::Value =
-            serde_json::from_str(&raw).map_err(|e| rootcause::report!(e).into_dynamic())?;
+            serde_json::from_str(raw).map_err(|e| rootcause::report!(e).into_dynamic())?;
         Ok(crate::domain::model::RunOutcome {
             status: serde_json::from_value(value["status"].clone())
                 .map_err(|e| rootcause::report!(e).into_dynamic())?,

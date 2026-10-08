@@ -62,12 +62,14 @@ type GraphqlGroupQuery = {
   data: Accessor<GroupQueryData | undefined>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  error: Accessor<Error | null>;
   fetchNextPage: () => Promise<void>;
   resetToInitialPage: () => void;
   dispose: () => void;
 };
 
 type GraphqlGroupedInitialPage = {
+  cachedMail?: boolean;
   items: SoupAstItemsGroupedPage['items'];
   groups: GroupMeta[];
 };
@@ -290,6 +292,9 @@ export function createGraphqlGroupedSoupQueries(
         setContinuationRevision((value) => value + 1);
       };
 
+      const cachedMail = createMemo(
+        () => args.initialPage()?.cachedMail === true
+      );
       const initialData = createMemo<GroupQueryData | undefined>(() => {
         const config = getConfig();
         const initialPage = args.initialPage();
@@ -310,7 +315,9 @@ export function createGraphqlGroupedSoupQueries(
       const data = createMemo<GroupQueryData | undefined>(() => {
         const initial = initialData();
         if (!initial) return;
-        const continued = getContinuation()?.query.data;
+        const continued = cachedMail()
+          ? undefined
+          : getContinuation()?.query.data;
         const combined = continued
           ? { entities: [...initial.entities, ...continued.entities] }
           : initial;
@@ -342,7 +349,7 @@ export function createGraphqlGroupedSoupQueries(
 
       const fetchNextPage = async (): Promise<void> => {
         const config = getConfig();
-        if (!config.enabled) return;
+        if (!config.enabled || cachedMail()) return;
         if (firstPagePromise) return firstPagePromise;
 
         let current = getContinuation();
@@ -368,12 +375,15 @@ export function createGraphqlGroupedSoupQueries(
         await current.query.fetchNextPage();
       };
 
+      createComputed(on(cachedMail, () => disposeContinuation()));
       onCleanup(disposeContinuation);
 
       return {
         key,
         data,
+        error: () => getContinuation()?.query.error ?? null,
         hasNextPage: () => {
+          if (cachedMail()) return false;
           const current = getContinuation();
           return current?.query.data === undefined
             ? getConfig().group.nextCursor !== null

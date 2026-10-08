@@ -9,6 +9,8 @@ use macro_user_id::{
 use models_permissions::share_permission::LinkShare;
 use roles_and_permissions::domain::model::{ProductTier, RoleId, UserRolesAndPermissionsError};
 
+use crate::domain::owned_entity_cleanup::OwnedEntityCleanupError;
+
 /// Team plans
 #[derive(
     Eq,
@@ -148,7 +150,7 @@ impl std::fmt::Display for TeamRole {
 pub enum SeatPlan {
     /// The $40/seat/month plan.
     Premium,
-    /// The $200/seat/month plan with a 5x AI allowance.
+    /// The $200/seat/month plan with a larger AI allowance.
     Max,
 }
 
@@ -157,10 +159,7 @@ impl SeatPlan {
     pub const ALL: [SeatPlan; 2] = [SeatPlan::Premium, SeatPlan::Max];
 
     /// Plans available for a new purchase or plan move.
-    pub const PURCHASABLE: [SeatPlan; 1] = [
-        SeatPlan::Premium,
-        // SeatPlan::Max,
-    ];
+    pub const PURCHASABLE: [SeatPlan; 2] = Self::ALL;
 
     /// The role tier recorded on a user holding this seat.
     pub fn product_tier(self) -> ProductTier {
@@ -785,6 +784,23 @@ pub enum DeleteTeamError {
     /// Remove roles from user error
     #[error("Remove roles from user error")]
     RemoveRolesFromUserError(#[from] UserRolesAndPermissionsError),
+    /// The team's content could not be purged, so the team was not deleted
+    #[error("unable to purge the team's content")]
+    OwnedEntityCleanup(#[from] OwnedEntityCleanupError),
+}
+
+/// Errors for detaching a user from every team ahead of account deletion
+#[derive(Debug, thiserror::Error)]
+pub enum RemoveUserFromAllTeamsError {
+    /// Underlying team error
+    #[error("Underlying team error")]
+    TeamError(#[from] TeamError),
+    /// A team the user owns could not be deleted
+    #[error("Unable to delete a team the user owns")]
+    DeleteTeam(#[from] DeleteTeamError),
+    /// The user could not be removed from a team they belong to
+    #[error("Unable to remove the user from a team")]
+    RemoveUserFromTeam(#[from] RemoveUserFromTeamError),
 }
 
 /// Errors for joining a team

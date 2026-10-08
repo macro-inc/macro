@@ -51,6 +51,7 @@ vi.mock('@solidjs/router', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
 vi.mock('@core/signal/permissions', () => ({
   useCanComment: () => () => mocks.canComment,
+  useIsDocumentOwner: () => () => false,
 }));
 vi.mock('@core/util/url', () => ({ buildSimpleEntityUrl: () => 'link' }));
 vi.mock('@ui/components/Button', () => ({
@@ -499,7 +500,7 @@ it('keeps out-of-grid range threads readable without rendering an invalid marker
   mocks.data[0].state.anchor = {
     type: 'spreadsheet',
     ...anchor,
-    range: 'AA1:AB2',
+    range: 'XFE1:XFF2',
   };
   mount();
   expect(screen.getByText('Check assumptions')).toBeTruthy();

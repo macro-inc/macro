@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM agent_session_tool_standing_approval\n                WHERE agent_session_id = $1 AND user_id = $2 AND server_slug = $3\n                    AND (tool_name IS NULL OR tool_name = $4)\n            ) AS \"standing!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "standing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8f653ae1ee4210ae28103cb83980495b239df2ff6d2c3f5a4c3335ec1e9d54ab"
+}

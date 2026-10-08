@@ -378,7 +378,7 @@ export function CrmFeatureGrid() {
                 <span
                   style={{
                     color: 'color-mix(in srgb, var(--c4) 55%, transparent)',
-                    'font-family': 'rajdhani, body',
+                    'font-family': 'Inter, body',
                     'font-size': '11px',
                     'font-weight': '600',
                     'letter-spacing': '0.1em',

@@ -26,6 +26,9 @@ use super::instance::{Instance, Port};
 use super::inventory::services_for_mode;
 use super::{Mode, repo_root};
 
+#[cfg(test)]
+mod test;
+
 /// The one Rust service with a second listener: the agent egress proxy inside
 /// `agent_harness_service`, on the container port `EGRESS_PORT` defaults to.
 const EGRESS_SERVICE: &str = "agent_harness_service";
@@ -342,7 +345,8 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) {
-    // FusionAuth: repoint at the generated kickstart (volumes replaced via tag).
+    // This per-instance directory belongs only to FusionAuth. Private SELinux
+    // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
         environment: kv(&[(
             "FUSIONAUTH_APP_KICKSTART_FILE",
@@ -351,7 +355,7 @@ fn add_local_infra(
         volumes: vec![
             dct::Volumes::Simple("fusionauth_config:/usr/local/fusionauth/config".to_string()),
             dct::Volumes::Simple(format!(
-                "{}:/usr/local/fusionauth/kickstart:ro",
+                "{}:/usr/local/fusionauth/kickstart:ro,Z",
                 kickstart_dir(instance).display()
             )),
         ],

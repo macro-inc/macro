@@ -9,7 +9,7 @@
 .agents-page *, .agents-page *::before, .agents-page *::after { box-sizing: border-box; }
 .agents-wrap { width: 100%; max-width: 1160px; margin-inline: auto; padding-inline: 14px; }
 .agents-page h1, .agents-page h2, .agents-page h3, .agents-page p, .agents-page figure { margin: 0; }
-.agents-page h1, .agents-page h2 { font-family: 'display'; font-weight: 380; letter-spacing: -.025em; line-height: 1.1; text-wrap: balance; }
+.agents-page h1, .agents-page h2 { font-family: 'display'; font-weight: 315; letter-spacing: -.025em; line-height: 1.1; text-wrap: balance; }
 .agents-page h1 { font-size: clamp(48px, 4.6vw, 60px); }
 .agents-page h1 em { font-weight: inherit; }
 .agents-page h2 { font-size: clamp(36px, 3.8vw, 46px); }
@@ -24,7 +24,7 @@
 .agents-secondary span { color: var(--a0); }
 .agents-section { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); gap: 84px; align-items: center; padding-block: 110px; border-top: 1px solid var(--agents-line); }
 .agents-copy { max-width: 415px; }
-.agents-kicker { display: block; color: var(--agents-dim); font: 600 12px/1.4 'rajdhani', 'body'; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 20px; }
+.agents-kicker { display: block; color: var(--agents-dim); font: 600 12px/1.4 'Inter', 'body'; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 20px; }
 .agents-copy p { font-size: 18px; line-height: 1.55; color: var(--c4); margin-top: 23px; }
 .agents-copy p + p { margin-top: 14px; }
 .agents-text-link { display: inline-flex; align-items: center; gap: 12px; min-height: 44px; margin-top: 14px; color: var(--c2); font-size: 15px; font-weight: 600; text-decoration: none; }

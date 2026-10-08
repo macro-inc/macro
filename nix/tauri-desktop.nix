@@ -18,7 +18,16 @@
       isX86_64Linux = system == "x86_64-linux";
       isAarch64Darwin = system == "aarch64-darwin";
 
-      appVersion = (builtins.fromJSON (builtins.readFile ../apps/web/package.json)).version;
+      desktopRelease = builtins.fromJSON (builtins.readFile ../apps/web/tauri/desktop-release.json);
+      appVersion = desktopRelease.version;
+      desktopPlugins = {
+        desktop-update.enabled = desktopRelease.enabled;
+        macro-bundle-updater.nativeBuild = desktopRelease.nativeBuild;
+        updater = {
+          pubkey = desktopRelease.publicKey;
+          endpoints = [ desktopRelease.endpoint ];
+        };
+      };
       gitRev = inputs.self.shortRev or inputs.self.dirtyShortRev or "unknown";
 
       rustToolchain = fenix.packages.${system}.fromToolchainFile {
@@ -128,7 +137,7 @@
               cd apps/web
               MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
               printf '${appVersion}+${gitRev}\n' > dist/semver.txt
-              BUNDLE_BUILD_NUMBER=1 MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
+              BUNDLE_BUILD_NUMBER=${toString desktopRelease.bundleBuild} MIN_NATIVE_BUILD=0 bun scripts/write-bundle-manifest.mjs
             )
 
             runHook postBuild
@@ -173,41 +182,50 @@
         extraFileset = ../static_assets/schema.graphql;
         inherit frontend;
 
-        craneArgs.cargoVendorDir = tauriCargoVendorDir;
-        craneArgs.CARGO_TARGET_DIR = "apps/web/tauri/target";
-        # crane's common Cargo fileset only keeps the lockfile at cargoRoot.
-        # Restore the nested Tauri workspace lockfile where Cargo discovers it.
-        craneArgs.preConfigure = ''
-          export CARGO_TARGET_DIR="$PWD/apps/web/tauri/target"
-          install -Dm0644 ${../apps/web/tauri/Cargo.lock} apps/web/tauri/Cargo.lock
-        '';
-        craneArgs.postConfigure = ''
-          writable_vendor="$TMPDIR/cargo-vendor"
-          mkdir -p "$writable_vendor"
-          cp -aL ${tauriCargoVendorDir}/. "$writable_vendor/"
-          chmod -R u+w "$writable_vendor"
-          substituteInPlace .cargo-home/config.toml \
-            --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
-        '';
-        craneArgs.preBuild = ''
-          cp ${../apps/web/package.json} apps/web/package.json
-          rm -rf apps/web/dist
-          cp -r ${frontend} apps/web/dist
+        craneArgs = {
+          cargoVendorDir = tauriCargoVendorDir;
+          CARGO_TARGET_DIR = "apps/web/tauri/target";
+          # crane's common Cargo fileset only keeps the lockfile at cargoRoot.
+          # Restore the nested Tauri workspace lockfile where Cargo discovers it.
+          preConfigure = ''
+            export CARGO_TARGET_DIR="$PWD/apps/web/tauri/target"
+            install -Dm0644 ${../apps/web/tauri/Cargo.lock} apps/web/tauri/Cargo.lock
+          '';
+          postConfigure = ''
+            writable_vendor="$TMPDIR/cargo-vendor"
+            mkdir -p "$writable_vendor"
+            cp -aL ${tauriCargoVendorDir}/. "$writable_vendor/"
+            chmod -R u+w "$writable_vendor"
+            substituteInPlace .cargo-home/config.toml \
+              --replace-fail "${tauriCargoVendorDir}" "$writable_vendor"
+          '';
+        }
+        // lib.optionalAttrs isAarch64Darwin {
+          # Nix's linker crashes on the large final desktop binary. Use Apple's
+          # linker for both dependencies and the app so Cargo can reuse them.
+          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = tauriDesktopDmgAppleLinker;
+        };
+      };
 
-          # The dependency derivation runs from cargoRoot with an injected
-          # manifest path. Actual Tauri commands must run beside tauri.conf.json.
-          case "''${name:-}" in
-            *-deps-*) ;;
-            *) cd apps/web/tauri ;;
-          esac
-        '';
+      # Only final application builds need frontend assets. Including them in
+      # craneArgs also invalidates buildDepsOnly whenever the frontend changes.
+      tauriDesktopPreBuild = ''
+        ${tauri.commonArgs.preBuild or ""}
+        cp ${../apps/web/package.json} apps/web/package.json
+        rm -rf apps/web/dist
+        cp -r ${frontend} apps/web/dist
+        cd apps/web/tauri
+      '';
+
+      tauriDesktopUnwrapped = tauri.app.overrideAttrs {
+        preBuild = tauriDesktopPreBuild;
       };
 
       gioTlsModulePath = "${pkgs.glib-networking}/lib/gio/modules";
 
       wrappedTauriDesktop = pkgs.symlinkJoin {
         name = "macro-tauri-desktop-${appVersion}";
-        paths = [ tauri.app ];
+        paths = [ tauriDesktopUnwrapped ];
         nativeBuildInputs = [ pkgs.makeWrapper ];
         postBuild = ''
           wrapProgram "$out/bin/app" \
@@ -489,6 +507,8 @@
         rootPaths = tauriRuntimeLibraries ++ tauri.commonArgs.buildInputs;
       };
       tauriAppImageConfig = builtins.toJSON {
+        version = appVersion;
+        plugins = desktopPlugins;
         build = {
           frontendDist = "${frontend}";
           beforeBuildCommand = "";
@@ -572,6 +592,8 @@
       tauriDesktopDmgConfig = builtins.toJSON (
         lib.recursiveUpdate
           {
+            version = appVersion;
+            plugins = desktopPlugins;
             build = {
               frontendDist = "${frontend}";
               beforeBuildCommand = "";
@@ -594,11 +616,6 @@
           pname = "macro-tauri-desktop-dmg";
           TAURI_CONFIG = tauriDesktopDmgConfig;
           APPLE_SIGNING_IDENTITY = tauriDesktopDmgSigningIdentity;
-          # Nix's cctools ld crashes with SIGTRAP while linking the large final
-          # desktop binary on GitHub's macOS 15 arm64 runners. This derivation
-          # is already an impure, unsandboxed native macOS build for signing;
-          # use the runner's Apple linker and SDK for Cargo links.
-          CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER = tauriDesktopDmgAppleLinker;
           nativeBuildInputs = tauri.commonArgs.nativeBuildInputs ++ [ pkgs.cargo-tauri ];
           preBuild = ''
             if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
@@ -606,7 +623,7 @@
               exit 1
             fi
             export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
-            ${tauri.commonArgs.preBuild or ""}
+            ${tauriDesktopPreBuild}
           '';
           buildPhaseCargoCommand = ''
             cargo tauri build --bundles app \
@@ -719,10 +736,30 @@
             sign_darwin_app "$appPath"
 
             mkdir -p "$out"
+            # Export the final, relocated and signed app for updater packaging.
+            # Notarization, stapling and updater signing happen outside the store.
+            cp -a "$appPath" "$out/Macro.app"
             dmgPath="$out/Macro-${appVersion}-${system}.dmg"
+            # Package a drag-to-install volume, including Finder's icon layout.
+            dmgRoot=$(mktemp -d "$TMPDIR/macro-dmg.XXXXXX")
+            cp -a "$appPath" "$dmgRoot/Macro.app"
+            ln -s /Applications "$dmgRoot/Applications"
+            ${pkgs.python3.withPackages (ps: [ ps.ds-store ])}/bin/python \
+              ${./dmg-layout.py} "$dmgRoot"
+            # hdiutil's automatic APFS sizing can run out of space while copying
+            # the app. Budget logical bytes (including sparse files), then leave
+            # 25% plus 64 MiB for filesystem metadata and temporary allocations.
+            appSize=$(${pkgs.coreutils}/bin/du --apparent-size --count-links --block-size=1 --summarize "$appPath")
+            read -r appBytes _ <<< "$appSize"
+            appSizeMiB=$(( (appBytes + 1048575) / 1048576 ))
+            dmgSizeMiB=$(( appSizeMiB + (appSizeMiB + 3) / 4 + 64 ))
+            echo "DMG sizing: app=$appBytes logical bytes, image=$dmgSizeMiB MiB"
+            df -h "$TMPDIR" "$out"
             hdiutil create \
+              -fs APFS \
+              -size "$dmgSizeMiB"m \
               -volname "Macro" \
-              -srcfolder "$appPath" \
+              -srcfolder "$dmgRoot" \
               -ov \
               -format UDZO \
               "$dmgPath"
@@ -760,7 +797,7 @@
           LD_LIBRARY_PATH = tauriRuntimeLibraryPath;
           LDAI_RUNTIME_FILE = tauriAppImageRuntime;
           preBuild = ''
-            ${tauri.commonArgs.preBuild or ""}
+            ${tauriDesktopPreBuild}
 
             runtime_library_path="$(while IFS= read -r store_path; do
               if [ -d "$store_path/lib" ]; then
@@ -878,7 +915,7 @@
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;
         tauri-desktop = wrappedTauriDesktop;
-        tauri-desktop-unwrapped = tauri.app;
+        tauri-desktop-unwrapped = tauriDesktopUnwrapped;
         tauri-desktop-cargo-artifacts = tauri.cargoArtifacts;
       }
       // lib.optionalAttrs isX86_64Linux {

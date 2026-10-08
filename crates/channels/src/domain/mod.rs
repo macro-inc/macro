@@ -12,14 +12,13 @@ pub mod events;
 /// Channel audience policy for authored group mentions.
 #[cfg(feature = "ports")]
 pub mod group_mentions;
+/// Silent historical creation commands and shared atomic DM creation policy.
+pub mod historical;
 /// Legacy channel list service implementation.
 #[cfg(feature = "list")]
 pub mod list_service;
 /// Kafka event models for the `macro.mentions` topic.
 pub mod mention_events;
-/// Channel compatibility commands over the shared message application.
-#[cfg(feature = "ports")]
-pub mod message_commands;
 /// Channel side effects for messages committed by the shared message service.
 #[cfg(feature = "ports")]
 pub mod message_delivery;

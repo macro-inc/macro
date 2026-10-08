@@ -59,6 +59,7 @@ struct CapturingEmailMutationService {
     delete_reports_missing: std::sync::atomic::AtomicBool,
     attachment_load_fails: bool,
     thread_load_fails: bool,
+    thread_load_missing: bool,
     attachments: Vec<MessageAttachment>,
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
@@ -220,11 +221,13 @@ impl EmailMutationService for CapturingEmailMutationService {
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             return Ok(DeletedUserDraft {
+                thread_id: None,
                 deleted: false,
                 thread_deleted: false,
             });
         }
         Ok(DeletedUserDraft {
+            thread_id: None,
             deleted: true,
             thread_deleted: true,
         })
@@ -290,11 +293,12 @@ impl EmailThreadMutationOutput for TestEmailThreadOutput {
     ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
     {
         Box::pin(async move {
-            if ctx
-                .data::<Arc<CapturingEmailMutationService>>()?
-                .thread_load_fails
-            {
+            let service = ctx.data::<Arc<CapturingEmailMutationService>>()?;
+            if service.thread_load_fails {
                 return Err(async_graphql::Error::new("thread loading failed"));
+            }
+            if service.thread_load_missing {
+                return Ok(None);
             }
             Ok(Some(TestEmailThread {
                 id: ID(thread_id.to_string()),
@@ -627,13 +631,13 @@ async fn save_email_draft_does_not_return_a_message_when_attachment_loading_fail
             .as_ref()
             .unwrap()
             .get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
+        None
     );
     assert!(response.data.into_json().unwrap().is_null());
 }
 
 #[tokio::test]
-async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
+async fn save_email_draft_reports_internal_error_when_the_post_save_thread_reload_fails() {
     let service = Arc::new(CapturingEmailMutationService {
         thread_load_fails: true,
         ..Default::default()
@@ -652,10 +656,7 @@ async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
         extensions.get("code"),
         Some(&async_graphql::Value::from("INTERNAL"))
     );
-    assert_eq!(
-        extensions.get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
-    );
+    assert_eq!(extensions.get("retryable"), None);
     assert!(response.data.into_json().unwrap().is_null());
 }
 

@@ -37,11 +37,32 @@ export const snippetRawKeys = createQueryKeys('snippetRaw', {
   }),
 });
 
+export const githubPullRequestRefreshKeys = createQueryKeys(
+  'githubPullRequestRefresh',
+  {
+    refresh: (githubKey: string) => ({
+      queryKey: [githubKey],
+    }),
+  }
+);
+
 export const documentGithubPullRequestsKeys = createQueryKeys(
   'documentGithubPullRequests',
   {
     list: (documentId: string) => ({
       queryKey: [documentId],
+    }),
+  }
+);
+
+export const githubPullRequestChangesKeys = createQueryKeys(
+  'githubPullRequestChanges',
+  {
+    summary: (foreignEntityId: string) => ({
+      queryKey: [foreignEntityId],
+    }),
+    patch: (foreignEntityId: string, changesetId: string) => ({
+      queryKey: [foreignEntityId, changesetId],
     }),
   }
 );
@@ -97,6 +118,32 @@ export const teamTaskKeys = createQueryKeys('teamTask', {
   bySlug: (slug: string) => ({
     queryKey: [slug],
   }),
+});
+
+export const databasesKeys = createQueryKeys('databases', {
+  list: null,
+  starter: (userId: string) => ({ queryKey: [userId] }),
+  detail: (databaseId: string) => ({
+    queryKey: [databaseId],
+  }),
+});
+
+export const formsKeys = createQueryKeys('forms', {
+  list: null,
+  forDatabase: (databaseId: string) => ({ queryKey: [databaseId] }),
+  detail: (formId: string) => ({ queryKey: [formId] }),
+  mine: (formId: string, userId: string) => ({ queryKey: [formId, userId] }),
+  summary: (formId: string) => ({ queryKey: [formId] }),
+  tally: (formId: string) => ({ queryKey: [formId] }),
+  permissions: (formId: string) => ({ queryKey: [formId] }),
+});
+
+/** One form's own-response queries, whoever the viewer is. */
+export const myResponseKeyOf = (formId: string) =>
+  [...formsKeys.mine._def, formId] as const;
+
+export const savedDatabaseQueryKeys = createQueryKeys('saved-database-query', {
+  definition: (queryId: string) => ({ queryKey: [queryId] }),
 });
 
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {

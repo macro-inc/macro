@@ -15,10 +15,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import {
-  automationComposerOpen,
-  setAutomationComposerOpen,
-} from '@block-automation/component';
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
@@ -59,9 +55,9 @@ import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
   applySystemTheme,
   applyTheme,
-  clearThemePreview,
   previewTheme,
   resolveActiveThemeId,
+  scheduleThemePreviewEnd,
 } from '@theme/utils/themeUtils';
 import { type Component, onCleanup, Show } from 'solid-js';
 import { useSplitLayout } from './split-layout/layout';
@@ -148,10 +144,6 @@ export default function GlobalShortcuts() {
     const willOpen = !CommandState.isOpen();
 
     if (willOpen) {
-      if (automationComposerOpen()) {
-        setAutomationComposerOpen(false, false);
-      }
-
       analytics.track('command_menu_open', { from: 'global_hotkey' });
     }
 
@@ -164,10 +156,6 @@ export default function GlobalShortcuts() {
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      if (automationComposerOpen()) {
-        return true;
-      }
-
       const willOpen = !createMenuOpen();
 
       if (willOpen) {
@@ -446,7 +434,7 @@ export default function GlobalShortcuts() {
       const theme = systemResolvedTheme();
       if (theme) previewTheme(theme.id);
     },
-    onHighlightEnd: clearThemePreview,
+    onHighlightEnd: scheduleThemePreviewEnd,
   });
 
   themes().forEach((theme) => {
@@ -464,7 +452,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 
@@ -490,7 +478,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 
@@ -516,7 +504,7 @@ export default function GlobalShortcuts() {
       runWithInputFocused: true,
       displayComponent: () => <ThemeDisplay theme={theme} />,
       onHighlight: () => previewTheme(theme.id),
-      onHighlightEnd: clearThemePreview,
+      onHighlightEnd: scheduleThemePreviewEnd,
     });
   });
 

@@ -3,6 +3,8 @@ use chrono::Utc;
 use entity_access::domain::models::{AccessLevel, EntityAccessAuth};
 use std::sync::{Arc, Mutex};
 
+mod call_retries;
+mod event_posts;
 mod initiative;
 
 #[derive(Clone)]
@@ -16,6 +18,8 @@ struct Repo {
     edits: Arc<Mutex<Vec<EditMessage>>>,
     reaction_changed: bool,
     file_type: Option<String>,
+    concurrent_create: bool,
+    client_message_id: Option<Uuid>,
 }
 
 impl Repo {
@@ -58,6 +62,9 @@ impl MessageRepository for Repo {
         Ok(true)
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+        if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
+            return Ok(None);
+        }
         let mut message = std::iter::once(&self.message)
             .chain(&self.replies)
             .find(|message| message.parent == *parent && message.id == id)
@@ -69,6 +76,20 @@ impl MessageRepository for Repo {
             message.content.clear();
         }
         Ok(message)
+    }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        if self.client_message_id == Some(client_message_id)
+            && self.message.sender_id.as_ref() == actor.as_ref()
+        {
+            self.get(parent, self.message.id).await
+        } else {
+            Ok(None)
+        }
     }
     async fn thread(
         &self,
@@ -90,7 +111,15 @@ impl MessageRepository for Repo {
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
         let included = self.message.parent == *parent
-            && (query.ids.is_empty() || query.ids.contains(&self.message.id));
+            && (query.ids.is_empty() || query.ids.contains(&self.message.id))
+            && query.cursor.as_ref().is_none_or(|cursor| {
+                let key = (self.message.created_at, self.message.id);
+                let boundary = (cursor.created_at, cursor.id);
+                match query.direction {
+                    MessageDirection::Older => key < boundary,
+                    MessageDirection::Newer => key > boundary,
+                }
+            });
         Ok(MessagePage {
             items: if included {
                 vec![MessageListItem {
@@ -110,7 +139,14 @@ impl MessageRepository for Repo {
         })
     }
     async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+        if command.input.id == Some(self.message.id)
+            || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
+        {
+            self.creates.lock().unwrap().push(command);
+            return Err(MessageError::Conflict);
+        }
         let mut message = self.message.clone();
+        message.id = command.input.id.unwrap_or(message.id);
         message.parent = command.parent.clone();
         message.sender_id = command.actor.clone();
         message.content = command.input.content.clone();
@@ -243,6 +279,8 @@ fn fixture() -> Repo {
         edits: Arc::default(),
         reaction_changed: true,
         file_type: Some("md".into()),
+        concurrent_create: false,
+        client_message_id: None,
     }
 }
 
@@ -345,6 +383,12 @@ async fn thread_patch_cannot_detach_non_markdown_anchors() {
             sheet_name: "Budget".into(),
             range: "B4:C9".into(),
         },
+        ThreadAnchor::Fig {
+            page_id: "0:1".into(),
+            node_id: Some("12:34".into()),
+            x: 4.0,
+            y: 8.0,
+        },
     ] {
         let mut repo = fixture();
         repo.state.anchor = Some(anchor);
@@ -445,6 +489,32 @@ async fn a_reply_author_can_delete_their_reply_but_not_the_root_above_it() {
         published[0].change,
         MessageChange::MessageDeleted { .. }
     ));
+}
+
+#[tokio::test]
+async fn document_owner_can_delete_another_authors_reply() {
+    let mut repo = fixture();
+    repo.replies = vec![reply_from(&repo.message, 7, "macro|other@example.com")];
+    let service = MessageService::new(repo.clone(), Events::default());
+    let denied = service
+        .delete(
+            access("macro|editor@example.com", "doc", AccessLevel::Edit),
+            repo.replies[0].id,
+            None,
+        )
+        .await;
+    assert!(matches!(denied, Err(MessageError::Forbidden)));
+    assert!(repo.deletes.lock().unwrap().is_empty());
+    service
+        .delete(
+            access("macro|owner@example.com", "doc", AccessLevel::Owner),
+            repo.replies[0].id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![repo.replies[0].id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -703,6 +773,7 @@ impl MessageReferenceAccess for ReferenceAccess {
 #[tokio::test]
 async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
     for (tag, entity_type) in [
+        ("form", EntityType::Form),
         ("thread", EntityType::EmailThread),
         ("email", EntityType::EmailThread),
         ("email_thread", EntityType::EmailThread),
@@ -933,6 +1004,7 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
         MessageParent::Initiative(Uuid::from_u128(21)),
         MessageParent::CrmCompany(Uuid::from_u128(22)),
         MessageParent::CrmContact(Uuid::from_u128(23)),
+        MessageParent::Call(Uuid::from_u128(24)),
     ] {
         let repo = fixture();
         let events = Events::default();
@@ -943,6 +1015,12 @@ async fn human_can_post_canonical_agent_mentions_on_documents_and_channels() {
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => (
                 parent.access_entity_type(),
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            ),
+            MessageParent::Call(_) => (
+                EntityType::Call,
                 EntityPermission::AccessLevel {
                     access_level: AccessLevel::Comment,
                 },
@@ -1011,72 +1089,89 @@ impl MessageMentionExtractor for RawBotMentions {
 
 #[tokio::test]
 async fn bot_posts_and_edits_extract_mentions_and_preserve_trusted_attribution_and_policy() {
-    use entity_access::domain::models::BotReceiptScope;
-    let receipt = || {
-        EntityAccessReceipt::try_new_bot(
-            bot_id::MACRO_AI_BOT_ID.into_storage_id(),
-            BotReceiptScope::User {
-                acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
-            },
-            access("macro|author@example.com", "doc", AccessLevel::Comment)
-                .entity()
-                .clone(),
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Comment,
-            },
-        )
-        .unwrap()
-    };
-    let mut repo = fixture();
-    repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
-    let events = Events::default();
-    let service =
-        MessageService::new(repo.clone(), events.clone()).with_mention_extractor(RawBotMentions);
-    let mut input = post_input();
-    input.notification_policy = PostMessageNotificationPolicy::Silent;
-    let posted = service.post(receipt(), input.clone()).await.unwrap();
-    assert_eq!(
-        posted.triggered_by.as_deref(),
-        Some("macro|author@example.com")
-    );
-    assert_eq!(posted.mentions.len(), 1);
-    input.attribution = MessageAttribution::Unprompted;
-    assert!(
-        service
-            .post(receipt(), input)
-            .await
+    use entity_access::domain::models::{BotReceiptScope, Entity};
+    for parent in [
+        MessageParent::parse("document", "doc").unwrap(),
+        MessageParent::Call(Uuid::from_u128(1)),
+    ] {
+        let receipt = || {
+            EntityAccessReceipt::try_new_bot(
+                bot_id::MACRO_AI_BOT_ID.into_storage_id(),
+                BotReceiptScope::User {
+                    acting_user: "macro|author@example.com".to_string().try_into().unwrap(),
+                },
+                Entity {
+                    entity_type: parent.access_entity_type(),
+                    entity_id: parent.entity_id(),
+                },
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Comment,
+                },
+            )
             .unwrap()
-            .triggered_by
-            .is_none()
-    );
-    service
-        .patch(
-            receipt(),
-            posted.id,
-            MessagePatch {
+        };
+        let mut repo = fixture();
+        repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        repo.message.parent = parent.clone();
+        let events = Events::default();
+        let service = MessageService::new(repo.clone(), events.clone())
+            .with_mention_extractor(RawBotMentions);
+        let mut input = post_input();
+        input.notification_policy = PostMessageNotificationPolicy::Silent;
+        let posted = service.post(receipt(), input.clone()).await.unwrap();
+        assert_eq!(
+            posted.triggered_by.as_deref(),
+            Some("macro|author@example.com")
+        );
+        assert_eq!(posted.mentions.len(), 1);
+        assert_eq!(posted.parent, parent);
+        let canonical_root_id = match parent {
+            MessageParent::Call(id) => Some(id),
+            _ => None,
+        };
+        assert_eq!(
+            repo.creates.lock().unwrap()[0].canonical_root_id,
+            canonical_root_id
+        );
+        input.attribution = MessageAttribution::Unprompted;
+        assert!(
+            service
+                .post(receipt(), input)
+                .await
+                .unwrap()
+                .triggered_by
+                .is_none()
+        );
+        service
+            .patch(
+                receipt(),
+                posted.id,
+                MessagePatch {
+                    notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    content: Some("final @mention".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
+        let events = events.0.lock().unwrap();
+        assert!(events.iter().all(|event| event.parent == parent));
+        assert!(matches!(
+            events[0].change,
+            MessageChange::Posted {
+                notification_policy: PostMessageNotificationPolicy::Silent,
+                ..
+            }
+        ));
+        assert!(matches!(
+            events[2].change,
+            MessageChange::Edited {
                 notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-                content: Some("final @mention".into()),
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(repo.edits.lock().unwrap()[0].mentions.len(), 1);
-    let events = events.0.lock().unwrap();
-    assert!(matches!(
-        events[0].change,
-        MessageChange::Posted {
-            notification_policy: PostMessageNotificationPolicy::Silent,
-            ..
-        }
-    ));
-    assert!(matches!(
-        events[2].change,
-        MessageChange::Edited {
-            notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
-            ..
-        }
-    ));
+                ..
+            }
+        ));
+    }
 }
 
 #[derive(Clone)]
@@ -1110,6 +1205,16 @@ impl MessageRepository for StrictRepo {
     }
     async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
         self.inner.get(parent, id).await
+    }
+    async fn get_by_client_message_id(
+        &self,
+        parent: &MessageParent,
+        actor: &ChannelSender<'_>,
+        client_message_id: Uuid,
+    ) -> Result<Option<Message>, MessageError> {
+        self.inner
+            .get_by_client_message_id(parent, actor, client_message_id)
+            .await
     }
     async fn thread(
         &self,
@@ -1372,6 +1477,300 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
     );
 }
 
+#[derive(Clone)]
+struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
+impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+    fn read<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(query.entity_type, activity::EntityType::Channel);
+            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(query.selection, CHANNEL_TIMELINE);
+            let mut rows: Vec<_> = self
+                .0
+                .iter()
+                .filter(|row| {
+                    query.cursor.is_none_or(|cursor| {
+                        let key = (row.occurred_at, row.id);
+                        if query.newer {
+                            key > cursor
+                        } else {
+                            key < cursor
+                        }
+                    })
+                })
+                .cloned()
+                .collect();
+            rows.sort_by_key(|row| (row.occurred_at, row.id));
+            if !query.newer {
+                rows.reverse();
+            }
+            rows.truncate(usize::from(query.limit));
+            Ok(rows)
+        })
+    }
+}
+
+/// Records each activity read's limit, to show how much a window reads.
+#[derive(Clone)]
+struct CountedFacts(TimelineFacts, Arc<Mutex<Vec<u16>>>);
+impl activity::domain::timeline::ActivityTimeline for CountedFacts {
+    fn read<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        self.1.lock().unwrap().push(query.limit);
+        self.0.read(query)
+    }
+}
+
+/// A channel message with system activity at the given second offsets.
+fn centered_channel(
+    offsets: impl IntoIterator<Item = i64>,
+) -> (Repo, Vec<activity::domain::timeline::TimelineActivity>) {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let facts = offsets
+        .into_iter()
+        .enumerate()
+        .map(
+            |(id, seconds)| activity::domain::timeline::TimelineActivity {
+                id: Uuid::from_u128(1_000 + id as u128),
+                actor_id: "macro|author@example.com".into(),
+                occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+                action: "picture_changed".into(),
+                payload: None,
+            },
+        )
+        .collect();
+    (repo, facts)
+}
+
+async fn around(
+    repo: &Repo,
+    facts: Vec<activity::domain::timeline::TimelineActivity>,
+    limit: u16,
+) -> (MessageTimelinePage, Vec<u16>) {
+    let reads = Arc::new(Mutex::new(Vec::new()));
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(CountedFacts(TimelineFacts(facts), reads.clone()));
+    let page = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(limit),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    let reads = reads.lock().unwrap().clone();
+    (page, reads)
+}
+
+#[tokio::test]
+async fn centered_window_reads_each_sides_share_not_a_page_per_side() {
+    let (repo, facts) = centered_channel((-40..=-1).chain(1..=40));
+    let (page, reads) = around(&repo, facts, 51).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 51);
+    assert_eq!(ids[25], repo.message.id, "anchor sits in the middle");
+    assert!(page.next_cursor.is_some() && page.previous_cursor.is_some());
+    // 25 per side plus one lookahead, instead of 51 per side.
+    assert_eq!(reads, [26, 26]);
+}
+
+#[tokio::test]
+async fn a_short_side_lends_its_room_to_the_other() {
+    let (repo, facts) = centered_channel(-10..=-1);
+    let (page, reads) = around(&repo, facts, 7).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 7);
+    assert_eq!(ids[0], repo.message.id, "nothing is newer than the anchor");
+    assert!(page.next_cursor.is_some() && page.previous_cursor.is_none());
+    assert_eq!(reads, [4, 4, 4], "only the older side reads further");
+
+    let (repo, facts) = centered_channel(1..=10);
+    let (page, _) = around(&repo, facts, 7).await;
+    let ids = entry_ids(&page);
+    assert_eq!(ids.len(), 7);
+    assert_eq!(ids[6], repo.message.id, "nothing is older than the anchor");
+    assert!(page.previous_cursor.is_some() && page.next_cursor.is_none());
+
+    // Both sides short: everything fits and neither side continues.
+    let (repo, facts) = centered_channel([-2, -1, 1]);
+    let (page, _) = around(&repo, facts, 7).await;
+    assert_eq!(entry_ids(&page).len(), 4);
+    assert!(page.next_cursor.is_none() && page.previous_cursor.is_none());
+}
+
+fn entry_ids(page: &MessageTimelinePage) -> Vec<Uuid> {
+    page.entries
+        .iter()
+        .map(|entry| entry.position().1)
+        .collect()
+}
+
+#[tokio::test]
+async fn centered_mixed_timeline_preserves_anchor_and_pages_to_both_ends() {
+    let mut repo = fixture();
+    repo.message.parent = MessageParent::Channel(Uuid::from_u128(20));
+    repo.state.anchor = None;
+    let facts: Vec<_> = [-2, -1, 1, 2]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(id, seconds)| activity::domain::timeline::TimelineActivity {
+                id: Uuid::from_u128(100 + id as u128),
+                actor_id: "macro|author@example.com".into(),
+                occurred_at: repo.message.created_at + chrono::Duration::seconds(seconds),
+                action: "picture_changed".into(),
+                payload: None,
+            },
+        )
+        .collect();
+    let service = MessageService::new(repo.clone(), Events::default())
+        .with_activity(TimelineFacts(facts.clone()));
+    let view = || {
+        channel_access()
+            .try_into_requirement::<MessageView>()
+            .unwrap()
+    };
+    let center = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        entry_ids(&center),
+        [facts[2].id, repo.message.id, facts[1].id]
+    );
+    let older = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                cursor: center.next_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&older), [facts[0].id]);
+    assert!(older.next_cursor.is_none());
+    let newer = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                direction: MessageDirection::Newer,
+                cursor: center.previous_cursor,
+                limit: Some(3),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&newer), [facts[3].id]);
+    assert!(newer.previous_cursor.is_none());
+    let anchor = service
+        .timeline_entries(
+            view(),
+            MessageTimelineQuery {
+                around: Some(repo.message.id),
+                limit: Some(1),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry_ids(&anchor), [repo.message.id]);
+    assert!(anchor.next_cursor.is_some() && anchor.previous_cursor.is_some());
+
+    // The message list stays message-only for clients that never asked for activity.
+    let messages = service
+        .timeline(view(), MessageTimelineQuery::default())
+        .await
+        .unwrap();
+    assert_eq!(messages.items.len(), 1);
+    assert!(messages.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn system_timeline_rejects_message_filters_and_keeps_discussions_message_only() {
+    let service =
+        MessageService::new(fixture(), Events::default()).with_activity(TimelineFacts(vec![]));
+    let result = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                ids: vec![Uuid::from_u128(1)],
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(MessageError::Invalid(_))));
+    // Tombstones sit on the same keyset, so they combine with activity.
+    let result = service
+        .timeline_entries(
+            channel_access()
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery {
+                include_deleted_threads: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(result.is_ok());
+    let result = service
+        .timeline_entries(
+            access("macro|author@example.com", "doc", AccessLevel::Comment)
+                .try_into_requirement::<MessageView>()
+                .unwrap(),
+            MessageTimelineQuery::default(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result.entries[..],
+        [MessageTimelineEntry::Message { .. }]
+    ));
+}
+
 #[test]
 fn client_ids_must_be_recent_uuid_v7() {
     let now = Utc::now();
@@ -1498,4 +1897,243 @@ async fn spreadsheet_anchors_require_a_spreadsheet_root_and_valid_range() {
         range: "A1".into(),
     });
     assert!(validate_post(&MessageParent::parse("document", "doc").unwrap(), &input).is_err());
+}
+
+fn fig_anchor(node_id: Option<&str>) -> NewThreadAnchor {
+    NewThreadAnchor::Fig {
+        page_id: "0:1".into(),
+        node_id: node_id.map(str::to_owned),
+        x: 12.5,
+        y: -3.0,
+    }
+}
+
+#[tokio::test]
+async fn fig_anchors_require_a_design_root() {
+    for file_type in [
+        None,
+        Some("md"),
+        Some("pdf"),
+        Some("spreadsheet"),
+        Some("fig"),
+    ] {
+        for node_id in [Some("12:34"), None] {
+            let mut repo = fixture();
+            repo.file_type = file_type.map(str::to_owned);
+            let creates = repo.creates.clone();
+            let service = MessageService::new(repo, Events::default());
+            let mut input = post_input();
+            input.anchor = Some(fig_anchor(node_id));
+            let result = service
+                .post(
+                    access("macro|author@example.com", "doc", AccessLevel::Comment),
+                    input.clone(),
+                )
+                .await;
+            assert_eq!(result.is_ok(), file_type == Some("fig"), "{file_type:?}");
+            assert_eq!(
+                creates.lock().unwrap().len(),
+                usize::from(file_type == Some("fig"))
+            );
+            input.thread_id = Some(Uuid::from_u128(1));
+            assert!(
+                service
+                    .post(
+                        access("macro|author@example.com", "doc", AccessLevel::Comment),
+                        input.clone()
+                    )
+                    .await
+                    .is_err()
+            );
+        }
+    }
+    let mut input = post_input();
+    input.anchor = Some(NewThreadAnchor::Spreadsheet {
+        sheet_id: "sheet-1".into(),
+        sheet_name: "Budget".into(),
+        range: "A1".into(),
+    });
+    let mut repo = fixture();
+    repo.file_type = Some("fig".into());
+    let service = MessageService::new(repo, Events::default());
+    assert!(
+        service
+            .post(
+                access("macro|author@example.com", "doc", AccessLevel::Comment),
+                input
+            )
+            .await
+            .is_err()
+    );
+}
+
+#[test]
+fn fig_anchors_need_bounded_ids_and_finite_positions() {
+    let document = MessageParent::parse("document", "doc").unwrap();
+    let with = |anchor: NewThreadAnchor| {
+        let mut input = post_input();
+        input.anchor = Some(anchor);
+        validate_post(&document, &input)
+    };
+    assert!(with(fig_anchor(Some("12:34"))).is_ok());
+    assert!(with(fig_anchor(None)).is_ok());
+    let limit = "1".repeat(FIG_ANCHOR_ID_LIMIT);
+    assert!(with(fig_anchor(Some(&limit))).is_ok());
+    let over = format!("{limit}1");
+    let invalid = [
+        ("", None, 0.0, 0.0),
+        (" ", None, 0.0, 0.0),
+        ("0:1", Some(""), 0.0, 0.0),
+        ("0:1", Some("\t"), 0.0, 0.0),
+        ("0:1", Some(over.as_str()), 0.0, 0.0),
+        (over.as_str(), None, 0.0, 0.0),
+        ("0:1", None, f64::NAN, 0.0),
+        ("0:1", None, 0.0, f64::INFINITY),
+        ("0:1", Some("1:2"), f64::NEG_INFINITY, 0.0),
+    ];
+    for (page_id, node_id, x, y) in invalid {
+        assert!(
+            with(NewThreadAnchor::Fig {
+                page_id: page_id.to_owned(),
+                node_id: node_id.map(str::to_owned),
+                x,
+                y,
+            })
+            .is_err(),
+            "{page_id:?} {node_id:?} {x} {y}"
+        );
+    }
+    let mut input = post_input();
+    input.anchor = Some(fig_anchor(None));
+    assert!(validate_post(&MessageParent::Channel(Uuid::from_u128(2)), &input).is_err());
+}
+
+fn call_receipt<P: RequiredPermission>(
+    user: &str,
+    call_id: Uuid,
+    level: AccessLevel,
+) -> Result<EntityAccessReceipt<P>, entity_access::domain::models::AccessError> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user.to_owned().try_into().unwrap(),
+        entity_access::domain::models::Entity {
+            entity_id: call_id.to_string(),
+            entity_type: EntityType::Call,
+        },
+        EntityPermission::AccessLevel {
+            access_level: level,
+        },
+    )
+}
+
+#[tokio::test]
+async fn call_posts_use_the_canonical_thread_and_reject_another_root() {
+    let call_id = Uuid::from_u128(10);
+    let repo = fixture();
+    let service = MessageService::new(repo.clone(), Events::default());
+    for thread_id in [None, Some(call_id)] {
+        let mut input = post_input();
+        input.thread_id = thread_id;
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await
+            .unwrap();
+    }
+    let creates = repo.creates.lock().unwrap();
+    assert_eq!(creates.len(), 2);
+    assert!(
+        creates
+            .iter()
+            .all(|command| command.canonical_root_id == Some(call_id))
+    );
+    drop(creates);
+    let mut input = post_input();
+    input.thread_id = Some(Uuid::from_u128(11));
+    assert!(matches!(
+        service
+            .post(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+                input,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert_eq!(repo.creates.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn call_viewers_can_read_but_cannot_post() {
+    let call_id = Uuid::from_u128(10);
+    assert!(
+        call_receipt::<MessageView>("macro|viewer@example.com", call_id, AccessLevel::View).is_ok()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|viewer@example.com", call_id, AccessLevel::View)
+            .is_err()
+    );
+    assert!(
+        call_receipt::<MessageWrite>("macro|member@example.com", call_id, AccessLevel::Comment)
+            .is_ok()
+    );
+}
+
+#[tokio::test]
+async fn call_root_deletion_preserves_chat_and_cannot_delete_other_authors() {
+    let mut repo = fixture();
+    let call_id = repo.message.id;
+    repo.message.parent = MessageParent::Call(call_id);
+    repo.state.anchor = None;
+    let service = MessageService::new(repo.clone(), Events::default());
+    assert!(matches!(
+        service
+            .delete(
+                call_receipt("macro|other@example.com", call_id, AccessLevel::Edit).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Forbidden)
+    ));
+    service
+        .delete(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            call_id,
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*repo.deletes.lock().unwrap(), vec![call_id]);
+    assert!(repo.thread_deletes.lock().unwrap().is_empty());
+    service
+        .post(
+            call_receipt("macro|author@example.com", call_id, AccessLevel::Comment).unwrap(),
+            post_input(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        service
+            .delete_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                None,
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        service
+            .patch_thread(
+                call_receipt("macro|author@example.com", call_id, AccessLevel::Owner).unwrap(),
+                call_id,
+                ThreadPatch {
+                    resolved: Some(true),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
 }

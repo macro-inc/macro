@@ -36,3 +36,7 @@
 .homepage-sheet-add-rows { padding: 2px 8px; background: #ffffff08; border: 1px solid #ffffff0d; border-radius: 999px; }
 .homepage-sheet-notice { margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) { .homepage-sheet-row-count, .homepage-sheet-add-rows, .homepage-sheet-notice { display: none; } .homepage-sheet-footer > .homepage-sheet-tool:last-child { margin-left: auto; } }
+@media (max-width: 767px) {
+  .homepage-sheet-editor { overflow: clip; touch-action: pan-y pinch-zoom; }
+  .homepage-sheet-toolbar, .homepage-sheet-grid { overflow: clip; overscroll-behavior: auto; }
+}

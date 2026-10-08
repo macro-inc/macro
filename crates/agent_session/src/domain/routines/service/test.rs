@@ -12,7 +12,29 @@ use agent_runtime_protocol::domain::schema::v0::ToRuntimeMessage;
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use shared_entity_registry::OwnedPurgeOutcome;
 use std::sync::{Arc, Mutex};
+
+#[test]
+#[cfg(feature = "admission")]
+fn definitive_admission_failures_survive_routine_preparation_and_prompt_mapping() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Denied(DenyReason::OverageLimitReached),
+        AiAdmissionError::Denied(DenyReason::OveragePaymentFailed),
+        AiAdmissionError::Unavailable,
+    ] {
+        let expected = RoutineSessionError::Admission(error);
+        assert_eq!(session_error(AgentSessionError::Admission(error)), expected);
+        assert_eq!(prompt_error(AgentSessionError::Admission(error)), expected);
+        let wire = serde_json::to_vec(&expected).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<RoutineSessionError>(&wire).unwrap(),
+            expected
+        );
+    }
+}
 
 #[derive(Clone)]
 struct Directory(Arc<Mutex<Option<BotFacts>>>);
@@ -41,6 +63,14 @@ struct Openings {
 }
 
 impl SessionOpener for Openings {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_managed_session(
         &self,
         request: OpenManagedSession,
@@ -106,6 +136,13 @@ impl AgentSessionNotificationRecipient for Controls {
     async fn session_deleted(&self, _: AgentSessionId) -> SessionResult<()> {
         panic!("not a routine capability")
     }
+    async fn purge_owned_session(
+        &self,
+        _: AgentSessionId,
+        _: &Owner,
+    ) -> SessionResult<OwnedPurgeOutcome> {
+        panic!("not a routine capability")
+    }
     async fn edit_queued_control(
         &self,
         _: AgentSessionId,
@@ -116,6 +153,14 @@ impl AgentSessionNotificationRecipient for Controls {
         panic!("not a routine capability")
     }
     async fn remove_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> SessionResult<()> {
+        panic!("not a routine capability")
+    }
+    async fn steer_queued_control(
         &self,
         _: AgentSessionId,
         _: AgentActionId,
@@ -264,6 +309,7 @@ async fn external_preparation_uses_requested_identity_and_model() {
         assert_eq!(
             requests.as_slice(),
             &[RequestedExternalSession {
+                repo_url: None,
                 session_id: fx.session.id,
                 bot_id: fx.session.bot_id,
                 owner: fx.session.owner_user().unwrap().clone(),

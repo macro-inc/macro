@@ -240,7 +240,7 @@ function _QuoteVideo() {
           <div
             style={{
               color: 'var(--a0)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '13px' : '14px',
               'font-weight': '700',
               'letter-spacing': '0.08em',
@@ -270,7 +270,7 @@ function _QuoteVideo() {
           <div
             style={{
               color: 'var(--c4)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': compact() ? '13px' : '14px',
               'font-weight': '700',
               'letter-spacing': '0.08em',
@@ -310,7 +310,7 @@ function _QuoteVideo() {
             <div
               style={{
                 color: 'var(--c1)',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': compact() ? '14px' : '15px',
                 'font-weight': '700',
                 'letter-spacing': '0.1em',
@@ -387,7 +387,7 @@ function _QuoteVideo() {
                 color: 'var(--c1)',
                 cursor: 'pointer',
                 'font-family': 'body',
-                'font-size': '18px',
+                'font-size': '15px',
                 height: '34px',
                 'line-height': 1,
                 position: 'absolute',
@@ -528,7 +528,7 @@ function _TeamSection() {
           color: 'var(--b0)',
           display: 'inline-flex',
           'font-family': 'body',
-          'font-size': '18px',
+          'font-size': '15px',
           'font-weight': '700',
           gap: '8px',
           height: '34px',
@@ -594,7 +594,7 @@ function TeamMemberCard(props: { member: { name: string; tags: string[] } }) {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': breakpoint() ? '12px' : '14px',
             'font-weight': '700',
             'letter-spacing': '0.09em',
@@ -610,7 +610,7 @@ function TeamMemberCard(props: { member: { name: string; tags: string[] } }) {
             'font-family': 'display',
             'font-size':
               viewportWidth() < 700 ? '30px' : breakpoint() ? '34px' : '30px',
-            'font-weight': '430',
+            'font-weight': '315',
             'letter-spacing': '-0.02em',
             'line-height': 1.05,
             margin: '0',
@@ -631,7 +631,7 @@ function TeamMemberCard(props: { member: { name: string; tags: string[] } }) {
                 style={{
                   border: '1px solid var(--b3)',
                   color: 'var(--c2)',
-                  'font-family': 'rajdhani, body',
+                  'font-family': 'Inter, body',
                   'font-size': '13px',
                   'font-weight': '700',
                   'letter-spacing': '0.07em',
@@ -699,7 +699,7 @@ function ComparisonCard(props: {
           style={{
             'font-family': 'display',
             'font-size': viewportWidth() < 700 ? '19px' : '18px',
-            'font-weight': '450',
+            'font-weight': '315',
             'line-height': 1.12,
             margin: '0',
           }}
@@ -811,7 +811,7 @@ function FinalBentoCta() {
                     : compact()
                       ? '47px'
                       : '51px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.015em',
               'line-height': 1.08,
               margin: 0,
@@ -848,7 +848,7 @@ function FinalBentoCta() {
             cursor: 'default',
             display: 'inline-flex',
             'font-family': 'body',
-            'font-size': viewportWidth() < 700 ? '15px' : '18px',
+            'font-size': viewportWidth() < 700 ? '15px' : '15px',
             'font-weight': '700',
             gap: viewportWidth() < 700 ? '8px' : '10px',
             height: viewportWidth() < 700 ? '40px' : '42px',
@@ -1003,7 +1003,7 @@ function GitHubButton(props: { mobile: boolean; showStars: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': props.mobile ? '18px' : '16px',
+        'font-size': props.mobile ? '15px' : '16px',
         'font-weight': '700',
         gap: '8px',
         height: props.mobile ? '38px' : '30px',
@@ -1227,7 +1227,7 @@ export function OpenSourceBento() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '38px',
-            'font-weight': '410',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.12,
             margin: 0,
@@ -1277,7 +1277,7 @@ function FeatureEyebrowLink(props: { href: string; children: any }) {
         'align-items': 'center',
         color: 'var(--a0)',
         display: 'inline-flex',
-        'font-family': 'rajdhani, body',
+        'font-family': 'Inter, body',
         'font-size': breakpoint() ? '12px' : '16px',
         gap: '8px',
         'letter-spacing': '0.08em',
@@ -1443,7 +1443,7 @@ export function SectionFeatureGrid(
   const _eyebrowStyle = () =>
     ({
       color: 'var(--a0)',
-      'font-family': 'rajdhani, body',
+      'font-family': 'Inter, body',
       'font-size': stacked() ? '12px' : '16px',
       'letter-spacing': '0.08em',
       'text-transform': 'uppercase',
@@ -1581,7 +1581,7 @@ export function SectionFeatureGrid(
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': mobile() ? '34px' : '44px',
-              'font-weight': '410',
+              'font-weight': '315',
               'letter-spacing': '-0.015em',
               'line-height': 1.2,
               margin: 0,
@@ -1709,7 +1709,7 @@ export function SectionFeatureGrid(
           <div
             style={{
               'color': 'var(--c4)',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': viewportWidth() < 700 ? '11px' : '13px',
               'font-weight': '700',
               'letter-spacing': '0.07em',
@@ -1759,7 +1759,7 @@ export function SectionFeatureGrid(
                 'align-items': 'center',
                 color: 'var(--a0)',
                 display: 'inline-flex',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': breakpoint() ? '12px' : '16px',
                 gap: '7px',
                 'letter-spacing': '0.08em',
@@ -1857,7 +1857,7 @@ export function SectionFeatureGrid(
           >
             <span
               style={{
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': breakpoint() ? '12px' : '16px',
                 color: 'var(--a0)',
                 'letter-spacing': '0.08em',
@@ -1928,7 +1928,7 @@ export function SectionFeatureGrid(
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? '55px' : breakpoint() ? '57px' : '53px',
-                'font-weight': mobile() ? '380' : '410',
+                'font-weight': '315',
                 'letter-spacing': '-0.015em',
                 'line-height': 1.08,
                 margin: '0',
@@ -1999,7 +1999,7 @@ export function SectionFeatureGrid(
                   cursor: 'default',
                   display: 'inline-flex',
                   'font-family': 'body',
-                  'font-size': mobile() ? '18px' : '16px',
+                  'font-size': mobile() ? '15px' : '16px',
                   'font-weight': '700',
                   gap: '8px',
                   height: mobile() ? '38px' : '30px',
@@ -2115,7 +2115,7 @@ export function SectionFeatureGrid(
                 color: 'var(--c1)',
                 cursor: 'pointer',
                 display: 'grid',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': viewportWidth() < 700 ? '13px' : '15px',
                 'font-weight': '700',
                 gap: '8px',
@@ -2238,7 +2238,7 @@ export function SectionFeatureGrid(
                     color: 'var(--c1)',
                     cursor: 'pointer',
                     'font-family': 'body',
-                    'font-size': '18px',
+                    'font-size': '15px',
                     height: '34px',
                     'line-height': 1,
                     position: 'absolute',
@@ -2315,7 +2315,7 @@ export function SectionFeatureGrid(
                   : stacked()
                     ? '28px'
                     : '51px',
-                'font-weight': '410',
+                'font-weight': '315',
                 'letter-spacing':
                   narrowDesktop() || stacked() ? 'normal' : '-0.015em',
                 'line-height': narrowDesktop() || stacked() ? 1.12 : 1.08,
@@ -2377,7 +2377,7 @@ export function SectionFeatureGrid(
                     display: 'grid',
                     'font-family': 'display',
                     'font-size': mobile() ? '22px' : '24px',
-                    'font-weight': '410',
+                    'font-weight': '315',
                     'grid-template-columns': 'auto minmax(0, 1fr)',
                     gap: '14px',
                     'line-height': 1.12,
@@ -2388,7 +2388,7 @@ export function SectionFeatureGrid(
                     aria-hidden="true"
                     style={{
                       color: 'var(--a0)',
-                      'font-family': 'rajdhani, body',
+                      'font-family': 'Inter, body',
                       'font-size': '14px',
                       'font-weight': '700',
                       'letter-spacing': '0.08em',
@@ -2401,7 +2401,7 @@ export function SectionFeatureGrid(
                     style={{
                       color: 'var(--c4)',
                       'font-family': 'body',
-                      'font-size': mobile() ? '19px' : '22px',
+                      'font-size': mobile() ? '16px' : '19px',
                       'font-weight': '400',
                       'line-height': 1.38,
                       margin: 0,
@@ -2443,7 +2443,7 @@ export function SectionFeatureGrid(
                 'align-items': 'center',
                 color: 'var(--a0)',
                 display: 'inline-flex',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': breakpoint() ? '12px' : '16px',
                 gap: '7px',
                 'letter-spacing': '0.08em',
@@ -2677,7 +2677,7 @@ export function SectionFeatureGrid(
           >
             <span
               style={{
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': breakpoint() ? '12px' : '16px',
                 color: 'var(--a0)',
                 'letter-spacing': '0.08em',
@@ -2838,7 +2838,7 @@ export function SectionFeatureGrid(
               <p
                 style={{
                   color: 'var(--c4)',
-                  'font-family': 'rajdhani, body',
+                  'font-family': 'Inter, body',
                   'font-size': breakpoint() ? '14px' : '16px',
                   'font-weight': '400',
                   'letter-spacing': '0.04em',

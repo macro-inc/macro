@@ -27,11 +27,25 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-default = ["ai_tools", "inbound", "lookup", "outbound", "ports"]
+# Links archived call records to CRM records from the call topic.
+call_link = [
+  "dep:call",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:models_properties",
+  "dep:rdkafka",
+  "dep:rootcause",
+  "dep:sqlx",
+  "dep:tokio",
+  "macro_event_broker/outbound",
+  "ports",
+]
+default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
+  "dep:entity_access_db_utils",
   "dep:macro_user_id",
   "dep:models_properties",
   "dep:properties",
@@ -40,23 +54,33 @@ outbound = [
   "dep:unfurl",
   "ports",
 ]
-ports = []
+ports = ["dep:databases", "dep:models_databases", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # reqwest/unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
 
 [dependencies]
+databases = { path = "../databases", default-features = false, features = ["ports"], optional = true }
+models_databases = { path = "../models_databases", optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+filter_ast = { path = "../filter_ast" }
+item_filters = { path = "../item_filters", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
+kafka_util = { path = "../kafka_util", optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
 messages = { path = "../messages", default-features = false, features = ["ports"], optional = true }
+rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 # AI toolset dependencies
 ai_toolset = { path = "../ai_toolset", optional = true }
@@ -83,6 +107,10 @@ unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+databases = { path = "../databases", features = ["postgres", "gateway"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+
 macro_db_migrator = { path = "../macro_db_migrator" }
 messages = { path = "../messages", default-features = false, features = ["outbound", "test-utils"] }
 macro_user_id = { path = "../macro_user_id" }

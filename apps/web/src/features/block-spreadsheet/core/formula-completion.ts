@@ -1,8 +1,10 @@
 import type { CompletionContext } from '@ironcalc/wasm';
 import catalog from './formula-functions.json';
 
-// Adapted from IronCalc's function catalog at 8fd0a82. See the adjacent MIT license.
-// Filtered against @ironcalc/wasm 0.8.4; volatile functions are disabled in Macro.
+// Adapted from IronCalc's function catalog at the vendored engine's upstream
+// commit (vendor/ironcalc/upstream.json). See the adjacent MIT license.
+// HYPERLINK is left out (Macro shows its text); AGGREGATE and GETPIVOTDATA are
+// Macro's additions.
 export type FormulaFunction = {
   args: string[][];
   description: string;
@@ -38,8 +40,6 @@ export function formulaCompletion(
   text: string,
   context: CompletionContext
 ): FormulaCompletion {
-  if (text.trim() === '=')
-    return { kind: 'list', names: names.slice(0, 40), from: 1 };
   const argument = context.expecting.find(
     (token) => typeof token === 'object' && 'Argument' in token
   );
@@ -51,7 +51,12 @@ export function formulaCompletion(
   const partial = context.expecting.find(
     (token) => typeof token === 'object' && 'FunctionName' in token
   );
-  if (!partial || typeof partial !== 'object' || !('FunctionName' in partial))
+  if (
+    !partial ||
+    typeof partial !== 'object' ||
+    !('FunctionName' in partial) ||
+    !partial.FunctionName
+  )
     return;
   const matches = names.filter((name) =>
     name.startsWith(partial.FunctionName.toUpperCase())

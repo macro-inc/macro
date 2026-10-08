@@ -68,6 +68,67 @@ pub type UserToolFinisher = Arc<
         + Sync,
 >;
 
+/// Which call loaded which catalog tools this session, in load order.
+///
+/// The Anthropic request planner references a loaded tool from the result of
+/// the call that loaded it, so loading never changes the request's `tools`.
+#[derive(Clone, Default)]
+pub struct ToolLoads(Arc<Mutex<Vec<Load>>>);
+
+/// One call's loading of catalog tools.
+struct Load {
+    call: LoadingCall,
+    tools: Vec<String>,
+}
+
+/// A call as the history shows it. Rig hands a tool's result hook no provider
+/// call id, so an executed call is known by its name and arguments; an invalid
+/// one arrives with its id.
+#[derive(Clone, Debug, PartialEq)]
+enum LoadingCall {
+    Id(String),
+    Arguments {
+        tool_name: String,
+        arguments: serde_json::Value,
+    },
+}
+
+impl ToolLoads {
+    fn record(&self, call: LoadingCall, tools: &[SearchableTool]) {
+        self.0.lock().expect("tool_loads poisoned").push(Load {
+            call,
+            tools: tools.iter().map(|tool| tool.name.clone()).collect(),
+        });
+    }
+
+    /// The tools `call` loaded.
+    pub(crate) fn loaded_by(&self, call: &rig_core::message::ToolCall) -> Vec<String> {
+        self.0
+            .lock()
+            .expect("tool_loads poisoned")
+            .iter()
+            .filter(|load| match &load.call {
+                LoadingCall::Id(id) => *id == call.id,
+                LoadingCall::Arguments {
+                    tool_name,
+                    arguments,
+                } => *tool_name == call.function.name && *arguments == call.function.arguments,
+            })
+            .flat_map(|load| load.tools.iter().cloned())
+            .collect()
+    }
+
+    /// Every tool loaded this session.
+    pub(crate) fn loaded(&self) -> Vec<String> {
+        self.0
+            .lock()
+            .expect("tool_loads poisoned")
+            .iter()
+            .flat_map(|load| load.tools.iter().cloned())
+            .collect()
+    }
+}
+
 /// Everything the session hands the stream bridge besides the request context.
 #[derive(Clone)]
 pub struct BridgeInputs {
@@ -77,6 +138,8 @@ pub struct BridgeInputs {
     pub loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
     /// Registers loaded tools with the live tool server.
     pub register_loaded: RegisterFn,
+    /// Records which result loaded which tools.
+    pub tool_loads: ToolLoads,
     /// Finishes user tools mid-turn, when the host can.
     pub user_tool_finisher: Option<UserToolFinisher>,
 }
@@ -106,6 +169,8 @@ pub struct StreamBridge {
     loaded_buffer: Arc<Mutex<Vec<SearchableTool>>>,
     /// Registers drained tools with the live tool server.
     register_loaded: RegisterFn,
+    /// Records which result loaded which tools.
+    tool_loads: ToolLoads,
     /// The session's full searchable catalog. Read by
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
@@ -137,6 +202,7 @@ impl StreamBridge {
             routing,
             loaded_buffer,
             register_loaded,
+            tool_loads,
             user_tool_finisher,
         } = inputs;
         let (tx, rx) = mpsc::unbounded_channel();
@@ -146,6 +212,7 @@ impl StreamBridge {
                 routing,
                 loaded_buffer,
                 register_loaded,
+                tool_loads,
                 searchable_catalog,
                 user_tool_finisher,
                 cancel,
@@ -209,6 +276,7 @@ impl StreamBridge {
     pub(crate) async fn handle_invalid_tool_call(
         &self,
         tool_name: &str,
+        tool_call_id: Option<&str>,
     ) -> Option<InvalidToolCallAction> {
         match self
             .searchable_catalog
@@ -216,14 +284,21 @@ impl StreamBridge {
             .find(|tool| tool.name == tool_name)
         {
             Some(tool) => {
-                (self.register_loaded)(vec![tool.clone()]).await;
+                let tools = vec![tool.clone()];
+                // The retry feedback answers this call, so it loads the tool.
+                if let Some(id) = tool_call_id {
+                    self.tool_loads
+                        .record(LoadingCall::Id(id.to_owned()), &tools);
+                }
+                (self.register_loaded)(tools).await;
                 tracing::info!(
                     tool = %tool_name,
                     "auto-loaded searchable tool the model called without loading"
                 );
                 Some(InvalidToolCallAction::retry(format!(
                     "The tool `{tool_name}` exists but was not loaded when you called it. \
-                     It is loaded now — call it again with the same arguments."
+                     It is loaded now and its parameters are in your tool list: call it \
+                     again, checking your arguments against them."
                 )))
             }
             None => Some(InvalidToolCallAction::retry(format!(
@@ -287,6 +362,13 @@ impl StreamBridge {
             std::mem::take(&mut *buf)
         };
         if !pending.is_empty() {
+            self.tool_loads.record(
+                LoadingCall::Arguments {
+                    tool_name: tool_name.to_owned(),
+                    arguments: serde_json::from_str(args).unwrap_or(serde_json::Value::Null),
+                },
+                &pending,
+            );
             (self.register_loaded)(pending).await;
         }
 
@@ -367,7 +449,8 @@ impl AgentHook for StreamBridge {
         _ctx: &HookContext,
         event: &InvalidToolCallContext,
     ) -> Option<InvalidToolCallAction> {
-        self.handle_invalid_tool_call(&event.tool_name).await
+        self.handle_invalid_tool_call(&event.tool_name, event.tool_call_id.as_deref())
+            .await
     }
 
     async fn on_tool_call(

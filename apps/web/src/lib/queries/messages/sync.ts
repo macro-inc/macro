@@ -4,6 +4,7 @@ import type {
   MessageListItem,
   MessageParent,
   MessageThread,
+  TimelineActivity,
 } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
@@ -23,10 +24,26 @@ import { fetchMessageThread, getThreadRepliesQueryKey } from './thread-replies';
 import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
+  insertActivitiesIntoMessageTimeline,
   type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
+
+/** Committed timeline activity, delivered whole so loaded history needs no re-read. */
+export function handleTimelineActivity(event: {
+  parent: MessageParent;
+  activities: TimelineActivity[];
+}) {
+  // A fact committed before the bottom page's first fetch resolved may be
+  // missing from a response the server already computed. Loaded windows still
+  // take it below.
+  refetchTimelineAwaitingFirstPage(event.parent);
+  queryClient.setQueriesData<MessageTimelineData>(
+    { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
+    (data) => insertActivitiesIntoMessageTimeline(data, event.activities)
+  );
+}
 
 type ThreadStateListener = (
   parent: MessageParent,
@@ -99,6 +116,30 @@ export function applyMessage(
     patchTargetMessage(parent, target, normalized);
   }
   softInvalidateTargetCaches(parent, target);
+  // Calls have one thread and no mounted timeline to seed its first fetch.
+  // A view may still be showing the empty response when the first post arrives.
+  if (
+    parent.type === 'call' &&
+    change === 'posted' &&
+    !queryClient.getQueryData(getThreadRepliesQueryKey(parent, parent.id))
+  ) {
+    void refreshUnloadedCallThread(parent);
+  }
+}
+
+async function refreshUnloadedCallThread(parent: MessageParent) {
+  const queryKey = getThreadRepliesQueryKey(parent, parent.id);
+  const inFlight = queryClient
+    .getQueryCache()
+    .find({ queryKey, exact: true })?.promise;
+  if (inFlight) {
+    try {
+      await inFlight;
+    } catch {
+      // An empty call may return 404; retry after the committed first message.
+    }
+  }
+  await queryClient.invalidateQueries({ queryKey, exact: true });
 }
 
 /**
@@ -114,7 +155,8 @@ export function applyRootDeletion(
   cached?: MessageThread['state']
 ) {
   const parent = message.parent;
-  if (parent.type === 'channel' || message.thread_id) return;
+  if (parent.type === 'channel' || parent.type === 'call' || message.thread_id)
+    return;
   const state = cached ?? getCachedThreadState(parent, message.id);
   if (!state) {
     void queryClient.invalidateQueries({
@@ -185,9 +227,21 @@ function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   const refetch = () =>
     queryClient.invalidateQueries({ queryKey, exact: true });
   const inFlight = query.promise;
-  if (inFlight) void inFlight.catch(() => {}).finally(refetch);
+  if (inFlight) void refetchAfterPendingPage(inFlight, refetch);
   else void refetch();
   return true;
+}
+
+async function refetchAfterPendingPage(
+  pending: Promise<unknown>,
+  refetch: () => Promise<void>
+) {
+  try {
+    await pending;
+  } catch {
+    // The new message still needs a fetch if the initial page request failed.
+  }
+  await refetch();
 }
 
 /**
@@ -222,14 +276,19 @@ export function applyThreadState(
         ...data,
         pages: data.pages.map((page) => ({
           ...page,
-          items: page.items
+          entries: page.entries
             .filter(
               (item) =>
+                item.type !== 'message' ||
                 parent.type === 'document' ||
                 !state.deleted_at ||
-                item.id !== state.root_id
+                item.message.id !== state.root_id
             )
-            .map(update),
+            .map((entry) =>
+              entry.type === 'message'
+                ? { ...entry, message: update(entry.message) }
+                : entry
+            ),
         })),
       }
   );

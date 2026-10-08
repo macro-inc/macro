@@ -43,7 +43,8 @@ describe('formula help using the actual IronCalc parser', () => {
       kind: 'list',
       names: ['NORM.DIST'],
     });
-    expect(formulaFunctions.RAND).toBeUndefined();
+    expect(complete('=')).toBeUndefined();
+    expect(formulaFunctions.TODAY).toBeDefined();
     expect(formulaFunctions.HYPERLINK).toBeUndefined();
   });
   it('finds nested functions and the current argument without suggesting inside text', () => {

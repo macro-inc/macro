@@ -23,13 +23,16 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, EntityAccessReceipt, EntityType,
-        MemberParticipantRole, RequiredPermission,
+        AccessError, BotAccessScope, EntityAccessReceipt, EntityType, MemberParticipantRole,
+        RequiredPermission,
     },
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageCommands, service::MessageWrite};
+use messages::domain::{
+    api::MessageServiceApi,
+    service::{MessageView, MessageWrite},
+};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -45,9 +48,9 @@ where
     Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
-    /// Shared message writer used to send channel messages on the user's behalf.
-    pub messages: Arc<dyn MessageCommands>,
-    /// Channel message service used to read timelines, resolve messages, and fetch threads.
+    /// Shared message application: channel timelines, threads, and posts.
+    pub messages: Arc<dyn MessageServiceApi>,
+    /// Channel service used for channel metadata and membership mutations.
     pub service: Arc<Svc>,
     /// Entity access service used to ensure the caller is a channel member.
     pub entity_access_service: Arc<AccessSvc>,
@@ -78,7 +81,7 @@ where
 {
     /// Create a new channel tool context.
     pub fn new(
-        messages: Arc<dyn MessageCommands>,
+        messages: Arc<dyn MessageServiceApi>,
         service: Svc,
         entity_access_service: AccessSvc,
     ) -> Self {
@@ -113,21 +116,21 @@ where
         self
     }
 
-    /// Require that the request user is an active member of the channel before reading it.
+    /// Require that the request user is an active member of the channel before
+    /// reading it, minting the read capability the message reads take.
     pub async fn require_channel_member(
         &self,
         request_context: &RequestContext,
         channel_id: Uuid,
-    ) -> Result<(), ToolCallError> {
+    ) -> Result<EntityAccessReceipt<MessageView>, ToolCallError> {
         self.entity_access_service
-            .check_access(
-                Some(&*request_context.user_id),
+            .generate_entity_access_receipt::<MessageView>(
+                &request_context.user_id,
+                None,
                 &channel_id.to_string(),
                 EntityType::Channel,
-                AccessLevel::View,
             )
             .await
-            .map(|_| ())
             .map_err(channel_access_error)
     }
 

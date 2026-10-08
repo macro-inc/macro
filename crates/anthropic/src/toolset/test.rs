@@ -1,9 +1,106 @@
 use super::*;
 use crate::types::response::{Content, MessageResponse, ResponseContentKind};
+use ai_billing::domain::{
+    DenyReason,
+    admission::{AdmissionFuture, AiAdmissionError, AiAdmissionService},
+};
 use ai_usage::financial::{FinancialError, WriteDisposition};
 use ai_usage::{FinancialFuture, UsageTracking};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+struct Refuse {
+    error: AiAdmissionError,
+    callers: Mutex<Vec<(String, ai_usage::AiFeature)>>,
+}
+impl AiAdmissionService for Refuse {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> AdmissionFuture<'a> {
+        Box::pin(async move {
+            self.callers
+                .lock()
+                .unwrap()
+                .push((user.to_string(), feature));
+            Err(self.error)
+        })
+    }
+}
+
+#[tokio::test]
+async fn direct_tools_refuse_before_both_provider_branches_and_observation() {
+    use ai_toolset::{AsyncTool, ServiceContext};
+    for tracked in [false, true] {
+        for error in [
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            AiAdmissionError::Unavailable,
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut context = AnthropicToolContext::new(
+                Client::with_config(crate::config::Config {
+                    api_base: format!("http://{}", listener.local_addr().unwrap()),
+                    ..Default::default()
+                }),
+                "claude-haiku-4-5".into(),
+            );
+            let admission = Arc::new(Refuse {
+                error,
+                callers: Mutex::new(Vec::new()),
+            });
+            context.admission = admission.clone();
+            let journal = Arc::new(Observations::default());
+            if tracked {
+                context.recorder =
+                    ai_usage::with_tracking(Arc::new(ai_usage::NoOpUsageRecorder), journal.clone());
+            }
+            context.usage_context = UsageContext::system(ai_usage::AiFeature::Automation);
+            let first =
+                RequestContext::new("macro|first@example.com".to_owned().try_into().unwrap());
+            let second =
+                RequestContext::new("macro|second@example.com".to_owned().try_into().unwrap());
+            let tool = WebSearch {
+                input: "test".into(),
+            };
+            let (a, b) = tokio::join!(
+                tool.call(ServiceContext(context.clone()), first.clone()),
+                tool.call(ServiceContext(context), second.clone()),
+            );
+            for result in [a, b] {
+                assert_eq!(
+                    result.unwrap_err().description,
+                    format!("{}: {error}", error.code())
+                );
+            }
+            {
+                let callers = admission.callers.lock().unwrap();
+                assert!(
+                    callers.contains(&(first.user_id.to_string(), ai_usage::AiFeature::Automation))
+                );
+                assert!(
+                    callers
+                        .contains(&(second.user_id.to_string(), ai_usage::AiFeature::Automation))
+                );
+            }
+            assert!(journal.begins.lock().unwrap().is_empty());
+            assert!(journal.finals.lock().unwrap().is_empty());
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(10), listener.accept())
+                    .await
+                    .is_err()
+            );
+        }
+    }
+}
+
+struct NoAnalytics;
+impl UsageRecorder for NoAnalytics {
+    fn record(&self, _: ai_usage::UsageEvent) {
+        panic!("native tools must not introduce a new analytics producer");
+    }
+}
 
 #[derive(Default)]
 struct Observations {
@@ -60,7 +157,7 @@ async fn context_with_status(
         }),
         "claude-haiku-4-5".into(),
     );
-    context.recorder = ai_usage::with_tracking(Arc::new(ai_usage::NoOpUsageRecorder), journal);
+    context.recorder = ai_usage::with_tracking(Arc::new(NoAnalytics), journal);
     context.usage_context = UsageContext::system(ai_usage::AiFeature::Automation);
     context
 }

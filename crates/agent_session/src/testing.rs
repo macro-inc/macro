@@ -11,7 +11,7 @@ use crate::domain::model::{
     ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
     ManagerFence, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, StoredQueuedAction,
-    ThreadSession,
+    ThreadSession, TurnPrompter,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -83,6 +83,8 @@ pub struct InMemoryAgentSessionRepo {
     leases: Arc<Mutex<HashMap<AgentSessionId, Lease>>>,
     /// Session -> waiting actions, mirroring `agent_session_queue`.
     queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
+    /// Session -> who prompted its turn, mirroring the `turn_*` columns.
+    turn_prompters: Arc<Mutex<HashMap<AgentSessionId, TurnPrompter>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -257,15 +259,19 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        self.find(id).await?.ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.session_reads.fetch_add(1, Ordering::Relaxed);
-        self.sessions
+        Ok(self
+            .sessions
             .lock()
             .expect("in-memory session store is not poisoned")
             .get(&id)
-            .cloned()
-            .ok_or_else(|| {
-                AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
-            })
+            .cloned())
     }
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
@@ -359,6 +365,24 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         hashes.retain(|_, session| *session != id);
         hashes.insert(hash.to_owned(), id);
         Ok(())
+    }
+
+    async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
+        self.get(id).await?;
+        self.turn_prompters
+            .lock()
+            .expect("turn prompters poisoned")
+            .insert(id, prompter.clone());
+        Ok(())
+    }
+
+    async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
+        Ok(self
+            .turn_prompters
+            .lock()
+            .expect("turn prompters poisoned")
+            .get(&id)
+            .cloned())
     }
 
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {

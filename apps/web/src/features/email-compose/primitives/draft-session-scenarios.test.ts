@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { message } from '../../email-message/tests/messages';
 import {
   DraftPersistRejected,
   type DraftSaveResult,
@@ -29,6 +30,92 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('draft session: reply composer', () => {
+  it('preserves the seeded ID as a handle until a save confirms it when lookup has no record', async () => {
+    const context = createComposeContext();
+    context.drafts.readDraft = vi.fn(async () => undefined);
+    context.drafts.watchDrafts = () => () => {};
+    const state = mountReplyComposer(context, undefined, {
+      draft: message('existing', { is_draft: true }),
+    });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await state.sendEmail();
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing', {
+        attachments: false,
+      });
+      expect(context.drafts.saveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientHandles: expect.objectContaining({ draftId: 'existing' }),
+        })
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps REST lifecycle reads blocked while the seeded draft identity is unresolved', async () => {
+    const context = createComposeContext();
+    const pending =
+      Promise.withResolvers<
+        Awaited<ReturnType<NonNullable<typeof context.drafts.readDraft>>>
+      >();
+    context.drafts.readDraft = vi.fn(() => pending.promise);
+    context.drafts.watchDrafts = () => () => {};
+    const draft = message('local', { is_draft: true });
+    const state = mountReplyComposer(context, undefined, { draft });
+    const observed = vi.mocked(context.draftLifecycle.observe).mock.calls[0][0];
+    try {
+      expect(observed.draftId()).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      pending.resolve({ draft, persistence: 'queued' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(observed.draftId()).toBeUndefined();
+      vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+        queued(input)
+      );
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      vi.mocked(context.drafts.readDraft).mockResolvedValue({
+        draft: message('server-1', { is_draft: true }),
+        persistence: 'committed',
+      });
+      vi.mocked(context.drafts.saveDraft).mockResolvedValue(committed());
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('still blocks send when local storage identifies the seeded draft as queued', async () => {
+    const context = createComposeContext();
+    const draft = message('existing', { is_draft: true });
+    context.drafts.readDraft = vi.fn(async () => ({
+      draft,
+      persistence: 'queued' as const,
+    }));
+    context.drafts.watchDrafts = () => () => {};
+    vi.mocked(context.drafts.saveDraft).mockImplementation(async (input) =>
+      queued(input)
+    );
+    const state = mountReplyComposer(context, undefined, { draft });
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.drafts.readDraft).toHaveBeenCalledWith('existing', {
+        attachments: false,
+      });
+      await state.sendEmail();
+      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+        'Failed to send email',
+        { subtext: 'Draft still syncing, try again' }
+      );
+    } finally {
+      state.dispose();
+    }
+  });
+
   it('queues saves offline under one handle, refuses to send, then sends once a save commits', async () => {
     const context = createComposeContext();
     vi.mocked(context.connectivity.looksOffline).mockReturnValue(true);
@@ -219,7 +306,13 @@ describe('draft session: compose composer', () => {
             }),
           })
         );
-        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        if (firstSave === 'autosave') {
+          expect(context.notices.feedback.failure).toHaveBeenCalledWith(
+            'Failed to save draft'
+          );
+        } else {
+          expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+        }
       } finally {
         root.dispose();
       }

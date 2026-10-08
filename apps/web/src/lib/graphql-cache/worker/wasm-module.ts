@@ -1,3 +1,4 @@
+import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
@@ -15,6 +16,9 @@ import type {
   CachedQueryVariantWire,
   CacheRevision,
   CacheRevisionResult,
+  CalendarCommitArgs,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -94,6 +98,11 @@ export interface CacheEngine {
   entityFilter(
     request: EntityFilterCacheArgs
   ): Promise<EntityFilterCacheResult>;
+  calendarRange(
+    request: CalendarRangeCacheArgs
+  ): Promise<CalendarRangeCacheResult>;
+  /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
+  calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
   writeQuery(
     context: {
       originOpId?: string;
@@ -115,6 +124,7 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<CacheEngineHydrationResult>;
+  inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
     uuid: string,
@@ -124,10 +134,13 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
+    identityBindings: IdentityBindingWire[] | undefined,
     createdAtMs: number,
     leaseOwner: string,
     nowMs: number,
-    leaseExpiresAtMs: number
+    leaseExpiresAtMs: number,
+    clientMetadata?: Record<string, unknown>,
+    uncertainCalendarEventKeys?: string[]
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
@@ -150,7 +163,8 @@ export interface CacheEngine {
     leaseOwner: string,
     leaseGeneration: string,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure: boolean
   ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,
@@ -226,6 +240,8 @@ export interface CacheWasmModule {
       success: boolean
     ) => void
   ): void;
+  /** Installs the schema shipped with this frontend before opening storage. */
+  configureCacheSchema(schemaSdl: string): void;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -313,6 +329,10 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         if (!(exports.memory instanceof WebAssembly.Memory)) {
           throw new Error('cache WASM did not export its linear memory');
         }
+        const { default: schemaSdl } = await import(
+          '../../../../../../static_assets/schema.graphql?raw'
+        );
+        mod.configureCacheSchema(schemaSdl);
         wasmMemory = exports.memory;
         mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
           telemetry.record({

@@ -1871,8 +1871,11 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
-    repo.expect_get_document_metadata()
-        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
+    repo.expect_get_document_metadata().returning(|_| {
+        let mut metadata = make_test_metadata();
+        metadata.sub_type = Some(DocumentSubType::Task);
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1896,6 +1899,7 @@ async fn test_delete_document_publishes_document_deleted_event() {
     assert_eq!(event.payload["event_type"], "document.deleted");
     assert_eq!(event.payload["schema_version"], 1);
     assert_eq!(event.payload["metadata"]["document_id"], "doc-1");
+    assert_eq!(event.payload["metadata"]["sub_type"], "task");
     assert_eq!(
         event.payload["metadata"]["actor_user_id"],
         "macro|user@user.com"
@@ -3168,4 +3172,261 @@ fn presigned_url_path_for_bot_and_team_owners_uses_their_principals() {
         service.cloudfront_url_for_key(&build_cloud_storage_bucket_document_key(&team, "doc-1", 7)),
         "https://cdn.example.test/00000000-0000-0000-0000-000000000456/doc-1/7"
     );
+}
+
+/// A random (v4) id: the kind a collab surface could also hold.
+fn random_id(seed: u128) -> uuid::Uuid {
+    uuid::Builder::from_random_bytes(seed.to_be_bytes()).into_uuid()
+}
+
+fn sync_with_session(
+    id: uuid::Uuid,
+    exists: bool,
+) -> crate::domain::ports::sync::MockDocumentSyncPort {
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    sync.expect_exists()
+        .withf(move |document_id| document_id == id.to_string())
+        .times(1)
+        .returning(move |_| Box::pin(std::future::ready(Ok(exists))));
+    sync
+}
+
+#[tokio::test]
+async fn a_caller_chosen_id_that_already_has_a_session_is_refused() {
+    let id = random_id(42);
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_create_document().times(0);
+    let service = spreadsheet_test_service(repo, sync_with_session(id, true));
+    let mut document = new_document(FileType::Md);
+    document.id = Some(id);
+
+    let err = DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, DocumentError::Conflict(_)));
+}
+
+#[tokio::test]
+async fn a_caller_chosen_id_without_a_session_is_created() {
+    let id = random_id(43);
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document()
+        .withf(move |args, _| args.document.id == Some(id))
+        .times(1)
+        .returning(|_, _| {
+            let mut metadata = make_test_metadata();
+            metadata.file_type = Some("spreadsheet".to_string());
+            Box::pin(std::future::ready(Ok(metadata)))
+        });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let mut sync = sync_with_session(id, false);
+    sync.expect_initialize_spreadsheet()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let service = spreadsheet_test_service(repo, sync);
+    let mut document = spreadsheet_document();
+    document.id = Some(id);
+
+    DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_deterministic_id_with_a_leftover_session_is_created() {
+    // Starter documents use v5 ids, which no collab surface can have, so a
+    // retry after a partial create that left a session still creates them.
+    let id = uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_OID, b"starter-document");
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document()
+        .withf(move |args, _| args.document.id == Some(id))
+        .times(1)
+        .returning(|_, _| {
+            let mut metadata = make_test_metadata();
+            metadata.file_type = Some("spreadsheet".to_string());
+            Box::pin(std::future::ready(Ok(metadata)))
+        });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    sync.expect_exists().times(0);
+    sync.expect_initialize_spreadsheet()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let service = spreadsheet_test_service(repo, sync);
+    let mut document = spreadsheet_document();
+    document.id = Some(id);
+
+    DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn an_email_import_cannot_choose_its_document_id() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team().times(0);
+    repo.expect_import_email_attachment_document().times(0);
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    sync.expect_exists().times(0);
+    let service = spreadsheet_test_service(repo, sync);
+    let mut document = new_document(FileType::Pdf);
+    document.id = Some(random_id(44));
+
+    let err = DocumentService::import_email_attachment(
+        &service,
+        ImportEmailAttachmentRepoArgs {
+            email_attachment_id: uuid::Uuid::from_u128(45),
+            owner: test_user(),
+            document,
+        },
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(err, DocumentError::BadRequest(_)));
+}
+
+#[tokio::test]
+async fn user_display_names_join_the_parts_a_user_set() {
+    for (first, last, expected) in [
+        (Some(" Jacob "), Some("Beckerman"), Some("Jacob Beckerman")),
+        (Some("Jacob"), None, Some("Jacob")),
+        (Some(" "), None, None),
+        (None, None, None),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_user_name()
+            .withf(|user_id| user_id == "macro|user@user.com")
+            .return_once(move |_| {
+                Box::pin(std::future::ready(Ok((
+                    first.map(str::to_owned),
+                    last.map(str::to_owned),
+                ))))
+            });
+        let name = make_test_service(repo)
+            .internal_get_user_display_name("macro|user@user.com")
+            .await
+            .unwrap();
+        assert_eq!(name.as_deref(), expected);
+    }
+}
+
+#[tokio::test]
+async fn github_pull_request_tasks_are_returned_only_for_visible_pull_requests() {
+    let visible_task = "00000000-0000-0000-0000-000000000201";
+    let other_task = "00000000-0000-0000-0000-000000000202";
+    let hidden_task = "00000000-0000-0000-0000-000000000203";
+    let short = |id: &str| short_id_for_entity_id(id).unwrap();
+    let links = vec![
+        ("macro/repo/pull/1".to_string(), short(visible_task)),
+        ("macro/repo/pull/1".to_string(), short(other_task)),
+        ("macro/repo/pull/2".to_string(), short(hidden_task)),
+        (
+            "macro/repo/pull/1".to_string(),
+            "not base58 0OIl".to_string(),
+        ),
+    ];
+    let mut repo = make_mock_repo();
+    repo.expect_get_github_pull_request_task_links()
+        .withf(|keys| {
+            keys == [
+                "macro/repo/pull/1".to_string(),
+                "macro/repo/pull/2".to_string(),
+                "macro/repo/pull/3".to_string(),
+            ]
+        })
+        .return_once(move |_| Box::pin(std::future::ready(Ok(links))));
+    expect_authenticated_team_lookup(&mut repo, Vec::new());
+
+    let service = make_test_service_with_foreign_entities(
+        repo,
+        vec![
+            make_foreign_entity(
+                uuid::uuid!("00000000-0000-0000-0000-000000000211"),
+                "macro/repo/pull/1",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|user@user.com",
+                "user",
+            ),
+            make_foreign_entity(
+                uuid::uuid!("00000000-0000-0000-0000-000000000212"),
+                "macro/repo/pull/2",
+                GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE,
+                "macro|someone-else@user.com",
+                "user",
+            ),
+        ],
+    );
+
+    let response = service
+        .get_github_pull_request_tasks(
+            "macro|user@user.com",
+            vec![
+                "macro/repo/pull/3".to_string(),
+                "macro/repo/pull/1".to_string(),
+                "macro/repo/pull/2".to_string(),
+            ],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        response
+            .pull_requests
+            .iter()
+            .map(|pull_request| (
+                pull_request.github_key.as_str(),
+                pull_request.task_ids.clone()
+            ))
+            .collect::<Vec<_>>(),
+        vec![
+            ("macro/repo/pull/3", vec![]),
+            (
+                "macro/repo/pull/1",
+                vec![visible_task.to_string(), other_task.to_string()]
+            ),
+            ("macro/repo/pull/2", vec![]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn github_pull_request_tasks_reject_oversized_lookups() {
+    let service = make_test_service(make_mock_repo());
+    let keys = (1..=101)
+        .map(|number| format!("macro/repo/pull/{number}"))
+        .collect();
+
+    let result = service
+        .get_github_pull_request_tasks("macro|user@user.com", keys)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
 }

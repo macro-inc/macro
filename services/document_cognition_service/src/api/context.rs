@@ -47,8 +47,7 @@ pub type DcsUserPermissionsService =
     >;
 
 /// The AI billing gate: reads plan allowances, credits, and overage state.
-/// DCS never charges anyone (the payment gateway is a no-op); settlement is
-/// requested from the authentication service.
+/// DCS never charges anyone.
 pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::RolesTeamsEntitlementSource<
         DcsUserPermissionsService,
@@ -56,7 +55,7 @@ pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
     >,
     ai_billing::outbound::PgUsageReader,
     ai_billing::outbound::PgBillingRepo,
-    ai_billing::outbound::NoOpPaymentGateway,
+    ai_billing::outbound::HttpPaymentGateway,
 >;
 
 /// Type alias for the chat model entitlement extractor wired to DCS services.
@@ -85,7 +84,7 @@ pub type DcsMessageService =
     MessageServiceImpl<PgChatRepo<PgBotsRepo>, DcsAttachmentProvider, DcsEventBroker>;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 #[cfg(test)]
 pub use test::test_api_context;
 pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
@@ -152,6 +151,8 @@ pub struct ApiContext {
     pub non_user_owners: NonUserOwners,
     /// Plan allowance gate for AI requests.
     pub ai_billing: Arc<DcsAiBillingService>,
+    /// Shared admission for new AI operations, after authorization.
+    pub ai_admission: Arc<dyn ai_billing::AiAdmissionService>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub notification_ingress_service: Arc<NotificationIngressType>,

@@ -1,4 +1,5 @@
 use super::*;
+use chrono::TimeZone;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -15,7 +16,7 @@ const INVOICE_ID: &str = "in_overage";
 const TEAM_ID: Uuid = Uuid::from_u128(7);
 
 #[tokio::test]
-async fn open_overage_invoice_keeps_create_stable_and_updates_current_routing() {
+async fn open_credit_reload_invoice_keeps_create_stable_and_updates_current_routing() {
     let invoice = stripe_response(&draft_invoice());
     let invoice_item = stripe_response(&draft_invoice_item());
     let server = MockServer::start().await;
@@ -59,15 +60,16 @@ async fn open_overage_invoice_keeps_create_stable_and_updates_current_routing() 
         .await;
 
     gateway(&server)
-        .open_overage_invoice(OverageChargeRequest {
+        .open_credit_reload_invoice(CreditReloadRequest {
             customer_id: CUSTOMER_ID.to_string(),
-            charge_id: Uuid::from_u128(1),
+            reload_id: Uuid::from_u128(1),
+            payer: payer(),
             amount_cents: 2_500,
-            description: "Macro AI usage beyond plan".to_string(),
+            description: "Macro AI credits, automatic reload".to_string(),
             scope: SubscriptionScope::Personal,
         })
         .await
-        .expect("open overage invoice");
+        .expect("open reload invoice");
 
     let requests = server.received_requests().await.expect("recorded requests");
 
@@ -85,15 +87,15 @@ async fn open_overage_invoice_keeps_create_stable_and_updates_current_routing() 
     );
     assert_eq!(
         form_value(create_body, &format!("metadata[{PURPOSE_METADATA_KEY}]")),
-        Some(PURPOSE_AI_OVERAGE)
+        Some(PURPOSE_AI_CREDIT_RELOAD)
     );
     assert_eq!(
-        form_value(create_body, &format!("metadata[{CHARGE_METADATA_KEY}]")),
+        form_value(create_body, &format!("metadata[{RELOAD_METADATA_KEY}]")),
         Some("00000000-0000-0000-0000-000000000001")
     );
     assert_eq!(
         idempotency_key(create),
-        Some("ai_overage:00000000-0000-0000-0000-000000000001:invoice")
+        Some("ai_credit_reload:00000000-0000-0000-0000-000000000001:invoice")
     );
 
     let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
@@ -124,15 +126,15 @@ async fn open_overage_invoice_keeps_create_stable_and_updates_current_routing() 
     assert_eq!(form_value(item_body, "subscription"), None);
     assert_eq!(
         form_value(item_body, &format!("metadata[{PURPOSE_METADATA_KEY}]")),
-        Some(PURPOSE_AI_OVERAGE)
+        Some(PURPOSE_AI_CREDIT_RELOAD)
     );
     assert_eq!(
-        form_value(item_body, &format!("metadata[{CHARGE_METADATA_KEY}]")),
+        form_value(item_body, &format!("metadata[{RELOAD_METADATA_KEY}]")),
         Some("00000000-0000-0000-0000-000000000001")
     );
     assert_eq!(
         idempotency_key(item),
-        Some("ai_overage:00000000-0000-0000-0000-000000000001:item")
+        Some("ai_credit_reload:00000000-0000-0000-0000-000000000001:item")
     );
 
     let create_at = request_position(&requests, "POST", "/v1/invoices");
@@ -208,7 +210,7 @@ async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
 }
 
 #[tokio::test]
-async fn open_overage_invoice_rejects_distinct_subscription_methods_without_posting() {
+async fn open_credit_reload_invoice_rejects_distinct_subscription_methods_without_posting() {
     let server = MockServer::start().await;
     mount_customer(&server).await;
     Mock::given(method("GET"))
@@ -243,11 +245,12 @@ async fn open_overage_invoice_rejects_distinct_subscription_methods_without_post
         .await;
 
     let error = gateway(&server)
-        .open_overage_invoice(OverageChargeRequest {
+        .open_credit_reload_invoice(CreditReloadRequest {
             customer_id: CUSTOMER_ID.to_string(),
-            charge_id: Uuid::from_u128(2),
+            reload_id: Uuid::from_u128(2),
+            payer: payer(),
             amount_cents: 2_500,
-            description: "Macro AI usage beyond plan".to_string(),
+            description: "Macro AI credits, automatic reload".to_string(),
             scope: SubscriptionScope::Personal,
         })
         .await
@@ -323,7 +326,7 @@ async fn pay_overage_invoice_skips_the_update_when_the_open_invoice_already_matc
 }
 
 #[tokio::test]
-async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope() {
+async fn open_credit_reload_invoice_selects_the_subscription_for_the_requested_scope() {
     let invoice = stripe_response(&draft_invoice());
     let invoice_item = stripe_response(&draft_invoice_item());
     let server = MockServer::start().await;
@@ -356,13 +359,13 @@ async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope()
 
     let gateway = gateway(&server);
     gateway
-        .open_overage_invoice(charge(SubscriptionScope::Personal, 4))
+        .open_credit_reload_invoice(reload(SubscriptionScope::Personal, 4))
         .await
-        .expect("personal overage invoice");
+        .expect("personal reload invoice");
     gateway
-        .open_overage_invoice(charge(SubscriptionScope::Team { team_id: TEAM_ID }, 5))
+        .open_credit_reload_invoice(reload(SubscriptionScope::Team { team_id: TEAM_ID }, 5))
         .await
-        .expect("team overage invoice");
+        .expect("team reload invoice");
 
     let requests = server.received_requests().await.expect("recorded requests");
     let creates: Vec<_> = requests
@@ -414,7 +417,7 @@ async fn open_overage_invoice_selects_the_subscription_for_the_requested_scope()
 }
 
 #[tokio::test]
-async fn open_overage_invoice_replay_uses_the_retrieved_scope_and_stored_method() {
+async fn open_credit_reload_invoice_replay_uses_the_retrieved_scope_and_stored_method() {
     let cached_invoice = stripe_response(&draft_invoice());
     let mut current_invoice = draft_invoice();
     current_invoice.default_payment_method = Some(stripe::Expandable::Id(
@@ -457,7 +460,7 @@ async fn open_overage_invoice_replay_uses_the_retrieved_scope_and_stored_method(
         .await;
 
     gateway(&server)
-        .open_overage_invoice(charge(SubscriptionScope::Team { team_id: TEAM_ID }, 7))
+        .open_credit_reload_invoice(reload(SubscriptionScope::Team { team_id: TEAM_ID }, 7))
         .await
         .expect("replay overage invoice");
 
@@ -487,7 +490,7 @@ async fn open_overage_invoice_replay_uses_the_retrieved_scope_and_stored_method(
 }
 
 #[tokio::test]
-async fn open_overage_invoice_replay_returns_an_already_paid_invoice() {
+async fn open_credit_reload_invoice_replay_returns_an_already_paid_invoice() {
     let cached_invoice = stripe_response(&draft_invoice());
     let paid_invoice = stripe_response(&paid_invoice(
         CURRENT_PAYMENT_METHOD,
@@ -519,7 +522,7 @@ async fn open_overage_invoice_replay_returns_an_already_paid_invoice() {
         .await;
 
     let invoice_id = gateway(&server)
-        .open_overage_invoice(charge(SubscriptionScope::Personal, 12))
+        .open_credit_reload_invoice(reload(SubscriptionScope::Personal, 12))
         .await
         .expect("already paid invoice");
     assert_eq!(invoice_id, INVOICE_ID);
@@ -541,7 +544,7 @@ async fn open_overage_invoice_replay_returns_an_already_paid_invoice() {
 }
 
 #[tokio::test]
-async fn open_overage_invoice_leaves_a_safe_draft_when_scope_has_no_match() {
+async fn open_credit_reload_invoice_leaves_a_safe_draft_when_scope_has_no_match() {
     let invoice = stripe_response(&draft_invoice());
     let server = MockServer::start().await;
     mount_customer_and_subscriptions(&server, team_subscription()).await;
@@ -557,7 +560,7 @@ async fn open_overage_invoice_leaves_a_safe_draft_when_scope_has_no_match() {
         .await;
 
     let error = gateway(&server)
-        .open_overage_invoice(charge(SubscriptionScope::Personal, 9))
+        .open_credit_reload_invoice(reload(SubscriptionScope::Personal, 9))
         .await
         .expect_err("missing personal subscription");
     assert!(matches!(error, BillingError::Payment(_)));
@@ -575,7 +578,7 @@ async fn open_overage_invoice_leaves_a_safe_draft_when_scope_has_no_match() {
     );
     assert_eq!(
         idempotency_key(create),
-        Some("ai_overage:00000000-0000-0000-0000-000000000009:invoice")
+        Some("ai_credit_reload:00000000-0000-0000-0000-000000000009:invoice")
     );
     assert_eq!(
         requests
@@ -757,6 +760,237 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
     }));
 }
 
+#[tokio::test]
+async fn subscription_period_selects_the_billable_subscription_in_scope() {
+    let personal = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+    };
+    let team = BillingPeriod {
+        start: Utc.with_ymd_and_hms(2026, 3, 18, 8, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 4, 18, 8, 0, 0).unwrap(),
+    };
+    let team_id = TEAM_ID.to_string();
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_past_due",
+                    stripe::SubscriptionStatus::PastDue,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_personal",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    personal,
+                ),
+                subscription_in_period(
+                    "sub_team",
+                    stripe::SubscriptionStatus::Active,
+                    Some(&team_id),
+                    team,
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+    let gateway = gateway(&server);
+
+    assert_eq!(
+        gateway
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(personal)
+    );
+    assert_eq!(
+        gateway
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Team { team_id: TEAM_ID })
+            .await
+            .unwrap(),
+        Some(team)
+    );
+    assert_eq!(
+        gateway
+            .subscription_period(
+                CUSTOMER_ID,
+                SubscriptionScope::Team {
+                    team_id: Uuid::from_u128(8)
+                }
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    let requests = server.received_requests().await.expect("recorded requests");
+    assert!(
+        requests
+            .iter()
+            .all(|request| request.url.path() == "/v1/subscriptions"),
+        "{requests:?}"
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_rejects_disagreeing_subscriptions() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_monthly",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_other",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 1, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 1, 0, 0, 0).unwrap(),
+                    },
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+
+    let error = gateway(&server)
+        .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+        .await
+        .expect_err("two personal subscriptions on different periods");
+    assert!(matches!(error, BillingError::Payment(_)), "{error:?}");
+}
+
+#[tokio::test]
+async fn subscription_period_reads_a_past_due_subscription_when_none_is_billable() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![subscription_in_period(
+                "sub_past_due",
+                stripe::SubscriptionStatus::PastDue,
+                None,
+                BillingPeriod {
+                    start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                    end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                },
+            )],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[tokio::test]
+async fn subscription_period_prefers_the_billable_subscription_to_an_unpaid_one() {
+    let server = MockServer::start().await;
+    mount_subscriptions(
+        &server,
+        subscription_page(
+            vec![
+                subscription_in_period(
+                    "sub_unpaid",
+                    stripe::SubscriptionStatus::Unpaid,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 1, 15, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 2, 15, 0, 0, 0).unwrap(),
+                    },
+                ),
+                subscription_in_period(
+                    "sub_active",
+                    stripe::SubscriptionStatus::Active,
+                    None,
+                    BillingPeriod {
+                        start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+                        end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+                    },
+                ),
+            ],
+            false,
+        ),
+    )
+    .await;
+
+    assert_eq!(
+        gateway(&server)
+            .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+            .await
+            .unwrap(),
+        Some(BillingPeriod {
+            start: Utc.with_ymd_and_hms(2026, 4, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 5, 10, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[test]
+fn credit_reload_metadata_stamps_purpose_reload_and_payer() {
+    let payer = MacroUserIdStr::try_from("macro|payer@example.com".to_string()).expect("payer");
+    let metadata = credit_reload_metadata(Uuid::from_u128(13), &payer);
+
+    assert_eq!(metadata.len(), 3);
+    assert_eq!(
+        metadata.get(PURPOSE_METADATA_KEY).map(String::as_str),
+        Some(PURPOSE_AI_CREDIT_RELOAD)
+    );
+    assert_eq!(
+        metadata.get(RELOAD_METADATA_KEY).map(String::as_str),
+        Some("00000000-0000-0000-0000-00000000000d")
+    );
+    assert_eq!(
+        metadata.get(PAYER_METADATA_KEY).map(String::as_str),
+        Some("macro|payer@example.com")
+    );
+    assert!(!metadata.contains_key(CHARGE_METADATA_KEY));
+}
+
+#[tokio::test]
+async fn subscription_period_reports_provider_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": { "type": "api_error", "message": "stripe is down" }
+        })))
+        .mount(&server)
+        .await;
+
+    let error = gateway(&server)
+        .subscription_period(CUSTOMER_ID, SubscriptionScope::Personal)
+        .await
+        .expect_err("stripe answered 500");
+    assert!(matches!(error, BillingError::Payment(_)), "{error:?}");
+}
+
 fn customer_with_stale_fallback() -> stripe::Customer {
     let stale: stripe::PaymentMethodId =
         STALE_PAYMENT_METHOD.parse().expect("stale payment method");
@@ -799,6 +1033,19 @@ fn subscription(
         },
         ..Default::default()
     }
+}
+
+fn subscription_in_period(
+    id: &str,
+    status: stripe::SubscriptionStatus,
+    team_id: Option<&str>,
+    period: BillingPeriod,
+) -> Value {
+    stripe_response(&stripe::Subscription {
+        current_period_start: period.start.timestamp(),
+        current_period_end: period.end.timestamp(),
+        ..subscription(id, status, None, team_id)
+    })
 }
 
 fn open_invoice(default_payment_method: Option<&str>, scope: Option<&str>) -> stripe::Invoice {
@@ -862,6 +1109,10 @@ async fn mount_customer(server: &MockServer) {
 
 async fn mount_customer_and_subscriptions(server: &MockServer, subscriptions: Value) {
     mount_customer(server).await;
+    mount_subscriptions(server, subscriptions).await;
+}
+
+async fn mount_subscriptions(server: &MockServer, subscriptions: Value) {
     Mock::given(method("GET"))
         .and(path("/v1/subscriptions"))
         .and(query_param("customer", CUSTOMER_ID))
@@ -914,12 +1165,13 @@ fn team_subscription() -> Value {
     )
 }
 
-fn charge(scope: SubscriptionScope, charge_id: u128) -> OverageChargeRequest {
-    OverageChargeRequest {
+fn reload(scope: SubscriptionScope, reload_id: u128) -> CreditReloadRequest {
+    CreditReloadRequest {
         customer_id: CUSTOMER_ID.to_string(),
-        charge_id: Uuid::from_u128(charge_id),
+        reload_id: Uuid::from_u128(reload_id),
+        payer: payer(),
         amount_cents: 2_500,
-        description: "Macro AI usage beyond plan".to_string(),
+        description: "Macro AI credits, automatic reload".to_string(),
         scope,
     }
 }
@@ -1003,4 +1255,51 @@ fn fill_missing_field(value: &mut Value, field: &str) {
         }
         Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
     }
+}
+
+#[tokio::test]
+async fn direct_usage_invoices_are_disabled_without_contacting_stripe() {
+    let server = MockServer::start().await;
+    let result = gateway(&server)
+        .open_overage_invoice(OverageChargeRequest {
+            customer_id: CUSTOMER_ID.to_string(),
+            charge_id: Uuid::from_u128(1),
+            amount_cents: 2_500,
+            description: "Retired usage charge".to_string(),
+            scope: SubscriptionScope::Personal,
+        })
+        .await;
+    assert!(matches!(
+        result,
+        Err(BillingError::DirectUsageBillingDisabled)
+    ));
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+fn payer() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|payer@example.com".to_string()).unwrap()
+}
+
+#[tokio::test]
+async fn historical_direct_usage_invoices_are_never_paid_by_the_gateway() {
+    let server = MockServer::start().await;
+    let mut invoice = open_invoice(Some(CURRENT_PAYMENT_METHOD), Some(PERSONAL_SCOPE_STAMP));
+    invoice.metadata.as_mut().unwrap().insert(
+        PURPOSE_METADATA_KEY.to_string(),
+        PURPOSE_AI_OVERAGE.to_string(),
+    );
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(stripe_response(&invoice)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let result = gateway(&server)
+        .pay_overage_invoice(Uuid::from_u128(1), INVOICE_ID, SubscriptionScope::Personal)
+        .await;
+    assert!(matches!(
+        result,
+        Err(BillingError::DirectUsageBillingDisabled)
+    ));
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
 }

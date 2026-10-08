@@ -25,5 +25,7 @@ pub mod claude;
 
 /// Compatible agent model discovery.
 pub mod model_load;
+/// Admitted model-backed repository choice, with deterministic paths kept free.
+pub mod repository_choice;
 /// Repository selection and fallback policy for hosted coding sessions.
 pub(crate) mod repository_selection;

@@ -14,11 +14,11 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * grant to the existing link, which kicks off the calendar backfill.
  *
  * Inboxes that also need a full reconnect are skipped so the two prompts don't
- * stack. Reconnecting restores the mailbox without calendar access, which
- * leaves `needs_calendar_permission` set and brings this prompt back. So are
- * inboxes whose calendar the user turned off — that reads as missing calendar
- * permission too, and nagging someone to re-enable what they just removed is
- * the one thing this prompt must never do.
+ * stack. Reconnecting restores previously enabled calendar access too; an
+ * inbox that never enabled calendar can still opt in through this prompt.
+ * Inboxes whose calendar the user turned off are also skipped — that reads as
+ * missing calendar permission too, and nagging someone to re-enable what they
+ * just removed is the one thing this prompt must never do.
  *
  * Closing the prompt sticks across reloads. Nothing is broken while calendar
  * is off, so re-asking every load is just nagging — Settings › Email keeps a
@@ -58,7 +58,10 @@ export function CalendarPermissionPrompt() {
             // Suppress re-prompting until the grant upgrades; on native the
             // page stays mounted while the OAuth flow runs.
             dismiss();
-            startAddInbox({ scopes: 'calendar' });
+            void startAddInbox({
+              scopes: 'calendar',
+              emailAddress: link.email_address,
+            });
           },
         },
       ],

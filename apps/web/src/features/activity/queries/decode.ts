@@ -52,6 +52,8 @@ export function decodeEntityType(
     .with('EMAIL_THREAD', () => 'email-thread' as const)
     .with('CHANNEL', () => 'channel' as const)
     .with('USER', () => 'user' as const)
+    .with('DATABASE', () => 'database' as const)
+    .with('FORM', () => 'form' as const)
     .otherwise((raw) => ({ kind: 'unsupported' as const, raw }));
 }
 
@@ -85,6 +87,9 @@ function decodeAction(
     }))
     .with({ __typename: 'GraphqlActivityCallStarted' }, () => ({
       kind: 'call-started' as const,
+    }))
+    .with({ __typename: 'GraphqlActivityResponded' }, () => ({
+      kind: 'responded' as const,
     }))
     .with(
       { __typename: 'GraphqlActivityPropertyChanged' },

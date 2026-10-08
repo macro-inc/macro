@@ -277,6 +277,12 @@ impl InfraEnv {
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".into(),
             "http://document-storage-service:8080".into(),
         );
+        // Historical indexing calls the processing service's scoped backfill API,
+        // not the search query service. Both run on the local Compose network.
+        env.insert(
+            "OVERRIDE_SEARCH_PROCESSING_SERVICE_URL".into(),
+            "http://search-processing-service:8080".into(),
+        );
         // Account deletion awaits both owning services from the auth container.
         env.insert(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL".into(),
@@ -517,7 +523,6 @@ impl AgentHarnessEnv {
 /// container (services, sync, lexical) agrees. `INTERNAL_API_SECRET_KEY` is the
 /// literal `"local"` to match the FusionAuth webhook's `x-internal-auth-key`.
 struct ServiceAuthEnv {
-    dss_auth: String,
     doc_perm_jwt: String,
     internal_call: String,
     url_signing: String,
@@ -526,7 +531,6 @@ struct ServiceAuthEnv {
 impl ServiceAuthEnv {
     fn for_instance(name: &str) -> Self {
         ServiceAuthEnv {
-            dss_auth: identity::instance_secret("dss-auth", name),
             // Must match sync-service's local DOCUMENT_PERMISSIONS_SECRET
             // ("local") so locally-minted tokens verify. This is ONLY for local
             // dev use obv
@@ -558,15 +562,21 @@ impl ServiceAuthEnv {
             "SYNC_SERVICE_AUTH_KEY".into(),
             identity::INTERNAL_AUTH_KEY.into(),
         );
-        // The key the authentication service presents to document storage on
-        // internal calls (e.g. seeding starter docs at signup). In dev/prod
-        // Doppler points it at the *same* secret as DSS's own auth key
-        // (document-storage-service-auth-key-*), so locally the two must be
-        // one value or DSS 401s every auth-service internal call.
-        env.insert("SERVICE_INTERNAL_AUTH_KEY".into(), self.dss_auth.clone());
+        // The key the authentication service presents on internal calls to
+        // document storage (seeding starter docs at signup), the connection
+        // gateway, the agent harness, and the scheduled-action service
+        // (account deletion). Deployed environments point it at the *same*
+        // secret those services validate, which is also DSS's own auth key
+        // (document-storage-service-auth-key-*). Locally every service
+        // validates the one shared internal key, so this must be that key or
+        // every auth-service internal call 401s.
+        env.insert(
+            "SERVICE_INTERNAL_AUTH_KEY".into(),
+            identity::INTERNAL_AUTH_KEY.into(),
+        );
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_AUTH_KEY".into(),
-            self.dss_auth.clone(),
+            identity::INTERNAL_AUTH_KEY.into(),
         );
         env.insert("DOCUMENT_PERMISSION_JWT".into(), self.doc_perm_jwt.clone());
         env.insert("INTERNAL_CALL_SECRET".into(), self.internal_call.clone());
@@ -634,10 +644,10 @@ impl FusionAuthEnv {
 /// Values the services' `macro_config` loaders require but that only exist in
 /// Doppler's `lcl_personal` config. Without these a `--no-doppler` stack's
 /// containers crash at startup ("missing required value") before any of the
-/// integration the value backs is ever exercised. Each entry is a deterministic
-/// local stub: good enough to boot, never a real secret, and only meaningful
-/// for the specific integration it names (which won't work locally anyway —
-/// that's what `--env-file` / `run_dev` are for).
+/// integration the value backs is ever exercised. Entries are deterministic
+/// local fixtures or third-party placeholders, never deployed secrets. Local
+/// authentication fixtures must support real requests; third-party integrations
+/// need `--env-file` / `run_dev` for working credentials.
 ///
 /// Unlike the rest of [`LocalEnv`], these are a FALLBACK layer: the resolver
 /// applies them below Doppler (see `env_layer::resolve`), so a developer with
@@ -648,6 +658,9 @@ struct BootStubEnv;
 
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
+        // The worker is opt-in and ships paused; an explicit env-file can enable it.
+        env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
+        env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).
         env.insert("REDIS_HOST".into(), "redis://redis:6379".into());
@@ -699,24 +712,43 @@ impl BootStubEnv {
             "local-github-client-secret".into(),
         );
         env.insert("GITHUB_IDP_ID".into(), identity::GITHUB_IDP_ID.into());
+        // HMAC key for signed account-link OAuth state; the loader rejects
+        // anything under 32 bytes.
+        env.insert(
+            "ACCOUNT_LINK_STATE_SECRET".into(),
+            "local-account-link-state-secret-0123456789".into(),
+        );
         env.insert("STRIPE_SECRET_KEY".into(), "local-stripe-secret".into());
         env.insert("STRIPE_PRICE_ID".into(), "local-stripe-price".into());
         env.insert(
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
-        // macro_auth's `JwtValidationArgs` (used by every service that mounts
-        // the auth middleware) reads these at boot. The keys are only parsed
-        // when a Macro API token is actually validated — normal local auth
-        // uses FusionAuth JWTs — so dummies are fine.
+        // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
+        // host that composes billing refuses to boot without all four; these
+        // mirror the published plan table ($5 free cap, $15 Pro, $150 Max,
+        // list price + 25%). Doppler's shared_ai configs are authoritative.
+        env.insert(
+            "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS".into(),
+            "500".into(),
+        );
+        env.insert("AI_USAGE_INCLUDED_ALLOWANCE_CENTS".into(), "1500".into());
+        env.insert(
+            "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS".into(),
+            "15000".into(),
+        );
+        env.insert("AI_USAGE_OVERAGE_MARKUP_PERCENT".into(), "25".into());
+        // Browser clients exchange FusionAuth sessions for Macro API tokens
+        // for actions such as enabling CRM. Both issuance and validation need
+        // the same usable local key pair, even without Doppler.
         env.insert("MACRO_API_TOKEN_ISSUER".into(), "local".into());
         env.insert(
             "MACRO_API_TOKEN_PUBLIC_KEY".into(),
-            "local-macro-api-token-public-key".into(),
+            identity::MACRO_API_TOKEN_PUBLIC_KEY.into(),
         );
         env.insert(
             "MACRO_API_TOKEN_PRIVATE_SECRET_KEY".into(),
-            "local-macro-api-token-private-key".into(),
+            identity::MACRO_API_TOKEN_PRIVATE_KEY.into(),
         );
         env.insert("MACRO_API_TOKEN_EXPIRY_SECONDS".into(), "3600".into());
         // email_service's GCP pubsub queue (gmail watch notifications) and

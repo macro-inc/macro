@@ -19,6 +19,7 @@ cd apps/web && PORT=3003 bun run dev   # any free port in 3000-3009
 
 `import.meta.env.MODE === 'development'` resolves the service clients to `https://dev.macro.com` through Vite’s same-origin development proxy. Sign in on the development hostname; existing `.macro.com` cookies are separate. Vite prints `https://<hostname>:<port>/app/`; `https://localhost:<port>/app/` also works. Trust `infra/local/certs/ca.pem` once in the visiting browser (see `infra/local/certs/README.md`). `MACRO_DEV_HTTPS=false` restores HTTP for workflows that require it. Notes:
 
+- On a remote devbox, open the app through Tailscale Serve rather than `https://<hostname>:<port>`. Vite drops to HTTP/1.1 while its development proxy is on, so the browser fetches the ~7k dev modules six at a time and pays a round trip for each (about 45 s at 30 ms). Run `sudo tailscale serve --bg --https=443 https+insecure://localhost:<port>` on the devbox and open `https://<devbox>.<tailnet>.ts.net/app/`, which serves HTTP/2 with a trusted certificate. Sign in again there. Serve offers HTTPS ports 443, 8443, and 10000.
 - Never assume port 3000 or 3002 is yours. Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN -t` and confirm the owner's worktree via `lsof -p <pid> | awk '$4=="cwd"'`. Take a free port instead of killing another session's server, and reuse one only if its cwd is this worktree.
 - The `.cursor/*.sh` scripts and the `run-app` skill are **Cursor Cloud** entry points. On a local machine they prompt for sudo and are the wrong tool. Only backend (Rust) changes need the local stack.
 
@@ -67,6 +68,12 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
   feature-specific query orchestration with its owning feature.
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
+
+### Startup bundle
+- Everything statically reachable from `src/index.tsx` downloads and runs before the first screen. Views, block components, and modals load through `lazy()` / `lazyNamed` (`@core/util/lazyNamed`) inside a `<Suspense>`; never statically import one into a shared hub (`Root`, `Layout`, `componentRegistry`, `app-router-view`, block `definition.ts`, Lexical `init.ts`).
+- `index.html` draws a boot shell (rail, view sidebar, Home's composer) before any JS runs, from the saved theme and the `rememberBootShell` layout hint; `Root` hands off once auth is known. Keep its geometry in step with `SidebarRail`, `ViewSidebar`, and `HomeChatStart`.
+- Production web builds register `public/sw.js`: it serves the cached `index.html` and content-hashed assets from Cache Storage and moves tabs to newer builds. Set localStorage `macro:sw` to `off` to bypass it while debugging.
+- The build fails if any emitted file exceeds CloudFront's 10 MB compression limit; split it rather than raising the limit.
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.

@@ -1,19 +1,15 @@
-import { lazy } from 'solid-js';
-import {
-  DeferredDemo,
-  DemoPlaceholder,
-} from '../../features/marketing/components/DeferredDemo';
+import MacroLogo from '@icon/macro-logo.svg';
+import { EmailAgenticEditingDemo } from '../../features/marketing/components/email/EmailAgenticEditingDemo';
+import { EmailAutoTagsDemo } from '../../features/marketing/components/email/EmailAutoTagsDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
+import { EmailDesktopDemo } from '../../features/marketing/components/email/EmailDesktopDemo';
 import {
   AgenticEditingGraphic,
+  AutoTagsGraphic,
   EmailSharingGraphic,
-  OneInboxGraphic,
-  SignalNoiseGraphic,
+  KeyboardSpeedGraphic,
 } from '../../features/marketing/components/email/EmailFeatureGraphics';
-import {
-  EmailInboxDemo,
-  EmailSignalNoiseDemo,
-} from '../../features/marketing/components/email/EmailInboxDemo';
+import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
 import { EmailSharingDemo } from '../../features/marketing/components/email/EmailSharingDemo';
 import {
   FeaturePage,
@@ -21,13 +17,9 @@ import {
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
-import { HomepageConversation } from '../../features/marketing/components/HomepageConversation';
-import { HomepageMention } from '../../features/marketing/components/HomepageMention';
+import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import { setPageSeo } from '../utils/utilSeo';
-
-const loadEmailCompose = () =>
-  import('../../features/marketing/components/HomepageEmailCompose');
-const HomepageEmailCompose = lazy(loadEmailCompose);
+import '../../features/marketing/components/email/email-hero.css';
 
 const faqItems = [
   {
@@ -82,10 +74,10 @@ const faqItems = [
     ),
   },
   {
-    q: 'Is there a free plan?',
+    q: 'Can I join as a Guest for free?',
     a: (
       <>
-        Yes. The free plan includes email alongside chat, documents, tasks, and
+        Yes. Guest access includes email alongside chat, documents, tasks, and
         AI, with usage limits. See <a href="/pricing">pricing</a> for current
         account, storage, and AI limits.
       </>
@@ -103,158 +95,140 @@ export function RouteEmail() {
 
   return (
     <FeaturePage>
-      <header class="feature-page-hero">
+      <header class="feature-page-hero email-page-hero">
+        <p class="email-page-hero-label">
+          <MacroLogo aria-hidden="true" />
+          <span>Macro Mail</span>
+        </p>
         <h1>
-          Email for humans
-          <br />
-          and agents.
+          <span>Extremely fast email for</span>
+          <span>humans and agents.</span>
         </h1>
-        <p>
-          Your accounts in one inbox. Agents to help you write. Your team, with
-          the full conversation.
+        <p class="email-page-hero-description">
+          All your accounts in one inbox. Search across them.
+          <br class="email-page-hero-break" /> Share threads. Let agents draft
+          your replies.
         </p>
         <FeaturePageCta name="email_hero_get_started" />
       </header>
-      <nav class="feature-page-jump-links" aria-label="On this page">
-        <a href="#inbox">
-          <OneInboxGraphic />
-          <span>One inbox</span>
+      <EmailDesktopDemo />
+      <nav
+        class="feature-page-jump-links email-feature-links"
+        aria-label="On this page"
+      >
+        <a href="#auto-tags">
+          <AutoTagsGraphic />
+          <span>Automatic tags</span>
+        </a>
+        <a href="#email-sharing">
+          <EmailSharingGraphic />
+          <span>Share to a channel</span>
+        </a>
+        <a href="#keyboard-speed">
+          <KeyboardSpeedGraphic />
+          <span>Superhuman speed</span>
         </a>
         <a href="#agentic-editing">
           <AgenticEditingGraphic />
           <span>Agentic editing</span>
         </a>
-        <a href="#signal-noise">
-          <SignalNoiseGraphic />
-          <span>Signal &amp; noise</span>
-        </a>
-        <a href="#email-sharing">
-          <EmailSharingGraphic />
-          <span>Share with your team</span>
-        </a>
       </nav>
       <FeaturePageSection
-        id="inbox"
-        title="Every account. One inbox."
-        description="Your work and personal email, together. Find a conversation without switching accounts."
+        id="auto-tags"
+        title="Your email, automatically tagged."
+        description={
+          'Macro tags incoming email by customer, project, or follow-up.\nUse tags to find the related conversations across your accounts.'
+        }
       >
         <div class="feature-page-visual">
-          <EmailInboxDemo />
+          <EmailAutoTagsDemo />
         </div>
-        <p class="feature-page-caption">
-          Search the inbox, switch accounts, or open a thread.
-        </p>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="agentic-editing"
-        title="Agentic editing"
-        description="Draft and edit with the context of your work. Review every word before it goes out."
-      >
-        <div class="feature-page-visual" id="email">
-          <HomepageConversation
-            messages={[
-              {
-                person: 'jacob',
-                text: (
-                  <>
-                    <span class="homepage-person-mention">@Claude</span>, draft
-                    a follow-up email based on{' '}
-                    <HomepageMention
-                      kind="calendar"
-                      label="Demo Call Sep 14th"
-                      description="Jacob, Dana, and Julia · Product demo and next steps for Dana’s team."
-                      href="#agentic-editing"
-                    />{' '}
-                    and{' '}
-                    <HomepageMention
-                      kind="call"
-                      label="Demo call transcript"
-                      description="Transcript of the September 14 demo with Dana · Team rollout, sales materials, and follow-up next steps."
-                      href="#agentic-editing"
-                    />
-                    . Include the sales PDF and rollout doc, and cc Julia.
-                  </>
-                ),
-              },
-            ]}
-          />
-          <div class="homepage-feature-email">
-            <DeferredDemo
-              preload={loadEmailCompose}
-              fallback={<DemoPlaceholder label="Agent email draft preview" />}
-            >
-              <HomepageEmailCompose appChrome />
-            </DeferredDemo>
-          </div>
+        <div class="email-feature-prose">
+          <p>
+            Automatic tags label incoming messages so you can browse email by
+            customer, project, or follow-up. Tags also work on documents, tasks,
+            and other workspace items. You can add, remove, or change a tag
+            yourself. A thread can have several tags, so it can appear under
+            both the customer and the project.
+          </p>
         </div>
-        <p class="feature-page-caption">
-          The agent brings in the context. You edit the draft and decide when to
-          send.
-        </p>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="signal-noise"
-        title="Signal above the noise"
-        description="Keep important conversations in focus. Give newsletters and automated updates their own space."
-      >
-        <div class="feature-page-visual">
-          <EmailSignalNoiseDemo />
-        </div>
-        <p class="feature-page-caption">
-          You control the split. Move a thread to Noise when it can wait.
-        </p>
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
-        title="Bring your team into the thread"
-        description="Share an email in a channel. Keep the original conversation beside the discussion."
+        title="Share an email directly to a channel."
+        description={
+          'Share the full email thread with your team.\nFuture replies appear in the shared thread automatically.'
+        }
       >
         <div class="feature-page-visual">
           <EmailSharingDemo />
         </div>
-        <p class="feature-page-caption">
-          Share the example thread, then open it from the channel.
-        </p>
+        <div class="email-feature-prose">
+          <p>
+            Choose a channel, add a note, and share the email. Channel members
+            can open the original thread, including its messages and
+            attachments. New replies update that same thread. Your team can
+            leave comments and @mention documents or tasks alongside the
+            customer’s email.
+          </p>
+        </div>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="keyboard-speed"
+        title="Superhuman speed."
+        description={
+          'J and K to navigate. E to mark done.\nSearch all your connected accounts from one inbox.'
+        }
+      >
+        <div class="feature-page-visual">
+          <EmailKeyboardDemo />
+        </div>
+        <div class="email-feature-prose">
+          <p>
+            Macro syncs email into its own database and search index. Search and
+            agent reading tools work on the indexed messages across your
+            connected accounts. J and K move to the next and previous thread. E
+            marks the conversation done. Enter opens it, and Esc returns to the
+            list. These shortcuts work with a thread open too.
+          </p>
+        </div>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="agentic-editing"
+        title="Agents draft from your email and docs."
+        description={
+          'Ask for a follow-up using the email thread and meeting transcript.\nReview the draft, recipients, and attachments before sending.'
+        }
+      >
+        <div class="feature-page-visual">
+          <EmailAgenticEditingDemo />
+        </div>
+        <div class="email-feature-prose">
+          <p>
+            Agents can search past emails and read the documents and calls you
+            reference. Ask Claude to write a reply, attach a proposal, and copy
+            the people involved. The result is an editable email draft. Change
+            the subject or wording, check the recipients, and approve the send
+            when you’re ready.
+          </p>
+        </div>
       </FeaturePageSection>
       <FeaturePageFaq
         id="email-faq-title"
-        eyebrow="Your account, explained"
-        title="Your email. Your permission."
+        title="Gmail accounts and agent permissions"
         introduction={
-          <>
-            <p>
-              Macro connects to your existing Google account. You can read,
-              organize, and reply to email alongside your team’s work.
-            </p>
-            <p>
-              You approve the connection on Google. Macro does not receive your
-              Google password. Email agents show you the draft and ask for
-              approval before sending.
-            </p>
-          </>
+          <p>
+            Macro connects to your existing Google account. You can read,
+            organize, and reply to email alongside your team’s work. You approve
+            the connection on Google. Macro does not receive your Google
+            password. Email agents show you the draft and ask for approval
+            before sending.
+          </p>
         }
         items={faqItems}
       />
       <EmailComparison />
-      <section
-        class="feature-page-end"
-        aria-label="Get started with Macro Mail"
-      >
-        <h2>
-          Your inbox,
-          <br />
-          connected to your work.
-        </h2>
-        <FeaturePageCta name="email_footer_get_started" />
-      </section>
-      <footer class="feature-page-footer">
-        <a href="/">Macro</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/migrate">Switching to Macro</a>
-        <a href="/privacy">Privacy</a>
-        <a href="https://security.macro.com">Security</a>
-        <a href="/terms">Terms</a>
-      </footer>
+      <HomepageClosing />
     </FeaturePage>
   );
 }

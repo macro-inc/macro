@@ -9,21 +9,27 @@ use super::ports::FsRepo;
 
 /// Name of the file used to persist the bundle root path across restarts.
 const BUNDLE_ROOT_FILE: &str = "bundle_root";
+const EMBEDDED_BUNDLE_MARKER: &str = "embedded";
 
 /// Swappable root directory for serving frontend assets.
-/// `None` = use built-in asset resolver (initial bundle from `frontendDist`).
-/// `Some(path)` = serve files from this directory (after OTA update).
-pub(crate) struct BundleRoot(Option<PathBuf>);
+pub(crate) enum BundleRoot {
+    /// No selection was persisted; legacy completed downloads may be recovered.
+    Uninitialized,
+    /// Explicitly selected embedded assets, including after an OTA revocation.
+    Embedded,
+    /// Serve files from an applied OTA directory.
+    Ota(PathBuf),
+}
 
 impl BundleRoot {
     /// Create an empty bundle root (no OTA update applied).
     pub(crate) fn new() -> Self {
-        Self(None)
+        Self::Uninitialized
     }
 
     /// Create a bundle root pointing to the given path.
     pub(crate) fn from_path(path: PathBuf) -> Self {
-        Self(Some(path))
+        Self::Ota(path)
     }
 
     /// Load persisted bundle root from the given cache directory.
@@ -32,11 +38,15 @@ impl BundleRoot {
         tracing::debug!("Loading bundle root from {persist_path:?}");
         match fs.read_to_string(&persist_path).await {
             Ok(contents) => {
+                if contents.trim() == EMBEDDED_BUNDLE_MARKER {
+                    return Self::Embedded;
+                }
+                // Preserve compatibility with the original absolute-path marker.
                 let path = PathBuf::from(contents.trim());
                 let index = path.join("index.html");
                 if fs.read_to_string(&index).await.is_ok() {
                     tracing::debug!("Restored bundle root: {path:?}");
-                    Self(Some(path))
+                    Self::Ota(path)
                 } else {
                     tracing::warn!(
                         "Persisted bundle root {path:?} missing index.html at {index:?}"
@@ -44,12 +54,12 @@ impl BundleRoot {
                     if let Err(e) = fs.remove_file(&persist_path).await {
                         tracing::debug!("Failed to remove stale bundle_root file: {e}");
                     }
-                    Self(None)
+                    Self::Uninitialized
                 }
             }
             Err(e) => {
                 tracing::debug!("No persisted bundle root: {e}");
-                Self(None)
+                Self::Uninitialized
             }
         }
     }
@@ -61,24 +71,32 @@ impl BundleRoot {
         fs: &impl FsRepo,
     ) -> Result<(), std::io::Error> {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
-        match self.0.as_ref() {
-            Some(root) => {
+        match self {
+            Self::Ota(root) => {
                 tracing::debug!("Persisting bundle root {root:?} to {persist_path:?}");
                 fs.write(&persist_path, root.to_string_lossy().as_bytes())
                     .await
             }
-            None => fs.remove_file(&persist_path).await,
+            Self::Embedded => {
+                fs.create_dir_all(cache_dir).await?;
+                fs.write(&persist_path, EMBEDDED_BUNDLE_MARKER.as_bytes())
+                    .await
+            }
+            Self::Uninitialized => fs.remove_file(&persist_path).await,
         }
     }
 
     /// Get the current bundle root path, if any.
     pub(crate) fn path(&self) -> Option<&Path> {
-        self.0.as_deref()
+        match self {
+            Self::Ota(path) => Some(path),
+            Self::Uninitialized | Self::Embedded => None,
+        }
     }
 
     /// Read the bundle manifest inside the bundle root.
     pub(crate) async fn manifest(&self, fs: &impl FsRepo) -> Option<BundleManifest> {
-        let manifest_path = self.0.as_ref()?.join("bundle-manifest.json");
+        let manifest_path = self.path()?.join("bundle-manifest.json");
         BundleManifest::read(&manifest_path, fs).await
     }
 }

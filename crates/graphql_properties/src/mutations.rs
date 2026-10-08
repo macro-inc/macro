@@ -251,6 +251,8 @@ pub enum GraphqlPropertyTargetEntityType {
     Chat,
     /// CRM company target.
     Company,
+    /// Row of a Macro database table.
+    DatabaseRow,
     /// Document target, including tasks and snippets.
     Document,
     /// Initiative target, displayed as a Project in the application.
@@ -271,6 +273,7 @@ impl GraphqlPropertyTargetEntityType {
             Self::Channel => model_entity::EntityType::Channel,
             Self::Chat => model_entity::EntityType::Chat,
             Self::Company => model_entity::EntityType::CrmCompany,
+            Self::DatabaseRow => model_entity::EntityType::DatabaseRow,
             Self::Document => model_entity::EntityType::Document,
             Self::Initiative => model_entity::EntityType::Initiative,
             Self::Project => model_entity::EntityType::Project,
@@ -336,7 +339,7 @@ impl EntityPropertyOptionDeltaInput {
 
 /// Input identifying an entity referenced by a property value.
 #[derive(async_graphql::InputObject)]
-struct GraphqlEntityReferenceInput {
+pub struct GraphqlEntityReferenceInput {
     /// Type of the referenced entity.
     entity_type: GraphqlPropertyEntityType,
     /// Identifier of the referenced entity.
@@ -361,7 +364,7 @@ impl GraphqlEntityReferenceInput {
 
 /// A typed value accepted when setting an entity property.
 #[derive(async_graphql::OneofObject)]
-enum GraphqlSetPropertyValue {
+pub enum GraphqlSetPropertyValue {
     /// A Boolean value.
     Boolean(bool),
     /// An RFC 3339 date-time value.
@@ -386,7 +389,7 @@ enum GraphqlSetPropertyValue {
 
 impl GraphqlSetPropertyValue {
     /// Convert the GraphQL value into its properties-domain request model.
-    fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
+    pub fn try_into_model(self) -> async_graphql::Result<SetPropertyValue> {
         Ok(match self {
             Self::Boolean(value) => SetPropertyValue::Boolean { value },
             Self::Date(value) => SetPropertyValue::Date {

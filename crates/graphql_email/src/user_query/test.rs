@@ -67,6 +67,7 @@ fn label() -> LinkLabel {
 
 fn link() -> UserEmailLink {
     UserEmailLink {
+        draft_is_signal: true,
         id: Uuid::from_u128(2),
         macro_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
         email_address: EmailStr::try_from("inbox@example.com".to_owned()).unwrap(),
@@ -80,6 +81,9 @@ fn link() -> UserEmailLink {
             signature: Some("<p>Regards</p>".to_owned()),
         },
         is_primary: false,
+        needs_calendar_permission: true,
+        calendar_disabled: false,
+        has_calendar_data: true,
         created_at: Utc.with_ymd_and_hms(2025, 1, 2, 3, 4, 5).unwrap(),
         updated_at: Utc.with_ymd_and_hms(2025, 2, 3, 4, 5, 6).unwrap(),
     }
@@ -105,7 +109,8 @@ async fn resolves_labels_and_links_for_the_bound_authenticated_user() {
                 emailLinks {
                     id macroId emailAddress photoUrl provider isSyncActive syncStatus
                     needsReauth settings { signatureOnRepliesForwards signature }
-                    isPrimary createdAt updatedAt
+                    isPrimary needsCalendarPermission calendarDisabled hasCalendarData
+                    createdAt updatedAt
                 }
             }"#,
         )
@@ -129,6 +134,9 @@ async fn resolves_labels_and_links_for_the_bound_authenticated_user() {
     assert_eq!(link["needsReauth"], true);
     assert_eq!(link["settings"]["signatureOnRepliesForwards"], true);
     assert_eq!(link["settings"]["signature"], "<p>Regards</p>");
+    assert_eq!(link["needsCalendarPermission"], true);
+    assert_eq!(link["calendarDisabled"], false);
+    assert_eq!(link["hasCalendarData"], true);
     assert_eq!(
         *service.requested_users.lock().unwrap(),
         vec![user_id(), user_id()]

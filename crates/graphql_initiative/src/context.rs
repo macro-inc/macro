@@ -9,22 +9,13 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
-use futures::{StreamExt, TryStreamExt, stream};
 use initiative::domain::{
-    models::{
-        AssignTasksResponse, CreateInitiativeRequest, InitiativeDetail, InitiativeError,
-        TaskAssignment, TaskAssignmentBatch, UpdateInitiativeRequest,
-    },
+    models::{CreateInitiativeRequest, InitiativeDetail, InitiativeError, UpdateInitiativeRequest},
     ports::InitiativeService,
-    reads::{
-        InitiativePageRow, InitiativeTasksPage, InitiativeTasksRequest, TaskInitiativeReferences,
-        TaskInitiativeReferencesRequest,
-    },
+    reads::{InitiativePageRow, InitiativeTasksPage, InitiativeTasksRequest},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
-
-const MAX_CONCURRENT_TASK_AUTHORIZATIONS: usize = 16;
 
 /// Object-safe forwarding future for the request's concrete domain services.
 pub(crate) type ApiFuture<'a, T> =
@@ -34,17 +25,17 @@ pub(crate) type ApiFuture<'a, T> =
 pub(crate) trait InitiativeApi: Send + Sync {
     fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow>;
     fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail>;
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> ApiFuture<'_, ()>;
     fn tasks(
         &self,
         user: MacroUserIdStr<'static>,
         id: Uuid,
         input: InitiativeTasksRequest,
     ) -> ApiFuture<'_, InitiativeTasksPage>;
-    fn references(
-        &self,
-        user: MacroUserIdStr<'static>,
-        ids: Vec<String>,
-    ) -> ApiFuture<'_, TaskInitiativeReferences>;
     fn create(
         &self,
         user: MacroUserIdStr<'static>,
@@ -57,19 +48,6 @@ pub(crate) trait InitiativeApi: Send + Sync {
         input: UpdateInitiativeRequest,
     ) -> ApiFuture<'_, InitiativeDetail>;
     fn delete(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, ()>;
-    fn assign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        id: Uuid,
-        task_ids: Vec<String>,
-    ) -> ApiFuture<'_, AssignTasksResponse>;
-    fn unassign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        id: Uuid,
-        task_id: String,
-    ) -> ApiFuture<'_, ()>;
-    fn clear(&self, user: MacroUserIdStr<'static>, task_id: String) -> ApiFuture<'_, ()>;
 }
 
 /// Request-scoped initiative capability, shared by viewer reads and mutations.
@@ -138,6 +116,20 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
         })
     }
 
+    fn ensure_description_surface(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> ApiFuture<'_, ()> {
+        Box::pin(async move {
+            let receipt = self
+                .access
+                .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
+                .await?;
+            self.service.ensure_description_surface(receipt).await
+        })
+    }
+
     fn tasks(
         &self,
         user: MacroUserIdStr<'static>,
@@ -150,18 +142,6 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
                 .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
                 .await?;
             self.service.tasks_page(receipt, input).await
-        })
-    }
-
-    fn references(
-        &self,
-        user: MacroUserIdStr<'static>,
-        ids: Vec<String>,
-    ) -> ApiFuture<'_, TaskInitiativeReferences> {
-        Box::pin(async move {
-            self.service
-                .task_references(&user, TaskInitiativeReferencesRequest { task_ids: ids })
-                .await
         })
     }
 
@@ -195,64 +175,6 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
                 .authorize::<OwnerAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
                 .await?;
             self.service.delete(receipt).await
-        })
-    }
-
-    fn assign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        id: Uuid,
-        task_ids: Vec<String>,
-    ) -> ApiFuture<'_, AssignTasksResponse> {
-        Box::pin(async move {
-            let batch = TaskAssignmentBatch::try_new(task_ids)?;
-            let receipt = self
-                .access
-                .authorize::<EditAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
-                .await?;
-            let tasks = stream::iter(batch.into_task_ids().into_iter().map(|task_id| {
-                let user = &user;
-                async move {
-                    let access = self
-                        .access
-                        .authorize::<EditAccessLevel>(user, &task_id, EntityType::Document)
-                        .await;
-                    TaskAssignment::from_access(task_id, access)
-                }
-            }))
-            .buffered(MAX_CONCURRENT_TASK_AUTHORIZATIONS)
-            .try_collect()
-            .await?;
-            self.service.assign_tasks(receipt, tasks).await
-        })
-    }
-
-    fn unassign(
-        &self,
-        user: MacroUserIdStr<'static>,
-        id: Uuid,
-        task_id: String,
-    ) -> ApiFuture<'_, ()> {
-        Box::pin(async move {
-            let receipt = self
-                .access
-                .authorize::<EditAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
-                .await?;
-            let task_receipt = self
-                .access
-                .authorize::<EditAccessLevel>(&user, &task_id, EntityType::Document)
-                .await?;
-            self.service.unassign_task(receipt, task_receipt).await
-        })
-    }
-
-    fn clear(&self, user: MacroUserIdStr<'static>, task_id: String) -> ApiFuture<'_, ()> {
-        Box::pin(async move {
-            let task_receipt = self
-                .access
-                .authorize::<EditAccessLevel>(&user, &task_id, EntityType::Document)
-                .await?;
-            self.service.clear_task(task_receipt).await
         })
     }
 }

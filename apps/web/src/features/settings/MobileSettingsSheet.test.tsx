@@ -18,6 +18,7 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
+  Surface: (props: ParentProps) => <div>{props.children}</div>,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button {...props} />
   ),
@@ -42,7 +43,9 @@ afterEach(() => {
 const groups: SettingsTabGroup[] = [
   {
     label: 'Account',
-    items: [{ tab: 'Account', label: 'Account', icon: () => <svg /> }],
+    items: [
+      { tab: 'Account', label: 'Account', icon: () => <svg />, keywords: [] },
+    ],
   },
 ];
 

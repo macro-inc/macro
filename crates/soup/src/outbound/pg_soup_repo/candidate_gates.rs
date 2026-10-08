@@ -43,6 +43,13 @@ fn exact_subtree_sql<T>(expr: &Expr<T>, fold: &impl Fn(&T) -> Option<String>) ->
     }
 }
 
+/// Ends each `entity_access`-checked gate's subquery. Postgres can answer an
+/// `EXISTS` by hashing every row its subquery returns, and it prices that
+/// against every candidate the outer scan could produce rather than the
+/// page's `LIMIT`. For these gates that hash is the user's whole accessible
+/// set. An `OFFSET` keeps the subquery per candidate.
+const PER_CANDIDATE: &str = "OFFSET 0";
+
 /// Renders the implied conjuncts of `tree` that `fold` knows how to express
 /// as ` AND ...` clauses, in tree order.
 pub(super) fn implied_conjuncts_sql<T>(
@@ -100,6 +107,7 @@ pub(super) fn document_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> S
                 AND {access}
                 {doc_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
         access = access_semi_join("d.id", "document"),
         doc_fold = build_document_filter(doc_filter),
@@ -118,6 +126,7 @@ pub(super) fn chat_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> Strin
                 AND {access}
                 {chat_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
         access = access_semi_join("c.id", "chat"),
         chat_fold = build_chat_filter(chat_filter),
@@ -136,6 +145,7 @@ pub(super) fn project_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
                 AND {access}
                 {project_fold}
                 {props_fold}
+                {PER_CANDIDATE}
             )"#,
         access = access_semi_join("p.id", "project"),
         project_fold = build_project_filter(project_filter),
@@ -214,7 +224,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
                 _ => return None,
             };
             Some(build_notification_exists_clause(
-                "m.channel_id",
+                "m.parent_entity_id",
                 "channel",
                 &format!(
                     "n.secondary_event_item_type = 'channel_message' AND n.secondary_event_item_id = m.id::text AND {}",
@@ -229,7 +239,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
             r#"EXISTS (
                 SELECT 1 FROM comms_messages m
                 JOIN comms_channel_participants cp
-                    ON cp.channel_id = m.channel_id
+                    ON m.parent_entity_type = 'channel' AND m.parent_entity_id = cp.channel_id::text
                     AND cp.user_id = $1
                     AND cp.left_at IS NULL
                 WHERE m.id = {id_sql}::uuid
@@ -332,7 +342,7 @@ pub(super) fn includes_email_threads(filter: Option<&EntityFilterAst>, link_ids:
 pub(super) fn initiative_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
     use super::expanded::dynamic::{build_initiative_filter, initiative_access_clause};
     format!(
-        "EXISTS (SELECT 1 FROM initiative i WHERE i.id::text = {id_sql} AND {} {} {})",
+        "EXISTS (SELECT 1 FROM initiative i WHERE i.id::text = {id_sql} AND {} {} {} {PER_CANDIDATE})",
         initiative_access_clause(),
         build_initiative_filter(filter.and_then(|f| f.initiative_filter.as_deref())),
         build_properties_filter(

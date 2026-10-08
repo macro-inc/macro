@@ -1,3 +1,5 @@
+mod admission;
+mod owned_purge;
 mod user_cleanup;
 
 use super::*;
@@ -7,7 +9,6 @@ use crate::domain::models::{
     MAX_ACTION_TIME,
 };
 use crate::domain::{
-    event_trigger::EventReference,
     execution::ExecutionHandle,
     ports::{ScheduledActionReadService, ScheduledAgentRunner},
     read_service::ScheduledActionReadServiceImpl,
@@ -101,6 +102,7 @@ impl ScheduledActionRepo for FakeRepo {
         &self,
         _id: &Uuid,
         _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<ClaimToken> {
         unimplemented!()
     }
@@ -121,12 +123,20 @@ impl ScheduledActionRepo for FakeRepo {
 #[derive(Default)]
 pub(crate) struct FakeExecutor {
     calls: Mutex<Vec<ScheduledAction>>,
+    admission_error: Mutex<Option<ai_billing::AiAdmissionError>>,
+}
+
+pub(crate) fn set_admission_error(service: &TestService, error: ai_billing::AiAdmissionError) {
+    *service.executor.admission_error.lock().unwrap() = Some(error);
 }
 
 impl ScheduledActionExecutor for FakeExecutor {
     async fn execute_action(&self, action: ScheduledAction) -> Result<InProgressExecution> {
         let action_id = action.id.unwrap();
         self.calls.lock().unwrap().push(action);
+        if let Some(error) = *self.admission_error.lock().unwrap() {
+            return Err(error.into());
+        }
         Ok(InProgressExecution {
             action_id,
             chat_id: Some("manual-chat".into()),
@@ -189,6 +199,28 @@ pub(crate) fn set_stored_owner(service: &TestService, id: Uuid, owner: Owner) {
         .find(|action| action.id == Some(id))
         .expect("stored action");
     action.owner = owner;
+}
+
+pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
+    let actions = service.repo.actions.lock().unwrap();
+    actions
+        .iter()
+        .find(|action| action.id == Some(id))
+        .map(|action| action.owner.clone())
+}
+
+/// The same store behind a dispatcher that has stopped.
+pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
+    let (tx, _) = tokio::sync::mpsc::channel(1);
+    Arc::new(
+        TestService::new(
+            Arc::clone(&service.repo),
+            Arc::clone(&service.executor),
+            tx,
+            Arc::clone(&service.grants),
+        )
+        .with_event_management_enabled(service.event_management_enabled),
+    )
 }
 
 pub(crate) fn grant_to(service: &TestService, user_id: &str, id: Uuid) {
@@ -464,25 +496,6 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
     }
 }
 
-struct NoModelFallback;
-
-impl ScheduledAgentRunner for NoModelFallback {
-    async fn prepare(&self, _: &ScheduledAction, _: &mut ExecutionHandle) -> Result<()> {
-        panic!("must not fall back")
-    }
-    async fn run(
-        &self,
-        _: &ScheduledAction,
-        _: &ExecutionHandle,
-        _: Option<&EventReference>,
-    ) -> Result<()> {
-        panic!("must not fall back")
-    }
-    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> Result<()> {
-        panic!("must not fall back")
-    }
-}
-
 #[tokio::test]
 async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_revocation() {
     for denial in [
@@ -506,7 +519,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
         *sessions.error.lock().unwrap() = Some(denial);
-        let runner = TargetRunner::new(Arc::new(NoModelFallback), sessions.clone());
+        let runner = TargetRunner::new(sessions.clone());
         let mut handle = ExecutionHandle::default();
         let error = runner.prepare(&created, &mut handle).await.unwrap_err();
         assert_eq!(error.downcast_ref(), Some(&denial));
@@ -668,92 +681,64 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
 }
 
 #[tokio::test]
-async fn receipt_manages_another_owners_row_and_missing_row_is_not_found() {
+async fn grants_do_not_allow_access_to_another_owners_routine() {
     let svc = service(true);
-    let created = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
-        .await
-        .unwrap();
-    let id = created.id.unwrap();
-    svc.repo.actions.lock().unwrap()[0].owner = Owner::from_principal_str(FOREIGN_USER).unwrap();
-    svc.delete_action(owner_receipt(id)).await.unwrap();
-    assert!(svc.repo.actions.lock().unwrap().is_empty());
-    let error = svc.execute_action_now(owner_receipt(id)).await.unwrap_err();
-    assert!(matches!(
-        error.downcast_ref(),
-        Some(ActionPolicyError::NotFound)
-    ));
-}
-
-#[tokio::test]
-async fn bot_owned_execution_and_validating_update_need_a_user_owner() {
-    use crate::domain::target_validation::{
-        TargetValidation,
-        test::{Sessions, agent_task},
-    };
-    let base = service(true);
-    let sessions = Arc::new(Sessions::default());
-    let svc = TestService::new(
-        base.repo.clone(),
-        base.executor.clone(),
-        base.dispatcher_tx.clone(),
-        grants(&base.repo),
-    )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
-    let mut config = configuration(false);
-    config.task = agent_task();
-    let created = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(config.clone()),
-        )
-        .await
-        .unwrap();
-    let id = created.id.unwrap();
-    let editor = EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
-        MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap(),
-        &id.to_string(),
-        EntityType::ScheduledAction,
-    );
-    config.task["prompt"] = json!("changed");
-    svc.update_action(editor, update(config.clone()))
-        .await
-        .unwrap();
-    assert_eq!(
-        sessions
-            .validations
+    for owner in [
+        Owner::from_principal_str(FOREIGN_USER).unwrap(),
+        Owner::from_principal_str(&format!("bot|{}", generate_uuid_v7())).unwrap(),
+        Owner::from_principal_str(&generate_uuid_v7().to_string()).unwrap(),
+    ] {
+        let created = svc
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(configuration(true)),
+            )
+            .await
+            .unwrap();
+        let id = created.id.unwrap();
+        assert_eq!(svc.get_action(view_receipt(id)).await.unwrap().id, Some(id));
+        svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
+        assert_policy(
+            svc.get_action(view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.update_action(edit_receipt(id), update(configuration(true)))
+                .await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.set_enabled(edit_receipt(id), false).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.delete_action(owner_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.get_execution_records(view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+        assert_policy(
+            svc.execute_action_now(owner_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
+    }
+    assert!(svc.get_actions(user(), true).await.unwrap().is_empty());
+    assert!(
+        svc.repo
+            .actions
             .lock()
             .unwrap()
-            .last()
-            .unwrap()
-            .owner
-            .as_ref(),
-        USER
+            .iter()
+            .all(|action| action.enabled)
     );
-
-    svc.repo.actions.lock().unwrap()[0].owner = Owner::Bot(bot_id::BotId::TEST_A);
-    let before = sessions.validations.lock().unwrap().len();
-    let error = svc
-        .update_action(edit_receipt(id), update(config.clone()))
-        .await
-        .unwrap_err();
-    assert!(error.downcast_ref::<OwnerNotUserError>().is_some());
-    assert_eq!(sessions.validations.lock().unwrap().len(), before);
-
-    let disabled = svc.set_enabled(edit_receipt(id), false).await.unwrap();
-    assert!(!disabled.enabled);
-    assert_eq!(sessions.validations.lock().unwrap().len(), before);
-
-    let error = svc.execute_action_now(owner_receipt(id)).await.unwrap_err();
-    assert!(error.to_string().contains("owner is a bot"));
-    assert!(base.executor.calls.lock().unwrap().is_empty());
-
-    svc.repo.actions.lock().unwrap()[0].owner = Owner::User(user());
-    svc.execute_action_now(owner_receipt(id)).await.unwrap();
-    assert_eq!(base.executor.calls.lock().unwrap().len(), 1);
+    assert!(svc.executor.calls.lock().unwrap().is_empty());
+    assert_policy(
+        svc.execute_action_now(owner_receipt(generate_uuid_v7()))
+            .await,
+        ActionPolicyError::NotFound,
+    );
 }
 
 #[tokio::test]
@@ -1112,7 +1097,6 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
     let reader = ScheduledActionReadServiceImpl::new(repo.clone(), accessible);
 
     let expected = vec![
-        "foreign",
         "early-cron",
         "low-id",
         "first-equal",
@@ -1127,7 +1111,7 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             .collect::<Vec<_>>()
     };
     assert_eq!(names(&read), expected);
-    assert!(read.iter().any(|action| action.name == "foreign"));
+    assert!(read.iter().all(|action| action.name != "foreign"));
     assert!(
         read.iter()
             .all(|action| action.name != "bot" && action.name != "team")
@@ -1146,13 +1130,7 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
     );
     assert_eq!(
         names(&svc.get_actions(user(), false).await.unwrap()),
-        vec![
-            "foreign",
-            "early-cron",
-            "low-id",
-            "first-equal",
-            "second-equal"
-        ]
+        vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }
 
@@ -1274,4 +1252,130 @@ async fn configuration_updates_that_omit_activation_keep_it() {
         assert_eq!(updated.enabled, enabled);
         assert_eq!(updated.name, format!("renamed while enabled={enabled}"));
     }
+}
+
+#[tokio::test]
+async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
+    let svc = service(false);
+    let mut config = configuration(false);
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    config.trigger = ActionTrigger::Cron {
+        schedule: crate::domain::models::Schedule::from_cron("0 0 9 1 1 * 2000".into()).unwrap(),
+        timezone: chrono_tz::UTC,
+    };
+    let firing = Utc::now() - chrono::Duration::minutes(1);
+    {
+        let mut actions = svc.repo.actions.lock().unwrap();
+        actions[0].trigger = config.trigger.clone();
+        actions[0].next_run_at = Some(firing);
+    }
+    config.name = "Renamed while waiting for the worker".into();
+    let updated = svc
+        .update_action(edit_receipt(id), update(config.clone()))
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, Some(firing));
+    svc.repo.actions.lock().unwrap()[0].next_run_at = None;
+    config.name = "Renamed after completion".into();
+    let updated = svc
+        .update_action(edit_receipt(id), update(config))
+        .await
+        .unwrap();
+    assert_eq!(updated.next_run_at, None);
+}
+
+fn conditional_configuration() -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(json!({
+            "type": "events",
+            "filters": [{"events": ["email.message_received"], "condition": "Is this an invoice?"}]
+        }))
+        .unwrap(),
+        ..configuration(true)
+    }
+}
+
+#[tokio::test]
+async fn conditions_are_rejected_unless_the_host_can_check_them() {
+    let without = service(true);
+    assert_policy(
+        without
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(conditional_configuration()),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+    let plain = without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    assert_policy(
+        without
+            .update_action(
+                edit_receipt(plain.id.unwrap()),
+                update(conditional_configuration()),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+
+    let with = TestService::new(
+        without.repo.clone(),
+        without.executor.clone(),
+        without.dispatcher_tx.clone(),
+        grants(&without.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_conditions_enabled(true);
+    let created = with
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(conditional_configuration()),
+        )
+        .await
+        .unwrap();
+    let filters = created.trigger.event_filters().unwrap();
+    assert_eq!(
+        filters.as_slice()[0].condition().map(|c| c.as_str()),
+        Some("Is this an invoice?")
+    );
+}
+
+#[test]
+fn conditions_are_trimmed_bounded_and_round_trip() {
+    let filters: crate::domain::event_trigger::EventFilters = serde_json::from_value(json!([
+        {"events": ["email.message_received"], "condition": "  Is this urgent?  "}
+    ]))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(&filters).unwrap(),
+        json!([{"events": ["email.message_received"], "condition": "Is this urgent?"}])
+    );
+    for condition in [json!(""), json!("   "), json!("x".repeat(501)), json!(3)] {
+        assert!(
+            serde_json::from_value::<crate::domain::event_trigger::EventFilters>(json!([
+                {"events": ["email.message_received"], "condition": condition}
+            ]))
+            .is_err(),
+            "{condition}"
+        );
+    }
+    let unconditional: crate::domain::event_trigger::EventFilters =
+        serde_json::from_value(json!([{"events": ["document.created"]}])).unwrap();
+    assert_eq!(
+        serde_json::to_value(&unconditional).unwrap(),
+        json!([{"events": ["document.created"]}])
+    );
 }

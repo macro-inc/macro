@@ -12,6 +12,11 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { listCalendarOccurrences: vi.fn() },
 }));
 
+vi.mock('@queries/calendar/graphql/flag', () => ({
+  useGraphqlCalendarHost: () => () => undefined,
+  markCalendarCacheUnsupported: vi.fn(),
+}));
+
 let client: QueryClient;
 vi.mock('@queries/client', () => ({
   get queryClient() {
@@ -68,18 +73,20 @@ function respond(items: CalendarOccurrenceItem[]) {
   list.mockResolvedValue(ok({ items, hasMore: false, syncStatus: 'ready' }));
 }
 
-function setup() {
+function setup(metadataReady = true) {
   const [now, setNow] = createSignal(today);
   const [userId, setUserId] = createSignal<string | undefined>(
     'macro|self@example.com'
   );
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
+  const [sourcesReady, setSourcesReady] = createSignal(metadataReady);
   let result!: ReturnType<typeof useUpcomingCalendarEventsSource>;
   const Harness = () => {
     result = useUpcomingCalendarEventsSource({
       userId,
       now,
       sourceById: () => sources,
+      sourcesReady,
       isSourceVisible: (id) => !hidden().has(id),
     });
     return null;
@@ -94,7 +101,7 @@ function setup() {
     return dispose;
   });
   disposers.push(dispose);
-  return { result, setNow, setUserId, setHidden };
+  return { result, setNow, setUserId, setHidden, setSourcesReady };
 }
 
 beforeEach(() => {
@@ -109,6 +116,55 @@ afterEach(() => {
 });
 
 describe('upcoming calendar events source', () => {
+  it('waits to display agenda colors without delaying occurrence fetches', async () => {
+    respond([1, 2, 3, 4, 5].map((day) => occurrence(day)));
+    const { result, setSourcesReady } = setup(false);
+    await vi.waitFor(() =>
+      expect(client.getQueryCache().getAll()[0]?.state.status).toBe('success')
+    );
+    expect(result.events()).toEqual([]);
+    expect(result.loading()).toBe(true);
+    expect(list).toHaveBeenCalledTimes(1);
+
+    setSourcesReady(true);
+    expect(result.events()).toHaveLength(5);
+    expect(result.events().every((event) => event.color === source.color)).toBe(
+      true
+    );
+    expect(result.loading()).toBe(false);
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips working locations and keeps looking for upcoming events', async () => {
+    const locations = [0, 1, 2, 3, 4].map((day) =>
+      occurrence(day, { title: 'Office', eventType: 'working_location' })
+    );
+    const allDay = {
+      kind: 'allDay' as const,
+      startDate: '2026-09-23',
+      endDate: '2026-09-24',
+    };
+    locations[0].event.time = allDay;
+    locations[0].occurrence.time = allDay;
+    list
+      .mockResolvedValueOnce(
+        ok({ items: locations, hasMore: false, syncStatus: 'ready' })
+      )
+      .mockResolvedValueOnce(
+        ok({
+          items: [16, 17, 18, 19, 20].map((day) => occurrence(day)),
+          hasMore: false,
+          syncStatus: 'ready',
+        })
+      );
+    const { result } = setup();
+    await vi.waitFor(() => expect(result.events()).toHaveLength(5));
+    expect(result.events().map((event) => event.title)).toEqual(
+      [16, 17, 18, 19, 20].map((day) => `event-${day}`)
+    );
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
   it('stops after the first window when five events are available', async () => {
     respond([5, 3, 2, 4, 1].map((day) => occurrence(day)));
     const { result } = setup();
@@ -126,6 +182,36 @@ describe('upcoming calendar events source', () => {
         isReadOnly: false,
       })
     );
+  });
+
+  it('uses the visible copy type without filtering ordinary events named Office', async () => {
+    const location = occurrence(0, {
+      sources: [
+        {
+          calendarId: source.id,
+          title: 'Office',
+          isReadOnly: false,
+          eventType: 'working_location',
+          reminders: { useDefault: true, overrides: [] },
+          transparency: 'transparent',
+          visibility: 'default',
+        },
+      ],
+    });
+    respond([
+      location,
+      ...[1, 2, 3, 4, 5].map((day) => occurrence(day, { title: 'Office' })),
+    ]);
+    const { result } = setup();
+    await vi.waitFor(() => expect(result.events()).toHaveLength(5));
+    expect(result.events().map((event) => event.eventId)).toEqual(
+      [1, 2, 3, 4, 5].map((day) => `event-${day}`)
+    );
+    expect(
+      result.findEvent(
+        JSON.stringify(['event-0', location.occurrence.occurrenceKey])
+      )
+    ).toBeUndefined();
   });
 
   it('widens to later windows after filtering cancelled, declined and hidden events', async () => {

@@ -650,9 +650,13 @@ impl IntoResponse for BotsHandlerErr {
             Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
             Self::Bot(BotError::NotFound(_)) => StatusCode::NOT_FOUND,
             Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
+            Self::Bot(BotError::Unavailable(_)) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Bot(BotError::Repo(_)) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
+        if matches!(
+            status,
+            StatusCode::INTERNAL_SERVER_ERROR | StatusCode::SERVICE_UNAVAILABLE
+        ) {
             tracing::error!(error=?self, "bots handler error");
         }
         (

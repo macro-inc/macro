@@ -47,6 +47,30 @@ describe('message-actions helpers', () => {
     ).toBe(false);
   });
 
+  it('lets a document owner delete a comment they did not write', () => {
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: null },
+        'user-1',
+        true
+      )
+    ).toBe(true);
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: null },
+        'user-1',
+        false
+      )
+    ).toBe(false);
+    expect(
+      canDeleteMessage(
+        { sender_id: 'user-2', deleted_at: '2026-02-25T00:00:00.000Z' },
+        'user-1',
+        true
+      )
+    ).toBe(false);
+  });
+
   it('allows reply for non-deleted top-level messages and thread replies', () => {
     expect(canReplyToMessage({ thread_id: null, deleted_at: null })).toBe(true);
     expect(
@@ -78,6 +102,38 @@ describe('message-actions helpers', () => {
       '<m-reply-target>{"parent":{"type":"channel","id":"channel-1"},"targetMessageId":"reply-1","targetThreadId":"thread-1","displayText":"first line second line","senderId":"macro|sender@example.com"}</m-reply-target>\n\ndraft'
     );
   });
+
+  it.each([undefined, 'call-1'])(
+    'quotes a call message with thread_id %s in its canonical thread',
+    (threadId) => {
+      const value = buildReplyTargetValue({
+        parent: { type: 'call', id: 'call-1' },
+        message: {
+          ...threadReply,
+          id: threadId ? 'reply-1' : 'call-1',
+          thread_id: threadId,
+        },
+        existingValue: 'draft',
+      });
+      expect(value).toContain('"parent":{"type":"call","id":"call-1"}');
+      expect(value).toContain('"targetThreadId":"call-1"');
+      expect(value).toContain(
+        '"targetMessageId":"' + (threadId ? 'reply-1' : 'call-1') + '"'
+      );
+      expect(value).toMatch(/\n\ndraft$/);
+      expect(
+        buildReplyTargetValue({
+          parent: { type: 'call', id: 'call-1' },
+          message: {
+            ...threadReply,
+            id: threadId ? 'reply-1' : 'call-1',
+            thread_id: threadId,
+          },
+          existingValue: value,
+        })
+      ).toBe(value);
+    }
+  );
 
   it('uses browser-selected text for the reply preview', () => {
     expect(

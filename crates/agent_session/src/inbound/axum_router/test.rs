@@ -14,6 +14,65 @@ use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
+#[tokio::test]
+async fn admission_maps_to_shared_public_http_contract_on_create_and_control() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for (error, status) in [
+        (
+            AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+            StatusCode::PAYMENT_REQUIRED,
+        ),
+        (
+            AiAdmissionError::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+        ),
+    ] {
+        let responses = [
+            AgentSessionApiError::Domain(error.into()).into_response(),
+            CreateSessionApiError::Domain(error.into()).into_response(),
+            AgentSessionApiError::Domain(AgentSessionError::from(
+                rootcause::report!(error).into_dynamic(),
+            ))
+            .into_response(),
+        ];
+        for response in responses {
+            assert_eq!(response.status(), status);
+            let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                value,
+                serde_json::json!({"error": error.to_string(), "code": error.code()})
+            );
+        }
+    }
+}
+
+#[test]
+fn openapi_documents_session_admission_failures() {
+    #[derive(utoipa::OpenApi)]
+    #[openapi(paths(create_agent_session_handler, control_agent_session_handler))]
+    struct ApiDoc;
+
+    let schema = serde_json::to_value(<ApiDoc as utoipa::OpenApi>::openapi()).unwrap();
+    for path in ["/agent-sessions", "/agent-sessions/{session_id}/control"] {
+        let responses = &schema["paths"][path]["post"]["responses"];
+        for status in ["402", "503"] {
+            assert_eq!(
+                responses[status]["content"]["application/json"]["schema"]["$ref"],
+                "#/components/schemas/AiAdmissionErrorBody"
+            );
+        }
+    }
+    assert_eq!(
+        schema["paths"]["/agent-sessions/{session_id}/control"]["post"]["responses"]["503"]["content"]
+            ["text/plain"]["schema"]["type"],
+        "string"
+    );
+    assert!(schema["components"]["schemas"]["AiAdmissionErrorBody"].is_object());
+}
+
 const BOT_TOKEN: &str = "mbot_self_test";
 const HARNESS_TOKEN: &str = "mhns_self_test";
 const OWNER: &str = "macro|owner@example.com";
@@ -119,6 +178,14 @@ struct RecordingOpener {
 }
 
 impl SessionOpener for RecordingOpener {
+    async fn warm_session(
+        &self,
+        _owner: model_owner::Owner,
+        _id: AgentSessionId,
+    ) -> crate::domain::error::Result<Option<crate::domain::model::AgentSession>> {
+        Ok(None)
+    }
+
     async fn open_external_session(
         &self,
         request: OpenExternalAgentSession,
@@ -1048,6 +1115,8 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
             "id": minted,
             "botId": BotId::TEST_A.as_uuid(),
             "model": "claude-opus-5",
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "main",
         })
         .to_string(),
     );
@@ -1068,6 +1137,10 @@ async fn an_owner_starts_their_macrod_agent_from_the_composer() {
         let requested = requests.requested.lock().unwrap();
         assert_eq!(requested.len(), 1);
         assert_eq!(requested[0].bot_id, BotId::TEST_A);
+        assert_eq!(
+            requested[0].repo_url.as_deref(),
+            Some("https://github.com/org/project")
+        );
         assert_eq!(requested[0].owner.as_ref(), OWNER);
         assert_eq!(requested[0].session_id.as_uuid(), minted);
         assert_eq!(requested[0].model.as_deref(), Some("claude-opus-5"));
@@ -1236,6 +1309,7 @@ async fn an_external_open_carries_its_instructions() {
     );
 }
 
+mod owned_purge;
 mod read;
 mod user_cleanup;
 
@@ -1340,4 +1414,27 @@ async fn invalid_repository_branch_is_rejected_before_opening() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn macrod_rejects_an_unsupported_base_before_dispatch() {
+    let requests = Arc::new(RecordingRequester::default());
+    let response = router_with_requests(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        requests.clone(),
+    )
+    .oneshot(as_user(
+        OWNER,
+        serde_json::json!({
+            "botId": BotId::TEST_A.as_uuid(),
+            "repoUrl": "https://github.com/org/project",
+            "repoBranch": "feature/other"
+        })
+        .to_string(),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(requests.requested.lock().unwrap().is_empty());
 }

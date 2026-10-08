@@ -18,11 +18,6 @@ const macro = bot.requestedAs(bot.users.byId(actAs));
 const ALL_EVENTS = [
   'channel.created',
   'channel.deleted',
-  'channel.message_attachment_created',
-  'channel.message_attachment_removed',
-  'channel.message_deleted',
-  'channel.message_patched',
-  'channel.message_posted',
   'channel.participant_added',
   'channel.participant_removed',
   'channel.updated',
@@ -30,6 +25,12 @@ const ALL_EVENTS = [
   'document.created',
   'document.deleted',
   'document.updated',
+  'message.attachment_created',
+  'message.attachment_removed',
+  'message.deleted',
+  'message.mentioned',
+  'message.patched',
+  'message.posted',
 ] as const satisfies readonly EventName[];
 
 for (const name of ALL_EVENTS) {
@@ -43,9 +44,13 @@ macro.events.on('document.created', async (e) => {
   );
 });
 
-macro.events.on('channel.message_posted', async (e) => {
+macro.events.on('message.posted', async (e) => {
   const from = e.sender ? ((await e.sender.name()) ?? e.sender.id) : 'a bot';
-  console.log(`  -> ${from} posted in ${await e.channel.name()}`);
+  const where =
+    e.target.type === 'channel'
+      ? `in ${await e.target.channel.name()}`
+      : `on ${await e.target.document.name()}`;
+  console.log(`  -> ${from} posted ${where}`);
 });
 
 const stop = await macro.events.listen();

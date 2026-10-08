@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for bounded sort-index selection of dense local filter pages.
-version = "0.6.35"
+# Rebuild to parse frontend-supplied GraphQL SDL directly.
+version = "0.6.43"
 
 [features]
 default = []

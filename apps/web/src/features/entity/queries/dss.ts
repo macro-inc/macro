@@ -1,4 +1,6 @@
 /** Document-storage mutations used by entity surfaces. */
+
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import {
   copyItem,
   deleteItem,
@@ -10,12 +12,9 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
-import { scheduledActionKeys } from '@queries/agent-schedule/keys';
 import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
-import { notificationKeys } from '@queries/notification/keys';
-import { reminderKeys } from '@queries/reminders/keys';
 import {
   getSoupEntityById,
   invalidateSoupEntity,
@@ -35,7 +34,6 @@ import { soupKeys } from '@queries/soup/keys';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { callServiceClient } from '@service-call/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { storageServiceClient } from '@service-storage/client';
 import { useMutation } from '@tanstack/solid-query';
 import { batch } from 'solid-js';
 import { type EntityData, getEntityProjectId } from '../types/entity';
@@ -45,14 +43,9 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
   if (entities.some((e) => e.type === 'call')) {
     void queryClient.invalidateQueries({ queryKey: callKeys._def });
   }
-  if (entities.some((e) => e.type === 'reminder')) {
-    // Reminder deletion retracts its notification in the same server transaction.
-    void queryClient.invalidateQueries({ queryKey: reminderKeys._def });
-    void queryClient.invalidateQueries({ queryKey: notificationKeys._def });
-  }
-  if (entities.some((e) => e.type === 'automation')) {
+  if (entities.some((e) => e.type === 'routine')) {
     const deletedIds = new Set(
-      entities.filter((e) => e.type === 'automation').map((e) => e.id)
+      entities.filter((e) => e.type === 'routine').map((e) => e.id)
     );
     queryClient.setQueryData(
       scheduledActionKeys.list.queryKey,
@@ -66,6 +59,14 @@ function invalidateDeletedDssItems(entities: EntityData[]): void {
     void queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
     });
+    for (const scheduleId of deletedIds) {
+      queryClient.removeQueries({
+        queryKey: scheduledActionKeys.detail({ scheduleId }).queryKey,
+      });
+      queryClient.removeQueries({
+        queryKey: scheduledActionKeys.history({ scheduleId }).queryKey,
+      });
+    }
   }
 }
 
@@ -78,7 +79,7 @@ async function settleGraphqlDeletes(
     (outcome) => outcome.status === 'fulfilled' && outcome.value
   );
   // Process confirmed successes before surfacing sibling failures. Never remove
-  // failed schedules or skip call/reminder invalidation because another API threw.
+  // failed schedules or skip call invalidation because another API threw.
   try {
     invalidateDeletedDssItems(entities.filter((_, index) => results[index]));
   } catch (error) {
@@ -102,8 +103,7 @@ export function createBulkDeleteDssItemsMutation() {
       type === 'document' ||
       type === 'project' ||
       type === 'call' ||
-      type === 'automation' ||
-      type === 'reminder'
+      type === 'routine'
     );
   };
   const isCurrentContext = (context: unknown) =>
@@ -130,17 +130,9 @@ export function createBulkDeleteDssItemsMutation() {
             callServiceClient.deleteCallRecord(e.id)
           ).then(() => true);
         }
-        if (e.type === 'automation') {
+        if (e.type === 'routine') {
           return throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
-          ).then(() => true);
-        }
-        if (e.type === 'reminder') {
-          // Deleting a reminder also retracts the notification it produced —
-          // the API does both in one transaction, since a reminder *is* its
-          // notification's event_item.
-          return throwOnErr(() =>
-            storageServiceClient.reminders.deleteReminder(e.id)
           ).then(() => true);
         }
         return deleteItem({ id: e.id, itemType: e.type });

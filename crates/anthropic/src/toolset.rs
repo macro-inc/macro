@@ -30,6 +30,8 @@ pub struct AnthropicToolContext {
     pub client: Arc<Client>,
     /// The model to use for server tool invocations.
     pub model: String,
+    /// Admission for the authenticated caller before any provider execution.
+    pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
     /// Analytics injection also exposes the separate observational journal.
     pub recorder: Arc<dyn UsageRecorder>,
     /// Inherited feature/entity only; each call replaces the user from RequestContext.
@@ -41,6 +43,7 @@ impl Clone for AnthropicToolContext {
         Self {
             client: self.client.clone(),
             model: self.model.clone(),
+            admission: self.admission.clone(),
             recorder: self.recorder.clone(),
             usage_context: self.usage_context.clone(),
         }
@@ -53,6 +56,7 @@ impl AnthropicToolContext {
         Self {
             client: Arc::new(client),
             model,
+            admission: Arc::new(ai_billing::domain::admission::DisabledAiAdmissionService),
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             usage_context: UsageContext::system(ai_usage::AiFeature::Chat),
         }
@@ -115,6 +119,15 @@ pub(crate) async fn invoke_server_tool(
     server_tool: ServerTool,
     input: &str,
 ) -> Result<Vec<ResponseContentKind>, ToolCallError> {
+    context
+        .admission
+        .admit(&request_context.user_id, context.usage_context.feature)
+        .await
+        .map_err(|error| ToolCallError {
+            description: format!("{}: {error}", error.code()),
+            internal_error: error.into(),
+        })?;
+
     let request = CreateMessageRequestBody {
         model: context.model.clone(),
         messages: vec![RequestMessage {

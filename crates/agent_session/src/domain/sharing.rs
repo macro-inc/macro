@@ -21,6 +21,28 @@ use super::{
 #[cfg(test)]
 mod test;
 
+/// Who owns the bot a session runs as, for deciding what its originating
+/// channel may do with the session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionBotOwnership {
+    /// A user's private agent.
+    User,
+    /// A team agent, or a first-party system bot that belongs to everyone.
+    Shared,
+}
+
+/// The access the channel a session was invoked from gets to it.
+///
+/// The invocation was public there, so the channel may always watch. It may
+/// also steer, unless the bot is someone's private agent: those sessions
+/// only their owner drives.
+pub fn originating_channel_access(bot: SessionBotOwnership) -> AccessLevel {
+    match bot {
+        SessionBotOwnership::User => AccessLevel::View,
+        SessionBotOwnership::Shared => AccessLevel::Edit,
+    }
+}
+
 /// Persistence capability for session sharing, independent of transport.
 pub trait SessionSharingRepo: Send + Sync + 'static {
     /// Read canonical sharing settings and direct channel grants.

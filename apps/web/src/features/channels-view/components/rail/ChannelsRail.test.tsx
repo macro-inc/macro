@@ -161,6 +161,8 @@ vi.mock('../../channels-view-context', () => ({
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
     },
+    tab: () => 'browse',
+    threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
   }),
@@ -172,6 +174,8 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  // What the real helper answers for the disabled lookup above.
+  resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
 vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
@@ -220,6 +224,7 @@ const sources: ChannelsSources = {
   direct_messages: source,
   recents: source,
   search: source,
+  threads: source,
 };
 const mount = () =>
   render(() => (

@@ -19,18 +19,20 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem } from '@core/component/ContextMenu';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
 import ChatIcon from '@phosphor/chat-circle.svg';
+import RoutineIcon from '@phosphor/clock-clockwise.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn } from '@ui';
+import { cn, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { compactAge } from '../core/format-age';
-import type { AgentsMode } from '../core/mode';
+import { type AgentsMode, agentsModeLabel } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
@@ -40,12 +42,19 @@ import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
 
+/** Rows a mode should fill before paging stops waiting for a scroll. */
+const MODE_PAGE_FILL = 20;
+
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: true,
   senderBucket: undefined,
 };
 
 export type AgentsSidebarProps = {
+  /** Only conversations of this mode are listed. */
+  mode: AgentsMode;
+  onModeChange: (mode: AgentsMode) => void;
   activePage: AgentsPage | undefined;
   onOpenPage: (page: AgentsPage) => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
@@ -157,8 +166,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
+  const inMode = (conversations: AgentConversationEntity[]) =>
+    conversations.filter(
+      (conversation) => props.modeForConversation(conversation) === props.mode
+    );
+  const conversations = () => inMode(props.conversations);
+  const archived = () => inMode(props.archived);
   const actionController = createListController({
-    items: () => [...props.conversations, ...props.archived],
+    items: () => [...conversations(), ...archived()],
     getKey: (conversation) => conversation.id,
     isSelectable: () => false,
   });
@@ -166,7 +181,19 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     controller: actionController,
     getEntity: (conversation) => conversation,
   });
-  const total = () => props.conversations.length + props.archived.length;
+  const total = () => conversations().length + archived().length;
+  // Both modes page through one mixed query, so a short filtered list never
+  // scrolls far enough to ask for more; keep paging until it fills.
+  createEffect(() => {
+    if (
+      total() < MODE_PAGE_FILL &&
+      props.hasNextPage &&
+      !props.loading &&
+      !props.loadingNextPage &&
+      !props.error
+    )
+      props.onLoadMore();
+  });
   // Both lists page through one query, so either reaching its end loads more.
   const loadMoreNearEnd = (event: Event & { currentTarget: HTMLElement }) => {
     const list = event.currentTarget;
@@ -208,6 +235,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search agent chats',
+      condition: () => props.activePage !== 'routines',
       run: () => {
         openSearch();
         return true;
@@ -218,43 +246,76 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <ViewSidebar.Root aria-label="Agents navigation">
-        <ViewSidebar.Header>
-          <div class="flex min-w-0 items-center gap-1">
-            <ViewSidebar.CloseButton />
-            <ViewSidebar.Title>Agents</ViewSidebar.Title>
-          </div>
-        </ViewSidebar.Header>
+        <Show when={!isTouchDevice()}>
+          <ViewSidebar.Header>
+            <div class="flex min-w-0 items-center gap-1">
+              <ViewSidebar.CloseButton />
+              <ViewSidebar.Title>Agents</ViewSidebar.Title>
+            </div>
+          </ViewSidebar.Header>
+        </Show>
 
-        <ViewSidebar.Primary>
-          <SidebarCreateButton
-            label="New conversation"
-            onCreate={props.onNewConversation}
-            ref={tourTarget(AGENTS_TOUR.newChat)}
+        <div
+          ref={tourTarget(AGENTS_TOUR.modeSwitch)}
+          class="px-(--sidebar-gutter) pt-1 touch:pt-0"
+        >
+          <Tabs
+            aria-label="Agents mode"
+            fullWidth
+            list={(['chat', 'code'] as const).map((mode) => ({
+              value: mode,
+              label: agentsModeLabel(mode),
+            }))}
+            value={props.mode}
+            onChange={(value) =>
+              props.onModeChange(value === 'code' ? 'code' : 'chat')
+            }
           />
-        </ViewSidebar.Primary>
+        </div>
+
+        <Show when={!isTouchDevice()}>
+          <div class="px-(--sidebar-gutter) pt-2">
+            <SidebarCreateButton
+              label="New conversation"
+              onCreate={props.onNewConversation}
+              ref={tourTarget(AGENTS_TOUR.newChat)}
+            />
+          </div>
+        </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
-          <ViewSidebar.Nav aria-label="Agent tools">
-            <ViewSidebar.Item
-              active={props.activePage === 'agents'}
-              onClick={() => props.onOpenPage('agents')}
-              ref={tourTarget(AGENTS_TOUR.rosterNav)}
-            >
-              <ViewSidebar.Icon>
-                <AgentIcon />
-              </ViewSidebar.Icon>
-              <span>Agents</span>
-            </ViewSidebar.Item>
-            <ViewSidebar.Item
-              active={props.activePage === 'connections'}
-              onClick={() => props.onOpenPage('connections')}
-            >
-              <ViewSidebar.Icon>
-                <PlugIcon />
-              </ViewSidebar.Icon>
-              <span>Connections</span>
-            </ViewSidebar.Item>
-          </ViewSidebar.Nav>
+          <Show when={!isTouchDevice()}>
+            <ViewSidebar.Nav aria-label="Agent tools">
+              <ViewSidebar.Item
+                active={props.activePage === 'agents'}
+                onClick={() => props.onOpenPage('agents')}
+                ref={tourTarget(AGENTS_TOUR.rosterNav)}
+              >
+                <ViewSidebar.Icon>
+                  <AgentIcon />
+                </ViewSidebar.Icon>
+                <span>Agents</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'routines'}
+                onClick={() => props.onOpenPage('routines')}
+              >
+                <ViewSidebar.Icon>
+                  <RoutineIcon />
+                </ViewSidebar.Icon>
+                <span>Routines</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'connections'}
+                onClick={() => props.onOpenPage('connections')}
+              >
+                <ViewSidebar.Icon>
+                  <PlugIcon />
+                </ViewSidebar.Icon>
+                <span>Connections</span>
+              </ViewSidebar.Item>
+            </ViewSidebar.Nav>
+          </Show>
           <CollapsibleSection.Root
             open={conversationsOpen()}
             onOpenChange={setConversationsOpen}
@@ -297,7 +358,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 aria-busy={props.loading || props.loadingNextPage}
                 onScroll={loadMoreNearEnd}
               >
-                {rows(() => props.conversations)}
+                {rows(conversations)}
                 <Show when={props.loading && total() === 0}>
                   <AgentSessionListSkeleton />
                 </Show>
@@ -311,7 +372,9 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
                     {props.search.trim()
                       ? `No results for "${props.search.trim()}"`
-                      : 'No conversations yet.'}
+                      : props.mode === 'code'
+                        ? 'No coding conversations yet.'
+                        : 'No conversations yet.'}
                   </p>
                 </Show>
                 <Show when={props.loadingNextPage}>
@@ -320,7 +383,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               </ViewSidebar.Nav>
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
-          <Show when={props.archived.length}>
+          <Show when={archived().length}>
             <section
               aria-label="Archived conversations"
               class="mt-auto flex min-h-0 shrink-0 basis-1/4 flex-col border-t border-edge-muted pt-2"
@@ -328,14 +391,14 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <ViewSidebar.Toolbar class="shrink-0">
                 <h3 class="text-xs font-medium text-ink-muted">Archived</h3>
                 <span class="text-xs text-ink-extra-muted tabular-nums">
-                  {props.archived.length}
+                  {archived().length}
                 </span>
               </ViewSidebar.Toolbar>
               <ViewSidebar.Nav
                 class="min-h-0 flex-1 shrink overflow-auto"
                 onScroll={loadMoreNearEnd}
               >
-                {rows(() => props.archived)}
+                {rows(archived)}
               </ViewSidebar.Nav>
             </section>
           </Show>

@@ -3,6 +3,8 @@
 
 use agent_fold::domain::model::TurnSignal;
 use agent_session::domain::session::StopReason;
+use model_owner::Owner;
+use shared_entity_registry::OwnedPurgeOutcome;
 
 use super::*;
 
@@ -83,6 +85,26 @@ where
             .map_err(into_session_error)
     }
 
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_session(
+        &self,
+        id: AgentSessionId,
+        expected_owner: &Owner,
+    ) -> agent_session::domain::error::Result<OwnedPurgeOutcome> {
+        let Some(session) = self.inner.sessions.find_session(id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if session.owner_id != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        self.session_deleted(id).await?;
+        Ok(OwnedPurgeOutcome::Purged)
+    }
+
     async fn control_event(
         &self,
         id: AgentSessionId,
@@ -146,6 +168,18 @@ where
         actor: Option<MacroUserIdStr<'static>>,
     ) -> agent_session::domain::error::Result<()> {
         self.execute(id, HarnessCommand::RemoveQueued { action_id, actor })
+            .await
+            .map(drop)
+            .map_err(into_session_error)
+    }
+
+    async fn steer_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> agent_session::domain::error::Result<()> {
+        self.execute(id, HarnessCommand::SteerQueued { action_id, actor })
             .await
             .map(drop)
             .map_err(into_session_error)
@@ -229,6 +263,50 @@ where
                 reason: reason.to_string(),
             },
         ));
+    }
+}
+
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> crate::domain::ports::HeldToolCallObserver
+    for AgentHarnessService<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >
+where
+    Sessions: AgentSessionService,
+    Containers: ContainerManager,
+    Announcer: SessionAnnouncer,
+    Runtimes: RuntimeConnections,
+    PromptContext: MessagePromptContext,
+    PromptComposer: AgentPromptComposer,
+    Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
+{
+    /// Through [`execute`](AgentHarnessService::execute), not `execute_here`:
+    /// the call may have been held on any replica, and only the one managing
+    /// the session knows the turn whose reply to change.
+    fn changed(&self, id: AgentSessionId, change: crate::domain::model::ToolApprovalChange) {
+        drop(self.execute(id, HarnessCommand::ToolApproval(change)));
     }
 }
 

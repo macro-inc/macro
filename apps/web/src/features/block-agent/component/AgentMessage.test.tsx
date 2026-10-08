@@ -7,10 +7,18 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, onMount } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
+
+const renderTelemetry = vi.hoisted(() => ({
+  context: vi.fn(),
+  observe: vi.fn(),
+}));
+vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: renderTelemetry.context,
+}));
 
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
@@ -33,15 +41,33 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: { text: string }) => <p data-testid="text">{props.text}</p>,
+  TextPart: (props: {
+    text: string;
+    observeRender?: (element: HTMLElement) => void;
+  }) => {
+    let element!: HTMLParagraphElement;
+    onMount(() => props.observeRender?.(element));
+    return (
+      <p ref={element} data-testid="text">
+        {props.text}
+      </p>
+    );
+  },
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
     part: { id: string; status: string };
-    context: { partIndex: number; inFlight: boolean };
+    context: {
+      partIndex: number;
+      inFlight: boolean;
+      followedBy: (name: string) => boolean;
+    };
   }) => (
     <div
       data-index={props.context.partIndex}
+      data-followed-by-save={String(
+        props.context.followedBy('SaveDatabaseQuery')
+      )}
       data-status={props.part.status}
       data-live={String(props.context.inFlight)}
       data-testid="tool"
@@ -72,8 +98,10 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => (
-    <div data-testid="action-line">{props.label}</div>
+  ActionLine: (props: { label: string; detail?: string }) => (
+    <div data-testid="action-line" data-detail={props.detail}>
+      {props.label}
+    </div>
   ),
   FailureNoticeCard: (props: {
     notice: { title: string; body: string; link?: { url: string } | null };
@@ -103,6 +131,8 @@ vi.mock('../views/LiveToolGroup', () => ({
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  renderTelemetry.context.mockReset();
+  renderTelemetry.observe.mockReset();
   cleanup();
 });
 
@@ -139,6 +169,29 @@ const message = (
 });
 
 describe('Message tool grouping', () => {
+  it('observes only agent answer DOM on the existing session and matching turn', () => {
+    renderTelemetry.context.mockReturnValue({
+      observeRenderedText: renderTelemetry.observe,
+    });
+    const answer = message([text('Hello')]);
+    answer.turn = 3;
+    render(() => <Message message={answer} inFlight />);
+    expect(renderTelemetry.observe).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      3,
+      expect.any(HTMLElement)
+    );
+    cleanup();
+    renderTelemetry.observe.mockClear();
+    render(() => (
+      <Message
+        message={{ ...answer, author: { kind: 'user', userId: null } }}
+        inFlight={false}
+      />
+    ));
+    expect(renderTelemetry.observe).not.toHaveBeenCalled();
+  });
+
   it('folds consecutive tool calls into one group, keeping their indices', () => {
     const view = render(() => (
       <Message
@@ -172,6 +225,39 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('text').map((el) => el.textContent)).toEqual([
       'Looking.',
       'Done.',
+    ]);
+  });
+
+  it('tells each call whether a later call of the turn saves the query', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          {
+            kind: 'tool_use',
+            id: 'query',
+            name: { kind: 'mcp', server: 'macro', tool: 'QueryDatabase' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          {
+            kind: 'tool_use',
+            id: 'save',
+            name: { kind: 'mcp', server: 'macro', tool: 'SaveDatabaseQuery' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          text('Saved.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view
+        .getAllByTestId('tool')
+        .map((el) => [el.textContent, el.dataset.followedBySave])
+    ).toEqual([
+      ['query', 'true'],
+      ['save', 'false'],
     ]);
   });
 
@@ -633,6 +719,26 @@ describe('Message prompt attribution', () => {
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();
   });
+
+  it('renders a notification Cursor wrote full-width, not as a prompt', () => {
+    const notification = [
+      '<system_notification source="github" conclusion="success" checks="27" subscriptionType="github:ci:branch">',
+      'All 27 CI checks completed without failures.',
+      '</system_notification>',
+    ].join('\n');
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(notification)]),
+          author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('bubble')).toBeNull();
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('text').textContent).toBe(notification);
+  });
 });
 
 describe('Message failed turns', () => {
@@ -646,7 +752,7 @@ describe('Message failed turns', () => {
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('action-line').textContent).toContain(
+    expect(view.getByTestId('action-line').dataset.detail).toBe(
       'Internal error: something broke'
     );
     expect(view.queryByTestId('failure-notice')).toBeNull();

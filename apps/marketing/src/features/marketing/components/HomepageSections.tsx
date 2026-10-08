@@ -1,9 +1,9 @@
 import { createMemo, type JSX, lazy, onCleanup, onMount, Show } from 'solid-js';
 import siteStyles from '../../../app/main/index.css?inline';
-import { animateHomepageCta } from './animateHomepageCta';
 import { DeferredDemo, DemoPlaceholder } from './DeferredDemo';
 import { HomepageAgentLogos } from './HomepageAgentLogos';
 import { HomepageBlog } from './HomepageBlog';
+import { HomepageClosing } from './HomepageClosing';
 import {
   HomepageConversation,
   type HomepageMessage,
@@ -11,10 +11,12 @@ import {
 import { HomepageFeatureHeading } from './HomepageFeatureHeading';
 import { HomepageMention } from './HomepageMention';
 import { HomepageOpenSource } from './HomepageOpenSource';
-import { HomepageReassurance } from './HomepageReassurance';
 import { HomepageSidebar } from './HomepageSidebar';
 import { HomepageTestimonials } from './HomepageTestimonials';
 import './workspace-story.css';
+
+// Retain the standalone sidebar breakdown for future use.
+const SHOW_SIDEBAR_BREAKDOWN = false;
 
 const loadPullRequest = () => import('./HomepagePullRequest');
 const loadEmailCompose = () => import('./HomepageEmailCompose');
@@ -90,10 +92,8 @@ function Feature(props: {
 
 export function HomepageSections() {
   let root!: HTMLDivElement;
-  let appDestination!: HTMLDivElement;
 
   onMount(() => {
-    onCleanup(animateHomepageCta(root, appDestination));
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const items = Array.from(
       root.querySelectorAll<HTMLElement>('.homepage-enter')
@@ -144,13 +144,13 @@ export function HomepageSections() {
       <style>{definitions}</style>
       <style>{`@scope (.homepage-sections) to (.workspace-demo) { ${scopedStyles} }`}</style>
       <div class="homepage-sections-inner">
-        <HomepageOpenSource>
-          <HomepageSidebar />
+        <HomepageOpenSource showSidebarBreakdown={SHOW_SIDEBAR_BREAKDOWN}>
+          <HomepageSidebar showInteractiveDemo={false} />
         </HomepageOpenSource>
         <Feature
           id="email"
           title="Email and chat"
-          description="A full email client, alongside your team’s conversations, documents, and tasks."
+          description="Share live email threads in channels. Ask agents to draft from your emails, documents, and calls."
           messages={[
             {
               person: 'julia',
@@ -191,7 +191,7 @@ export function HomepageSections() {
         <Feature
           id="documents"
           title="Documents and tasks"
-          description="Write together, assign tasks, and link the context behind your work. Keep the plan and the work to ship it in one place."
+          description="CRDT documents with live agent edits. Create tasks from messages and link them to the specification."
           messages={[
             {
               person: 'jacob',
@@ -220,17 +220,13 @@ export function HomepageSections() {
                 <HomepageCollaborativeDoc />
               </DeferredDemo>
             </div>
-            <figcaption>
-              <span>An audit log for every edit.</span>
-              Track changes by humans and agents over time.
-            </figcaption>
           </figure>
         </Feature>
         <Feature
           id="coding-agents"
           title="Coding agents"
           titleAdornment={<HomepageAgentLogos />}
-          description="Bring your existing agent subs into channels and see the full agent trace inline through to PR."
+          description="Use your coding agent subscriptions in channels. Read the diff and follow the task through to a pull request."
         >
           <DeferredDemo
             preload={loadPullRequest}
@@ -265,7 +261,7 @@ export function HomepageSections() {
         <Feature
           id="crm"
           title="Sales and marketing"
-          description="CRM, outbound, and marketing automation. Connected across the customer lifecycle."
+          description="Companies and contacts created from email. Agents update deal stages and draft customer follow-ups."
           messages={[
             {
               person: 'valentina',
@@ -295,15 +291,7 @@ export function HomepageSections() {
         </Feature>
         <HomepageTestimonials />
         <HomepageBlog />
-        <footer class="homepage-feature-end workspace-demo">
-          <hr class="homepage-closing-rule" />
-          <div
-            ref={appDestination}
-            class="homepage-app-landing"
-            aria-hidden="true"
-          />
-          <HomepageReassurance />
-        </footer>
+        <HomepageClosing root={() => root} />
       </div>
     </div>
   );

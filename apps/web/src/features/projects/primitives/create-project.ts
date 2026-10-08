@@ -1,25 +1,42 @@
 import type { Property, PropertyApiValues } from '@property/types';
 import { createSignal } from 'solid-js';
 import type {
+  ProjectCreationInput,
   ProjectPropertyDraft,
   ProjectsContext,
 } from '../context/projects-context';
+import type { ProjectDetail } from '../core/project';
 
-export type ProjectComposerDraft = {
-  name: string;
-  shareWithTeam: boolean;
-  properties: ProjectPropertyDraft[];
-  createdId?: string;
-  error?: string;
+export type ProjectComposerDraft = ProjectCreationInput & { error?: string };
+
+/** What the composer hands its host: it closes, and the host owns the outcome. */
+export type ProjectComposerSubmission = {
+  draft: ProjectComposerDraft;
+  result: Promise<ProjectDetail>;
 };
 
-/** Retain the created identity if a property save fails so retry cannot duplicate it. */
+/** Reopens a failed submission with its draft and the server's reason. */
+export function failedProjectDraft(
+  draft: ProjectComposerDraft,
+  error: unknown
+): ProjectComposerDraft {
+  return {
+    ...draft,
+    error:
+      error instanceof Error && error.message
+        ? error.message
+        : 'Could not create project.',
+  };
+}
+
 export function createProjectComposer(
   commands: ReturnType<ProjectsContext['createCommands']>,
-  onCreated: (id: string) => void,
   initial?: ProjectComposerDraft
 ) {
   const [name, setName] = createSignal(initial?.name ?? '');
+  const [description, setDescription] = createSignal(
+    initial?.description ?? ''
+  );
   const [shareWithTeam, setShareWithTeam] = createSignal(
     initial?.shareWithTeam ?? true
   );
@@ -31,28 +48,31 @@ export function createProjectComposer(
       ])
     )
   );
-  const [createdId, setCreatedId] = createSignal(initial?.createdId);
+  // A submitted composer is finished; its host closes it.
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal(initial?.error);
+  const snapshot = (): ProjectComposerDraft => ({
+    name: name(),
+    description: description(),
+    shareWithTeam: shareWithTeam(),
+    properties: [...drafts().values()],
+    error: error(),
+  });
   return {
     name,
     setName,
+    description,
+    setDescription,
     shareWithTeam,
     setShareWithTeam,
     drafts,
     pending,
     error,
-    createdId,
-    snapshot: (): ProjectComposerDraft => ({
-      name: name(),
-      shareWithTeam: shareWithTeam(),
-      properties: [...drafts().values()],
-      createdId: createdId(),
-      error: error(),
-    }),
+    snapshot,
     clear() {
-      if (pending() || createdId()) return;
+      if (pending()) return;
       setName('');
+      setDescription('');
       setShareWithTeam(true);
       setDrafts(new Map());
       setError(undefined);
@@ -64,36 +84,15 @@ export function createProjectComposer(
           value,
         })
       ),
-    async submit(): Promise<'created' | 'failed' | undefined> {
+    /** Starts creation once, or returns nothing when there is nothing to submit. */
+    submit(): ProjectComposerSubmission | undefined {
       if (pending() || !name().trim()) return;
       setPending(true);
-      setError(undefined);
-      try {
-        const id =
-          createdId() ??
-          (
-            await commands.create({
-              name: name().trim(),
-              shareWithTeam: shareWithTeam(),
-            })
-          ).id;
-        setCreatedId(id);
-        for (const { property, value } of drafts().values())
-          await commands.saveProperty(id, property, value);
-        onCreated(id);
-        return 'created';
-      } catch (error) {
-        setError(
-          createdId()
-            ? 'Your project was created, but some properties could not be saved. Retry to finish saving it.'
-            : error instanceof Error
-              ? error.message
-              : 'Could not create project.'
-        );
-        return 'failed';
-      } finally {
-        setPending(false);
-      }
+      const { error: _stale, ...draft } = snapshot();
+      return {
+        draft,
+        result: commands.create({ ...draft, name: draft.name.trim() }),
+      };
     },
   };
 }

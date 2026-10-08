@@ -34,6 +34,8 @@ export type QueryPersistence = {
   restoreQuery: (queryKey: QueryKey) => Promise<void>;
   /** Clear every durable scope and fence pending hydration on account changes. */
   clear: () => Promise<void>;
+  /** Await pending local writes before restarting the native app. */
+  flush: () => Promise<void>;
   dispose: () => void;
 };
 
@@ -173,14 +175,12 @@ export function setupQueryPersistence(
     return pending;
   };
 
-  const flushAll = () => {
-    for (const scope of scopes) {
-      void scope.store.flush();
-    }
+  const flushAll = async () => {
+    await Promise.all(scopes.map((scope) => scope.store.flush()));
   };
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') flushAll();
+    if (document.visibilityState === 'hidden') void flushAll();
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -233,6 +233,11 @@ export function setupQueryPersistence(
       } finally {
         clearing = false;
       }
+    },
+    flush: async () => {
+      await Promise.all(
+        scopes.map((scope) => scope.store.flush({ throwOnError: true }))
+      );
     },
     dispose() {
       disposed = true;

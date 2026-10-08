@@ -19,6 +19,7 @@ import { taskGridColumnCount } from '@app/features/tasks-view/components/task-li
 import { toast } from '@core/component/Toast/Toast';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -129,6 +130,7 @@ export function ProjectsCollection(props: {
       alternateDescription: 'Open project in new split',
     },
     disclosure: {
+      isHeader: (row) => row.kind === 'group-header',
       getKey: (row) =>
         row.kind === 'section-header' ? undefined : row.groupId,
       isExpanded: collection.disclosure.isExpanded,
@@ -352,11 +354,9 @@ export function ProjectsCollection(props: {
               </div>
               <Dropdown>
                 <Dropdown.Trigger
-                  variant="outline"
+                  variant="ghost"
                   size="md"
                   square
-                  depth={2}
-                  class="rounded-lg bg-surface"
                   label="Filter due date"
                 >
                   <CalendarIcon />
@@ -395,6 +395,14 @@ export function ProjectsCollection(props: {
                   </div>
                 </Dropdown.Content>
               </Dropdown>
+              <Button
+                variant="outline"
+                class="touch:hidden @max-[720px]/view-shell:hidden"
+                onClick={props.onCreate}
+              >
+                <PlusIcon class="size-4" />
+                New project
+              </Button>
             </div>
           </div>
         </div>

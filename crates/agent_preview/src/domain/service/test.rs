@@ -3,6 +3,17 @@ use crate::testing::*;
 use entity_access::domain::models::AccessLevel;
 
 #[tokio::test]
+async fn ssh_credentials_have_a_safe_username_prefix_without_losing_entropy() {
+    let (service, _, _) = fixture(2222);
+    let share = service.share(identity(), 3000).await.unwrap();
+    let payload = share.token.strip_prefix("preview_").unwrap();
+    assert_eq!(URL_SAFE_NO_PAD.decode(payload).unwrap().len(), 32);
+    // The prefix is part of the credential, not merely a client-side decoration.
+    assert!(service.authenticate_ssh(payload).is_err());
+    assert!(service.authenticate_ssh(&share.token).is_ok());
+}
+
+#[tokio::test]
 async fn ssh_credentials_are_single_use_and_forward_is_scoped() {
     let (service, _, _) = fixture(2222);
     let share = service.share(identity(), 3000).await.unwrap();

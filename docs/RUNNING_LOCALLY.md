@@ -109,6 +109,10 @@ just run_local --no-doppler
 
 The local stack does not need Doppler. It uses the code-defined local configuration with dummy AWS credentials and fixed test secrets. Most contributors are not on the team, so this is the common path.
 
+Local authentication includes a working signing key pair for Macro API tokens,
+which settings actions such as enabling CRM require. New teams start with CRM
+disabled; enable it in Settings > CRM before creating pipelines.
+
 The stack boots with stubbed values for every config the services require, including the third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. The rest of the stack is fully functional: auth, documents, email, and search.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
@@ -159,6 +163,28 @@ on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
 
+### Recover an existing instance without resetting data
+
+`run_local` and `stack up` initialize clean state, including snapshot restoration.
+Do not use them to recover an instance whose application or auth data must
+survive. Keep its generated env/Compose files and existing named volumes; start
+stopped containers with `docker start`, or recreate only the affected services
+with the same Compose project/files and `up -d --no-deps --no-build <service>`.
+Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+On SELinux hosts, FusionAuth can become healthy while silently skipping an
+unreadable kickstart. The generated per-instance kickstart directory uses
+`:ro,Z`: read-only with a private container label. Regenerate the override with
+`cargo x gen-compose --instance <name>`, then recreate only FusionAuth against
+its existing volumes. Verify the kickstart is readable in the container and the
+configured application API returns 200 with the local API key; a healthy process
+alone does not prove kickstart ran. Do not disable SELinux, change host permissions,
+or delete the FusionAuth database. Diagnose other bind-mount denials separately;
+private labels must not be applied to directories shared by several containers.
+
+For the synthetic Slack recovery harness and separate browser/native coverage,
+see [the Slack import runbook](SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
+
 ### Seeding sample data (recommended)
 
 A bare stack has no content to click through. The seed CLI creates a realistic
@@ -193,10 +219,10 @@ A `--no-doppler` stack boots with deterministic stubs for every value the servic
 | --- | --- | --- |
 | Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service reports no Gmail grant and skips inbox syncing. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
-| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup still works: the create-user webhook detects the stub key and skips the real Stripe call. It stores a placeholder customer id instead. |
+| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
 
-The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
+The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `ACCOUNT_LINK_STATE_SECRET`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
 
 To turn on an integration, create a `local.env` with the real values. Then pass it
 to `run_local`:
@@ -292,10 +318,17 @@ use that same HTTPS origin for attached local stacks.
 If your host firewall blocks Docker-to-host traffic, allow the instance's
 Docker network to reach the Vite port through `host.docker.internal`.
 Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
-a listening Vite port alone is insufficient. A 502 with a proxy log such as
-`dial tcp <host-gateway>:<vite-port>: i/o timeout` indicates this firewall path
-is blocked. Firewall rules must cover the current instance's Docker network
+a listening Vite port alone is insufficient. Persistent 502s with proxy logs such
+as `dial tcp <host-gateway>:<vite-port>: i/o timeout` can indicate this firewall
+path is blocked. Firewall rules must cover the current instance's Docker network
 and frontend port, which can differ between instances.
+
+If `/app/` succeeds but the page stays blank, inspect script requests as well as
+API requests. Intermittent 502s for Vite modules can come from the burst of
+Docker-to-host connections during startup. The generated proxy limits Vite to
+16 upstream connections so module requests queue instead of exhausting the host
+listener. After applying an updated proxy configuration, restart only the
+instance's proxy and reload the page; existing databases and volumes can stay.
 
 Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
 [certificate README](../infra/local/certs/README.md)), then open that URL.

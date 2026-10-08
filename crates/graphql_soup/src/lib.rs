@@ -20,20 +20,22 @@ mod resolvers;
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupInput};
 pub use loaders::{
-    EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader, SoupItemLoader,
-    SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+    AgentSessionEntityLoader, EmailServiceInboxReader, SoupInboxReader, SoupItemDataLoader,
+    SoupItemLoader, SoupItemLoaderError, SoupItemLoaderKey, soup_item_loader,
+    soup_item_loader_with_team_access,
 };
 pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
-    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
-    GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany, GraphqlSoupDocument,
+    GraphqlSoupAgentSession, GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel,
+    GraphqlSoupChannelMessage, GraphqlSoupChannelMessagePreview, GraphqlSoupChat,
+    GraphqlSoupCrmCompany, GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument,
     GraphqlSoupDocumentSubType, GraphqlSoupEmailThread, GraphqlSoupEntity,
     GraphqlSoupForeignEntity, GraphqlSoupInitiative, GraphqlSoupProject, GroupedSoup,
     SoupCacheProjection, SoupEntityEdges, SoupPage, SoupPatch, SoupUpdated,
 };
 pub use resolvers::{
-    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_email_thread,
-    resolve_soup_updates,
+    SoupEmailThreadMutationOutput, resolve_grouped_soup, resolve_soup, resolve_soup_agent_session,
+    resolve_soup_email_thread, resolve_soup_updates,
 };

@@ -35,10 +35,12 @@ import { Header } from './Header';
 import { Page } from './Page';
 import { SelectedEventDetails } from './SelectedEventDetails';
 import { SetupStatus } from './SetupStatus';
+import { SyncStatus } from './SyncStatus';
 
 const CALENDAR_SWIPE_EDGE_INSET = 40;
 
 function CalendarPages() {
+  const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const viewportSize = createElementSize(viewport);
@@ -73,13 +75,16 @@ function CalendarPages() {
   return (
     <Layer depth={2}>
       <div class="flex min-w-0 min-h-0 flex-1 flex-col">
+        <SyncStatus
+          syncing={calendarPager.activeData()?.isSyncing() ?? false}
+        />
         <RangeUnavailableBanner
           class={isMobile() ? 'order-last' : undefined}
           fullWidth={isMobile()}
         />
         <div
           ref={setViewport}
-          class="relative flex min-w-0 min-h-0 flex-1"
+          class="relative flex min-w-0 min-h-0 flex-1 overflow-hidden"
           role="region"
           aria-label="Calendar periods"
         >
@@ -98,6 +103,17 @@ function CalendarPages() {
               )}
             </For>
           </Pager.Viewport>
+          <Show when={viewport()}>
+            {(boundary) => (
+              <SelectedEventDetails
+                boundary={boundary()}
+                anchor={calendarView.selectedEventAnchor}
+                event={calendarView.selectedEvent}
+                timeFormat={() => calendarView.displaySettings.timeFormat}
+                onClose={calendarView.closeEventDetails}
+              />
+            )}
+          </Show>
           <Show when={isMobile()}>
             <PagerSwipeGestures
               edgeInset={CALENDAR_SWIPE_EDGE_INSET}
@@ -131,25 +147,14 @@ function CalendarPageContent() {
 
 function WorkspaceContent() {
   const panel = useSplitPanelOrThrow();
-  const calendarView = useCalendarView();
 
   // An inline preview keeps its host's name.
   useSplitDisplayName(() => (panel.isInlinePreview ? undefined : 'Calendar'));
-
-  const eventDetails = () => (
-    <SelectedEventDetails
-      anchor={calendarView.selectedEventAnchor}
-      event={calendarView.selectedEvent}
-      timeFormat={() => calendarView.displaySettings.timeFormat}
-      onClose={calendarView.closeEventDetails}
-    />
-  );
 
   return (
     <Switch>
       <Match when={panel.isInlinePreview}>
         <Header presentation="preview" />
-        {eventDetails()}
         <main class="flex size-full min-h-0">
           <CalendarPageContent />
         </main>
@@ -176,7 +181,6 @@ function WorkspaceContent() {
                 </ViewShell.Content>
               </ViewShell.Main>
             </ViewShell.Root>
-            {eventDetails()}
           </SplitPanel.Body>
         </SplitPanel.Root>
       </Match>

@@ -5,57 +5,6 @@
 @source './lib/core/component/LexicalMarkdown/theme.ts';
 @source '../**/*.tsx';
 
-@property --a0l { syntax: "<number>"; inherits: true; initial-value:   0.88; }
-@property --a0c { syntax: "<number>"; inherits: true; initial-value:   0.20; }
-@property --a0h { syntax: "<angle>";  inherits: true; initial-value: 145deg; }
-@property --a1l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
-@property --a1c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
-@property --a1h { syntax: "<angle>";  inherits: true; initial-value:  54deg; }
-@property --a2l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
-@property --a2c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
-@property --a2h { syntax: "<angle>";  inherits: true; initial-value:  94deg; }
-@property --a3l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
-@property --a3c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
-@property --a3h { syntax: "<angle>";  inherits: true; initial-value: 144deg; }
-@property --a4l { syntax: "<number>"; inherits: true; initial-value:   0.61; }
-@property --a4c { syntax: "<number>"; inherits: true; initial-value:   0.37; }
-@property --a4h { syntax: "<angle>";  inherits: true; initial-value: 194deg; }
-
-@property --b0l { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b0c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --b1l { syntax: "<number>"; inherits: true; initial-value:   0.15; }
-@property --b1c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --b2l { syntax: "<number>"; inherits: true; initial-value:   0.16; }
-@property --b2c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --b3l { syntax: "<number>"; inherits: true; initial-value:   0.18; }
-@property --b3c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --b4l { syntax: "<number>"; inherits: true; initial-value:   0.36; }
-@property --b4c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --b4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-
-@property --c0l { syntax: "<number>"; inherits: true; initial-value:      1; }
-@property --c0c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --c0h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --c1l { syntax: "<number>"; inherits: true; initial-value:   0.90; }
-@property --c1c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --c1h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --c2l { syntax: "<number>"; inherits: true; initial-value:   0.80; }
-@property --c2c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --c2h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --c3l { syntax: "<number>"; inherits: true; initial-value:   0.70; }
-@property --c3c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --c3h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-@property --c4l { syntax: "<number>"; inherits: true; initial-value:   0.60; }
-@property --c4c { syntax: "<number>"; inherits: true; initial-value:      0; }
-@property --c4h { syntax: "<angle>";  inherits: true; initial-value:  14deg; }
-
-/* Foreground lightness selected for readable content on the active accent. */
-@property --accent-contrast-l { syntax: "<number>"; inherits: true; initial-value: 0.2; }
-
 @property --safe-bottom { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-right  { syntax: "<length>"; inherits: true; initial-value: 0px; }
 @property --safe-left   { syntax: "<length>"; inherits: true; initial-value: 0px; }
@@ -119,30 +68,6 @@
   --channel-rail-clearance: .5rem;
   --left-of-channel-rail: calc(var(--left-of-connector) - var(--channel-rail-width) / 2);
   --channel-rail-center: calc(var(--left-of-channel-rail) + var(--channel-rail-width) / 2);
-
-  /* accent - active, hover states, high chroma */
-  --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
-  --a1: oklch(var(--a1l) var(--a1c) var(--a1h));
-  --a2: oklch(var(--a2l) var(--a2c) var(--a2h));
-  --a3: oklch(var(--a3l) var(--a3c) var(--a3h));
-  --a4: oklch(var(--a4l) var(--a4c) var(--a4h));
-
-  /* base - background colors, borders */
-  --b0: oklch(var(--b0l) var(--b0c) var(--b0h));
-  --b1: oklch(var(--b1l) var(--b1c) var(--b1h));
-  --b2: oklch(var(--b2l) var(--b2c) var(--b2h));
-  --b3: oklch(var(--b3l) var(--b3c) var(--b3h));
-  --b4: oklch(var(--b4l) var(--b4c) var(--b4h));
-
-  /* contrast, body & paragraph text, icon stroke & fill */
-  --c0: oklch(var(--c0l) var(--c0c) var(--c0h));
-  --c1: oklch(var(--c1l) var(--c1c) var(--c1h));
-  --c2: oklch(var(--c2l) var(--c2c) var(--c2h));
-  --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
-  --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
-
-  /* scuffed: defualt 0.15, used for transition jamming, currently disabled */
-  --transition: 0s;
 
   /* Glass chrome, ported from the marketing site's hero CTA ring
      (solid-site `.home-hero-cta-bar`). The look is four things layered on a
@@ -422,11 +347,13 @@ body.tauri-ios {
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
-  --color-snippet:     var(--color-pink);
+  --color-snippet:     var(--color-note);
+  --color-form:        var(--color-pink);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-default);
+  --color-email:       var(--color-communication);
 }
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
@@ -453,21 +380,21 @@ body.tauri-ios {
   --default-ring-width: var(--app-ring-width);
 
   /* Input tokens: the only raw colors stored by a VNext theme. */
-  --color-surface-0: var(--b0);
-  --color-surface-1: var(--b1);
-  --color-surface-2: var(--b2);
-  --color-surface-3: var(--b3);
-  --color-surface-4: var(--b4);
-  --color-content-0: var(--c0);
-  --color-content-1: var(--c1);
-  --color-content-2: var(--c2);
-  --color-content-3: var(--c3);
-  --color-content-4: var(--c4);
+  --color-surface-0: oklch(0.17 0 0);
+  --color-surface-1: oklch(0.1949 0 0);
+  --color-surface-2: oklch(0.2115 0 0);
+  --color-surface-3: oklch(0.2281 0 0);
+  --color-surface-4: oklch(0.2447 0 0);
+  --color-content-0: oklch(1 0 0);
+  --color-content-1: oklch(0.83 0 0);
+  --color-content-2: oklch(0.75 0 0);
+  --color-content-3: oklch(0.63 0 0);
+  --color-content-4: oklch(0.55 0 0);
   --color-edge: var(--color-surface-4);
   --color-edge-muted: var(--color-surface-3);
-  --color-accent: var(--a0);
-  --color-accent-contrast: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h));
-  --color-accent-contrast-muted: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h) / 0.7);
+  --color-accent: oklch(0.7 0.12 250);
+  --color-accent-contrast: oklch(0.97 0 0);
+  --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
   --color-red: oklch(63.7% 0.237 25.331);
   --color-orange: oklch(70.5% 0.213 47.604);
   --color-amber: oklch(76.9% 0.188 70.08);
@@ -605,7 +532,7 @@ body.tauri-ios {
   /* Entity colors are aliases of the authored named palette. */
   --color-comment:     var(--color-yellow);
   --color-comment-bg:  oklch(from var(--color-comment) l c h / 0.15);
-  --color-comment-ink: oklch(from var(--color-comment) var(--c1l) c h); /* scuffed */
+  --color-comment-ink: oklch(from var(--color-comment) var(--theme-comment-ink-lightness, 0.83) c h); /* scuffed */
 
   --color-calendar:    var(--color-yellow);
   --color-contact:     var(--color-yellow);
@@ -619,11 +546,13 @@ body.tauri-ios {
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
-  --color-snippet:     var(--color-pink);
+  --color-snippet:     var(--color-note);
+  --color-form:        var(--color-pink);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-default);
+  --color-email:       var(--color-communication);
 
   /* Font families */
   /* Apple devices get the system font (SF): `-apple-system` and
@@ -795,7 +724,7 @@ html[data-theme-light='false'] {
    say), so the flattening stops at an island boundary. */
 @utility header-actions {
   & [data-button]:is([data-variant="ghost"], [data-variant="outline"]):not([data-header-island] *) {
-    @apply glass-none rounded-xl border-0 bg-transparent;
+    @apply glass-none border-0 bg-transparent;
 
     &:not(:hover):not(:active) {
       background-image: none;
@@ -976,9 +905,11 @@ html[data-theme-light='false'] {
   --glass-shadow-scale: 0.5;
 }
 
-/* Shared flat menu appearance, on the existing menu elements. */
+/* Shared menu appearance: an opaque menu fill with the glass rim, inset
+   top/bottom highlights, and cast shadow, so menus read as raised in both
+   themes. */
 @utility menu-surface {
-  @apply relative min-h-0 rounded-xl border border-edge-frame bg-menu text-ink shadow-none;
+  @apply glass relative min-h-0 rounded-xl bg-menu text-ink;
   --color-surface: var(--color-menu);
 }
 
@@ -1481,12 +1412,12 @@ a {
 }
 
 @utility hover-transition-bg {
-  transition: background-color var(--transition);
+  transition: none;
   &:hover { transition: none; }
 }
 
 @utility hover-transition-border {
-  transition: border-color var(--transition);
+  transition: none;
   &:hover { transition: none; }
 }
 

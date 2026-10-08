@@ -68,6 +68,8 @@ export {
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
+  /** Collection-owned schedule metadata for the original entity row. */
+  scheduleStatus?: JSX.Element;
 }
 
 export function MaybeEntityRow(props: {
@@ -96,6 +98,9 @@ export function ListEntity(props: ListEntityProps) {
   const soupView = useMaybeSoupView();
   const rowActions = children(() => props.actions);
   const leadingAction = children(() => props.leadingAction);
+  const titleLeading = children(() => props.titleLeading);
+  const meta = children(() => props.meta);
+  const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
@@ -153,6 +158,9 @@ export function ListEntity(props: ListEntityProps) {
     entity: props.entity,
     actions: !isTouchDevice() ? rowActions() : undefined,
     leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    titleLeading: titleLeading(),
+    meta: meta(),
+    scheduleStatus: scheduleStatus(),
     authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
@@ -252,6 +260,7 @@ export function ListEntity(props: ListEntityProps) {
         <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
+            scheduleStatus={scheduleStatus()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
           />

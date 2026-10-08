@@ -4,7 +4,9 @@ import { hasLoginCookie } from '@core/util/cookies';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import { useQuery } from '@tanstack/solid-query';
+import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
+import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
 import { authKeys } from './keys';
 import { hasCachedUserIdentity } from './user-info-cache';
 
@@ -36,6 +38,10 @@ export function useUserInfoQuery(options?: UseUserInfoQueryOptions) {
         ),
       throwOnError: false,
       staleTime: USER_INFO_STALE_TIME,
+      // Signed-out screens also observe this query. Retrying their cached 401
+      // on mount resets auth to loading, unmounts them, and repeats forever.
+      // Successful login explicitly invalidates the query to refresh identity.
+      retryOnMount: false,
       // Never pause on navigator.onLine — it reports false during native cold
       // launches (e.g. woken by a notification tap) while the network is fine,
       // and a paused auth check renders as "unauthenticated" at the base path.
@@ -55,6 +61,10 @@ export function invalidateUserInfo() {
 
 /** Invalidate all queries after a successful login. */
 export function invalidateAllAfterLogin() {
+  // Login may replace a session without visiting logout (including native auth).
+  // Invalidate old display-intent handles before refetching the new identity.
+  resetGraphqlSoupDoneSession();
+  resetTeamCalendarSession();
   enableUserInfoQuery();
   const invalidated = queryClient.invalidateQueries();
   // Rebind this device's push registrations once the refetches above have

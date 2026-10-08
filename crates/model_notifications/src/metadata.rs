@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-pub use invite_email::{ChannelInviteMetadata, InviteToTeamMetadata};
+pub use invite_email::{ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
@@ -1553,7 +1553,8 @@ impl NotificationTitle for ReminderMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok("Reminder".to_string())
+        let subject: String = self.description.chars().take(128).collect();
+        Ok(format!("Reminder: {subject}"))
     }
 
     fn format_body(

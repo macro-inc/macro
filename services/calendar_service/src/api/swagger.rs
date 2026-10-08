@@ -9,6 +9,10 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         crate::health::health_handler,
+        calendar_events::inbound::team_router::get_team_sharing,
+        calendar_events::inbound::team_router::set_team_sharing,
+        calendar_events::inbound::team_router::get_availability_calendars,
+        calendar_events::inbound::team_router::set_availability_calendar,
         calendar_events::inbound::mutation_router::list_calendars,
         calendar_events::inbound::mutation_router::create_calendar_event,
         calendar_events::inbound::mutation_router::update_calendar_event,
@@ -16,6 +20,11 @@ use utoipa::OpenApi;
         calendar_events::inbound::mutation_router::rsvp_calendar_event,
     ),
     components(schemas(
+        calendar_events::inbound::team_router::TeamCalendarSharingBody,
+        calendar_events::inbound::team_router::AvailabilityCalendarBody,
+        calendar_events::inbound::team_router::AvailabilityCalendarsResponse,
+        calendar_events::domain::team::TeamCalendarSharing,
+        calendar_events::domain::team::AvailabilityCalendar,
         calendar_events::inbound::mutation_router::CreateCalendarEventRequest,
         calendar_events::inbound::mutation_router::ListCalendarsResponse,
         calendar_events::domain::models::VisibleCalendar,

@@ -3,6 +3,9 @@ export const BlockRegistry = [
   'call',
   'calendar',
   'chat',
+  'database',
+  // A questionnaire whose answers are rows of a database table.
+  'form',
   'write',
   'pdf',
   'md',
@@ -10,6 +13,14 @@ export const BlockRegistry = [
   'image',
   'canvas',
   'spreadsheet',
+  // PowerPoint presentations, edited in the browser.
+  'pptx',
+  // Photoshop documents, edited in the browser.
+  'psd',
+  // Figma files, viewed in the browser.
+  'fig',
+  // Illustrator files, edited in the browser.
+  'ai',
   'channel',
   'project',
   'unknown',
@@ -17,9 +28,11 @@ export const BlockRegistry = [
   'email',
   'contact',
   'company',
-  'automation',
+  'routine',
   'pr',
   'agent',
+  // A task project (`project` is a folder).
+  'initiative',
 ] as const;
 
 /** Aliases for block types that share a concrete block implementation. */

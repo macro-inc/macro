@@ -24,10 +24,10 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5, anthropic/claude-opus-5 | low, medium, high, xhigh, max |
+| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
 | openai/gpt-5.5 | none, low, medium, high, xhigh |
 | openai/gpt-5-mini | minimal, low, medium, high |
-| Haiku and unknown models | No effort control |
+| Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
 It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
@@ -49,8 +49,11 @@ Sources checked September 21, 2026:
 - Preflight capability cache identity includes the harness and model. A selection
   from another target is discarded. External harnesses expose controls after
   opening a session; model-specific preflight is not guessed.
-- Startup waits for the correlated ACP acceptance of the model, checks the
-  resulting effort choices, then confirms effort before sending the prompt.
+- A model chosen at creation is the session's model from its row. In-memory,
+  Cursor, and Claude cloud runtimes start on it; the harness selects it over ACP
+  for the others and holds the first prompt until the runtime accepts it.
+- An effort chosen at creation waits for the runtime's reported configuration,
+  checks the effort choices, then confirms effort before sending the prompt.
   HTTP queue acceptance alone is insufficient. Rejection or timeout stops startup.
 - New/resumed sessions and setting changes return the complete configuration.
   Clients replace their previous options, including removing unsupported controls.

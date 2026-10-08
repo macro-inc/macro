@@ -19,7 +19,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
-      descriptionDocumentId: 'description',
       metadata: {
         ownerId: 'owner',
         createdAt: '2026-09-01',
@@ -42,7 +41,6 @@ it('preserves initiative identity, properties, and metadata separately from fold
       id: 'initiative',
       name: 'Launch',
       ownerId: 'owner',
-      descriptionDocumentId: 'description',
       properties: [],
       updatedAt: '2026-09-26',
     },
@@ -53,8 +51,8 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
   const { mapGraphqlNotification } = await import('./graphql-soup');
   const mapped = mapGraphqlNotification({
     id: 'notification-1',
-    entityId: 'reminder-1',
-    entityType: 'REMINDER',
+    entityId: 'thread-1',
+    entityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -69,6 +67,8 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
       reminderScheduledFor: '2026-09-21T10:00:00Z',
     },
   });
+  expect(mapped.entity_type).toBe('email_thread');
+  expect(mapped.entity_id).toBe('thread-1');
   expect(mapped.notification_metadata).toEqual({
     tag: 'reminder',
     content: {
@@ -263,6 +263,10 @@ vi.mock('@core/util/reloadForNewerBuild', () => ({
   reloadForNewerBuild: mocks.reloadForNewerBuild,
 }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
+// Recovery lifecycle is covered with its real store in local-drafts.test.ts.
+vi.mock('@queries/email/local-drafts', () => ({
+  localDraftQueueLifecycle: () => ({}),
+}));
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
 }));
@@ -296,7 +300,14 @@ vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: mocks.telemetryError },
+  Telemetry: {
+    error: mocks.telemetryError,
+    span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
+      work({
+        event: vi.fn(),
+        setAttr: vi.fn(),
+      }),
+  },
 }));
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
@@ -768,6 +779,60 @@ describe('GraphQL Soup browser cache session gate', () => {
   );
 
   it.each([
+    ['navigation', 'admitted-enqueue-uncertain', false],
+    ['transport', 'admitted-enqueue-uncertain', true],
+    ['abrupt', 'admitted-enqueue-uncertain', true],
+    ['message-only', 'admitted-enqueue-uncertain', true],
+    ['missing', 'admitted-enqueue-uncertain', true],
+    ['navigation', undefined, true],
+  ] as const)(
+    'classifies wrapped cache errors by cause %s and code %s (report: %s)',
+    async (causeKind, errorCode, shouldReport) => {
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const { CacheNavigationError } = await import(
+        '@graphql-cache/host/navigation-error'
+      );
+      const navigation = new CacheNavigationError();
+      const causes = {
+        navigation,
+        transport: new Error('coordinator MessagePort messageerror'),
+        abrupt: new Error('cache worker host was abruptly disposed'),
+        'message-only': new Error(navigation.message),
+        missing: undefined,
+      };
+      const error = Object.assign(
+        new Error('admitted optimistic enqueue outcome is uncertain', {
+          cause: causes[causeKind],
+        }),
+        { name: 'CacheResponseError', errorCode }
+      );
+      const operation: Operation = {
+        kind: 'mutation',
+        key: 42,
+        query: parse('mutation PrivateMutation { update }'),
+        variables: { privateValue: 'do-not-export' },
+        context: { url: 'http://dss.test', requestPolicy: 'cache-first' },
+      };
+      const report =
+        mocks.normalizedCacheExchange.mock.calls[0]?.[1]?.onCacheError;
+      expect(report).toBeDefined();
+      report?.(error, operation);
+
+      if (shouldReport) {
+        expect(mocks.telemetryError).toHaveBeenCalledExactlyOnceWith(error, {
+          'error.source': 'graphql-cache',
+          'cache.backend': 'turso-wasm-opfs',
+          'cache.phase': 'operation',
+          'cache.operation_kind': 'mutation',
+        });
+      } else {
+        expect(mocks.telemetryError).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it.each([
     { native: false, backend: 'turso-wasm-opfs' },
     { native: true, backend: 'native' },
   ])(
@@ -908,6 +973,59 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(readers.host()).toBeUndefined();
     readers.dispose();
   });
+
+  it('requests a native update and uses the existing fallback when draft recovery commands are unavailable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.tauri = true;
+    const soup = await import('./graphql-soup');
+    const { NativeCacheUpgradeRequiredError } = await import(
+      '@graphql-cache/host/tauri-host'
+    );
+    const cached = soup.getGraphqlSoupClient();
+    mocks.failInitialization(new NativeCacheUpgradeRequiredError());
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Macro update required',
+      expect.objectContaining({
+        subtext: expect.stringContaining('queued drafts are preserved'),
+      })
+    );
+    expect(soup.graphqlCacheEnabled()).toBe(false);
+    expect(soup.getGraphqlSoupClient()).not.toBe(cached);
+    expect(mocks.host.dispose).toHaveBeenCalledOnce();
+    expect(() => soup.assertEmailDraftQueueAvailable()).toThrow(
+      'queued changes are preserved'
+    );
+  });
+
+  it.each([
+    ['SaveEmailDraft', 'saveEmailDraft'],
+    ['DeleteEmailDraft', 'deleteEmailDraft'],
+  ])(
+    'prevents %s from overtaking preserved mutations through fallback transport',
+    async (name, field) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      // Initialization may fail after callers have already captured a client.
+      mocks.failInitialization();
+      await expect(
+        soup.dssGraphqlFetch('https://dss.test/graphql', {
+          method: 'POST',
+          body: JSON.stringify({
+            query: `mutation ${name} { ${field}(input: { draftId: "draft" }) { __typename } }`,
+          }),
+        })
+      ).rejects.toThrow('queued changes are preserved');
+      expect(mocks.platformFetch).not.toHaveBeenCalled();
+
+      mocks.platformFetch.mockResolvedValueOnce(new Response('{}'));
+      await soup.dssGraphqlFetch('https://dss.test/graphql', {
+        method: 'POST',
+        body: JSON.stringify({ query: 'query Read { user { id } }' }),
+      });
+      expect(mocks.platformFetch).toHaveBeenCalledOnce();
+    }
+  );
 
   it('falls back quietly while another context holds the database', async () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});

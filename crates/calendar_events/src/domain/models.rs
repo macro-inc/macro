@@ -135,7 +135,7 @@ pub enum EventTime {
     Timed {
         /// Inclusive start instant.
         starts_at: DateTime<Utc>,
-        /// Exclusive end instant.
+        /// Exclusive end instant; equal to the start for an imported point event.
         ends_at: DateTime<Utc>,
         /// Original IANA time-zone identifier, when supplied.
         time_zone: Option<String>,
@@ -151,8 +151,21 @@ pub enum EventTime {
 }
 
 impl EventTime {
-    /// Validate the exclusive end is later than the start.
+    /// Validate a stored event, including a timed point with no occupied duration.
     pub fn is_valid(&self) -> bool {
+        match self {
+            Self::Timed {
+                starts_at, ends_at, ..
+            } => ends_at >= starts_at,
+            Self::AllDay {
+                start_date,
+                end_date,
+            } => end_date > start_date,
+        }
+    }
+
+    /// Whether the event occupies a positive duration. User time writes require this.
+    pub fn has_positive_duration(&self) -> bool {
         match self {
             Self::Timed {
                 starts_at, ends_at, ..
@@ -172,12 +185,16 @@ impl EventTime {
         }
     }
 
-    /// Return whether this span overlaps an occurrence query range.
+    /// Query membership: spans overlap the range and points use [start, end).
     pub fn overlaps(&self, range: &OccurrenceRange) -> bool {
         match self {
             Self::Timed {
                 starts_at, ends_at, ..
-            } => starts_at < &range.ends_at && ends_at > &range.starts_at,
+            } => {
+                starts_at < &range.ends_at
+                    && (ends_at > &range.starts_at
+                        || (ends_at == starts_at && starts_at >= &range.starts_at))
+            }
             Self::AllDay {
                 start_date,
                 end_date,
@@ -665,6 +682,13 @@ pub struct CalendarEventOverride {
     pub location: Option<String>,
     /// Optional replacement status.
     pub status: Option<EventStatus>,
+    /// Instance visibility, when explicitly supplied by the provider. Kept
+    /// on the source snapshot so team views do not lose privacy information.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<EventVisibility>,
+    /// Instance availability, when explicitly supplied by the provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transparency: Option<EventTransparency>,
     /// Replacement attendee list for this occurrence alone. `None` inherits
     /// the series attendees. Google carries the complete list on every
     /// exception it returns, so a single instance-scoped RSVP — including the
@@ -690,6 +714,12 @@ impl CalendarEventOverride {
     pub fn apply_to(&self, event: &mut CalendarEvent) {
         event.apply_occurrence_content(self.content());
         event.time = self.time.clone();
+        if let Some(visibility) = self.visibility {
+            event.visibility = visibility;
+        }
+        if let Some(transparency) = self.transparency {
+            event.transparency = transparency;
+        }
         if let Some(attendees) = &self.attendees {
             event.attendees = attendees.clone();
         }
@@ -803,6 +833,68 @@ impl CalendarOccurrenceCursor {
             event_id: occurrence.event_id,
             occurrence_key: occurrence.occurrence_key.clone(),
         }
+    }
+}
+
+/// What an exception replaces on one listed occurrence of a series. A field
+/// left `None` inherits the series value.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct OccurrenceException {
+    /// Replacement title.
+    pub title: Option<String>,
+    /// Replacement description.
+    pub description: Option<String>,
+    /// Replacement location.
+    pub location: Option<String>,
+    /// Replacement status.
+    pub status: Option<EventStatus>,
+    /// Instance-scoped attendee list replacing the series list for this
+    /// occurrence alone.
+    pub attendees: Option<Vec<CalendarAttendee>>,
+}
+
+impl OccurrenceException {
+    /// The content this exception replaces on its occurrence.
+    pub fn content(&self) -> OccurrenceContent<'_> {
+        OccurrenceContent {
+            title: self.title.as_deref(),
+            description: self.description.as_deref(),
+            location: self.location.as_deref(),
+            status: self.status,
+        }
+    }
+}
+
+/// One occurrence of a viewport query: the series event as stored, the
+/// instance, the instance's exception, and the connected inbox the event
+/// syncs through.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OccurrenceListing {
+    /// The series event, without the occurrence's exception applied.
+    pub event: CalendarEvent,
+    /// The materialized instance.
+    pub occurrence: CalendarOccurrence,
+    /// Connected inbox whose grant backs the event (`source_link_id`).
+    pub link_id: Uuid,
+    /// The instance's exception content, empty when it has none.
+    pub exception: OccurrenceException,
+}
+
+impl OccurrenceListing {
+    /// Read the series event as this occurrence: the exception's content and
+    /// attendee list replace the series values.
+    pub fn into_occurrence_event(self) -> (CalendarEvent, CalendarOccurrence) {
+        let Self {
+            mut event,
+            occurrence,
+            exception,
+            ..
+        } = self;
+        event.apply_occurrence_content(exception.content());
+        if let Some(attendees) = exception.attendees {
+            event.attendees = attendees;
+        }
+        (event, occurrence)
     }
 }
 
@@ -1004,6 +1096,9 @@ pub struct GoogleEventSource {
     pub account_id: Uuid,
     /// Calendar containing the source event.
     pub calendar_id: Uuid,
+    /// Calendar role observed for this account before the provider request.
+    /// Never substitute a newer stored role when persisting its response.
+    pub observed_access_role: Option<String>,
     /// Google event identifier.
     pub provider_event_id: String,
     /// Google recurring master identifier for an instance.
@@ -1047,6 +1142,8 @@ pub struct GoogleCalendarTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// Calendar role captured before this target is sent to the provider.
+    pub observed_access_role: Option<String>,
     /// Whether the provider role prohibits event mutation.
     pub is_read_only: bool,
     /// Occurrence window to materialize.
@@ -1067,6 +1164,8 @@ pub struct CalendarAttendeeInput {
 /// User-supplied fields for a new provider event.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CalendarEventDraft {
+    /// Optional stable creation identity for callers with durable retry state.
+    pub idempotency_key: Option<Uuid>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -1163,6 +1262,8 @@ pub struct CalendarEventMutationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// This account's role on the addressed calendar before the provider call.
+    pub observed_access_role: Option<String>,
     /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
     /// The clicker's owned inboxes. `None` when they own none.
@@ -1186,6 +1287,7 @@ impl CalendarEventMutationTarget {
             account_id: self.account_id,
             calendar_id: self.calendar_id,
             provider_calendar_id: self.provider_calendar_id.clone(),
+            observed_access_role: self.observed_access_role.clone(),
             is_read_only: self.is_read_only,
             range,
         }
@@ -1235,6 +1337,8 @@ pub struct CalendarCreationTarget {
     pub calendar_id: Uuid,
     /// Provider calendar identifier used in Google API paths.
     pub provider_calendar_id: String,
+    /// This account's role on the addressed calendar before the provider call.
+    pub observed_access_role: Option<String>,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
     /// Whether this is its account's primary calendar. Out-of-office events
@@ -1255,6 +1359,7 @@ impl CalendarCreationTarget {
             account_id: self.account_id,
             calendar_id: self.calendar_id,
             provider_calendar_id: self.provider_calendar_id.clone(),
+            observed_access_role: self.observed_access_role.clone(),
             is_read_only: self.is_read_only,
             range,
         }
@@ -1434,13 +1539,17 @@ pub struct GoogleBackfillRunReport {
     pub events_upserted: usize,
     /// Cancellation tombstones the change feed reported this run.
     pub cancellations_observed: usize,
+    /// Events removed or rewritten because a source they relied on was
+    /// retired: unobserved by a full snapshot, or on a calendar the account
+    /// no longer lists.
+    pub events_retired: usize,
 }
 
 impl GoogleBackfillRunReport {
     /// Whether the run plausibly changed the local projection. Quiet
     /// token-only polls report nothing and skip client notifications.
     pub fn changed(&self) -> bool {
-        self.events_upserted > 0 || self.cancellations_observed > 0
+        self.events_upserted > 0 || self.cancellations_observed > 0 || self.events_retired > 0
     }
 }
 
@@ -1455,6 +1564,8 @@ pub enum RefreshCalendarEvent {
         /// Connected inbox whose calendars changed.
         link_id: Uuid,
     },
+    /// A team entitlement changed; discard cached team projections before refetching.
+    TeamSharingChanged,
 }
 
 /// Identity of one scheduled reminder firing: an occurrence, an offset, and
@@ -1655,4 +1766,10 @@ pub struct ProviderCalendar {
     pub is_selected: bool,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
+}
+
+/// Stable organizer-scoped identifier for a retryable event creation.
+/// Hex UUIDs satisfy the Google Calendar base32hex event-ID alphabet.
+pub fn creation_provider_id(key: Uuid, owner: &str) -> String {
+    Uuid::new_v5(&key, owner.as_bytes()).simple().to_string()
 }

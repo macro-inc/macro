@@ -1,5 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
 import { openChatWithMessage } from '@app/features/chat/ChatWithAgentButton';
+import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { getSearchSplit } from '@app/features/next-soup/soup-view/search-controllers';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -19,6 +20,7 @@ import {
   setActiveScope,
   setPressedKeys,
 } from '@core/hotkey/state';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
@@ -27,6 +29,8 @@ import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
+import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import {
   Badge,
   CommandMenuEmptyState,
@@ -65,6 +69,7 @@ import {
   isCommandItem,
   isEntityItem,
   isSearchItem,
+  isUserItem,
   type PaginationControls,
   useCommandItems,
 } from './useCommandItems';
@@ -108,7 +113,13 @@ export function CommandMenu() {
   });
 
   const handleSelect = (item: CommandMenuItem) => {
-    if (isSearchItem(item) || isAskAiItem(item) || item.kind === 'new-project')
+    if (
+      isSearchItem(item) ||
+      isAskAiItem(item) ||
+      item.kind === 'new-project' ||
+      (isCommandItem(item) &&
+        item.data.hotkeyToken === TOKENS.global.createCommand)
+    )
       suppressCloseAutoFocus = true;
   };
 
@@ -123,7 +134,13 @@ export function CommandMenu() {
       }}
       open={CommandState.isOpen()}
     >
-      <CommandMenuInner depth={2} onSelect={handleSelect} />
+      <CommandMenuInner
+        depth={2}
+        onSelect={handleSelect}
+        onHint={() => {
+          suppressCloseAutoFocus = true;
+        }}
+      />
     </Dialog>
   );
 }
@@ -133,6 +150,8 @@ export function CommandMenuInner(props: {
   items?: () => CommandMenuItem[];
   /** Called when the user selects an item from the menu */
   onSelect?: (item: CommandMenuItem) => void;
+  /** Called when the user takes the menu's hint (it moves focus itself). */
+  onHint?: () => void;
   /**
    * When true, selecting an item only fires `onSelect` — no navigation,
    * command, or search is run. Used by the onboarding sandbox so selecting a
@@ -166,10 +185,13 @@ export function CommandMenuInner(props: {
 
   const query = debouncedDependent(CommandState.query, 60);
 
+  useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
+
   const defaultCommandItems = props.items
     ? undefined
     : useCommandItems(query, categoryFilter, {
         searchActive: CommandState.isOpen,
+        contactDiscovery: useCrmContactDiscovery,
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;
@@ -189,16 +211,33 @@ export function CommandMenuInner(props: {
     }
   });
 
+  // Skip past the search row only onto a real result — when the query has
+  // no results the rows below are fallbacks (ask AI), and the search row
+  // should stay the default.
+  const resultFollowsSearchRow = () => {
+    const items = filteredItems();
+    return Boolean(
+      items[0] && isSearchItem(items[0]) && items[1] && !isAskAiItem(items[1])
+    );
+  };
   createEffect(
     on([query, categoryFilter], () => {
-      const items = filteredItems();
-      const firstIsSearch = items[0] && isSearchItem(items[0]);
-      // Skip past the search row only onto a real result — when the query has
-      // no results the rows below are fallbacks (ask AI), and the search row
-      // should stay the default.
-      const secondIsResult = items[1] && !isAskAiItem(items[1]);
-      listController.setSelectedIndex(firstIsSearch && secondIsResult ? 1 : 0);
+      listController.setSelectedIndex(resultFollowsSearchRow() ? 1 : 0);
     })
+  );
+  // Results fetched from the server (CRM contacts outside the cache, projects)
+  // can appear after the query changes; the first one takes the default
+  // selection the search row held until then.
+  createEffect(
+    on(
+      resultFollowsSearchRow,
+      (hasResult, hadResult) => {
+        if (hasResult && !hadResult && CommandState.selectedIndex() === 0) {
+          listController.setSelectedIndex(1);
+        }
+      },
+      { defer: true }
+    )
   );
 
   const selectedItem = () => {
@@ -230,7 +269,10 @@ export function CommandMenuInner(props: {
   };
   const selectedIsEntity = () => {
     const item = selectedItem();
-    return item && (isEntityItem(item) || item.kind === 'initiative');
+    return (
+      item &&
+      (isEntityItem(item) || isUserItem(item) || item.kind === 'initiative')
+    );
   };
   const selectedIsSearch = () => {
     const item = selectedItem();
@@ -239,6 +281,29 @@ export function CommandMenuInner(props: {
   const selectedIsAskAi = () => {
     const item = selectedItem();
     return item && isAskAiItem(item);
+  };
+
+  const getOrCreateDirectMessage = useGetOrCreateDirectMessageMutation();
+  // A person without a conversation yet: open one, as the user card does.
+  const openDirectMessage = async (
+    recipientId: string,
+    openInNewSplit: boolean
+  ) => {
+    try {
+      const { channel_id } = await getOrCreateDirectMessage.mutateAsync({
+        recipient_id: recipientId,
+      });
+      openWithSplit(
+        { type: 'channel', id: channel_id },
+        {
+          referredFrom: 'kommand-menu',
+          preferNewSplit: openInNewSplit,
+          reopen: 'latest',
+        }
+      );
+    } catch {
+      toast.failure('Unable to open conversation. Please try again.');
+    }
   };
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
@@ -262,8 +327,11 @@ export function CommandMenuInner(props: {
       const command = item.data;
       trackCommandUsage(item.id);
 
-      // Check if this is a multi-stage command
-      if (command.activateCommandScopeId) {
+      // Create opens its own launcher; other multi-stage commands stay here.
+      if (
+        command.activateCommandScopeId &&
+        command.hotkeyToken !== TOKENS.global.createCommand
+      ) {
         const commandScope = hotkeyScopeTree.get(
           command.activateCommandScopeId
         );
@@ -371,9 +439,16 @@ export function CommandMenuInner(props: {
       return;
     }
 
+    if (isUserItem(item)) {
+      void openDirectMessage(item.id, openInNewSplit);
+      CommandState.close();
+      CommandState.setQuery('');
+      return;
+    }
+
     if (isAskAiItem(item)) {
-      // Opens a new chat split and sends the query immediately.
-      openChatWithMessage(item.query);
+      // Opens a new agent session and sends the query when ready.
+      void openChatWithMessage(item.query);
       CommandState.close();
       CommandState.setQuery('');
       return;
@@ -583,6 +658,26 @@ export function CommandMenuInner(props: {
     }
   });
 
+  const runHint = () => {
+    const hint = CommandState.hint();
+    if (!hint) return;
+    props.onHint?.();
+    CommandState.close();
+    // After the dialog has gone, so its focus trap lets the hint move focus.
+    setTimeout(hint.run);
+  };
+  // The hint's own key (e.g. ⌘P) works while the menu is open.
+  onMount(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!CommandState.hint()?.matches(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      runHint();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', onKeyDown));
+  });
+
   const isInCommandScope = createMemo(
     () => CommandState.commandScopeCommands().length > 0
   );
@@ -652,6 +747,26 @@ export function CommandMenuInner(props: {
           autofocus
         />
       </CommandMenuShell.Header>
+
+      <Show
+        when={
+          !isInCommandScope() && !isEntityActionMode() && CommandState.hint()
+        }
+      >
+        {(hint) => (
+          <button
+            type="button"
+            class="mx-2 mt-2 flex items-center justify-between gap-2 rounded-md border border-edge-muted bg-inset px-2.5 py-1.5 text-left text-ink-muted text-xs hover:bg-hover hover:text-ink"
+            data-testid="command-menu-hint"
+            onClick={runHint}
+          >
+            <span class="truncate">{hint().message}</span>
+            <kbd class="shrink-0 rounded border border-edge-muted px-1 font-sans text-ink">
+              {hint().shortcut}
+            </kbd>
+          </button>
+        )}
+      </Show>
 
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar

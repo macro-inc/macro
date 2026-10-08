@@ -1,6 +1,11 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import { CombinedError, createClient, type Exchange } from '@urql/core';
+import {
+  CombinedError,
+  cacheExchange,
+  createClient,
+  type Exchange,
+} from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, mergeMap, pipe } from 'wonka';
@@ -16,6 +21,7 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
 }));
 
 import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
+import type { ProjectFilters } from '../core/project';
 import {
   createProjectSoupSource,
   projectSoupInput,
@@ -27,7 +33,6 @@ const initiative = (id: string) => ({
   id,
   displayName: id,
   entityType: 'INITIATIVE' as const,
-  descriptionDocumentId: 'description',
   metadata: {
     ownerId: 'owner',
     updatedAt: '2026-09-27',
@@ -51,6 +56,154 @@ afterEach(() => {
 });
 
 describe('project Soup source', () => {
+  it('reuses cached projects on remount while refreshing in the background', async () => {
+    const refresh = Promise.withResolvers<void>();
+    let networkReads = 0;
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) =>
+          fromPromise(
+            (async () => {
+              if (operation.kind === 'query' && ++networkReads > 1)
+                await refresh.promise;
+              return {
+                operation,
+                data: {
+                  user: {
+                    id: 'viewer',
+                    soup: { items: [initiative('cached')], nextCursor: null },
+                  },
+                },
+                stale: false,
+                hasNext: false,
+              };
+            })()
+          )
+        )
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [cacheExchange, exchange],
+    });
+    const mount = () =>
+      createRoot((cleanup) => {
+        dispose = cleanup;
+        return createProjectSoupSource(
+          () => client,
+          () => ({ sort: 'updated' }),
+          () => true
+        );
+      });
+    const first = mount();
+    await vi.waitFor(() => expect(first.rows()?.[0].project.id).toBe('cached'));
+    dispose?.();
+    const second = mount();
+    await vi.waitFor(() => expect(networkReads).toBe(2));
+    expect(second.loading()).toBe(false);
+    expect(second.rows()?.[0].project.id).toBe('cached');
+    refresh.resolve();
+  });
+  function offlineFixture(empty = false) {
+    let failure: CombinedError | undefined;
+    const [filters, setFilters] = createSignal<ProjectFilters>({
+      sort: 'updated',
+    });
+    const exchange: Exchange = () => (operations) =>
+      pipe(
+        operations,
+        mergeMap((operation) =>
+          fromPromise(
+            Promise.resolve({
+              operation,
+              error: failure,
+              data: failure
+                ? undefined
+                : {
+                    user: {
+                      id: 'viewer',
+                      soup: {
+                        items: empty ? [] : [initiative('cached')],
+                        nextCursor: 'next',
+                      },
+                    },
+                  },
+              stale: false,
+              hasNext: false,
+            })
+          )
+        )
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [cacheExchange, exchange],
+    });
+    const source = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createProjectSoupSource(
+        () => client,
+        filters,
+        () => true
+      );
+    });
+    return {
+      source,
+      setFilters,
+      fail: (error: CombinedError) => {
+        failure = error;
+      },
+    };
+  }
+
+  it.each([false, true])(
+    'keeps a cached collection quiet on refresh failure (empty=%s)',
+    async (empty) => {
+      const f = offlineFixture(empty);
+      await vi.waitFor(() =>
+        expect(f.source.rows()).toHaveLength(empty ? 0 : 1)
+      );
+      const error = new CombinedError({
+        networkError: new TypeError('Failed to fetch'),
+      });
+      f.fail(error);
+      await expect(f.source.refresh()).rejects.toBe(error);
+      expect(f.source.rows()).toHaveLength(empty ? 0 : 1);
+      expect(f.source.error()).toBeUndefined();
+    }
+  );
+
+  it('keeps errors for uncached filters and pagination visible', async () => {
+    const f = offlineFixture();
+    await vi.waitFor(() => expect(f.source.rows()).toHaveLength(1));
+    const error = new CombinedError({
+      networkError: new TypeError('Failed to fetch'),
+    });
+    f.fail(error);
+    await f.source.loadMore();
+    expect(f.source.rows()).toHaveLength(1);
+    expect(f.source.error()).toBe(error);
+    f.setFilters({ query: 'not cached' });
+    await vi.waitFor(() => expect(f.source.error()).toBe(error));
+    expect(f.source.rows()).toBeUndefined();
+  });
+
+  it.each([
+    new CombinedError({ graphQLErrors: ['Forbidden'] }),
+    ...[401, 403, 503].map(
+      (status) =>
+        new CombinedError({
+          networkError: new Error('HTTP failure'),
+          response: { status },
+        })
+    ),
+  ])('preserves server errors alongside cached projects: %s', async (error) => {
+    const f = offlineFixture();
+    await vi.waitFor(() => expect(f.source.rows()).toHaveLength(1));
+    f.fail(error);
+    await expect(f.source.refresh()).rejects.toBe(error);
+    expect(f.source.error()).toBe(error);
+  });
+
   it('scopes all filters to initiatives and excludes folders and task documents', () => {
     const input = projectSoupInput({
       query: 'Roadmap',
@@ -122,7 +275,6 @@ describe('project Soup source', () => {
         project: {
           id: 'launch',
           name: 'launch',
-          descriptionDocumentId: 'description',
           updatedAt: '2026-09-27',
           access: 'edit',
         },

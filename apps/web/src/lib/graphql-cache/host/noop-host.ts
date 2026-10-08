@@ -43,6 +43,12 @@ export function createNoopCacheHost(): CacheHost {
     async entityFilter() {
       return { kind: 'unsupported' };
     },
+    async calendarRange() {
+      return { kind: 'unsupported' };
+    },
+    async calendarCommit() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(): Promise<WriteResult> {
       return emptyWriteResult();
     },

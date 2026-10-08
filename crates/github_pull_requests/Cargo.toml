@@ -1,0 +1,59 @@
+[package]
+edition = "2024"
+name = "github_pull_requests"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports", "service"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "entity_access/inbound",
+  "schema",
+  "service",
+]
+outbound = [
+  "dep:filter_ast",
+  "dep:models_pagination",
+  "dep:sqlx",
+  "ports",
+]
+ports = ["dep:entity_access", "dep:item_filters", "foreign_entity/ports"]
+# Pull request patches in S3.
+s3 = ["dep:aws-sdk-s3", "outbound"]
+schema = ["dep:utoipa", "git_patch/schema"]
+service = ["ports"]
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+filter_ast = { path = "../filter_ast", optional = true }
+foreign_entity = { path = "../foreign_entity", default-features = false }
+git_patch = { path = "../git_patch" }
+item_filters = { path = "../item_filters", optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
+macro_user_id = { path = "../macro_user_id" }
+model-error-response = { path = "../model-error-response", optional = true }
+models_pagination = { path = "../models_pagination", optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+foreign_entity = { path = "../foreign_entity", default-features = false, features = ["outbound"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -1,0 +1,27 @@
+#agentic-editing .homepage-feature-heading { max-width: 920px; margin-inline: auto; padding-inline: 24px; text-align: left; }
+#agentic-editing .homepage-feature-title { justify-content: flex-start; }
+#agentic-editing .homepage-section-break { display: block; }
+#agentic-editing .homepage-section-break > span { display: none; }
+#agentic-editing .homepage-section-break p { max-width: 490px; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
+
+.email-editing-stage { position: relative; isolation: isolate; padding: 24px; }
+.email-editing-stage::before {
+  content: ''; position: absolute; inset: 0 -24px; z-index: -1; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 50%, #a0aabc08, transparent 70%);
+}
+.email-editing-stage::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(#d0d6e133 .6px, transparent .9px);
+  background-size: 8px 8px;
+  mask-image: radial-gradient(ellipse at 50% 40%, #000, transparent 70%);
+  opacity: .16;
+}
+.email-editing-stage .homepage-conversation { width: 100%; }
+.email-editing-stage .homepage-email-body p + p { margin-top: 16px; }
+
+@media (max-width: 699px) {
+  #agentic-editing .homepage-feature-heading { padding-inline: 0; }
+  #agentic-editing .homepage-section-break p { max-width: 100%; white-space: normal; text-wrap: pretty; }
+  .email-editing-stage { padding: 12px 0 0; }
+  .email-editing-stage::before { inset: 0; }
+}

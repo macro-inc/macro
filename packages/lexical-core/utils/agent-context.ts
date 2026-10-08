@@ -45,7 +45,13 @@ export type AgentContextReplyTarget =
 
 /** The authorized conversation a prompt was posted in. */
 export type AgentContextParent = {
-  type: 'channel' | 'document' | 'initiative' | 'crm_company' | 'crm_contact';
+  type:
+    | 'channel'
+    | 'document'
+    | 'initiative'
+    | 'crm_company'
+    | 'crm_contact'
+    | 'call';
   id: string;
 };
 
@@ -82,11 +88,22 @@ export type AgentContextAnchor =
   | PdfPinCommentAnchor
   | { type: 'spreadsheet'; sheetId: string; sheetName: string; range: string };
 
+/** A person the session acts for or hears from. */
+export type AgentContextPerson = {
+  id: string;
+  /** Readable name. */
+  name: string;
+};
+
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
   /** Trusted session instructions supplied by the agent harness. */
   instructions?: string;
+  /** Whose access the session runs with. Supplied by the harness. */
+  owner?: AgentContextPerson;
+  /** Who sent the prompt; absent when a bot sent it on nobody's behalf. */
+  sender?: AgentContextPerson;
   /** Supplied by the message service, never by the prompt's author. */
   parent?: AgentContextParent;
   anchor?: AgentContextAnchor;
@@ -165,6 +182,7 @@ function describeOrigin(parent: AgentContextParent): string {
     .with('initiative', () => 'a project comment thread')
     .with('crm_company', () => 'a CRM company comment thread')
     .with('crm_contact', () => 'a CRM contact comment thread')
+    .with('call', () => 'a call chat thread')
     .exhaustive();
   return `This prompt was posted in ${surface}, not the agent session view. Your reply is posted back into that thread, and it is where the user will answer anything you ask.`;
 }
@@ -332,7 +350,7 @@ function channelNode(
  * outright. A flat history leaves the agent to guess which of several bugs
  * "please fix" means.
  */
-function renderConversation(input: AgentContextPrompt): string | undefined {
+function renderConversation(input: AgentContextPrompt): FxpNode | undefined {
   const channel = input.channel ?? [];
   const children: FxpNode[] = [
     ...(input.parent
@@ -354,14 +372,54 @@ function renderConversation(input: AgentContextPrompt): string | undefined {
       : []),
   ];
   if (children.length === 0) return undefined;
-  return buildXml([
-    el(
-      'conversation',
-      children,
-      present({ type: input.parent?.type, id: input.parent?.id })
-    ),
-    // The builder opens with a newline when formatting.
-  ]).trimStart();
+  return el(
+    'conversation',
+    children,
+    present({ type: input.parent?.type, id: input.parent?.id })
+  );
+}
+
+/**
+ * Name who the session acts for and who is asking. The agent runs with the
+ * owner's access, so a prompt from anyone else must not be able to spend it
+ * on things only the owner should see or do.
+ */
+function sessionNode(
+  owner: AgentContextPerson,
+  sender: AgentContextPerson | undefined
+): FxpNode {
+  const isOwner = sender?.id === owner.id;
+  const prompter = sender?.name ?? 'A bot acting for nobody';
+  const policy = isOwner
+    ? `${owner.name} owns this session and sent this prompt.`
+    : `${prompter} sent this prompt, but ${owner.name} owns this session. You act with the access of ${owner.name} - their email, calendar, documents, and connected apps. Every tool call that uses that access waits for ${owner.name} to approve it, so use the tools the request needs and let ${owner.name} decide. Do not refuse on ${owner.name}'s behalf: the approval request is how they say yes or no. Looking things up on the public web needs no approval. Do not repeat anything private to ${owner.name} that you saw in earlier turns. If a call is declined or not approved, say so and do not look for another way to do it.`;
+  return el(
+    'session',
+    [
+      el(
+        'prompted_by',
+        [],
+        present({
+          name: sender?.name,
+          id: sender?.id,
+          is_owner: isOwner ? 'true' : 'false',
+        })
+      ),
+      note(policy),
+    ],
+    { owner: owner.name, owner_id: owner.id }
+  );
+}
+
+function renderContext(input: AgentContextPrompt): string | undefined {
+  const conversation = renderConversation(input);
+  const nodes = [
+    ...(input.owner ? [sessionNode(input.owner, input.sender)] : []),
+    ...(conversation ? [conversation] : []),
+  ];
+  if (nodes.length === 0) return undefined;
+  // The builder opens with a newline when formatting.
+  return buildXml(nodes).trimStart();
 }
 
 function renderInstructions(
@@ -403,7 +461,7 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
     () => {
       const sections = [
         renderInstructions(input.instructions),
-        renderConversation(input),
+        renderContext(input),
       ].filter((section) => section !== undefined);
       if (sections.length === 0) return;
 

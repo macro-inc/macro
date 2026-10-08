@@ -1,7 +1,8 @@
 use github::domain::models::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestRef, GithubPullRequestStatus,
+    EnrichedGithubPullRequest, GithubMergeMethod, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestRef, GithubPullRequestStatus,
+    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
 };
 use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
@@ -32,7 +33,6 @@ use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse}
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
 use crate::api::link::outlook::InitOutlookLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
-use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
 use crate::api::user::get_user_organization::UserOrganizationResponse;
@@ -42,7 +42,9 @@ use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
 use crate::api::user::post_get_names::PostGetNamesRequestBody;
 use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::user::stripe::change_plan::{ChangePlanRequest, ChangePlanResponse};
-use crate::api::user::stripe::create_checkout_session_v2::CreateCheckoutSessionV2Request;
+use crate::api::user::stripe::create_checkout_session_v2::{
+    CheckoutSessionV2Response, CreateCheckoutSessionV2Request,
+};
 use crate::api::user::stripe::create_portal_session::CreatePortalSessionRequest;
 use crate::api::user::stripe::{PaidPlan, StripeSessionResponse};
 use crate::api::{
@@ -108,6 +110,7 @@ use model::user::{
 
                 /// /github_pull_requests
                 github_pull_requests::handler,
+                github_pull_requests::merge_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -120,7 +123,6 @@ use model::user::{
                 jwt::macro_api_token::handler,
 
                 /// /user
-                user::create_user::handler,
                 user::get_user_info::handler,
                 user::delete_user::handler,
                 user::post_profile_pictures::handler,
@@ -144,6 +146,7 @@ use model::user::{
                 ai_billing::inbound::axum_router::get_summary_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::get_plans_handler,
                 ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::update_auto_reload_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
@@ -214,7 +217,6 @@ use model::user::{
                         UserTokensResponse,
                         UserLinkResponse,
                         MacroApiTokenResponse,
-                        CreateUserRequest,
                         ResendFusionauthVerifyUserEmailRequest,
                         GenerateEmailLinkRequest,
                         CreateInProgressLinkResponse,
@@ -247,6 +249,9 @@ use model::user::{
                         ai_billing::inbound::axum_router::PlanCatalogEntry,
                         ai_billing::inbound::axum_router::PlanCatalogResponse,
                         ai_billing::inbound::axum_router::UpdateOverageRequest,
+                        ai_billing::inbound::axum_router::UpdateAutoReloadRequest,
+                        ai_billing::inbound::axum_router::AutoReloadDefaults,
+                        ai_billing::AutoReloadSnapshot,
                         ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
                         ai_billing::inbound::axum_router::CreditCheckoutResponse,
 
@@ -258,6 +263,9 @@ use model::user::{
                         GithubPullRequestComment,
                         GithubPullRequestRef,
                         GithubPullRequestStatus,
+                        GithubMergeMethod,
+                        MergeGithubPullRequestRequest,
+                        MergeGithubPullRequestResponse,
 
                         UserQuota,
                         UserOrganizationResponse,
@@ -266,6 +274,7 @@ use model::user::{
 
                         // Stripe
                         CreateCheckoutSessionV2Request,
+                        CheckoutSessionV2Response,
                         CreatePortalSessionRequest,
                         StripeSessionResponse,
 
@@ -329,6 +338,44 @@ mod tests {
     }
 
     #[test]
+    fn github_pull_requests_openapi_includes_merge_path() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &openapi["paths"]["/github_pull_requests/merge"]["post"];
+
+        assert_eq!(operation["operationId"], "merge_github_pull_request");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/MergeGithubPullRequestRequest")
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/MergeGithubPullRequestResponse")
+        );
+        for status in ["403", "404", "409", "422", "428"] {
+            assert!(
+                operation["responses"].get(status).is_some(),
+                "missing {status} response"
+            );
+        }
+
+        let schemas = &openapi["components"]["schemas"];
+        let request_properties = &schemas["MergeGithubPullRequestRequest"]["properties"];
+        for property in ["owner", "repo", "number", "mergeMethod"] {
+            assert!(
+                request_properties.get(property).is_some(),
+                "missing request property {property}"
+            );
+        }
+        assert_eq!(
+            schemas["GithubMergeMethod"]["enum"],
+            serde_json::json!(["merge", "squash", "rebase"])
+        );
+        let response_properties = &schemas["MergeGithubPullRequestResponse"]["properties"];
+        assert!(response_properties.get("sha").is_some());
+        assert!(response_properties.get("pullRequest").is_some());
+    }
+
+    #[test]
     fn github_link_status_openapi_includes_path_and_schema() {
         let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
         let operation = &openapi["paths"]["/link/github/status"]["get"];
@@ -344,6 +391,9 @@ mod tests {
                 .get("GithubLinkStatusResponse")
                 .is_some()
         );
+        let fields = &openapi["components"]["schemas"]["GithubLinkStatusResponse"]["properties"];
+        assert!(fields.get("github_username").is_some());
+        assert!(fields.get("github_user_id").is_some());
     }
 
     #[test]

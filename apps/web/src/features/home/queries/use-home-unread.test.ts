@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
   ...(await import('@app/features/soup/collection/rows')),
+  ...(await import('@app/features/soup/collection/row-store')),
   useSearchContext: () => ({ entityPool: () => [] }),
   createSearchState: vi.fn(),
 }));
@@ -164,7 +165,7 @@ describe('Home unread presence', () => {
     expect(mocks.withLocalOverrides).toHaveBeenCalledTimes(101);
   });
 
-  it('does not read email notifications and stops on an unread, non-archived email', () => {
+  it('reads notifications only for read emails and stops on an unread, non-archived email', () => {
     const inbox = setup();
     const read = vi.fn(() => []);
     expect(
@@ -175,8 +176,30 @@ describe('Home unread presence', () => {
         withNotifications(channel, read),
       ])
     ).toBe(true);
-    expect(read).not.toHaveBeenCalled();
+    expect(read).toHaveBeenCalledOnce();
   });
+
+  it.each(['unseen', 'seen', 'done'] as const)(
+    'keeps the badge and row unread state aligned for a %s email reminder',
+    (state) => {
+      const inbox = setup();
+      const email = withNotifications({ ...emailRow, isRead: true }, [
+        {
+          ...notification('email-reminder', state, {
+            tag: 'reminder',
+            content: { description: 'Follow up', reminderId: 'reminder' },
+          }),
+          entity_type: 'email_thread',
+          entity_id: emailRow.id,
+        },
+      ]);
+      expect(inbox.hasUnreadEntity([email])).toBe(state === 'unseen');
+      expect(inbox.transformEntities([email]).some(unreadFilterFn)).toBe(
+        state === 'unseen'
+      );
+      expect(email.isRead).toBe(true);
+    }
+  );
 
   it('retains the same answers as list transformation across membership and thread cases', () => {
     const inbox = setup();
@@ -256,14 +279,6 @@ describe('Home unread presence', () => {
       },
       {
         ...base,
-        type: 'reminder',
-        description: 'Reminder',
-        scheduleType: 'once',
-        nextRunAt: NOW,
-        enabled: true,
-      },
-      {
-        ...base,
         type: 'foreign',
         foreignSource: 'unknown',
         rawForeignSource: 'test',
@@ -318,7 +333,7 @@ describe('Home unread presence', () => {
     }
   );
 
-  it.each(['signal', 'noise', 'reminders'] as const)(
+  it.each(['signal', 'noise'] as const)(
     'reuses membership for the %s tab',
     (tab) => {
       const inbox = setup(tab);
@@ -342,17 +357,6 @@ describe('Home unread presence', () => {
         withNotifications(channel, [notification('channel')]),
         emailRow,
         noisyEmail,
-        withNotifications(
-          {
-            ...base,
-            type: 'reminder' as const,
-            description: 'Reminder',
-            scheduleType: 'once' as const,
-            nextRunAt: '2026-09-24T12:00:00Z',
-            enabled: true,
-          },
-          [notification('reminder')]
-        ),
       ];
       for (const row of rows) {
         expect(inbox.hasUnreadEntity([row])).toBe(

@@ -1,21 +1,22 @@
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
 import Envelope from '@phosphor/envelope.svg';
 import Hash from '@phosphor/hash.svg';
 import PaperPlane from '@phosphor/paper-plane-tilt.svg';
-import Pause from '@phosphor/pause.svg';
-import Play from '@phosphor/play.svg';
 import X from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { homepagePeople } from '../../core/homepage-demo-people';
+import { DemoCursor } from '../DemoCursor';
 import { HomepageConversation } from '../HomepageConversation';
 import { demoEmails } from './email-fixtures';
 import { ChannelComposer } from './frozen/ChannelComposer';
 import { EmailShell } from './frozen/EmailShell';
 import { EmailThread } from './frozen/EmailThread';
 import './email-demos.css';
+import './email-sharing-stage.css';
 
-const phaseDuration = [1800, 1100, 1100, 1200, 1600, 650, 5500];
+const phaseDuration = [1800, 1100, 1100, 1200, 1600, 650, 3200];
+const incomingReply =
+  'One more thing: could you include the onboarding guide? I’ll share it with the team before Thursday.';
 
 // The Share form's markup/classes come from TopBar/ShareButton.tsx and
 // ForwardToChannel.tsx. The animation changes fixture state only; it never
@@ -28,7 +29,7 @@ function ShareForm(props: {
   return (
     <div class="mail-share-scrim">
       <div
-        class="mail-share-form"
+        class="mail-share-form glass-input"
         role="group"
         aria-label="Share email preview"
       >
@@ -46,7 +47,7 @@ function ShareForm(props: {
             <X />
           </Button>
         </header>
-        <div class="flex items-center bg-surface pr-2">
+        <div class="flex items-center pr-2">
           <div class="min-w-0 flex-1 min-h-11 mail-recipient-input">
             <Show
               when={props.phase >= 3}
@@ -102,7 +103,7 @@ function ShareForm(props: {
               <Button
                 variant={props.phase >= 3 ? 'accent' : 'ghost'}
                 depth={3}
-                class="rounded-lg border-0"
+                class="mail-share-submit rounded-lg border-0"
                 disabled={props.phase < 3}
                 onClick={props.advance}
                 data-active={props.phase === 5}
@@ -118,7 +119,7 @@ function ShareForm(props: {
   );
 }
 
-function ChannelResult(props: { onOpen: () => void }) {
+function ChannelResult(props: { onOpen: () => void; updated: boolean }) {
   const [messages, setMessages] = createSignal<string[]>([]);
   return (
     <div class="mail-channel">
@@ -147,21 +148,29 @@ function ChannelResult(props: { onOpen: () => void }) {
               text: (
                 <>
                   Dana’s ready for Thursday. Here’s the conversation.
-                  <span class="flex flex-row mt-2 gap-2 flex-wrap max-w-full">
-                    <button
-                      type="button"
-                      class="text-ink text-sm border border-edge-muted rounded-xs hover:bg-hover flex flex-row h-6 px-2 justify-center items-center max-w-full"
-                      onClick={props.onOpen}
-                      aria-label="Open shared email: Next steps for our team"
-                    >
-                      <span class="flex justify-start items-center w-3.5 h-3.5 mr-2">
-                        <Envelope />
-                      </span>
-                      <span class="flex-1 text-left leading-5 min-w-0 truncate">
-                        Next steps for our team
-                      </span>
-                    </button>
-                  </span>
+                  <button
+                    type="button"
+                    class="mail-shared-thread glass-input"
+                    onClick={props.onOpen}
+                    aria-label="Open shared email: Next steps for our team"
+                  >
+                    <span class="mail-shared-thread-label">
+                      <Envelope class="size-4" /> Email thread <span>Live</span>
+                    </span>
+                    <strong>Next steps for our team</strong>
+                    <span>Dana Whitfield · Jacob Beckerman</span>
+                    <span class="mail-shared-thread-preview">
+                      {props.updated
+                        ? incomingReply
+                        : 'Thursday at 9 works. Could you share the rollout plan?'}
+                    </span>
+                    <span class="mail-shared-thread-footer">
+                      {props.updated
+                        ? '2 messages · New reply from Dana'
+                        : '1 message · Open full thread'}{' '}
+                      <span aria-hidden="true">↗</span>
+                    </span>
+                  </button>
                 </>
               ),
             },
@@ -182,8 +191,9 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
   const [phase, setPhase] = createSignal(0);
   const [playing, setPlaying] = createSignal(true);
   const [opened, setOpened] = createSignal(false);
-  const [reducedMotion, setReducedMotion] = createSignal(false);
   let root!: HTMLDivElement;
+  let stage!: HTMLDivElement;
+  const [pointer, setPointer] = createSignal<{ x: number; y: number }>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let visible = false;
   let reduced = false;
@@ -193,9 +203,11 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
   };
   const schedule = () => {
     clear();
-    if (!visible || !playing() || reduced || document.hidden) return;
+    if (!visible || !playing() || reduced || document.hidden || phase() >= 7)
+      return;
     timer = setTimeout(() => {
-      setPhase((phase() + 1) % phaseDuration.length);
+      setPhase(phase() + 1);
+      if (phase() >= 7) setPlaying(false);
       schedule();
     }, phaseDuration[phase()]);
   };
@@ -205,21 +217,49 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
     setPhase(next);
     setOpened(false);
   };
-  const replay = () => {
-    setOpened(false);
-    setPhase(reduced ? 6 : 0);
-    setPlaying(!reduced);
-    schedule();
-  };
   onMount(() => {
+    function positionPointer() {
+      const selectors = [
+        '[data-demo-share-trigger]',
+        '.mail-recipient-input',
+        '.mail-recipient-option',
+        '.mail-share-note',
+        '.mail-share-note',
+        '.mail-share-submit',
+        '.mail-shared-thread',
+      ];
+      const selector = selectors[phase()];
+      const target = selector && stage.querySelector<HTMLElement>(selector);
+      if (!playing() || !visible || reduced || !target) {
+        setPointer(undefined);
+        return;
+      }
+      const bounds = target.getBoundingClientRect();
+      const frame = stage.getBoundingClientRect();
+      setPointer({
+        x: bounds.left - frame.left + Math.min(bounds.width / 2, 100),
+        y: bounds.top - frame.top + bounds.height / 2,
+      });
+    }
+    // Measure actual controls so the walkthrough follows mobile and desktop layouts.
+    createEffect(() => {
+      phase();
+      if (!playing()) {
+        setPointer(undefined);
+        return;
+      }
+      const frame = requestAnimationFrame(positionPointer);
+      onCleanup(() => cancelAnimationFrame(frame));
+    });
+    const resize = new ResizeObserver(positionPointer);
+    resize.observe(stage);
     const preference = matchMedia('(prefers-reduced-motion: reduce)');
     const syncPreference = () => {
       reduced = preference.matches;
-      setReducedMotion(reduced);
       if (reduced) {
         clear();
         setPlaying(false);
-        setPhase(6);
+        setPhase(7);
       } else schedule();
     };
     syncPreference();
@@ -227,6 +267,7 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
       ([entry]) => {
         visible = entry.isIntersecting;
         schedule();
+        positionPointer();
       },
       { threshold: 0.2 }
     );
@@ -236,70 +277,93 @@ export function EmailSharingDemo(props: { onClose?: () => void } = {}) {
     onCleanup(() => {
       clear();
       observer.disconnect();
+      resize.disconnect();
       preference.removeEventListener('change', syncPreference);
       document.removeEventListener('visibilitychange', schedule);
     });
   });
   return (
     <div ref={root} class="mail-sharing-demo" data-phase={phase()}>
-      <EmailShell
-        label="Email sharing animation"
-        channel={phase() === 6 && !opened()}
+      <div
+        ref={stage}
+        class="mail-sharing-stage"
+        onPointerDown={() => {
+          clear();
+          setPlaying(false);
+        }}
+        onFocusIn={() => {
+          clear();
+          setPlaying(false);
+        }}
+        data-result={phase() >= 6 && !opened()}
+        data-opened={opened()}
       >
-        <Show
-          when={phase() === 6 && !opened()}
-          fallback={
-            <EmailThread
-              email={demoEmails[0]}
-              onBack={opened() ? () => setOpened(false) : undefined}
-              onShare={() => manual(2)}
-              sharing={phase() === 1}
-            />
-          }
+        <EmailShell
+          class="glass-input"
+          label="Email sharing animation"
+          channel={phase() >= 6 && !opened()}
         >
-          <ChannelResult
-            onOpen={() => {
-              clear();
-              setPlaying(false);
-              setOpened(true);
-            }}
+          <Show
+            when={phase() >= 6 && !opened()}
+            fallback={
+              <EmailThread
+                email={demoEmails[0]}
+                hideReply
+                onBack={opened() ? () => setOpened(false) : undefined}
+                onShare={() => manual(2)}
+                sharing={phase() === 1}
+              >
+                <Show when={opened() && phase() >= 7}>
+                  <div class="mail-arrived-reply glass-input">
+                    <header>
+                      <strong>Dana Whitfield</strong>
+                      <span>Just now</span>
+                    </header>
+                    <p>{incomingReply}</p>
+                  </div>
+                </Show>
+              </EmailThread>
+            }
+          >
+            <ChannelResult
+              updated={phase() >= 7}
+              onOpen={() => {
+                clear();
+                setPlaying(false);
+                setOpened(true);
+              }}
+            />
+          </Show>
+        </EmailShell>
+        <Show when={phase() >= 1 && phase() <= 5}>
+          <ShareForm
+            phase={phase()}
+            advance={() => manual(phase() < 3 ? 3 : 6)}
+            cancel={() => manual(0)}
           />
         </Show>
-      </EmailShell>
-      <Show when={phase() >= 1 && phase() <= 5}>
-        <ShareForm
-          phase={phase()}
-          advance={() => manual(phase() < 3 ? 3 : 6)}
-          cancel={() => manual(0)}
-        />
-      </Show>
-      <div class="mail-demo-controls">
-        <Show when={!reducedMotion()}>
-          <Button
-            variant="plain"
-            size="sm"
-            aria-label={
-              playing() ? 'Pause sharing animation' : 'Play sharing animation'
-            }
-            onClick={() => {
-              setPlaying(!playing());
-              schedule();
-            }}
-          >
-            <Show when={playing()} fallback={<Play />}>
-              <Pause />
-            </Show>
-            {playing() ? 'Pause' : 'Play'}
-          </Button>
+        <Show when={playing() && pointer()}>
+          {(position) => (
+            <div
+              class="mail-sharing-pointer"
+              data-clicking={phase() === 5}
+              aria-hidden="true"
+              style={{
+                transform: `translate(${position().x}px, ${position().y}px)`,
+              }}
+            >
+              <DemoCursor label="Jacob" clicking={phase() === 5} />
+            </div>
+          )}
         </Show>
-        <Button variant="plain" size="sm" onClick={replay}>
-          <ArrowCounterClockwise />
-          Replay
-        </Button>
+      </div>
+      <div class="mail-demo-controls">
         <span>
-          {phase() === 6
-            ? 'The email is shared in #launch.'
-            : 'Share an email with a channel.'}
+          {phase() >= 7
+            ? 'Dana replied. Your whole team is already up to date.'
+            : phase() === 6
+              ? 'Shared. Open the email right from the channel.'
+              : 'Choose #launch, add a note, and share.'}
         </span>
         <Show when={props.onClose}>
           <Button variant="plain" size="sm" onClick={props.onClose}>

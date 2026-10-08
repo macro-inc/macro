@@ -4,7 +4,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { channelKeys } from '../channel/keys';
-import { botKeys } from './keys';
+import { botKeys, botProfileKeys } from './keys';
 
 type CreateBotParams = {
   avatarUrl?: string;
@@ -39,8 +39,8 @@ export function botsQueryOptions() {
   });
 }
 
-export function useBotsQuery() {
-  return useQuery(botsQueryOptions);
+export function useBotsQuery(enabled: () => boolean = () => true) {
+  return useQuery(() => ({ ...botsQueryOptions(), enabled: enabled() }));
 }
 
 export function useBotQuery(botId: () => string) {
@@ -90,7 +90,12 @@ export function useUpdateBotMutation() {
       ),
     onSuccess: async (bot) => {
       queryClient.setQueryData(botKeys.detail(bot.id).queryKey, bot);
-      await invalidateBots();
+      await Promise.all([
+        invalidateBots(),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(bot.id).queryKey,
+        }),
+      ]);
     },
     onError: (error) => console.error('failed to update bot', error),
   }));
@@ -116,6 +121,9 @@ export function useDeleteBotMutation() {
 
       await Promise.all([
         invalidateBots(),
+        queryClient.invalidateQueries({
+          queryKey: botProfileKeys.detail(vars.botId).queryKey,
+        }),
         ...vars.channelIds.flatMap((channelId) => [
           queryClient.invalidateQueries({
             queryKey: channelKeys.channelBots(channelId).queryKey,

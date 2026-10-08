@@ -10,9 +10,10 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -71,11 +72,13 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     fn delete_action(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
     /// Claim only while the stored configuration is still `revision`, so a
-    /// snapshot read before a pause or update can never start a run.
+    /// snapshot read before a pause or update can never start a run. The stored
+    /// firing must also match, fencing candidates fetched before a completed run.
     fn claim_action(
         &self,
         id: &Uuid,
         revision: ConfigurationRevision,
+        expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> impl Future<Output = Result<ClaimToken>> + Send;
 
     /// Release only this execution's claim; stale tokens must not mutate a newer run.
@@ -117,12 +120,27 @@ pub trait ScheduledActionReadService: Send + Sync + 'static {
 }
 
 pub trait ScheduledActionService: Send + Sync + 'static {
+    /// Read a routine only when the caller is its owner.
+    fn get_action(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Delete all of a user's actions before account deletion, including disabled
     /// and claimed actions. Repeating a completed cleanup succeeds.
     fn delete_user_actions(
         &self,
         user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Delete one action while `expected_owner` still owns it, including a
+    /// disabled or claimed one. Internal owner removal only. A missing action
+    /// is already purged; one under another owner is untouched.
+    fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> impl Future<Output = Result<OwnedPurgeOutcome>> + Send;
 
     /// Records `principal.owner()`. A non-user owner is `OwnerNotUserError`
     /// before validation and before any write. `BotForUser` records the user.

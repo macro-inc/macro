@@ -30,6 +30,7 @@ import {
 import {
   getSortedKeyProperties,
   soupPropertyToProperty,
+  withTaskProject,
 } from './property-helpers';
 
 function getEntityType(entity: EntityData): EntityType {
@@ -54,17 +55,20 @@ function getEntityType(entity: EntityData): EntityType {
         'agent sessions are not property-service mutation targets'
       );
     })
-    .with({ type: 'automation' }, () => {
-      throw new Error('automation entities do not support properties');
+    .with({ type: 'routine' }, () => {
+      throw new Error('routine entities do not support properties');
     })
     .with({ type: 'foreign' }, () => {
       throw new Error('foreign entities do not support properties');
     })
-    .with({ type: 'reminder' }, () => {
-      throw new Error('reminders do not support properties');
-    })
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events do not support properties');
+    })
+    .with({ type: 'database' }, () => {
+      throw new Error('databases do not support properties');
+    })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
     })
     .exhaustive();
 }
@@ -78,6 +82,8 @@ interface EntityKeyPropertiesProps {
   maxUserStackUsers?: number;
   /** Whether to show the edit affordance caret. */
   showCaret?: boolean;
+  /** Append a task's Project, set or not (Projects enabled). */
+  includeProject?: boolean;
 }
 
 /**
@@ -91,16 +97,18 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
   const keyProperties = createMemo((): PropertyT[] => {
     const soupProperties = props.entity.properties ?? [];
-    return getSortedKeyProperties(
-      soupProperties.flatMap((soupProperty) => {
-        try {
-          return [soupPropertyToProperty(soupProperty)];
-        } catch (error) {
-          console.warn('Skipping property with unsupported type', error);
-          return [];
-        }
-      })
-    );
+    const properties = soupProperties.flatMap((soupProperty) => {
+      try {
+        return [soupPropertyToProperty(soupProperty)];
+      } catch (error) {
+        console.warn('Skipping property with unsupported type', error);
+        return [];
+      }
+    });
+    const key = getSortedKeyProperties(properties);
+    return props.includeProject && entityType() === EntityType.TASK
+      ? withTaskProject(key, properties)
+      : key;
   });
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();

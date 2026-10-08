@@ -109,6 +109,32 @@ it('subscribes and heartbeats a linked document drawer without a document block'
   expect(mocks.updates.size).toBe(0);
 });
 
+it('tracks and refreshes a call thread independently from its channel', () => {
+  const call: MessageParent = { type: 'call', id: 'call-id' };
+  const channel: MessageParent = { type: 'channel', id: 'channel-id' };
+  mount(() => {
+    useReopenTrackedEntitiesOnReconnect();
+    useMessageThreadQuery(
+      () => call,
+      () => call.id
+    );
+    useMessageThreadQuery(
+      () => channel,
+      () => 'root'
+    );
+  });
+  expect(sent('open', call.id)[0][0].entity_type).toBe('call');
+  expect(sent('open', channel.id)[0][0].entity_type).toBe('channel');
+  mocks.invalidate.mockClear();
+  for (const reconnect of mocks.reconnects) reconnect();
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: ['messages', 'threadReplies', call],
+  });
+  expect(mocks.invalidate).toHaveBeenCalledWith({
+    queryKey: ['messages', 'threadReplies', channel],
+  });
+});
+
 it.each(['drawer', 'block'] as const)(
   'keeps the source subscription alive when the %s closes first',
   (first) => {

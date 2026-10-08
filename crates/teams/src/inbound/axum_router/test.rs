@@ -31,6 +31,7 @@ use model_user::UserContext;
 use roles_and_permissions::domain::model::PermissionId;
 use rootcause::Report;
 use serde_json::{Value, json};
+use shared_entity_registry::RegisteredEntityType;
 use tower::ServiceExt;
 
 use crate::domain::{
@@ -42,6 +43,7 @@ use crate::domain::{
         TeamInvite, TeamInviteDetails, TeamMember, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError,
     },
+    owned_entity_cleanup::OwnedEntityCleanupError,
     team_repo::TeamService,
 };
 
@@ -81,6 +83,22 @@ async fn assert_customer_error_is_obfuscated(error: impl IntoResponse) {
 #[tokio::test]
 async fn delete_team_customer_error_response_is_obfuscated() {
     assert_customer_error_is_obfuscated(DeleteTeamError::CustomerError(customer_error())).await;
+}
+
+#[tokio::test]
+async fn delete_team_cleanup_error_says_the_team_survived_without_details() {
+    let error = DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::Purge {
+        entity_type: RegisteredEntityType::Document,
+        id: uuid::Uuid::from_u128(1),
+        source: Box::new(std::io::Error::other("document storage unreachable")),
+    });
+    let (status, body_text, _) = response_parts(error).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body_text,
+        r#"{"message":"unable to delete the team's content; the team was not deleted"}"#
+    );
 }
 
 #[tokio::test]
@@ -423,6 +441,13 @@ impl TeamService for FakeTeamService {
         _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
     ) -> Result<bool, TeamError> {
         panic!("unexpected toggle_allow_non_admin_invites call")
+    }
+
+    async fn remove_user_from_all_teams(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), crate::domain::model::RemoveUserFromAllTeamsError> {
+        panic!("unexpected remove_user_from_all_teams call")
     }
 
     async fn try_join_team_by_domain(

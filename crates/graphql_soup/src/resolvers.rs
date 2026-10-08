@@ -23,10 +23,10 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::SoupItemDataLoader,
+    loaders::{AgentSessionEntityLoader, SoupItemDataLoader},
     objects::{
-        GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage,
-        SoupPatch,
+        GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
+        SoupEntityEdges, SoupPage, SoupPatch,
     },
 };
 
@@ -121,6 +121,32 @@ where
         GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
         _ => Err(async_graphql::Error::new(
             "Soup returned a non-email entity for an email-thread request",
+        )),
+    }
+}
+
+/// Fetch one agent session the viewer can see, through the same access
+/// filter the Soup list uses, so a session outside their grants reads as
+/// absent rather than as an error. Reads the primary: see
+/// [`AgentSessionEntityLoader`].
+pub async fn resolve_soup_agent_session<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    session_id: uuid::Uuid,
+) -> async_graphql::Result<Option<GraphqlSoupAgentSession<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
+    let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
+    let Some(item) = loader.load_one((user_id, entity)).await? else {
+        return Ok(None);
+    };
+
+    match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+        GraphqlSoupEntity::AgentSession(session) => Ok(Some(session)),
+        _ => Err(async_graphql::Error::new(
+            "Soup returned a non-agent-session entity for an agent-session request",
         )),
     }
 }

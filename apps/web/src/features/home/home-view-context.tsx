@@ -9,6 +9,12 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import {
+  homeChannelRoute,
+  homeDocumentRoute,
+  homePreviewRoute,
+  homeSplitRoute,
+} from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import {
   type PreviewBlockTarget,
@@ -45,13 +51,6 @@ import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { isHomeDocumentType } from './home-route-schema';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
-import {
-  homeChannelRoute,
-  homeDocumentRoute,
-  homePreviewRoute,
-  homeReminderRoute,
-  homeSplitRoute,
-} from './route';
 import type {
   HomeGroupBy,
   HomeTab,
@@ -72,8 +71,6 @@ export type HomeViewContext = {
   previewNavigationRequest: Accessor<number>;
   /** Whether the route opens the Calendar view inline. */
   calendarOpen: Accessor<boolean>;
-  /** Whether the route opens a reminder inline. */
-  reminderOpen: Accessor<boolean>;
   /** Bumped when the open calendar event is requested again, to re-aim in place. */
   calendarRefocus: Accessor<number>;
   openPreview: (entity: PreviewSelection) => boolean;
@@ -82,8 +79,8 @@ export type HomeViewContext = {
   setFacets: (facets: FacetSelection) => void;
 };
 
-function defaultGroupBy(tab: HomeTab): HomeGroupBy {
-  return tab === 'reminders' ? 'none' : 'date';
+function defaultGroupBy(): HomeGroupBy {
+  return 'date';
 }
 
 export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
@@ -93,9 +90,8 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const navigate = useNavigate();
-  const routeParams = useParams<
-    Parameters<typeof homeDetailParamsFromRoute>[0] & { reminderId?: string }
-  >();
+  const routeParams =
+    useParams<Parameters<typeof homeDetailParamsFromRoute>[0]>();
   const [channelSearch] = createSearchParams(channelsSearch);
   const [documentSearch] = createSearchParams(driveSearch);
   const [tabSearch] = createSearchParams(homeTabSearch);
@@ -106,7 +102,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     createStore<HomeViewState>({
       tab: initialTab,
       search: initial.search ?? '',
-      groupBy: initial.groupBy ?? defaultGroupBy(initialTab),
+      groupBy: initial.groupBy ?? defaultGroupBy(),
       facets: normalizeHomeFacets(initial.facets),
     }),
     createHomeViewPersistence({
@@ -135,7 +131,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
         setState(
           produce((draft) => {
             draft.tab = tab;
-            draft.groupBy = defaultGroupBy(tab);
+            draft.groupBy = defaultGroupBy();
           })
         );
       }
@@ -160,7 +156,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   });
   const { calendarOpen, calendarRefocus, openCalendarEvent } =
     useHomeCalendarPreview(withTab);
-  const reminderOpen = () => typeof routeParams.reminderId === 'string';
   const navigateDetail = (
     { params, search }: HomePreviewNavigation,
     replace = false
@@ -187,17 +182,10 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
   const openPreview = (entity: PreviewSelection) => {
-    if (entity.type === 'calendar_event') {
-      return openCalendarEvent(entity);
-    }
-    if (entity.type === 'reminder') {
-      navigate(
-        { route: homeReminderRoute, params: { reminderId: entity.id } },
-        { search: withTab(homeDetailSearch()) }
-      );
-      return true;
-    }
-    const target = previewBlockTarget(entity);
+    if (entity.type === 'calendar_event') return openCalendarEvent(entity);
+    return openPreviewTarget(previewBlockTarget(entity));
+  };
+  const openPreviewTarget = (target: PreviewBlockTarget) => {
     if (!selectPreview.canSelect(target)) return false;
     const current = previewTarget();
     if (
@@ -231,7 +219,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     setState(
       produce((draft) => {
         draft.tab = tab;
-        draft.groupBy = defaultGroupBy(tab);
+        draft.groupBy = defaultGroupBy();
       })
     );
     closePreview();
@@ -248,7 +236,6 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     previewNavigationRequest,
     calendarOpen,
     calendarRefocus,
-    reminderOpen,
     openPreview,
     closePreview,
     setTab,

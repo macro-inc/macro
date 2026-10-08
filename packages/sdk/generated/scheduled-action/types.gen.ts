@@ -56,7 +56,7 @@ export type ActionExecutionRecord = {
 export type ActionKind = 'Agent';
 
 /**
- * Exactly one trigger per action. Existing cron validation is reused.
+ * A routine may run on one trigger or any of several schedules and Macro events.
  */
 export type ActionTrigger = {
     schedule: Schedule;
@@ -65,6 +65,9 @@ export type ActionTrigger = {
 } | {
     filters: EventFilters;
     type: 'events';
+} | {
+    triggers: RoutineTriggers;
+    type: 'multiple';
 };
 
 export type AgentTask = {
@@ -82,6 +85,34 @@ export type AgentTaskAgent = {
 };
 
 /**
+ * Public admission error payload. Handlers with additional fields can reuse the
+ * domain error's code and message and [`admission_status`].
+ */
+export type AiAdmissionErrorBody = {
+    /**
+     * Stable denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Human-readable explanation, without internal billing diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * Why an event-triggered run was skipped before it started.
+ */
+export type ConditionResult = {
+    /**
+     * The classifier's probability, from 0 to 1, that the answer was yes.
+     */
+    probability: number;
+    status: 'not_met';
+} | {
+    status: 'unavailable';
+};
+
+/**
  * Exactly one representation is accepted, even if mixed fields agree or are null.
  */
 export type CreateScheduledAction = ActionConfiguration | LegacyActionConfiguration;
@@ -94,9 +125,15 @@ export type EmptyResponse = {
 };
 
 /**
- * An event name AND an entity ID must match within the same filter.
+ * An event name AND an entity ID must match within the same filter. A
+ * condition further requires the event's content to answer it with yes.
  */
 export type EventFilter = {
+    /**
+     * Yes/no question about the triggering content, e.g. "Is this email an
+     * invoice?". The routine runs only when the answer is yes.
+     */
+    condition?: string | null;
     events: Array<EventName>;
     ids?: Array<string> | null;
 };
@@ -110,7 +147,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -130,6 +167,7 @@ export type ExecutionResourceType = 'chat' | 'agent';
  * Null/string column values predate this envelope and refer to legacy chats.
  */
 export type ExecutionResult = {
+    condition?: null | ConditionResult;
     error?: string | null;
     resource?: null | ExecutionResource;
     version: number;
@@ -159,6 +197,23 @@ export type LegacyActionConfiguration = {
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * An individual trigger in a routine's trigger list.
+ */
+export type RoutineTrigger = {
+    schedule: Schedule;
+    timezone: string;
+    type: 'cron';
+} | {
+    filters: EventFilters;
+    type: 'events';
+};
+
+/**
+ * Bounded schedules and one combined set of event filters.
+ */
+export type RoutineTriggers = Array<RoutineTrigger>;
 
 export type Schedule = string;
 
@@ -341,6 +396,32 @@ export type DeleteScheduledActionResponses = {
 
 export type DeleteScheduledActionResponse = DeleteScheduledActionResponses[keyof DeleteScheduledActionResponses];
 
+export type GetScheduledActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}';
+};
+
+export type GetScheduledActionErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionError = GetScheduledActionErrors[keyof GetScheduledActionErrors];
+
+export type GetScheduledActionResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type GetScheduledActionResponse = GetScheduledActionResponses[keyof GetScheduledActionResponses];
+
 export type UpdateScheduledActionData = {
     body: UpdateScheduledAction;
     path: {
@@ -418,12 +499,20 @@ export type ExecuteScheduledActionNowData = {
 export type ExecuteScheduledActionNowErrors = {
     400: string;
     401: string;
+    /**
+     * AI allowance exhausted
+     */
+    402: AiAdmissionErrorBody;
     404: string;
     /**
      * Action is already running
      */
     409: string;
     500: string;
+    /**
+     * AI usage validation unavailable; retry later
+     */
+    503: AiAdmissionErrorBody;
 };
 
 export type ExecuteScheduledActionNowError = ExecuteScheduledActionNowErrors[keyof ExecuteScheduledActionNowErrors];

@@ -36,6 +36,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 
 use agent_client_protocol::schema::v1::{
     ContentBlock, EmbeddedResourceResource, InitializeRequest, InitializeResponse,
@@ -94,6 +95,8 @@ pub(crate) struct GenAiProjector {
     tool_definitions: SharedToolDefinitions,
     /// The `initialize` request whose response names the harness.
     initialize: Option<RequestId>,
+    /// ACP initialization requests, kept open until their matching response.
+    initialization_spans: HashMap<RequestId, tracing::Span>,
     /// Requests whose responses carry the session's config options (and so
     /// its model): `session/new`, `session/load`, `session/resume`, and every
     /// `session/set_config_option`.
@@ -114,6 +117,13 @@ pub(crate) struct GenAiProjector {
 struct Turn {
     request_id: RequestId,
     span: tracing::Span,
+    /// When the prompt went out, so the first output back dates the turn's
+    /// time to first output.
+    started: Instant,
+    first_output_recorded: bool,
+    first_text_recorded: bool,
+    first_reasoning_recorded: bool,
+    first_tool_call_recorded: bool,
     /// The agent's output, in order: prose, reasoning and tool calls.
     parts: Vec<OutputPart>,
     /// Facts recorded at open so they are not recorded twice at close. Each
@@ -121,6 +131,13 @@ struct Turn {
     agent_name_recorded: bool,
     model_recorded: bool,
     definitions_recorded: bool,
+}
+
+/// Independent milestones: a tool call must not stop the answer-text clock.
+enum OutputKind {
+    Text,
+    Reasoning,
+    ToolCall,
 }
 
 enum OutputPart {
@@ -186,6 +203,7 @@ impl GenAiProjector {
             model: None,
             tool_definitions,
             initialize: None,
+            initialization_spans: HashMap::new(),
             config_requests: HashSet::new(),
             turn: None,
             tools: HashMap::new(),
@@ -210,6 +228,20 @@ impl GenAiProjector {
             return;
         };
         let method = &request.method;
+        if InitializeRequest::matches_method(method)
+            || NewSessionRequest::matches_method(method)
+            || LoadSessionRequest::matches_method(method)
+            || ResumeSessionRequest::matches_method(method)
+        {
+            let span = tracing::info_span!(
+                parent: parent.and_then(tracing::Span::id),
+                "agent.init.acp",
+                agent.session.id = %self.session,
+                rpc.method = %method,
+                outcome = tracing::field::Empty,
+            );
+            self.initialization_spans.insert(request.id.clone(), span);
+        }
         if InitializeRequest::matches_method(method) {
             self.initialize = Some(request.id.clone());
         } else if NewSessionRequest::matches_method(method)
@@ -240,9 +272,16 @@ impl GenAiProjector {
         };
         match frame {
             RawJsonRpcMessage::Response(Response::Result { id, result }) => {
+                if let Some(span) = self.initialization_spans.remove(id) {
+                    span.record("outcome", "success");
+                }
                 self.on_result(id, result);
             }
             RawJsonRpcMessage::Response(Response::Error { id, error }) => {
+                if let Some(span) = self.initialization_spans.remove(id) {
+                    span.record("outcome", "error");
+                    span.set_error("acp_initialization_failed", "ACP initialization failed");
+                }
                 if self
                     .turn
                     .as_ref()
@@ -268,6 +307,13 @@ impl GenAiProjector {
     /// The connection is over. A turn in flight ends in error; tool calls
     /// still open are marked abandoned.
     pub(crate) fn on_stopped(&mut self, reason: &StopReason) {
+        for (_, span) in self.initialization_spans.drain() {
+            span.record("outcome", "stopped");
+            span.set_error(
+                "session_stopped",
+                "Session stopped during ACP initialization",
+            );
+        }
         if let Some(turn) = self.turn.take() {
             self.end_turn(turn, Outcome::Stopped(reason));
         }
@@ -310,9 +356,29 @@ impl GenAiProjector {
 
     fn on_update(&mut self, update: SessionUpdate) {
         match update {
-            SessionUpdate::AgentMessageChunk(chunk) => self.append_output(&chunk.content, false),
-            SessionUpdate::AgentThoughtChunk(chunk) => self.append_output(&chunk.content, true),
-            SessionUpdate::ToolCall(call) => self.open_tool(call),
+            SessionUpdate::AgentMessageChunk(chunk) => {
+                self.note_first_output();
+                if let ContentBlock::Text(text) = &chunk.content
+                    && !text.text.trim().is_empty()
+                {
+                    self.note_output_kind(OutputKind::Text);
+                }
+                self.append_output(&chunk.content, false);
+            }
+            SessionUpdate::AgentThoughtChunk(chunk) => {
+                self.note_first_output();
+                if let ContentBlock::Text(text) = &chunk.content
+                    && !text.text.trim().is_empty()
+                {
+                    self.note_output_kind(OutputKind::Reasoning);
+                }
+                self.append_output(&chunk.content, true);
+            }
+            SessionUpdate::ToolCall(call) => {
+                self.note_first_output();
+                self.note_output_kind(OutputKind::ToolCall);
+                self.open_tool(call);
+            }
             SessionUpdate::ToolCallUpdate(update) => self.patch_tool(update),
             SessionUpdate::ConfigOptionUpdate(update) => {
                 self.apply_config_options(update.config_options);
@@ -329,6 +395,52 @@ impl GenAiProjector {
             // chunks: nothing a judge of the turn needs.
             _ => {}
         }
+    }
+
+    /// Date the turn's first streamed output once; later chunks are the
+    /// model talking, not the harness waking up.
+    fn note_first_output(&mut self) {
+        let Some(turn) = &mut self.turn else {
+            return;
+        };
+        if turn.first_output_recorded {
+            return;
+        }
+        turn.first_output_recorded = true;
+        let elapsed_ms = u64::try_from(turn.started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        turn.span
+            .set_u64(attr::MACRO_TIME_TO_FIRST_OUTPUT_MS, elapsed_ms);
+    }
+
+    fn note_output_kind(&mut self, kind: OutputKind) {
+        let Some(turn) = &mut self.turn else {
+            return;
+        };
+        let (recorded, attribute, kind) = match kind {
+            OutputKind::Text => (
+                &mut turn.first_text_recorded,
+                attr::MACRO_TIME_TO_FIRST_TEXT_MS,
+                "text",
+            ),
+            OutputKind::Reasoning => (
+                &mut turn.first_reasoning_recorded,
+                attr::MACRO_TIME_TO_FIRST_REASONING_MS,
+                "reasoning",
+            ),
+            OutputKind::ToolCall => (
+                &mut turn.first_tool_call_recorded,
+                attr::MACRO_TIME_TO_FIRST_TOOL_CALL_MS,
+                "tool_call",
+            ),
+        };
+        if *recorded {
+            return;
+        }
+        *recorded = true;
+        let elapsed_ms = u64::try_from(turn.started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        turn.span.set_u64(attribute, elapsed_ms);
+        // Emit immediately as well: an unfinished turn's span may not be exported yet.
+        tracing::info!(parent: &turn.span, output_kind = kind, elapsed_ms, "agent first output milestone");
     }
 
     fn apply_config_options(&mut self, options: Vec<SessionConfigOption>) {
@@ -373,6 +485,11 @@ impl GenAiProjector {
         let mut turn = Turn {
             request_id,
             span,
+            started: Instant::now(),
+            first_output_recorded: false,
+            first_text_recorded: false,
+            first_reasoning_recorded: false,
+            first_tool_call_recorded: false,
             parts: Vec::new(),
             agent_name_recorded: false,
             model_recorded: false,

@@ -14,16 +14,20 @@ const request = (body: unknown) =>
   });
 
 describe('agent context', () => {
-  it.each(['channel', 'document', 'initiative', 'crm_company', 'crm_contact'])(
-    'composes a prompt posted on a %s parent',
-    async (type) => {
-      const response = await request({
-        promptMarkdown: 'tell me more',
-        parent: { type, id: 'parent-1' },
-      });
-      expect(response.status).toBe(200);
-      const { markdown } = await response.json<{ markdown: string }>();
-      expect(markdown).toContain(`conversation type=\\"${type}\\"`);
-    }
-  );
+  it.each([
+    'channel',
+    'document',
+    'initiative',
+    'crm_company',
+    'crm_contact',
+    'call',
+  ])('composes a prompt posted on a %s parent', async (type) => {
+    const response = await request({
+      promptMarkdown: 'tell me more',
+      parent: { type, id: 'parent-1' },
+    });
+    expect(response.status).toBe(200);
+    const { markdown } = await response.json<{ markdown: string }>();
+    expect(markdown).toContain(`conversation type=\\"${type}\\"`);
+  });
 });

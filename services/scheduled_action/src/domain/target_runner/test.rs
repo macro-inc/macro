@@ -27,34 +27,83 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const USER: &str = "macro|routine@macro.com";
 
-#[derive(Default)]
-struct Model {
-    calls: Mutex<Vec<&'static str>>,
-    events: Mutex<Vec<Option<EventReference>>>,
+struct NoModelAdmission;
+
+impl ai_billing::AiAdmissionService for NoModelAdmission {
+    fn admit<'a>(
+        &'a self,
+        _: &'a MacroUserIdStr<'_>,
+        _: ai_usage::AiFeature,
+    ) -> ai_billing::AdmissionFuture<'a> {
+        panic!("agent funding must be decided by the session/harness service")
+    }
 }
 
-impl ScheduledAgentRunner for Model {
-    async fn prepare(&self, _: &ScheduledAction, handle: &mut ExecutionHandle) -> Result<()> {
-        self.calls.lock().unwrap().push("prepare");
-        handle.resource = Some(ExecutionResource {
-            resource_type: ExecutionResourceType::Chat,
-            id: "legacy-chat".into(),
+#[tokio::test]
+async fn agent_targets_delegate_admission_and_never_apply_the_model_gate() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+
+    for admission_error in [
+        None,
+        Some(AiAdmissionError::Denied(DenyReason::AllowanceExhausted)),
+        Some(AiAdmissionError::Unavailable),
+    ] {
+        let runner = Arc::new(runner(Sessions {
+            prepare_error: admission_error.map(RoutineSessionError::Admission),
+            statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+            ..Default::default()
+        }));
+        let live = Arc::new(Live::default());
+        let executor = InProcessExecutor::new(
+            Arc::new(UnusedRepo),
+            runner.clone(),
+            live.clone(),
+            TaskTracker::new(),
+            CancellationToken::new(),
+        )
+        .with_admission(Arc::new(NoModelAdmission));
+        let run = event_run();
+        let result = executor.execute(&run, std::future::pending()).await;
+        let record = result.record.unwrap();
+        let preparations = runner.sessions.preparations.lock().unwrap();
+        assert_eq!(preparations.len(), 1);
+        assert_eq!(
+            &preparations[0].selection.owner,
+            run.action.owner_user().unwrap()
+        );
+        assert!(runner.sessions.stops.lock().unwrap().is_empty());
+        if let Some(error) = admission_error {
+            assert_eq!(result.outcome, EventRunOutcome::Failed);
+            assert!(!record.is_success);
+            assert!(record.resource_id.is_none());
+            assert_eq!(record.result["error"], error.to_string());
+            assert!(runner.sessions.prompts.lock().unwrap().is_empty());
+            assert!(runner.sessions.reads.lock().unwrap().is_empty());
+            assert!(live.0.lock().unwrap().is_empty());
+        } else {
+            assert_eq!(result.outcome, EventRunOutcome::Succeeded);
+            assert!(record.is_success);
+            assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
+        }
+    }
+}
+
+#[tokio::test]
+async fn agent_preparation_preserves_typed_admission_failures() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let runner = runner(Sessions {
+            prepare_error: Some(RoutineSessionError::Admission(error)),
+            ..Default::default()
         });
-        Ok(())
-    }
-    async fn run(
-        &self,
-        _: &ScheduledAction,
-        _: &ExecutionHandle,
-        event: Option<&EventReference>,
-    ) -> Result<()> {
-        self.calls.lock().unwrap().push("run");
-        self.events.lock().unwrap().push(event.cloned());
-        Ok(())
-    }
-    async fn cancel(&self, _: &ScheduledAction, _: &ExecutionHandle) -> Result<()> {
-        self.calls.lock().unwrap().push("cancel");
-        Ok(())
+        let mut handle = ExecutionHandle::default();
+        let returned = runner.prepare(&action(), &mut handle).await.unwrap_err();
+        assert_eq!(returned.downcast_ref::<AiAdmissionError>(), Some(&error));
+        assert!(handle.resource.is_none());
+        assert!(runner.sessions.reads.lock().unwrap().is_empty());
     }
 }
 
@@ -170,8 +219,8 @@ fn event() -> EventReference {
     .unwrap()
 }
 
-fn runner(sessions: Sessions) -> TargetRunner<Model, Sessions> {
-    TargetRunner::new(Arc::new(Model::default()), Arc::new(sessions))
+fn runner(sessions: Sessions) -> TargetRunner<Sessions> {
+    TargetRunner::new(Arc::new(sessions))
 }
 
 fn assert_identity(
@@ -184,26 +233,63 @@ fn assert_identity(
     assert_eq!(identity.action_id.as_uuid(), handle.action_id);
     assert_eq!(
         serde_json::to_value(identity.bot_id).unwrap(),
-        action.task["agent"]["bot_id"]
+        action
+            .task
+            .get("agent")
+            .filter(|agent| !agent.is_null())
+            .map(|agent| agent["bot_id"].clone())
+            .unwrap_or_else(|| json!(bot_id::MACRO_NEW_BOT_ID))
     );
 }
 
 #[tokio::test]
-async fn model_targets_delegate_all_operations_and_event_context() {
-    let runner = runner(Sessions::default());
-    let mut action = action();
-    action.task.as_object_mut().unwrap().remove("agent");
-    let mut handle = ExecutionHandle::default();
-    let event = event();
-    runner.prepare(&action, &mut handle).await.unwrap();
-    runner.run(&action, &handle, Some(&event)).await.unwrap();
-    runner.cancel(&action, &handle).await.unwrap();
-    assert_eq!(
-        *runner.model.calls.lock().unwrap(),
-        ["prepare", "run", "cancel"]
-    );
-    assert_eq!(*runner.model.events.lock().unwrap(), [Some(event)]);
-    assert!(runner.sessions.preparations.lock().unwrap().is_empty());
+async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_context() {
+    for event in [None, Some(event())] {
+        let runner = runner(Sessions {
+            statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+            ..Default::default()
+        });
+        let mut action = action();
+        action.task.as_object_mut().unwrap().remove("agent");
+        let mut handle = ExecutionHandle::default();
+        runner.prepare(&action, &mut handle).await.unwrap();
+        runner.run(&action, &handle, event.as_ref()).await.unwrap();
+        runner.cancel(&action, &handle).await.unwrap();
+
+        let preparations = runner.sessions.preparations.lock().unwrap();
+        assert_eq!(preparations.len(), 1);
+        assert_eq!(preparations[0].selection.bot_id, bot_id::MACRO_NEW_BOT_ID);
+        assert_eq!(
+            preparations[0].selection.model.as_deref(),
+            Some("runtime/model")
+        );
+        assert_eq!(
+            &preparations[0].selection.owner,
+            action.owner_user().unwrap()
+        );
+        assert_eq!(preparations[0].session_id.as_uuid(), handle.session_id);
+
+        let prompts = runner.sessions.prompts.lock().unwrap();
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(
+            prompts[0].prompt,
+            first_prompt(&task(&action).unwrap(), event.as_ref()).unwrap()
+        );
+        let identity = &prompts[0].action;
+        assert_eq!(identity.bot_id, bot_id::MACRO_NEW_BOT_ID);
+        assert_eq!(identity.session_id.as_uuid(), handle.session_id);
+        assert_eq!(identity.action_id.as_uuid(), handle.action_id);
+        assert_eq!(&identity.owner, action.owner_user().unwrap());
+        assert_identity(
+            &runner.sessions.reads.lock().unwrap()[0].1,
+            &action,
+            &handle,
+        );
+        assert_identity(&runner.sessions.stops.lock().unwrap()[0], &action, &handle);
+        let resource = handle.resource.unwrap();
+        assert_eq!(resource.resource_type, ExecutionResourceType::Agent);
+        assert_eq!(resource.id, handle.session_id.to_string());
+    }
 }
 
 #[tokio::test(start_paused = true)]
@@ -246,7 +332,6 @@ async fn fast_completion_keeps_owner_override_ids_and_context_in_one_prompt() {
         handle.resource.unwrap().resource_type,
         ExecutionResourceType::Agent
     );
-    assert!(runner.model.calls.lock().unwrap().is_empty());
     assert!(runner.sessions.stops.lock().unwrap().is_empty());
 }
 
@@ -360,7 +445,6 @@ async fn ambiguous_prompt_is_never_retried_and_keeps_resource_for_failed_history
     assert!(runner.sessions.reads.lock().unwrap().is_empty());
     assert_identity(&runner.sessions.stops.lock().unwrap()[0], &action, &handle);
     assert_eq!(handle.resource.unwrap().id, handle.session_id.to_string());
-    assert!(runner.model.calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -393,7 +477,6 @@ async fn offline_byoa_and_rejected_overrides_never_fall_back() {
         runner.cancel(&action, &handle).await.unwrap();
         assert_identity(&runner.sessions.stops.lock().unwrap()[0], &action, &handle);
         assert!(runner.sessions.prompts.lock().unwrap().is_empty());
-        assert!(runner.model.calls.lock().unwrap().is_empty());
         assert_eq!(runner.sessions.preparations.lock().unwrap().len(), 1);
     }
 }
@@ -463,7 +546,6 @@ async fn all_terminal_failures_and_authorization_errors_fail_without_retry() {
         runner.prepare(&action, &mut handle).await.unwrap();
         assert!(runner.run(&action, &handle, None).await.is_err());
         assert_eq!(runner.sessions.reads.lock().unwrap().len(), 1);
-        assert!(runner.model.calls.lock().unwrap().is_empty());
     }
 }
 
@@ -491,7 +573,12 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn delete_action(&self, _: &Uuid) -> Result<()> {
         unimplemented!()
     }
-    async fn claim_action(&self, _: &Uuid, _: ConfigurationRevision) -> Result<ClaimToken> {
+    async fn claim_action(
+        &self,
+        _: &Uuid,
+        _: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<ClaimToken> {
         unimplemented!()
     }
     async fn release_action(&self, _: &Uuid, _: ClaimToken) -> Result<()> {
@@ -597,12 +684,11 @@ async fn executor_deadline_stops_preallocated_session_even_during_preparation() 
                 ]
             ));
         }
-        assert!(runner.model.calls.lock().unwrap().is_empty());
     }
 }
 
 #[tokio::test]
-async fn executor_failed_prompt_finalizes_agent_history_and_stops_once() {
+async fn executor_failed_model_prompt_keeps_session_history_and_stops_once() {
     let runner = Arc::new(runner(Sessions {
         prompt_error: Some(RoutineSessionError::PromptDeliveryUnknown),
         ..Default::default()
@@ -614,7 +700,9 @@ async fn executor_failed_prompt_finalizes_agent_history_and_stops_once() {
         TaskTracker::new(),
         CancellationToken::new(),
     );
-    let result = executor.execute(&event_run(), std::future::pending()).await;
+    let mut run = event_run();
+    run.action.task.as_object_mut().unwrap().remove("agent");
+    let result = executor.execute(&run, std::future::pending()).await;
     assert_eq!(result.outcome, EventRunOutcome::Failed);
     let record = result.record.unwrap();
     let metadata: ExecutionResult = serde_json::from_value(record.result).unwrap();
@@ -623,6 +711,53 @@ async fn executor_failed_prompt_finalizes_agent_history_and_stops_once() {
     assert_eq!(record.resource_id, Some(resource.id));
     assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
     assert_eq!(runner.sessions.stops.lock().unwrap().len(), 1);
+    assert_eq!(
+        runner.sessions.stops.lock().unwrap()[0].bot_id,
+        bot_id::MACRO_NEW_BOT_ID
+    );
+}
+
+#[tokio::test]
+async fn executor_failed_prompt_finalizes_agent_history_and_stops_once() {
+    use ai_billing::{AiAdmissionError, DenyReason};
+    for error in [
+        RoutineSessionError::PromptDeliveryUnknown,
+        RoutineSessionError::Admission(AiAdmissionError::Denied(DenyReason::AllowanceExhausted)),
+        RoutineSessionError::Admission(AiAdmissionError::Unavailable),
+    ] {
+        let runner = Arc::new(runner(Sessions {
+            prompt_error: Some(error),
+            ..Default::default()
+        }));
+        let live = Arc::new(Live::default());
+        let executor = InProcessExecutor::new(
+            Arc::new(UnusedRepo),
+            runner.clone(),
+            live.clone(),
+            TaskTracker::new(),
+            CancellationToken::new(),
+        );
+        let result = executor.execute(&event_run(), std::future::pending()).await;
+        assert_eq!(result.outcome, EventRunOutcome::Failed);
+        let record = result.record.unwrap();
+        let metadata: ExecutionResult = serde_json::from_value(record.result).unwrap();
+        let resource = metadata.resource.unwrap();
+        assert_eq!(resource.resource_type, ExecutionResourceType::Agent);
+        assert_eq!(record.resource_id, Some(resource.id));
+        assert_eq!(metadata.error, Some(error.to_string()));
+        assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
+        assert_eq!(runner.sessions.stops.lock().unwrap().len(), 1);
+        assert!(matches!(
+            live.0.lock().unwrap().as_slice(),
+            [
+                ScheduledActionUpdate::Started { .. },
+                ScheduledActionUpdate::Stopped {
+                    is_success: false,
+                    ..
+                },
+            ]
+        ));
+    }
 }
 
 #[tokio::test]
@@ -650,5 +785,4 @@ async fn invalid_targets_and_non_user_owners_never_reach_sessions() {
         );
     }
     assert!(runner.sessions.preparations.lock().unwrap().is_empty());
-    assert!(runner.model.calls.lock().unwrap().is_empty());
 }

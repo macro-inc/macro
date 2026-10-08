@@ -92,6 +92,8 @@ async fn enqueue(engine: &mut Engine<InMemoryStorage>, value: &str, now: i64) ->
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                client_metadata: None,
+                identity_bindings: &[],
                 uuid: UUID,
                 query: MUTATION,
                 operation_name: Some("Set"),
@@ -175,7 +177,12 @@ fn cold_parent_needs_no_query_root_or_cached_page_for_enqueue_and_replay() {
         let mut engine = Engine::new(storage);
         let txn = enqueue(&mut engine, "urgent", 1).await;
         let mut engine = Engine::new(engine.into_storage());
-        let selection = RecordSelection::parse(FRAGMENT, "AssignmentParent").unwrap();
+        let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            FRAGMENT,
+            "AssignmentParent",
+        )
+        .unwrap();
         let key = EntityKey("GraphqlSoupDocument:task-1".into());
         let records = engine
             .read_records_by_keys(&selection, std::slice::from_ref(&key))
@@ -242,7 +249,12 @@ fn pending_assignment_replays_after_its_original_page_is_evicted() {
             pending
         );
         let mut engine = Engine::new(engine.into_storage());
-        let selection = RecordSelection::parse(FRAGMENT, "AssignmentParent").unwrap();
+        let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            FRAGMENT,
+            "AssignmentParent",
+        )
+        .unwrap();
         let keys = [EntityKey("GraphqlSoupDocument:task-1".into())];
         let records = engine
             .read_records_by_keys(&selection, &keys)

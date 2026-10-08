@@ -5,8 +5,15 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useInfiniteScrollSentinel } from '@companies/Company/use-infinite-scroll-sentinel';
+import {
+  type OpenPrLink,
+  PrLinkChips,
+  PrLinksPending,
+  PrPriorityBadge,
+} from '@block-pr/component/PrLinks';
+import { type PrLinks, priorityTaskName } from '@block-pr/data/pr-links';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import {
@@ -38,8 +45,18 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import type { ReviewsListController } from '../primitives/create-reviews-list-controller';
 import type { useReviewsQuery } from '../queries/use-reviews-query';
 import { isAuthoredBy } from '../reviews-filter';
-import type { ReviewsScope } from '../reviews-types';
+import {
+  type ReviewsScope,
+  scopeMatchesViewerGithubId,
+} from '../reviews-types';
 import { ReviewsEmptyState } from './ReviewsEmptyState';
+
+/** What each row links to, loaded alongside the list. */
+export type ReviewsListLinks = {
+  linksFor: (review: GithubPullRequestEntity) => PrLinks | undefined;
+  companyName: (id: string) => string | undefined;
+  onOpen: OpenPrLink;
+};
 
 export type ReviewsListProps = {
   list: ReviewsListController;
@@ -51,11 +68,11 @@ export type ReviewsListProps = {
   githubIdentityLoading: boolean;
   githubAccountStatus?: GithubLinkStatus | 'error';
   search: string;
-  selectedRepositories: readonly string[];
-  selectedAuthors: readonly string[];
+  hasFilters: boolean;
   onClearSearch: () => void;
   onClearFilters: () => void;
   onOpen: (foreignEntityId: string, newSplit: boolean) => void;
+  links: ReviewsListLinks;
 };
 
 const copyLink = makeCopyLinkAction();
@@ -71,6 +88,7 @@ function ReviewRow(props: {
   onChecked: (checked: boolean, shiftKey: boolean) => void;
   favoriteAction: ReturnType<typeof makeFavoriteAction>;
   onOpen: ReviewsListProps['onOpen'];
+  links: ReviewsListLinks;
   onActivate: (newSplit: boolean) => void;
   onClick: (event: MouseEvent) => void;
   onFocus: () => void;
@@ -97,6 +115,30 @@ function ReviewRow(props: {
           checked={props.checked}
           onChecked={props.onChecked}
           onClick={props.onClick}
+          titleLeading={
+            <Show when={props.links.linksFor(props.review)}>
+              {(links) => (
+                <PrPriorityBadge
+                  priority={links().priority}
+                  taskName={priorityTaskName(links())}
+                />
+              )}
+            </Show>
+          }
+          meta={
+            <Show
+              when={props.links.linksFor(props.review)}
+              fallback={<PrLinksPending />}
+            >
+              {(links) => (
+                <PrLinkChips
+                  links={links()}
+                  companyName={props.links.companyName}
+                  onOpen={props.links.onOpen}
+                />
+              )}
+            </Show>
+          }
         />
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
@@ -148,8 +190,8 @@ export function ReviewsList(props: ReviewsListProps) {
   const list = props.list;
   const reviews = list.items.all;
   const selectedReviews = list.selection.items;
-  const missingIdentity = () =>
-    props.scope === 'authored' && !props.authorLogin && !props.authorId;
+  const matchesViewer = () => scopeMatchesViewerGithubId(props.scope);
+  const missingIdentity = () => matchesViewer() && !props.authorId;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   const listSize = createElementSize(listElement);
@@ -179,7 +221,11 @@ export function ReviewsList(props: ReviewsListProps) {
     selectedEntities: list.selection.items,
     focusedEntity: list.focus.item,
     restoreFocus: () => listElement()?.focus(),
-    viewContext: () => ({ supportsMarkDone: false, senderBucket: undefined }),
+    viewContext: () => ({
+      supportsMarkDone: false,
+      supportsOpenInNewSplit: true,
+      senderBucket: undefined,
+    }),
     splitHandle: panel.handle,
     condition: panel.isPanelActive,
   });
@@ -207,7 +253,7 @@ export function ReviewsList(props: ReviewsListProps) {
       source.isLoadingMore() ||
       source.pageError() ||
       !source.hasMore() ||
-      (props.scope === 'authored' && props.githubIdentityLoading)
+      (matchesViewer() && props.githubIdentityLoading)
     )
       return;
     if (element.scrollHeight - element.scrollTop - element.clientHeight < 320)
@@ -223,7 +269,7 @@ export function ReviewsList(props: ReviewsListProps) {
     rootMargin: '320px',
   });
 
-  // The visible rows can be sparser than the fetched pages after local filters.
+  // The visible rows can be sparser than the fetched pages after a local search.
   // Measure the scroll area after rendering each page and keep fetching until
   // the viewport fills, a result is reachable, or pagination ends.
   createEffect(() => {
@@ -255,7 +301,7 @@ export function ReviewsList(props: ReviewsListProps) {
           <Match
             when={
               source.isLoading() ||
-              (props.scope === 'authored' && props.githubIdentityLoading)
+              (matchesViewer() && props.githubIdentityLoading)
             }
           >
             <div
@@ -307,13 +353,8 @@ export function ReviewsList(props: ReviewsListProps) {
                           <ReviewsEmptyState
                             scope={props.scope}
                             search={props.search}
-                            hasFilters={
-                              props.selectedRepositories.length > 0 ||
-                              props.selectedAuthors.length > 0
-                            }
-                            hasAuthorIdentity={Boolean(
-                              props.authorLogin || props.authorId
-                            )}
+                            hasFilters={props.hasFilters}
+                            hasAuthorIdentity={Boolean(props.authorId)}
                             githubAccountStatus={props.githubAccountStatus}
                             onClearSearch={props.onClearSearch}
                             onClearFilters={props.onClearFilters}
@@ -367,6 +408,7 @@ export function ReviewsList(props: ReviewsListProps) {
                         }
                         favoriteAction={favoriteAction}
                         onOpen={props.onOpen}
+                        links={props.links}
                         onChecked={(checked, shiftKey) =>
                           listInteractions.selection.set(review.id, checked, {
                             range: shiftKey,

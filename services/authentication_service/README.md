@@ -2,6 +2,20 @@
 
 ## Development signup allowlist
 
+### Temporary open signup override
+
+Develop currently allows every public signup, even when
+`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` is `false` or absent. The temporary override
+in `Config::signup_policy_for_environment` skips the allowlist for both runtime
+startup and Doppler validation. Production and Local behavior is unchanged.
+
+Deploy the authentication service to apply this change. To restore allowlist
+enforcement, remove the temporary override, confirm the Develop allowlist is
+valid and the bypass flag is `false`, and redeploy. Changing Doppler alone cannot
+disable this override. Existing accounts remain after enforcement is restored.
+
+The configuration behavior described below applies once the override is removed.
+
 The authentication service gates new signups with a startup-built `SignupPolicy`.
 The policy is enforced authoritatively by the existing FusionAuth `user.create`
 webhook at `/webhooks/user`. FusionAuth is configured for `user.create` with

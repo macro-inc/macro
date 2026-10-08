@@ -67,6 +67,7 @@ function responseFor(request: CacheRequest): unknown {
         transactionId: '1',
         initialClaim: { kind: 'not-runnable' },
       };
+    case 'inspect-mutations':
     case 'inspect-query':
     case 'inspect-query-variants':
       return [];
@@ -495,7 +496,7 @@ describe('createWorkerCacheHost', () => {
         query: 'mutation Rename { rename { id } }',
         data: { rename: { id: 'doc-1' } },
       }),
-      host.rollbackOptimisticWrite('2', claim, 'denied'),
+      host.rollbackOptimisticWrite('2', claim, 'denied', 'DRAFT_ALREADY_SENT'),
       host.invalidate(['User:1']),
       host.deleteRecords(['Document:1']),
       host.teardown(7),
@@ -503,6 +504,9 @@ describe('createWorkerCacheHost', () => {
     ]);
 
     const requests = requireAdapter().requests;
+    expect(
+      requests.find((request) => request.kind === 'rollback-optimistic-write')
+    ).toMatchObject({ errorCode: 'DRAFT_ALREADY_SENT', error: 'denied' });
     expect(requests.map(({ id, kind }) => [id, kind])).toEqual([
       [1, 'init'],
       [2, 'read'],
@@ -781,28 +785,34 @@ describe('createWorkerCacheHost', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('times out a hung current-revision request', async () => {
-    vi.useFakeTimers();
-    configureAdapter = (fake) => fake.ignoredKinds.add('current-revision');
-    const host = createWorkerCacheHost({
-      scope: 'scope-1',
-      requestTimeoutMs: 10,
-    });
+  it.each(['current-revision', 'inspect-mutations'] as const)(
+    'times out a hung %s request',
+    async (kind) => {
+      vi.useFakeTimers();
+      configureAdapter = (fake) => fake.ignoredKinds.add(kind);
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        requestTimeoutMs: 10,
+      });
 
-    const revision = host.currentRevision();
-    const revisionRejected = expect(revision).rejects.toThrow(
-      'cache worker timeout: current-revision'
-    );
+      const revision =
+        kind === 'inspect-mutations'
+          ? host.inspectMutations!()
+          : host.currentRevision();
+      const revisionRejected = expect(revision).rejects.toThrow(
+        `cache worker timeout: ${kind}`
+      );
 
-    await vi.advanceTimersByTimeAsync(11);
-    await revisionRejected;
-    expect(requireAdapter().requests.map(({ kind }) => kind)).toEqual([
-      'init',
-      'current-revision',
-    ]);
-    host.dispose();
-    expect(vi.getTimerCount()).toBe(0);
-  });
+      await vi.advanceTimersByTimeAsync(11);
+      await revisionRejected;
+      expect(requireAdapter().requests.map(({ kind }) => kind)).toEqual([
+        'init',
+        kind,
+      ]);
+      host.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
 
   it('recovers typed initial epoch loss with fresh init handshakes only', async () => {
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
@@ -1324,9 +1334,11 @@ describe('createWorkerCacheHost', () => {
       },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
+    const transportError = new Error('coordinator MessagePort messageerror');
     const mutationRejected = expect(mutation).rejects.toMatchObject({
       message: expect.stringContaining('coordinator MessagePort messageerror'),
       errorCode: 'admitted-enqueue-uncertain',
+      cause: transportError,
     });
     await vi.waitFor(() =>
       expect(
@@ -1336,7 +1348,7 @@ describe('createWorkerCacheHost', () => {
       ).toHaveLength(1)
     );
 
-    adapter.terminalError(new Error('coordinator MessagePort messageerror'));
+    adapter.terminalError(transportError);
     await mutationRejected;
     adapter.terminalError(new Error('duplicate terminal callback'));
     adapter.replace(2);
@@ -2017,6 +2029,7 @@ describe('createWorkerCacheHost', () => {
     );
     const rejected = expect(mutation).rejects.toMatchObject({
       errorCode: 'admitted-enqueue-uncertain',
+      cause: expect.any(CacheNavigationError),
     });
     await vi.waitFor(() =>
       expect(old.requests.at(-1)?.kind).toBe('enqueue-optimistic-mutation')
@@ -2051,6 +2064,7 @@ describe('createWorkerCacheHost', () => {
     const rejected = expect(mutation).rejects.toMatchObject({
       message: expect.stringContaining('disposed for page navigation'),
       errorCode: 'admitted-enqueue-uncertain',
+      cause: expect.any(CacheNavigationError),
     });
     await vi.waitFor(() =>
       expect(

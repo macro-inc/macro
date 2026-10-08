@@ -10,7 +10,11 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => false,
 }));
 
-async function renderOpenCard(keepOpenOnTriggerPress?: boolean) {
+async function renderOpenCard(
+  keepOpenOnTriggerPress?: boolean,
+  closeOnScroll?: boolean,
+  passThroughPointerEvents?: boolean
+) {
   const onOpenChange = vi.fn();
   render(() => (
     <>
@@ -18,6 +22,8 @@ async function renderOpenCard(keepOpenOnTriggerPress?: boolean) {
         open
         onOpenChange={onOpenChange}
         keepOpenOnTriggerPress={keepOpenOnTriggerPress}
+        closeOnScroll={closeOnScroll}
+        passThroughPointerEvents={passThroughPointerEvents}
         trigger={<span>Standup</span>}
         content={<div>Card</div>}
       />
@@ -53,5 +59,47 @@ describe('HoverCard', () => {
     fireEvent.pointerDown(screen.getByText('Elsewhere'));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('dismisses on outside scrolling by default', async () => {
+    const onOpenChange = await renderOpenCard();
+
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps stationary previews open through trigger presses and scrolling', async () => {
+    const onOpenChange = await renderOpenCard(true, false);
+
+    fireEvent.pointerDown(screen.getByText('Standup'));
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.pointerDown(screen.getByText('Elsewhere'));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('takes the pointer by default', async () => {
+    await renderOpenCard();
+
+    const content = screen.getByText('Card').parentElement;
+    expect(content?.className).not.toContain('pointer-events-none');
+    expect(
+      content?.closest<HTMLElement>('[data-popper-positioner]')?.style
+        .pointerEvents
+    ).toBe('');
+  });
+
+  it('lets the pointer through the card and its positioner when asked', async () => {
+    await renderOpenCard(undefined, undefined, true);
+
+    const content = screen.getByText('Card').parentElement;
+    expect(content?.className).toContain('pointer-events-none!');
+    expect(
+      content?.closest<HTMLElement>('[data-popper-positioner]')?.style
+        .pointerEvents
+    ).toBe('none');
   });
 });

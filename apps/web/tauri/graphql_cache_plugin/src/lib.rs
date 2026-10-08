@@ -23,11 +23,11 @@ pub mod commands;
 mod engine;
 
 pub use engine::{
-    AffectedOperationsResultWire, ClaimedMutationWire, CommitOptimisticWriteResultWire,
-    DeferOptimisticWriteResultWire, EngineHandle, EnqueueOptimisticMutationResultWire,
-    EntityFilterRequest, EntityFilterResult, InitialMutationClaimWire, PredicateBaselineEntry,
-    PredicateFilterResult, ReadResultWire, RecordSelectionResultWire,
-    RollbackOptimisticWriteResultWire, WriteResultWire,
+    AffectedOperationsResultWire, CalendarRangeResultWire, ClaimedMutationWire,
+    CommitOptimisticWriteResultWire, DeferOptimisticWriteResultWire, EngineHandle,
+    EnqueueOptimisticMutationResultWire, EntityFilterRequest, EntityFilterResult,
+    InitialMutationClaimWire, PredicateBaselineEntry, PredicateFilterResult, ReadResultWire,
+    RecordSelectionResultWire, RollbackOptimisticWriteResultWire, WriteResultWire,
 };
 
 /// Broadcast event carrying [`OpsAffectedEvent`]: operations whose
@@ -71,12 +71,19 @@ pub struct CacheChangedEvent {
 #[serde(rename_all = "camelCase")]
 struct MutationSettledEvent {
     transaction_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mutation_uuid: Option<String>,
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     replacement_transaction_id: Option<String>,
 }
+
+#[cfg(test)]
+mod test;
 
 struct InitializedCache {
     scope: String,
@@ -144,16 +151,20 @@ fn emit_cache_changed_with_search_changes<R: Runtime>(
 fn emit_mutation_settled<R: Runtime>(
     app: &AppHandle<R>,
     transaction_id: String,
+    mutation_uuid: Option<String>,
     status: &'static str,
     error: Option<String>,
+    error_code: Option<String>,
     replacement_transaction_id: Option<String>,
 ) {
     app.emit(
         MUTATION_SETTLED_EVENT,
         MutationSettledEvent {
             transaction_id,
+            mutation_uuid,
             status,
             error,
+            error_code,
             replacement_transaction_id,
         },
     )

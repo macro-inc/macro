@@ -19,7 +19,7 @@ mod test;
 
 pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 
-#[derive(Serialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 pub struct Schedule(String);
 
 impl Schedule {
@@ -67,7 +67,7 @@ pub struct AgentTask {
     /// Required for model targets; overrides the persona default for agent targets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<RoutineModelId>,
-    /// Absent for legacy model-only tasks.
+    /// Absent when using Macro's agent-session runtime with a selected model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentTaskAgent>,
     pub prompt: String,
@@ -114,6 +114,17 @@ pub enum ResolvedTaskTarget<'a> {
         /// None means use the selected persona's default at execution time.
         model: Option<&'a RoutineModelId>,
     },
+}
+
+impl<'a> ResolvedTaskTarget<'a> {
+    /// Use the same Macro runtime as the new AI composer for model selections.
+    /// Explicit agent selections keep their own runtime and optional model override.
+    pub fn session_target(self) -> (BotId, Option<&'a RoutineModelId>) {
+        match self {
+            Self::Model { model } => (bot_id::MACRO_NEW_BOT_ID, Some(model)),
+            Self::Agent { bot_id, model } => (bot_id, model),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -244,6 +255,8 @@ pub enum ActionPolicyError {
     NoFutureFirings,
     #[error("event-trigger management is not enabled")]
     EventManagementDisabled,
+    #[error("trigger conditions are not enabled")]
+    ConditionsDisabled,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
 }
@@ -329,6 +342,9 @@ pub struct ExecutionResult {
     pub version: u8,
     pub resource: Option<ExecutionResource>,
     pub error: Option<String>,
+    /// Present when an event trigger's condition stopped the run from starting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ConditionResult>,
 }
 
 impl ExecutionResult {
@@ -337,6 +353,53 @@ impl ExecutionResult {
             version: 1,
             resource,
             error,
+            condition: None,
+        }
+    }
+
+    /// A run its trigger's condition kept from starting. No agent ran.
+    pub fn skipped(condition: ConditionResult) -> Self {
+        let error = match condition {
+            ConditionResult::NotMet { .. } => None,
+            ConditionResult::Unavailable => Some(CONDITION_UNAVAILABLE_ERROR.to_owned()),
+        };
+        Self {
+            condition: Some(condition),
+            ..Self::new(None, error)
+        }
+    }
+}
+
+const CONDITION_UNAVAILABLE_ERROR: &str =
+    "The trigger's condition couldn't be checked, so this run was skipped.";
+
+/// Why an event-triggered run was skipped before it started.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ConditionResult {
+    /// The triggering content answered the condition with no.
+    NotMet {
+        /// The classifier's probability, from 0 to 1, that the answer was yes.
+        probability: f32,
+    },
+    /// The condition could not be checked before the retry window closed.
+    Unavailable,
+}
+
+impl ActionExecutionRecord {
+    /// History for a run that was skipped at `at` without starting an agent.
+    pub fn skipped(action_id: Uuid, at: DateTime<Utc>, condition: ConditionResult) -> Self {
+        let is_success = matches!(condition, ConditionResult::NotMet { .. });
+        Self {
+            id: None,
+            action_id,
+            resource_id: None,
+            start_time: at,
+            end_time: at,
+            is_success,
+            result: serde_json::to_value(ExecutionResult::skipped(condition))
+                .expect("execution results serialize"),
+            created_at: at,
         }
     }
 }

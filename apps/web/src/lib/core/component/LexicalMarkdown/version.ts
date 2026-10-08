@@ -24,5 +24,12 @@
  * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
  * Version 4.3 - Sep 2026. ReplyTargetNode references a message parent (channel or document) instead of a channel id.
  * Version 4.4 - Sep 2026. Expanded agent session mentions are block decorators with node selection.
+ * Version 5.0 - Sep 2026. Added CursorSystemNotificationNode (Cursor `<system_notification>` event cards).
+ * Version 6.0 - Oct 2026. Added source-only DatabaseQueryNode: a live database answer pointing at a saved query (`queryId`), with its table, title, and table or chart display (bar, line, area, scatter, pie; optional `color` and `stack`).
+ * Version 6.1 - Oct 2026. ReplyTargetNode accepts call, initiative, and CRM message parents.
+ * Version 6.2 - Oct 2026. DocumentCardNode preview data can reserve poll height using its option count.
+ * Version 7.0 - Oct 2026. Added TaskListNode: replaces ListNode at runtime, serializes as
+ *   `task-list` with the `list` wire shape plus optional `$.taskListView` node state
+ *   (persisted check-list task filters).
  */
-export const MARKDOWN_VERSION_COUNTER = 4.4;
+export const MARKDOWN_VERSION_COUNTER = 7.0;

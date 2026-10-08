@@ -58,7 +58,7 @@ const tasksMotionStyles = `
 function eyebrowStyle(): JSX.CSSProperties {
   return {
     color: 'var(--a0)',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': breakpoint() ? '12px' : '16px',
     'letter-spacing': '0.08em',
     'text-transform': 'uppercase',
@@ -1311,7 +1311,7 @@ function _CaptureGraphic() {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': '12px',
             'font-weight': '700',
             'letter-spacing': '0.08em',
@@ -1588,7 +1588,7 @@ export function CaptureTaskGraphic() {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': '12px',
             'font-weight': '700',
             left: 'calc(50% + 15px)',
@@ -2862,8 +2862,8 @@ function Keycap(props: { label: string; wide?: boolean }) {
         'box-sizing': 'border-box',
         color: 'var(--c1)',
         display: 'inline-grid',
-        'font-family': 'rajdhani, body',
-        'font-size': mobile() ? '15px' : '17px',
+        'font-family': 'Inter, body',
+        'font-size': mobile() ? '15px' : '14px',
         'font-weight': '700',
         height: mobile() ? '40px' : '48px',
         'letter-spacing': '0.04em',
@@ -2922,7 +2922,7 @@ export function KeyboardGraphic(props: { columns?: number } = {}) {
             <span
               style={{
                 color: 'var(--c4)',
-                'font-family': 'rajdhani, body',
+                'font-family': 'Inter, body',
                 'font-size': mobile() ? '12px' : '13px',
                 'font-weight': '700',
                 'letter-spacing': '0.08em',
@@ -3086,7 +3086,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.02em',
@@ -3113,7 +3113,7 @@ function _ComparisonTable() {
       : 'transparent',
     color: macro ? 'var(--a0)' : 'var(--c2)',
     display: 'flex',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
     'font-weight': '700',
     'justify-content': 'center',
@@ -3385,7 +3385,7 @@ function _FaqSection() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : breakpoint() ? '38px' : '44px',
-            'font-weight': '410',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,
@@ -3819,7 +3819,7 @@ export function CreateTaskCreator() {
               'border-radius': '6px',
               color: 'var(--c2)',
               display: 'inline-flex',
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': '12px',
               'font-weight': '700',
               gap: '3px',
@@ -5074,7 +5074,7 @@ export function AgentHandoffGraphic() {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': '12px',
             'font-weight': '700',
             left: 'calc(50% + 15px)',

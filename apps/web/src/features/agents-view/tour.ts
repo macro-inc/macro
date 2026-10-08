@@ -4,6 +4,7 @@ import { defineViewTour } from '@app/features/tours/core/view-tour';
 import { defineTourTargets } from '@ui/components/Tour';
 
 export const AGENTS_TOUR = defineTourTargets('agents', [
+  'modeSwitch',
   'newChat',
   'rosterNav',
   'picker',
@@ -22,12 +23,20 @@ export const agentsTour = defineViewTour({
   title: 'Agents',
   steps: [
     {
+      target: AGENTS_TOUR.modeSwitch,
+      entry: [VIEW_SHELL_TOUR.sidebarToggle],
+      entryLabel: 'Open the sidebar to continue',
+      title: 'Switch between Work and Code',
+      description:
+        'Work shows your chat agents and their conversations. Code shows your coding agents, their sessions, and the repository each one works in.',
+    },
+    {
       target: AGENTS_TOUR.picker,
       entry: [AGENTS_TOUR.newChat, VIEW_SHELL_TOUR.sidebarToggle],
       entryLabel: 'Start a new conversation to continue',
       title: 'Choose your agent and model',
       description:
-        'Open this picker to choose a chat or coding agent. Models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
+        'Open this picker to choose an agent for the current mode. In Work, Macro’s models are listed here too; each agent’s submenu lets you choose a model for that conversation.',
     },
     {
       target: AGENTS_TOUR.agentsTab,
@@ -54,7 +63,7 @@ export const agentsTour = defineViewTour({
       target: APP_TOUR.createMenu,
       title: 'Put recurring work on a schedule',
       description:
-        'Use Create → Automation to give an agent instructions and a schedule—for example, a weekly summary or daily triage. Review the automation’s runs and pause it when you need to.',
+        'Use Create → Routine to give an agent instructions and a schedule—for example, a weekly summary or daily triage. Review the routine’s runs and pause it when you need to.',
     },
   ],
 });

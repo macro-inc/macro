@@ -6,16 +6,25 @@ import {
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
-import { createEffect, on, onCleanup, onMount, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+  onMount,
+  Suspense,
+} from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { driveLocationLabel } from './core/location-label';
 import {
@@ -32,7 +41,10 @@ import {
   createDriveViewState,
   type DriveRouteState,
 } from './primitives/drive-route-state';
-import { createDriveState } from './primitives/drive-state';
+import {
+  availableDriveState,
+  createDriveState,
+} from './primitives/drive-state';
 import { createDriveDataSource } from './queries/drive-data-source';
 import { createDriveSidebarSource } from './queries/drive-sidebar-source';
 import { documentsTour } from './tour';
@@ -45,19 +57,30 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const panel = useSplitPanelOrThrow();
   const navigation = useDriveDetailNavigation();
   const userId = useUserId();
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const view = createDriveViewState(props.route, () => list.reset());
+  const viewState = createMemo(() =>
+    availableDriveState(
+      view.value(),
+      databasesFlag().enabled,
+      formsFlag().enabled
+    )
+  );
   const searchText = useMobileSearchText(
     () => view.value().search,
     panel.handle.isActive
   );
-  const selection = () => ({ ...view.value(), search: searchText() });
+  const selection = () => ({ ...viewState(), search: searchText() });
   const sidebar = createDriveSidebarSource();
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,
+      databasesEnabled: () => databasesFlag().enabled,
+      formsEnabled: () => formsFlag().enabled,
       userId,
       tagSets,
       tagSetsReady,
@@ -84,7 +107,7 @@ function DriveComposition(props: { route: DriveRouteState }) {
     })
   );
   const state = createDriveState({
-    state: view.value,
+    state: viewState,
     setState: view.setValue,
     folders: sidebar.folders,
     list,

@@ -1,10 +1,10 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
-import { openReminderDetail } from '@app/features/reminders/reminder-navigation';
 import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
+import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
   OpenSplitResult,
   SplitHandle,
@@ -83,16 +83,13 @@ function openSplitIfNotOpen(
     existing.activate();
     reportApplied();
   } else {
-    const result = layoutManager.openWithSplit(
-      { type, id },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.newSplit,
-        handle: options.sourceHandle,
-        ...(options.onApplied ? { onApplied: reportApplied } : {}),
-      }
-    );
+    const result = layoutManager.openWithSplit(contentReference(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+      ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    });
     reportImmediateResult(result);
   }
   if (options.params && type !== 'component') {
@@ -358,12 +355,12 @@ function getSupportedHandler(
         }
       )
       .with('reminder', () => {
+        if (notification.entity_type !== 'email_thread') return null;
         return async (lm: SplitManager, newSplit: boolean = false) => {
-          openReminderDetail(notification.entity_id, {
-            manager: lm,
-            handle: sourceHandle,
-            openInNewSplit: newSplit,
-            ...(onApplied ? { onApplied } : {}),
+          openSplitIfNotOpen(lm, 'email', notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
           });
         };
       })

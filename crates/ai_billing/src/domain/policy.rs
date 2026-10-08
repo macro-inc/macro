@@ -26,6 +26,7 @@ use super::models::{
     BillingPeriod, BillingSettings, Entitlement, MIN_STRIPE_CHARGE_CENTS, NON_BILLABLE_AI_FEATURES,
     OVERAGE_CHARGE_THRESHOLD_CENTS, PlanTier, UsagePolicy,
 };
+use super::pricing::AiPricing;
 
 #[cfg(test)]
 mod test;
@@ -33,12 +34,24 @@ mod test;
 const ZERO_PUBLIC: PublicUsage = PublicUsage::from_units(0);
 const ZERO_MONEY: CustomerMoney = CustomerMoney::from_units(0);
 const PUBLIC_UNITS_PER_CENT: u64 = CustomerMoney::UNITS_PER_CENT / 100;
-const EXTRA_RATE_NUMERATOR: u64 = 105;
+// A whole-percent markup over 100 prices every public unit exactly.
 const EXTRA_RATE_DENOMINATOR: u64 = 100;
 
-/// Non-rolling $20 public-provider-price allowance for each activated seat and period.
-pub const INCLUDED_PUBLIC_USAGE: PublicUsage =
-    PublicUsage::from_units(2_000 * PUBLIC_UNITS_PER_CENT);
+/// Non-rolling public-provider-price allowance for each activated seat and
+/// period: the configured Premium allowance
+/// ([`AiPricing::included_allowance_cents`]) of public usage. Both accounting
+/// paths read the same value, so this policy and the ledger never disagree.
+/// This prospective policy is not yet tier-aware; activating it for a Max seat
+/// requires threading the seat's tier through here first.
+pub fn included_public_usage(pricing: AiPricing) -> PublicUsage {
+    // The allowance is validated non-negative at construction.
+    PublicUsage::from_units(pricing.included_allowance_cents() as u64 * PUBLIC_UNITS_PER_CENT)
+}
+
+fn extra_rate_numerator(pricing: AiPricing) -> u64 {
+    // The markup is validated to a whole percent below 100 at construction.
+    EXTRA_RATE_DENOMINATOR + pricing.overage_markup_percent() as u64
+}
 
 /// Accounting path after a trusted caller resolves the recorded policy and entitlement.
 /// This is not eligibility detection: a Premium role alone must never activate V1.
@@ -75,9 +88,10 @@ pub fn accounting_route(
 /// Pricing is independent of which source funds the usage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PricingCategory {
-    /// First $20 public usage: zero additional customer money, no markup.
+    /// Public usage within the allowance: zero additional customer money, no markup.
     Included,
-    /// Beyond $20: public usage multiplied by exactly 1.05 (not divided by 0.95).
+    /// Beyond the allowance: public usage multiplied by exactly
+    /// `(100 + markup percent) / 100` (never divided by the complement).
     Extra,
 }
 
@@ -148,20 +162,9 @@ pub enum PostpaidAuthorization {
 }
 
 impl PostpaidAuthorization {
-    /// Capture existing enable/cap/suspension semantics without changing settings.
-    pub fn from_settings(settings: &BillingSettings) -> Result<Self, PolicyError> {
-        if !settings.overage_enabled {
-            return Ok(Self::Disabled);
-        }
-        if settings.overage_suspended_at.is_some() {
-            return Ok(Self::Suspended);
-        }
-        if settings.overage_limit_cents <= 0 {
-            return Ok(Self::Disabled);
-        }
-        Ok(Self::Enabled {
-            limit: CustomerMoney::from_cents(settings.overage_limit_cents as u64)?,
-        })
+    /// New admissions never authorize direct charges, including for legacy opt-ins.
+    pub fn from_settings(_settings: &BillingSettings) -> Result<Self, PolicyError> {
+        Ok(Self::Disabled)
     }
 }
 
@@ -268,6 +271,7 @@ pub enum AllocationState {
 /// Bounded admission for one provider attempt. Persist before acknowledging execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reservation {
+    pricing: AiPricing,
     authorization: AuthorizationSnapshot,
     sequence: AllocationSequence,
     maximum_public_usage: PublicUsage,
@@ -346,19 +350,24 @@ impl UsageAllocation {
     }
 }
 
-fn remaining_included(used: PublicUsage) -> PublicUsage {
-    PublicUsage::from_units(INCLUDED_PUBLIC_USAGE.units().saturating_sub(used.units()))
+fn remaining_included(pricing: AiPricing, used: PublicUsage) -> PublicUsage {
+    PublicUsage::from_units(
+        included_public_usage(pricing)
+            .units()
+            .saturating_sub(used.units()),
+    )
 }
 
-fn extra_price(usage: PublicUsage) -> Result<CustomerMoney, PolicyError> {
+fn extra_price(pricing: AiPricing, usage: PublicUsage) -> Result<CustomerMoney, PolicyError> {
     Ok(CustomerMoney::from_public_ratio(
         usage,
-        EXTRA_RATE_NUMERATOR,
+        extra_rate_numerator(pricing),
         EXTRA_RATE_DENOMINATOR,
     )?)
 }
 
 fn available_holds(
+    pricing: AiPricing,
     authorization: &AuthorizationSnapshot,
     available: FundingAvailability,
 ) -> Result<FundingHolds, PolicyError> {
@@ -376,6 +385,7 @@ fn available_holds(
     };
     Ok(FundingHolds {
         included_public: remaining_included(
+            pricing,
             available
                 .seat_public_used
                 .checked_add(available.seat_public_held)?,
@@ -389,13 +399,14 @@ fn available_holds(
 /// admission bound, never actual usage/money. Hosts must lower their execution ceiling
 /// before retrying a rejected admission; an oversized token budget is not authorized.
 pub fn funded_capacity(
+    pricing: AiPricing,
     authorization: &AuthorizationSnapshot,
     maximum_public_usage: PublicUsage,
     available: FundingAvailability,
 ) -> Result<PublicUsage, PolicyError> {
-    let holds = available_holds(authorization, available)?;
+    let holds = available_holds(pricing, authorization, available)?;
     let money = u128::from(holds.prepaid.units()) + u128::from(holds.postpaid.units());
-    let money_per_public_unit = extra_price(PublicUsage::from_units(1))?.units();
+    let money_per_public_unit = extra_price(pricing, PublicUsage::from_units(1))?.units();
     let public =
         u128::from(holds.included_public.units()) + money / u128::from(money_per_public_unit);
     Ok(PublicUsage::from_units(
@@ -405,7 +416,9 @@ pub fn funded_capacity(
 
 /// Reserve the complete trusted per-attempt ceiling, credit-first. No partially funded
 /// execution is admitted. A rejection carries the maximum affordable smaller ceiling.
+/// The reservation keeps `pricing`, so allocation prices usage as it was admitted.
 pub fn reserve(
+    pricing: AiPricing,
     authorization: AuthorizationSnapshot,
     sequence: AllocationSequence,
     maximum_public_usage: PublicUsage,
@@ -414,19 +427,20 @@ pub fn reserve(
     if maximum_public_usage == ZERO_PUBLIC {
         return Err(PolicyError::EmptyBudget);
     }
-    let capacity = funded_capacity(&authorization, maximum_public_usage, available)?;
+    let capacity = funded_capacity(pricing, &authorization, maximum_public_usage, available)?;
     if maximum_public_usage > capacity {
         return Err(PolicyError::InsufficientFunding {
             maximum_public_usage: capacity,
         });
     }
     let prior_prepaid_held = available.prepaid_held;
-    let available = available_holds(&authorization, available)?;
+    let available = available_holds(pricing, &authorization, available)?;
     let included_public = maximum_public_usage.min(available.included_public);
-    let extra = extra_price(maximum_public_usage.checked_sub(included_public)?)?;
+    let extra = extra_price(pricing, maximum_public_usage.checked_sub(included_public)?)?;
     let prepaid = extra.min(available.prepaid);
     let postpaid = extra.checked_sub(prepaid)?;
     Ok(Reservation {
+        pricing,
         authorization,
         sequence,
         maximum_public_usage,
@@ -441,6 +455,11 @@ pub fn reserve(
 }
 
 impl Reservation {
+    /// The pricing captured when this attempt was admitted.
+    pub fn pricing(&self) -> AiPricing {
+        self.pricing
+    }
+
     /// Captured facts, never a live settings lookup.
     pub fn authorization(&self) -> &AuthorizationSnapshot {
         &self.authorization
@@ -502,9 +521,10 @@ impl Reservation {
         }
         // Check the total the repository will persist before changing any state.
         position.seat_public_used.checked_add(actual)?;
-        let included_public = actual.min(remaining_included(position.seat_public_used));
+        let included_public =
+            actual.min(remaining_included(self.pricing, position.seat_public_used));
         let extra_public = actual.checked_sub(included_public)?;
-        let extra = extra_price(extra_public)?;
+        let extra = extra_price(self.pricing, extra_public)?;
         let prepaid = extra.min(self.holds.prepaid);
         let remainder = extra.checked_sub(prepaid)?;
         let postpaid_budget = remainder.min(self.holds.postpaid);

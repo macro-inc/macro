@@ -307,6 +307,7 @@ fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000020",
                     query: RENAME,
                     operation_name: Some("Rename"),
@@ -315,6 +316,7 @@ fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
                     link_patches: &[],
                     revalidations: &[],
                     created_at_ms: 1,
+                    identity_bindings: &[],
                 },
             )
             .await

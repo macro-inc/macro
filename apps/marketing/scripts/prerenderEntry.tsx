@@ -89,13 +89,13 @@ export function criticalCss(themeId = 'Macro'): string {
     // @font-face rules that put them to use are in the bundle, so without
     // this the hero paints in a fallback serif and reflows on arrival.
     "@font-face{src:url('/fonts/roboto-slab-variable.woff2') format('woff2');font-family:'display';font-weight:100 900;font-display:swap}",
-    "@font-face{src:url('/fonts/rajdhani-medium.woff2') format('woff2');font-family:'body';font-display:swap}",
+    "@font-face{src:url('/fonts/inter-variable.woff2') format('woff2');font-family:'body';font-weight:100 900;font-display:swap}",
     ':root{--page-gutter:24px;--page-max-mobile:560px;--page-max:1000px;--site-scale:1;--ambient-ink:color-mix(in srgb,var(--c1) 25%,transparent);',
     ...colors,
     '}',
     '@media (max-width:700px){:root{--page-gutter:12px}}',
     'html,body{background-color:var(--b0)}',
-    "body{margin:0;color:var(--c2);font-family:'body';font-size:16px}",
+    "body{margin:0;color:var(--c2);font-family:'body';font-size:14px}",
     '.ssg-mobile,.ssg-desktop{display:contents}',
     '@media (min-width:700px){.ssg-mobile{display:none}}',
     '@media (max-width:699px){.ssg-desktop{display:none}}',

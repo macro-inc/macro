@@ -8,6 +8,7 @@ export {
   resolveEntityActionViewContext,
   type ToEntityActionListStateOptions,
   toEntityActionListState,
+  toSingleEntityActionListState,
 } from './entity-action-context';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
@@ -15,12 +16,8 @@ export { makeCopyAction } from './make-copy-action';
 export { makeCopyBranchNameAction } from './make-copy-branch-name-action';
 export { makeCopyEntityIdAction } from './make-copy-entity-id-action';
 export { makeCopyLinkAction } from './make-copy-link-action';
-export {
-  makeCreateReminderAction,
-  markReminderTargetDone,
-} from './make-create-reminder-action';
+export { makeCreateReminderAction } from './make-create-reminder-action';
 export { makeDeleteAction } from './make-delete-action';
-export { makeEditReminderAction } from './make-edit-reminder-action';
 export { makeFavoriteAction } from './make-favorite-action';
 export { makeHideCompanyAction } from './make-hide-company-action';
 export { makeMarkDoneAction } from './make-mark-done-action';

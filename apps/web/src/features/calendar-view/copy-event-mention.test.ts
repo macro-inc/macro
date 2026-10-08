@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { copyCalendarEventMentionTarget } from './copy-event-mention';
+import { mapTeamCalendarItem } from '../calendar-team/queries/map';
+import {
+  copyCalendarEventMention,
+  copyCalendarEventMentionTarget,
+} from './copy-event-mention';
 
 const writeClipboardData = vi.hoisted(() =>
   vi.fn(async (_data: Record<string, string | undefined>) => true)
@@ -14,6 +18,25 @@ const written = () => writeClipboardData.mock.calls[0]?.[0];
 
 describe('copyCalendarEventMentionTarget', () => {
   beforeEach(() => writeClipboardData.mockClear());
+
+  it('never copies a team projection as an independently resolvable event', async () => {
+    const event = mapTeamCalendarItem(
+      {
+        id: 'opaque',
+        ownerId: 'alice',
+        kind: 'busy',
+        contributesToAvailability: true,
+        time: {
+          kind: 'timed',
+          startsAt: '2026-10-07T10:00:00Z',
+          endsAt: '2026-10-07T11:00:00Z',
+        },
+      },
+      'Alice'
+    );
+    await copyCalendarEventMention(event);
+    expect(writeClipboardData).not.toHaveBeenCalled();
+  });
 
   it('writes a mention span an editor can import', async () => {
     await copyCalendarEventMentionTarget({

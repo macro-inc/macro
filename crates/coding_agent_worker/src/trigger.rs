@@ -28,6 +28,8 @@ pub enum TriggerWork {
     /// Open a session for a mention, serve it, and forward the mention as
     /// its first prompt.
     OpenAndPrompt {
+        /// Update the bot response reserved by a task assignment.
+        reuse_origin_message: bool,
         /// The mentioned agent the session runs for. One harness serves many
         /// agents, so the daemon must name the bot when creating the session.
         bot: BotId,
@@ -47,6 +49,8 @@ pub enum TriggerWork {
     /// the app shows the session directly and sends its own first prompt
     /// through the session once this create answers.
     OpenRequested {
+        /// Remote repository supplied by Macro, if selected.
+        repo_url: Option<String>,
         /// The id to create the session under.
         session: AgentSessionId,
         /// The agent the session runs for.
@@ -84,6 +88,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::Requested(
             AgentSessionRequestedEvent {
+                repo_url,
                 bot_id,
                 session_id,
                 owner,
@@ -91,9 +96,21 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
         )) => {
             let sender = MacroUserIdStr::try_from(owner).map_err(|_| Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenRequested {
+                repo_url,
                 session: session_id,
                 bot: bot_id,
                 sender,
+            })
+        }
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
+            Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: true,
+                bot: assigned.bot_id,
+                sender: assigned.actor,
+                parent: assigned.parent,
+                thread_id: assigned.discussion_id,
+                message_id: assigned.discussion_id,
+                content: assigned.prompt,
             })
         }
         AgentTriggerTopicEvent::New(event) => {
@@ -106,6 +123,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
+                reuse_origin_message: false,
                 bot: bot_id,
                 sender,
                 parent: message.parent,

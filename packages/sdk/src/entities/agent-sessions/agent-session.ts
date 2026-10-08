@@ -5,12 +5,28 @@ import type {
   AgentSessionResponse,
   ControlResponse,
   PromptAttachment,
+  PullRequestLinkSource,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { User } from '../users/user';
 import { QueuedAction } from './queued-action';
+
+/** A GitHub pull request linked to a session. */
+export type SessionPullRequest = {
+  /** The pull request's `owner/repo/pull/number` key. */
+  githubKey: string;
+  /** The pull request's GitHub URL. */
+  url: string;
+  /** Whether the session's agent opened it or a person linked it. */
+  source: PullRequestLinkSource;
+  /** Who linked it, for pull requests a person linked. */
+  linkedBy?: User;
+  /** When it was linked. */
+  createdAt: string;
+};
 
 /** A GitHub repository the caller can point a managed session at. */
 export type SelectableRepository = {
@@ -152,6 +168,67 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
 
   /** When the session was last modified. */
   readonly modifiedAt = this.field('modifiedAt');
+
+  /**
+   * The sessions linked to the GitHub pull request at `url` that the caller
+   * can view, oldest link first.
+   */
+  static async forPullRequest(
+    client: MacroClient,
+    url: string
+  ): Promise<AgentSession[]> {
+    const { sessionIds } = unwrap(
+      await client.agentHarness.agentSessionsForPullRequest({ body: { url } })
+    );
+    return sessionIds.map((id) => AgentSession.byId(client, id));
+  }
+
+  /**
+   * The GitHub pull requests linked to this session: the one its agent
+   * opened and any a person linked, oldest first.
+   */
+  async pullRequests(): Promise<SessionPullRequest[]> {
+    const { pullRequests } = unwrap(
+      await this.client.agentHarness.listAgentSessionPullRequests({
+        path: { session_id: this.id },
+      })
+    );
+    return pullRequests.map((link) => ({
+      githubKey: link.githubKey,
+      url: link.url,
+      source: link.source,
+      linkedBy: link.linkedBy
+        ? User.byId(this.client, link.linkedBy)
+        : undefined,
+      createdAt: link.createdAt,
+    }));
+  }
+
+  /**
+   * Link the GitHub pull request at `url` to this session. Linking one that
+   * is already linked changes nothing.
+   */
+  async linkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.linkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        body: { url },
+      })
+    );
+  }
+
+  /**
+   * Unlink a GitHub pull request a person linked to this session. The pull
+   * request the session's agent opened stays linked.
+   */
+  async unlinkPullRequest(url: string): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.unlinkAgentSessionPullRequest({
+        path: { session_id: this.id },
+        query: { url },
+      })
+    );
+  }
 
   /** Rename this session. */
   async rename(name: string): Promise<void> {

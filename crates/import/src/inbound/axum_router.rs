@@ -19,6 +19,9 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Body for accepting/declining staged imports.
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct RunImportRequest {
@@ -77,6 +80,10 @@ where
             post(retry_gather_handler::<T, Auth>),
         )
         .route(
+            "/import/runs/{source}/discover",
+            post(discover_handler::<T, Auth>),
+        )
+        .route(
             "/import/runs/{source}/dismiss",
             post(dismiss_run_handler::<T, Auth>),
         )
@@ -84,6 +91,9 @@ where
 }
 
 fn error_response(e: ImportError) -> Response {
+    if let ImportError::Admission(error) = e {
+        return error.into_response();
+    }
     tracing::error!(error = ?e, "import request failed");
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
@@ -156,6 +166,8 @@ pub async fn run_import_handler<T: ImportService, Auth: MacroAuthorizationServic
     responses(
         (status = 204, description = "Retry accepted (idempotent)"),
         (status = 400, description = "Unknown import source"),
+        (status = 402, description = "AI allowance exhausted", body = ai_billing::inbound::admission::AiAdmissionErrorBody),
+        (status = 503, description = "AI usage validation unavailable; retry later", body = ai_billing::inbound::admission::AiAdmissionErrorBody),
         (status = 500, description = "Internal server error"),
     ),
     tag = "import"
@@ -174,6 +186,39 @@ pub async fn retry_gather_handler<T: ImportService, Auth: MacroAuthorizationServ
         .await
     {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => error_response(e),
+    }
+}
+
+/// Discover candidates for user selection without auto-importing them.
+#[utoipa::path(
+    post,
+    path = "/import/runs/{source}/discover",
+    params(("source" = String, Path, description = "Import source")),
+    responses(
+        (status = 204, description = "Discovery accepted (idempotent)"),
+        (status = 400, description = "Unknown import source or discovery not supported"),
+        (status = 500, description = "Internal server error"),
+    ),
+    tag = "import"
+)]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+pub async fn discover_handler<T: ImportService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<T>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(source): Path<String>,
+) -> Response {
+    let Ok(source) = ImportSource::from_str(&source) else {
+        return unknown_source_response(&source);
+    };
+    match service
+        .start_discovery(user.authorization.user.macro_user_id, source)
+        .await
+    {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e @ ImportError::UnsupportedDiscovery(_)) => {
+            (StatusCode::BAD_REQUEST, e.to_string()).into_response()
+        }
         Err(e) => error_response(e),
     }
 }

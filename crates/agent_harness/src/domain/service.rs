@@ -16,11 +16,13 @@
 #[cfg(test)]
 mod test;
 
+mod admission;
 mod deliver;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod queue;
+mod warm;
 
 use std::sync::Arc;
 
@@ -49,8 +51,8 @@ use tracing::instrument::WithSubscriber as _;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
     AgentKind, AnnounceOrigin, AnnouncePrompt, CommandOutcome, DeclinedMention, DeliverAction,
-    HarnessCommand, HarnessDefaults, OpenSession, ReplyOutcome, ResolvedReply, SessionAnnouncement,
-    SpawnContainer, is_macro_staff,
+    HarnessCommand, HarnessDefaults, OpenSession, PromptPeople, ReplyOutcome, ResolvedReply,
+    SessionAnnouncement, SpawnContainer, ToolApprovalChange, is_macro_staff,
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
@@ -124,6 +126,7 @@ struct AgentHarnessInner<
     Notifier,
 > {
     sessions: Sessions,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -217,6 +220,9 @@ pub struct AgentHarnessService<
     >,
     workers: Arc<SessionWorkers>,
     repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
+    warm_lifecycle: Option<Arc<dyn agent_session::domain::warm::WarmSessionLifecycle>>,
+    warm_tools: Arc<dyn agent_session::domain::ports::SessionToolCatalog>,
+    warm_reservations: Arc<tokio::sync::Mutex<warm::WarmReservations>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -253,6 +259,9 @@ impl<
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
             repositories: self.repositories.clone(),
+            warm_lifecycle: self.warm_lifecycle.clone(),
+            warm_tools: Arc::clone(&self.warm_tools),
+            warm_reservations: Arc::clone(&self.warm_reservations),
         }
     }
 }
@@ -318,6 +327,7 @@ where
         Self {
             inner: Arc::new(AgentHarnessInner {
                 sessions,
+                admission: Arc::new(ai_billing::DisabledAiAdmissionService),
                 containers,
                 announcer,
                 runtimes,
@@ -337,7 +347,18 @@ where
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
+            warm_lifecycle: None,
+            warm_tools: Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+            warm_reservations: Arc::default(),
         }
+    }
+
+    /// Configure shared admission before cloning the harness or starting workers.
+    pub fn with_admission(mut self, admission: Arc<dyn ai_billing::AiAdmissionService>) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure admission before sharing the harness")
+            .admission = admission;
+        self
     }
 
     /// Enable explicit repository choices, authorized against the owner's reachable repositories.
@@ -413,6 +434,7 @@ where
         self.inner
             .announcer
             .announce(SessionAnnouncement {
+                reuse_origin_message: false,
                 session_id,
                 bot_id: session.bot_id,
                 is_coding: persona.is_coding,
@@ -497,6 +519,7 @@ where
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Admission(error) => AgentSessionError::Admission(error),
         HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }

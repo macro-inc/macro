@@ -75,6 +75,7 @@ function pullRequest(
       deletions: 1,
       comments: [],
       checks: [],
+      labels: [],
     },
   };
 }
@@ -175,7 +176,7 @@ describe('Entity.Icon', () => {
 
   it.each([
     [false, false, EnvelopeIcon, 'text-email'],
-    [true, false, EnvelopeOpenIcon, 'text-default'],
+    [true, false, EnvelopeOpenIcon, 'text-ink-extra-muted'],
     [false, true, CalendarIcon, 'text-calendar'],
     [true, true, CalendarIcon, 'text-calendar'],
   ] as const)(

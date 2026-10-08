@@ -18,6 +18,36 @@ pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
 `cargo test -p graphql_cache_plugin` (on NixOS use the `tauri-linux` dev shell —
 Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
+## Runtime GraphQL schema
+
+Desktop and mobile keep the cache engine and Turso storage in the native binary.
+The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
+text. Native startup and browser workers pass it to the same Rust
+`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
+the cache's internal lookup tables. There is no TypeScript schema generator or
+intermediate JSON asset. Browser workers configure SDL through
+`configureCacheSchema` before opening storage.
+
+Native startup calls `graphql_cache_init_with_schema`. This requires one native
+release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
+command. Older native binaries cannot accept runtime SDL. The frontend does
+not fall back to the old initialization command.
+
+An engine owns a validated schema snapshot; there is no mutable global schema.
+Compatible additions are merged under the native engine lock, including when an
+OTA reload leaves the process alive. Validated fragment caches include schema
+identity in their keys. Native `graphql-cache/schema.json` retains the compatible
+superset across restarts and rollbacks, so older windows and pending mutations can
+still reference earlier definitions. Schema installation neither resets records
+nor discards queued mutations or changes the durable storage generation.
+
+Persisted metadata format/compatibility epochs must be supported by the installed engine.
+Conflicting field shapes, root types, or entity identities are rejected before
+publishing metadata or opening storage. These changes need an explicit migration;
+a native rebuild alone does not migrate the persisted metadata. Removed definitions
+are deliberately retained. Schema-driven normalization can accept new types, but
+handwritten search/filter projections and new IPC commands still need native code.
+
 ## Startup and integrity checks
 
 Normal opens validate schema, scope/version metadata, and pending mutation/optimistic
@@ -121,6 +151,12 @@ or delays completion/flushes; offset preflight, partial-write retries, and
 first-error propagation retain their existing semantics.
 
 ## Projection refreshes
+
+Calendar range projections retain imported timed points with equal start and end.
+Points belong to a viewport when its start is at or before the point and its end
+is after it; empty viewports still return no occurrences. Projection version 2
+rebuilds derived calendar rows once on open, preserving normalized records,
+coverage, watermarks, and queued mutations. All-day spans remain positive.
 
 Hydration folds authoritative index mutations in order and writes only final
 states that differ from stored state. An updated normalized record does not force
@@ -252,4 +288,10 @@ wipes + rebinds atomically when the tag changes (silent restart).
 Optimistic GraphQL mutations are persisted with their replay request before
 becoming visible. The exchange claims and applies them strictly in enqueue
 order; a configurable callback decides whether an error remains queued or
-permanently rolls back.
+permanently rolls back. The exchange caps retryable server failures at ten per
+mutation, excluding transport failures/timeouts. This separate budget is stored
+in the existing Turso `meta` table under `mutation-server-failures:<id>` and
+updated atomically with fenced deferral; absent metadata starts at zero for
+existing queued writes. Commit, rollback, replacement, and clear remove it.
+The storage schema/database identity and the all-attempt backoff counter stay
+unchanged. Failed mutations are not retained in a DLQ.

@@ -61,14 +61,31 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
+    let team_settings = calendar_events::inbound::team_router::team_calendar_settings_router(
+        calendar_events::inbound::team_router::CalendarTeamRouterState::new(
+            state.calendar_team_service.clone(),
+            state.authorization_state.clone(),
+        ),
+    );
     // Calendar mutations follow the calendar sync kill switch: without sync a
     // provider write would never be reflected locally.
     if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(calendar_mutation_router(CalendarMutationRouterState::new(
-            state.calendar_mutation_service.clone(),
-            state.authorization_state.clone(),
-        )))
-    } else {
         calendar_watch::router()
+            .merge(team_settings)
+            .nest(
+                "/scheduling",
+                calendar_scheduling::inbound::router::router(
+                    calendar_scheduling::inbound::router::RouterState::new(
+                        state.scheduling_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
+                ),
+            )
+            .merge(calendar_mutation_router(CalendarMutationRouterState::new(
+                state.calendar_mutation_service.clone(),
+                state.authorization_state.clone(),
+            )))
+    } else {
+        calendar_watch::router().merge(team_settings)
     }
 }

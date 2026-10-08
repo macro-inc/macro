@@ -33,7 +33,7 @@ mod deploy_on_push;
 mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
-mod docs_check;
+mod deploy_website;
 mod ensure_daytona_snapshot;
 mod ios_preview;
 mod path_validation;
@@ -245,6 +245,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_patched(deploy_web_app::deploy_web_app, deploy_web_app::patch),
     },
     WorkflowFile {
+        slug: "deploy_website",
+        file_name: "deploy_website.yml",
+        render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
+    },
+    WorkflowFile {
         slug: "ensure_daytona_snapshot",
         file_name: "ensure_daytona_snapshot.yml",
         render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
@@ -318,11 +323,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
-    },
-    WorkflowFile {
-        slug: "docs_check",
-        file_name: "docs-check.yml",
-        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

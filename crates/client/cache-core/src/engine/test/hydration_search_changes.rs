@@ -32,7 +32,7 @@ fn nested_task_completion_hydration_invalidates_task_searches() {
             let document_key = EntityKey::entity("GraphqlSoupDocument", &["task"]);
             let records = engine
                 .storage()
-                .get_batch(&[document_key.clone()])
+                .get_batch(std::slice::from_ref(&document_key))
                 .await
                 .unwrap();
             // Task subtypes have no id: normalization embeds the object in
@@ -48,9 +48,12 @@ fn nested_task_completion_hydration_invalidates_task_searches() {
                 panic!("task subtype must stay embedded in its document");
             };
             assert_eq!(subtype["isCompleted"], CacheValue::Bool(false));
-            let selection =
-                RecordSelection::parse(include_str!("task_completion.graphql"), "TaskCompletion")
-                    .unwrap();
+            let selection = RecordSelection::parse(
+                crate::meta::bundled_schema_ref(),
+                include_str!("task_completion.graphql"),
+                "TaskCompletion",
+            )
+            .unwrap();
             if cold {
                 engine = Engine::new(engine.into_storage());
             }

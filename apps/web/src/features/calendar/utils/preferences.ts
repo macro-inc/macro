@@ -15,9 +15,12 @@ import { getDefaultCalendarTimeFormat } from './time-format';
 interface CalendarPreferences {
   periodView: CalendarPeriodView;
   hiddenSourceIds: string[];
+  sourceColors: Record<string, string | undefined>;
+  accountColors: Record<string, string | undefined>;
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
+  showTeamCalendars: boolean;
 }
 
 /** One persisted store, so preference changes reach invitation cards outside the calendar. */
@@ -25,9 +28,12 @@ export const useCalendarPreferences = createSharedRoot(() => {
   const defaultPreferences: CalendarPreferences = {
     periodView: getPreferredCalendarPeriodView(),
     hiddenSourceIds: [],
+    sourceColors: {},
+    accountColors: {},
     showWeekends: true,
     weekStartsOn: 0,
     timeFormat: getDefaultCalendarTimeFormat(),
+    showTeamCalendars: false,
   };
   const [preferences, setPreferences] = makePersisted(
     createStore<CalendarPreferences>(defaultPreferences),

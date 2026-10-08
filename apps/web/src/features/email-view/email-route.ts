@@ -1,23 +1,11 @@
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import { z } from 'zod';
-import type { EmailTab } from './types';
+import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
 
 export const emailTabSearch = {
   namespace: 'mail',
-  schema: z.object({
-    tab: z.enum([
-      'important',
-      'noise',
-      'favorites',
-      'sent',
-      'scheduled',
-      'calendar',
-      'drafts',
-      'shared',
-      'all',
-    ]),
-  }),
-  defaults: { tab: 'important' as EmailTab },
+  schema: z.object({ tab: z.enum(EMAIL_TAB_IDS) }),
+  defaults: { tab: DEFAULT_EMAIL_TAB },
 };
 
 export const emailTabSearchCodec = createSearchParamsCodec(emailTabSearch);

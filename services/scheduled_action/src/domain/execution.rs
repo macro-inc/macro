@@ -3,6 +3,8 @@ mod test;
 
 use std::{sync::Arc, time::Duration};
 
+use ai_billing::{AiAdmissionError, AiAdmissionService, DisabledAiAdmissionService};
+use ai_usage::AiFeature;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
@@ -12,8 +14,8 @@ use crate::domain::event_runs::{
     ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
 };
 use crate::domain::models::{
-    ActionExecutionRecord, ExecutionResource, ExecutionResult, InProgressExecution,
-    MAX_ACTION_TIME, ScheduledAction, ScheduledActionUpdate,
+    ActionExecutionRecord, AgentTask, ExecutionResource, ExecutionResult, InProgressExecution,
+    MAX_ACTION_TIME, ResolvedTaskTarget, ScheduledAction, ScheduledActionUpdate,
 };
 use crate::domain::ports::{
     ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner,
@@ -23,12 +25,14 @@ use crate::domain::ports::{
 /// partially created remote sessions even when preparation never returns.
 #[derive(Debug)]
 pub struct ExecutionHandle {
-    /// Caller-generated remote session ID; unused by the legacy chat runner.
+    /// Caller-generated agent session ID, available before preparation starts.
     pub session_id: Uuid,
-    /// Caller-generated initial remote action ID; unused by the legacy chat runner.
+    /// Caller-generated initial action ID for prompt delivery and status checks.
     pub action_id: Uuid,
     /// Set as soon as resource existence is established, even if preparation later fails.
     pub resource: Option<ExecutionResource>,
+    // Cancellation during admission must not contact a runner that never started.
+    preparation_started: bool,
 }
 
 impl Default for ExecutionHandle {
@@ -37,6 +41,7 @@ impl Default for ExecutionHandle {
             session_id: generate_uuid_v7(),
             action_id: generate_uuid_v7(),
             resource: None,
+            preparation_started: false,
         }
     }
 }
@@ -47,6 +52,7 @@ pub struct InProcessExecutor<Rpo, Live, Runner> {
     repo: Arc<Rpo>,
     live_updates: Arc<Live>,
     runner: Arc<Runner>,
+    admission: Arc<dyn AiAdmissionService>,
     tracker: TaskTracker,
     cancellation: CancellationToken,
 }
@@ -57,6 +63,7 @@ impl<Rpo, Live, Runner> Clone for InProcessExecutor<Rpo, Live, Runner> {
             repo: self.repo.clone(),
             live_updates: self.live_updates.clone(),
             runner: self.runner.clone(),
+            admission: self.admission.clone(),
             tracker: self.tracker.clone(),
             cancellation: self.cancellation.clone(),
         }
@@ -69,6 +76,8 @@ where
     Live: ScheduledActionLiveUpdate,
     Runner: ScheduledAgentRunner,
 {
+    /// Admission defaults off for compatibility; production must configure it
+    /// with `with_admission` using the shared enforcement policy.
     pub fn new(
         repo: Arc<Rpo>,
         runner: Arc<Runner>,
@@ -80,9 +89,17 @@ where
             repo,
             runner,
             live_updates,
+            admission: Arc::new(DisabledAiAdmissionService),
             tracker,
             cancellation,
         }
+    }
+
+    /// Configure model admission. Agent funding and admission belong to the
+    /// session/harness service, not to the scheduler's model policy.
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     async fn prepare(
@@ -92,6 +109,12 @@ where
     ) -> Result<ExecutionResource> {
         let owner = action.owner_user()?.clone();
         let action_id = action.id.context("persisted action required")?;
+        let task: AgentTask =
+            serde_json::from_value(action.task.clone()).context("invalid agent task definition")?;
+        if matches!(task.resolve_target()?, ResolvedTaskTarget::Model { .. }) {
+            self.admission.admit(&owner, AiFeature::Automation).await?;
+        }
+        handle.preparation_started = true;
         self.runner.prepare(action, handle).await?;
         // Retain the resource even if publishing Started stalls or is cancelled.
         let resource = handle
@@ -109,7 +132,17 @@ where
         Ok(resource)
     }
 
-    async fn cancel(&self, action: &ScheduledAction, handle: &ExecutionHandle) {
+    async fn cancel(
+        &self,
+        action: &ScheduledAction,
+        handle: &ExecutionHandle,
+        error: &anyhow::Error,
+    ) {
+        if !handle.preparation_started
+            || (handle.resource.is_none() && error.is::<AiAdmissionError>())
+        {
+            return;
+        }
         match tokio::time::timeout(CANCELLATION_TIMEOUT, self.runner.cancel(action, handle)).await {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
@@ -212,7 +245,7 @@ where
                 executor.cancellation.cancelled(),
                 executor
                     .repo
-                    .claim_action(&id, action.configuration_revision),
+                    .claim_action(&id, action.configuration_revision, action.next_run_at),
             )
             .await;
             let token = match claim {
@@ -236,8 +269,8 @@ where
                 executor.runner.run(&action, &handle, None).await
             })
             .await;
-            if result.is_err() {
-                executor.cancel(&action, &handle).await;
+            if let Err(error) = &result {
+                executor.cancel(&action, &handle, error).await;
             }
             let record = execution_record(&action, handle.resource.clone(), start_time, &result);
             let end_time = record.end_time;
@@ -309,8 +342,8 @@ where
                 .await
         })
         .await;
-        if result.is_err() {
-            self.cancel(&run.action, &handle).await;
+        if let Err(error) = &result {
+            self.cancel(&run.action, &handle, error).await;
         }
         let record = execution_record(
             &run.action,

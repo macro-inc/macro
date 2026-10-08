@@ -245,6 +245,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     let session = AgentSessionRepo::create(
         &repo,
         CreateAgentSessionParams {
+            warm: false,
             repo_branch: None,
             id: session_id,
             owner_id: model_owner::Owner::User(owner),

@@ -5,9 +5,14 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+serde_json = { workspace = true }
+chrono = { workspace = true }
 anyhow = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 axum = { workspace = true }
+agent_session = { path = "../agent_session", default-features = false }
+agent_session_realtime = { path = "../agent_session_realtime", default-features = false }
+async-stream = { workspace = true }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
 email = { path = "../email", default-features = false, features = [
   "axum",
@@ -20,6 +25,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
+graphql_calendar = { path = "../graphql_calendar" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
 graphql_email = { path = "../graphql_email" }
@@ -51,7 +57,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
+calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }

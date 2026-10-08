@@ -4,7 +4,6 @@
 //! with durable optimistic mutations and replayed after a restart.
 
 use crate::document::{Document, FieldNode, OperationKind, Selection};
-use crate::meta;
 use crate::normalize::RecordUpdates;
 use crate::query_path::{
     selected_field as find_selected_field, selected_storage_key as resolve_selected_storage_key,
@@ -148,7 +147,7 @@ impl LinkOperation {
     }
 }
 
-/// A query that should be fetched after a successful mutation settlement.
+/// A query to refresh after terminal mutation settlement, including rejection.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryRevalidation {
@@ -272,6 +271,7 @@ pub enum LinkPatchError {
 /// Removes exact duplicate recipes while retaining the first occurrence and
 /// preserving caller order for conflicting operations.
 pub fn deduplicate_patches(
+    schema: &crate::meta::Schema,
     patches: &[OptimisticLinkPatch],
 ) -> Result<Vec<OptimisticLinkPatch>, LinkPatchError> {
     if patches.len() > MAX_PATCHES {
@@ -283,7 +283,7 @@ pub fn deduplicate_patches(
     let mut seen = BTreeSet::new();
     let mut out = Vec::with_capacity(patches.len());
     for patch in patches {
-        validate_recipe(patch)?;
+        validate_recipe(schema, patch)?;
         let encoded = serde_json::to_value(patch).expect("link patch serializes");
         if seen.insert(canonical_json(&encoded)) {
             out.push(patch.clone());
@@ -292,11 +292,14 @@ pub fn deduplicate_patches(
     Ok(out)
 }
 
-fn validate_recipe(patch: &OptimisticLinkPatch) -> Result<(), LinkPatchError> {
+fn validate_recipe(
+    schema: &crate::meta::Schema,
+    patch: &OptimisticLinkPatch,
+) -> Result<(), LinkPatchError> {
     if patch.path.is_empty() || patch.path.len() > MAX_PATH_DEPTH {
         return Err(LinkPatchError::InvalidDepth(patch.path.len()));
     }
-    validate_entrypoint(patch)?;
+    validate_entrypoint(schema, patch)?;
     validate_entity_key(patch.operation.entity_key())?;
     for segment in &patch.path {
         if let LinkPathSegment::ListItem { list_item } = segment
@@ -375,10 +378,11 @@ fn validate_embedded_link_fields(
 }
 
 fn validate_entrypoint(
+    schema: &crate::meta::Schema,
     patch: &OptimisticLinkPatch,
 ) -> Result<serde_json::Map<String, Json>, LinkPatchError> {
     if let Some(root) = &patch.record_root {
-        root.validate(patch)?;
+        root.validate(schema, patch)?;
         return Ok(serde_json::Map::new());
     }
     let document = Document::parse(&patch.query)
@@ -429,18 +433,25 @@ fn is_json_scalar(value: &Json) -> bool {
 /// mode is used during hydration and successful settlement, where stale query
 /// fields must never be recreated.
 pub fn apply_link_patches(
+    schema: &crate::meta::Schema,
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
 ) -> Result<(), LinkPatchError> {
-    let patches = deduplicate_patches(patches)?;
+    let patches = deduplicate_patches(schema, patches)?;
 
     // Work on clones so strict validation is all-or-nothing.
     let mut staged_effective = effective.clone();
     let mut staged_updates = updates.clone();
     for patch in &patches {
-        if let Err(error) = apply_one(&mut staged_effective, &mut staged_updates, updates, patch) {
+        if let Err(error) = apply_one(
+            schema,
+            &mut staged_effective,
+            &mut staged_updates,
+            updates,
+            patch,
+        ) {
             if skip_not_applicable {
                 continue;
             }
@@ -453,12 +464,13 @@ pub fn apply_link_patches(
 }
 
 fn apply_one(
+    schema: &crate::meta::Schema,
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     response_updates: &RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
-    let resolved = resolve_target(effective, patch)?;
+    let resolved = resolve_target(schema, effective, patch)?;
     let upsert = upsert::resolve(&patch.operation, &resolved, response_updates)?;
     if let Some(inserted) = upsert
         .as_ref()
@@ -746,10 +758,11 @@ struct ResolvedEmbeddedLink {
 /// update. Engines use this to hydrate graph links from cold storage before
 /// applying the update.
 pub fn missing_patch_records(
+    schema: &crate::meta::Schema,
     effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Vec<EntityKey<'static>> {
-    match resolve_target(effective, patch) {
+    match resolve_target(schema, effective, patch) {
         Err(LinkPatchError::MissingParent(key)) => vec![key],
         Ok(target) if target.match_field.is_some() => upsert::missing_records(effective, &target),
         _ => Vec::new(),
@@ -757,12 +770,13 @@ pub fn missing_patch_records(
 }
 
 fn resolve_target(
+    schema: &crate::meta::Schema,
     effective: &HashMap<EntityKey<'static>, Record>,
     patch: &OptimisticLinkPatch,
 ) -> Result<ResolvedTarget, LinkPatchError> {
-    let variables = validate_entrypoint(patch)?;
+    let variables = validate_entrypoint(schema, patch)?;
     if let Some(root) = &patch.record_root {
-        return root.resolve(effective, patch);
+        return root.resolve(schema, effective, patch);
     }
     let document = Document::parse(&patch.query)
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
@@ -770,9 +784,10 @@ fn resolve_target(
         .operation(patch.operation_name.as_deref())
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))?;
     resolve_from_record(
+        schema,
         effective,
         &EntityKey::root(),
-        meta::QUERY_ROOT_TYPE,
+        schema.query_root(),
         &operation.selection_set,
         &variables,
         &patch.path,
@@ -780,7 +795,12 @@ fn resolve_target(
     )
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "recursive traversal carries schema and selection context"
+)]
 fn resolve_from_record(
+    schema: &crate::meta::Schema,
     effective: &HashMap<EntityKey<'static>, Record>,
     owner: &EntityKey<'static>,
     type_name: &str,
@@ -799,7 +819,7 @@ fn resolve_from_record(
         .get(owner)
         .ok_or_else(|| LinkPatchError::MissingParent(owner.clone()))?;
     let concrete = record.typename().unwrap_or(type_name);
-    let selected = selected_field(selections, concrete, response_key)?;
+    let selected = selected_field(schema, selections, concrete, response_key)?;
     let storage_key = selected_storage_key(selected, variables)?;
     let value = record
         .fields
@@ -808,8 +828,9 @@ fn resolve_from_record(
             parent: owner.0.to_string(),
             field: storage_key.clone(),
         })?;
-    let named_type = selected_type(concrete, selected)?;
+    let named_type = selected_type(schema, concrete, selected)?;
     resolve_from_value(
+        schema,
         effective,
         variables,
         ValueCursor {
@@ -835,6 +856,7 @@ struct ValueCursor<'a> {
 }
 
 fn resolve_from_value(
+    schema: &crate::meta::Schema,
     effective: &HashMap<EntityKey<'static>, Record>,
     variables: &serde_json::Map<String, Json>,
     cursor: ValueCursor<'_>,
@@ -847,12 +869,14 @@ fn resolve_from_value(
             field_key: cursor.anchor_field,
             path: cursor.relative_path,
             match_field: upsert::resolve_field(
+                schema,
                 cursor.selections,
                 cursor.type_name,
                 variables,
                 operation,
             )?,
             embedded_link: resolve_embedded_link_fields(
+                schema,
                 cursor.selections,
                 cursor.type_name,
                 variables,
@@ -863,6 +887,7 @@ fn resolve_from_value(
 
     if let CacheValue::Ref(key) = cursor.value {
         return resolve_from_record(
+            schema,
             effective,
             key,
             cursor.type_name,
@@ -887,7 +912,7 @@ fn resolve_from_value(
                     _ => None,
                 })
                 .unwrap_or(cursor.type_name);
-            let selected = selected_field(cursor.selections, concrete, response_key)?;
+            let selected = selected_field(schema, cursor.selections, concrete, response_key)?;
             let storage_key = selected_storage_key(selected, variables)?;
             let child = object.get(&storage_key).ok_or(LinkPatchError::WrongShape)?;
             let mut child_path = cursor.relative_path;
@@ -895,6 +920,7 @@ fn resolve_from_value(
                 field: storage_key.clone(),
             });
             resolve_from_value(
+                schema,
                 effective,
                 variables,
                 ValueCursor {
@@ -902,7 +928,7 @@ fn resolve_from_value(
                     owner: cursor.owner,
                     anchor_field: cursor.anchor_field,
                     relative_path: child_path,
-                    type_name: selected_type(concrete, selected)?,
+                    type_name: selected_type(schema, concrete, selected)?,
                     selections: &selected.selection_set,
                 },
                 &path[1..],
@@ -916,8 +942,12 @@ fn resolve_from_value(
                     maximum: MAX_TRAVERSED_LIST,
                 });
             }
-            let selector =
-                selected_field(cursor.selections, cursor.type_name, &list_item.where_field)?;
+            let selector = selected_field(
+                schema,
+                cursor.selections,
+                cursor.type_name,
+                &list_item.where_field,
+            )?;
             let selector_key = selected_storage_key(selector, variables)?;
             let mut matches = Vec::new();
             for (index, value) in items.iter().enumerate() {
@@ -952,6 +982,7 @@ fn resolve_from_value(
                 },
             });
             resolve_from_value(
+                schema,
                 effective,
                 variables,
                 ValueCursor {
@@ -971,6 +1002,7 @@ fn resolve_from_value(
 }
 
 fn resolve_embedded_link_fields(
+    schema: &crate::meta::Schema,
     selections: &[Selection],
     concrete: &str,
     variables: &serde_json::Map<String, Json>,
@@ -996,20 +1028,24 @@ fn resolve_embedded_link_fields(
     };
 
     let selector_key = selected_storage_key(
-        selected_field(selections, concrete, &list_item.where_field)?,
+        selected_field(schema, selections, concrete, &list_item.where_field)?,
         variables,
     )?;
-    let resolved_link_field =
-        selected_storage_key(selected_field(selections, concrete, link_field)?, variables)?;
+    let resolved_link_field = selected_storage_key(
+        selected_field(schema, selections, concrete, link_field)?,
+        variables,
+    )?;
     let resolved_count_field = selected_storage_key(
-        selected_field(selections, concrete, count_field)?,
+        selected_field(schema, selections, concrete, count_field)?,
         variables,
     )?;
     let mut resolved_insert_fields = HashMap::new();
     if let Some(insert_fields) = insert_fields {
         for (field, value) in insert_fields {
-            let storage_key =
-                selected_storage_key(selected_field(selections, concrete, field)?, variables)?;
+            let storage_key = selected_storage_key(
+                selected_field(schema, selections, concrete, field)?,
+                variables,
+            )?;
             if resolved_insert_fields.contains_key(&storage_key) {
                 return Err(LinkPatchError::ConflictingInsertField(storage_key));
             }
@@ -1053,11 +1089,12 @@ fn resolve_embedded_link_fields(
 }
 
 fn selected_field<'a>(
+    schema: &crate::meta::Schema,
     selections: &'a [Selection],
     concrete: &str,
     response_key: &str,
 ) -> Result<&'a FieldNode, LinkPatchError> {
-    find_selected_field(selections, concrete, response_key).ok_or_else(|| {
+    find_selected_field(schema, selections, concrete, response_key).ok_or_else(|| {
         LinkPatchError::UnselectedField {
             type_name: concrete.to_string(),
             field: response_key.to_string(),
@@ -1073,8 +1110,12 @@ fn selected_storage_key(
         .map_err(|error| LinkPatchError::InvalidEntrypoint(error.to_string()))
 }
 
-fn selected_type(concrete: &str, field: &FieldNode) -> Result<&'static str, LinkPatchError> {
-    resolve_selected_type(concrete, field).ok_or_else(|| LinkPatchError::UnselectedField {
+fn selected_type<'schema>(
+    schema: &'schema crate::meta::Schema,
+    concrete: &str,
+    field: &FieldNode,
+) -> Result<&'schema str, LinkPatchError> {
+    resolve_selected_type(schema, concrete, field).ok_or_else(|| LinkPatchError::UnselectedField {
         type_name: concrete.to_string(),
         field: field.response_key.clone(),
     })
@@ -1293,7 +1334,7 @@ mod tests {
         };
         *link_field = "key".into();
         assert_eq!(
-            deduplicate_patches(&[direct_conflict]).unwrap_err(),
+            deduplicate_patches(&crate::meta::bundled_schema(), &[direct_conflict]).unwrap_err(),
             LinkPatchError::ConflictingManagedField {
                 first: "key".into(),
                 second: "key".into(),
@@ -1323,7 +1364,12 @@ mod tests {
         list_item.where_field = "selector".into();
         *link_field = "link".into();
         assert_eq!(
-            resolve_target(&effective, &resolved_conflict).unwrap_err(),
+            resolve_target(
+                &crate::meta::bundled_schema(),
+                &effective,
+                &resolved_conflict
+            )
+            .unwrap_err(),
             LinkPatchError::ConflictingManagedField {
                 first: "key".into(),
                 second: "key".into(),
@@ -1355,7 +1401,7 @@ mod tests {
         ]);
 
         assert_eq!(
-            resolve_target(&effective, &duplicate).unwrap_err(),
+            resolve_target(&crate::meta::bundled_schema(), &effective, &duplicate).unwrap_err(),
             LinkPatchError::ConflictingInsertField("nextCursor".into())
         );
     }
@@ -1376,6 +1422,7 @@ mod tests {
         ]);
         let mut updates = RecordUpdates::new();
         apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             &[
@@ -1445,6 +1492,7 @@ mod tests {
         let mut updates = RecordUpdates::new();
         assert_eq!(
             apply_link_patches(
+                &crate::meta::bundled_schema(),
                 &mut effective,
                 &mut updates,
                 std::slice::from_ref(&ghost),
@@ -1460,7 +1508,14 @@ mod tests {
         // and leaves the base untouched for the revalidation to repair.
         let mut effective = base;
         let mut updates = RecordUpdates::new();
-        apply_link_patches(&mut effective, &mut updates, &[ghost], true).unwrap();
+        apply_link_patches(
+            &crate::meta::bundled_schema(),
+            &mut effective,
+            &mut updates,
+            &[ghost],
+            true,
+        )
+        .unwrap();
         assert_eq!(effective.get(&parent), Some(&initial));
         assert!(updates.is_empty());
 
@@ -1468,6 +1523,7 @@ mod tests {
         // must never require its target to still exist.
         let mut updates = RecordUpdates::new();
         apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             &[patch(
@@ -1498,33 +1554,57 @@ mod tests {
         let mut updates = RecordUpdates::new();
         let urgent = upsert_bin_patch("urgent");
         apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             &[urgent.clone(), urgent.clone()],
             false,
         )
         .unwrap();
-        apply_link_patches(&mut effective, &mut updates, &[urgent], false).unwrap();
+        apply_link_patches(
+            &crate::meta::bundled_schema(),
+            &mut effective,
+            &mut updates,
+            &[urgent],
+            false,
+        )
+        .unwrap();
 
         let completed = upsert_bin_patch("completed");
         apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             std::slice::from_ref(&completed),
             false,
         )
         .unwrap();
-        apply_link_patches(&mut effective, &mut updates, &[completed], false).unwrap();
+        apply_link_patches(
+            &crate::meta::bundled_schema(),
+            &mut effective,
+            &mut updates,
+            &[completed],
+            false,
+        )
+        .unwrap();
 
         let source = remove_bin_patch("in-progress");
         apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             std::slice::from_ref(&source),
             false,
         )
         .unwrap();
-        apply_link_patches(&mut effective, &mut updates, &[source], false).unwrap();
+        apply_link_patches(
+            &crate::meta::bundled_schema(),
+            &mut effective,
+            &mut updates,
+            &[source],
+            false,
+        )
+        .unwrap();
 
         let CacheValue::Object(grouped) = &effective[&parent].fields["groupSoup"] else {
             panic!()
@@ -1585,6 +1665,7 @@ mod tests {
         ]);
         let mut updates = RecordUpdates::new();
         let result = apply_link_patches(
+            &crate::meta::bundled_schema(),
             &mut effective,
             &mut updates,
             &[
@@ -1639,6 +1720,7 @@ mod tests {
         let mut updates = RecordUpdates::new();
         assert_eq!(
             apply_link_patches(
+                &crate::meta::bundled_schema(),
                 &mut effective,
                 &mut updates,
                 &[patch(

@@ -1,17 +1,65 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
-import { BulkDeleteFailure } from '@app/features/entity/queries/bulk-delete-result';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { globalRemoveFromSplitHistory } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  createBulkDeleteDssItemsMutation,
-  type EntityData,
-  isEmailEntity,
-} from '@entity';
+import { type EmailEntity, type EntityData, isEmailEntity } from '@entity';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import type { SoupRow } from '../create-soup-state';
 import { restoreSoupFocus, trashEmails } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
+
+/**
+ * Move email threads to Trash and drop them from split history.
+ *
+ * Emails never reach the confirmation modal: `createBulkDeleteDssItemsMutation`
+ * cannot delete them at all, and the TRASH label is reversible, so the Undo
+ * toast is the safety net the modal gives everything else.
+ */
+function trashEmailThreads(emails: EmailEntity[]) {
+  const handle = trashEmails(
+    emails.map((email) => ({ id: email.id, linkId: email.linkId }))
+  );
+
+  const splitManager = globalSplitManager();
+  if (splitManager) {
+    const entityIdSet = new Set(emails.map(({ id }) => id));
+    globalRemoveFromSplitHistory(splitManager, (entry) =>
+      entityIdSet.has(entry.id)
+    );
+  }
+
+  return handle;
+}
+
+function reportTrashedEmails(
+  handle: ReturnType<typeof trashEmails>,
+  count: number
+) {
+  const toastId = toast.success(
+    count > 1 ? `Moved ${count} items to Trash` : 'Moved to Trash',
+    {
+      actions: [
+        {
+          label: 'Undo',
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (toastId != null) toast.dismiss(toastId);
+            handle.undo().then(
+              () => toast.success('Restored from Trash'),
+              () => toast.failure('Failed to restore from Trash')
+            );
+          },
+        },
+      ],
+      duration: 10_000,
+    }
+  );
+
+  // Surface background API failures
+  handle.done.catch(() => {
+    toast.failure('Failed to move to Trash');
+  });
+}
 
 type MakeDeleteOptions = {
   userId: () => string | undefined;
@@ -44,58 +92,14 @@ function createDeletionCleanup() {
 
 export const makeDeleteAction = (options: MakeDeleteOptions) => {
   const { userId } = options;
-  const bulkDelete = createBulkDeleteDssItemsMutation();
-
-  /**
-   * Delete reminders straight away, with no confirmation step.
-   *
-   * Unlike a document or a folder, a reminder holds nothing — deleting one
-   * discards a note to self, so the modal cost more than it protected.
-   *
-   * Note this is genuinely unrecoverable: the reminders API has no undelete,
-   * so unlike email (which trashes with an Undo toast) there is nothing to
-   * offer here. Failures are surfaced by the mutation's own error handler,
-   * which also rolls the row back into the list.
-   */
-  const deleteRemindersNow = async (reminders: EntityData[]) => {
-    if (reminders.length === 0) return;
-    try {
-      let deleted = reminders;
-      try {
-        await bulkDelete.mutateAsync(reminders);
-      } catch (error) {
-        if (
-          !(error instanceof BulkDeleteFailure) ||
-          error.deletedEntities.length === 0
-        )
-          throw error;
-        deleted = error.deletedEntities;
-      }
-      // Only after the delete lands: the mutation restores the rows on
-      // failure, and a dropped split-history entry cannot be restored with
-      // them.
-      const splitManager = globalSplitManager();
-      if (splitManager) {
-        const ids = new Set(deleted.map(({ id }) => id));
-        globalRemoveFromSplitHistory(splitManager, (entry) =>
-          ids.has(entry.id)
-        );
-      }
-      if (deleted.length === reminders.length) {
-        toast.success(
-          reminders.length > 1
-            ? `Deleted ${reminders.length} reminders`
-            : 'Reminder deleted'
-        );
-      }
-      options.onDeleted?.(deleted);
-    } catch {
-      // The mutation already reports failure and restores the failed rows.
-    }
-  };
 
   const canExecute = (entity: EntityData): boolean => {
-    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+    if (
+      entity.type === 'database' ||
+      entity.type === 'form' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread'
+    ) {
       return false;
     }
     if (entity.type === 'email') {
@@ -104,19 +108,18 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     if (entity.type === 'channel') {
       return false;
     }
-    // Reminders carry no owner id — they are private to their owner, and the
-    // API only ever returns the caller's own — so the ownership check below
-    // would reject every one of them.
-    if (entity.type === 'reminder') {
-      return true;
-    }
     return entity.ownerId === userId();
   };
 
   const execute = async (entities: EntityData[]) => {
-    const reminders = entities.filter((e) => e.type === 'reminder');
-    const rest = entities.filter((e) => e.type !== 'reminder');
-    void deleteRemindersNow(reminders);
+    const emails = entities.filter(isEmailEntity);
+    const rest = entities.filter((e) => e.type !== 'email');
+
+    if (emails.length > 0) {
+      reportTrashedEmails(trashEmailThreads(emails), emails.length);
+      options.onDeleted?.(emails);
+    }
+
     if (rest.length === 0) return;
 
     const cleanup = createDeletionCleanup();
@@ -169,13 +172,8 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       captureAnchor(soup.navigate.peekOffset(-1, anchorNavigation)?.row),
     ];
 
-    // Three lanes: emails trash immediately (with Undo), reminders delete
-    // immediately (no Undo to give), everything else confirms first.
     const emailEntities = entities.filter(isEmailEntity);
-    const reminderEntities = entities.filter((e) => e.type === 'reminder');
-    const nonEmailEntities = entities.filter(
-      (e) => e.type !== 'email' && e.type !== 'reminder'
-    );
+    const nonEmailEntities = entities.filter((e) => e.type !== 'email');
 
     const cleanup = createDeletionCleanup();
     let remainingEntities: EntityData[] = nonEmailEntities;
@@ -218,17 +216,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     };
 
     const trashEmailEntities = () => {
-      const handle = trashEmails(
-        emailEntities.map((e) => ({ id: e.id, linkId: e.linkId }))
-      );
-
-      const splitManager = globalSplitManager();
-      if (splitManager) {
-        const entityIdSet = new Set(emailEntities.map(({ id }) => id));
-        globalRemoveFromSplitHistory(splitManager, (entry) =>
-          entityIdSet.has(entry.id)
-        );
-      }
+      const handle = trashEmailThreads(emailEntities);
 
       soup.selection.clear();
       const next = nextSurvivingRow(emailEntities.map((entity) => entity.id));
@@ -236,32 +224,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         soup.focus.set(next?.id);
       }
 
-      const toastId = toast.success(
-        emailEntities.length > 1
-          ? `Moved ${emailEntities.length} items to Trash`
-          : 'Moved to Trash',
-        {
-          actions: [
-            {
-              label: 'Undo',
-              icon: ArrowCounterClockwise,
-              onClick: () => {
-                if (toastId != null) toast.dismiss(toastId);
-                handle.undo().then(
-                  () => toast.success('Restored from Trash'),
-                  () => toast.failure('Failed to restore from Trash')
-                );
-              },
-            },
-          ],
-          duration: 10_000,
-        }
-      );
-
-      // Surface background API failures
-      handle.done.catch(() => {
-        toast.failure('Failed to move to Trash');
-      });
+      reportTrashedEmails(handle, emailEntities.length);
 
       restoreSoupFocus(next?.id);
     };
@@ -310,15 +273,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     } else if (emailEntities.length > 0) {
       // Email-only selection: trash immediately
       trashEmailEntities();
-    } else if (reminderEntities.length > 0) {
-      // Reminders-only selection: no modal, so move focus on now rather than
-      // waiting for a confirmation that never comes.
-      advancePastDeleted();
     }
-
-    // Reminders never gate on the modal, so they go regardless of what else
-    // was selected — the confirmation covers only the entities it lists.
-    void deleteRemindersNow(reminderEntities);
   };
 
   return { canExecute, execute, executeWithSoup };

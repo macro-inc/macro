@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM forms\n            WHERE id = $1\n            AND audience = 'public'\n            AND trashed_at IS NULL\n        ) AS \"is_public!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_public!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7c68c67a9f1cbf0ff4a8cb51a19bc1bd358bf49f83e90359b804807b421b0446"
+}

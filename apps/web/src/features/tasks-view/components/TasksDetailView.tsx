@@ -4,13 +4,13 @@ import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list
 import { useListDetailNavigation } from '@app/components/list';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useRouteParams } from '@app/lib/split-router';
+import { taskDetailRoute } from '@app/routes/routes';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
-import { taskDetailRoute } from '../route';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 import { TaskDetail } from './TaskDetail';
@@ -28,7 +28,8 @@ function TaskDetailTopBar(props: { documentId: string }) {
         aria-label="Task location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <SidePanel.HeaderActionsOutlet />
         <ShareTrigger
           onClick={openShare}
           id={props.documentId}
@@ -78,7 +79,7 @@ export function TasksDetailView(props: {
   });
 
   return (
-    <SidePanel.Root>
+    <SidePanel.Root floating>
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
         <TaskDetailTopBar documentId={props.task.id} />
         <div class="relative min-h-0 min-w-0 flex-1">

@@ -16,9 +16,7 @@ use bot_id::BotId;
 use super::{
     event_trigger::EventReference,
     execution::ExecutionHandle,
-    models::{
-        AgentTask, ExecutionResource, ExecutionResourceType, ResolvedTaskTarget, ScheduledAction,
-    },
+    models::{AgentTask, ExecutionResource, ExecutionResourceType, ScheduledAction},
     ports::ScheduledAgentRunner,
 };
 
@@ -26,31 +24,25 @@ const INITIAL_POLL_DELAY: Duration = Duration::from_secs(1);
 const MAX_POLL_DELAY: Duration = Duration::from_secs(10);
 const STATUS_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_STATUS_FAILURES: u8 = 5;
-const SCHEDULED_GUIDANCE: &str = "You are executing a user automation that has already been triggered. Do not schedule it again or wait for its requested time or event. Follow your configured persona instructions while carrying out this routine.";
+const SCHEDULED_GUIDANCE: &str = "You are executing a user routine that has already been triggered. Do not schedule it again or wait for its requested time or event. Follow your configured persona instructions while carrying out this routine.";
 
-/// Keeps model execution unchanged and delegates agent work to the session domain.
+/// Executes every routine through the agent-session domain.
 /// The shared executor bounds preparation and polling by its original deadline,
 /// drops in-flight reads on timeout/shutdown, and invokes `cancel` separately.
-pub struct TargetRunner<Model, Sessions> {
-    model: Arc<Model>,
+pub struct TargetRunner<Sessions> {
     sessions: Arc<Sessions>,
 }
 
-impl<Model, Sessions> TargetRunner<Model, Sessions> {
-    pub fn new(model: Arc<Model>, sessions: Arc<Sessions>) -> Self {
-        Self { model, sessions }
+impl<Sessions> TargetRunner<Sessions> {
+    pub fn new(sessions: Arc<Sessions>) -> Self {
+        Self { sessions }
     }
 }
 
-impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunner
-    for TargetRunner<Model, Sessions>
-{
+impl<Sessions: RoutineSessions> ScheduledAgentRunner for TargetRunner<Sessions> {
     async fn prepare(&self, action: &ScheduledAction, handle: &mut ExecutionHandle) -> Result<()> {
         let task = task(action)?;
-        let (bot_id, model) = match task.resolve_target()? {
-            ResolvedTaskTarget::Model { .. } => return self.model.prepare(action, handle).await,
-            ResolvedTaskTarget::Agent { bot_id, model } => (bot_id, model),
-        };
+        let (bot_id, model) = task.resolve_target()?.session_target();
         let identity = session_action(action, handle, bot_id)?;
         let prepared = self
             .sessions
@@ -69,6 +61,9 @@ impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunne
                 Ok(())
             }
             Ok(_) => Err(RoutineSessionError::SessionMismatch.into()),
+            // A definitive admission refusal created no session. Preserve the
+            // shared type for HTTP mapping and resource-free executor cleanup.
+            Err(RoutineSessionError::Admission(error)) => Err(error.into()),
             Err(error) => {
                 // ModelMismatch proves the requested owner/session was established.
                 // Other ambiguous failures may have persisted it too; a safe,
@@ -101,10 +96,7 @@ impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunne
         event: Option<&EventReference>,
     ) -> Result<()> {
         let task = task(action)?;
-        let bot_id = match task.resolve_target()? {
-            ResolvedTaskTarget::Model { .. } => return self.model.run(action, handle, event).await,
-            ResolvedTaskTarget::Agent { bot_id, .. } => bot_id,
-        };
+        let (bot_id, _) = task.resolve_target()?.session_target();
         let resource = handle
             .resource
             .as_ref()
@@ -129,20 +121,16 @@ impl<Model: ScheduledAgentRunner, Sessions: RoutineSessions> ScheduledAgentRunne
     }
 
     async fn cancel(&self, action: &ScheduledAction, handle: &ExecutionHandle) -> Result<()> {
-        match task(action)?.resolve_target()? {
-            ResolvedTaskTarget::Model { .. } => self.model.cancel(action, handle).await,
-            ResolvedTaskTarget::Agent { bot_id, .. } => {
-                // Also stop partially prepared sessions; resource may still be None.
-                self.sessions
-                    .cancel(session_action(action, handle, bot_id)?)
-                    .await?;
-                Ok(())
-            }
-        }
+        let (bot_id, _) = task(action)?.resolve_target()?.session_target();
+        // Also stop partially prepared sessions; resource may still be None.
+        self.sessions
+            .cancel(session_action(action, handle, bot_id)?)
+            .await?;
+        Ok(())
     }
 }
 
-impl<Model, Sessions: RoutineSessions> TargetRunner<Model, Sessions> {
+impl<Sessions: RoutineSessions> TargetRunner<Sessions> {
     async fn await_completion(&self, identity: RoutineSessionAction) -> Result<()> {
         let mut delay = INITIAL_POLL_DELAY;
         let mut failures = 0;

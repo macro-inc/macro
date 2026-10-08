@@ -126,12 +126,15 @@ fn unchanged_authority_still_rebases_durable_optimistic_intent() {
         let mut mutation = queued("Pending");
         mutation.optimistic.optimistic_data_json =
             cache_core::queue::encode_optimistic_source(&cache_core::queue::OptimisticSource {
+                client_metadata: None,
+                identity_bindings: Vec::new(),
                 mutation_data: serde_json::json!({}),
                 link_patches: Vec::new(),
                 revalidations: Vec::new(),
                 projection_mutations: vec![predicate_index::OptimisticProjectionMutation::Replace(
                     optimistic.clone(),
                 )],
+                uncertain_calendar_event_keys: Vec::new(),
             });
         let owner = storage.enqueue_mutation(mutation).await.unwrap();
         assert_eq!(

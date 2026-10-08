@@ -1,22 +1,31 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableCrm, enableReminders } from '@core/constant/featureFlags';
-import type { Accessor } from 'solid-js';
+import {
+  ENABLE_CALLS,
+  enableCrm,
+  enableTasksReviews,
+} from '@core/constant/featureFlags';
+import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
+import { useSidebarPrefs } from './use-sidebar-prefs';
 
 /**
- * Subscribes to the flags gating the Calendar and Customers rows, so a flag
- * that resolves after mount still reaches the rendered list. Shared by the
- * sidebar's nav and the More Apps grid so the two can't disagree about which
- * apps exist.
+ * Subscribes to the flags gating Calendar, Customers, Calls, and Reviews, so a
+ * flag that resolves after mount still reaches the rendered list. Shared by the
+ * sidebar's nav and the More menu so the two can't disagree about which apps
+ * exist.
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
   const calendar = useCalendarUiFlag();
   const crm = useFeatureFlag(enableCrm);
-  const reminders = useFeatureFlag(enableReminders);
-  return () => ({
+  const reviews = useFeatureFlag(enableTasksReviews);
+  const { prefs } = useSidebarPrefs();
+
+  return createMemo(() => ({
     showCalendar: calendar(),
     showCustomers: crm().enabled,
-    showReminders: reminders().enabled,
-  });
+    showCalls: ENABLE_CALLS,
+    showReviews: reviews().enabled,
+    prefs: prefs(),
+  }));
 }

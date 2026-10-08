@@ -1,16 +1,23 @@
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { QueryClient } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { onlineManager } from '@tanstack/query-core';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { err, type Ok, ok } from 'neverthrow';
+import { Suspense } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailKeys } from './keys';
-import { useDisableCalendarMutation } from './link';
+import { useDisableCalendarMutation, usePrimaryEmailLinkId } from './link';
 import { mountEmailMutation } from './tests/mutation';
 
 const disableLinkCalendarMock = vi.hoisted(() => vi.fn());
+const getLinksMock = vi.hoisted(() => vi.fn());
 const invalidateCalendarViewsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-email/client', () => ({
-  emailClient: { disableLinkCalendar: disableLinkCalendarMock },
+  emailClient: {
+    disableLinkCalendar: disableLinkCalendarMock,
+    getLinks: getLinksMock,
+  },
 }));
 
 vi.mock('@queries/calendar/sync', () => ({
@@ -47,6 +54,39 @@ const cachedLinks = () =>
 
 const cachedLink = (id: string) => cachedLinks().find((it) => it.id === id);
 
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
+
+it('does not suspend an offline composer when its primary-inbox lookup resumes', async () => {
+  testQueryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
+  onlineManager.setOnline(false);
+  const { promise, resolve } =
+    Promise.withResolvers<Ok<{ links: EmailLink[] }, unknown>>();
+  getLinksMock.mockReturnValue(promise);
+  const Composer = () => {
+    const primary = usePrimaryEmailLinkId();
+    return <input aria-label="Composer" data-inbox={primary()} />;
+  };
+  render(() => (
+    <QueryClientProvider client={testQueryClient}>
+      <Suspense fallback={<div>Hidden composer</div>}>
+        <Composer />
+      </Suspense>
+    </QueryClientProvider>
+  ));
+  const editor = screen.getByRole('textbox');
+  onlineManager.setOnline(true);
+  await vi.waitFor(() => expect(getLinksMock).toHaveBeenCalledOnce());
+  expect(screen.queryByRole('textbox')).toBe(editor);
+  resolve(ok({ links: [{ ...link('primary'), is_primary: true }] }));
+  await vi.waitFor(() =>
+    expect(editor.getAttribute('data-inbox')).toBe('primary')
+  );
+  expect(screen.getByRole('textbox')).toBe(editor);
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
@@ -58,6 +98,36 @@ beforeEach(() => {
 });
 
 describe('useDisableCalendarMutation', () => {
+  it('does not offer re-enable while the server is still deleting calendar data', async () => {
+    let finish!: (value: Ok<Record<string, never>, never>) => void;
+    disableLinkCalendarMock.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+    const disable = mountEmailMutation(
+      useDisableCalendarMutation,
+      testQueryClient
+    );
+    const pending = disable.mutateAsync('inbox-a');
+    await vi.waitFor(() =>
+      expect(disableLinkCalendarMock).toHaveBeenCalledOnce()
+    );
+    expect(disable.isPending).toBe(true);
+    expect(cachedLink('inbox-a')).toMatchObject({
+      calendar_disabled: false,
+      needs_calendar_permission: false,
+      has_calendar_data: true,
+    });
+    finish(ok({}));
+    await pending;
+    expect(cachedLink('inbox-a')).toMatchObject({
+      calendar_disabled: true,
+      needs_calendar_permission: true,
+      has_calendar_data: false,
+    });
+  });
+
   it('marks only the target inbox as deliberately calendar-less', async () => {
     disableLinkCalendarMock.mockResolvedValue(ok({}));
     const disable = mountEmailMutation(
@@ -83,7 +153,7 @@ describe('useDisableCalendarMutation', () => {
     expect(invalidateCalendarViewsMock).toHaveBeenCalledTimes(1);
   });
 
-  it('restores the previous links when the request fails', async () => {
+  it('keeps the previous links when the request fails', async () => {
     disableLinkCalendarMock.mockResolvedValue(
       err([{ code: 'HTTP_ERROR' as const, message: 'nope' }])
     );

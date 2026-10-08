@@ -1,6 +1,6 @@
 use std::{future::Future, marker::PhantomData, pin::Pin, sync::Arc};
 
-use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputType, SimpleObject};
+use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object, OutputType};
 use chrono::Utc;
 use email::domain::{
     models::{
@@ -278,17 +278,38 @@ pub struct DeleteEmailDraftInput {
     pub draft_id: ID,
 }
 
-/// Result of deleting an email draft.
-#[derive(SimpleObject)]
-pub struct DeleteEmailDraftPayload {
-    /// The requested draft ID, echoed for client cache bookkeeping.
-    pub draft_id: ID,
-    /// Whether a draft row was actually deleted. `false` means the ID was
-    /// already gone and the delete was an idempotent no-op.
-    pub deleted: bool,
-    /// Whether deleting the draft emptied its thread and removed the thread
-    /// too (a discarded compose draft that never gained other messages).
-    pub thread_deleted: bool,
+/// Result of deleting an email draft, including its surviving conversation.
+pub struct DeleteEmailDraftPayload<O: EmailThreadMutationOutput> {
+    draft_id: ID,
+    deleted: bool,
+    thread_deleted: bool,
+    thread_id: Option<ID>,
+    thread: Option<O::Thread>,
+}
+
+/// Result of deleting an email draft, including its surviving conversation.
+#[Object(name = "DeleteEmailDraftPayload")]
+impl<O: EmailThreadMutationOutput> DeleteEmailDraftPayload<O> {
+    /// Requested draft identity.
+    async fn draft_id(&self) -> &ID {
+        &self.draft_id
+    }
+    /// Whether a row was removed; an absent row is an idempotent success.
+    async fn deleted(&self) -> bool {
+        self.deleted
+    }
+    /// Whether the thread was also removed.
+    async fn thread_deleted(&self) -> bool {
+        self.thread_deleted
+    }
+    /// Authorized thread identity, including a thread removed by this delete.
+    async fn thread_id(&self) -> Option<&ID> {
+        self.thread_id.as_ref()
+    }
+    /// Canonical surviving thread, when this delete found a draft.
+    async fn thread(&self) -> Option<&O::Thread> {
+        self.thread.as_ref()
+    }
 }
 
 /// Result of creating or updating an email draft.
@@ -394,8 +415,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
 
 /// Error taxonomy for the draft mutations (save and delete), mirroring the
 /// REST `CreateDraftError` mapping with machine-readable `extensions.code`
-/// values the client's offline queue can branch on. Repository failures are
-/// retryable: a write may have committed before loading its response failed.
+/// values the client can use to offer recovery without blocking its mutation queue.
 fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
     let (message, code) = match error {
         EmailErr::MessageAlreadySent(_) => {
@@ -413,20 +433,16 @@ fn draft_mutation_error(error: &EmailErr) -> async_graphql::Error {
             ("email draft body is invalid", "INVALID")
         }
         EmailErr::Unauthorized => ("not authorized to modify email draft", "UNAUTHORIZED"),
-        EmailErr::RepoErr(_) => {
-            return retryable_email_error(async_graphql::Error::new("email draft mutation failed"));
-        }
         _ => ("email draft mutation failed", "INTERNAL"),
     };
     async_graphql::Error::new(message).extend_with(|_, extensions| extensions.set("code", code))
 }
 
-/// State-setting writes and draft handles are idempotent; an uncertain reply
-/// must not roll back the client after the domain write already committed.
-fn retryable_email_error(error: async_graphql::Error) -> async_graphql::Error {
+/// A failed response may follow a committed write. Preserve its error code so
+/// callers can offer an explicit retry using the original idempotent handle.
+fn internal_email_error(error: async_graphql::Error) -> async_graphql::Error {
     error.extend_with(|_, extensions| {
         extensions.set("code", "INTERNAL");
-        extensions.set("retryable", true);
     })
 }
 
@@ -449,13 +465,17 @@ async fn reload_thread<O: EmailThreadMutationOutput>(
     user_id: MacroUserIdStr<'static>,
     thread_id: Uuid,
 ) -> async_graphql::Result<O::Thread> {
-    async {
-        O::load_email_thread(ctx, user_id, thread_id)
-            .await?
-            .ok_or_else(|| async_graphql::Error::new("updated email thread is unavailable"))
-    }
-    .await
-    .map_err(retryable_email_error)
+    O::load_email_thread(ctx, user_id, thread_id)
+        .await
+        .map_err(internal_email_error)?
+        .ok_or_else(|| {
+            // The primary-backed lookup completed, but its All Mail projection
+            // can omit a trashed thread even after the write committed. Repeating
+            // that write cannot recover the reply and blocks every later queued
+            // mutation, including unrelated notification reads.
+            async_graphql::Error::new("updated email thread is unavailable")
+                .extend_with(|_, extensions| extensions.set("code", "NOT_FOUND"))
+        })
 }
 
 /// GraphQL email mutations.
@@ -602,7 +622,7 @@ where
         let draft_id = saved.draft.db_id;
         let thread = reload_thread::<O>(ctx, user_id, saved.draft.thread_db_id)
             .await
-            .map_err(retryable_email_error)?;
+            .map_err(internal_email_error)?;
         Ok(SaveEmailDraftPayload {
             draft_id,
             draft: GraphqlSoupEmailMessage::from_content(EmailContentMessage::from(
@@ -622,7 +642,7 @@ where
         &self,
         ctx: &Context<'_>,
         input: DeleteEmailDraftInput,
-    ) -> async_graphql::Result<DeleteEmailDraftPayload> {
+    ) -> async_graphql::Result<DeleteEmailDraftPayload<O>> {
         let user_id = require_authenticated_user(ctx)?;
         let draft_id = parse_id(input.draft_id, "draftId")?;
         let service = ctx.data::<Arc<S>>()?;
@@ -640,7 +660,15 @@ where
                 draft_mutation_error(&error)
             })?;
 
+        let thread = match deleted.thread_id.filter(|_| !deleted.thread_deleted) {
+            Some(id) => O::load_email_thread(ctx, user_id, id)
+                .await
+                .map_err(internal_email_error)?,
+            None => None,
+        };
         Ok(DeleteEmailDraftPayload {
+            thread_id: deleted.thread_id.map(|id| ID(id.to_string())),
+            thread,
             draft_id: ID(draft_id.to_string()),
             deleted: deleted.deleted,
             thread_deleted: deleted.thread_deleted,

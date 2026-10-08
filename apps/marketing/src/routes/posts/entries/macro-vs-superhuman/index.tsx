@@ -16,6 +16,7 @@ import {
   ComparisonTable,
   SuperhumanLogo,
 } from '../../PostComparison';
+import { PostFaqItem } from '../../PostFaq';
 import type { PostMeta } from '../../registry';
 
 const SUPERHUMAN_VIDEO_ID = 'tnsxkywzTvY';
@@ -42,9 +43,9 @@ const comparisonRows: ComparisonRow[] = [
     them: '$40 per seat per month (as part of the new Superhuman Suite)',
   },
   {
-    feature: 'Free plan',
+    feature: 'No-cost access',
     macro:
-      'Full workspace access for personal use, with limits on storage and AI',
+      'Free Guest access to a workspace, with limits on storage and AI',
     them: "Covers Grammarly, Docs, and Go — Mail isn't included until Business",
   },
   {
@@ -233,8 +234,8 @@ export default function MacroVsSuperhumanPost() {
           Macro has a <strong>unified inbox</strong> so you can triage all your
           accounts at once using familiar <code>j</code>, <code>k</code> and{' '}
           <code>e</code> shortcuts. You can also view accounts individually if
-          you want. Connect 2 emails under Macro's free plan or unlimited emails
-          with a paid plan.
+          you want. Connect 2 emails as a Guest or unlimited emails with a paid
+          plan.
         </p>
         <PostScreenshot
           src={accountsSidebar}
@@ -481,12 +482,12 @@ export default function MacroVsSuperhumanPost() {
         <p>
           Macro is one flat $40 per seat, and that includes every module: email,
           chat, docs, tasks, CRM, calls, all of it, with all AI features
-          included. We also have a free plan that covers everything for personal
-          use with some limits on storage and AI. Superhuman is also $40 a month
-          which includes Superhuman and Grammarly. Some people might use both of
-          those products but the kinds of users that need Superhuman —
-          salespeople, founders, execs — and Grammarly (more junior or foreign
-          language people) might have limited overlap.
+          included. You can also join a workspace as a Guest for free, with
+          limits on storage and AI. Superhuman is also $40 a month which
+          includes Superhuman and Grammarly. Some people might use both of those
+          products but the kinds of users that need Superhuman — salespeople,
+          founders, execs — and Grammarly (more junior or foreign language
+          people) might have limited overlap.
         </p>
 
         <h2>When to choose Macro</h2>
@@ -541,44 +542,49 @@ export default function MacroVsSuperhumanPost() {
           team half-checks, Macro is built for that instead.
         </p>
 
-        <h2>FAQs</h2>
-        <div class="mvn-faq">
-          <h3>Is Macro better than Superhuman?</h3>
-          <p>
-            For teams that live across email, chat, and docs, yes. Macro triages
-            all of it from one inbox with the same shortcuts Superhuman
-            popularized. For someone whose entire job is answering a single
-            inbox as fast as possible, Superhuman is still excellent at that one
-            thing.
-          </p>
+        <h2 class="post-faq-title">Frequently asked questions</h2>
+        <div class="post-faq">
+          <PostFaqItem question="Is Macro better than Superhuman?">
+            <p>
+              For teams that live across email, chat, and docs, yes. Macro
+              triages all of it from one inbox with the same shortcuts
+              Superhuman popularized. For someone whose entire job is answering
+              a single inbox as fast as possible, Superhuman is still excellent
+              at that one thing.
+            </p>
+          </PostFaqItem>
 
-          <h3>Is Macro cheaper than Superhuman?</h3>
-          <p>
-            Depends what you're comparing. Macro is $40/seat flat with
-            everything included. Superhuman's Mail only shows up on the Business
-            plan, $33/seat/month billed annually ($40 monthly), and that doesn't
-            include a native chat, docs, or task layer, those are separate
-            Superhuman products (Grammarly, Docs) with their own limits.
-          </p>
+          <PostFaqItem question="Is Macro cheaper than Superhuman?">
+            <p>
+              Depends what you're comparing. Macro is $40/seat flat with
+              everything included. Superhuman's Mail only shows up on the
+              Business plan, $33/seat/month billed annually ($40 monthly), and
+              that doesn't include a native chat, docs, or task layer, those are
+              separate Superhuman products (Grammarly, Docs) with their own
+              limits.
+            </p>
+          </PostFaqItem>
 
-          <h3>Does Superhuman have team chat or tasks?</h3>
-          <p>
-            No. Superhuman's Shared Conversations let you loop teammates into an
-            email thread, but it's a parallel system, not your team's actual
-            chat. Macro's channels are native, and emails, docs, and tasks all
-            live in the same inbox.
-          </p>
+          <PostFaqItem question="Does Superhuman have team chat or tasks?">
+            <p>
+              No. Superhuman's Shared Conversations let you loop teammates into
+              an email thread, but it's a parallel system, not your team's
+              actual chat. Macro's channels are native, and emails, docs, and
+              tasks all live in the same inbox.
+            </p>
+          </PostFaqItem>
 
-          <h3>Why does Macro's email UI look like Superhuman's?</h3>
-          <p>
-            Because we built it that way on purpose. Macro's{' '}
-            <code>block-email</code> interface is modeled after Superhuman's, we
-            think they got that part right, and it laid a lot of the groundwork
-            for what "polished" looks like in email.
-          </p>
+          <PostFaqItem question="Why does Macro's email UI look like Superhuman's?">
+            <p>
+              Because we built it that way on purpose. Macro's{' '}
+              <code>block-email</code> interface is modeled after Superhuman's,
+              we think they got that part right, and it laid a lot of the
+              groundwork for what "polished" looks like in email.
+            </p>
+          </PostFaqItem>
         </div>
 
-        <p>
+        <p class="post-footnote">
           For keyboard shortcuts, the multi-account inbox, sharing and AI
           drafting, see the{' '}
           <a

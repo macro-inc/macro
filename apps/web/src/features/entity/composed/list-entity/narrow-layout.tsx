@@ -15,17 +15,15 @@ import {
   ChannelMessageSingleLine,
 } from './channel';
 import { EmailInboxChip } from './email';
-import { GithubAuthorBadge } from './foreign';
+import { GithubPullRequestPills } from './foreign';
 import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
 export function NarrowLayout(props: LayoutProps) {
-  const reviewWithAuthor = () => {
+  const pullRequest = () => {
     const entity = props.entity;
-    if (!isGithubPrEntity(entity)) return;
-    if (!entity.metadata.authorLogin && !entity.metadata.authorId) return;
-    return entity;
+    return isGithubPrEntity(entity) ? entity : undefined;
   };
   return (
     <Entity.Layout
@@ -36,8 +34,10 @@ export function NarrowLayout(props: LayoutProps) {
       style={{
         'grid-template-columns':
           'var(--soup-row-indicator-width) 1fr max-content',
-        'grid-template-rows': '44px',
-        'grid-template-areas': '"indicator title timestamp"',
+        'grid-template-rows': pullRequest() ? '44px auto' : '44px',
+        'grid-template-areas': pullRequest()
+          ? '"indicator title timestamp" ". body body"'
+          : '"indicator title timestamp"',
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
@@ -56,21 +56,12 @@ export function NarrowLayout(props: LayoutProps) {
         <div class="size-4 shrink-0">
           <Entity.Icon entity={props.entity} streamState={props.streamState} />
         </div>
+        {props.titleLeading}
         <Show
           when={isChannelMessageEntity(props.entity) && props.entity}
           fallback={<Entity.Title entity={props.entity} />}
         >
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
-        </Show>
-        <Show when={reviewWithAuthor()}>
-          {(review) => (
-            <span class="max-w-32 shrink-0 overflow-hidden text-xs font-normal text-ink-muted">
-              <GithubAuthorBadge
-                entity={review()}
-                displayName={props.authorDisplayName}
-              />
-            </span>
-          )}
         </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
@@ -95,30 +86,49 @@ export function NarrowLayout(props: LayoutProps) {
         </Show>
       </Entity.Slot>
 
+      <Show when={pullRequest()}>
+        {(review) => (
+          <Entity.Slot
+            placement="body"
+            class="flex min-w-0 flex-wrap items-center gap-1.5 pb-2"
+          >
+            <GithubPullRequestPills
+              entity={review()}
+              authorDisplayName={props.authorDisplayName}
+            />
+          </Entity.Slot>
+        )}
+      </Show>
+
       <Show
         when={
-          !props.hasNotifications &&
-          !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+          props.scheduleStatus ||
+          (!props.hasNotifications &&
+            !(isChannelEntity(props.entity) && isSearchEntity(props.entity)))
         }
       >
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="flex items-center justify-end gap-1 text-xs text-right text-ink-extra-muted font-light"
         >
-          <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
-            <Show
-              when={!isTaskEntity(props.entity)}
-              fallback={
-                <Entity.Properties
-                  entity={props.entity}
-                  maxUserStackUsers={0}
-                  showCaret={false}
-                />
-              }
-            >
-              <Entity.Timestamp entity={props.entity} />
-            </Show>
-          </RowEnd>
+          {props.scheduleStatus}
+          <Show when={!props.hasNotifications}>
+            <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
+              <Show
+                when={!isTaskEntity(props.entity)}
+                fallback={
+                  <Entity.Properties
+                    entity={props.entity}
+                    maxUserStackUsers={0}
+                    showCaret={false}
+                    includeProject={props.showProject}
+                  />
+                }
+              >
+                <Entity.Timestamp entity={props.entity} />
+              </Show>
+            </RowEnd>
+          </Show>
         </Entity.Slot>
       </Show>
     </Entity.Layout>

@@ -12,6 +12,7 @@ const DIALOG_HANDOFF_WINDOW_MS = 180;
 let openDialogCount = 0;
 let lastAllDialogsClosedAt = Number.NEGATIVE_INFINITY;
 export type DialogProps = {
+  mount?: HTMLElement;
   onEscapeKeyDown?: (event: KeyboardEvent) => void;
   onCloseAutoFocus?: (event: Event) => void;
   onOpenAutoFocus?: (event: Event) => void;
@@ -69,7 +70,7 @@ export function Dialog(props: DialogProps) {
 
   return (
     <KobalteDialog onOpenChange={props.onOpenChange} open={props.open} modal>
-      <KobalteDialog.Portal>
+      <KobalteDialog.Portal mount={props.mount}>
         <KobalteDialog.Overlay
           class={cn(
             // Every floating dialog dims the page behind it with the accent

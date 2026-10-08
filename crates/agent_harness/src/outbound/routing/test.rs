@@ -127,6 +127,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the router never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,
@@ -211,6 +215,21 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
         unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_turn_prompter(
+        &self,
+        _id: AgentSessionId,
+        _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn turn_prompter(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Option<agent_session::domain::model::TurnPrompter>> {
+        unimplemented!("this adapter does not dispatch turns")
     }
 
     async fn set_repo_url(

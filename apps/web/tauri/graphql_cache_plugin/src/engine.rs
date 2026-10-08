@@ -23,7 +23,7 @@ use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant, Quer
 use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
 };
-use cache_core::record_selection::{RecordSelection, SelectedRecord};
+use cache_core::record_selection::{SelectedRecord, cache::RecordSelectionCache};
 use cache_core::revision::CacheRevision;
 use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
@@ -33,7 +33,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+mod calendar;
 mod soup;
+pub use calendar::CalendarRangeResultWire;
 pub use soup::{
     EntityFilterRequest, EntityFilterResult, PredicateBaselineEntry, PredicateFilterResult,
 };
@@ -55,6 +57,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Bindings omitted while preserving a normalizable server response.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub identity_errors: Vec<String>,
     /// Effective-view revision installed by this logical mutation.
     pub revision: String,
     /// Whether this write advanced `revision`.
@@ -71,6 +76,9 @@ pub struct WriteResultWire {
     pub reset: bool,
     /// Queries to fetch after successful optimistic settlement.
     pub revalidations: Vec<QueryRevalidation>,
+    /// Stable caller identity on settlement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mutation_uuid: Option<String>,
 }
 
 /// Internal hydration result used to fan out changes before returning only
@@ -179,12 +187,16 @@ pub enum InitialMutationClaimWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaimedMutationWire {
+    /// Opaque client correlation restored from the durable source.
+    pub client_metadata: Option<serde_json::Value>,
     /// Durable mutation id.
     pub transaction_id: String,
     /// Caller coalescing UUID.
     pub uuid: String,
     /// Whether a newer current row superseded this request.
     pub superseded: bool,
+    /// Whether settlement must recover a server identity before a replacement runs.
+    pub requires_confirmation: bool,
     /// Claim generation required for settlement.
     pub lease_generation: String,
     /// GraphQL mutation document.
@@ -197,6 +209,8 @@ pub struct ClaimedMutationWire {
     pub identity: Option<String>,
     /// Number of network attempts including this claim.
     pub attempt_count: u32,
+    /// Retryable server failures, excluding transport failures.
+    pub server_failure_count: u32,
 }
 
 /// Tagged result of deferring or discarding a failed queue attempt.
@@ -227,6 +241,17 @@ pub enum DeferOptimisticWriteResultWire {
     rename_all_fields = "camelCase"
 )]
 pub enum CommitOptimisticWriteResultWire {
+    /// Invalid response identity data permanently failed this attempt.
+    Failed {
+        /// Diagnostic for the cache error handler.
+        error: String,
+        /// Newer intent preserved when this attempt was superseded.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        replacement_transaction_id: Option<String>,
+        /// Cache changes caused by discarding the failed layer.
+        #[serde(flatten)]
+        result: WriteResultWire,
+    },
     /// The current mutation committed normally.
     Committed {
         /// Cache changes caused by commit.
@@ -271,17 +296,25 @@ impl TryFrom<ClaimedMutation> for ClaimedMutationWire {
     type Error = String;
 
     fn try_from(claimed: ClaimedMutation) -> Result<Self, Self::Error> {
+        let requires_confirmation = claimed.queued.requires_confirmation();
+        let client_metadata = cache_core::queue::decode_optimistic_source(
+            &claimed.queued.optimistic.optimistic_data_json,
+        )?
+        .client_metadata;
         let request = claimed.queued.mutation.request;
         Ok(Self {
+            client_metadata,
             transaction_id: claimed.queued.id.to_string(),
             uuid: claimed.queued.uuid.to_string(),
             superseded: claimed.queued.superseded,
+            requires_confirmation,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
             variables: serde_json::from_str(&request.variables_json).map_err(|e| e.to_string())?,
             identity: request.identity,
             attempt_count: claimed.queued.mutation.attempt_count,
+            server_failure_count: claimed.queued.mutation.server_failure_count,
         })
     }
 }
@@ -350,6 +383,7 @@ pub struct WriteRequest {
 struct EngineState {
     engine: Engine<TursoStorage>,
     ops: OpInterner,
+    selections: RecordSelectionCache,
 }
 
 /// Cheaply-clonable handle to the shared engine. All methods serialize
@@ -366,6 +400,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
         revision_advanced: result.revision_advanced,
         search_changed_buckets: result.search_changed_buckets,
@@ -377,6 +412,7 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         affected_ops: ops.names(result.affected_ops),
         reset: result.reset,
         revalidations: result.revalidations,
+        mutation_uuid: result.mutation_uuid,
     }
 }
 
@@ -394,15 +430,28 @@ impl EngineHandle {
     /// Wraps an opened storage backend. A `hot_capacity` of 0 is treated as
     /// unset (engine default).
     pub fn new(storage: TursoStorage, hot_capacity: Option<u32>) -> Self {
-        let engine = match hot_capacity.filter(|c| *c > 0) {
-            Some(cap) => Engine::with_capacity(storage, cap as usize),
-            None => Engine::new(storage),
-        };
+        Self::with_schema(storage, hot_capacity, cache_core::meta::bundled_schema())
+    }
+
+    /// Constructs the native engine with metadata loaded from its frontend bundle.
+    pub fn with_schema(
+        storage: TursoStorage,
+        hot_capacity: Option<u32>,
+        schema: Arc<cache_core::meta::Schema>,
+    ) -> Self {
+        let engine = Engine::with_schema(
+            storage,
+            hot_capacity
+                .filter(|c| *c > 0)
+                .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
+            schema,
+        );
         EngineHandle {
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(Mutex::new(EngineState {
                 engine,
                 ops: OpInterner::default(),
+                selections: RecordSelectionCache::default(),
             })),
         }
     }
@@ -441,6 +490,25 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
+    /// Validates and persists compatible metadata before publishing it to native operations.
+    pub async fn install_schema(
+        &self,
+        schema: &cache_core::meta::Schema,
+        path: &std::path::Path,
+    ) -> Result<(), String> {
+        let mut state = self.inner.lock().await;
+        let merged = state
+            .engine
+            .schema()
+            .merge(schema)
+            .map_err(|e| e.to_string())?;
+        persist_schema(path, &merged)?;
+        state
+            .engine
+            .install_schema(&merged)
+            .map_err(|e| e.to_string())
+    }
+
     /// Cache read; registers `op_id` as active when given.
     pub async fn read(
         &self,
@@ -451,7 +519,7 @@ impl EngineHandle {
         entity_resolvers: Vec<EntityResolver>,
     ) -> Result<ReadResultWire, String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let op = op_id.map(|name| ops.intern(&name));
         engine
             .read_query_with_entity_resolvers(
@@ -476,12 +544,14 @@ impl EngineHandle {
         fragment_name: String,
         keys: Vec<String>,
     ) -> Result<RecordSelectionResultWire, String> {
-        let selection =
-            RecordSelection::parse(&document, &fragment_name).map_err(|error| error.to_string())?;
+        let mut state = self.inner.lock().await;
+        let schema = state.engine.schema_snapshot();
+        let selection = state
+            .selections
+            .get(&schema, document, fragment_name)
+            .map_err(|error| error.to_string())?;
         let keys: Vec<_> = keys.into_iter().map(|key| EntityKey(key.into())).collect();
-        self.inner
-            .lock()
-            .await
+        state
             .engine
             .read_records_by_keys(&selection, &keys)
             .await
@@ -567,7 +637,7 @@ impl EngineHandle {
             identity,
         } = request;
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
             let op_id = ops.intern(&registration.op_id);
@@ -616,7 +686,7 @@ impl EngineHandle {
         identity: Option<String>,
     ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::write_projections(
             engine,
             &query,
@@ -657,13 +727,16 @@ impl EngineHandle {
         data: serde_json::Value,
         link_patches: Vec<OptimisticLinkPatch>,
         revalidations: Vec<QueryRevalidation>,
+        identity_bindings: Vec<cache_core::identity::IdentityBinding>,
         created_at_ms: i64,
         lease_owner: String,
         now_ms: i64,
         lease_expires_at_ms: i64,
+        client_metadata: Option<serde_json::Value>,
+        uncertain_calendar_event_keys: Vec<String>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let projections = soup::optimistic_projections(
             engine,
@@ -675,9 +748,10 @@ impl EngineHandle {
         )
         .await?;
         let result = engine
-            .enqueue_optimistic_mutation_with_projections(
+            .enqueue_optimistic_mutation_with_calendar(
                 origin,
                 BeginOptimisticWrite {
+                    client_metadata: client_metadata.as_ref(),
                     uuid: &uuid,
                     query: &query,
                     operation_name: operation_name.as_deref(),
@@ -686,6 +760,7 @@ impl EngineHandle {
                     link_patches: &link_patches,
                     revalidations: &revalidations,
                     created_at_ms,
+                    identity_bindings: &identity_bindings,
                 },
                 MutationClaimRequest {
                     owner: lease_owner,
@@ -693,6 +768,10 @@ impl EngineHandle {
                     lease_expires_at_ms,
                 },
                 projections,
+                uncertain_calendar_event_keys
+                    .into_iter()
+                    .map(|key| EntityKey(key.into()))
+                    .collect(),
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -711,6 +790,18 @@ impl EngineHandle {
             result: wire_write_result(ops, result.write_result),
             initial_claim,
         })
+    }
+
+    /// Reads queued operations without acquiring their leases.
+    pub async fn inspect_mutations(
+        &self,
+    ) -> Result<Vec<cache_core::queue::MutationInspection>, String> {
+        let state = self.inner.lock().await;
+        state
+            .engine
+            .inspect_mutations()
+            .await
+            .map_err(|error| error.to_string())
     }
 
     /// Claims the strict mutation queue head when it is runnable.
@@ -742,6 +833,7 @@ impl EngineHandle {
         lease_generation: String,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<DeferOptimisticWriteResultWire, String> {
         let transaction = parse_transaction_id(&transaction_id)?;
         let claim = MutationClaimToken {
@@ -749,9 +841,15 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         match engine
-            .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
+            .defer_optimistic_write(
+                transaction,
+                claim,
+                next_attempt_at_ms,
+                error,
+                server_failure,
+            )
             .await
             .map_err(|e| e.to_string())?
         {
@@ -782,7 +880,7 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::write_projections(
             engine,
             &query,
@@ -805,6 +903,15 @@ impl EngineHandle {
             .await
             .map_err(|e| e.to_string())?
         {
+            CommitOptimisticWriteResult::Failed(result) => {
+                Ok(CommitOptimisticWriteResultWire::Failed {
+                    error: result.error,
+                    replacement_transaction_id: result
+                        .replacement_transaction_id
+                        .map(|id| id.to_string()),
+                    result: wire_write_result(ops, result.write_result),
+                })
+            }
             CommitOptimisticWriteResult::Committed(result) => {
                 Ok(CommitOptimisticWriteResultWire::Committed {
                     result: wire_write_result(ops, result),
@@ -832,7 +939,7 @@ impl EngineHandle {
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         match engine
             .rollback_optimistic_write_with_outcome(transaction, claim)
             .await
@@ -858,7 +965,7 @@ impl EngineHandle {
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::invalidation_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -879,7 +986,7 @@ impl EngineHandle {
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::deletion_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
             keys.into_iter().map(|key| EntityKey(key.into())).collect();
@@ -896,7 +1003,7 @@ impl EngineHandle {
     /// Unregisters an operation (urql teardown).
     pub async fn teardown(&self, op_id: String) -> Result<(), String> {
         let mut state = self.inner.lock().await;
-        let EngineState { engine, ops } = &mut *state;
+        let EngineState { engine, ops, .. } = &mut *state;
         if let Some(id) = ops.remove(&op_id) {
             engine.teardown_operation(id);
         }
@@ -912,3 +1019,25 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
+
+/// Atomically persists metadata separately from user records; no database reset occurs.
+pub(crate) fn persist_schema(
+    path: &std::path::Path,
+    schema: &cache_core::meta::Schema,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
+    let temporary = path.with_extension("json.tmp");
+    use std::io::Write;
+    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
+    file.write_all(&bytes).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    drop(file);
+    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        std::fs::File::open(parent)
+            .and_then(|dir| dir.sync_all())
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

@@ -2862,6 +2862,85 @@ async fn a_refused_create_keeps_its_repository_and_carries_the_prompt_forward() 
     assert_eq!(follow_up, "thanks");
 }
 
+#[cfg(feature = "postgres")]
+struct RefusedChooser;
+
+#[cfg(feature = "postgres")]
+impl RepositoryChooser for RefusedChooser {
+    async fn choose(&self, _: &str, _: &Path) -> Result<SessionIntent, rootcause::Report> {
+        Err(
+            rootcause::report!(agent_session::domain::error::AiAdmissionError::Unavailable)
+                .into_dynamic(),
+        )
+    }
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn admission_refusal_is_typed_aborted_and_never_sent_to_cursor() {
+    use agent_session::domain::error::AiAdmissionError;
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service.prompt(&id, "do the thing").await.unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::Admission(AiAdmissionError::Unavailable)
+        ));
+        assert_eq!(error.to_string(), AiAdmissionError::Unavailable.to_string());
+    }
+    assert!(cursor.calls().is_empty());
+    let session = service.session(&id).unwrap();
+    let state = session.state.lock().unwrap();
+    assert!(
+        state.rejected_prompts.is_empty(),
+        "quota-refused work cannot hitch a ride on a later prompt"
+    );
+    assert!(state.intent.is_none());
+    assert_eq!(
+        state
+            .journal_entries
+            .iter()
+            .filter(|entry| matches!(entry.input, JournalInput::PromptAborted(_)))
+            .count(),
+        2
+    );
+}
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn existing_cursor_agent_runs_even_when_macro_helper_admission_would_fail() {
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RefusedChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    );
+    let id = SessionId::new("existing");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent-existing")), None);
+    crate::testing::script_legacy_history(&cursor);
+    service.replay_session(&id).await.unwrap().complete();
+    let events = cursor.script_stream();
+    events.send(finished("run")).unwrap();
+    events.send(CursorEvent::Done).unwrap();
+    service.prompt(&id, "continue").await.unwrap();
+    assert!(
+        cursor
+            .calls()
+            .iter()
+            .any(|call| matches!(call, CursorCall::CreateRun(..)))
+    );
+}
+
 #[tokio::test]
 async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
     struct UnavailableChooser;
@@ -3520,6 +3599,362 @@ async fn a_rejected_resume_position_reconnects_once_without_one() {
         agent_texts(&notifier.updates()),
         vec!["half", " and half"],
         "the replayed prefix is matched, not delivered again"
+    );
+}
+
+/// Prod, 2026-09-26: a resume was held open with no headers for 6m43s and
+/// answered all at once when the run ended. The connect now gives up waiting
+/// for headers, and each stall checks the run's record: a run still going
+/// gets its stream tried again without spending the failure budget, and a
+/// run that has ended gets one more connect to drain what the stream held.
+#[tokio::test(start_paused = true)]
+async fn a_stalled_connect_checks_the_record_and_drains_the_stream_once_the_run_ends() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "before the stall".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    // Two resumes stall. The record says the run is still going after the
+    // first and finished after the second.
+    cursor.script_stream_connect_error(StreamConnectError::Stalled(
+        "no response headers after 30s".to_owned(),
+    ));
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+    cursor.script_stream_connect_error(StreamConnectError::Stalled(
+        "no response headers after 30s".to_owned(),
+    ));
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("before the stall and after it".to_owned()),
+    });
+    // The drain delivers what the stalled stream held back, terminal frame
+    // included.
+    let drained = cursor.script_stream();
+    drained
+        .send(CursorEvent::Assistant {
+            text: " and after it".to_owned(),
+        })
+        .expect("stream open");
+    drained.send(finished("run-fake-1")).expect("stream open");
+    drained.send(CursorEvent::Done).expect("stream open");
+    drop(drained);
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the drained stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions(),
+        vec![
+            None,
+            Some("evt-1".to_owned()),
+            Some("evt-1".to_owned()),
+            Some("evt-1".to_owned()),
+        ],
+        "every connect after the break resumes from the last id heard"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["before the stall", " and after it"],
+        "the stream's own account is delivered once, never the record's on top of it"
+    );
+    let entries = service.journal.read(&session).await.expect("journal");
+    let stalls: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| match &entry.input {
+            JournalInput::StreamInterrupted {
+                reason, attempt, ..
+            } if reason.contains("stalled connect") => Some((reason.clone(), *attempt)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        stalls,
+        vec![
+            (
+                "no response headers after 30s (stalled connect 1)".to_owned(),
+                2
+            ),
+            (
+                "no response headers after 30s (stalled connect 2)".to_owned(),
+                2
+            ),
+        ],
+        "each stall is durable, and none of them spends the reconnect budget"
+    );
+    assert_eq!(
+        entries
+            .iter()
+            .filter(|entry| matches!(entry.input, JournalInput::Poll(_)))
+            .count(),
+        1,
+        "the record is captured while the run is going, not the terminal one that the drain overtook"
+    );
+}
+
+/// When the drain stalls too, the record's account stands - and because the
+/// stream broke and never came back, the restated answer is appended whole
+/// rather than dropped for not continuing the fragment that was streamed.
+#[tokio::test(start_paused = true)]
+async fn a_stream_still_stalled_after_the_run_ends_keeps_the_record() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "Looking into".to_owned(),
+            },
+            "evt-1",
+        )
+        .expect("stream open");
+    drop(dropped);
+    for _ in 0..2 {
+        cursor.script_stream_connect_error(StreamConnectError::Stalled(
+            "no response headers after 30s".to_owned(),
+        ));
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Finished,
+            text: Some("The bell icon was hidden by a stale flag.".to_owned()),
+        });
+    }
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the record ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        3,
+        "the first connect, the stalled resume, and the one drain attempt"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec![
+            "Looking into",
+            "\n\nThe bell icon was hidden by a stale flag."
+        ],
+        "the answer the stream never delivered still reaches the client"
+    );
+}
+
+/// Before the stream has ever opened there is nothing to resume, so stalls
+/// are bounded: a few are tried, then the record is polled instead.
+#[tokio::test(start_paused = true)]
+async fn stalls_before_the_stream_ever_opened_fall_back_to_polling() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    for _ in 0..STALLED_CONNECTS_BEFORE_POLLING {
+        cursor.script_stream_connect_error(StreamConnectError::Stalled(
+            "no response headers after 30s".to_owned(),
+        ));
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the whole answer".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        STALLED_CONNECTS_BEFORE_POLLING as usize,
+        "a stream that never opens is tried a bounded number of times"
+    );
+    assert_eq!(agent_texts(&notifier.updates()), vec!["the whole answer"]);
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        entries.iter().any(|entry| matches!(
+            &entry.input,
+            JournalInput::TransportError(reason) if reason.contains("stalled connect 3")
+        )),
+        "giving up on the stream is journaled as the transport failure it is"
+    );
+}
+
+/// Every resume in the 2026-09-26 incidents delivered its backlog in one
+/// burst and failed within the second. Delivery alone no longer refills the
+/// reconnect budget: a resume that dies at once is the same failure
+/// continuing, and after the budget the record is polled instead.
+#[tokio::test(start_paused = true)]
+async fn a_resume_that_delivers_and_dies_at_once_spends_the_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "a".to_owned(),
+            },
+            "evt-0",
+        )
+        .expect("stream open");
+    drop(dropped);
+    for index in 1..=STREAM_RECONNECT_ATTEMPTS {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "a".to_owned(),
+                },
+                &format!("evt-{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    // One more burst is queued than the budget allows; it must go unread.
+    let unread = cursor.script_stream();
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("a".repeat(1 + STREAM_RECONNECT_ATTEMPTS)),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the poll ends the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    drop(unread);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        1 + STREAM_RECONNECT_ATTEMPTS,
+        "the budget is spent by resumes that fail at once, however much they delivered"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()).concat(),
+        "a".repeat(1 + STREAM_RECONNECT_ATTEMPTS),
+        "everything each burst delivered still reached the client, once"
+    );
+    let entries = service.journal.read(&session).await.expect("journal");
+    let attempts: Vec<u32> = entries
+        .iter()
+        .filter_map(|entry| match &entry.input {
+            JournalInput::StreamInterrupted { attempt, .. } => Some(*attempt),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        attempts,
+        (1..=1 + STREAM_RECONNECT_ATTEMPTS as u32).collect::<Vec<_>>(),
+        "the attempt counter climbs instead of reading 1 on every line"
+    );
+}
+
+/// A resume that delivers and then stays up is the transport working again,
+/// and the next break gets a full budget.
+#[tokio::test(start_paused = true)]
+async fn a_resume_that_stays_up_refills_the_budget() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let dropped = cursor.script_stream_failing_with("error decoding response body");
+    dropped
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "a".to_owned(),
+            },
+            "evt-0",
+        )
+        .expect("stream open");
+    drop(dropped);
+    // The budget's worth of resumes that die at once, then one that lives.
+    for index in 1..STREAM_RECONNECT_ATTEMPTS {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "a".to_owned(),
+                },
+                &format!("evt-{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    let lively = cursor.script_stream_failing_with("error decoding response body");
+    lively
+        .send_with_id(
+            CursorEvent::Assistant {
+                text: "b".to_owned(),
+            },
+            "evt-lively",
+        )
+        .expect("stream open");
+    // After the refill, another budget's worth of fast failures is survivable.
+    for index in 0..STREAM_RECONNECT_ATTEMPTS - 1 {
+        let burst = cursor.script_stream_failing_with("error decoding response body");
+        burst
+            .send_with_id(
+                CursorEvent::Assistant {
+                    text: "c".to_owned(),
+                },
+                &format!("evt-c{index}"),
+            )
+            .expect("stream open");
+        drop(burst);
+    }
+    let last = cursor.script_stream();
+    last.send(finished("run-fake-1")).expect("stream open");
+    last.send(CursorEvent::Done).expect("stream open");
+    drop(last);
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Let the lively connection outlive the health threshold before it dies.
+    // The bursts before it reconnect on the backoff schedule, which paused
+    // time advances through as the turn sleeps.
+    tokio::time::sleep(
+        STREAM_RECONNECT_DELAYS.iter().sum::<std::time::Duration>()
+            + STREAM_HEALTHY_RESUME
+            + std::time::Duration::from_secs(1),
+    )
+    .await;
+    drop(lively);
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("the stream finishes the turn");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(
+        cursor.resume_positions().len(),
+        // The first connect, the bursts before the lively resume, the lively
+        // resume itself, the bursts after it, and the stream that finished.
+        1 + (STREAM_RECONNECT_ATTEMPTS - 1) + 1 + (STREAM_RECONNECT_ATTEMPTS - 1) + 1,
+        "the lively resume refilled the budget for the bursts after it"
+    );
+    assert_eq!(
+        agent_texts(&notifier.updates()).concat(),
+        format!(
+            "{}b{}",
+            "a".repeat(STREAM_RECONNECT_ATTEMPTS),
+            "c".repeat(STREAM_RECONNECT_ATTEMPTS - 1)
+        )
     );
 }
 

@@ -27,10 +27,14 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing" }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
 agent_changes = { path = "../../crates/agent_changes", default-features = false, features = ["outbound"] }
 dictation = { path = "../../crates/dictation", features = ["inbound", "outbound"] }
-initiative_documents = { path = "../../crates/initiative_documents" }
+initiative_description = { path = "../../crates/initiative_description" }
 agent_session = { path = "../../crates/agent_session", features = ["outbound"] }
+agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 activity = { path = "../../crates/activity" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_usage = { path = "../../crates/ai_usage" }
@@ -54,14 +58,14 @@ base64 = { workspace = true }
 bots = { path = "../../crates/bots" }
 bot_id = { path = "../../crates/bot_id" }
 bytes = { workspace = true }
-calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "notify", "postgres"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
 bzip2 = { workspace = true, default-features = false, features = [
   "libbz2-rs-sys",
 ] }
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
-messages = { path = "../../crates/messages", features = ["broker", "delivery", "inbound"] }
+messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -92,6 +96,18 @@ channel_labels = { path = "../../crates/channel_labels", features = [
   "postgres",
 ] }
 crm = { path = "../../crates/crm" }
+databases = { path = "../../crates/databases", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+] }
+forms = { path = "../../crates/forms", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
 doppler-config = { workspace = true }
@@ -121,12 +137,20 @@ github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "sync",
 ] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "inbound",
+  "outbound",
+  "s3",
+  "service",
+] }
 graphql_soup = { path = "../../crates/graphql_soup" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
+graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+import = { path = "../../crates/import" }
 initiative = { path = "../../crates/initiative", features = ["inbound", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
@@ -163,6 +187,7 @@ model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
 model_user = { path = "../../crates/model_user" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+models_databases = { path = "../../crates/models_databases" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_opensearch = { path = "../../crates/models_opensearch" }
 models_pagination = { path = "../../crates/models_pagination", features = [
@@ -203,6 +228,12 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+slack_integration = { path = "../../crates/slack_integration", features = [
+  "gateway",
+  "inbound",
+  "postgres",
+  "s3",
+] }
 soup = { path = "../../crates/soup", features = [
   "axum",
   "inbound",
@@ -252,6 +283,7 @@ zip = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]

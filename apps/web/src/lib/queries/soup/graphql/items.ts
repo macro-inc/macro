@@ -15,9 +15,11 @@ import {
   createUrqlInfiniteQuery,
   type UrqlInfiniteData,
 } from '@app/lib/urql-solid';
-import { isTransientRequestError } from '@core/util/request-error';
+import { createBrowserOfflineSignal } from '@core/util/connectivity';
+import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import type { SoupApiItem } from '@service-storage/generated/schemas';
 import {
   ChannelListItemFieldsFragmentDoc,
   ChannelListSoupDocument,
@@ -54,6 +56,7 @@ import {
 } from 'solid-js';
 import { NIL as NIL_UUID } from 'uuid';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
+import { soupQueryExcludesDone } from '../excludes-done';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { soupPageTimestamp } from '../page-timestamp';
 import {
@@ -62,11 +65,10 @@ import {
 } from '../transform-utils';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlSoupInput } from './ast';
+import { createGraphqlSoupDoneProjection } from './done-projection';
 import { isCachedMailView, materializeMailView } from './mail-view';
-import {
-  usePendingGraphqlSoupDeleteIds,
-  withoutPendingGraphqlSoupDeletes,
-} from './optimistic-deletions';
+import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDone } from './optimistic-done';
 import {
   materializeReconciledSoup,
   soupItemKey,
@@ -81,6 +83,8 @@ export type GraphqlSoupAstItemsQueryArgs = {
 
 export type GraphqlSoupAstItemsQueryOptions = {
   enabled: boolean;
+  /** Reuse local Mail evaluation beneath a separately subscribed grouped query. */
+  localOnly?: boolean;
   networkPaused?: boolean;
   keepPreviousData?: boolean;
   projection?: 'channel-list';
@@ -90,6 +94,8 @@ export type GraphqlSoupAstItemsQueryOptions = {
 };
 
 export type GraphqlSoupAstItemsQuery = {
+  localRevision?: Accessor<CacheRevision | undefined>;
+  localOptimistic?: Accessor<boolean>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
@@ -108,6 +114,17 @@ export type GraphqlSoupAstItemsQuery = {
   refresh: () => Promise<void>;
 };
 
+const itemsById = (items: readonly SoupApiItem[]) =>
+  Object.fromEntries(
+    items.map((item) => [mapApiSoupItemToEntity(item).id, item])
+  );
+
+// A page result can carry the viewer without its `soup` field. Selection runs
+// over every loaded page, so such a page reads as unloaded instead of failing
+// the whole list.
+const hasSoupPage = (page: SoupQuery | ChannelListSoupQuery): boolean =>
+  page.user?.soup != null;
+
 /** Creates the live urql query for a flat Soup AST request. */
 export function createGraphqlSoupAstItemsQuery(
   args: Accessor<GraphqlSoupAstItemsQueryArgs>,
@@ -115,18 +132,10 @@ export function createGraphqlSoupAstItemsQuery(
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
-  const [offline, setOffline] = createSignal(
-    typeof navigator !== 'undefined' && !navigator.onLine
-  );
-  const updateConnectivity = () => setOffline(!navigator.onLine);
-  if (typeof window !== 'undefined') {
-    window.addEventListener('online', updateConnectivity);
-    window.addEventListener('offline', updateConnectivity);
-    onCleanup(() => {
-      window.removeEventListener('online', updateConnectivity);
-      window.removeEventListener('offline', updateConnectivity);
-    });
-  }
+  const pendingDone = usePendingGraphqlSoupDone();
+  const projectDone = createGraphqlSoupDoneProjection();
+  const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
+  const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
 
   const inputForCursor = (
@@ -143,6 +152,9 @@ export function createGraphqlSoupAstItemsQuery(
 
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
+  const inputKey = createMemo(() =>
+    JSON.stringify([options().projection, firstPageInput()])
+  );
   type ServerProjection = {
     pageParams: readonly (string | null)[];
     data: SoupAstItemsData;
@@ -158,6 +170,7 @@ export function createGraphqlSoupAstItemsQuery(
     mail?: {
       nextCursor: string | null;
       revision: CacheRevision;
+      optimistic: boolean;
       records: GraphqlSoupItem[];
     };
   };
@@ -198,6 +211,7 @@ export function createGraphqlSoupAstItemsQuery(
     disposed = true;
   });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
+  const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
   let staleFallbackSpan: ReturnType<typeof Telemetry.span> | undefined;
@@ -347,7 +361,12 @@ export function createGraphqlSoupAstItemsQuery(
       (networkAuthorityInput === input &&
         networkAuthorityRevision() === revision &&
         !offline() &&
-        !query.error?.networkError) ||
+        !query.error?.networkError &&
+        !(
+          input &&
+          'initial' in input &&
+          isCachedMailView(input.initial?.emailView)
+        )) ||
       !queryOptions.enabled ||
       !graphqlSoupProjectionSupported() ||
       !input ||
@@ -503,12 +522,14 @@ export function createGraphqlSoupAstItemsQuery(
                     mail: {
                       nextCursor: result.nextCursor,
                       revision: result.revision,
+                      optimistic: result.optimistic,
                       records: reconciledRecords,
                     },
                   }
                 : {}),
               data: {
                 cachedMail: result.kind === 'mail-page',
+                itemsById: itemsById(items),
                 entities: mapSoupPageToEntityList(
                   { items, next_cursor: undefined },
                   {
@@ -576,7 +597,8 @@ export function createGraphqlSoupAstItemsQuery(
       SoupQuery | ChannelListSoupQuery,
       string | null
     >): ServerProjection => {
-      const mappedPages = pages.map(mapGraphqlSoupPage);
+      const soupPages = pages.filter(hasSoupPage);
+      const mappedPages = soupPages.map(mapGraphqlSoupPage);
       const oldestFetchedTimestamp = soupPageTimestamp(
         mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
         sortMethod
@@ -587,7 +609,7 @@ export function createGraphqlSoupAstItemsQuery(
           showSupportedForeignEntities,
         })
       );
-      const records = pages.flatMap<GraphqlSoupItem>(
+      const records = soupPages.flatMap<GraphqlSoupItem>(
         (page) => page.user.soup.items
       );
       return {
@@ -608,6 +630,7 @@ export function createGraphqlSoupAstItemsQuery(
     ServerProjection
   >(() => {
     const firstInput = firstPageInput();
+    const firstInputKey = inputKey();
     const queryOptions = options();
 
     return {
@@ -622,15 +645,23 @@ export function createGraphqlSoupAstItemsQuery(
         return { input };
       },
       getNextPageParam: (lastPage) =>
-        lastPage.user.soup.nextCursor ?? undefined,
-      enabled: queryOptions.enabled && firstInput !== undefined,
+        hasSoupPage(lastPage)
+          ? (lastPage.user.soup.nextCursor ?? undefined)
+          : undefined,
+      enabled:
+        queryOptions.enabled &&
+        !queryOptions.localOnly &&
+        firstInput !== undefined,
       requestPolicy: queryOptions.networkPaused
         ? 'cache-only'
         : 'cache-and-network',
       keepPreviousData: queryOptions.keepPreviousData ?? false,
       onResult: (result, page) => {
         if (!result.data) return;
-        setBaselineGeneration(cacheGeneration);
+        batch(() => {
+          setBaselineGeneration(cacheGeneration);
+          setBaselineInputKey(firstInputKey);
+        });
         const metadata = normalizedCacheResultMetadata(result);
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
@@ -655,7 +686,8 @@ export function createGraphqlSoupAstItemsQuery(
                 )
               ).set(page.pageIndex, pending)
             );
-            setLocalProjection(undefined);
+            // Retain pending Mail rows while the new server page is persisted.
+            if (!untrack(localProjection)?.mail) setLocalProjection(undefined);
           });
           recordAuthority('network');
           finishStaleFallback('network');
@@ -673,7 +705,9 @@ export function createGraphqlSoupAstItemsQuery(
         batch(() => {
           setCurrentCacheRevision(metadata.revision);
           setNetworkAuthorityRevision(metadata.revision);
-          setLocalProjection(undefined);
+          // Keep same-view Mail evidence while checking the new revision.
+          // A server page cannot supersede an unsettled offline draft.
+          if (!untrack(localProjection)?.mail) setLocalProjection(undefined);
         });
         recordAuthority('network');
         finishStaleFallback('network');
@@ -764,12 +798,13 @@ export function createGraphqlSoupAstItemsQuery(
     return local;
   };
   const networkIsAuthoritative = (): boolean =>
-    hasUnpersistedPages(firstPageInput()) ||
-    (!offline() &&
-      !query.error?.networkError &&
-      networkAuthorityInput === firstPageInput() &&
-      networkAuthorityRevision() !== undefined &&
-      networkAuthorityRevision() === currentCacheRevision());
+    !displayLocalProjection()?.mail?.optimistic &&
+    (hasUnpersistedPages(firstPageInput()) ||
+      (!offline() &&
+        !query.error?.networkError &&
+        networkAuthorityInput === firstPageInput() &&
+        networkAuthorityRevision() !== undefined &&
+        networkAuthorityRevision() === currentCacheRevision()));
 
   // An overlay covers only the server rows that existed when it was evaluated.
   // New server pages must render immediately, even if the next evaluation stalls
@@ -808,13 +843,18 @@ export function createGraphqlSoupAstItemsQuery(
     const error = query.error;
     // A background transport failure must not replace usable current-query
     // cache results (including an empty result) with the full-screen error state.
-    // Keep server responses (including HTTP auth failures), GraphQL errors,
-    // and failures without current-query local proof visible.
+    // A normalized page is usable before local reconciliation finishes. Keep
+    // server responses, uncached queries and failed continuation reads visible;
+    // previous-filter or previous-generation pages are not fallback evidence.
     if (
-      error &&
-      isTransientRequestError(error) &&
-      !error.response &&
-      displayLocalProjection()
+      isResponseFreeNetworkError(error) &&
+      options().enabled &&
+      isSupported() &&
+      !query.isFetchNextPageError &&
+      (displayLocalProjection() ||
+        (query.data !== undefined &&
+          baselineGeneration() === cacheGeneration &&
+          baselineInputKey() === inputKey()))
     ) {
       return undefined;
     }
@@ -829,13 +869,18 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
+    localRevision: () => displayLocalProjection()?.mail?.revision,
+    localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {
       const data = displayData();
-      return withoutPendingGraphqlSoupDeletes(
+      return projectDone(
+        JSON.stringify([firstPageInput(), cacheGeneration]),
         data && {
           ...data,
           oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
         },
+        pendingDone(),
+        excludesDone(),
         pendingDeleteIds()
       );
     }),
@@ -924,10 +969,12 @@ export function createGraphqlSoupAstItemsQuery(
           mail: {
             nextCursor: result.nextCursor,
             revision: result.revision,
+            optimistic: result.optimistic,
             records,
           },
           data: {
             cachedMail: true,
+            itemsById: itemsById(items),
             entities: mapSoupPageToEntityList(
               { items, next_cursor: undefined },
               {

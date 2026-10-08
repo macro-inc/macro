@@ -114,11 +114,6 @@ export function useEntitiesForProperty(
       return emails().map(threadMapper);
     }
 
-    // For COMPANY type, return empty (not in quickAccess)
-    if (entityType === 'COMPANY') {
-      return [];
-    }
-
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
     const converted: CombinedEntity[] = [];

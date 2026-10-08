@@ -132,6 +132,34 @@ async fn team_edit_args(repo: &TestRepo, level: Option<AccessLevel>) -> EditDocu
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn get_user_name_reads_the_name_a_user_set(pool: Pool<Postgres>) {
+    sqlx::query!(
+        "INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES ($1, 'Jacob', 'Beckerman')",
+        uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = test_repo(pool);
+    assert_eq!(
+        repo.get_user_name("macro|teammate1@user.com")
+            .await
+            .unwrap(),
+        (Some("Jacob".to_owned()), Some("Beckerman".to_owned()))
+    );
+    // A user who never set a name has none.
+    assert_eq!(
+        repo.get_user_name("macro|teammate2@user.com")
+            .await
+            .unwrap(),
+        (None, None)
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn team_edit_exact_levels_omission_and_legacy_preservation(pool: Pool<Postgres>) {
     let repo = test_repo(pool.clone());
     let mut revision = 0;
@@ -3284,5 +3312,57 @@ async fn failed_sponsor_grant_leaves_no_bot_owned_rows(pool: Pool<Postgres>) {
             entities: 2,
             grants: 2,
         }
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_github_pull_request_task_links_returns_requested_keys_oldest_first(
+    pool: Pool<Postgres>,
+) {
+    let repo = test_repo(pool.clone());
+    let task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let other_task = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
+    let task_short_id = short_id_for_document_id(&task.document_id);
+    let other_task_short_id = short_id_for_document_id(&other_task.document_id);
+    let created_at = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/1",
+        &other_task_short_id,
+        created_at + chrono::Duration::seconds(2),
+    )
+    .await;
+    insert_github_pr_task(&pool, "macro/macro/pull/1", &task_short_id, created_at).await;
+    insert_github_pr_task(
+        &pool,
+        "macro/macro/pull/2",
+        &task_short_id,
+        created_at + chrono::Duration::seconds(1),
+    )
+    .await;
+    insert_github_pr_task(&pool, "macro/macro/pull/3", &task_short_id, created_at).await;
+
+    let links = repo
+        .get_github_pull_request_task_links(&[
+            "macro/macro/pull/1".to_string(),
+            "macro/macro/pull/2".to_string(),
+            "macro/macro/pull/9".to_string(),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(
+        links,
+        vec![
+            ("macro/macro/pull/1".to_string(), task_short_id.clone()),
+            ("macro/macro/pull/2".to_string(), task_short_id),
+            ("macro/macro/pull/1".to_string(), other_task_short_id),
+        ]
     );
 }

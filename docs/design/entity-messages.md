@@ -18,7 +18,8 @@ real foreign keys, so their discussions are deleted with the parent.
 
 `comms_message_threads` holds one row per root: owner, resolution, an optional anchor,
 import metadata, and whole-thread deletion. An anchor is a tagged Markdown mark, PDF
-highlight, or PDF placeable and is only valid on document roots. Deleting a root
+highlight, PDF placeable, or spreadsheet cell range and is only valid on document
+roots. Deleting a root
 tombstones that message and keeps the discussion. Deleting the discussion tombstones
 every message in it, removes a comment-only placeable, detaches a highlight, and keeps
 a Markdown anchor on the tombstone so an open editor can reconcile the mark.
@@ -35,10 +36,9 @@ a partial unique index for one live Markdown discussion per mark per document.
 
 Until the last PR of the rollout removes them, the schema keeps:
 
-- `comms_messages.channel_id` and `comms_attachments.channel_id`, nullable, filled for
-  channel parents by the messages crate and by the channel writers that still exist.
-  A `BEFORE INSERT` shim keeps the two representations of a channel parent in step
-  for writers that only set one of them.
+- `comms_messages.channel_id` and `comms_attachments.channel_id`, nullable. No
+  application code reads or writes them any more; the `BEFORE INSERT` shim fills
+  them from the parent columns for channel parents until the schema drop.
 - An `AFTER INSERT` trigger that creates the thread row for roots inserted by writers
   that know nothing about `comms_message_threads`. The messages crate inserts the row
   itself with `ON CONFLICT`, so the trigger can be dropped without changing it.
@@ -46,8 +46,11 @@ Until the last PR of the rollout removes them, the schema keeps:
   bigint `threadId`. New document discussions reference PDF anchors through the
   nullable `root_id` columns; `PdfPlaceableCommentAnchor` rows carry exactly one of
   `threadId` or `root_id`.
-- The empty `migrated_comment_id` and `migrated_comment_thread_id` tables that the
-  import fills; `resolve_legacy` reads them and returns not-found until then.
+- The `migrated_comment_id` and `migrated_comment_thread_id` tables the document
+  import filled; `resolve_legacy` reads them so old numeric comment links resolve.
+  They stay after the schema drop.
+- The legacy `crm_comment` and `crm_thread` tables. The CRM import copied them into
+  the message store with their ids, and nothing but the importer reads them.
 
 ## One message API
 
@@ -68,16 +71,16 @@ membership. Display-only editor chips (dates, contacts, colors, automations) are
 stored as written, as the channel writer always did, because they name nothing that
 can be authorized.
 
-## The channel routes are adapters
+## The channel routes are gone
 
-Every existing `/channels/{id}` message, reaction, and typing route, its request and
-response shapes, and its OpenAPI operation id are unchanged. The write handlers
-translate the old request into the shared `MessageCommands` through
-`ChannelMessageAdapter`; so do the channel bot webhook, the agent's
-`SendChannelMessage` tool, the Macro AI reply loop, and the support-channel welcome
-message. Channel reads still use the channel repository, which reads `channel_id`.
-The `ChannelService` write methods remain on the trait for their tests and are
-removed with the routes in the last PR.
+Channel messages, reactions, typing, and catch-up reads live only on the
+`/messages/channel/{id}` routes. The `/channels/{id}` router keeps channel metadata,
+membership, lists, inbox activity, attachments, and the bot webhook. The channel bot
+webhook, the agent's `SendChannelMessage` tool, the Macro AI reply loop, and the
+support-channel welcome message post through the shared `MessageCommands`. Channel
+reads filter `comms_messages` and `comms_attachments` by the parent columns; the legacy
+`channel_id` columns are written only by the transition trigger until the schema-drop
+migration removes them.
 
 ## Delivery
 
@@ -93,13 +96,13 @@ and never turns the committed write into an error:
 - The local built-in agent queue: every human-authored post, on either parent, is
   handed to the in-process Macro AI detector (see Agents below). Bot posts never
   enter it, so bots cannot trigger each other.
-- Parent delivery. For channels, `ChannelMessageDelivery` dispatches the same
-  `ChannelEvent`s the old writer dispatched, so notifications, activity, sharing of
-  referenced items, contact sync, search indexing, bot triggers, and the
-  `comms_message` / `comms_attachment` / `comms_reaction` / `comms_typing` realtime
-  payloads the deployed client listens to are unchanged, and the `channel.*` events
-  on `macro.channels` keep flowing. It also sends the common `message_update` payload
-  to channel participants. For documents, `DiscussionDelivery` sends `message_update`
+- Parent delivery. For channels, `ChannelMessageDelivery` shares the referenced
+  items with participants, dispatches `ChannelEvent::MessagePosted` for new posts
+  (notifications and mention events), and sends the common `message_update` payload
+  to channel participants. The legacy `comms_message` / `comms_attachment` /
+  `comms_reaction` / `comms_typing` realtime frames and the `channel.message_*`
+  events on `macro.channels` are gone; search, webhooks, and soup consume
+  `macro.messages` instead. For documents, `DiscussionDelivery` sends `message_update`
   to current viewers and the existing document comment notifications (mention, reply,
   assignee, owner) to recipients whose view access is rechecked at delivery time.
   Comment notifications now identify the comment by message id, so the metadata's
@@ -143,36 +146,34 @@ silent thinking message as the bot on that user's capability, and patches it int
 answer with normal notification delivery. A deleted placeholder or revoked access
 prevents publishing the answer.
 
-### Trigger event transition
+### Trigger events
 
-The trigger consumers can read either `message.posted` on `macro.messages` (the
-default) or the pre-parent `channel.message_posted` on `macro.channels`, selected by
-`AGENT_TRIGGER_EVENT_SOURCE`. Only one source is read at a time: the storage service
-publishes every channel post on both topics, so reading both would evaluate each
-channel mention twice. The channel source stays available as a rollback until PR 7
-retires the `channel.message_*` events, at which point it is removed.
+The trigger consumers read `message.posted` on `macro.messages`; the pre-parent
+`channel.message_posted` source no longer exists, and the storage service publishes
+message facts on `macro.messages` only.
 
 Agent-session trigger events on `macro.agent_sessions` stay at schema version 1. A
 channel-parent trigger keeps the shapes every consumer already decodes
 (`top_level_mentioned` and `channel`, embedding the channel-only post with its
 `channel_type`, which the trigger reads from the channel when `message.posted` did not
-carry it). A document-parent trigger travels in the new `mentioned` and `thread`
-variants, which consumers built before message parents drop as undecodable. Old
-replicas and user-run macrod daemons therefore keep serving channel mentions through a
-deploy; only document mentions wait for them to roll. Lifecycle events keep their
-schema too: `ThreadOrigin` gains `parent` and its `channel_id` becomes optional, and
-older origins without a parent decode as channel origins.
+carry it). A document-parent trigger travels in the `mentioned` and `thread` variants.
+Lifecycle events keep their schema too: `ThreadOrigin` carries `parent` and its
+`channel_id` is optional; older origins without a parent decode as channel origins.
 
-## What each remaining PR adds
+## What remains
 
-1. Comment import: an online, idempotent copy of `Comment` / `Thread` rows into the
-   shared store, filling the legacy-id mapping tables and the PDF anchors' `root_id`.
-2. Frontend: the shared message queries, cache, and thread components mounted on both
-   surfaces behind a flag, consuming `message_update` and the new routes.
-3. Parent-aware agents (this document's Agents section): trigger detection, session
-   origins, history, and reply delivery on `message.posted`; the local agent sink
-   replaces the channel trigger.
-4. References: documents list the channel threads that mention them.
-5. Contract: drop the legacy comment tables and handlers, `channel_id`, the shim
-   triggers, the old channel message routes, and the `channel.message_*` broker
-   events; search, webhooks, and soup move to `macro.messages`; SDK major bump.
+The contract PR removed the legacy document comment handlers and their
+`macro_db_client` writers, the legacy CRM comment API, the channel message routes
+and adapters, the channel realtime frames, the `channel.message_*` broker events
+(search, webhooks, soup, activity, and scheduled actions consume `macro.messages`),
+and every application read and write of the message and attachment `channel_id`
+columns; the SDK moved channel, document, and CRM comments onto the message routes
+in 0.2.0. One migration is still owed, deployed only after the contract release
+reaches every consumer: drop `comms_messages.channel_id`,
+`comms_attachments.channel_id`, the parent-sync trigger and its constraints, the
+legacy `"threadId"` on the PDF anchor tables, and the `"Comment"`, `"Thread"`,
+`"ThreadAnchor"`, `crm_comment`, and `crm_thread` tables; rewrite
+`cascade_comms_message_delete_to_notifications` onto the parent columns; and retire
+the document and CRM comment importers with their source tables. The
+`migrated_comment_id` / `migrated_comment_thread_id` mapping tables stay so old
+links keep resolving.

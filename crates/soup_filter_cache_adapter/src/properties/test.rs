@@ -73,14 +73,23 @@ fn favorites_membership_changes_optimistically_and_rolls_back_without_a_new_quer
             "__typename":"SoupUpdated","item":{"__typename":"GraphqlSoupProject","id":id(100),"isFavorited":false}
         }]}}});
         let core = crate::optimistic_projection_mutations(&removal, 0);
-        let projections =
-            augment_optimistic(engine.storage(), FAVORITE, None, &vars, &removal, core)
-                .await
-                .unwrap();
+        let projections = augment_optimistic(
+            cache_core::meta::bundled_schema_ref(),
+            engine.storage(),
+            FAVORITE,
+            None,
+            &vars,
+            &removal,
+            core,
+        )
+        .await
+        .unwrap();
         let queued = engine
             .enqueue_optimistic_mutation_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
+                    identity_bindings: &[],
                     uuid: "00000000-0000-7000-8000-000000000007",
                     query: FAVORITE,
                     operation_name: None,
@@ -155,16 +164,31 @@ async fn write<S: PredicateIndexStorage>(
     data: &Value,
     identity: &str,
 ) {
-    let core = crate::authoritative_projection_mutations(query, None, data).unwrap();
+    let core = crate::authoritative_projection_mutations(
+        cache_core::meta::bundled_schema_ref(),
+        query,
+        None,
+        data,
+    )
+    .unwrap();
     let reuse = engine
         .current_identity()
         .await
         .unwrap()
         .as_deref()
         .is_none_or(|bound| bound == identity);
-    let projections = augment_authoritative(engine.storage(), query, None, vars, data, reuse, core)
-        .await
-        .unwrap();
+    let projections = augment_authoritative(
+        cache_core::meta::bundled_schema_ref(),
+        engine.storage(),
+        query,
+        None,
+        vars,
+        data,
+        reuse,
+        core,
+    )
+    .await
+    .unwrap();
     engine
         .write_query_with_registration_and_projections(
             None,
@@ -310,14 +334,23 @@ fn independent_property_optimism_survives_rollback_and_commits() {
         for (definition, option) in [(1, 12), (2, 23)] {
             let vars = json!({"input":{"entityType":"PROJECT","entityId":id(100),"propertyDefinitionId":id(definition)}}).as_object().unwrap().clone();
             let data = json!({"setEntityProperty":property(definition, option)});
-            let projections = augment_optimistic(engine.storage(), SET, None, &vars, &data, vec![])
-                .await
-                .unwrap();
+            let projections = augment_optimistic(
+                cache_core::meta::bundled_schema_ref(),
+                engine.storage(),
+                SET,
+                None,
+                &vars,
+                &data,
+                vec![],
+            )
+            .await
+            .unwrap();
             let uuid = format!("00000000-0000-7000-8000-{definition:012}");
             let queued = engine
                 .enqueue_optimistic_mutation_with_projections(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: &uuid,
                         query: SET,
                         operation_name: None,
@@ -326,6 +359,7 @@ fn independent_property_optimism_survives_rollback_and_commits() {
                         link_patches: &[],
                         revalidations: &[],
                         created_at_ms: 0,
+                        identity_bindings: &[],
                     },
                     MutationClaimRequest {
                         owner: "runner".into(),
@@ -382,6 +416,7 @@ fn independent_property_optimism_survives_rollback_and_commits() {
             .unwrap()
             .unwrap();
         let projections = augment_authoritative(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             SET,
             None,
@@ -445,6 +480,7 @@ fn property_optimism_only_patches_the_modified_definition() {
         write(&mut engine, QUERY, &Map::new(), &data(), VIEWER).await;
         let vars = json!({"input": {"entityType":"PROJECT", "entityId":id(100), "propertyDefinitionId":id(1)}}).as_object().unwrap().clone();
         let changes = augment_optimistic(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             SET,
             None,

@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
@@ -12,13 +13,13 @@ maybe_send = { path = "../../maybe_send" }
 postcard = { workspace = true }
 predicate-index = { path = "../../predicate_index" }
 serde = { workspace = true }
-serde_json = { workspace = true }
+# Opaque JSON scalars must preserve floating-point values when reparsed.
+serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [build-dependencies]
-apollo-compiler = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]

@@ -32,7 +32,10 @@ import {
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
-import { handleMessageEvent } from '@queries/messages/sync';
+import {
+  handleMessageEvent,
+  handleTimelineActivity,
+} from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -48,7 +51,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
-import '@queries/agent-schedule/sync';
+import '@app/features/routines/queries/sync';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
@@ -103,6 +106,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
+      })
+      .with({ type: 'timeline_activity' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleTimelineActivity
+        );
       })
       .with({ type: 'message_update' }, () => {
         withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(

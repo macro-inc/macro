@@ -9,6 +9,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { blockLiveTrackingEnabledSignal } from '../internal/BlockLoader';
 import {
   blockContainerMountedSignal,
@@ -20,16 +21,16 @@ import {
 const getBlockElementId = (blockId: string) => `block-${blockId}`;
 
 function resolveEntityType(blockName: BlockName) {
-  switch (blockName) {
-    case 'chat':
-      return 'chat';
-    case 'channel':
-      return 'channel';
-    case 'project':
-      return 'project';
-    default:
-      return 'document';
-  }
+  return match(blockName)
+    .with(
+      'chat',
+      'channel',
+      'project',
+      'database',
+      'form',
+      (entityType) => entityType
+    )
+    .otherwise(() => 'document' as const);
 }
 
 interface BlockContainerProps extends FlowProps {

@@ -1,0 +1,12 @@
+---
+source: crates/folds/claude_fold/src/test.rs
+expression: events
+---
+[
+  {
+    "ModelChanged": "claude-opus-5"
+  },
+  {
+    "ModelChanged": "claude-sonnet-4-6"
+  }
+]

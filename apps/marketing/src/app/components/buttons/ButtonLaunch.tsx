@@ -62,15 +62,15 @@ export function ButtonLaunch(props: ButtonLaunchProps) {
               : '0 18px',
         'font-size': shortcut()
           ? isLarge
-            ? '20px'
+            ? '17px'
             : isSmall
               ? '15px'
               : '16px'
           : isLarge
-            ? '22px'
+            ? '19px'
             : isSmall
               ? '16px'
-              : '18px',
+              : '15px',
         'font-weight': '700',
         'line-height': '1',
         'align-items': 'center',

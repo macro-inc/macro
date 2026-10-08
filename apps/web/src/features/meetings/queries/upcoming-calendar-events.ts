@@ -23,6 +23,7 @@ const TARGET_EVENT_COUNT = 5;
 type SourceOptions = {
   userId: Accessor<string | undefined>;
   sourceById: Accessor<ReadonlyMap<string, CalendarSource>>;
+  sourcesReady?: Accessor<boolean>;
   isSourceVisible: (sourceId: string) => boolean;
   now: Accessor<Date>;
 };
@@ -46,9 +47,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
     const previous = windows.slice();
     const enabled = () =>
       Boolean(options.userId()) &&
-      previous.every(
-        ({ query }) => query.isSuccess && !query.isPlaceholderData
-      ) &&
+      previous.every(({ query }) => query.isSuccess) &&
       selectUpcomingCalendarEvents(
         previous.flatMap((window) => window.events()),
         options.now()
@@ -65,7 +64,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
       () => ({ enabled: enabled() })
     );
     const calendarEvents = createMemo(() => {
-      if (!query.isSuccess || query.isPlaceholderData) return [];
+      if (!query.isSuccess) return [];
       const sources = options.sourceById();
       return query.data.items.flatMap((item): CalendarEvent[] => {
         const event = mapCalendarOccurrence(item, {
@@ -73,6 +72,7 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
           isSourceVisible: options.isSourceVisible,
         });
         if (
+          event.eventType === 'working_location' ||
           event.isCancelled ||
           !isCalendarEventVisible(event, options.isSourceVisible) ||
           event.attendees.some(
@@ -106,20 +106,20 @@ export function useUpcomingCalendarEventsSource(options: SourceOptions) {
 
   const activeWindows = () => windows.filter((window) => window.enabled());
   return {
-    events: createMemo(() =>
-      selectUpcomingCalendarEvents(
+    events: createMemo(() => {
+      if (options.sourcesReady?.() === false) return [];
+      return selectUpcomingCalendarEvents(
         activeWindows().flatMap((window) => window.events()),
         options.now()
-      )
-    ),
+      );
+    }),
     findEvent: (id: string) =>
       activeWindows()
         .flatMap((window) => window.calendarEvents())
         .find((event) => event.id === id),
     loading: () =>
-      activeWindows().some(
-        ({ query }) => query.isPending || query.isPlaceholderData
-      ),
+      options.sourcesReady?.() === false ||
+      activeWindows().some(({ query }) => query.isPending),
     error: () =>
       activeWindows().some(({ query }) => query.isError)
         ? 'Could not load upcoming events.'

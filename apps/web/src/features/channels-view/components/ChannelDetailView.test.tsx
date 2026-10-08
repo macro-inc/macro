@@ -28,6 +28,7 @@ vi.mock('@channel/Channel/ChannelDetail', () => ({
   ),
   ChannelDetailTopBar: () => null,
 }));
+vi.mock('./ChannelTitleMenu', () => ({ ChannelTitleMenu: () => null }));
 
 import { ChannelDetailView } from './ChannelDetailView';
 

@@ -107,6 +107,12 @@ pub struct EmailInboxDetails {
     pub is_primary: bool,
     /// Latest initial backfill status, when one exists.
     pub latest_backfill_status: Option<EmailBackfillStatus>,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
@@ -119,6 +125,8 @@ pub struct EmailInboxDetails {
 /// which is an internal credential-linking detail rather than user-facing data.
 #[derive(Debug, Clone)]
 pub struct UserEmailLink {
+    /// Importance of a locally composed draft from this account's own address.
+    pub draft_is_signal: bool,
     /// Stable email link identifier.
     pub id: Uuid,
     /// Macro user that owns the inbox.
@@ -139,15 +147,24 @@ pub struct UserEmailLink {
     pub settings: UserEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     pub is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    pub needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    pub calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    pub has_calendar_data: bool,
     /// Link creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Link last-updated timestamp.
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<EmailInboxDetails> for UserEmailLink {
-    fn from(details: EmailInboxDetails) -> Self {
+impl UserEmailLink {
+    /// `draft_is_signal` comes from the inbox's sender overrides, which the
+    /// details row does not carry.
+    pub fn from_details(details: EmailInboxDetails, draft_is_signal: bool) -> Self {
         Self {
+            draft_is_signal,
             id: details.id,
             macro_id: details.macro_id,
             email_address: details.email_address,
@@ -162,6 +179,9 @@ impl From<EmailInboxDetails> for UserEmailLink {
             needs_reauth: details.needs_reauth,
             settings: details.settings,
             is_primary: details.is_primary,
+            needs_calendar_permission: details.needs_calendar_permission,
+            calendar_disabled: details.calendar_disabled,
+            has_calendar_data: details.has_calendar_data,
             created_at: details.created_at,
             updated_at: details.updated_at,
         }

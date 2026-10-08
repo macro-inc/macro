@@ -23,7 +23,11 @@ import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
-import { rowKeyForChannel, useChannelsRail } from './ChannelsRailContext';
+import {
+  type ChannelRailRow,
+  rowKeyForChannel,
+  useChannelsRail,
+} from './ChannelsRailContext';
 
 export type ChannelCallStatus = 'active' | 'incoming';
 
@@ -43,6 +47,7 @@ export type ChannelRailItemProps = {
 
 export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: false,
   senderBucket: undefined,
 };
 
@@ -58,6 +63,8 @@ export function isPrimaryMouseDown(event: MouseEvent) {
 export function ChannelRailItemContextMenu(
   props: ParentProps<{
     channel: ChannelEntity;
+    /** The row the menu opens from; defaults to the channel's own row. */
+    rowId?: ChannelRailRow['id'];
     class?: string;
     /** Rail-specific items shown after the entity actions. */
     extraItems?: JSX.Element;
@@ -66,7 +73,13 @@ export function ChannelRailItemContextMenu(
   const rail = useChannelsRail();
   const actionList = toEntityActionListState({
     controller: rail.list,
-    getEntity: (row) => (row.kind === 'conversation' ? row.channel : undefined),
+    getEntity: (row) => {
+      if (row.kind === 'conversation') return row.channel;
+      if (row.kind === 'favorite' && row.favorite.entityType === 'channel') {
+        return rail.channelById(row.favorite.entityId);
+      }
+      return undefined;
+    },
   });
 
   return (
@@ -80,7 +93,7 @@ export function ChannelRailItemContextMenu(
       onOpenChange={(open) => {
         if (!open) return;
 
-        rail.list.focus.set(rowKeyForChannel(props.channel.id), {
+        rail.list.focus.set(props.rowId ?? rowKeyForChannel(props.channel.id), {
           reason: 'pointer',
           force: true,
         });

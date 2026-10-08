@@ -10,6 +10,8 @@ import type {
   CacheRequest,
   CacheResponse,
   CacheRevisionResult,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheResult,
   HydrationResult,
@@ -111,7 +113,13 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 }
 
 function isQueryDataWrite(request: CacheRequest): boolean {
-  return request.kind === 'write' || request.kind === 'hydrate';
+  // A calendar commit records coverage for data written just before it, so it
+  // must never overtake that write or hydration.
+  return (
+    request.kind === 'write' ||
+    request.kind === 'hydrate' ||
+    request.kind === 'calendar-commit'
+  );
 }
 
 function revisionAdvancementCategory(
@@ -126,7 +134,12 @@ function revisionAdvancementCategory(
   | 'clear'
   | undefined {
   return match(request.kind)
-    .with('write', 'hydrate', () => 'authoritative-write' as const)
+    .with(
+      'write',
+      'hydrate',
+      'calendar-commit',
+      () => 'authoritative-write' as const
+    )
     .with('enqueue-optimistic-mutation', () => 'optimistic-enqueue' as const)
     .with('commit-optimistic-write', () => 'optimistic-commit' as const)
     .with('rollback-optimistic-write', () => 'optimistic-rollback' as const)
@@ -145,6 +158,7 @@ function requestPriority(request: CacheRequest): number {
   }
   if (
     request.kind === 'write' ||
+    request.kind === 'calendar-commit' ||
     request.kind === 'enqueue-optimistic-mutation' ||
     request.kind === 'claim-next-mutation' ||
     request.kind === 'commit-optimistic-write' ||
@@ -500,6 +514,26 @@ export class CacheWorkerCore {
           ? result
           : { ...result, revision: parseCacheRevision(result.revision) };
       })
+      .with({ kind: 'calendar-range' }, async (request) => {
+        const result: CalendarRangeCacheResult =
+          await this.requireEngine().calendarRange(request.request);
+        return result.kind === 'unsupported'
+          ? result
+          : { ...result, revision: parseCacheRevision(result.revision) };
+      })
+      .with({ kind: 'calendar-commit' }, async (request) => {
+        const result = await this.requireEngine().calendarCommit(
+          request.commit
+        );
+        result.revision = parseCacheRevision(result.revision);
+        this.fanOut(result, true);
+        const committed: CalendarCommitCacheResult = {
+          kind: 'committed',
+          revision: result.revision,
+          changed: result.changed,
+        };
+        return committed;
+      })
       .with({ kind: 'write' }, async (request) => {
         const engine = this.requireEngine();
         const result = await engine.writeQuery(
@@ -562,10 +596,13 @@ export class CacheWorkerCore {
             request.data,
             request.linkPatches,
             request.revalidations,
+            request.identityBindings,
             request.createdAtMs,
             request.owner,
             request.nowMs,
-            request.leaseExpiresAtMs
+            request.leaseExpiresAtMs,
+            request.clientMetadata,
+            request.uncertainCalendarEventKeys
           );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
@@ -574,6 +611,7 @@ export class CacheWorkerCore {
             kind: 'mutation-settled',
             settlement: {
               transactionId: result.upsertKind.removedTransactionId,
+              mutationUuid: request.uuid,
               status: 'superseded',
               replacementTransactionId: result.transactionId,
             },
@@ -596,6 +634,10 @@ export class CacheWorkerCore {
           request.variableFilters ?? []
         );
       })
+      .with(
+        { kind: 'inspect-mutations' },
+        async () => await this.requireEngine().inspectMutations()
+      )
       .with({ kind: 'claim-next-mutation' }, async (request) => {
         const engine = this.requireEngine();
         return await engine.claimNextMutation(
@@ -611,7 +653,8 @@ export class CacheWorkerCore {
           request.leaseOwner,
           request.leaseGeneration,
           request.nextAttemptAtMs,
-          request.error
+          request.error,
+          request.serverFailure ?? false
         );
         if (result.kind === 'discarded-superseded') {
           result.revision = parseCacheRevision(result.revision);
@@ -620,6 +663,7 @@ export class CacheWorkerCore {
             kind: 'mutation-settled',
             settlement: {
               transactionId: request.transactionId,
+              mutationUuid: result.mutationUuid,
               status: 'superseded',
               replacementTransactionId: result.replacementTransactionId,
             },
@@ -641,19 +685,32 @@ export class CacheWorkerCore {
         );
         result.revision = parseCacheRevision(result.revision);
         this.fanOut(result, true);
+        const replacementTransactionId =
+          result.kind === 'committed'
+            ? undefined
+            : result.replacementTransactionId;
         this.push({
           kind: 'mutation-settled',
           settlement:
-            result.kind === 'committed-superseded'
+            replacementTransactionId !== undefined
               ? {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'superseded',
-                  replacementTransactionId: result.replacementTransactionId,
+                  replacementTransactionId,
                 }
-              : {
-                  transactionId: request.transactionId,
-                  status: 'committed',
-                },
+              : result.kind === 'failed'
+                ? {
+                    transactionId: request.transactionId,
+                    mutationUuid: result.mutationUuid,
+                    status: 'permanently-failed',
+                    error: result.error,
+                  }
+                : {
+                    transactionId: request.transactionId,
+                    mutationUuid: result.mutationUuid,
+                    status: 'committed',
+                  },
         });
         return result;
       })
@@ -672,13 +729,18 @@ export class CacheWorkerCore {
             result.kind === 'discarded-superseded'
               ? {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'superseded',
                   replacementTransactionId: result.replacementTransactionId,
                 }
               : {
                   transactionId: request.transactionId,
+                  mutationUuid: result.mutationUuid,
                   status: 'permanently-failed',
                   error: request.error,
+                  ...(request.errorCode === undefined
+                    ? {}
+                    : { errorCode: request.errorCode }),
                 },
         });
         return result;

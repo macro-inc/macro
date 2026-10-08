@@ -9,7 +9,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
 import { scrollToRenderedTarget } from '@core/messages/scroll-to-rendered-target';
-import { useCanComment } from '@core/signal/permissions';
+import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import XIcon from '@phosphor/x.svg';
@@ -75,6 +75,7 @@ export function SpreadsheetComments(props: {
 }) {
   const userId = useUserId();
   const canComment = useCanComment();
+  const isOwner = useIsDocumentOwner();
   const params = useUrlParams(SPREADSHEET_COMMENT_PARAMS);
   const parent = () => ({ type: 'document' as const, id: props.documentId });
   const query = useMessageRootsQuery(parent);
@@ -148,6 +149,7 @@ export function SpreadsheetComments(props: {
     <SpreadsheetCommentThread
       data={thread()}
       canWrite={canComment()}
+      canModerate={isOwner()}
       targetId={
         target.rootId() === thread().id && clearedTarget() !== request()
           ? target.messageId()
@@ -473,6 +475,7 @@ export function SpreadsheetComments(props: {
                   <EntityDiscussion
                     parent={parent()}
                     canWrite={canComment()}
+                    canModerate={isOwner()}
                     link={{ type: 'spreadsheet', id: props.documentId }}
                     targetId={discussionTarget()}
                     label="Discussion"

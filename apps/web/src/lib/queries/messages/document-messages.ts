@@ -17,6 +17,7 @@ import {
 } from './mutations';
 import { fetchMessageThread } from './thread-replies';
 import { useMessageTimelineQuery } from './timeline';
+import { timelineMessages } from './timeline-entries';
 
 /** Positioning annotations needs every root, but never fetches every root's replies. */
 export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
@@ -32,9 +33,7 @@ export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
   });
   return {
     get data() {
-      return query.isSuccess
-        ? query.data.pages.flatMap((page) => page.items)
-        : [];
+      return query.isSuccess ? query.data.pages.flatMap(timelineMessages) : [];
     },
     get isSuccess() {
       return query.isSuccess;

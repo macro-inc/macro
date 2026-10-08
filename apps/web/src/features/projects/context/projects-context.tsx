@@ -3,12 +3,7 @@ import type { Property, PropertyApiValues } from '@property/types';
 import type { Accessor, ParentProps } from 'solid-js';
 import { createContext, useContext } from 'solid-js';
 import type { ProjectAssignmentResult } from '../core/assignment';
-import type {
-  Project,
-  ProjectDetail,
-  ProjectFilters,
-  TaskProjectReference,
-} from '../core/project';
+import type { Project, ProjectDetail, ProjectFilters } from '../core/project';
 
 export type ProjectRow = {
   project: Project;
@@ -38,6 +33,14 @@ export type ProjectPropertyDraft = {
   value: PropertyApiValues;
 };
 
+export type ProjectCreationInput = {
+  name: string;
+  /** Markdown that seeds the description surface. */
+  description: string;
+  shareWithTeam: boolean;
+  properties: readonly ProjectPropertyDraft[];
+};
+
 /** Capabilities supplied by the production entry point or by a test. */
 export type ProjectsContext = {
   userId: Accessor<string | undefined>;
@@ -51,23 +54,18 @@ export type ProjectsContext = {
     loading: Accessor<boolean>;
     error: Accessor<Error | undefined>;
   };
-  createReferencesSource(ids: Accessor<readonly string[]>): {
-    references: Accessor<ReadonlyMap<string, TaskProjectReference>>;
-    loading: Accessor<boolean>;
-    error: Accessor<Error | undefined>;
-  };
   createCommands(): {
+    /** One request creates the task with its Project property set. */
     createTask(
       projectId: string,
       ...args: Parameters<typeof createTaskWithProperties>
     ): ReturnType<typeof createTaskWithProperties>;
     pending: Accessor<boolean>;
-    create(input: {
-      name: string;
-      shareWithTeam: boolean;
-    }): Promise<ProjectDetail>;
+    /** One request creates the project with its property values. */
+    create(input: ProjectCreationInput): Promise<ProjectDetail>;
     rename(id: string, name: string): Promise<void>;
     setMembers(id: string, memberIds: string[]): Promise<void>;
+    /** Sets or, without a project, clears each task's Project property. */
     assignTasks(
       projectId: string | undefined,
       taskIds: readonly string[]

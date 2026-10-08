@@ -158,6 +158,63 @@
       }
     },
     "/scheduled-actions/{id}": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "get_scheduled_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": ["scheduled actions"],
         "operationId": "update_scheduled_action",
@@ -431,6 +488,16 @@
               }
             }
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "404": {
             "description": "",
             "content": {
@@ -457,6 +524,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
                 }
               }
             }
@@ -654,9 +731,22 @@
                 "enum": ["events"]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": ["triggers", "type"],
+            "properties": {
+              "triggers": {
+                "$ref": "#/components/schemas/RoutineTriggers"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["multiple"]
+              }
+            }
           }
         ],
-        "description": "Exactly one trigger per action. Existing cron validation is reused."
+        "description": "A routine may run on one trigger or any of several schedules and Macro events."
       },
       "AgentTask": {
         "type": "object",
@@ -669,7 +759,7 @@
               },
               {
                 "$ref": "#/components/schemas/AgentTaskAgent",
-                "description": "Absent for legacy model-only tasks."
+                "description": "Absent when using Macro's agent-session runtime with a selected model."
               }
             ]
           },
@@ -703,6 +793,53 @@
           }
         }
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
+      "ConditionResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The triggering content answered the condition with no.",
+            "required": ["probability", "status"],
+            "properties": {
+              "probability": {
+                "type": "number",
+                "format": "float",
+                "description": "The classifier's probability, from 0 to 1, that the answer was yes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["not_met"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The condition could not be checked before the retry window closed.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["unavailable"]
+              }
+            }
+          }
+        ],
+        "description": "Why an event-triggered run was skipped before it started."
+      },
       "CreateScheduledAction": {
         "oneOf": [
           {
@@ -720,9 +857,14 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.",
         "required": ["events"],
         "properties": {
+          "condition": {
+            "type": ["string", "null"],
+            "description": "Yes/no question about the triggering content, e.g. \"Is this email an\ninvoice?\". The routine runs only when the answer is yes.",
+            "maxLength": 500
+          },
           "events": {
             "type": "array",
             "items": {
@@ -750,6 +892,12 @@
         "enum": [
           "document.created",
           "document.updated",
+          "document.deleted",
+          "task.created",
+          "task.status_changed",
+          "task.priority_changed",
+          "task.property_changed",
+          "email.message_received",
           "channel.created",
           "channel.message_posted",
           "channel.mentioned",
@@ -780,6 +928,17 @@
         "description": "Version 1 execution metadata stored in the existing JSON result column.\nNull/string column values predate this envelope and refer to legacy chats.",
         "required": ["version"],
         "properties": {
+          "condition": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConditionResult",
+                "description": "Present when an event trigger's condition stopped the run from starting."
+              }
+            ]
+          },
           "error": {
             "type": ["string", "null"]
           },
@@ -853,6 +1012,47 @@
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+      },
+      "RoutineTrigger": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["schedule", "timezone", "type"],
+            "properties": {
+              "schedule": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["cron"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["filters", "type"],
+            "properties": {
+              "filters": {
+                "$ref": "#/components/schemas/EventFilters"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["events"]
+              }
+            }
+          }
+        ],
+        "description": "An individual trigger in a routine's trigger list."
+      },
+      "RoutineTriggers": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/RoutineTrigger"
+        },
+        "description": "Bounded schedules and one combined set of event filters."
       },
       "Schedule": {
         "type": "string"

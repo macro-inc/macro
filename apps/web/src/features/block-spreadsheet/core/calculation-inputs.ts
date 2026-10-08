@@ -6,6 +6,31 @@ export type CalculationCells = Record<
   Pick<SpreadsheetCell, 'value' | 'format' | 'decimals' | 'numberFormat'>
 >;
 
+/** The calculation-relevant part of a cell, or undefined for a blank one.
+ * Formatting an otherwise empty cell must not trigger calculation. Keep
+ * number formats, though: a blank source cell can display an array spill. */
+export function calculationInput(
+  cell: SpreadsheetCell | undefined
+): CalculationCells[string] | undefined {
+  if (!cell) return;
+  const format = cell.format ?? 'general';
+  const decimals = cell.decimals ?? -1;
+  const numberFormat = cell.numberFormat;
+  if (
+    cell.value === '' &&
+    format === 'general' &&
+    decimals === -1 &&
+    !numberFormat
+  )
+    return;
+  return {
+    value: cell.value,
+    format,
+    decimals,
+    ...(numberFormat && { numberFormat }),
+  };
+}
+
 /** Keep appearance edits out of the calculation dependency graph. */
 export function calculationInputs(
   cells: SpreadsheetCells,
@@ -70,6 +95,10 @@ export function workbookCalculationInputs(
       prior.rowCount === sheet.rowCount &&
       JSON.stringify(prior.metadata?.definedNames) ===
         JSON.stringify(sheet.metadata?.definedNames) &&
+      JSON.stringify(prior.metadata?.hiddenRows) ===
+        JSON.stringify(sheet.metadata?.hiddenRows) &&
+      JSON.stringify(prior.metadata?.conditionalFormats) ===
+        JSON.stringify(sheet.metadata?.conditionalFormats) &&
       cells === prior.cells
       ? prior
       : { ...sheet, cells };

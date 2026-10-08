@@ -1,17 +1,13 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
-import { enableCrm } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideContact from '@phosphor/address-book.svg';
 import WideChat from '@phosphor/chat.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import WideTask from '@phosphor/list-checks.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   type Accessor,
   type Component,
@@ -72,7 +68,6 @@ export function useUserCardActions(
   const currentUserId = useUserId();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const { openWithSplit, popoverSplit } = useSplitLayout();
-  const crmFlag = useFeatureFlag(enableCrm);
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
     onError: () => toast.failure('Failed to open direct message'),
   });
@@ -87,21 +82,7 @@ export function useUserCardActions(
   const canDirectMessage = () =>
     canTreatAsUser() && !isBotPrincipalId(userId());
 
-  // Only the CRM contact lookup needs the team, so a card on a workspace
-  // without CRM never fetches one.
-  const currentTeamQuery = useCurrentTeamQuery(() => crmFlag().enabled);
-  // Guarded reads: an unguarded `data` suspends whoever renders the card, and
-  // a card that suspends takes its hover surface or sheet down with it.
-  const team = () =>
-    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team : undefined;
-  const crmEnabled = () => crmFlag().enabled && team()?.crm_enabled === true;
-  const contactQuery = useCrmContactByEmailQuery(
-    () => team()?.id ?? '',
-    () => target().email ?? '',
-    crmEnabled
-  );
-  const crmContact = () =>
-    crmEnabled() && contactQuery.isSuccess ? contactQuery.data : undefined;
+  const contactAction = createCrmUserCardAction(() => target().email);
 
   const copyAction = (
     id: UserCardActionId,
@@ -124,15 +105,6 @@ export function useUserCardActions(
       toast.success(toastMessage);
     },
   });
-
-  const openContact = (event: MouseEvent, contactId: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openWithSplit(
-      { type: 'contact', id: contactId },
-      { preferNewSplit: event.shiftKey, reopen: 'latest' }
-    );
-  };
 
   const openDirectMessage = async (event: MouseEvent) => {
     event.preventDefault();
@@ -177,15 +149,8 @@ export function useUserCardActions(
       actions.push(copyAction('copy-name', 'Copy name', name, 'Name copied'));
     }
 
-    const contact = crmContact();
-    if (contact) {
-      actions.push({
-        id: 'open-contact',
-        label: 'Open contact',
-        icon: WideContact,
-        onSelect: (event) => openContact(event, contact.id),
-      });
-    }
+    const contact = contactAction();
+    if (contact) actions.push(contact);
 
     if (canDirectMessage() && userId() !== currentUserId()) {
       actions.push({

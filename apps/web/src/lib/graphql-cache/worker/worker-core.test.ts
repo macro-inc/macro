@@ -9,6 +9,61 @@ import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it.each([
+    { errorCode: undefined, superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: false },
+    { errorCode: 'INTERNAL', superseded: false },
+    { errorCode: 'DRAFT_ALREADY_SENT', superseded: true },
+  ])(
+    'preserves rollback codes only for permanent settlement: %j',
+    async ({ errorCode, superseded }) => {
+      const rollbackOptimisticWrite = vi.fn().mockResolvedValue({
+        kind: superseded ? 'discarded-superseded' : 'rolled-back',
+        ...(superseded ? { replacementTransactionId: '2' } : {}),
+        mutationUuid: 'draft-handle',
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ rollbackOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      });
+      expect(rollbackOptimisticWrite).toHaveBeenCalledWith('1', 'runner', '1');
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          mutationUuid: 'draft-handle',
+          ...(superseded
+            ? { status: 'superseded', replacementTransactionId: '2' }
+            : {
+                status: 'permanently-failed',
+                error: 'rejected',
+                ...(errorCode === undefined ? {} : { errorCode }),
+              }),
+        },
+      });
+    }
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -128,49 +183,83 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: page });
   });
 
-  it('reports a successful stale commit as superseded', async () => {
-    const commitOptimisticWrite = vi.fn().mockResolvedValue({
-      kind: 'committed-superseded',
-      replacementTransactionId: '2',
-      revision: INITIAL_CACHE_REVISION,
-      changed: [],
-      affectedOps: [],
-      reset: false,
-      revalidations: [],
-    });
-    loadCacheWasmMock.mockResolvedValue({
-      openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
-    });
-    const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
-    const core = new CacheWorkerCore();
-    core.addPort(port);
-    await core.handleRequest(port, {
-      id: 1,
-      kind: 'init',
-      scope: 'scope-1',
-    });
-    messages.length = 0;
-
-    await core.handleRequest(port, {
-      id: 2,
-      kind: 'commit-optimistic-write',
-      transactionId: '1',
-      leaseOwner: 'runner',
-      leaseGeneration: '1',
-      query: 'mutation Update { update }',
-      data: { update: true },
-    });
-
-    expect(messages).toContainEqual({
-      kind: 'mutation-settled',
+  it.each([
+    {
+      outcome: {
+        kind: 'committed',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'committed' },
+    },
+    {
+      outcome: {
+        kind: 'committed-superseded',
+        replacementTransactionId: '2',
+        identityErrors: ['missing identity response object'],
+      },
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+    {
+      outcome: { kind: 'failed', error: 'missing identity response id' },
       settlement: {
-        transactionId: '1',
-        status: 'superseded',
+        status: 'permanently-failed',
+        error: 'missing identity response id',
+      },
+    },
+    {
+      outcome: {
+        kind: 'failed',
+        error: 'missing identity response id',
         replacementTransactionId: '2',
       },
-    });
-  });
+      settlement: { status: 'superseded', replacementTransactionId: '2' },
+    },
+  ])(
+    'publishes commit settlement $settlement',
+    async ({ outcome, settlement }) => {
+      const commitOptimisticWrite = vi.fn().mockResolvedValue({
+        ...outcome,
+        revision: INITIAL_CACHE_REVISION,
+        changed: [],
+        affectedOps: [],
+        reset: false,
+        revalidations: [],
+      });
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ commitOptimisticWrite }),
+      });
+      const messages: unknown[] = [];
+      const port = {
+        postMessage: (message: unknown) => messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      core.addPort(port);
+      await core.handleRequest(port, {
+        id: 1,
+        kind: 'init',
+        scope: 'scope-1',
+      });
+      messages.length = 0;
+
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'commit-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      });
+
+      expect(messages).toContainEqual({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          ...settlement,
+        },
+      });
+    }
+  );
 
   it('finishes the initial claim before pushes or queued reads run', async () => {
     const order: string[] = [];
@@ -280,10 +369,42 @@ describe('CacheWorkerCore', () => {
       settlement: {
         transactionId: '0',
         status: 'superseded',
+        mutationUuid: '00000000-0000-4000-8000-000000000007',
         replacementTransactionId: '1',
       },
     });
   });
+
+  it.each([undefined, false, true])(
+    'forwards server-failure accounting to wasm: %s',
+    async (serverFailure) => {
+      const deferOptimisticWrite = vi.fn(async () => ({ kind: 'deferred' }));
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({ deferOptimisticWrite }),
+      });
+      const port = { postMessage: vi.fn() };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      await core.handleRequest(port, {
+        id: 2,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '2',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      });
+      expect(deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+        '1',
+        'runner',
+        '2',
+        100,
+        'failed',
+        serverFailure ?? false
+      );
+    }
+  );
 
   it('runs standalone claims ahead of queued observational reads', async () => {
     const order: string[] = [];
@@ -433,6 +554,124 @@ describe('CacheWorkerCore', () => {
       'entity-filter',
       'hydrate',
     ]);
+  });
+
+  it('keeps a calendar commit behind the hydration it covers and fans out its deletions', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const range = {
+      kind: 'range' as const,
+      revision: '1',
+      occurrenceKeys: [],
+      gaps: [],
+      freshness: 'fresh' as const,
+      uncertainEventKeys: [],
+      optimistic: false,
+      watermark: null,
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return {
+            revision: '1',
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+            data: null,
+          };
+        }),
+        calendarRange: vi.fn(async () => {
+          order.push('calendar-range');
+          return range;
+        }),
+        calendarCommit: vi.fn(async () => {
+          order.push('calendar-commit');
+          return {
+            revision: '2',
+            revisionAdvanced: true,
+            changed: ['GraphqlCalendarOccurrence:e1:k'],
+            affectedOps: ['client:7'],
+            reset: false,
+            searchChangedBuckets: [],
+          };
+        }),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const hydration = core.handleRequest(port, {
+      id: 3,
+      kind: 'hydrate',
+      query: 'query CalendarOccurrences { occurrences }',
+      data: { occurrences: [] },
+    });
+    const commit = core.handleRequest(port, {
+      id: 4,
+      kind: 'calendar-commit',
+      commit: {
+        coverage: [{ kind: 'timed', start: 0, end: 10 }],
+        deletedEventKeys: ['GraphqlCalendarEvent:e1'],
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 5,
+      kind: 'calendar-range',
+      request: { startMs: 0, endMs: 10, startDay: 0, endDay: 1 },
+    });
+    releaseBlocker();
+    await Promise.all([running, hydration, commit, read]);
+
+    expect(order).toEqual([
+      'read',
+      'calendar-range',
+      'hydrate',
+      'calendar-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 5, ok: true, result: range });
+    expect(messages).toContainEqual({
+      kind: 'ops-affected',
+      opIds: ['client:7'],
+      keys: ['GraphqlCalendarOccurrence:e1:k'],
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 4,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlCalendarOccurrence:e1:k'],
+      },
+    });
   });
 
   it('does not let stale hydration overwrite a newer queued write', async () => {

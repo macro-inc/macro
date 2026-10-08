@@ -4,9 +4,9 @@
 
 use super::models::EntityType;
 use crate::domain::models::{
-    AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, ChannelRoleResult,
-    CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission, TeamRole,
-    UserTeamInfo, ViewAccessLevel,
+    AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
+    ChannelRoleResult, CrmEntityAccess, EntityAccessReceipt, EntityPermission, RequiredPermission,
+    TeamRole, UserTeamInfo, ViewAccessLevel,
 };
 #[cfg(feature = "explain_binary")]
 use crate::domain::models::{AccessExplanation, AccessGrant};
@@ -97,12 +97,71 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 
-    /// Document owning an agent session's still-live originating message thread.
+    /// Supported parent owning an agent session's still-live originating message thread.
     /// This is a persisted relationship, not a caller-supplied grant.
-    fn get_agent_session_document(
+    fn get_agent_session_parent(
         &self,
         agent_session_id: &str,
-    ) -> impl Future<Output = Result<Option<String>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
+
+    /// Highest grant on a CRM pipeline.
+    fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// All pipeline grants for the caller's current sharing sources.
+    fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a database.
+    fn get_database_access(
+        &self,
+        database_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a user has on every database they can reach,
+    /// ordered by database id.
+    fn list_database_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a database row, which is
+    /// their access to the row's database.
+    fn get_database_row_access(
+        &self,
+        row_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// Highest grant on each requested row's database. Rows without grants are omitted.
+    fn get_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, AccessLevel>, AccessError>> + Send;
+
+    /// Get the highest access level a user has for a form: their grants, plus
+    /// View for anyone (signed in or not) while the form's audience is public
+    /// and it is not trashed.
+    fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
+    /// The highest access level a user's grants hold on every live form they
+    /// reach, ordered by form id. A public audience alone never lists a form,
+    /// and trashed forms are left out.
+    fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 
     /// Get the access level a user has for a reminder.
     ///
@@ -257,6 +316,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         call_id: &Uuid,
     ) -> impl Future<Output = Result<Option<CallChannelInfo>, AccessError>> + Send;
 
+    /// The database a row's table belongs to; `None` for a row that does not
+    /// exist.
+    fn get_database_row_database(
+        &self,
+        row_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+
     /// Resolve a channel ID to the call's channel info and share permission ID.
     ///
     /// Checks both the `calls` table (active calls) and the `call_records` table
@@ -358,6 +424,34 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
                         user_org_id,
                         thread_id,
                         EntityType::EmailThread,
+                    )
+                    .await,
+                );
+            }
+            receipts
+        }
+    }
+
+    /// Mint view receipts for database rows. Implementations may share access
+    /// lookups; the default delegates to the single-entity authorization path.
+    fn generate_database_row_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        row_ids: &'a [String],
+    ) -> impl Future<
+        Output = HashMap<String, Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>>,
+    > + Send
+    + 'a {
+        async move {
+            let mut receipts = HashMap::with_capacity(row_ids.len());
+            for row_id in row_ids {
+                receipts.insert(
+                    row_id.clone(),
+                    self.generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        None,
+                        row_id,
+                        EntityType::DatabaseRow,
                     )
                     .await,
                 );
@@ -488,6 +582,31 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<UserTeamInfo>, AccessError>> + Send;
 }
 
+/// Enumerates the databases a user can reach. Kept apart from
+/// [`EntityAccessService`], which answers for one entity at a time: only the
+/// databases catalog needs every grant at once.
+pub trait AccessibleDatabases: Clone + Send + Sync + 'static {
+    /// The highest access level the user has on every database they can
+    /// reach, ordered by database id. Trashed databases are still listed.
+    fn accessible_databases(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
+/// Enumerates the forms a user can reach through grants. Kept apart from
+/// [`EntityAccessService`], which answers for one entity at a time: only the
+/// forms catalog needs every grant at once.
+pub trait AccessibleForms: Clone + Send + Sync + 'static {
+    /// The highest access level the user's grants hold on every live form,
+    /// ordered by form id. Public forms the user holds no grant on are not
+    /// listed, and neither are trashed forms.
+    fn accessible_forms(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
+}
+
 /// No-op [`EntityAccessService`] for binaries that need to satisfy the
 /// bound but never check access — e.g. schema-only GraphQL SDL export.
 /// `get_user_team` reports no membership; every other method errors.
@@ -610,4 +729,13 @@ impl EntityAccessService for NoOpEntityAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(None)
     }
+}
+
+/// Directory of pipeline grants for CRM navigation.
+pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
+    /// Highest effective grant on each accessible pipeline.
+    fn accessible_pipelines(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }

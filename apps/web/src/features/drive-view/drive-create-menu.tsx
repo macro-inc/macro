@@ -1,6 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import {
   CREATABLE_BLOCKS,
+  type CreatableName,
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
@@ -12,24 +13,50 @@ import { Dropdown } from '@ui';
 import { For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useDriveView } from './context/drive-context';
+import { driveCreateDestinationLabel } from './core/location-label';
 
 /** Launcher integration for the current Drive folder. */
 export function DriveCreateMenu() {
-  const { state, actions } = useDriveView();
+  const { state, sidebar, actions } = useDriveView();
 
   const isEnabled = useCreatableEnabled();
+
+  const destination = () =>
+    driveCreateDestinationLabel(state.projectId(), sidebar.folders());
 
   const options = () =>
     CREATABLE_BLOCKS.filter(
       (block) =>
-        ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'].includes(
-          block.blockName
-        ) && isEnabled(block.blockName)
+        [
+          'md',
+          'snippet',
+          'spreadsheet',
+          'canvas',
+          'code',
+          'project',
+          'database',
+          'form',
+        ].includes(block.blockName) &&
+        isEnabled(block.blockName) &&
+        // Databases and forms have no folder membership.
+        ((block.blockName !== 'database' && block.blockName !== 'form') ||
+          !state.projectId())
     );
+
+  const select = (blockName: CreatableName) => {
+    runCreateAction(blockName, {
+      projectId: state.projectId(),
+      source: 'drive',
+      destination: destination(),
+    });
+  };
 
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger as={ViewSidebar.Action} aria-label="New file or folder">
+      <Dropdown.Trigger
+        as={ViewSidebar.Action}
+        aria-label={`New file or folder in ${destination()}`}
+      >
         <ViewSidebar.Icon>
           <PlusIcon class="size-4" />
         </ViewSidebar.Icon>
@@ -38,18 +65,18 @@ export function DriveCreateMenu() {
           <CaretDownIcon class="size-3 shrink-0" />
         </ViewSidebar.Trailing>
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-48">
+      <Dropdown.Content class="min-w-48 max-w-72">
         <Dropdown.Group>
+          <Dropdown.GroupLabel class="min-w-0 gap-1.5">
+            <span class="shrink-0">Create in</span>
+            <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
+            <span class="min-w-0 truncate font-medium text-ink-muted">
+              {destination()}
+            </span>
+          </Dropdown.GroupLabel>
           <For each={options()}>
             {(option) => (
-              <Dropdown.Item
-                onSelect={() =>
-                  runCreateAction(option.blockName, {
-                    projectId: state.projectId(),
-                    source: 'drive',
-                  })
-                }
-              >
+              <Dropdown.Item onSelect={() => select(option.blockName)}>
                 <span
                   aria-hidden="true"
                   class="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4"

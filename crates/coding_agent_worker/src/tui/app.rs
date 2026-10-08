@@ -10,7 +10,7 @@ use tui_input::Input;
 
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
 use super::api::{HarnessSelfApi, Snapshot};
-use super::config_form::{ConfigForm, SETTINGS, Setting};
+use super::config_form::{ConfigForm, Setting, settings};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
 use super::platform::{BrowserTarget, copy_to_clipboard};
@@ -68,7 +68,7 @@ pub(crate) enum Mode {
     Normal,
     /// Editing one config setting's value.
     EditSetting {
-        /// Index into [`SETTINGS`].
+        /// Index into the current settings.
         index: usize,
         /// The text being typed.
         buffer: Input,
@@ -471,14 +471,17 @@ impl App {
     }
 
     async fn commit_edit(&mut self, index: usize, input: String) {
-        let setting = SETTINGS[index];
+        let setting = settings(&self.config)[index];
         if let Err(message) = self.form.apply_text(setting, &input) {
             return self.fail(message);
         }
         let apply = match setting {
-            Setting::Workspace => ApplyConfig::Now,
+            Setting::Workspace
+            | Setting::HerdrModel
+            | Setting::HerdrArguments
+            | Setting::HerdrStorage => ApplyConfig::Now,
             Setting::Name => ApplyConfig::NextPairing,
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass => {
+            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
                 unreachable!("not edited as text")
             }
         };
@@ -545,6 +548,8 @@ impl App {
                     self.config = config;
                     // The core reads config at start, so a save while serving
                     // means a restart to apply it.
+                    self.selected_setting =
+                        self.selected_setting.min(settings(&self.config).len() - 1);
                     if apply == ApplyConfig::Now && self.paired() {
                         if self.restart_daemon().await {
                             self.ok("saved and applied");
@@ -588,36 +593,47 @@ impl App {
                 self.selected_setting = self.selected_setting.saturating_sub(1);
             }
             KeyCode::Down | KeyCode::Char('j') if self.tab == Tab::Config => {
-                self.selected_setting = (self.selected_setting + 1).min(SETTINGS.len() - 1);
+                self.selected_setting =
+                    (self.selected_setting + 1).min(settings(&self.config).len() - 1);
             }
-            KeyCode::Enter if self.tab == Tab::Config => match SETTINGS[self.selected_setting] {
-                Setting::Agent => {
-                    let selected = self
-                        .agents
-                        .iter()
-                        .position(|agent| {
-                            agent.launch.command == self.config.harness.command
-                                && agent.launch.args == self.config.harness.args
-                        })
-                        .unwrap_or(self.agents.len());
-                    self.mode = Mode::AgentPicker { selected };
+            KeyCode::Enter if self.tab == Tab::Config => {
+                match settings(&self.config)[self.selected_setting] {
+                    Setting::Agent => {
+                        let selected = self
+                            .agents
+                            .iter()
+                            .position(|agent| {
+                                agent.launch.command == self.config.harness.command
+                                    && agent.launch.args == self.config.harness.args
+                            })
+                            .unwrap_or(self.agents.len());
+                        self.mode = Mode::AgentPicker { selected };
+                    }
+                    Setting::Scope => {
+                        self.form.toggle_scope(&self.config);
+                        self.save_config(ApplyConfig::NextPairing).await;
+                    }
+                    Setting::PermissionBypass => {
+                        self.form
+                            .set_permission_bypass(!self.config.identity.allow_permission_bypass);
+                        self.save_config(ApplyConfig::NextPairing).await;
+                    }
+                    Setting::HerdrFocus => {
+                        self.form.toggle_herdr_focus(&self.config);
+                        self.save_config(ApplyConfig::Now).await;
+                    }
+                    setting @ (Setting::Workspace
+                    | Setting::Name
+                    | Setting::HerdrModel
+                    | Setting::HerdrArguments
+                    | Setting::HerdrStorage) => {
+                        self.mode = Mode::EditSetting {
+                            index: self.selected_setting,
+                            buffer: self.form.edit_value(setting).into(),
+                        };
+                    }
                 }
-                Setting::Scope => {
-                    self.form.toggle_scope(&self.config);
-                    self.save_config(ApplyConfig::NextPairing).await;
-                }
-                Setting::PermissionBypass => {
-                    self.form
-                        .set_permission_bypass(!self.config.identity.allow_permission_bypass);
-                    self.save_config(ApplyConfig::NextPairing).await;
-                }
-                setting @ (Setting::Workspace | Setting::Name) => {
-                    self.mode = Mode::EditSetting {
-                        index: self.selected_setting,
-                        buffer: self.form.edit_value(setting).into(),
-                    };
-                }
-            },
+            }
             _ => {}
         }
     }

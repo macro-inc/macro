@@ -47,10 +47,12 @@ import {
   refuseAttachmentsOffline,
 } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { observeDraftIdentity } from './draft-identity';
 import {
   createDraftPersistence,
   deleteDraftForDiscard,
 } from './draft-persistence';
+import { createDraftSaveNotice } from './draft-save-notice';
 import { createDraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue, FormAccessKey } from './email-form-types';
@@ -109,6 +111,8 @@ export type ReplyComposerOptions = {
   replyingTo: Accessor<EmailMessage | undefined>;
   isEditingExisting?: boolean;
   draft?: EmailMessage;
+  localDraft?: import('../core/local-draft').LocalDraft;
+  localAttachments?: DraftFormAttachment[];
   preloadedHtml?: string;
   /** Seed identity of the draft this composer mounted from — becomes part of
    * the form-state cache key so a remount on a newer draft version gets a
@@ -255,12 +259,41 @@ export function createReplyComposer(
         ? {
             draftId: draftSeed.db_id,
             threadId: draftSeed.thread_db_id,
+            // A cached seed may still use local IDs. Only a cache read or save
+            // can confirm it for REST actions.
+            persistence: props.drafts.readDraft ? 'queued' : undefined,
             inboxId: draftSeed.link_id,
           }
         : undefined
   );
+  if (props.localAttachments) {
+    form.attachments.clear();
+    for (const attachment of props.localAttachments)
+      form.attachments.add(attachment);
+  }
+  if (
+    props.localDraft &&
+    ['failed', 'unconfirmed', 'delete-failed'].includes(props.localDraft.status)
+  )
+    session.dispatch({
+      type: 'rejected',
+      epoch: session.epoch(),
+      code: 'INTERNAL',
+    });
   const savedDraftId = session.draftId;
   const savedDraftThreadId = session.threadId;
+  observeDraftIdentity(
+    props.drafts,
+    session,
+    props.notices,
+    () => {
+      if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
+      if (props.drafts.retryDraft) {
+        void retryDraft().catch(props.notices.reportError);
+      } else detachFromObsoleteDraft('Saving your edits as a new draft.');
+    },
+    handleAlreadySent
+  );
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let identityVersion = 0;
@@ -394,9 +427,11 @@ export function createReplyComposer(
   };
 
   const attachmentPersistence = createAttachmentPersistence({
+    confirmRemoval: !!props.drafts.saveLocalDraft,
     services: props.attachmentStorage,
     attachments: form.attachments,
-    draftId: () => (session.serverConfirmed() ? savedDraftId() : undefined),
+    draftId: () =>
+      session.identity().kind === 'server' ? savedDraftId() : undefined,
     inboxId: persistedInboxId,
   });
 
@@ -491,6 +526,7 @@ export function createReplyComposer(
     completingThread,
     generation: identityVersion,
     revision: editVersion,
+    attachments: [...form.attachments.list()],
   });
 
   async function reportPersistenceFailure(
@@ -499,7 +535,9 @@ export function createReplyComposer(
   ) {
     props.notices.reportError(error);
     if (!session.serverConfirmed()) {
-      if (schedule?.pending()) {
+      // A best-effort pre-send save may fail while delivery still succeeds.
+      // Background saves and explicit draft actions report their own failure.
+      if (schedule?.pending() || !submitting()) {
         props.notices.feedback.failure(`Failed to ${operation} draft`);
       }
       return;
@@ -537,19 +575,22 @@ export function createReplyComposer(
       }, 0);
     }
   };
+  function handleAlreadySent() {
+    identityVersion += 1;
+    props.notices.feedback.alert('This reply was already sent');
+    void withDeletionGuard(() => {
+      resetState();
+      clearDraftState();
+    });
+  }
+
   const persistence = createDraftPersistence({
     session,
     drafts: props.drafts,
     attachments: attachmentPersistence,
+    localDraft: props.localDraft,
     mintThreadHandle: false,
-    onAlreadySent: () => {
-      identityVersion += 1;
-      props.notices.feedback.alert('This reply was already sent');
-      void withDeletionGuard(() => {
-        resetState();
-        clearDraftState();
-      });
-    },
+    onAlreadySent: handleAlreadySent,
   });
 
   async function persistDraft({
@@ -595,8 +636,23 @@ export function createReplyComposer(
   }
 
   const autosave = createDraftAutosave({
+    ...createDraftSaveNotice(props.notices.feedback),
     capture: captureSave,
     persist: persistDraft,
+    saveLocalSnapshot: async (snapshot) => {
+      if (snapshot.generation !== identityVersion) return;
+      await persistence.saveLocally({
+        draft: snapshot.draft
+          ? {
+              ...snapshot.draft,
+              thread_db_id: snapshot.thread?.db_id,
+              provider_thread_id: snapshot.thread?.provider_id,
+            }
+          : null,
+        inboxId: snapshot.inboxId,
+        attachments: snapshot.attachments,
+      });
+    },
     paused: () =>
       submitting() ||
       pendingDeletion() ||
@@ -663,7 +719,7 @@ export function createReplyComposer(
     );
     try {
       return persistence.confirmed(
-        await autosave.save(captureSave(false, true))
+        await autosave.save(captureSave(false, true), { acknowledge: false })
       );
     } finally {
       cleanupWatermark();
@@ -854,10 +910,9 @@ export function createReplyComposer(
     const sendGeneration = identityVersion;
     try {
       // Ensure draft is saved before sending so undo-send always has a draft to restore
-      autosave.cancel();
       const epochBeforeSave = session.epoch();
       try {
-        await executeSaveDraft(willMarkDone);
+        await autosave.save(captureSave(willMarkDone), { acknowledge: false });
       } catch (error) {
         props.notices.reportError(error);
         if (session.isStale(epochBeforeSave)) return;
@@ -1067,6 +1122,7 @@ export function createReplyComposer(
     autosave.cancel();
     try {
       await autosave.settled().catch(() => {});
+      await autosave.flushLocal().catch(props.notices.reportError);
       const draftId = savedDraftId();
       if (draftId) {
         try {
@@ -1124,7 +1180,10 @@ export function createReplyComposer(
       terminalState()
     )
       return;
-    if (await refuseAttachmentsOffline(props.connectivity, props.notices))
+    if (
+      !props.drafts.saveLocalDraft &&
+      (await refuseAttachmentsOffline(props.connectivity, props.notices))
+    )
       return;
     const currentAttachments = form.attachments.list();
 
@@ -1166,7 +1225,7 @@ export function createReplyComposer(
     scheduleDraftSave();
   };
 
-  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
+  const handleRemoveAttachment = async (attachment: DraftFormAttachment) => {
     if (
       submitting() ||
       pendingDeletion() ||
@@ -1176,13 +1235,17 @@ export function createReplyComposer(
       terminalState()
     )
       return;
-    hasLocalChanges = true;
-    editVersion += 1;
-    attachmentPersistence.remove(attachment);
+    try {
+      if (!(await attachmentPersistence.remove(attachment))) return;
+      scheduleDraftSave();
+    } catch (error) {
+      props.notices.reportError(error);
+    }
   };
 
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
+    attachmentPersistence.removing() ||
     pendingDeletion() ||
     movingInbox() ||
     submitting() ||
@@ -1337,7 +1400,19 @@ export function createReplyComposer(
     });
   };
 
+  async function retryDraft() {
+    if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
+    // Finish this editor's last write before checking the shared revision.
+    await autosave.flushLocal().catch(props.notices.reportError);
+    await persistence.retry();
+    await autosave.save();
+  }
+
   return {
+    retryDraft,
+    flushLocal: autosave.flushLocal,
+    localSaveState: autosave.localSaveState,
+    acknowledgeSaved: autosave.acknowledgeSaved,
     onContentChange: handleChange,
     handleUserMention,
     scrollContainer,

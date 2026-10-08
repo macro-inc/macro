@@ -24,6 +24,14 @@ single `vite.config.ts`.
 You can override the dev server host for devices/emulators by exporting
 `TAURI_DEV_HOST` before running `cargo tauri …`.
 
+From `apps/web`, use `just ios-dev` (or `PORT=3001 just ios-dev`) to open Xcode
+with the native toolchain configured. It prepares WASM with the original shell
+environment, then uses the same Xcode compiler/linker setup as `just ios-build`.
+This also applies to macOS build scripts and proc macros compiled for the host;
+mixing Nix's linker with Xcode's SDK can fail with `library not found for -liconv`.
+Tauri starts and manages the Vite server after preparation. Keep `just ios-dev`
+running while building in Xcode, and restart it after changing these scripts.
+
 Default native logging keeps Turso at `warn`, including Debug builds: its
 per-record/page debug spans are expensive through iOS OS activity logging.
 Application and Tao debug logs remain enabled in Debug builds. An explicit
@@ -104,6 +112,38 @@ The `beforeBuildCommand` is `just build-tauri`, which runs `bun run build` and
 emits the frontend into `dist`. Tauri then packages that output
 according to `tauri.conf.json`.
 
+From `apps/web`, use `just ios-build` for a release build or
+`just ios-build --no-update` to disable automatic bundle updates.
+`just ios-build-no-update` remains a compatibility alias. Both modes use
+`VITE_POSTHOG_API_KEY` from the environment, fetching it from
+Doppler `web-release/prd` if it is unset or empty. Install the Doppler CLI and
+authenticate with read access to that config, or supply the variable explicitly.
+An unavailable or empty key stops the build before frontend compilation.
+
+Both modes build the frontend with the current shell's toolchain, then select
+Xcode's compiler, linker, and tools for the native build and the opened Xcode
+session. This avoids Nix's macOS compiler wrapper injecting
+`-mmacos-version-min` into an iOS build.
+The system `xcode-select` selection is used unless `DEVELOPER_DIR` explicitly
+selects an Xcode installation. Keep the recipe running while building in Xcode
+so Tauri's options server can supply the build configuration and tool paths.
+The native build keeps the selected Rust toolchain and forwards its compiler
+to Xcode. Both device and simulator targets are declared in the root
+`rust-toolchain.toml`, which also defines Nix's pinned Fenix toolchain. Re-enter
+`nix develop` after pulling target changes; Nix's `rustup` shim cannot install
+targets into an existing shell. The launcher fails early if the device standard
+library is missing. These are local Xcode build recipes; reproducible release
+builds also require a pinned Xcode/SDK environment.
+
+The iOS recipes and Xcode's Rust build phase both set `TMPDIR` to macOS's
+per-user temporary directory (`getconf DARWIN_USER_TEMP_DIR`). Tauri CLI finds
+its options server there before restoring the build environment. Inheriting
+Nix's shell-specific `TMPDIR` can leave Xcode connecting to a stale server after
+restarting `nix develop`, even while the new CLI process is running. Keep the
+build phase in `gen/apple/project.yml` and the generated project in sync.
+For direct `cargo tauri ios` invocations from Nix, first run
+`export TMPDIR="$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)"` as well.
+
 The Rust library emits `staticlib` for iOS and `cdylib` for Android. Cargo emits
 both outputs on iOS, but Xcode links only the static archive into the app.
 CallKit's Swift package is part of Xcode's dependency graph, so `build.rs` permits
@@ -111,6 +151,12 @@ its initializer to remain unresolved only in the unused iOS dylib. The final
 Xcode app link must still resolve `init_plugin_call_kit` from the Swift package.
 Do not remove Android's `cdylib` output or disable undefined-symbol checking
 globally to work around an iOS link failure.
+
+GraphQL schema SDL is loaded from the frontend bundle through
+`graphql_cache_init_with_schema`; the cache engine and Turso remain native.
+Set `MIN_NATIVE_BUILD` to the first native release containing this command before
+shipping the corresponding OTA bundle. See [runtime schema behavior](../../../../crates/client/README.md#runtime-graphql-schema)
+for compatible additions, queued work, and rollback behavior.
 
 GraphQL hydration checkpoints require the native
 `graphql_cache_current_storage_generation` command. When shipping this frontend
@@ -138,6 +184,72 @@ matching completion record cannot be reused or restored. Previously cached OTA
 bundles lack this record and fall back to embedded assets on the first native
 upgrade; a compatible update can then be downloaded again.
 
+Durable email-draft recovery additionally requires
+`graphql_cache_inspect_mutations` and queued `client_metadata` support. Set
+`MIN_NATIVE_BUILD` to the first full native build containing both before publishing
+this frontend as an OTA bundle. The frontend probes this command before claiming
+or enqueueing mutations. An older binary uses the existing uncached fallback and
+shows an update-required notice; its existing mutation queue stays intact until
+the user installs the native update.
+
+## Desktop native updates
+
+Release builds for macOS Apple Silicon and Linux AppImage check for native updates
+after startup and every six hours. Downloads are verified with Tauri's updater
+signature before becoming eligible for installation. A ready update installs on
+normal app quit; closing/hiding a window only installs if it actually exits the
+app. Force-killing loses the in-memory download and the next launch checks again.
+No network work is started during quit. Errors retry with backoff.
+
+The ready notification and Settings → Account offer **Restart to update**. Explicit
+restart waits for registered canvas/PDF saves and local query persistence, and is
+blocked during calls, uploads and imports. Native installation closes the native
+cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
+user data. Mobile updates remain managed by the app stores. Debug, recording,
+branch, and `--no-default-features` builds do not auto-install native updates.
+
+`../desktop-release.json` is the public release configuration; its checked-in
+defaults disable updates for local builds. `bun apps/web/scripts/desktop-release.mjs prepare <ref>`
+(run from the repository root) updates this tracked file in CI
+before Nix evaluates either package. Both packages receive the same native version,
+OTA compatibility build number, and source commit timestamp for the embedded
+frontend. Existing `vYEAR.MONTH.DAY.REVISION` tags map to
+`YEAR.MMDD.REVISION` SemVer, e.g. `v2026.10.6.1` → `2026.1006.1`. Three-part stable
+SemVer tags also work. Each component must be at most 9999. Do not reuse a version
+or rebuild an already published tag; publish a higher version for fixes/reverts.
+
+The combined desktop workflow is the only publisher. It exports the final
+relocated/signed macOS app, notarizes and staples it, and archives it as
+`.app.tar.gz`. The Linux AppImage and macOS archive receive updater signatures
+outside Nix. `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+live in Doppler `macos-release/prd`, read using the existing
+`MACOS_RELEASE_DOPPLER_TOKEN` CI secret. Only the corresponding public key is
+committed. Keep this private key: changing the embedded key requires a transition
+release signed with the old key.
+
+Versioned GitHub Release assets are immutable. Publication retries reuse and
+verify any already-published signatures, since newly generated signatures include
+the signing time. The stable manifest is uploaded last to the dedicated
+`desktop-stable` prerelease's `latest.json` asset, after both packages and signatures
+exist. Promotions are serialized and reject older/equal versions; unrelated SDK
+or daemon releases cannot move the desktop update feed. A brief missing manifest
+during replacement is treated as a retryable check error.
+
+Bootstrap requires one manual native upgrade: older binaries cannot acquire the
+Rust updater through a frontend OTA. Before promoting the first release, test two
+consecutive signed builds on installed macOS and Linux apps, including offline
+launch, read-only install locations, quit, restart, and preservation of local data.
+Builds run directly from a mounted DMG or the Nix store are not writable installed
+apps. For a broken release, stop promotion and release the last working code under
+a higher version. No automatic crash rollback is implemented.
+
+The Rust coordinator tests exercise the pinned updater against a local HTTP
+server with a test-only public key and signed fixture (the test private key is
+discarded), including corrupt signatures and older versions. Release metadata tests
+run from `apps/web` with `bunx vitest run --project scripts scripts/desktop-release.test.ts scripts/desktop-signing.test.ts`.
+Frontend preparation tests are in the web `tauri` Vitest project. Native replacement/notarization still
+requires platform release testing; mocked HTTP tests never replace the test runner.
+
 ## Automated offline tests (Linux)
 
 See [native E2E](../../tests/native/README.md) for the isolated WebDriver setup,
@@ -152,3 +264,70 @@ extra routes, or mount native-only UI. Pair those checks with the
 `MaybeTauriProvider` from `@macro/tauri` to keep native-specific wiring
 localized while rendering everything through the shared `src` entry
 point.
+
+## Desktop memory recording (macOS)
+
+The frontend tags traces and logs with `app.runtime=tauri`, `app.platform`,
+`service.instance.id` (a new UUID per native launch), `macro.native.pid`, and
+`macro.native.version`. The shared `service.name=web-app` remains unchanged.
+Browser sessions instead have `app.runtime=browser`.
+
+Quit an existing Macro instance first, then launch the built **app bundle**:
+
+```sh
+open -a /absolute/path/to/Macro.app --args --record-memory \
+  --otel-traces-url https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+```
+
+For dev telemetry use `https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces`;
+for a local collector use its full HTTP `/v1/traces` URL. The endpoint is required
+and applies to this launch only; the corresponding `/v1/logs` endpoint is derived
+from it. No collector credentials are embedded in the app. Selecting a telemetry
+endpoint does not change which backend the frontend uses.
+
+Recording explicitly enables the frontend OTel SDK regardless of the normal
+PostHog/build-time enablement gate and uses an always-on sampler for emitted
+frontend spans. This does not override sampling/drop policies in a downstream
+collector or backend, or add traces to operations that have no instrumentation.
+The title bar shows `Recording <short ID>`; the full `macro.recording.id` and
+`service.instance.id` appear in the startup telemetry log. Quit to stop recording.
+Launching again creates new IDs. A second launch while Macro is already running
+is handled by the existing single-instance plugin and does **not** enable recording
+in the running instance. Automatic bundle updates are disabled for a recording
+launch so the measured frontend stays on the embedded build.
+
+A native thread samples once per second, retaining at most one hour in memory.
+The frontend drains the samples, emits timestamped `app.memory.sample` spans, and
+attaches the latest reading to every frontend span at start and at end (the latter
+attributes end in `.end`). Readings older than five seconds are tagged `stale` and
+are not attached as current memory. Buffer overflow is reported in a telemetry
+warning. Reloads reuse the native session; a per-webview sessionStorage cursor
+avoids replaying samples already handed to the exporter. Export uses the existing
+bounded, best-effort OTel batch transport; this is not a durable local recording,
+and abrupt exit, export failures, or buffer overflow can lose telemetry.
+
+Memory fields (bytes):
+
+- `macro.memory.native.{rss_bytes,footprint_bytes}`: Rust host process.
+- `macro.memory.web_content.{rss_bytes,footprint_bytes}`: frontend WebContent processes.
+- `macro.memory.gpu.*` / `macro.memory.network.*`: attributed WebKit helpers.
+- `macro.memory.frontend.footprint_bytes`: sum of measured WebKit helper footprints.
+- `macro.memory.app.footprint_bytes`: native + frontend footprint sum, present only
+  when the native host and WebContent were measured with no helper-read failures.
+- `macro.memory.frontend.status`: `available`, `partial`, or `unavailable`.
+- `macro.memory.timestamp_ms` / `sample_age_ms`: native sample time and its age.
+
+These are process memory measurements, not JavaScript heap/allocation profiles.
+RSS and macOS physical footprint have different accounting; sums are explicitly
+process sums and need not equal Activity Monitor's app total.
+
+macOS sampling uses `proc_pid_rusage`. WebKit helpers are XPC processes, so PPID
+alone is insufficient. Attribution resolves the optional private libSystem SPI
+`responsibility_get_pid_responsible_for_pid` at runtime and includes only known
+WebKit helpers whose responsible PID is this app. If the SPI, permissions, or
+attribution are unavailable, frontend coverage is explicitly unavailable. Never
+sum every WebKit process on the machine. Launch through `open`/LaunchServices:
+executing the binary directly from a terminal may attribute helpers to Terminal.
+Memory recording is currently macOS-only; normal runtime identification works on
+all Tauri platforms. The private attribution API is a compatibility consideration
+for future App Store distribution.

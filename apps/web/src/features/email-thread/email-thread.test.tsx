@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   source: vi.fn(),
   composeOptions: vi.fn<(options: EmailComposeContextOptions) => void>(),
 }));
+vi.mock('@property/tags', () => ({ InlineFetchedEntityTagsPill: () => null }));
 vi.mock('@queries/email/thread', () => ({ useThreadQuery: mocks.query }));
 vi.mock('@queries/email/draft-cache', () => ({
   clearSavedDraftThreadCache: mocks.clearDraft,
@@ -100,7 +101,11 @@ describe('email thread query ownership', () => {
       />
     ));
     expect(screen.getByTestId('body').textContent).toBe('Cached body');
-    expect(mocks.source).toHaveBeenCalledWith(source);
+    expect(mocks.source.mock.calls[0][0]).toMatchObject({
+      id: source.id,
+      fetchOlder,
+      refresh,
+    });
     expect(mocks.query).not.toHaveBeenCalled();
     const options = mocks.composeOptions.mock.calls[0][0];
     expect(options.threadTransport?.()).toBe('graphql');

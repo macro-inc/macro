@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use documents::domain::ports::DocumentService;
-use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::ports::GithubPullRequestService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{
@@ -46,10 +46,10 @@ impl<
     D: DocumentService,
     R: GithubSyncRepo,
     C: GithubSyncClient,
-    F: ForeignEntityService,
+    G: GithubPullRequestService,
     N: NotificationIngress,
     P: GithubSyncRealtime,
-> GithubSyncServiceImpl<D, R, C, F, N, P>
+> GithubSyncServiceImpl<D, R, C, G, N, P>
 {
     pub(super) async fn notify_pr_status_transitions(
         &self,

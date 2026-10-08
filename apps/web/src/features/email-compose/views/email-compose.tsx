@@ -6,18 +6,19 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
-
 import { ComposerSurface } from '@ui';
-
-import { createSignal, Show } from 'solid-js';
+import { createResource, createSignal, Show } from 'solid-js';
+import { DraftSyncStatus } from '../components/draft-sync-status';
 import { EmailScheduleBar } from '../components/email-schedule-summary';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { ComposeProvider } from '../context/compose-context';
 import type { ComposeContextValue } from '../primitives/compose-view-state';
+import { createDraftSyncStatus } from '../primitives/draft-sync-status';
 import {
   createEmailComposer,
   type EmailComposerOptions,
+  hasComposeUndo,
 } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
@@ -32,6 +33,53 @@ export type EmailComposeViewProps = Pick<
   | 'initialInboxId'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
+  // The split mounts one composer per initial draft. Keep this content load
+  // fixed to that mount; live queue changes refresh identity, not editor text.
+  const initialDraftId = props.draft?.db_id ?? props.draftId;
+  const readInitialDraft = props.context.drafts.readDraft;
+  const [saved, { refetch }] = createResource(
+    () => readInitialDraft && initialDraftId,
+    async (id) => {
+      const result = await readInitialDraft!(id);
+      if (!result?.draft && !props.draft && !hasComposeUndo(id)) {
+        throw new Error('This draft is not available on this device.');
+      }
+      return result;
+    }
+  );
+  return (
+    <Show
+      when={!saved.loading}
+      fallback={<div role="status">Loading draft…</div>}
+    >
+      <Show
+        when={!saved.error}
+        fallback={
+          <div role="alert">
+            Unable to load this draft.{' '}
+            <button onClick={() => void refetch()}>Retry</button>
+          </div>
+        }
+      >
+        <LoadedEmailComposeView
+          {...props}
+          draft={saved()?.draft ?? props.draft}
+          draftPersistence={saved()?.persistence}
+          localDraft={saved()?.local}
+          localAttachments={saved()?.attachments}
+        />
+      </Show>
+    </Show>
+  );
+}
+
+function LoadedEmailComposeView(
+  props: EmailComposeViewProps &
+    Pick<
+      EmailComposerOptions,
+      'draftPersistence' | 'localDraft' | 'localAttachments'
+    >
+) {
   const composeContext = props.context;
   const state = createEmailComposer({
     drafts: composeContext.drafts,
@@ -48,10 +96,21 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     host: props.host,
     draft: props.draft,
     draftId: props.draftId,
+    draftPersistence: props.draftPersistence,
+    localDraft: props.localDraft,
+    localAttachments: props.localAttachments,
     recipientOptions: props.recipientOptions,
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
     initialInboxId: props.initialInboxId,
+  });
+  const sync = createDraftSyncStatus({
+    drafts: composeContext.drafts,
+    draftId: state.draftId,
+    localSaveState: state.localSaveState,
+    acknowledgeSaved: state.acknowledgeSaved,
+    retry: state.retryDraft,
+    discard: state.deleteDraftAndReset,
   });
   const {
     editor,
@@ -124,10 +183,26 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     });
   }
 
-  const leaveCompose = () => {
+  const leaveCompose = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
     setDraftBackMenuOpen(false);
     props.host?.goBack?.();
   };
+
+  const SyncStatus = () => (
+    <DraftSyncStatus
+      state={sync.state()}
+      busy={sync.busy()}
+      error={sync.error()}
+      onRetry={sync.retry}
+      onKeepEditing={sync.keepEditing}
+    />
+  );
 
   return (
     <ComposeProvider value={ctxValue}>
@@ -175,7 +250,9 @@ export function EmailComposeView(props: EmailComposeViewProps) {
             )}
           >
             <ComposeLayout
-              toolbar={<EmailComposeToolbar editor={editor} />}
+              toolbar={
+                <EmailComposeToolbar editor={editor} status={<SyncStatus />} />
+              }
               notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
               class="size-full p-4 touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
@@ -207,7 +284,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
                       setDraftBackMenuOpen(false);
                       return;
                     }
-                    leaveCompose();
+                    setDraftBackMenuOpen(false);
                   }}
                 >
                   Delete Draft

@@ -29,7 +29,7 @@ const comparisonRows: ComparisonRow[] = [
     feature: 'Agents draft & send for you',
     cells: [true, 'partial', 'partial', 'partial'],
   },
-  { feature: 'Free plan', cells: [true, false, true, true] },
+  { feature: 'No-cost access', cells: [true, false, true, true] },
   {
     feature: 'Email, chat & tasks in one place',
     cells: [true, false, 'partial', false],
@@ -40,14 +40,17 @@ const comparisonRows: ComparisonRow[] = [
   },
   { feature: 'Split-screen multitasking', cells: [true, false, true, false] },
   {
-    feature: 'AI with your whole workspace as context',
+    feature: 'Agents search email, chat, docs & calls',
     cells: [true, false, false, false],
   },
   {
     feature: '@mention docs, people & tasks',
     cells: [true, false, false, false],
   },
-  { feature: 'Shared team memory', cells: [true, false, false, false] },
+  {
+    feature: 'Memory built from workspace activity',
+    cells: [true, false, false, false],
+  },
   { feature: 'Open source', cells: [true, false, false, false] },
 ];
 

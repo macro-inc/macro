@@ -21,7 +21,7 @@ import {
 } from 'date-fns';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
-import { parseLocalDate } from '../../utils/calendar-date';
+import { isTimedPointEvent, parseLocalDate } from '../../utils/calendar-date';
 import {
   calendarMacroCallUrl,
   removeCalendarMacroCall,
@@ -80,6 +80,8 @@ export interface EventEditorInitialValues {
   start: string;
   /** Inclusive end shown to the user; all-day submissions add the exclusive day. */
   end: string;
+  /** Exact provider instant, preserved only for an unchanged imported point. */
+  importedPointTime?: Extract<EventTime, { kind: 'timed' }>;
   recurrenceLines: string[];
   calendarId?: string;
   guests: string;
@@ -264,6 +266,14 @@ export function calendarEventToEditorInitialValues(
     allDay: false,
     start: format(new Date(event.start), DATETIME_VALUE),
     end: format(new Date(event.end), DATETIME_VALUE),
+    importedPointTime: isTimedPointEvent(event)
+      ? {
+          kind: 'timed',
+          startsAt: event.start,
+          endsAt: event.end,
+          timeZone: event.timeZone ?? null,
+        }
+      : undefined,
     recurrenceLines: [...event.recurrenceLines],
     calendarId: event.calendarId ?? event.calendar.id,
     guests,
@@ -419,6 +429,7 @@ export interface CreateEventEditorStateOptions {
   initialValues: EventEditorInitialValues;
   state: Accessor<EventEditorInitialValues>;
   recurrenceTimeZone?: string;
+  isEdit?: boolean;
 }
 
 function recurrenceConfigFor(
@@ -518,20 +529,37 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     const choice = recurrenceChoice();
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
-    if (choice === 'custom') {
-      return buildRecurrenceLines(
-        customConfig(),
-        options.state().allDay,
-        options.recurrenceTimeZone
-      );
+    const config =
+      choice === 'custom'
+        ? customConfig()
+        : presets().find((candidate) => candidate.id === choice)?.config;
+    if (!config) return undefined;
+    const originalConfig = initialConfig();
+    if (
+      originalConfig &&
+      options.state().allDay === initialValues().allDay &&
+      recurrenceConfigsEqual(config, originalConfig)
+    ) {
+      // Rebuilding an untouched rule can reorder fields, drop provider details
+      // like WKST, or change UNTIL precision. Preserve it so a private reminder
+      // edit does not accidentally request an organizer-only series update.
+      return initialValues().recurrenceLines;
     }
-    const preset = presets().find((candidate) => candidate.id === choice);
-    return preset
-      ? buildRecurrenceLines(
-          preset.config,
-          options.state().allDay,
-          options.recurrenceTimeZone
-        )
+    return buildRecurrenceLines(
+      config,
+      options.state().allDay,
+      options.recurrenceTimeZone
+    );
+  };
+  const unchangedImportedPoint = () => {
+    const initial = initialValues();
+    const current = options.state();
+    return options.isEdit === true &&
+      initial.importedPointTime !== undefined &&
+      !current.allDay &&
+      current.start === initial.start &&
+      current.end === initial.end
+      ? initial.importedPointTime
       : undefined;
   };
   const dateRangeError = createMemo(() => {
@@ -547,9 +575,13 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return undefined;
     }
-    return end <= start ? 'End time must be after the start time.' : undefined;
+    return end <= start && !unchangedImportedPoint()
+      ? 'End time must be after the start time.'
+      : undefined;
   });
-  const eventTime = createMemo(() => buildEventTime(options.state()));
+  const eventTime = createMemo(
+    () => buildEventTime(options.state()) ?? unchangedImportedPoint()
+  );
   const canSave = () =>
     options.state().title.trim() !== '' &&
     eventTime() !== undefined &&

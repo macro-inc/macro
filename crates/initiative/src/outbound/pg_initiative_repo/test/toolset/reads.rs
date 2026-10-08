@@ -6,14 +6,36 @@ use entity_access::domain::models::{EntityPermission, EntityType};
 struct VisibleResources {
     hidden_task: String,
     task_reads: Arc<std::sync::atomic::AtomicUsize>,
+    /// Membership comes from the tasks' Project property rows in this pool.
+    pool: PgPool,
 }
 
 impl InitiativeResources for VisibleResources {
     fn initialize(&self, _: InitiativeId) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }
+    fn set_initial_properties(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: InitiativeId,
+        _: Vec<crate::domain::models::InitialPropertyValue>,
+    ) -> ResourceFuture<'_, ()> {
+        panic!("read-only fixture")
+    }
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
+    }
+    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+        use system_properties::SystemPropertiesService;
+        let properties = system_properties::SystemPropertiesServiceImpl::new(
+            system_properties::PgSystemPropertiesRepository::new(self.pool.clone()),
+        );
+        Box::pin(async move {
+            Ok(properties
+                .project_task_ids(id.as_uuid())
+                .await
+                .expect("project tasks"))
+        })
     }
     fn view(
         &self,
@@ -55,7 +77,7 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     for name in ["Launch one", "Launch two"] {
         projects.push(
             repo.create(
-                create_args(&pool, OWNER, name, &[]).await?,
+                create_args(OWNER, name, &[]),
                 share_off(),
                 TeamShareCreation::Unshared,
             )
@@ -68,15 +90,18 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
         insert_document(&pool, &id, OWNER, true).await?;
         task_ids.push(id);
     }
-    repo.assign_tasks(projects[0].id, task_ids.clone()).await?;
+    for task_id in &task_ids {
+        set_project(&pool, task_id, projects[0].id).await?;
+    }
     let hidden_task = task_ids.remove(100);
     let task_reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let context = context_with_resources(
-        pool,
+        pool.clone(),
         Arc::new(Events::default()),
         Arc::new(VisibleResources {
             hidden_task: hidden_task.clone(),
             task_reads: task_reads.clone(),
+            pool,
         }),
     );
     let mut list: ListInitiatives =

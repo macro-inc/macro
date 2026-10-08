@@ -1,0 +1,286 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`real-world XLSX corpus > census-monthly-retail-trade-sales-1992-… 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 52106,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 35,
+  "styledCells": 60252,
+  "warnings": [
+    "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > closedxml-data-table-formula-what-if.xl… 1`] = `
+{
+  "calculation": {
+    "compared": 9,
+    "matched": 9,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 111,
+  "formulas": 9,
+  "roundTrip": "identical",
+  "sheets": 9,
+  "styledCells": 4,
+  "warnings": [
+    "What-if data tables are imported as their last calculated values.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > ironcalc-example-pivots-charts-comments… 1`] = `
+{
+  "calculation": {
+    "compared": 36,
+    "matched": 36,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 154,
+  "formulas": 36,
+  "roundTrip": "identical",
+  "sheets": 10,
+  "styledCells": 128,
+  "warnings": [
+    "Chart sheets and other non-grid sheets are not imported.",
+    "Diagonal borders are not imported.",
+    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Patterned fills are shown as a blended solid color.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > irs-soi-2023-partnerships-table3-balanc… 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 722,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 1,
+  "styledCells": 8677,
+  "warnings": [
+    "Font sizes are rounded and limited to 8–36 pt.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > libreoffice-functions-excel-2010.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 517,
+    "matched": 513,
+    "mismatchedFunctions": {
+      "AND": 1,
+      "RANK.EQ": 1,
+      "ROUND": 2,
+    },
+    "volatile": 0,
+  },
+  "cells": 973,
+  "formulas": 517,
+  "roundTrip": "identical",
+  "sheets": 2,
+  "styledCells": 281,
+  "warnings": [
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > nrel-sam-ppa-single-owner-project-finan… 1`] = `
+{
+  "calculation": {
+    "compared": 16248,
+    "matched": 16158,
+    "mismatchedFunctions": {
+      "(no function)": 64,
+      "SUM": 26,
+    },
+    "volatile": 0,
+  },
+  "cells": 18067,
+  "formulas": 16248,
+  "roundTrip": "identical",
+  "sheets": 3,
+  "styledCells": 28010,
+  "warnings": [
+    "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > packt-loan-amortization-schedule.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 96,
+    "matched": 96,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 138,
+  "formulas": 96,
+  "roundTrip": "identical",
+  "sheets": 1,
+  "styledCells": 138,
+  "warnings": [],
+}
+`;
+
+exports[`real-world XLSX corpus > poi-cvlkra-kyc-file-structure-tika3163.… 1`] = `
+{
+  "calculation": {
+    "compared": 103,
+    "matched": 103,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 2987,
+  "formulas": 103,
+  "roundTrip": "identical",
+  "sheets": 30,
+  "styledCells": 52242,
+  "warnings": [
+    "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Hyperlinks are imported as display text; link targets are not retained.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+    "Text number formats on numeric, boolean, date or formula cells are reset to preserve the original value types.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > poi-data-validation-table-range-county-… 1`] = `
+{
+  "calculation": {
+    "compared": 87,
+    "matched": 87,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 6615,
+  "formulas": 87,
+  "roundTrip": "identical",
+  "sheets": 2,
+  "styledCells": 176,
+  "warnings": [
+    "Excel table references are converted to cell ranges; tables are imported as ordinary cells.",
+    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "Font sizes are rounded and limited to 8–36 pt.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > sheetjs-large-strings.xlsx 1`] = `
+{
+  "calculation": {
+    "compared": 21492,
+    "matched": 21492,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 56913,
+  "formulas": 21492,
+  "roundTrip": "identical",
+  "sheets": 3,
+  "styledCells": 35238,
+  "warnings": [],
+}
+`;
+
+exports[`real-world XLSX corpus > worldbank-commodity-prices-pink-sheet-m… 1`] = `
+{
+  "calculation": {
+    "compared": 0,
+    "matched": 0,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 72988,
+  "formulas": 0,
+  "roundTrip": "identical",
+  "sheets": 5,
+  "styledCells": 85343,
+  "warnings": [
+    "Excel tables are imported as ordinary cells; table formulas are converted to cell ranges.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Special font effects are simplified to the supported text formatting.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > zenodo-ccs-cement-post-tax-dcf-model.xl… 1`] = `
+{
+  "calculation": {
+    "compared": 1752,
+    "matched": 1752,
+    "mismatchedFunctions": {},
+    "volatile": 0,
+  },
+  "cells": 16138,
+  "formulas": 1752,
+  "roundTrip": "identical",
+  "sheets": 12,
+  "styledCells": 20467,
+  "warnings": [
+    "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
+    "Excel filters are retained for export; Macro displays all rows.",
+    "Hyperlinks are imported as display text; link targets are not retained.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Patterned fills are shown as a blended solid color.",
+    "Pivot tables show their last values in Macro; Excel rebuilds them from their data when the downloaded file opens.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+    "Text rotation, shrink-to-fit and right-to-left layout are not imported.",
+  ],
+}
+`;
+
+exports[`real-world XLSX corpus > zenodo-circular-economy-business-case-c… 1`] = `
+{
+  "calculation": {
+    "compared": 2825,
+    "matched": 2825,
+    "mismatchedFunctions": {},
+    "volatile": 3,
+  },
+  "cells": 4665,
+  "formulas": 2828,
+  "roundTrip": "identical",
+  "sheets": 14,
+  "styledCells": 20074,
+  "warnings": [
+    "Dynamic array formulas are recalculated by Macro; cached spill values are discarded and their cell formatting is retained.",
+    "Excel sheet protection is not imported; Macro sharing controls determine edit access.",
+    "Frozen panes are retained for Excel export; Macro uses its own scrolling view.",
+    "Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.",
+    "Rich text is imported as plain text with the cell’s formatting.",
+  ],
+}
+`;

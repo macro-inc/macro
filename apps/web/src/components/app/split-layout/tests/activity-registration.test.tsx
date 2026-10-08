@@ -29,7 +29,7 @@ vi.mock('@service-connection/websocket', () => ({
 }));
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
-  useSplitRouter: () => ({ location: () => undefined }),
+  useSplitRouter: () => ({ entry: () => undefined }),
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
@@ -105,7 +105,6 @@ vi.mock('@app/features/email-view/email-view', () => ({}));
 vi.mock('@app/features/email-view/components/EmailDetailView', () => ({
   EmailDetailRouteView: () => null,
 }));
-vi.mock('@app/features/getting-started', () => ({}));
 vi.mock('@app/features/home/home-view', () => ({
   HomeDetailRouteView: () => null,
   HomeCalendarRouteView: () => null,
@@ -115,7 +114,6 @@ vi.mock('@app/features/next-soup/filters/filter-store/query-store', () => ({}));
 vi.mock('@app/features/next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('@app/features/next-soup/soup-view/soup-view', () => ({}));
 vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
-vi.mock('@app/features/reminders/ReminderEditorSplit', () => ({}));
 vi.mock('@app/features/settings/Settings', () => ({
   SettingsPanelComponentWrapper: () => null,
 }));
@@ -129,12 +127,12 @@ vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
 vi.mock('@block-md/component/ComposeTask', () => ({}));
-vi.mock('@companies/crm/saved-views', () => ({}));
+vi.mock('@app/features/crm/queries/saved-views', () => ({}));
 vi.mock('@core/context/user', () => ({}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch(),
 }));
-vi.mock('@queries/agent-schedule/entities', () => ({}));
+vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('@ui', () => ({
   createVariants: () => () => '',
 }));
@@ -149,9 +147,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-function renderActivity() {
+/** Registry views are lazy chunks; settle the chunk so assertions see the view. */
+async function renderActivity() {
   const activity = resolveComponent('activity');
-  return render(() => <Suspense>{activity.element()}</Suspense>);
+  const result = render(() => <Suspense>{activity.element()}</Suspense>);
+  await import('@app/features/activity/route-views');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return result;
 }
 describe('calendar layout registration', () => {
   it('owns desktop chrome but keeps the floating split header on touch', () => {
@@ -164,8 +166,8 @@ describe('calendar layout registration', () => {
 });
 
 describe('activity registration', () => {
-  it('redirects a disabled feed to inbox without mounting or tracking it', () => {
-    renderActivity();
+  it('redirects a disabled feed to inbox without mounting or tracking it', async () => {
+    await renderActivity();
 
     expect(state.replace).toHaveBeenCalledExactlyOnceWith({
       next: { type: 'component', id: 'home', entryMetadata: { search: {} } },
@@ -181,7 +183,7 @@ describe('activity registration', () => {
       const [flagsLoaded, setFlagsLoaded] = createSignal(false);
       state.enabled = flagEnabled;
       state.flagsLoaded = flagsLoaded;
-      renderActivity();
+      await renderActivity();
 
       expect(state.replace).not.toHaveBeenCalled();
       expect(state.mountActivity).not.toHaveBeenCalled();
@@ -212,7 +214,7 @@ describe('activity registration', () => {
     const [authenticated, setAuthenticated] = createSignal(false);
     state.authenticated = authenticated;
     state.enabled = () => true;
-    renderActivity();
+    await renderActivity();
 
     expect(screen.getByText('Authenticating')).toBeTruthy();
     expect(state.mountActivity).not.toHaveBeenCalled();

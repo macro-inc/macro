@@ -68,6 +68,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the manager never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,
@@ -155,6 +159,21 @@ impl AgentSessionRepo for StubSessions {
 
     async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
         unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_turn_prompter(
+        &self,
+        _id: AgentSessionId,
+        _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn turn_prompter(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Option<agent_session::domain::model::TurnPrompter>> {
+        unimplemented!("this adapter does not dispatch turns")
     }
 
     async fn set_repo_url(

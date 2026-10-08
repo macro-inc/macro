@@ -27,6 +27,7 @@ import {
   useDeleteAgentMutation,
   useUpdateAgentMutation,
 } from '@queries/agents/agents';
+import { useUploadAgentAvatarMutation } from '@queries/agents/avatar';
 import {
   type AgentModelTarget,
   buildAgentModelTargets,
@@ -97,7 +98,7 @@ const MACRO_AGENT: AgentSummary = {
   tag: 'macro',
   instructions: '',
   harness: MACRO_HARNESS_NAME,
-  defaultModel: MODEL_PRETTYNAME[Model.sonnet5],
+  defaultModel: MODEL_PRETTYNAME[Model.sonnet55],
   channelSummary: 'All channels',
   share: 'Team',
 };
@@ -564,6 +565,9 @@ function AgentEditorPage(props: {
   const [avatarUrl, setAvatarUrl] = createSignal<string | undefined>(
     props.agent?.bot.avatar_url ?? undefined
   );
+  const uploadAvatar = useUploadAgentAvatarMutation();
+  const [uploadingAvatar, setUploadingAvatar] = createSignal(false);
+  const busy = () => props.pending || uploadingAvatar();
   const [instructions, setInstructions] = createSignal(
     props.agent?.instructions ?? ''
   );
@@ -697,7 +701,7 @@ function AgentEditorPage(props: {
   let pageContentRef: HTMLDivElement | undefined;
 
   const close = () => {
-    if (!props.pending) props.onClose();
+    if (!busy()) props.onClose();
   };
 
   const handleNameInput = (value: string) => {
@@ -712,17 +716,23 @@ function AgentEditorPage(props: {
     setCodingChoice(undefined);
   };
 
-  const handleAvatarInput = (file: File | undefined) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      if (typeof reader.result === 'string') setAvatarUrl(reader.result);
-    });
-    reader.readAsDataURL(file);
+  const handleAvatarInput = async (file: File | undefined) => {
+    if (!file || busy()) return;
+    setUploadingAvatar(true);
+    try {
+      setAvatarUrl(await uploadAvatar.mutateAsync(file));
+    } catch (error) {
+      toast.failure(
+        error instanceof Error ? error.message : 'Failed to upload avatar'
+      );
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef) avatarInputRef.value = '';
+    }
   };
 
   const canCreate = () =>
-    !props.pending &&
+    !busy() &&
     name().trim().length > 0 &&
     tag().trim().length > 0 &&
     selectedHarness() !== undefined &&
@@ -771,12 +781,7 @@ function AgentEditorPage(props: {
       showTitleInSheet
       description="Give your agent an identity, instructions, and a runtime."
       actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={close}
-          disabled={props.pending}
-        >
+        <Button variant="ghost" size="sm" onClick={close} disabled={busy()}>
           <ArrowLeftIcon /> Back
         </Button>
       }
@@ -802,6 +807,7 @@ function AgentEditorPage(props: {
               <button
                 type="button"
                 aria-label="Upload avatar"
+                disabled={busy()}
                 class="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 onClick={() => avatarInputRef?.click()}
               >
@@ -830,18 +836,20 @@ function AgentEditorPage(props: {
                 type="file"
                 accept="image/*"
                 class="hidden"
+                disabled={busy()}
                 onChange={(event) =>
-                  handleAvatarInput(event.currentTarget.files?.[0])
+                  void handleAvatarInput(event.currentTarget.files?.[0])
                 }
               />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={busy()}
                 onClick={() => avatarInputRef?.click()}
               >
                 <UploadIcon />
-                Upload
+                {uploadingAvatar() ? 'Uploading…' : 'Upload'}
               </Button>
             </div>
 
@@ -1181,7 +1189,7 @@ function AgentEditorPage(props: {
             variant="ghost"
             size="sm"
             onClick={close}
-            disabled={props.pending}
+            disabled={busy()}
           >
             Cancel
           </Button>
@@ -1212,15 +1220,9 @@ function AgentFormSection(props: {
   children: import('solid-js').JSX.Element;
 }) {
   return (
-    <section>
-      <div class="mb-2 px-1">
-        <h2 class="text-sm font-semibold text-ink">{props.title}</h2>
-        <p class="mt-0.5 text-xs text-ink-muted">{props.description}</p>
-      </div>
-      <div class="rounded-xl border border-ink/[0.06] bg-surface-2 p-4">
-        {props.children}
-      </div>
-    </section>
+    <SettingsSection title={props.title} description={props.description}>
+      <div class="pt-2">{props.children}</div>
+    </SettingsSection>
   );
 }
 

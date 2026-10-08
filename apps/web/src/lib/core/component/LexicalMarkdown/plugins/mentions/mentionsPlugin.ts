@@ -146,10 +146,13 @@ export type ItemMention = {
     | 'color'
     | 'call'
     | 'calendar_event'
+    | 'database'
+    | 'form'
     | 'agent_session'
+    | 'initiative'
     | 'foreign'
     | 'group'
-    | 'automation'
+    | 'routine'
     | 'crm_company'
     | 'crm_contact'
     | 'skill';
@@ -211,6 +214,14 @@ function $mentionItemFromNode(node: MentionNode): ItemMention {
     } else if (blockName === 'project') {
       fileType = 'project';
       itemType = 'project';
+    } else if (blockName === 'form') {
+      // A form reference: posting it grants the channel View on the form.
+      fileType = 'form';
+      itemType = 'form';
+    } else if (blockName === 'initiative') {
+      // A task project, never a document id.
+      fileType = 'initiative';
+      itemType = 'initiative';
     } else if (blockName === 'chat') {
       fileType = 'chat';
       itemType = 'chat';
@@ -310,19 +321,24 @@ function $deleteSelectedMentions(sourceDocumentId?: string) {
 
 const getDocumentMentionItemType = (
   node: DocumentMentionNode
-): ItemMention['itemType'] => {
-  const blockName = node.__blockName;
+): ItemMention['itemType'] => blockItemType(node.__blockName);
+
+/** The item a document mention or card of `blockName` references. */
+const blockItemType = (blockName: string): ItemMention['itemType'] => {
   const itemType = blockNameToItemType(verifyBlockName(blockName));
   return match<ItemType, ItemMention['itemType']>(itemType)
     .with('email', () => 'thread')
     .with('document', () => 'document')
     .with('agent_session', () => 'agent_session')
+    .with('database', () => 'database')
+    .with('form', () => 'form')
     .with('chat', () => 'chat')
     .with('channel', () => 'channel')
     .with('project', () => 'project')
+    .with('initiative', () => 'initiative')
     .with('channel_message', () => 'channel')
     .with('channel_thread', () => 'channel')
-    .with('automation', () => 'automation')
+    .with('routine', () => 'routine')
     .with('call', () => 'call')
     .with('calendar_event', () => 'calendar_event')
     .with('foreign', () => {
@@ -391,6 +407,34 @@ function registerMentionsPlugin(
   }
 
   return mergeRegister(
+    // A form's card references the form exactly as its mention did;
+    // converting one to the other removes one reference and creates the other.
+    editor.registerMutationListener(
+      DocumentCardNode,
+      (mutatedNodes, { prevEditorState }) => {
+        for (const [nodeKey, mutation] of mutatedNodes) {
+          if (mutation === 'updated') continue;
+          const node = nodeByKey(
+            mutation === 'destroyed'
+              ? prevEditorState
+              : editor.getEditorState(),
+            nodeKey
+          );
+          // Only a form's card is a reference here (RFC 03); other cards'
+          // sharing stays as it was.
+          if (!(node instanceof DocumentCardNode)) continue;
+          if (node.getBlockName() !== 'form') continue;
+          const card = {
+            itemType: blockItemType(node.getBlockName()),
+            itemId: node.getDocumentId(),
+            documentName: node.getDocumentName(),
+          };
+          if (mutation === 'created') onCreateMention?.(card);
+          else
+            onRemoveMention?.({ itemType: card.itemType, itemId: card.itemId });
+        }
+      }
+    ),
     editor.registerCommand(
       INSERT_DOCUMENT_MENTION_COMMAND,
       (payload) => {

@@ -1,7 +1,5 @@
 import {
   type EntityData,
-  getCompanyOwnerId,
-  getCompanyStageOptionId,
   getTaskAssigneeIds,
   getTaskStatusOptionId,
   isGithubPrEntity,
@@ -13,7 +11,6 @@ import {
 import { getTaskPriorityOptionId } from '@entity/utils/task-properties';
 import { compositeEntity, type NotificationSource } from '@notifications';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
-import { NO_ASSIGNEE, NO_STAGE } from './configs/base';
 
 function getPredicateNotifications(
   entity: EntityData,
@@ -107,8 +104,8 @@ export function agentFilter(entity: EntityData): boolean {
   return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
-export function automationFilter(entity: EntityData): boolean {
-  return entity.type === 'automation';
+export function routineFilter(entity: EntityData): boolean {
+  return entity.type === 'routine';
 }
 
 export function projectFilter(entity: EntityData): boolean {
@@ -141,55 +138,6 @@ export function calendarEventFilter(entity: EntityData): boolean {
   return entity.type === 'calendar_event';
 }
 
-export function crmCompanyFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company';
-}
-
-export function remindersFilter(entity: EntityData): boolean {
-  return entity.type === 'reminder';
-}
-
-/**
- * Reminders that have fired and are waiting on their owner.
- *
- * `completedAt` means the owner has dealt with the reminder, and firing
- * deliberately does not set it — so a fired one is outstanding, not finished.
- * The `nextRunAt` test is what separates these from reminders that simply have
- * not come due yet; those live in Scheduled.
- */
-export function firedRemindersFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'reminder' &&
-    !entity.completedAt &&
-    new Date(entity.nextRunAt).getTime() <= Date.now()
-  );
-}
-
-/**
- * Reminders set for the future, which have not fired yet. Recurring reminders
- * never complete, so between firings they sit here pointing at their next run.
- */
-export function scheduledRemindersFilter(entity: EntityData): boolean {
-  return (
-    entity.type === 'reminder' &&
-    !entity.completedAt &&
-    new Date(entity.nextRunAt).getTime() > Date.now()
-  );
-}
-
-/**
- * Reminders not yet dealt with — the scheduled ones still ahead and the fired
- * ones waiting on their owner, together. Everything but Done.
- */
-export function notDoneRemindersFilter(entity: EntityData): boolean {
-  return entity.type === 'reminder' && !entity.completedAt;
-}
-
-/** Reminders the owner has marked as dealt with. */
-export function doneRemindersFilter(entity: EntityData): boolean {
-  return entity.type === 'reminder' && !!entity.completedAt;
-}
-
 /**
  * Entity types the search view supports. Mirrors the search preset's
  * server-side exclusions (foreign entities + CRM) so entities that enter
@@ -202,57 +150,6 @@ export function searchSupportedFilter(entity: EntityData): boolean {
     entity.type !== 'crm_company' &&
     entity.type !== 'crm_contact'
   );
-}
-
-export function crmCompanyActiveFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && !entity.hidden;
-}
-
-export function crmCompanyHiddenFilter(entity: EntityData): boolean {
-  return entity.type === 'crm_company' && entity.hidden;
-}
-
-/**
- * Stage filter for companies, driven by the view's stage selection
- * (`ctx.stages`). `NO_STAGE` matches companies without a Stage set. Stage
- * resolution goes through `resolveStage` (the team's active deal-stage
- * set, from `ctx.resolveCompanyStage`) when supplied, so the filter
- * buckets companies exactly like the kanban — legacy system-stage values
- * included; otherwise it falls back to the raw system Stage value.
- */
-export function companyStageFilter(
-  stageIds: () => string[] | undefined,
-  resolveStage?: (entity: EntityData) => string | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const stages = stageIds();
-    if (!stages?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const stageId = resolveStage
-      ? resolveStage(entity)
-      : getCompanyStageOptionId(entity);
-    return stages.some((id) =>
-      id === NO_STAGE ? stageId === undefined : stageId === id
-    );
-  };
-}
-
-/**
- * Owner filter for companies, driven by the view's owner selection
- * (`ctx.owners`). `NO_OWNER` matches companies without an Owner set.
- */
-export function companyOwnedByUsersFilter(
-  ownerIds: () => string[] | undefined
-) {
-  return (entity: EntityData): boolean => {
-    const owners = ownerIds();
-    if (!owners?.length) return true;
-    if (entity.type !== 'crm_company') return false;
-    const ownerId = getCompanyOwnerId(entity);
-    return owners.some((id) =>
-      id === NO_ASSIGNEE ? ownerId === undefined : ownerId === id
-    );
-  };
 }
 
 export function filesAndFolderFilter(entity: EntityData): boolean {

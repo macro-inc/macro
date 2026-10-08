@@ -1,4 +1,6 @@
+import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
+import { preloadAgentFold } from '@core/agent-fold/client';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
@@ -11,7 +13,12 @@ import {
 } from 'lexical';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
 
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: vi.fn(() => false),
@@ -138,6 +145,34 @@ function type(text: string) {
 }
 
 describe('Chat session input', () => {
+  it('preloads the fold only when focused without sending or changing the draft', () => {
+    const send = vi.fn();
+    const change = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft="Keep this draft"
+        onDraftChange={change}
+        onSend={send}
+        selector={null}
+      />
+    ));
+    expect(preloadAgentFold).not.toHaveBeenCalled();
+    fireEvent.focusIn(screen.getByTestId('editor'));
+    expect(preloadAgentFold).toHaveBeenCalledOnce();
+    expect(send).not.toHaveBeenCalled();
+    expect(change).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+  });
+
+  it('seeds the supplied context without sending it', () => {
+    const send = vi.fn();
+    render(() => (
+      <ChatSessionInput initialInput="Document context" onSend={send} />
+    ));
+    expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('shows only the model control and submits a trimmed follow-up', () => {
     const send = vi.fn();
     render(() => (
@@ -153,6 +188,53 @@ describe('Chat session input', () => {
     expect(
       screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
     ).toBe(true);
+  });
+
+  it('restores an unsent session message after the composer remounts', () => {
+    localStorage.clear();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-restore');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={vi.fn()}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Hold this for the session');
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).toHaveBeenCalledWith(
+      'Hold this for the session'
+    );
+  });
+
+  it('drops the saved session message once it is sent', () => {
+    localStorage.clear();
+    const send = vi.fn();
+    const View = () => {
+      const persisted = createSessionComposerDraft(() => 'session-sent');
+      return (
+        <ChatSessionInput
+          draft={persisted.draft()}
+          onDraftChange={persisted.setDraft}
+          onSend={send}
+        />
+      );
+    };
+    const first = render(() => <View />);
+    type('Send and forget');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenCalledWith('Send and forget', []);
+    first.unmount();
+    editor.text = '';
+    editor.setMarkdown.mockClear();
+    render(() => <View />);
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Send and forget');
   });
 
   it('keeps a draft intact while the session is pending', () => {
@@ -219,7 +301,7 @@ describe('Chat session input', () => {
       expect(editor.enter?.(undefined, '')).toBe(false);
       expect(stop).not.toHaveBeenCalled();
       fireEvent.click(
-        screen.getByRole('button', { name: 'Send next queued message' })
+        screen.getByRole('button', { name: 'Flush queued messages' })
       );
       expect(stop).toHaveBeenCalledOnce();
     });
@@ -441,3 +523,146 @@ it('keeps the paperclip visible while the session is unavailable', () => {
       .hasAttribute('disabled')
   ).toBe(true);
 });
+
+it.each([undefined, 'Describe what you want to build'])(
+  'leaves the mobile editor blank instead of showing placeholder %s',
+  (placeholder) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    render(() => (
+      <ChatComposer
+        draft=""
+        placeholder={placeholder}
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={<button>Model</button>}
+      />
+    ));
+    expect(screen.getByTestId('editor').textContent).toBe('');
+  }
+);
+
+it('expands Home controls on focus without replacing the editor or model picker', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const { container } = render(() => (
+    <ChatComposer
+      collapseOnBlur
+      draft=""
+      onDraftChange={() => {}}
+      onSend={() => {}}
+      onAttachFiles={() => {}}
+      selector={<button>Model</button>}
+      drawer={<button>Repository</button>}
+      drawerOpen
+    />
+  ));
+  const input = screen.getByTestId('editor');
+  const model = screen.getByRole('button', { name: 'Model' });
+  const attach = screen.getByRole('button', { name: 'Attach files' });
+  const repository = container.querySelector('.composer-drawer');
+  const compact = () => input.closest('[data-composer-compact]');
+
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
+  expect(model.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(attach.parentElement?.classList.contains('hidden')).toBe(true);
+  expect(repository?.getAttribute('aria-hidden')).toBe('true');
+
+  fireEvent.focusIn(input);
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('false');
+  expect(model.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(attach.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(repository?.getAttribute('aria-hidden')).toBe('false');
+
+  fireEvent.pointerDown(document.body);
+  expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
+  expect(repository?.getAttribute('aria-hidden')).toBe('true');
+  expect(screen.getByTestId('editor')).toBe(input);
+  expect(screen.getByRole('button', { name: 'Model' })).toBe(model);
+});
+
+it.each(['Send', 'Attach files', 'Model'])(
+  'keeps the expanded Home composer stable through an iOS %s tap',
+  (control) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        collapseOnBlur
+        draft={'First line\nSecond line'}
+        onDraftChange={() => {}}
+        onSend={send}
+        onAttachFiles={() => {}}
+        selector={<button>Model</button>}
+      />
+    ));
+    editor.text = 'First line\nSecond line';
+    const input = screen.getByTestId('editor');
+    const clipped = () => input.parentElement?.classList.contains('max-h-6');
+    fireEvent.focusIn(input);
+    expect(clipped()).toBe(false);
+    const button = screen.getByRole('button', { name: control });
+    fireEvent.pointerDown(button);
+    fireEvent.focusOut(input, { relatedTarget: null });
+    expect(clipped()).toBe(false);
+    fireEvent.click(button);
+    if (control === 'Send')
+      expect(send).toHaveBeenCalledWith('First line\nSecond line', []);
+    fireEvent.pointerDown(document.body);
+    expect(clipped()).toBe(true);
+  }
+);
+
+it.each(['Repository', 'Branch'])(
+  'keeps the mobile composer expanded while the portaled %s picker has focus',
+  (control) => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const [controlsOpen, setControlsOpen] = createSignal(false);
+    const { container } = render(() => (
+      <ChatComposer
+        collapseOnBlur
+        controlsOpen={controlsOpen()}
+        draft="Keep this draft"
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={<button>Model</button>}
+        drawerOpen
+        drawer={
+          <RepositoryPicker
+            onOpenChange={setControlsOpen}
+            repoUrl="https://github.com/macro-inc/macro"
+            branch="main"
+            repositories={[]}
+            repositoriesLoading={false}
+            repositoriesError={false}
+            recentRepositories={[]}
+            branches={['main']}
+            branchesLoading={false}
+            branchesError={false}
+            onRetryRepositories={() => {}}
+            onRetryBranches={() => {}}
+            onSelectRepository={() => {}}
+            onSelectBranch={() => {}}
+          />
+        }
+      />
+    ));
+    const input = screen.getByTestId('editor');
+    fireEvent.focusIn(input);
+    fireEvent.click(screen.getByRole('button', { name: control }));
+    const search = screen.getByRole('combobox');
+    expect(container.contains(search)).toBe(false);
+    fireEvent.focusOut(input, { relatedTarget: search });
+    fireEvent.pointerDown(search);
+    expect(controlsOpen()).toBe(true);
+    expect(
+      container.querySelector('.composer-drawer')?.getAttribute('aria-hidden')
+    ).toBe('false');
+    expect(
+      input
+        .closest('[data-composer-compact]')
+        ?.getAttribute('data-composer-compact')
+    ).toBe('false');
+    fireEvent.click(screen.getAllByRole('option')[0]);
+    expect(controlsOpen()).toBe(false);
+    expect(screen.getByTestId('editor')).toBe(input);
+  }
+);

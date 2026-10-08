@@ -34,6 +34,7 @@ use entity_access::domain::models::{
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::{DocumentResponseMetadata, LocationResponseData};
@@ -62,8 +63,9 @@ use super::events::{
 use super::models::{
     CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
     DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
-    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse,
-    ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument, TaskBranchName,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestTasks,
+    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP, NewDocument, TaskBranchName,
     TeamTaskMetadata,
 };
 #[cfg(feature = "document_create")]
@@ -209,8 +211,6 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
         }
     }
 }
-
-const GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE: &str = "github_pull_request";
 
 const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
 
@@ -607,6 +607,33 @@ impl<
                 Ok(None)
             }
         }
+    }
+
+    /// A new document starts its own collaborative session, so a caller-chosen
+    /// id must not already have one: the document would take it over instead.
+    /// Only random (v4/v7) ids can name a collab surface's session, the kind a
+    /// document must never adopt. Other ids, such as the deterministic v5 ids
+    /// of starter documents, can retry after a partial create left a session.
+    async fn refuse_existing_session(&self, id: Option<uuid::Uuid>) -> Result<(), DocumentError> {
+        let Some(id) = id.filter(|id| {
+            matches!(
+                id.get_version(),
+                Some(uuid::Version::Random | uuid::Version::SortRand)
+            )
+        }) else {
+            return Ok(());
+        };
+        if self
+            .sync_service_client
+            .exists(&id.to_string())
+            .await
+            .map_err(DocumentError::Internal)?
+        {
+            return Err(DocumentError::Conflict(
+                "document id is already in use".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     /// Clean up a document on creation error.
@@ -1106,6 +1133,7 @@ impl<
             entity_access_receipt.entity().entity_id.clone(),
             DocumentDeletedMetadata {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
+                sub_type: metadata.sub_type,
                 actor_user_id,
                 actor,
                 on_behalf_of,
@@ -1124,6 +1152,25 @@ impl<
             .get_basic_document(document_id)
             .await
             .map_err(|error| map_basic_document_error(document_id, error.into()))
+    }
+
+    async fn internal_get_user_display_name(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        let (first, last) = self
+            .repo
+            .get_user_name(user_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+        let name = [first, last]
+            .into_iter()
+            .flatten()
+            .map(|part| part.trim().to_owned())
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok((!name.is_empty()).then_some(name))
     }
 
     async fn get_document_text(
@@ -1264,6 +1311,98 @@ impl<
         Ok(response)
     }
 
+    #[tracing::instrument(err, skip(self, github_keys), fields(github_keys = github_keys.len()))]
+    async fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> Result<GithubPullRequestTasksResponse, DocumentError> {
+        if github_keys.len() > MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP {
+            return Err(DocumentError::BadRequest(format!(
+                "at most {MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP} pull requests per lookup"
+            )));
+        }
+        let mut response = GithubPullRequestTasksResponse {
+            pull_requests: github_keys
+                .into_iter()
+                .map(|github_key| GithubPullRequestTasks {
+                    github_key,
+                    task_ids: Vec::new(),
+                })
+                .collect(),
+        };
+        let mut keys: Vec<String> = response
+            .pull_requests
+            .iter()
+            .map(|pull_request| pull_request.github_key.clone())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        if keys.is_empty() {
+            return Ok(response);
+        }
+
+        let links = self
+            .repo
+            .get_github_pull_request_task_links(&keys)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if links.is_empty() {
+            return Ok(response);
+        }
+
+        let converter = macro_uuid::ShortUuidConverter::default();
+        let mut task_ids_by_key = std::collections::HashMap::<String, Vec<String>>::new();
+        for (github_key, task_short_id) in links {
+            match converter.to_uuid(&task_short_id) {
+                Ok(task_id) => task_ids_by_key
+                    .entry(github_key)
+                    .or_default()
+                    .push(task_id.to_string()),
+                Err(error) => tracing::warn!(
+                    error = ?error,
+                    github_key = %github_key,
+                    "skipping malformed task id linked to a GitHub pull request"
+                ),
+            }
+        }
+
+        // Task ids come from the pull request's own text, so they are visible to whoever can
+        // see the pull request; Soup still checks access to each task.
+        let team_ids = self
+            .repo
+            .get_team_ids_for_user(user_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let mut source_ids = Vec::with_capacity(team_ids.len() + 1);
+        source_ids.push(SourceId::user(user_id.to_string()));
+        source_ids.extend(team_ids.into_iter().map(SourceId::team));
+
+        let mut visible_keys = std::collections::HashSet::new();
+        for github_key in task_ids_by_key.keys() {
+            let foreign_entities = self
+                .foreign_entity_service
+                .get_foreign_entities_by_foreign_entity_id(
+                    github_key,
+                    Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?;
+            if first_visible_foreign_entity(&foreign_entities, Some(&source_ids)).is_some() {
+                visible_keys.insert(github_key.clone());
+            }
+        }
+
+        for pull_request in &mut response.pull_requests {
+            if visible_keys.contains(&pull_request.github_key)
+                && let Some(task_ids) = task_ids_by_key.get(&pull_request.github_key)
+            {
+                pull_request.task_ids = task_ids.clone();
+            }
+        }
+        Ok(response)
+    }
+
     #[tracing::instrument(err, skip(self, document_context))]
     async fn get_document_content(
         &self,
@@ -1307,6 +1446,7 @@ impl<
             }
             document.team_id = Some(*team);
         }
+        self.refuse_existing_session(document.id).await?;
 
         let owner = principal.owner();
         let file_type = document.file_type;
@@ -1354,6 +1494,14 @@ impl<
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
             });
+        }
+
+        // Imports reuse documents by attachment and content, so their ids are
+        // always server-chosen and never meet an existing session.
+        if args.document.id.is_some() {
+            return Err(DocumentError::BadRequest(
+                "email attachment imports cannot choose a document id".to_string(),
+            ));
         }
 
         let file_type = args.document.file_type;

@@ -74,7 +74,6 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupProject implements GraphqlSoupEntity {",
         "type GraphqlSoupInitiative implements GraphqlSoupEntity {",
         "initiativeFilter: GraphqlInitiativeExpr",
-        "descriptionDocumentId: ID",
         "parent: GraphqlEntity",
         "type GraphqlCacheDeletion {",
         "graphqlTypeName: String!",
@@ -289,8 +288,8 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "GraphqlSoupCall",
         "GraphqlSoupCrmCompany",
         "GraphqlSoupForeignEntity",
-        "GraphqlSoupReminder",
         "GraphqlSoupAgentSession",
+        "GraphqlSoupDatabaseRow",
     ] {
         let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
         else {
@@ -430,12 +429,16 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
         assert_sdl_line(object("GraphqlSoupInitiative"), field);
     }
     assert_sdl_line(
-        object("TaskInitiativeReference"),
-        "initiative: GraphqlSoupInitiative",
+        &sdl,
+        "createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!",
     );
     assert_sdl_line(
         &sdl,
-        "createInitiative(input: CreateInitiativeInput!): GraphqlSoupInitiative!",
+        "ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!",
+    );
+    assert_sdl_line(
+        &sdl,
+        "ensureInitiativeDescriptionSurface(initiativeId: ID!): ID!",
     );
     assert_sdl_line(
         &sdl,
@@ -448,6 +451,12 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
         "enum InitiativeSort {",
         "type InitiativePropertySnapshot {",
         "initiatives(input:",
+        // Tasks join a project through their Project property.
+        "type TaskInitiativeReference {",
+        "taskInitiativeReferences(",
+        "assignInitiativeTasks(",
+        "unassignInitiativeTask(",
+        "clearTaskInitiative(",
     ] {
         assert!(!sdl.contains(obsolete), "obsolete API remains: {obsolete}");
     }
@@ -467,6 +476,43 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
 }
 
 #[test]
+fn database_rows_are_an_opt_in_soup_entity_named_by_table() {
+    let sdl = crate::build_schema().sdl();
+    let block = |declaration: &str| {
+        sdl.split_once(declaration)
+            .unwrap_or_else(|| panic!("schema has no `{declaration}`"))
+            .1
+            .split_once("\n}")
+            .unwrap()
+            .0
+            .to_owned()
+    };
+    let row = block("type GraphqlSoupDatabaseRow implements GraphqlSoupEntity {");
+    for field in [
+        "id: ID!",
+        "entityType: GraphqlSoupEntityType!",
+        "tableId: ID!",
+        "databaseId: ID!",
+        "position: String!",
+        "ownerId: String!",
+        "creatorId: String",
+        "createdAt: String!",
+        "updatedAt: String!",
+        "properties: [GraphqlProperty!]!",
+    ] {
+        assert_sdl_line(&row, field);
+    }
+    assert_sdl_line(
+        &block("input GraphqlEntityFilterAst {"),
+        "databaseRowFilter: GraphqlDatabaseRowExpr",
+    );
+    let literal = block("input GraphqlDatabaseRowLiteral @oneOf {");
+    assert_sdl_line(&literal, "tableId: ID");
+    assert_sdl_line(&literal, "id: ID");
+    assert_sdl_line(&block("enum GraphqlSoupEntityType {"), "DATABASE_ROW");
+}
+
+#[test]
 fn scheduled_actions_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
@@ -474,12 +520,18 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
     assert_sdl_line(&sdl, "scheduledActions: [GraphqlScheduledAction!]!");
     assert_sdl_line(
         &sdl,
-        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger",
+        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger",
     );
     assert!(sdl.contains("AI routines the authenticated user can access."));
     for value in [
         "DOCUMENT_CREATED",
         "DOCUMENT_UPDATED",
+        "DOCUMENT_DELETED",
+        "TASK_CREATED",
+        "TASK_STATUS_CHANGED",
+        "TASK_PRIORITY_CHANGED",
+        "TASK_PROPERTY_CHANGED",
+        "EMAIL_MESSAGE_RECEIVED",
         "CHANNEL_CREATED",
         "CHANNEL_MESSAGE_POSTED",
         "CHANNEL_MENTIONED",
@@ -656,6 +708,65 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
         entity_ids.contains("empty list matches nothing"),
         "{entity_ids}"
     );
+}
+
+#[test]
+fn calendar_reads_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "calendars: [GraphqlCalendar!]!",
+        "calendarOccurrences(input: CalendarRangeInput!): GraphqlCalendarOccurrencePage!",
+        "union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime",
+        "watermark: [GraphqlCalendarLinkWatermark!]!",
+        "calendarChanges(input: CalendarChangesInput!): GraphqlCalendarChanges!",
+        "since: [CalendarLinkWatermarkInput!]!",
+        "newWatermark: [GraphqlCalendarLinkWatermark!]!",
+        "occurrences: [GraphqlCalendarOccurrence!]!",
+        "createCalendarEvent(input: CreateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "updateCalendarEvent(input: UpdateCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "deleteCalendarEvent(input: DeleteCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!",
+        "input CalendarEventTimeInput @oneOf {",
+        "deletedEventId: ID",
+        "needsCalendarPermission: Boolean!",
+        "calendarDisabled: Boolean!",
+        "hasCalendarData: Boolean!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(occurrence) = schema
+        .types
+        .get("GraphqlCalendarOccurrence")
+        .expect("occurrence type")
+    else {
+        panic!("GraphqlCalendarOccurrence must be an object");
+    };
+    for scalar in ["id", "eventId", "linkId"] {
+        assert_eq!(occurrence.fields[scalar].ty.to_string(), "ID!");
+    }
+    assert_eq!(
+        occurrence.fields["event"].ty.to_string(),
+        "GraphqlCalendarEvent!"
+    );
+    for entity in ["GraphqlCalendarEvent", "GraphqlCalendar"] {
+        let ExtendedType::Object(object) = schema.types.get(entity).expect("entity type") else {
+            panic!("{entity} must be an object");
+        };
+        assert_eq!(object.fields["id"].ty.to_string(), "ID!");
+        assert_eq!(object.fields["linkId"].ty.to_string(), "ID!");
+    }
+
+    let ExtendedType::Object(root) = schema.types.get("SoupQueryRoot").expect("query root") else {
+        panic!("SoupQueryRoot must be an object");
+    };
+    assert!(!root.fields.contains_key("calendars"));
+    assert!(!root.fields.contains_key("calendarOccurrences"));
+    assert!(!root.fields.contains_key("calendarChanges"));
 }
 
 /// The exported SDL is a frontend contract: `schema.graphql` feeds the client

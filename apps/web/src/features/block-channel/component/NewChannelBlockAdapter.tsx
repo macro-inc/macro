@@ -9,7 +9,6 @@ import {
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import { createSearchParams } from '@app/lib/split-router';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
@@ -56,6 +55,7 @@ import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsla
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
+import { SplitLayoutContext } from '@components/app/split-layout/context';
 import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
@@ -93,6 +93,7 @@ import {
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
 import { ChannelTopLeft } from './Top';
 
@@ -311,6 +312,8 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // BlockContainer. The adapter requires a split panel, so unlike
   // BlockContainer it needs no fallback DOM scope of its own.
   const splitPanel = useSplitPanelOrThrow();
+  // The layout context exists during construction; its global signal is set later.
+  const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
@@ -335,7 +338,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         [URL_PARAMS.thread]: props[URL_PARAMS.thread],
       };
     }
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return {};
     return {
       [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
@@ -369,7 +372,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       props[URL_PARAMS.thread] !== undefined;
     if (hasPropsTarget) return true;
 
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return false;
 
     return (
@@ -539,34 +542,36 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               'touch:pt-(--mobile-content-inset-top)'
           )}
         >
-          <Switch>
-            <Match when={activeTab() === 'messages'}>
-              <ChannelMessages
-                autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-              />
-            </Match>
-            <Match when={activeTab() === 'attachments'}>
-              <ChannelAttachmentsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-              <ChannelCallsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'participants'}>
-              <ChannelParticipantsTab
-                channelId={channelId}
-                botManagementEnabled={botManagement.enabled()}
-                onCreateBot={botManagement.openCreateBot}
-                inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                onOpenBot={botManagement.openBot}
-              />
-            </Match>
-            <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-              <ChannelCallTab
-                channelId={channelId}
-                pendingJoin={pendingJoinCall}
-              />
-            </Match>
-          </Switch>
+          <div class="flex min-h-0 flex-1 flex-col" data-channel-tab-content>
+            <Switch>
+              <Match when={activeTab() === 'messages'}>
+                <ChannelMessages
+                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                />
+              </Match>
+              <Match when={activeTab() === 'attachments'}>
+                <ChannelAttachmentsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+                <ChannelCallsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'participants'}>
+                <ChannelParticipantsTab
+                  channelId={channelId}
+                  botManagementEnabled={botManagement.enabled()}
+                  onCreateBot={botManagement.openCreateBot}
+                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                  onOpenBot={botManagement.openBot}
+                />
+              </Match>
+              <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                <ChannelCallTab
+                  channelId={channelId}
+                  pendingJoin={pendingJoinCall}
+                />
+              </Match>
+            </Switch>
+          </div>
           <NewTop channelId={channelId} />
         </div>
       </ChannelTabProvider>

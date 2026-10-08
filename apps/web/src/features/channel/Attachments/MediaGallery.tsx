@@ -57,7 +57,11 @@ export function MediaGallery(props: {
   };
 
   return (
-    <AttachmentSection label="Photos and Videos" fillBody>
+    <AttachmentSection
+      label="Photos and Videos"
+      class={hasMedia() ? 'flex-1' : undefined}
+      fillBody
+    >
       <Show
         when={hasMedia()}
         fallback={

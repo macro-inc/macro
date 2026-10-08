@@ -4,6 +4,7 @@ import {
   buildReplyTargetMarkdown,
   isReplyTargetData,
   markdownToPlainText,
+  type ReplyTargetParent,
   stripLeadingReplyTargetMarkdown,
 } from '@macro-inc/lexical-core';
 import type { MessageData } from '../../Message';
@@ -42,11 +43,16 @@ export function canEditMessage(
 
 export function canDeleteMessage(
   message: Pick<ActionableMessage, 'sender_id' | 'deleted_at'>,
-  currentUserId: string | undefined
+  currentUserId: string | undefined,
+  /**
+   * Document owners may delete comments they did not write. Channel members
+   * leave this false; bot posts stay deletable without it.
+   */
+  canModerate = false
 ): boolean {
+  if (message.deleted_at) return false;
   return (
-    (isOwnMessage(message, currentUserId) || isBotMessage(message)) &&
-    !message.deleted_at
+    canModerate || isOwnMessage(message, currentUserId) || isBotMessage(message)
   );
 }
 
@@ -64,14 +70,24 @@ function stripMagicChipMarkdown(markdown: string): string {
   return markdown.replace(/<m-magic-chip>.*?<\/m-magic-chip>/gs, '');
 }
 
-export function buildReplyTargetValue(input: {
-  channelId: string;
-  message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
-  selectedText?: string;
-  renderedText?: string;
-  existingValue?: string;
-}): string {
-  if (!input.message.thread_id) return input.existingValue ?? '';
+export function buildReplyTargetValue(
+  input: {
+    message: Pick<MessageData, 'id' | 'content' | 'sender_id' | 'thread_id'>;
+    selectedText?: string;
+    renderedText?: string;
+    existingValue?: string;
+  } & (
+    | { channelId: string; parent?: never }
+    | { parent: ReplyTargetParent; channelId?: never }
+  )
+): string {
+  const parent: ReplyTargetParent = input.parent ?? {
+    type: 'channel',
+    id: input.channelId,
+  };
+  if (parent.type === 'channel' && !input.message.thread_id) {
+    return input.existingValue ?? '';
+  }
 
   for (const match of (input.existingValue ?? '').matchAll(
     /<m-reply-target>(.*?)<\/m-reply-target>/gs
@@ -98,9 +114,9 @@ export function buildReplyTargetValue(input: {
     input.selectedText || input.renderedText || messageText
   );
   const replyTarget = buildReplyTargetMarkdown({
-    parent: { type: 'channel', id: input.channelId },
+    parent,
     targetMessageId: input.message.id,
-    targetThreadId: input.message.thread_id,
+    targetThreadId: input.message.thread_id ?? input.message.id,
     displayText,
     senderId: input.message.sender_id,
   });

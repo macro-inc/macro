@@ -1,6 +1,6 @@
 import ArrowRight from '@phosphor/arrow-right.svg';
 import CaretDown from '@phosphor/caret-down.svg';
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { ctaHref, handleCtaClick } from '../../../app/utils/utilCta';
 import palette from '../../../styles/dark-theme.css?inline';
 import uiStyles from '../../../styles/site-ui.css?inline';
@@ -16,9 +16,12 @@ const scopedUi = uiStyles
   .replace(/@(font-face|property)[^{]*\{[^}]*\}/g, '')
   .replaceAll(':root', ':scope');
 
-export function FeaturePage(props: { children: JSX.Element }) {
+export function FeaturePage(props: { children: JSX.Element; light?: boolean }) {
   return (
-    <main class="feature-page" data-theme-light="false">
+    <main
+      class="feature-page"
+      data-theme-light={props.light ? 'true' : 'false'}
+    >
       <style>{uiProperties}</style>
       <style>{`@scope (.feature-page) { ${scopedUi} ${palette.replaceAll(':root', ':scope')} }`}</style>
       {props.children}
@@ -64,7 +67,7 @@ export function FeaturePageSection(props: {
 /** Same reading measure, quiet rules, and disclosures as onboarding security. */
 export function FeaturePageFaq(props: {
   id: string;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   introduction: JSX.Element;
   items: readonly { q: string; a: JSX.Element }[];
@@ -72,7 +75,9 @@ export function FeaturePageFaq(props: {
   return (
     <section class="feature-page-reading" aria-labelledby={props.id}>
       <div class="feature-page-reading-rule" aria-hidden="true" />
-      <p class="feature-page-eyebrow">{props.eyebrow}</p>
+      <Show when={props.eyebrow}>
+        <p class="feature-page-eyebrow">{props.eyebrow}</p>
+      </Show>
       <h2 id={props.id}>{props.title}</h2>
       <div class="feature-page-prose">{props.introduction}</div>
       <h3>Frequently asked questions</h3>

@@ -1,5 +1,5 @@
 import type { LoroDoc } from 'loro-crdt';
-import { formulaReferencesSheet } from './sheet-references';
+import { formulaSheetReferences } from './sheet-references';
 
 export const DEFAULT_SHEET_ID = 'sheet1';
 export type SpreadsheetSheet = { id: string; name: string };
@@ -77,6 +77,13 @@ function readRetainedIdentities(doc: LoroDoc): Map<string, RetainedIdentity> {
 
 /** Registry defaults never write state, so opening a legacy sheet is read-only. */
 export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
+  return readOrderedSheets(doc).map(({ id, name }) => ({ id, name }));
+}
+
+/** Visible sheets with the order value each one sorts by. */
+export function readOrderedSheets(
+  doc: LoroDoc
+): (SpreadsheetSheet & { order: number })[] {
   const names = doc.getMap('spreadsheetSheetNames').toJSON();
   const order = doc.getMap('spreadsheetSheetOrder').toJSON();
   const deleted = doc.getMap('spreadsheetDeletedSheets').toJSON();
@@ -125,7 +132,7 @@ export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
   const visible = live.length ? live : candidates.slice(0, 1);
   const reserved = new Set(visible.map((sheet) => sheet.name.toLowerCase()));
   const assigned = new Set<string>();
-  return visible.map(({ id, name }) => {
+  return visible.map(({ id, name, order: sheetOrder }) => {
     let unique = name;
     let suffix = 2;
     if (assigned.has(unique.toLowerCase())) {
@@ -138,7 +145,7 @@ export function readSpreadsheetSheets(doc: LoroDoc): SpreadsheetSheet[] {
       );
     }
     assigned.add(unique.toLowerCase());
-    return { id, name: unique };
+    return { id, name: unique, order: sheetOrder };
   });
 }
 
@@ -155,11 +162,20 @@ export function retainSpreadsheetSheets(
   const retentions = doc.getMap('spreadsheetSheetRetentions');
   const identities = readRetainedIdentities(doc);
   const order = doc.getMap('spreadsheetSheetOrder');
+  // Scan each formula once; imports can contain many formulas and sheets.
+  const referenced = new Set<string>();
+  let anySheet = false;
+  for (const formula of formulas) {
+    const references = formulaSheetReferences(formula);
+    anySheet ||= references.any;
+    for (const name of references.names) referenced.add(name);
+  }
   for (const sheet of readSpreadsheetSheets(doc)) {
     if (sheet.id === DEFAULT_SHEET_ID) continue;
     if (
       sheet.id !== sheetId &&
-      !formulas.some((formula) => formulaReferencesSheet(formula, sheet.name))
+      !anySheet &&
+      !referenced.has(sheet.name.toLowerCase())
     )
       continue;
     const storedOrder = order.get(sheet.id);

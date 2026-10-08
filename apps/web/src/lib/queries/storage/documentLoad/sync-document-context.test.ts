@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import { base64url } from 'jose';
 import { err, ok } from 'neverthrow';
 import { createComponent, createEffect } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,10 @@ import {
   clearOfflineDocumentContexts,
   offlineDocumentContextCache,
 } from './offline-context-runtime';
-import { fetchSyncDocumentOpenContext } from './sync-document-context';
+import {
+  fetchFileDocumentOpenContext,
+  fetchSyncDocumentOpenContext,
+} from './sync-document-context';
 
 const mocks = vi.hoisted(() => ({
   native: true,
@@ -346,5 +350,58 @@ describe('native document identity bootstrap', () => {
     ).toBe(false);
     expect(mocks.restore).not.toHaveBeenCalled();
     expect(mocks.userInfo).not.toHaveBeenCalled();
+  });
+});
+
+// An uploaded DOCX lives in document storage until its first editor seeds it
+// into sync-service: its location is a presigned URL, never sync content.
+describe('stored-file document open context', () => {
+  const docxContext = {
+    ...documentContext,
+    documentMetadata: { ...documentContext.documentMetadata, fileType: 'docx' },
+  };
+  const sessionToken = `e30.${base64url.encode(
+    JSON.stringify({
+      user_id: identity.id,
+      document_id: 'doc-1',
+      access_level: 'edit',
+    })
+  )}.test-signature`;
+
+  it('opens on the web without requiring sync-service content', async () => {
+    mocks.native = false;
+    mocks.bundle.mockResolvedValue({ ...docxContext, token: 'web-token' });
+    const opened = (
+      await fetchFileDocumentOpenContext('doc-1')
+    )._unsafeUnwrap();
+    expect(opened).toMatchObject({ fromCache: false, token: 'web-token' });
+    expect(opened.authorization).toBeUndefined();
+    expect(mocks.location).not.toHaveBeenCalled();
+  });
+
+  it('binds native synchronization to the session and never opens from the cache', async () => {
+    queryClient.setQueryData(authKeys.userInfo.queryKey, identity);
+    mocks.bundle.mockResolvedValue({ ...docxContext, token: sessionToken });
+    const opened = (
+      await fetchFileDocumentOpenContext('doc-1')
+    )._unsafeUnwrap();
+    expect(opened.fromCache).toBe(false);
+    expect(mocks.snapshot).not.toHaveBeenCalled();
+    expect(mocks.location).not.toHaveBeenCalled();
+    const authorization = opened.authorization!;
+    expect(authorization.isCurrent()).toBe(true);
+    expect(authorization.canWrite()).toBe(true);
+    expect(await authorization.getToken()).toBe(sessionToken);
+
+    const invalidated = vi.fn();
+    authorization.onInvalidated(invalidated);
+    mocks.login = false;
+    await clearOfflineDocumentContexts();
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      authenticated: false,
+    });
+    expect(invalidated).toHaveBeenCalled();
+    expect(authorization.isCurrent()).toBe(false);
+    expect(authorization.canWrite()).toBe(false);
   });
 });

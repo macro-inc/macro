@@ -1,86 +1,45 @@
-import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { CommentsProvider } from '@block-md/comments/CommentsProvider';
+import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
-import type { BlockName } from '@core/block';
-import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
   HighlightLayer,
   LocationHighlight,
 } from '@core/component/LexicalMarkdown/component/core/Highlights';
-import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { LexicalStateDebugger } from '@core/component/LexicalMarkdown/component/debug/LexicalStateDebugger';
-import { ActionMenu } from '@core/component/LexicalMarkdown/component/menu/ActionsMenu';
-import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
-import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
-import { FloatingLinkMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingLinkMenu';
-import { FloatingTableMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingTableMenu';
 import { GenerateMenu } from '@core/component/LexicalMarkdown/component/menu/GenerateMenu';
-import { MentionsMenu } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu';
-import { SnippetsMenu } from '@core/component/LexicalMarkdown/component/menu/SnippetsMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
-import { DraggableBlockMenu } from '@core/component/LexicalMarkdown/component/misc/DraggableBlockMenu';
-import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
-import { TableCellResizer } from '@core/component/LexicalMarkdown/component/misc/TableCellResizer';
-import { TableDeleteButtons } from '@core/component/LexicalMarkdown/component/misc/TableDeleteButtons';
-import { TableInsertButton } from '@core/component/LexicalMarkdown/component/misc/TableInsertButton';
-import { TableMoveHandle } from '@core/component/LexicalMarkdown/component/misc/TableMoveHandle';
-import { TableSelectionActionBar } from '@core/component/LexicalMarkdown/component/misc/TableSelectionActionBar';
 import {
   getErrorDescription,
   MarkdownEditorErrors,
 } from '@core/component/LexicalMarkdown/constants';
-import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import {
   createLexicalWrapper,
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
+import { useEditorEntityDrop } from '@core/component/LexicalMarkdown/editing/entityDrop';
+import { MarkdownEditingOverlays } from '@core/component/LexicalMarkdown/editing/MarkdownEditingOverlays';
 import {
-  awaitPlugin,
+  type MarkdownEditingSource,
+  registerMarkdownEditing,
+} from '@core/component/LexicalMarkdown/editing/registerMarkdownEditing';
+import {
   CLOSE_INLINE_SEARCH_COMMAND,
-  createDraggableBlockStore,
-  createDragInsertStore,
   createProgressStatsStore,
   createWordcountStatsStore,
-  DefaultShortcuts,
   diffPlugin,
-  documentMetadataPlugin,
-  draggableBlockPlugin,
-  dragInsertPlugin,
-  filePastePlugin,
   generatePlugin,
-  horizontalRulePlugin,
-  keyboardShortcutsPlugin,
-  listSwipeIndentPlugin,
-  listToTablePlugin,
-  markdownPastePlugin,
-  mentionsPlugin,
   pinnedPropertiesPlugin,
   progressPlugin,
-  selectionDataPlugin,
-  tabIndentationPlugin,
-  tableCellResizerPlugin,
-  tablePlugin,
-  tableTouchSelectionPlugin,
   tagsPlugin,
-  textPastePlugin,
-  trailingParagraphPlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
-import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
 import {
   BlameTooltip,
   blameTooltipPlugin,
   createBlameTooltipStore,
 } from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
-import {
-  CONVERT_CHECKBOXES_TO_TASKS,
-  checkboxToTaskPlugin,
-} from '@core/component/LexicalMarkdown/plugins/checkbox-to-task';
-import { codePlugin } from '@core/component/LexicalMarkdown/plugins/code/codePlugin';
-import { emojisPlugin } from '@core/component/LexicalMarkdown/plugins/emojis/emojisPlugin';
 import {
   DO_SEARCH_COMMAND,
   FloatingSearchHighlight,
@@ -88,7 +47,6 @@ import {
   type NodekeyOffset,
   SearchHighlight,
 } from '@core/component/LexicalMarkdown/plugins/find-and-replace';
-import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import {
   GO_TO_LOCATION_COMMAND,
   GO_TO_NODE_ID_COMMAND,
@@ -97,18 +55,10 @@ import {
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location';
 import {
-  INSERT_MEDIA_COMMAND,
-  mediaPlugin,
-} from '@core/component/LexicalMarkdown/plugins/media';
-import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
-import { normalizeEnterPlugin } from '@core/component/LexicalMarkdown/plugins/normalize-enter/';
-import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
-import {
   autoRegister,
   lazyRegister,
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins/shared/utils';
-import { snippetsPlugin } from '@core/component/LexicalMarkdown/plugins/snippets';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
@@ -119,18 +69,8 @@ import {
   initializeEditorWithState,
   setEditorStateFromMarkdown,
 } from '@core/component/LexicalMarkdown/utils';
-import {
-  getValidDragInsertPosition,
-  insertDocumentMentionAtDragInsertPosition,
-  updateDragInsertPreviewFromCoordinates,
-} from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import {
-  createFilesReadyHandler,
-  getDragDropPosition,
-} from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
-import { itemToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
@@ -139,32 +79,21 @@ import {
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { IS_MAC } from '@core/constant/isMac';
-import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { trackMention } from '@core/signal/mention';
 import { bufToString } from '@core/util/string';
-import { handleFileFolderDrop } from '@core/util/upload';
-import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
-  AwaitNode,
-  CommentNode,
   createPeerIdValidator,
-  InlineSearchNode,
   type PeerIdValidator,
-  peerIdPlugin,
 } from '@macro-inc/lexical-core';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
-import { debounce, throttle } from '@solid-primitives/scheduled';
-import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
+import { debounce } from '@solid-primitives/scheduled';
 import { $getRoot, $isElementNode, type EditorState } from 'lexical';
 import {
   type Accessor,
@@ -219,7 +148,6 @@ export function MarkdownEditor(props: {
   } = useMarkdownDocument();
   const { canEdit, canComment } = permissions;
   const blockId = documentId();
-  const userId = useUserId();
   const documentKind = kind();
   const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
@@ -333,132 +261,7 @@ export function MarkdownEditor(props: {
   const [editorFocus, setEditorFocus] = createSignal(false);
   autoRegister(editorFocusSignal(editor, setEditorFocus));
 
-  const mentionsMenuOperations = createMenuOperations();
   const tagsMenuOperations = createMenuOperations();
-  const emojiMenuOperations = createMenuOperations();
-  const actionsMenuOperations = createMenuOperations();
-  const snippetsMenuOperations = createMenuOperations();
-
-  // store for the drag insert pluign.
-  const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
-
-  // store for the draggable block (drag-to-rearrange) plugin.
-  const [draggableBlockStore, setDraggableBlockStore] =
-    createDraggableBlockStore();
-
-  // set up the solid-dnd stuff
-  const droppable = createDroppable(editor._config.namespace, {
-    type: 'markdown-editor',
-  });
-
-  const [dragDropState, { onDragEnd, onDragMove }] = useDragDropContext() ?? [
-    undefined,
-    {
-      onDragEnd: () => {},
-      onDragMove: () => {},
-    },
-  ];
-
-  // turn the solid dnd events into something we can use.
-  const wrapDndEvent = (event: EntityDragEvent) => {
-    const currentPos = dragDropState?.active.sensor?.coordinates?.current;
-    if (!currentPos) return;
-    const mousePos = {
-      clientX: currentPos.x,
-      clientY: currentPos.y,
-    };
-    const item = event.draggable.data;
-    if (item.type === 'foreign') return;
-    const blockName = itemToBlockName(item);
-    if (!blockName) return;
-    let id = event.draggable.data.id as string;
-    if (event.draggable.data.type === 'channel_message') {
-      id = event.draggable.data.channelId;
-    }
-    return {
-      id,
-      blockName: blockName as BlockName,
-      mousePos,
-      item,
-    };
-  };
-
-  const dndDragEnd = async (event: EntityDragEvent) => {
-    if (!dragInsertStore.visible) return;
-    setDragInsertStore({ visible: false });
-    if (!canEdit()) return;
-
-    const res = wrapDndEvent(event);
-    if (!res) return;
-
-    if (res.blockName === 'image' || res.blockName === 'video') {
-      getDragDropPosition(editor, res.mousePos, true);
-      editor.dispatchCommand(INSERT_MEDIA_COMMAND, {
-        type: 'dss',
-        id: res.id,
-        mediaType: res.blockName,
-      });
-      return;
-    }
-
-    if (res.blockName === undefined) return;
-    const dragInsertPosition = getValidDragInsertPosition(editor, res.mousePos);
-    if (!dragInsertPosition) return;
-
-    const mentionId = await trackMention(
-      blockId,
-      res.item.type === 'agent_session' ? 'agent_session' : 'document',
-      res.id
-    );
-
-    let blockParams: Record<string, string> | undefined;
-    if (res.blockName === 'channel') {
-      blockParams = {};
-      if (res.item.messageId) {
-        blockParams[CHANNEL_PARAMS.message] = res.item.messageId;
-      }
-      if (res.item.threadId) {
-        blockParams[CHANNEL_PARAMS.thread] = res.item.threadId;
-      }
-    }
-
-    insertDocumentMentionAtDragInsertPosition(editor, dragInsertPosition, {
-      documentId: res.id,
-      documentName: res.item.name,
-      blockName: res.blockName,
-      blockParams,
-      mentionUuid: mentionId,
-      createdAt: Date.now(),
-    });
-  };
-
-  const dndDragMove = throttle((event: EntityDragEvent) => {
-    if (!droppable.isActiveDroppable) {
-      return setDragInsertStore({ visible: false });
-    }
-    const res = wrapDndEvent(event);
-    if (!res) return;
-    const { mousePos } = res;
-    updateDragInsertPreviewFromCoordinates({
-      editor,
-      coordinates: mousePos,
-      setState: setDragInsertStore,
-    });
-  }, 60);
-
-  onDragEnd((event) => {
-    // dndDragMove is a trailing throttle, so a callback scheduled just before
-    // the drop would otherwise fire after it and could re-show the indicator.
-    dndDragMove.clear();
-    // Only soup entity drags insert mentions (not e.g. sidebar favorite drags).
-    if (!isEntityDragEvent(event)) return;
-    dndDragEnd(event);
-  });
-
-  onDragMove((event) => {
-    if (!isEntityDragEvent(event)) return;
-    dndDragMove(event);
-  });
 
   const onSetListOffset = (listOffset: NodekeyOffset[]) => {
     setFindAndReplaceStore('listOffset', listOffset);
@@ -550,6 +353,12 @@ export function MarkdownEditor(props: {
     return createPeerIdValidator(peerId, true);
   };
 
+  const editingSource: MarkdownEditingSource = {
+    id: blockId,
+    blockName: sourceBlockName,
+    trackMentions: true,
+  };
+
   // plugins
   plugins
     .richText()
@@ -557,156 +366,59 @@ export function MarkdownEditor(props: {
     .markdownShortcuts()
     .delete()
     .state<EditorState>(setState, 'json')
-    .history(400, props.loroManager)
-    .use(tabIndentationPlugin())
-    .use(listSwipeIndentPlugin(isContentEditable))
-    .use(selectionDataPlugin(lexicalWrapper))
-    .use(horizontalRulePlugin())
-    .use(
-      emojisPlugin({
-        menu: emojiMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-        sourceDocumentId: blockId,
-      })
-    )
-    .use(
-      tagsPlugin({
-        menu: tagsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(
-      snippetsPlugin({
-        menu: snippetsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-        sourceDocumentId: blockId,
-      })
-    )
-    .use(
-      actionsPlugin({
-        menu: actionsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(mediaPlugin())
-    .use(
-      tablePlugin({
-        hasCellMerge: true,
-        hasCellBackgroundColor: true,
-        hasTabHandler: true,
-        hasHorizontalScroll: true,
-      })
-    )
-    .use(tableCellResizerPlugin())
-    .use(tableTouchSelectionPlugin())
-    .use(
-      filePastePlugin({
-        onPasteFilesAndDirs: (fileEntries, directories) =>
-          handleFileFolderDrop(
-            fileEntries,
-            directories,
-            createFilesReadyHandler(editor, blockId)
-          ),
-      })
-    )
-    .use(
-      findAndReplacePlugin({
-        getListOffset: () => findAndReplaceStore.listOffset,
-        setListOffset: onSetListOffset,
-      })
-    )
-    .use(
-      dragInsertPlugin({
-        setState: setDragInsertStore,
-        dragListenerRef: editorContainerRef,
-      })
-    )
-    .use(textPastePlugin(props.resolveAppLink))
-    .use(restoreFocusPlugin())
-    .use(markdownPastePlugin())
-    .use(normalizeEnterPlugin())
-    .use(trailingParagraphPlugin())
-    .use(
-      checkboxToTaskPlugin({
-        currentUserId: userId(),
-        parentTaskId: documentKind === 'task' ? blockId : undefined,
-      })
-    )
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: [
-          ...DefaultShortcuts,
-          {
-            label: `${IS_MAC ? 'meta' : 'ctrl'}+shift+o`,
-            test: (e) =>
-              e.code === 'KeyO' &&
-              e.shiftKey &&
-              (IS_MAC ? e.metaKey : e.ctrlKey),
-            handler: (editor) => {
-              const userId = useUserId()();
-              if (!userId) return;
-              editor.dispatchCommand(CONVERT_CHECKBOXES_TO_TASKS, {});
-            },
-            priority: 0,
-          },
-        ],
-      })
-    )
-    .use(
-      documentMetadataPlugin({
-        onVersionError: (error) => setEditorError(error),
-      })
-    )
-    .use(pinnedPropertiesPlugin())
-    .use(awaitPlugin());
-
-  if (isIOS || isNativeMobilePlatform()) {
-    plugins.use(
-      iosCursorScrollPlugin({ scrollContainer: () => md.scrollContainer })
-    );
-  }
-
-  if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const peerId = () => props.loroManager.peerIdStr;
-    plugins.use(
-      peerIdPlugin({
-        peerId,
-        nodes: [InlineSearchNode, CommentNode, AwaitNode],
-      })
-    );
-  }
-
-  if (ENABLE_MARKDOWN_DIFF) {
-    plugins.use(diffPlugin());
-  }
-
-  const [accessoryStore, setAccessoryStore] = createAccessoryStore();
-  if (ENABLE_MARKDOWN_AI_GENERATE) {
-    plugins.use(
-      generatePlugin({
-        completionSignal: completionSignal,
-        isGeneratingSignal,
-        generatedAndWaitingSignal,
-        menuSignal: generateMenuSignal,
-        setContext: setGenerateContext,
-        accessories: accessoryStore,
-        setAccessories: setAccessoryStore,
-      })
-    );
-  }
-  plugins.use(
-    codePlugin({
-      accessories: accessoryStore,
-      setAccessories: setAccessoryStore,
-    })
-  );
-  plugins.use(listToTablePlugin());
+    .history(400, props.loroManager);
+  const editing = registerMarkdownEditing({
+    lexicalWrapper,
+    isContentEditable,
+    peerIdValidator: peerIdValidator(),
+    source: editingSource,
+    resolveAppLink: props.resolveAppLink,
+    parentTaskId: documentKind === 'task' ? blockId : undefined,
+    onVersionError: (error) => setEditorError(error),
+    peerId: ENABLE_MARKDOWN_LIVE_COLLABORATION
+      ? () => props.loroManager.peerIdStr
+      : undefined,
+    iosScrollContainer:
+      isIOS || isNativeMobilePlatform() ? () => md.scrollContainer : undefined,
+    slots: {
+      afterMentions: [
+        tagsPlugin({
+          menu: tagsMenuOperations,
+          peerIdValidator: peerIdValidator(),
+        }),
+      ],
+      afterFilePaste: [
+        findAndReplacePlugin({
+          getListOffset: () => findAndReplaceStore.listOffset,
+          setListOffset: onSetListOffset,
+        }),
+      ],
+      beforeAwait: [pinnedPropertiesPlugin()],
+      beforeCode: ([accessoryStore, setAccessoryStore]) => [
+        ...(ENABLE_MARKDOWN_DIFF ? [diffPlugin()] : []),
+        ...(ENABLE_MARKDOWN_AI_GENERATE
+          ? [
+              generatePlugin({
+                completionSignal: completionSignal,
+                isGeneratingSignal,
+                generatedAndWaitingSignal,
+                menuSignal: generateMenuSignal,
+                setContext: setGenerateContext,
+                accessories: accessoryStore,
+                setAccessories: setAccessoryStore,
+              }),
+            ]
+          : []),
+      ],
+    },
+  });
+  const droppable = useEditorEntityDrop({
+    editor,
+    canEdit: () => canEdit() ?? false,
+    dragInsert: editing.dragInsert,
+    source: editingSource,
+  });
+  false && droppable;
 
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
@@ -727,18 +439,7 @@ export function MarkdownEditor(props: {
     editor.setRootElement(el);
 
     // Register plugins that require the container ref.
-    plugins.use(
-      dragInsertPlugin({
-        setState: setDragInsertStore,
-        dragListenerRef: editorContainerRef,
-      })
-    );
-    plugins.use(
-      draggableBlockPlugin({
-        setState: setDraggableBlockStore,
-        anchorElem: editorContainerRef,
-      })
-    );
+    editing.connectContainer(editorContainerRef);
 
     const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
@@ -775,13 +476,7 @@ export function MarkdownEditor(props: {
   // Are are any of the inline menus open? This effects the behavior of the
   // array keys.
   const isInlineMenuOpen = createMemo(() => {
-    return (
-      mentionsMenuOperations.isOpen() ||
-      emojiMenuOperations.isOpen() ||
-      actionsMenuOperations.isOpen() ||
-      snippetsMenuOperations.isOpen() ||
-      titleEditorMenuOpen()
-    );
+    return editing.isInlineMenuOpen() || titleEditorMenuOpen();
   });
 
   createEffect(() => {
@@ -981,13 +676,7 @@ export function MarkdownEditor(props: {
         use:fileFolderDrop={{
           onDrop: (fileEntries, folderEntries, e) => {
             if (!e) return;
-            handleFileFolderDrop(
-              fileEntries,
-              folderEntries,
-              createFilesReadyHandler(editor, blockId, 'md', () =>
-                getDragDropPosition(editor, e, true)
-              )
-            );
+            editing.dropFiles(fileEntries, folderEntries, e, 'md');
           },
         }}
         use:droppable
@@ -1049,9 +738,6 @@ export function MarkdownEditor(props: {
             <BlameTooltip state={blameTooltipStore} documentId={blockId} />
           </Suspense>
         </Show>
-        <DecoratorRenderer editor={editor} />
-        <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
-
         <HighlightLayer
           editor={editor}
           ref={(el) => {
@@ -1069,28 +755,19 @@ export function MarkdownEditor(props: {
           />
         </Show>
 
-        <DragInsertIndicator
-          state={dragInsertStore}
-          active={canEdit() ?? false}
-        />
-
-        <DraggableBlockMenu
-          state={draggableBlockStore}
-          setState={setDraggableBlockStore}
-          active={canEdit() ?? false}
-        />
-
-        <EmojiMenu
+        <MarkdownEditingOverlays
           editor={editor}
-          menu={emojiMenuOperations}
-          useBlockBoundary={true}
-        />
-
-        <MentionsMenu
-          editor={editor}
-          menu={mentionsMenuOperations}
+          editing={editing}
+          source={editingSource}
+          canEdit={() => canEdit() ?? false}
           useBlockBoundary={true}
           showOpenTabs
+          floatingMenus={
+            <MarkdownPopup
+              highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
+              lexicalMapping={lexicalWrapper.mapping}
+            />
+          }
         />
 
         <TagsMenu
@@ -1104,32 +781,6 @@ export function MarkdownEditor(props: {
             void documentTags.applyTag(tag.scope, tag.optionId);
           }}
         />
-
-        <SnippetsMenu
-          editor={editor}
-          menu={snippetsMenuOperations}
-          useBlockBoundary={true}
-          sourceDocumentId={blockId}
-        />
-
-        <ActionMenu
-          editor={editor}
-          menu={actionsMenuOperations}
-          actionContext={{
-            sourceDocumentId: blockId,
-            sourceBlockName,
-          }}
-        />
-
-        <FloatingMenuGroup>
-          <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
-          <FloatingEquationMenu canEdit={canEdit} />
-          <FloatingTableMenu canEdit={canEdit} />
-          <MarkdownPopup
-            highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
-            lexicalMapping={lexicalWrapper.mapping}
-          />
-        </FloatingMenuGroup>
 
         <Show when={findAndReplaceStore.searchIsOpen}>
           <SearchHighlight
@@ -1151,25 +802,11 @@ export function MarkdownEditor(props: {
 
         <Show when={ENABLE_MARKDOWN_COMMENTS}>
           <Suspense>
-            <CommentsProvider
+            <MessageCommentsProvider
               activeComment={activeCommentIdParam}
               loroManager={props.loroManager}
             />
           </Suspense>
-        </Show>
-
-        <Show when={canEdit()}>
-          {/* On touch devices the hover-driven controls are unusable */}
-          {isTouchDevice() ? (
-            <TableSelectionActionBar />
-          ) : (
-            <>
-              <TableInsertButton />
-              <TableDeleteButtons />
-            </>
-          )}
-          <TableCellResizer />
-          <TableMoveHandle />
         </Show>
 
         <Show when={ENABLE_MARKDOWN_AI_GENERATE}>

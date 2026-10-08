@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+ai_billing = { path = "../ai_billing" }
 rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_toolset = { path = "../ai_toolset" }
@@ -41,3 +42,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
+tower = { workspace = true, features = ["util"] }

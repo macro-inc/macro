@@ -9,9 +9,10 @@ use entity_access::domain::{
     },
     ports::ScheduledActionGrants,
 };
+use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::CreationPrincipal;
+use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::event_runs::ConfigurationRevision;
@@ -34,6 +35,7 @@ pub struct ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets = ModelOnlyTarge
     grants: Arc<Grants>,
     dispatcher_tx: Sender<DispatchEvent>,
     event_management_enabled: bool,
+    conditions_enabled: bool,
     targets: Targets,
 }
 
@@ -51,6 +53,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             grants,
             dispatcher_tx,
             event_management_enabled: false,
+            conditions_enabled: false,
             targets: ModelOnlyTargets,
         }
     }
@@ -69,12 +72,19 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             grants: self.grants,
             dispatcher_tx: self.dispatcher_tx,
             event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
             targets,
         }
     }
 
     pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
         self.event_management_enabled = enabled;
+        self
+    }
+
+    /// Accept trigger conditions only when dispatch can check them.
+    pub fn with_conditions_enabled(mut self, enabled: bool) -> Self {
+        self.conditions_enabled = enabled;
         self
     }
 
@@ -89,14 +99,41 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             bail!("scheduled action receipt id is not a uuid");
         };
         match self.repo.get_action(&id).await? {
-            Some(action) => Ok(action),
-            None => Err(ActionPolicyError::NotFound.into()),
+            Some(action)
+                if receipt
+                    .acting_user_id()
+                    .is_some_and(|user| action.owner.is_user(user)) =>
+            {
+                Ok(action)
+            }
+            _ => Err(ActionPolicyError::NotFound.into()),
         }
     }
 
+    /// Delete `action` and hand its removal to the dispatcher. The permit is
+    /// reserved first so a stopped dispatcher fails while the row still exists
+    /// for a retry to find.
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+        let permit = self.dispatcher_tx.reserve().await?;
+        self.repo.delete_action(id).await?;
+        permit.send(DispatchEvent::Delete(action));
+        Ok(())
+    }
+
     fn check_event_management(&self, trigger: &ActionTrigger) -> Result<()> {
-        if matches!(trigger, ActionTrigger::Events { .. }) && !self.event_management_enabled {
+        if trigger.event_filters().is_some() && !self.event_management_enabled {
             return Err(ActionPolicyError::EventManagementDisabled.into());
+        }
+        Ok(())
+    }
+
+    fn check_conditions(&self, trigger: &ActionTrigger) -> Result<()> {
+        if trigger
+            .event_filters()
+            .is_some_and(|filters| filters.has_conditions())
+            && !self.conditions_enabled
+        {
+            return Err(ActionPolicyError::ConditionsDisabled.into());
         }
         Ok(())
     }
@@ -121,6 +158,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         if !disable_only {
             self.check_event_management(&action.trigger)?;
             self.check_event_management(&input.trigger)?;
+            self.check_conditions(&input.trigger)?;
         }
         let now = Utc::now();
         if claim_blocks_replacement(&action, now) && !disable_only {
@@ -130,16 +168,18 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
-            action.next_run_at = next_run(&input.trigger)?;
-        }
-        action.event_activated_at = match &input.trigger {
-            ActionTrigger::Cron { .. } => None,
-            ActionTrigger::Events { .. }
-                if trigger_changed || (!action.enabled && input.enabled) =>
-            {
-                Some(now)
+            if trigger_changed || (!action.enabled && input.enabled) {
+                action.next_run_at = next_run(&input.trigger)?;
             }
-            ActionTrigger::Events { .. } => action.event_activated_at,
+        }
+        action.event_activated_at = if input.trigger.event_filters().is_some() {
+            if trigger_changed || (!action.enabled && input.enabled) {
+                Some(now)
+            } else {
+                action.event_activated_at
+            }
+        } else {
+            None
         };
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
@@ -159,15 +199,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
-    match trigger {
-        ActionTrigger::Cron { schedule, timezone } => schedule
-            .next_run_after_now(*timezone)
-            .map(Some)
-            .ok_or_else(|| ActionPolicyError::NoFutureFirings.into()),
-        // Filters are validated value objects: neither deserialization nor Rust
-        // constructors can supply unbounded, empty or unsupported selectors.
-        ActionTrigger::Events { .. } => Ok(None),
+    let next = trigger.next_run_after(Utc::now());
+    if trigger.has_schedule() && next.is_none() && trigger.event_filters().is_none() {
+        return Err(ActionPolicyError::NoFutureFirings.into());
     }
+    Ok(next)
 }
 
 pub(crate) async fn list_accessible_actions<R, G>(
@@ -187,6 +223,7 @@ where
         return Ok(Vec::new());
     }
     let mut actions = repo.get_actions_by_ids(&ids).await?;
+    actions.retain(|action| action.owner.is_user(user_id));
     actions.sort_by(|left, right| {
         left.created_at
             .cmp(&right.created_at)
@@ -202,20 +239,7 @@ fn claim_blocks_replacement(action: &ScheduledAction, now: DateTime<Utc>) -> boo
 }
 
 fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
-    match (left, right) {
-        (
-            ActionTrigger::Cron {
-                schedule: a,
-                timezone: at,
-            },
-            ActionTrigger::Cron {
-                schedule: b,
-                timezone: bt,
-            },
-        ) => a.as_str() == b.as_str() && at == bt,
-        (ActionTrigger::Events { filters: a }, ActionTrigger::Events { filters: b }) => a == b,
-        _ => false,
-    }
+    left == right
 }
 
 impl<Rpo, Exe, Grants, Targets> ScheduledActionService
@@ -226,6 +250,13 @@ where
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
+    async fn get_action(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<ScheduledAction> {
+        self.load_granted(&receipt).await
+    }
+
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
         // Use the repository list, not the legacy cron-only service list, so
         // event-triggered actions are also removed regardless of rollout gates.
@@ -236,13 +267,29 @@ where
             let Some(id) = action.id else {
                 bail!("cannot delete action without id");
             };
-            // Reserve before deleting: a stopped dispatcher must not leave us
-            // reporting failure after losing the row needed to retry its event.
-            let permit = self.dispatcher_tx.reserve().await?;
-            self.repo.delete_action(&id).await?;
-            permit.send(DispatchEvent::Delete(action));
+            self.delete_and_dispatch(&id, action).await?;
         }
         Ok(())
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_owner),
+        fields(%id, owner.kind = ?expected_owner.owner_type())
+    )]
+    async fn purge_owned_action(
+        &self,
+        id: Uuid,
+        expected_owner: &Owner,
+    ) -> Result<OwnedPurgeOutcome> {
+        let Some(action) = self.repo.get_action(&id).await? else {
+            return Ok(OwnedPurgeOutcome::Purged);
+        };
+        if action.owner != *expected_owner {
+            return Ok(OwnedPurgeOutcome::OwnedElsewhere);
+        }
+        self.delete_and_dispatch(&id, action).await?;
+        Ok(OwnedPurgeOutcome::Purged)
     }
 
     async fn create_action(
@@ -256,13 +303,11 @@ where
         })?;
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
+        self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
         let now = Utc::now();
         let next_run_at = next_run(&input.trigger)?;
-        let event_activated_at = match &input.trigger {
-            ActionTrigger::Events { .. } => Some(now),
-            ActionTrigger::Cron { .. } => None,
-        };
+        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
         let created = self
             .repo
             .create_action(ScheduledAction {

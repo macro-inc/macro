@@ -30,6 +30,8 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
+mod scheduling_recovery;
+
 #[tokio::main]
 #[tracing::instrument(err)]
 async fn main() -> anyhow::Result<()> {
@@ -126,6 +128,9 @@ async fn main() -> anyhow::Result<()> {
         calendar_events::domain::service::GoogleCalendarSyncScheduler::new(
             PgCalendarRepository::new(db.clone()),
         ),
+        calendar_events::domain::changes::CalendarChangeLogRetention::new(
+            PgCalendarRepository::new(db.clone()),
+        ),
         config.calendar_sync_enabled,
         worker_cancellation_token.clone(),
     ));
@@ -149,6 +154,7 @@ async fn main() -> anyhow::Result<()> {
             reauth_notifier.clone(),
             calendar_watch_config(),
             config.calendar_sync_enabled,
+            config.calendar_team_sharing_enabled,
         );
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -173,7 +179,21 @@ async fn main() -> anyhow::Result<()> {
         PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
-    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
+    let calendar_service = Arc::new(
+        CalendarService::new(PgCalendarRepository::new(db.clone()))
+            .with_team_sharing_enabled(config.calendar_team_sharing_enabled),
+    );
+    let calendar_team_service = Arc::new(
+        calendar_events::domain::team::CalendarTeamServiceImpl::with_notifier(
+            calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(db.clone()),
+            ConnectionGatewayCalendarRefresh::new(
+                connection_gateway_client.clone(),
+                db.clone(),
+                config.calendar_team_sharing_enabled,
+            ),
+            config.calendar_team_sharing_enabled,
+        ),
+    );
     let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
         PgCalendarRepository::new(db.clone()),
         GoogleCalendarClient::with_gate(
@@ -185,14 +205,41 @@ async fn main() -> anyhow::Result<()> {
         ),
         CalendarTokenProviderAdapter::new(redis_conn, Arc::new(auth_service_client)),
         macro_event_broker.clone(),
-        ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
+        ConnectionGatewayCalendarRefresh::new(
+            connection_gateway_client,
+            db.clone(),
+            config.calendar_team_sharing_enabled,
+        ),
     ));
 
+    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
+        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
+        calendar_scheduling::outbound::macro_services::MacroCalendars::new(
+            calendar_service.clone(),
+            calendar_mutation_service.clone(),
+            match config.environment {
+                Environment::Production => Some("https://macro.com".into()),
+                Environment::Develop => Some("https://dev.macro.com".into()),
+                Environment::Local => None,
+            },
+        ),
+        calendar_scheduling::outbound::macro_services::MacroDirectory(
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+    ));
+    if config.calendar_sync_enabled {
+        worker_tracker.spawn(scheduling_recovery::run(
+            scheduling_service.clone(),
+            worker_cancellation_token.clone(),
+        ));
+    }
     let api_result = calendar_service::api::setup_and_serve(ApiContext {
         config: Arc::new(config),
         authorization_state,
         calendar_service,
         calendar_mutation_service,
+        calendar_team_service,
+        scheduling_service,
     })
     .await;
 

@@ -13,7 +13,8 @@ bunx vite --config src/features/block-spreadsheet/browser-test/vite.config.ts
 ```
 
 Open `http://127.0.0.1:3017/`. The seeded `B4` should calculate to `30`.
-Use `?readonly` for a viewer. Test-only `window.spreadsheetFixture.snapshot()`
+Use `?readonly` for a viewer and `?load=1500` to hold the workbook back for 1.5
+seconds and show the loading skeleton. Test-only `window.spreadsheetFixture.snapshot()`
 returns the current workbook and `setReadonly(boolean)` simulates permission
 changes without replacing the editor.
 The fixture applies the app's coarse-pointer touch attribute and keyboard viewport
@@ -30,9 +31,23 @@ sheet creation and rename, cross-sheet calculation, permission changes, and
 XLSX import/export through native browser file APIs. They also verify atomic
 import undo/redo, restoring a distant selection across tabs, and formatting
 without a calculation-status flash or grid remount. Further regressions cover
-immediate typing after adding or duplicating sheets, returning focus from toolbar
+immediate typing after the workbook loads (without taking focus from a control
+reached while loading) and after adding or duplicating sheets, returning focus from toolbar
 fields, range formatting/sorting, and footer controls down to a 360-pixel panel.
-The imported workbook was
+Dropdowns added, used and removed from the toolbar and cell menus,
+imported conditional formatting, validation lists and notes, imported charts
+and images (drawn over their cells, following edits, deleted and restored with
+undo, and kept in the download), radar, bubble, stock and contour charts
+(imported, redrawn after edits, inserted from More charts and downloaded),
+100% stacked columns from the insert menu and combo charts chosen in
+Edit chart,
+shapes, text boxes, groups, SmartArt and an EMF logo (drawn, a linked text box
+following its cell, moved and downloaded), GETPIVOTDATA formulas of an imported
+pivot table (calculated, following an edit to the table and downloaded), pivot
+tables over another workbook (downloaded with their records, link and pivot
+charts), and
+creating, editing, moving and sizing charts and images with the pointer and the
+keyboard have their own suites. The imported workbook was
 created independently with openpyxl; the exported file is reopened using ExcelJS
 to check formula caches and workbook structure. Failure traces and screenshots
 stay in this directory's ignored `test-results/` folder.

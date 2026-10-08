@@ -632,6 +632,20 @@ where
             .clone();
 
         let finalize_result = async {
+            let initial_snapshot = self
+                .markdown_initializer
+                .initialize_existing_markdown(&document_id, &markdown)
+                .await?;
+
+            self.document_service
+                .set_document_content(
+                    &document_id,
+                    DocumentContent::ready(DocumentContentLocation::SyncService),
+                )
+                .await?;
+
+            // Assignments publish events that can start agents immediately.
+            // Make the task body readable before applying its properties.
             if let Some((property_values, share_with_team, team_id)) = task {
                 self.document_service
                     .handle_task_properties(
@@ -648,18 +662,6 @@ where
                     )
                     .await?;
             }
-
-            let initial_snapshot = self
-                .markdown_initializer
-                .initialize_existing_markdown(&document_id, &markdown)
-                .await?;
-
-            self.document_service
-                .set_document_content(
-                    &document_id,
-                    DocumentContent::ready(DocumentContentLocation::SyncService),
-                )
-                .await?;
 
             Ok(initial_snapshot)
         }
@@ -699,8 +701,20 @@ where
             file_type,
             text,
         } = document;
+        self.create_file(principal, metadata, file_type, text.into_bytes())
+            .await
+    }
 
-        let bytes = text.into_bytes();
+    /// Create a file document from its bytes (a PowerPoint deck, an image, or
+    /// any other non-markdown file) and upload it to document storage.
+    #[tracing::instrument(skip(self, metadata, bytes), fields(bytes = bytes.len()), err)]
+    pub async fn create_file(
+        &self,
+        principal: &CreationPrincipal,
+        metadata: NewDocumentMetadata,
+        file_type: NonMarkdownFileType,
+        bytes: Vec<u8>,
+    ) -> Result<CreatedDocument, DocumentError> {
         let hashes = file_shas(&bytes);
         let new_document = metadata.into_new_document(RepoDocumentKind {
             file_type: Some(file_type.into_file_type()),

@@ -97,6 +97,7 @@ impl ScheduledActionRepo for FakeRepository {
         &self,
         _id: &Uuid,
         _revision: ConfigurationRevision,
+        _expected_next_run_at: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<crate::domain::event_runs::ClaimToken> {
         Ok(crate::domain::event_runs::ClaimToken::generate())
     }
@@ -284,7 +285,7 @@ async fn cancellation_allows_started_execution_to_finish_without_starting_anothe
 }
 
 #[tokio::test]
-async fn only_enabled_due_cron_candidates_reach_executor() {
+async fn only_enabled_due_schedules_including_mixed_triggers_reach_executor() {
     let mut event = due_action();
     event.trigger = serde_json::from_value(json!({
         "type": "events", "filters": [{"events": ["document.created"]}]
@@ -296,7 +297,12 @@ async fn only_enabled_due_cron_candidates_reach_executor() {
     disabled.enabled = false;
     let mut missing_next_run = due_action();
     missing_next_run.next_run_at = None;
-    let due = due_action();
+    let mut due = due_action();
+    due.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"* * * * * *", "timezone":"UTC"},
+        {"type":"events", "filters":[{"events":["document.created"]}]}
+    ]}))
+    .unwrap();
     let due_id = due.id.unwrap();
     let mut future = due_action();
     future.next_run_at = Some(Utc::now() + ChronoDuration::hours(1));

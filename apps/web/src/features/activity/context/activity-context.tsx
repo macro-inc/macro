@@ -1,3 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -8,7 +11,8 @@ import {
   firstPartyBotName,
   getBotDisplayName,
 } from '@queries/messages/message-sender';
-import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { useDatabasesQuery } from '@queries/storage/databases';
+import { useFormDetailQuery } from '@queries/storage/forms';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import {
@@ -19,6 +23,10 @@ import {
   runWithOwner,
   useContext,
 } from 'solid-js';
+import type {
+  ActivityDisplayEntityType,
+  ActivityEntityType,
+} from '../core/event';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -63,10 +71,15 @@ export type ActivityContext = {
    * it loads, `Bot` when the list does not know the id or failed to load.
    */
   botName: (botId: Accessor<string>) => Accessor<string | undefined>;
+  /**
+   * Whether rows about this kind of entity show at all. Reactive: a kind
+   * behind a rollout appears once its flag resolves on.
+   */
+  entityTypeShown: (entityType: ActivityEntityType) => boolean;
   /** Name, icon, and link target for a referenced entity. */
   entityDisplay: (
     entityId: Accessor<string>,
-    entityType: Accessor<EntityType>
+    entityType: Accessor<ActivityDisplayEntityType>
   ) => EntityDisplay;
   /** The property definition behind a property-changed row, when known. */
   propertyDefinition: (
@@ -92,6 +105,12 @@ function appActivityContext(): ActivityContext {
   const owner = getOwner();
   let bots: ReturnType<typeof useBotsQuery> | undefined;
   const botsQuery = () => (bots ??= runWithOwner(owner, useBotsQuery));
+  // Database names come from one list subscription, made the same way.
+  let databases: DatabasesQuery | undefined;
+  const databasesQuery = () =>
+    (databases ??= runWithOwner(owner, useDatabasesQuery));
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
   return {
     graphql: () => getGraphqlSoupClient(),
     currentUserId: () => userId() ?? '',
@@ -109,8 +128,17 @@ function appActivityContext(): ActivityContext {
       if (!list || list.isPending) return undefined;
       return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
-    entityDisplay: (entityId, entityType) =>
-      usePropertyEntityDisplay(entityId, entityType),
+    entityTypeShown: (entityType) =>
+      (entityType !== 'database' || databasesFlag().enabled) &&
+      (entityType !== 'form' || formsFlag().enabled),
+    entityDisplay: (entityId, entityType) => {
+      const type = entityType();
+      if (type === 'DATABASE') {
+        return databaseEntityDisplay(entityId, databasesQuery);
+      }
+      if (type === 'FORM') return formEntityDisplay(entityId);
+      return usePropertyEntityDisplay(entityId, () => type);
+    },
     propertyDefinition: (propertyId) => {
       const definitions = useAllProperties();
       return () => {
@@ -118,5 +146,44 @@ function appActivityContext(): ActivityContext {
         return id ? definitions().find((def) => def.id === id) : undefined;
       };
     },
+  };
+}
+
+/** A form's name from its own detail, which any respondent can read. */
+function formEntityDisplay(entityId: Accessor<string>): EntityDisplay {
+  const detail = useFormDetailQuery(entityId);
+  return {
+    name: () => {
+      if (detail.isPending) return 'Loading...';
+      return detail.isSuccess ? detail.data.form.name : 'Form unavailable';
+    },
+    icon: () => <CoreEntityIcon targetType="form" size="xs" />,
+    isLoading: () => detail.isPending,
+    blockOrFileType: () => 'form',
+    linkParams: () => undefined,
+  };
+}
+
+type DatabasesQuery = ReturnType<typeof useDatabasesQuery>;
+
+function databaseEntityDisplay(
+  entityId: Accessor<string>,
+  databasesQuery: () => DatabasesQuery | undefined
+): EntityDisplay {
+  const isLoading = () => databasesQuery()?.isPending ?? true;
+  return {
+    name: () => {
+      const list = databasesQuery();
+      if (!list || list.isPending) return 'Loading...';
+      const id = entityId();
+      const listed = list.isSuccess
+        ? list.data.find((entry) => entry.database.id === id)
+        : undefined;
+      return listed?.database.name ?? 'Database unavailable';
+    },
+    icon: () => <CoreEntityIcon targetType="database" size="xs" />,
+    isLoading,
+    blockOrFileType: () => 'database',
+    linkParams: () => undefined,
   };
 }

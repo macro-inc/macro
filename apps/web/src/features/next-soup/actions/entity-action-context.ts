@@ -1,4 +1,7 @@
-import type { ListController } from '@app/components/list';
+import {
+  createListController,
+  type ListController,
+} from '@app/components/list';
 import { isListViewID } from '@app/constants/list-views';
 import type { EntityData } from '@entity';
 import type { SoupRow, SoupState } from '../create-soup-state';
@@ -10,6 +13,7 @@ export type EntityActionSenderBucket = 'signal' | 'noise';
 
 export type EntityActionViewContext = {
   supportsMarkDone: boolean;
+  supportsOpenInNewSplit: boolean;
   senderBucket: EntityActionSenderBucket | undefined;
 };
 
@@ -85,6 +89,7 @@ export function resolveEntityActionViewContext(options: {
       activeTab !== undefined &&
       isListViewID(activeListView) &&
       canExecuteMarkDoneOnView(activeListView, activeTab),
+    supportsOpenInNewSplit: true,
     senderBucket: resolveSenderBucket(activeTab),
   };
 }
@@ -250,4 +255,24 @@ export function toEntityActionListState<TItem, TMetadata>(
       shouldCollapse: () => options.collapse?.enabled() ?? false,
     },
   };
+}
+
+/**
+ * List state for a surface that shows a single entity rather than a list of
+ * them, such as a detail header's action menu. Actions that would advance or
+ * clear a list find only this entity, so they leave the surface as it is.
+ */
+export function toSingleEntityActionListState(
+  entity: () => EntityData | undefined
+): EntityActionListState {
+  const controller = createListController({
+    items: () => {
+      const only = entity();
+      return only ? [only] : [];
+    },
+    getKey: (item) => item.id,
+    isSelectable: () => false,
+  });
+
+  return toEntityActionListState({ controller, getEntity: (item) => item });
 }

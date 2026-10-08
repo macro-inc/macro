@@ -22,6 +22,47 @@ export type AppleLoginRequest = {
 };
 
 /**
+ * The automatic reload thresholds a payer starts from.
+ */
+export type AutoReloadDefaults = {
+    /**
+     * Balance below which a reload fires, cents.
+     */
+    minimum_balance_cents: number;
+    /**
+     * Balance a reload tops up to, cents.
+     */
+    target_balance_cents: number;
+};
+
+/**
+ * The payer's automatic reload settings, as shown in Billing settings.
+ */
+export type AutoReloadSnapshot = {
+    /**
+     * Whether reloads will fire: the payer opted in and reloads are not suspended.
+     */
+    active: boolean;
+    /**
+     * Reload once the effective balance drops below this, in customer cents.
+     */
+    minimum_balance_cents: number;
+    /**
+     * Most reloaded per UTC calendar month, in customer cents. `null` when
+     * there is no limit.
+     */
+    monthly_spend_limit_cents?: number | null;
+    /**
+     * Whether reloads are paused after a failed reload charge.
+     */
+    suspended: boolean;
+    /**
+     * Reload the balance back up to this, in customer cents.
+     */
+    target_balance_cents: number;
+};
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -57,6 +98,20 @@ export type CheckoutSessionMetadata = {
      * Google Analytics client ID for conversion tracking
      */
     gaClientId?: string | null;
+};
+
+/**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
 };
 
 /**
@@ -191,6 +246,10 @@ export type CreateCheckoutSessionV2Request = {
      * Tracking metadata for conversion attribution
      */
     metadata?: CheckoutSessionMetadata;
+    /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
     plan?: null | SeatPlan;
     /**
      * The URL to redirect to on successful checkout
@@ -241,27 +300,6 @@ export type CreateTeamRequest = {
      * The name of the team
      */
     name: string;
-};
-
-/**
- * The request body to create a new user in fusionauth
- * NOTE: Never derive debug here as we don't want to accidentally log the password
- */
-export type CreateUserRequest = {
-    /**
-     * The primary email address of the user.
-     * This will be the user's root "profile".
-     */
-    email: string;
-    /**
-     * The password for the user.
-     * TODO: configure password policy and validate password before attempting to create user
-     */
-    password: string;
-    /**
-     * The unique username for the user.
-     */
-    username: string;
 };
 
 /**
@@ -358,7 +396,7 @@ export type CursorModelsResponse = {
 /**
  * Why a request was refused.
  */
-export type DenyReason = 'allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
@@ -396,6 +434,10 @@ export type EnrichedGithubPullRequest = {
      */
     additions?: number | null;
     /**
+     * The users assigned to the pull request, when known.
+     */
+    assignees?: Array<GithubPullRequestUser> | null;
+    /**
      * The stable numeric GitHub user id for the pull request author, when available.
      */
     authorId?: number | null;
@@ -428,6 +470,10 @@ export type EnrichedGithubPullRequest = {
      */
     githubKey: string;
     /**
+     * The pull request's labels, when known.
+     */
+    labels?: Array<GithubPullRequestLabel> | null;
+    /**
      * The GitHub pull request title, when enrichment succeeds.
      */
     name?: string | null;
@@ -449,6 +495,11 @@ export type EnrichedGithubPullRequest = {
      * The GitHub repository name.
      */
     repo: string;
+    /**
+     * Each reviewer's latest submitted review, when known. Stored metadata merges this per
+     * reviewer, so a write that knows one review keeps the others.
+     */
+    reviews?: Array<GithubPullRequestReview> | null;
     status?: null | GithubPullRequestStatus;
     /**
      * The public GitHub URL for the pull request.
@@ -555,10 +606,23 @@ export type GetUserInfo = {
 
 export type GithubLinkStatusResponse = {
     /**
+     * Stable ID of the authenticated user's linked GitHub account.
+     */
+    github_user_id: string;
+    /**
+     * Login of the authenticated user's linked GitHub account.
+     */
+    github_username: string;
+    /**
      * Whether the user must reauthenticate their GitHub link.
      */
     reauthentication_required: boolean;
 };
+
+/**
+ * How GitHub combines a pull request's commits into its base branch.
+ */
+export type GithubMergeMethod = 'merge' | 'squash' | 'rebase';
 
 /**
  * A check run associated with a GitHub pull request.
@@ -662,6 +726,20 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
  * A pull request reference that can be enriched with live GitHub data.
  */
 export type GithubPullRequestRef = {
@@ -692,9 +770,50 @@ export type GithubPullRequestRef = {
 };
 
 /**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
+};
 
 export type GmailLinkStatusResponse = {
     /**
@@ -897,6 +1016,40 @@ export type MacroApiTokenResponse = {
     macro_api_token: string;
 };
 
+/**
+ * A request to merge one pull request on the user's behalf.
+ */
+export type MergeGithubPullRequestRequest = {
+    mergeMethod?: null | GithubMergeMethod;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a merged pull request.
+ */
+export type MergeGithubPullRequestResponse = {
+    /**
+     * GitHub's own summary of the merge.
+     */
+    message: string;
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * The merge commit's SHA.
+     */
+    sha: string;
+};
+
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -1063,13 +1216,18 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
-     * Included AI per seat per period, list-rate cents.
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
      */
     included_ai_cents_per_seat: number;
     /**
-     * Monthly list price per seat, cents.
+     * Monthly subscription price per seat, cents.
      */
     monthly_price_cents: number;
+    /**
+     * Whether a new purchase or plan move may pick this plan today.
+     */
+    purchasable: boolean;
     /**
      * The tier.
      */
@@ -1080,6 +1238,14 @@ export type PlanCatalogEntry = {
  * The plan catalog and the knobs the billing UI offers.
  */
 export type PlanCatalogResponse = {
+    /**
+     * Thresholds automatic reload starts from before the payer sets their own.
+     */
+    auto_reload_defaults: AutoReloadDefaults;
+    /**
+     * Largest allowed automatic reload target, cents.
+     */
+    auto_reload_target_max_cents: number;
     /**
      * Credit packs a payer may buy, cents.
      */
@@ -1093,7 +1259,8 @@ export type PlanCatalogResponse = {
      */
     overage_limit_min_cents: number;
     /**
-     * Free and every purchasable paid plan, cheapest first.
+     * Every plan, cheapest first. Clients read allowances from here rather
+     * than hard-coding them; `purchasable` marks the plans a user can buy.
      */
     plans: Array<PlanCatalogEntry>;
 };
@@ -1376,6 +1543,30 @@ export type ToggleNonAdminInvitesResponse = {
 };
 
 /**
+ * Request body for [`update_auto_reload_handler`].
+ */
+export type UpdateAutoReloadRequest = {
+    /**
+     * Purchase prepaid credits automatically using the payer's card.
+     */
+    enabled: boolean;
+    /**
+     * Reload once the balance drops below this, cents. Must be positive.
+     */
+    minimumBalanceCents: number;
+    /**
+     * Most to reload per calendar month, cents. Omit or `null` for no limit.
+     * Must be at least the catalog's `overage_limit_min_cents` (legacy name).
+     */
+    monthlySpendLimitCents?: number | null;
+    /**
+     * Reload the balance back up to this, cents. At least $0.50 above the
+     * minimum and no more than the catalog's `auto_reload_target_max_cents`.
+     */
+    targetBalanceCents: number;
+};
+
+/**
  * Request body for [`update_overage_handler`].
  */
 export type UpdateOverageRequest = {
@@ -1394,33 +1585,38 @@ export type UpdateOverageRequest = {
  * by the gate.
  */
 export type UsageSnapshot = {
+    /**
+     * Automatic credit reload settings. `active` means the payer opted in and
+     * reloads are not suspended.
+     */
+    auto_reload: AutoReloadSnapshot;
     blocked_reason?: null | DenyReason;
     /**
      * Whether the requesting user is the payer.
      */
     can_manage_billing: boolean;
     /**
-     * Shared prepaid credit balance.
+     * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
     /**
-     * Shared payer credits already applied to this period.
+     * Shared payer credits already applied to this period, in customer cents.
      */
     credits_consumed_cents: number;
     /**
-     * Included AI for this user's seat this period, in list-rate cents.
+     * Included AI for this user's seat this period, in cents at provider cost.
      */
     included_cents: number;
     /**
-     * Shared overage charged so far this period.
+     * Shared overage charged so far this period, in customer cents.
      */
     overage_charged_cents: number;
     /**
-     * Whether overage billing is on.
+     * Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
      */
     overage_enabled: boolean;
     /**
-     * Per-period overage cap.
+     * Per-period overage cap, in customer cents.
      */
     overage_limit_cents: number;
     /**
@@ -1440,8 +1636,9 @@ export type UsageSnapshot = {
      */
     period_start: string;
     /**
-     * This seat's remaining allowance plus shared credit/overage headroom; 0
-     * when blocked.
+     * Cost cents of usage this seat may still consume: its remaining allowance
+     * plus whatever shared credit and overage headroom pays for at the markup.
+     * 0 when blocked.
      */
     remaining_cents: number;
     /**
@@ -1453,8 +1650,9 @@ export type UsageSnapshot = {
      */
     tier: PlanTier;
     /**
-     * Team-wide usage beyond per-seat allowances that is not yet covered by
-     * shared credits or charges (awaiting settlement).
+     * Team-wide usage beyond per-seat allowances, at the overage markup, that
+     * is not yet covered by shared credits or charges (awaiting settlement).
+     * Customer cents.
      */
     uncovered_cents: number;
     /**
@@ -1462,7 +1660,7 @@ export type UsageSnapshot = {
      */
     unlimited: boolean;
     /**
-     * AI used by this user this period, in list-rate cents.
+     * AI used by this user this period, in cents at provider cost.
      */
     used_cents: number;
 };
@@ -1533,6 +1731,47 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type UpdateAiBillingAutoReloadData = {
+    body: UpdateAutoReloadRequest;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/auto-reload';
+};
+
+export type UpdateAiBillingAutoReloadErrors = {
+    /**
+     * Invalid thresholds
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may change billing
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type UpdateAiBillingAutoReloadError = UpdateAiBillingAutoReloadErrors[keyof UpdateAiBillingAutoReloadErrors];
+
+export type UpdateAiBillingAutoReloadResponses = {
+    /**
+     * Updated position
+     */
+    200: UsageSnapshot;
+};
+
+export type UpdateAiBillingAutoReloadResponse = UpdateAiBillingAutoReloadResponses[keyof UpdateAiBillingAutoReloadResponses];
 
 export type CreateAiCreditCheckoutData = {
     body: CreditCheckoutRequestBody;
@@ -1968,6 +2207,40 @@ export type EnrichGithubPullRequestsResponses = {
 };
 
 export type EnrichGithubPullRequestsResponse2 = EnrichGithubPullRequestsResponses[keyof EnrichGithubPullRequestsResponses];
+
+export type MergeGithubPullRequestData = {
+    body: MergeGithubPullRequestRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/merge';
+};
+
+export type MergeGithubPullRequestErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot push to the repository
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * The pull request is not mergeable as it stands, or its head moved
+     */
+    409: ErrorResponse;
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
+
+export type MergeGithubPullRequestResponses = {
+    200: MergeGithubPullRequestResponse;
+};
+
+export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -3106,27 +3379,6 @@ export type GetUserInvitesResponses = {
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
 
-export type CreateUserData = {
-    body: CreateUserRequest;
-    path?: never;
-    query?: never;
-    url: '/user';
-};
-
-export type CreateUserErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
-
-export type CreateUserResponses = {
-    200: EmptyResponse;
-};
-
-export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
-
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
     path?: never;
@@ -3453,7 +3705,7 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];

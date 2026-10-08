@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use ai_usage::{UsageAmount, UsageContext, UsageRecorder};
 use anyhow::Context as _;
 use base64::Engine as _;
 use serde::Deserialize;
@@ -81,6 +82,8 @@ impl ImageGenerator for GeminiImageGenerator {
     async fn generate_image(
         &self,
         request: &ImageGenerationRequest,
+        usage: &UsageContext,
+        recorder: &dyn UsageRecorder,
     ) -> Result<GeneratedImage, ImageGenerationError> {
         let response = self
             .client
@@ -115,6 +118,26 @@ impl ImageGenerator for GeminiImageGenerator {
         let parsed: GenerateContentResponse = serde_json::from_str(&body)
             .context("unexpected Gemini response shape")
             .map_err(ImageGenerationError::Provider)?;
+        if let Some(metadata) = &parsed.usage_metadata {
+            // The image model publishes no cached-input rate, so implicit
+            // cache reads stay inside the prompt count at the input rate.
+            recorder.record(usage.clone().into_event(
+                self.model.clone(),
+                UsageAmount::Tokens {
+                    input: metadata.prompt_token_count,
+                    output: metadata.candidates_token_count.unwrap_or_else(|| {
+                        metadata
+                            .total_token_count
+                            .unwrap_or(metadata.prompt_token_count)
+                            .saturating_sub(metadata.prompt_token_count)
+                    }),
+                    cache_read: 0,
+                    cache_write: 0,
+                },
+            ));
+        } else {
+            tracing::warn!(model = %self.model, "Gemini image response omitted usage metadata");
+        }
         parsed.into_image()
     }
 }
@@ -136,6 +159,17 @@ struct GenerateContentResponse {
     #[serde(default)]
     candidates: Vec<Candidate>,
     prompt_feedback: Option<PromptFeedback>,
+    usage_metadata: Option<UsageMetadata>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UsageMetadata {
+    prompt_token_count: u64,
+    // Gemini can omit candidate counts. This non-thinking, IMAGE-only request
+    // can also recover output usage from the reported total minus prompt.
+    candidates_token_count: Option<u64>,
+    total_token_count: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -224,7 +258,23 @@ impl GenerateContentResponse {
             .decode(data.data.as_bytes())
             .context("Gemini image data is not valid base64")
             .map_err(ImageGenerationError::Provider)?;
+        let (width, height) = image::ImageReader::new(std::io::Cursor::new(&bytes))
+            .with_guessed_format()
+            .context("could not identify generated image format")
+            .and_then(|reader| {
+                reader
+                    .into_dimensions()
+                    .context("could not read generated image dimensions")
+            })
+            .map_err(ImageGenerationError::Provider)?;
+        if width == 0 || height == 0 {
+            return Err(ImageGenerationError::Provider(anyhow::anyhow!(
+                "generated image dimensions must be positive"
+            )));
+        }
         Ok(GeneratedImage {
+            width,
+            height,
             bytes,
             mime_type: data.mime_type,
             note,

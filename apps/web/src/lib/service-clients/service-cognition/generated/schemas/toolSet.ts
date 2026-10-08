@@ -5,6 +5,12 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ToolSetOneOf } from './toolSetOneOf';
+import type { ToolSetOneOfFive } from './toolSetOneOfFive';
+import type { ToolSetOneOfSeven } from './toolSetOneOfSeven';
 import type { ToolSetOneOfThree } from './toolSetOneOfThree';
 
-export type ToolSet = ToolSetOneOf | ToolSetOneOfThree;
+export type ToolSet =
+  | ToolSetOneOf
+  | ToolSetOneOfThree
+  | ToolSetOneOfFive
+  | ToolSetOneOfSeven;

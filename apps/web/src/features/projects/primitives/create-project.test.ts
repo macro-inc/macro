@@ -1,13 +1,13 @@
+import type { Property } from '@property/types';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectsContext } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
-import { createProjectComposer } from './create-project';
+import { createProjectComposer, failedProjectDraft } from './create-project';
 
 const project: ProjectDetail = {
   id: 'project-id',
   name: 'Release',
-  descriptionDocumentId: 'description',
   updatedAt: '',
   createdAt: '',
   ownerId: 'owner',
@@ -30,70 +30,72 @@ function commands() {
   } satisfies ReturnType<ProjectsContext['createCommands']>;
 }
 
-describe('project creation', () => {
-  it('defaults team sharing and leaves unset properties to canonical server defaults', async () => {
-    await new Promise<void>((resolve, reject) =>
-      createRoot((dispose) => {
-        const service = commands();
-        const complete = vi.fn();
-        const composer = createProjectComposer(service, complete);
-        composer.setName('  Release  ');
-        composer
-          .submit()
-          .then(() => {
-            expect(service.create).toHaveBeenCalledWith({
-              name: 'Release',
-              shareWithTeam: true,
-            });
-            expect(service.saveProperty).not.toHaveBeenCalled();
-            expect(complete).toHaveBeenCalledWith('project-id');
-            dispose();
-            resolve();
-          })
-          .catch(reject);
-      })
-    );
-  });
+const dueDate = {
+  propertyId: 'due',
+  propertyDefinitionId: 'due',
+  displayName: 'Due date',
+  valueType: 'DATE',
+  value: null,
+  isMultiSelect: false,
+  isMetadata: false,
+  isSystemProperty: true,
+  owner: { scope: 'system' },
+  createdAt: '',
+  updatedAt: '',
+} satisfies Property;
+const dueValue = {
+  valueType: 'DATE' as const,
+  value: new Date('2026-10-01T00:00:00Z'),
+};
 
-  it('retries a failed property write on the existing project without duplicating creation', async () => {
-    await new Promise<void>((resolve, reject) =>
-      createRoot((dispose) => {
-        const service = commands();
-        service.saveProperty.mockRejectedValueOnce(new Error('offline'));
-        const complete = vi.fn();
-        const composer = createProjectComposer(service, complete);
-        composer.setName('Release');
-        composer.saveDraft(
-          {
-            propertyId: 'due',
-            propertyDefinitionId: 'due',
-            displayName: 'Due date',
-            valueType: 'DATE',
-            value: null,
-            isMultiSelect: false,
-            isMetadata: false,
-            isSystemProperty: true,
-            owner: { scope: 'system' },
-            createdAt: '',
-            updatedAt: '',
-          },
-          { valueType: 'DATE', value: new Date('2026-10-01T00:00:00Z') }
-        );
-        composer
-          .submit()
-          .then(async () => {
-            expect(composer.createdId()).toBe('project-id');
-            expect(composer.error()).toContain('Retry');
-            expect(complete).not.toHaveBeenCalled();
-            await composer.submit();
-            expect(service.create).toHaveBeenCalledTimes(1);
-            expect(service.saveProperty).toHaveBeenCalledTimes(2);
-            expect(complete).toHaveBeenCalledWith('project-id');
-            dispose();
-            resolve();
-          })
-          .catch(reject);
-      })
-    );
+describe('project creation', () => {
+  it('submits once with its values, defaulting team sharing and leaving unset properties to the server', () =>
+    createRoot(async (dispose) => {
+      const service = commands();
+      const composer = createProjectComposer(service);
+      composer.setName('  Release  ');
+      composer.setDescription('Goals');
+      composer.saveDraft(dueDate, dueValue);
+      const submission = composer.submit();
+      expect(composer.pending()).toBe(true);
+      expect(composer.submit()).toBeUndefined();
+      expect(service.create).toHaveBeenCalledOnce();
+      expect(service.create).toHaveBeenCalledWith({
+        name: 'Release',
+        description: 'Goals',
+        shareWithTeam: true,
+        properties: [{ property: dueDate, value: dueValue }],
+      });
+      expect(service.saveProperty).not.toHaveBeenCalled();
+      expect(await submission?.result).toBe(project);
+      dispose();
+    }));
+
+  it('does not submit an unnamed project', () =>
+    createRoot((dispose) => {
+      const service = commands();
+      const composer = createProjectComposer(service);
+      composer.setName('   ');
+      expect(composer.submit()).toBeUndefined();
+      expect(composer.pending()).toBe(false);
+      expect(service.create).not.toHaveBeenCalled();
+      dispose();
+    }));
+
+  it("reopens a failure with its draft and the server's reason", () => {
+    const draft = {
+      name: 'Release',
+      description: '',
+      shareWithTeam: true,
+      properties: [{ property: dueDate, value: dueValue }],
+    };
+    expect(failedProjectDraft(draft, new Error('Name is too long'))).toEqual({
+      ...draft,
+      error: 'Name is too long',
+    });
+    expect(failedProjectDraft(draft, 'offline')).toEqual({
+      ...draft,
+      error: 'Could not create project.',
+    });
   });
 });

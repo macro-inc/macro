@@ -91,8 +91,8 @@ const columnStyle = (): JSX.CSSProperties => ({
 
 const bodyStyle = (): JSX.CSSProperties => ({
   color: 'var(--c4)',
-  'font-family': 'cyberreader, body',
-  'font-size': mobile() ? '16.5px' : '18px',
+  'font-family': 'Inter, body',
+  'font-size': mobile() ? '14px' : '15px',
   'line-height': 1.75,
   margin: '0',
   'text-wrap': 'pretty',
@@ -112,7 +112,7 @@ const pillStyle = (): JSX.CSSProperties => ({
   color: 'var(--c2)',
   cursor: 'default',
   display: 'inline-flex',
-  'font-family': 'rajdhani, body',
+  'font-family': 'Inter, body',
   'font-size': mobile() ? '13px' : '14px',
   'font-weight': '700',
   gap: '7px',
@@ -137,7 +137,7 @@ function ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': mobile() ? '15px' : props.large ? '18px' : '16px',
+        'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
         'font-weight': '750',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '46px' : '40px',
@@ -175,7 +175,7 @@ function BookCallButton(props: { large?: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': mobile() ? '15px' : props.large ? '18px' : '16px',
+        'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
         'font-weight': '700',
         height: mobile() ? '40px' : props.large ? '46px' : '40px',
         'justify-content': 'center',
@@ -235,7 +235,7 @@ function Key(props: { children: JSX.Element }) {
         border: '1px solid color-mix(in srgb, var(--c4) 22%, transparent)',
         'border-radius': '5px',
         color: 'var(--c2)',
-        'font-family': 'rajdhani, body',
+        'font-family': 'Inter, body',
         'font-size': '0.85em',
         'font-weight': '700',
         padding: '1px 6px',
@@ -319,7 +319,7 @@ function SectionHeading(props: {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '12px' : '15px',
             'letter-spacing': '0.08em',
             'text-transform': 'uppercase',
@@ -333,7 +333,7 @@ function SectionHeading(props: {
           color: 'var(--c1)',
           'font-family': 'display',
           'font-size': mobile() ? '30px' : '42px',
-          'font-weight': '410',
+          'font-weight': '315',
           'letter-spacing': '-0.015em',
           'line-height': 1.1,
           margin: 0,
@@ -428,7 +428,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': "'cyberreader', body",
+            'font-family': "'Inter', body",
             'font-size': mobile() ? '10px' : '11px',
             'font-weight': '400',
             'letter-spacing': '0.02em',
@@ -447,7 +447,7 @@ const compareHeaderStyle = (macro: boolean): JSX.CSSProperties => ({
   'background-color': 'transparent',
   color: macro ? 'var(--a0)' : 'var(--c2)',
   display: 'flex',
-  'font-family': "'cyberreader', body",
+  'font-family': "'Inter', body",
   'font-size': mobile() ? '9px' : '11px',
   'font-weight': '400',
   'justify-content': 'center',
@@ -969,7 +969,7 @@ function ComparisonBrandLockup(props: { brand: SwitchBrand }) {
           color: 'color-mix(in srgb, var(--c4) 42%, transparent)',
           'font-family': 'display',
           'font-size': comparisonMobile() ? '32px' : '42px',
-          'font-weight': '300',
+          'font-weight': '315',
           'line-height': 0.65,
           transform: 'translateY(-5px) scaleY(1.5)',
         }}
@@ -1056,7 +1056,7 @@ function ComparisonGutterLabel(props: { index: string; label: string }) {
         'align-items': 'center',
         color: 'color-mix(in srgb, var(--c4) 68%, transparent)',
         display: comparisonMobile() ? 'none' : 'flex',
-        'font-family': 'rajdhani, body',
+        'font-family': 'Inter, body',
         'font-size': '10px',
         'font-weight': '700',
         gap: '6px',
@@ -1120,7 +1120,7 @@ function ToolSectionBlock(props: { section: ToolSection }) {
               color: 'var(--c1)',
               'font-family': 'display',
               'font-size': comparisonMobile() ? '26px' : '32px',
-              'font-weight': '420',
+              'font-weight': '315',
               'letter-spacing': '-0.015em',
               'line-height': 1.12,
               margin: 0,
@@ -1163,7 +1163,7 @@ function ToolSectionBlock(props: { section: ToolSection }) {
         <h4
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': comparisonMobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.1em',
@@ -1294,7 +1294,7 @@ function WorldTable() {
         style={{
           'box-sizing': 'border-box',
           display: 'grid',
-          'font-family': "'cyberreader', body",
+          'font-family': "'Inter', body",
           'grid-template-columns': gridTemplate(),
           'min-width': mobile() ? '640px' : '760px',
           overflow: 'hidden',
@@ -1667,7 +1667,7 @@ export const RouteMigrate: Component = () => {
         }
         .migrate-case-subtitle {
           color: var(--c4);
-          font-family: cyberreader, body;
+          font-family: Inter, body;
           font-size: 16px;
           line-height: 1.45;
           margin: 0 0 20px;
@@ -1772,7 +1772,7 @@ export const RouteMigrate: Component = () => {
         }
         .migrate-case-quote blockquote {
           color: var(--c1);
-          font-family: cyberreader, body;
+          font-family: Inter, body;
           font-size: 15px;
           font-weight: 420;
           letter-spacing: -0.012em;
@@ -1820,7 +1820,7 @@ export const RouteMigrate: Component = () => {
         }
         .migrate-case-play span:not(.migrate-case-play-rule) {
           color: var(--c1);
-          font-family: rajdhani, body;
+          font-family: Inter, body;
           font-size: 15px;
           font-weight: 700;
           letter-spacing: 0.1em;
@@ -1894,7 +1894,7 @@ export const RouteMigrate: Component = () => {
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? 'clamp(42px, 11.5vw, 58px)' : '52.36px',
-                'font-weight': '380',
+                'font-weight': '315',
                 'letter-spacing': '-0.012em',
                 'line-height': 1.12,
                 margin: '0',
@@ -1905,8 +1905,8 @@ export const RouteMigrate: Component = () => {
             <p
               style={{
                 color: 'var(--c4)',
-                'font-family': 'cyberreader, body',
-                'font-size': mobile() ? '15px' : '18px',
+                'font-family': 'Inter, body',
+                'font-size': mobile() ? '15px' : '15px',
                 'font-weight': '400',
                 'line-height': 1.55,
                 margin: '0',
@@ -2079,7 +2079,7 @@ export const RouteMigrate: Component = () => {
             <Show when={mobile()}>
               <span
                 style={{
-                  'font-family': 'rajdhani, body',
+                  'font-family': 'Inter, body',
                   'font-size': '11px',
                   'letter-spacing': '0.06em',
                   opacity: 0.6,
@@ -2126,7 +2126,7 @@ export const RouteMigrate: Component = () => {
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? '36px' : '48px',
-                'font-weight': '420',
+                'font-weight': '315',
                 'letter-spacing': '-0.015em',
                 'line-height': 1.08,
                 margin: '0',
@@ -2137,8 +2137,8 @@ export const RouteMigrate: Component = () => {
             <p
               style={{
                 color: 'var(--c4)',
-                'font-family': 'cyberreader, body',
-                'font-size': mobile() ? '17px' : '19px',
+                'font-family': 'Inter, body',
+                'font-size': mobile() ? '14px' : '16px',
                 'line-height': 1.55,
                 margin: '0',
               }}

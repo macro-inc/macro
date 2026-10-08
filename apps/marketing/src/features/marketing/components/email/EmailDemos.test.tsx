@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { EmailInboxDemo, EmailSignalNoiseDemo } from './EmailInboxDemo';
 import { EmailSharingDemo } from './EmailSharingDemo';
+import { ChannelComposer } from './frozen/ChannelComposer';
 
 let visibility: IntersectionObserverCallback;
 let reducedMotion = false;
@@ -124,7 +125,7 @@ function setVisible(isIntersecting: boolean) {
   );
 }
 
-it('pauses playback offscreen, supports pause and replay, and cleans up its timer', () => {
+it('pauses playback offscreen and after interaction, and cleans up its timer', () => {
   const view = render(() => <EmailSharingDemo />);
   const phase = () =>
     view.container
@@ -141,18 +142,32 @@ it('pauses playback offscreen, supports pause and replay, and cleans up its time
   setVisible(true);
   vi.advanceTimersByTime(1100);
   expect(phase()).toBe('2');
-  fireEvent.click(
-    view.getByRole('button', { name: 'Pause sharing animation' })
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Close share preview' }));
   vi.advanceTimersByTime(10000);
-  expect(phase()).toBe('2');
-  fireEvent.click(view.getByRole('button', { name: 'Replay' }));
   expect(phase()).toBe('0');
-  vi.advanceTimersByTime(7450);
-  expect(phase()).toBe('6');
   view.unmount();
   expect(disconnect).toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('keeps the live reply in the shared thread and stops at the completed result', () => {
+  const view = render(() => <EmailSharingDemo />);
+  setVisible(true);
+  vi.advanceTimersByTime(10650);
+  expect(view.getByText('2 messages · New reply from Dana')).toBeTruthy();
+  vi.advanceTimersByTime(30000);
+  expect(view.getByText('2 messages · New reply from Dana')).toBeTruthy();
+  expect(vi.getTimerCount()).toBe(0);
+  fireEvent.click(
+    view.getByRole('button', {
+      name: 'Open shared email: Next steps for our team',
+    })
+  );
+  expect(view.getByText('Hi Jacob,')).toBeTruthy();
+  expect(
+    view.getByText(/One more thing: could you include the onboarding guide/)
+  ).toBeTruthy();
+  expect(view.queryByRole('button', { name: /Play|Pause|Replay/ })).toBeNull();
 });
 
 it('shows the shared result without autoplay for reduced motion', () => {
@@ -167,11 +182,49 @@ it('shows the shared result without autoplay for reduced motion', () => {
   expect(
     view.queryByRole('button', { name: 'Pause sharing animation' })
   ).toBeNull();
-  fireEvent.click(view.getByRole('button', { name: 'Replay' }));
   vi.advanceTimersByTime(10000);
   expect(
     view.getByRole('button', {
       name: 'Open shared email: Next steps for our team',
     })
   ).toBeTruthy();
+});
+
+it('keeps local attachment names, permits removal, and clears them after sending', () => {
+  const onSend = vi.fn();
+  const view = render(() => <ChannelComposer onSend={onSend} />);
+  const picker = view.getByLabelText('Choose local attachments');
+  fireEvent.change(picker, {
+    target: {
+      files: [
+        new File(['sample'], 'rollout.txt'),
+        new File(['sample'], 'notes.txt'),
+      ],
+    },
+  });
+  fireEvent.click(
+    view.getByRole('button', { name: 'Remove attachment notes.txt' })
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Send demo message' }));
+  expect(onSend).toHaveBeenCalledWith('Attached: rollout.txt');
+  expect(
+    view.queryByRole('button', { name: 'Remove attachment rollout.txt' })
+  ).toBeNull();
+  expect(
+    view
+      .getByRole('button', { name: 'Send demo message' })
+      .hasAttribute('disabled')
+  ).toBe(true);
+});
+
+it('does not send while composing text or inserting a line break', () => {
+  const onSend = vi.fn();
+  const view = render(() => <ChannelComposer onSend={onSend} />);
+  const input = view.getByRole('textbox');
+  fireEvent.input(input, { target: { value: 'Ready for review' } });
+  fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  expect(onSend).not.toHaveBeenCalled();
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSend).toHaveBeenCalledWith('Ready for review');
 });

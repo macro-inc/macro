@@ -180,7 +180,6 @@ const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
   id: row.project.id,
   name: row.project.name,
   ownerId: '',
-  descriptionDocumentId: row.project.descriptionDocumentId,
 });
 
 /**

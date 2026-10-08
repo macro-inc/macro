@@ -45,7 +45,7 @@ function ConnectGoogleButton(props: { buttonName: string; large?: boolean }) {
         cursor: 'default',
         display: 'inline-flex',
         'font-family': 'body',
-        'font-size': mobile() ? '15px' : props.large ? '18px' : '16px',
+        'font-size': mobile() ? '15px' : props.large ? '15px' : '16px',
         'font-weight': '700',
         gap: '8px',
         height: mobile() ? '40px' : props.large ? '46px' : '40px',
@@ -486,7 +486,7 @@ function ComparisonCell(props: { value: Cell; macro: boolean }) {
         <span
           style={{
             color: props.macro ? 'var(--a0)' : 'var(--c2)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '13px' : '15px',
             'font-weight': '700',
             'letter-spacing': '0.02em',
@@ -513,7 +513,7 @@ function ComparisonTable() {
       : 'transparent',
     color: macro ? 'var(--a0)' : 'var(--c2)',
     display: 'flex',
-    'font-family': 'rajdhani, body',
+    'font-family': 'Inter, body',
     'font-size': mobile() ? '12px' : '15px',
     'font-weight': '700',
     'justify-content': 'center',
@@ -653,7 +653,7 @@ function ComparisonSection() {
         <span
           style={{
             color: 'var(--a0)',
-            'font-family': 'rajdhani, body',
+            'font-family': 'Inter, body',
             'font-size': mobile() ? '12px' : '16px',
             'letter-spacing': '0.08em',
             'text-transform': 'uppercase',
@@ -666,7 +666,7 @@ function ComparisonSection() {
             color: 'var(--c1)',
             'font-family': 'display',
             'font-size': mobile() ? '32px' : '44px',
-            'font-weight': '410',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.1,
             margin: 0,
@@ -728,7 +728,7 @@ function ComparisonSection() {
                 'align-items': 'center',
                 color: 'var(--c4)',
                 display: 'flex',
-                'font-family': "'rajdhani', body",
+                'font-family': "'Inter', body",
                 'font-size': '11px',
                 'font-weight': '700',
                 gap: '8px',
@@ -800,7 +800,7 @@ function ComparisonSection() {
         <Show when={mobile()}>
           <span
             style={{
-              'font-family': 'rajdhani, body',
+              'font-family': 'Inter, body',
               'font-size': '11px',
               'letter-spacing': '0.06em',
               opacity: 0.6,
@@ -845,7 +845,7 @@ function CallsFinalCta() {
           style={{
             'font-family': 'display',
             'font-size': mobile() ? '38px' : '48px',
-            'font-weight': '420',
+            'font-weight': '315',
             'letter-spacing': '-0.015em',
             'line-height': 1.08,
             margin: '0',
@@ -857,7 +857,7 @@ function CallsFinalCta() {
           style={{
             color: 'var(--c4)',
             'font-family': 'body',
-            'font-size': mobile() ? '17px' : '19px',
+            'font-size': mobile() ? '14px' : '16px',
             'font-weight': '400',
             'line-height': 1.55,
             margin: '0',
@@ -945,7 +945,7 @@ export const RouteCalls: Component = () => {
               style={{
                 'font-family': 'display',
                 'font-size': mobile() ? 'clamp(44px, 12vw, 60px)' : '52.36px',
-                'font-weight': '380',
+                'font-weight': '315',
                 'letter-spacing': '-0.012em',
                 'line-height': 1.12,
                 margin: '0',
@@ -958,7 +958,7 @@ export const RouteCalls: Component = () => {
               style={{
                 color: 'var(--c4)',
                 'font-family': 'body',
-                'font-size': mobile() ? '16.5px' : '23px',
+                'font-size': mobile() ? '14px' : '20px',
                 'font-weight': '400',
                 'line-height': 1.5,
                 margin: '0',
@@ -1124,7 +1124,7 @@ export const RouteCalls: Component = () => {
                 color: 'var(--c1)',
                 cursor: 'pointer',
                 'font-family': 'body',
-                'font-size': '18px',
+                'font-size': '15px',
                 height: '34px',
                 'line-height': 1,
                 position: 'absolute',

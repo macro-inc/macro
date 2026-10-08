@@ -1,8 +1,8 @@
 use super::PgAccessRepository;
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, ChannelRoleResult, CrmEntityAccess, EntityType,
-        ParticipantRole, TeamRole,
+        AccessError, AccessLevel, AgentSessionParent, BotId, ChannelRoleResult, CrmEntityAccess,
+        EntityType, ParticipantRole, TeamRole,
     },
     ports::AccessRepository,
 };
@@ -18,6 +18,9 @@ const TEAM_ADMIN: &str = "macro|admin@team.com";
 const TEAM_OWNER: &str = "macro|owner@team.com";
 const USER_WITHOUT_TEAM: &str = "macro|noteam@team.com";
 const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
+
+mod agent_session_parent;
+mod channel_call_chat;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()

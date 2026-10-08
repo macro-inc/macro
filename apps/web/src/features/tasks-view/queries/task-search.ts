@@ -14,7 +14,7 @@ import {
   getTaskFacetOption,
   type TaskFacetContext,
 } from '../filters/task-facets';
-import type { TaskTab } from '../types';
+import type { TaskReferenceScope, TaskTab } from '../types';
 
 const nonTaskFilters: EntityFilters = {
   calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
@@ -26,7 +26,6 @@ const nonTaskFilters: EntityFilters = {
   email_filters: { email_thread_ids: [NIL_UUID] },
   foreign_entity_filters: { ids: [NIL_UUID] },
   project_filters: { project_ids: [NIL_UUID] },
-  reminder_filters: { ids: [NIL_UUID] },
 };
 
 const selectedCreators = (
@@ -85,7 +84,7 @@ export function buildTaskSearchRequest(options: {
   userId: string | undefined;
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
-  taskIds?: readonly string[];
+  reference?: TaskReferenceScope;
 }): SearchSoupQueryArgs {
   const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
@@ -95,6 +94,13 @@ export function buildTaskSearchRequest(options: {
       property_definition_id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
       entity_type: 'TASK',
       entity_ids: [options.userId ?? NIL_UUID],
+    });
+  }
+  if (options.reference) {
+    propertyFilters.push({
+      property_definition_id: options.reference.propertyDefinitionId,
+      entity_type: 'TASK',
+      entity_ids: [options.reference.entityId],
     });
   }
 
@@ -115,13 +121,6 @@ export function buildTaskSearchRequest(options: {
         document_filters: {
           sub_types: ['task'],
           ...(owners ? { owners } : {}),
-          ...(options.taskIds !== undefined
-            ? {
-                document_ids: options.taskIds.length
-                  ? [...options.taskIds]
-                  : [NIL_UUID],
-              }
-            : {}),
         },
         ...(propertyFilters.length > 0
           ? { property_filters: propertyFilters }

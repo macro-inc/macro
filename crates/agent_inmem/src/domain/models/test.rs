@@ -4,12 +4,20 @@ use chat::domain::models::CHAT_MODELS;
 #[test]
 fn advertised_models_keep_chat_then_append_routed() {
     let models = advertised_models();
+    assert_eq!(
+        models
+            .iter()
+            .filter(|model| **model == "google/gemini-3.8-flash")
+            .count(),
+        1
+    );
     assert_eq!(&models[..CHAT_MODELS.len()], CHAT_MODELS);
     assert_eq!(
         &models[CHAT_MODELS.len()..],
         ROUTED_MODELS
             .iter()
             .map(|(model, _)| *model)
+            .filter(|model| !CHAT_MODELS.contains(model))
             .collect::<Vec<_>>()
             .as_slice()
     );
@@ -34,8 +42,8 @@ fn routed_models_have_house_names() {
     );
     assert_eq!(display_name("google/gemini-3.8-flash"), "Gemini 3.8 Flash");
     assert_eq!(
-        display_name("anthropic/claude-sonnet-5"),
-        "anthropic/claude-sonnet-5"
+        display_name("anthropic/claude-sonnet-5-5"),
+        "anthropic/claude-sonnet-5-5"
     );
 }
 

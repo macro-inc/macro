@@ -26,6 +26,10 @@ use crate::domain::{
 };
 
 const GOOGLE_CALENDAR_API: &str = "https://www.googleapis.com/calendar/v3";
+// Events.list excludes the lower end bound and ignores fractional seconds.
+// A full second of padding admits points at the requested inclusive start;
+// normalization still filters occurrences against the exact requested range.
+const LIST_LOWER_BOUND_PADDING: chrono::Duration = chrono::Duration::seconds(1);
 
 /// Consulted before every Google Calendar HTTP request so deployments can
 /// enforce the per-user API quota. Denials surface as transient provider
@@ -53,6 +57,7 @@ impl GoogleRequestGate for UnmeteredGate {
 pub struct GoogleCalendarClient<G = UnmeteredGate> {
     client: Client,
     gate: G,
+    api_base: String,
 }
 
 impl GoogleCalendarClient<UnmeteredGate> {
@@ -61,6 +66,7 @@ impl GoogleCalendarClient<UnmeteredGate> {
         Self {
             client,
             gate: UnmeteredGate,
+            api_base: GOOGLE_CALENDAR_API.into(),
         }
     }
 }
@@ -68,7 +74,11 @@ impl GoogleCalendarClient<UnmeteredGate> {
 impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Construct a client whose requests must pass the supplied quota gate.
     pub fn with_gate(client: Client, gate: G) -> Self {
-        Self { client, gate }
+        Self {
+            client,
+            gate,
+            api_base: GOOGLE_CALENDAR_API.into(),
+        }
     }
 
     async fn calendars(
@@ -82,7 +92,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/users/me/calendarList"))
+                .get(format!("{}/users/me/calendarList", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[("maxResults", "250"), ("minAccessRole", "reader")]);
             if let Some(token) = &page_token {
@@ -114,13 +124,16 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500".to_string()),
                     ("singleEvents", single_events.to_string()),
                     ("showDeleted", "false".to_string()),
-                    ("timeMin", range.starts_at.to_rfc3339()),
+                    (
+                        "timeMin",
+                        (range.starts_at - LIST_LOWER_BOUND_PADDING).to_rfc3339(),
+                    ),
                     ("timeMax", range.ends_at.to_rfc3339()),
                     ("timeZone", "UTC".to_string()),
                 ]);
@@ -156,7 +169,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500"),
@@ -173,7 +186,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                 // past only: a timeMax would be encoded into the token and
                 // silently hide events created beyond it once the maintained
                 // window extends.
-                request = request.query(&[("timeMin", window.starts_at.to_rfc3339())]);
+                request = request.query(&[(
+                    "timeMin",
+                    (window.starts_at - LIST_LOWER_BOUND_PADDING).to_rfc3339(),
+                )]);
             }
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
@@ -209,7 +225,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let response = self
             .client
             .get(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .send()
@@ -248,7 +265,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500"),
@@ -287,7 +304,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             let mut request = self
                 .client
                 .get(format!(
-                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}/instances"
+                    "{}/calendars/{calendar}/events/{event}/instances",
+                    self.api_base
                 ))
                 .bearer_auth(access_token)
                 .query(&[
@@ -530,7 +548,8 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
                 )
                 .await?;
 
-            let mapped = map_snapshot(target, canonical_events, instances);
+            let mapped = map_snapshot(target, canonical_events, instances)
+                .map_err(sync_normalization_error)?;
 
             return Ok(GoogleEventSyncBatch {
                 upserts: mapped.upserts,
@@ -577,7 +596,8 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             GoogleRequestKind::Mutation,
             self.client
                 .post(format!(
-                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/watch"
+                    "{}/calendars/{calendar}/events/watch",
+                    self.api_base
                 ))
                 .bearer_auth(access_token)
                 .json(&serde_json::json!({
@@ -638,20 +658,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 
         for single in classified.single_upserts {
             let provider_event_id = single.id.clone();
-            match map_upsert(target, single.clone(), Vec::new(), vec![single]) {
-                Ok(upsert) => {
-                    applied.upserts.push(upsert);
-                    applied.upserted_singles.insert(provider_event_id);
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        provider_calendar_id=%target.provider_calendar_id,
-                        provider_event_id,
-                        "skipping malformed changed Google Calendar event"
-                    );
-                }
-            }
+            let upsert = map_upsert(target, single.clone(), Vec::new(), vec![single])
+                .map_err(sync_normalization_error)?;
+            applied.upserts.push(upsert);
+            applied.upserted_singles.insert(provider_event_id);
         }
 
         // One bounded refresh per changed series keeps Google authoritative
@@ -669,7 +679,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    applied.refreshed_series.insert(master_id);
+                    return Err(sync_normalization_error(rootcause::report!(
+                        "Google Calendar returned a malformed changed series"
+                    )));
                 }
             }
         }
@@ -733,7 +745,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     error=?error,
                     provider_calendar_id=%target.provider_calendar_id,
                     provider_event_id,
-                    "skipping malformed changed Google Calendar series"
+                    "rejecting malformed changed Google Calendar series"
                 );
                 Ok(SeriesOutcome::Malformed)
             }
@@ -773,20 +785,10 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 
         for single in tail_singles {
             let provider_event_id = single.id.clone();
-            match map_upsert(target, single.clone(), Vec::new(), vec![single]) {
-                Ok(upsert) => {
-                    applied.upserts.push(upsert);
-                    applied.upserted_singles.insert(provider_event_id);
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        error=?error,
-                        provider_calendar_id=%target.provider_calendar_id,
-                        provider_event_id,
-                        "skipping malformed Google Calendar event in the coverage tail"
-                    );
-                }
-            }
+            let upsert = map_upsert(target, single.clone(), Vec::new(), vec![single])
+                .map_err(sync_normalization_error)?;
+            applied.upserts.push(upsert);
+            applied.upserted_singles.insert(provider_event_id);
         }
 
         for master_id in tail_series {
@@ -802,7 +804,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
                     applied.cancelled.insert(master_id);
                 }
                 SeriesOutcome::Malformed => {
-                    applied.refreshed_series.insert(master_id);
+                    return Err(sync_normalization_error(rootcause::report!(
+                        "Google Calendar returned a malformed series in the coverage tail"
+                    )));
                 }
             }
         }
@@ -924,7 +928,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let response = self
             .client
             .delete(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES])
@@ -991,7 +996,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let request = self
             .client
             .patch(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES]);
@@ -1033,21 +1039,69 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         draft: &CalendarEventDraft,
     ) -> Result<CalendarEventUpsert, GoogleProviderError> {
         let calendar = urlencoding::encode(&target.provider_calendar_id);
-        let body = draft_body(draft);
+        let mut body = draft_body(draft);
+        // Scope caller keys to the organizer. Hex UUIDs are valid Google base32hex IDs.
+        let provider_id = draft
+            .idempotency_key
+            .map(|key| crate::domain::models::creation_provider_id(key, &target.owner_id));
+        if let Some(id) = &provider_id {
+            body["id"] = serde_json::json!(id);
+            if let Some(existing) = self
+                .event(
+                    access_token,
+                    target.email_link_id,
+                    &target.provider_calendar_id,
+                    id,
+                )
+                .await?
+            {
+                return self
+                    .mutation_readback(access_token, target, existing)
+                    .await?
+                    .ok_or_else(|| {
+                        GoogleProviderError::new(
+                            GoogleProviderErrorKind::Permanent,
+                            "The reserved calendar event was removed",
+                        )
+                    });
+            }
+        }
         self.gate.acquire(target.email_link_id).await?;
         let request = self
             .client
-            .post(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+            .post(format!("{}/calendars/{calendar}/events", self.api_base))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES]);
-        let created: GoogleEvent = send_google(
-            GoogleRequestKind::Mutation,
-            with_conference_query(request, &body).json(&body),
-        )
-        .await?;
-        // The insert already happened and carries no idempotency key, so a
-        // readback miss must not surface as retryable: a client retry would
-        // POST a duplicate event.
+        let response = with_conference_query(request, &body)
+            .json(&body)
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        let created: GoogleEvent = if status == StatusCode::CONFLICT && provider_id.is_some() {
+            self.event(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                provider_id.as_deref().unwrap_or_default(),
+            )
+            .await?
+            .ok_or_else(|| {
+                GoogleProviderError::new(
+                    GoogleProviderErrorKind::Transient,
+                    "Calendar creation is still converging",
+                )
+            })?
+        } else if status.is_success() {
+            response.json().await.map_err(provider_transport_error)?
+        } else {
+            let body = response.text().await.map_err(provider_transport_error)?;
+            return Err(provider_response_error(
+                GoogleRequestKind::Mutation,
+                status,
+                &body,
+            ));
+        };
         self.mutation_readback(access_token, target, created)
             .await?
             .ok_or_else(|| {
@@ -1336,7 +1390,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         self.gate.acquire(email_link_id).await?;
         let response = self
             .client
-            .post(format!("{GOOGLE_CALENDAR_API}/channels/stop"))
+            .post(format!("{}/channels/stop", self.api_base))
             .bearer_auth(access_token)
             .json(&serde_json::json!({
                 "id": channel_id,
@@ -1552,6 +1606,15 @@ fn mutation_normalization_error(error: Report) -> GoogleProviderError {
     GoogleProviderError::new(
         GoogleProviderErrorKind::Permanent,
         format!("Google Calendar returned a malformed event after the mutation: {error:?}"),
+    )
+}
+
+/// Reject the whole calendar batch so neither its token nor its coverage can
+/// advance past an event that has not been represented successfully.
+fn sync_normalization_error(error: Report) -> GoogleProviderError {
+    GoogleProviderError::new(
+        GoogleProviderErrorKind::Transient,
+        format!("Google Calendar snapshot could not be fully normalized: {error:?}"),
     )
 }
 
@@ -1862,9 +1925,12 @@ fn map_snapshot(
     target: &GoogleCalendarTarget,
     canonical_events: Vec<GoogleEvent>,
     instances: Vec<GoogleEvent>,
-) -> MappedGoogleSnapshot {
+) -> Result<MappedGoogleSnapshot, Report> {
     let mut occurrences: BTreeMap<String, Vec<GoogleEvent>> = BTreeMap::new();
     for instance in instances {
+        if instance.status.as_deref() == Some("cancelled") {
+            continue;
+        }
         occurrences
             .entry(instance.ical_uid.clone())
             .or_default()
@@ -1874,6 +1940,9 @@ fn map_snapshot(
     let mut exceptions: BTreeMap<String, Vec<GoogleEvent>> = BTreeMap::new();
     let mut masters = BTreeMap::new();
     for event in canonical_events {
+        if event.status.as_deref() == Some("cancelled") {
+            continue;
+        }
         if event.recurring_event_id.is_some() {
             exceptions
                 .entry(event.ical_uid.clone())
@@ -1901,29 +1970,29 @@ fn map_snapshot(
         .collect::<Vec<_>>();
     let upserts = masters
         .into_iter()
-        .filter_map(|(uid, master)| {
-            let provider_event_id = master.id.clone();
+        .map(|(uid, master)| {
             map_upsert(
                 target,
                 master,
                 exceptions.remove(&uid).unwrap_or_default(),
                 occurrences.remove(&uid).unwrap_or_default(),
             )
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar master"
-                );
-            })
-            .ok()
         })
-        .collect();
-    MappedGoogleSnapshot {
+        .collect::<Result<Vec<_>, _>>()?;
+    for exception in exceptions.into_values().flatten() {
+        // A moved exception can be returned by the unexpanded feed even when
+        // its current interval is outside the expanded window. Its absence
+        // there is expected; an in-window orphan is missing coverage.
+        if google_time(&exception)?.overlaps(&target.range) {
+            return Err(rootcause::report!(
+                "Google Calendar snapshot has an in-window exception without a master or expanded instance"
+            ));
+        }
+    }
+    Ok(MappedGoogleSnapshot {
         upserts,
         observed_provider_event_ids,
-    }
+    })
 }
 
 fn map_upsert(
@@ -1940,6 +2009,7 @@ fn map_upsert(
         email_link_id: target.email_link_id,
         account_id: target.account_id,
         calendar_id: target.calendar_id,
+        observed_access_role: target.observed_access_role.clone(),
         provider_event_id: master.id.clone(),
         provider_recurring_event_id: master.recurring_event_id.clone(),
         provider_etag: master.etag.clone(),
@@ -1999,113 +2069,93 @@ fn map_upsert(
         updated_at,
     };
 
-    let overrides = exceptions
-        .into_iter()
-        .filter_map(|exception| {
-            // Cancelled exceptions arrive without times; the occurrence
-            // replace already removes them, so there is no override to keep.
-            if exception.status.as_deref() == Some("cancelled") {
-                return None;
-            }
-            let provider_event_id = exception.id.clone();
-            (|| -> Result<CalendarEventOverride, Report> {
-                let original = exception
-                    .original_start_time
-                    .as_ref()
-                    .and_then(google_start)
-                    .ok_or_else(|| {
-                        rootcause::report!(
-                            "Google recurring exception {} has an invalid original start",
-                            exception.id
-                        )
-                    })?;
-                let time = google_time(&exception)?;
-                Ok(CalendarEventOverride {
-                    sequence: exception.sequence,
-                    source_updated_at: parse_datetime(exception.updated.as_deref()),
-                    recurrence_id: original.occurrence_key(),
-                    original_time: original,
-                    time,
-                    title: exception.summary,
-                    description: exception.description,
-                    location: exception.location,
-                    status: Some(google_status(exception.status.as_deref())),
-                    attendees: exception
-                        .attendees
-                        .map(|attendees| attendees.into_iter().filter_map(map_attendee).collect()),
-                })
-            })()
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar recurrence exception"
-                );
-            })
-            .ok()
-        })
-        .collect();
+    let mut overrides = Vec::new();
+    for exception in exceptions {
+        // Google omits times on cancelled exceptions. The occurrence snapshot
+        // already excludes them, so a cancellation is not a coverage gap.
+        if exception.status.as_deref() == Some("cancelled") {
+            continue;
+        }
+        let original = exception
+            .original_start_time
+            .as_ref()
+            .and_then(google_start)
+            .ok_or_else(|| {
+                rootcause::report!(
+                    "Google recurring exception {} has an invalid original start",
+                    exception.id
+                )
+            })?;
+        let time = google_time(&exception)?;
+        overrides.push(CalendarEventOverride {
+            sequence: exception.sequence,
+            source_updated_at: parse_datetime(exception.updated.as_deref()),
+            recurrence_id: original.occurrence_key(),
+            original_time: original,
+            time,
+            title: exception.summary,
+            description: exception.description,
+            location: exception.location,
+            status: Some(google_status(exception.status.as_deref())),
+            visibility: exception
+                .visibility
+                .as_deref()
+                .map(|value| google_visibility(Some(value))),
+            transparency: exception
+                .transparency
+                .as_deref()
+                .map(|value| google_transparency(Some(value))),
+            attendees: exception
+                .attendees
+                .map(|attendees| attendees.into_iter().filter_map(map_attendee).collect()),
+        });
+    }
 
-    let occurrences = instances
-        .into_iter()
-        .filter_map(|instance| {
-            let provider_event_id = instance.id.clone();
-            (|| -> Result<Option<CalendarOccurrence>, Report> {
-                let time = google_time(&instance)?;
-                let original_start = instance
-                    .original_start_time
-                    .as_ref()
-                    .map(|value| {
-                        google_start(value).ok_or_else(|| {
-                            rootcause::report!(
-                                "Google recurring instance {} has an invalid original start",
-                                instance.id
-                            )
-                        })
-                    })
-                    .transpose()?;
-                Ok(time.overlaps(&target.range).then(|| CalendarOccurrence {
-                    event_id,
-                    occurrence_key: original_start
-                        .as_ref()
-                        .map(|start| start.occurrence_key())
-                        .unwrap_or_else(|| time.occurrence_key()),
-                    recurrence_id: original_start.map(|start| start.occurrence_key()),
-                    time,
-                    is_cancelled: instance.status.as_deref() == Some("cancelled"),
-                }))
-            })()
-            .inspect_err(|error| {
-                tracing::warn!(
-                    error=?error,
-                    provider_calendar_id=%target.provider_calendar_id,
-                    provider_event_id,
-                    "skipping malformed Google Calendar recurrence instance"
-                );
+    let mut occurrences = BTreeMap::<String, CalendarOccurrence>::new();
+    for instance in instances {
+        // Cancellation tombstones need no interval and never block time.
+        if instance.status.as_deref() == Some("cancelled") {
+            continue;
+        }
+        let time = google_time(&instance)?;
+        let original_start = instance
+            .original_start_time
+            .as_ref()
+            .map(|value| {
+                google_start(value).ok_or_else(|| {
+                    rootcause::report!(
+                        "Google recurring instance {} has an invalid original start",
+                        instance.id
+                    )
+                })
             })
-            .ok()
-            .flatten()
-        })
-        .fold(
-            BTreeMap::<String, CalendarOccurrence>::new(),
-            |mut deduped, occurrence| {
-                // Google can expand two instances onto one occurrence key — a
-                // moved exception whose original start still lands on the series
-                // slot, a DST boundary, a pagination overlap. Both would carry
-                // the same (event_id, occurrence_key) primary key, so collapse
-                // them here and keep the live instance over a cancelled tombstone.
-                let replace = deduped
-                    .get(&occurrence.occurrence_key)
-                    .is_none_or(|existing| existing.is_cancelled && !occurrence.is_cancelled);
-                if replace {
-                    deduped.insert(occurrence.occurrence_key.clone(), occurrence);
-                }
-                deduped
-            },
-        )
-        .into_values()
-        .collect();
+            .transpose()?;
+        if instance.recurring_event_id.is_some() && original_start.is_none() {
+            return Err(rootcause::report!(
+                "Google recurring instance {} has no original start",
+                instance.id
+            ));
+        }
+        if !time.overlaps(&target.range) {
+            continue;
+        }
+        let occurrence_key = original_start
+            .as_ref()
+            .map(|start| start.occurrence_key())
+            .unwrap_or_else(|| time.occurrence_key());
+        // Repeated live instances can result from pagination overlap. Keep
+        // the first representation of an original occurrence as before.
+        occurrences
+            .entry(occurrence_key.clone())
+            .or_insert(CalendarOccurrence {
+                event_id,
+                occurrence_key,
+                recurrence_id: original_start.map(|start| start.occurrence_key()),
+                time,
+                is_cancelled: false,
+            });
+    }
+    let occurrences = occurrences.into_values().collect();
 
     Ok(CalendarEventUpsert {
         event,
@@ -2124,34 +2174,39 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
         .end
         .as_ref()
         .ok_or_else(|| rootcause::report!("Google event {} has no end", event.id))?;
-    match (
+    let time = match (
         start.date_time.as_deref(),
         end.date_time.as_deref(),
         start.date.as_deref(),
         end.date.as_deref(),
     ) {
-        (Some(start_value), Some(end_value), _, _) => {
-            let starts_at = DateTime::parse_from_rfc3339(start_value)
+        (Some(start_value), Some(end_value), _, _) => EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339(start_value)
                 .map_err(report)?
-                .with_timezone(&Utc);
-            let ends_at = DateTime::parse_from_rfc3339(end_value)
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339(end_value)
                 .map_err(report)?
-                .with_timezone(&Utc);
-            Ok(EventTime::Timed {
-                starts_at,
-                ends_at,
-                time_zone: start.time_zone.clone(),
-            })
-        }
-        (_, _, Some(start_value), Some(end_value)) => Ok(EventTime::AllDay {
+                .with_timezone(&Utc),
+            time_zone: start.time_zone.clone(),
+        },
+        (_, _, Some(start_value), Some(end_value)) => EventTime::AllDay {
             start_date: NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?,
             end_date: NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?,
-        }),
-        _ => Err(rootcause::report!(
-            "Google event {} has mixed or missing time fields",
+        },
+        _ => {
+            return Err(rootcause::report!(
+                "Google event {} has mixed or missing time fields",
+                event.id
+            ));
+        }
+    };
+    if !time.is_valid() {
+        return Err(rootcause::report!(
+            "Google event {} has an invalid interval",
             event.id
-        )),
+        ));
     }
+    Ok(time)
 }
 
 fn google_start(value: &GoogleEventDateTime) -> Option<EventStart> {

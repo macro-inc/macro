@@ -4,7 +4,15 @@ import { err, ok } from 'neverthrow';
 import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
-import { ShareModal, ShareOptions, ShareTrigger } from './ShareButton';
+import {
+  ShareModal,
+  ShareOptions,
+  ShareTrigger,
+  shareLevelsFor,
+} from './ShareButton';
+
+const ME = 'macro|me@example.com';
+const SOMEONE_ELSE = 'macro|someone-else@example.com';
 
 const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
@@ -16,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   getInitiativePermissions: vi.fn(),
   updateInitiativePermissions: vi.fn(),
   getDocumentPermissions: vi.fn(),
+  getDatabasePermissions: vi.fn(),
+  updateDatabasePermissions: vi.fn(),
+  getPipelinePermissions: vi.fn(),
+  updatePipelineTeamShare: vi.fn(),
   getChatPermissions: vi.fn(),
   updateChatPermissions: vi.fn(),
   fetchCallSharePermission: vi.fn(),
@@ -31,6 +43,14 @@ const mocks = vi.hoisted(() => ({
   blockPermissionsRead: vi.fn(),
   blockEditPermissionEnabled: true,
   inBlock: true,
+}));
+vi.mock('@app/features/crm/sharing-adapter', () => ({
+  fetchPipelineSharePermissions: mocks.getPipelinePermissions,
+  updatePipelineTeamShare: mocks.updatePipelineTeamShare,
+}));
+vi.mock('@queries/storage/databases', () => ({
+  getDatabaseSharePermissions: mocks.getDatabasePermissions,
+  updateDatabaseSharePermissions: mocks.updateDatabasePermissions,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
@@ -128,7 +148,7 @@ vi.mock('@core/component/VerticalScrollIndicators', () => ({
   ScrollIndicators: () => null,
 }));
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'owner',
+  useUserId: () => () => ME,
   useReferralCode: () => () => undefined,
 }));
 vi.mock('@channel/use-channel-participants', () => ({
@@ -167,7 +187,7 @@ vi.mock('@core/signal/permissions', () => ({
   useGetPermissions: () => () => 'owner',
   useIsDocumentOwner: () => () => true,
 }));
-vi.mock('@core/user', () => ({ idToEmail: (id: string) => id }));
+vi.mock('@core/user', () => ({ getDisplayName: (id: string) => id }));
 vi.mock('@core/util/currentBlockDocumentName', () => ({
   useBlockDocumentName: () => () => '',
 }));
@@ -205,7 +225,7 @@ vi.mock('@queries/call/call', () => ({
       return {
         callId: 'call-1',
         channelId: mocks.callRecordChannelId,
-        createdBy: 'owner',
+        createdBy: ME,
         shareWithTeam: mocks.callRecordShared,
       };
     },
@@ -247,22 +267,26 @@ vi.mock('@ui', async () => {
     onChange?: (value: string) => void;
   }>();
   const Container = (props: { children?: JSX.Element }) => props.children;
+  const Button = (props: {
+    children?: JSX.Element;
+    disabled?: boolean;
+    tooltip?: string;
+    onClick?: () => void;
+  }) => (
+    <button
+      disabled={props.disabled}
+      onClick={props.onClick}
+      aria-label={props.tooltip}
+    >
+      {props.children}
+    </button>
+  );
   return {
-    Button: (props: {
-      children?: JSX.Element;
-      disabled?: boolean;
-      tooltip?: string;
-      onClick?: () => void;
-    }) => (
-      <button
-        disabled={props.disabled}
-        onClick={props.onClick}
-        aria-label={props.tooltip}
-      >
-        {props.children}
-      </button>
-    ),
+    Button,
+    CopyButton: Button,
     Panel: Object.assign(Container, { Header: Container, Body: Container }),
+    // The owner row draws an unknown owner's avatar.
+    Avatar: Object.assign(Container, { Fallback: Container }),
     Tooltip: Container,
     Dropdown: Object.assign(Container, {
       Trigger: Container,
@@ -329,13 +353,13 @@ beforeEach(() => {
   mocks.getAgentPermissions.mockResolvedValue(
     ok({
       id: 'session-permissions',
-      owner: 'owner',
+      owner: ME,
       channelSharePermissions: [],
     })
   );
   mocks.updateAgentPermissions.mockResolvedValue(ok({}));
   mocks.getInitiativePermissions.mockResolvedValue(
-    ok({ id: 'project-permissions', owner: 'owner' })
+    ok({ id: 'project-permissions', owner: ME })
   );
   mocks.updateInitiativePermissions.mockResolvedValue(ok({}));
   mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
@@ -359,7 +383,7 @@ function mountShare(isOwner: boolean) {
     <ShareModal
       id="persisted-session"
       name="Fix the menu"
-      owner={isOwner ? 'owner' : 'someone-else'}
+      owner={isOwner ? ME : SOMEONE_ELSE}
       itemType="agent_session"
       blockAlias="agent"
       userPermissions={Permissions.OWNER}
@@ -383,7 +407,7 @@ describe('agent session sharing', () => {
       mocks.getAgentPermissions.mockResolvedValue(
         ok({
           id: 'session-permissions',
-          owner: 'owner',
+          owner: ME,
           linkShare: 'PUBLIC',
           linkShareAccessLevel: 'view',
           channelSharePermissions: [
@@ -561,7 +585,7 @@ describe('agent session sharing', () => {
       <ShareModal
         id="persisted-session"
         name="Fix the menu"
-        owner="someone-else"
+        owner={SOMEONE_ELSE}
         itemType="agent_session"
         blockAlias="agent"
         userPermissions={Permissions.CAN_VIEW}
@@ -636,6 +660,50 @@ describe('agent session sharing', () => {
       expect(mocks.updateAgentPermissions).not.toHaveBeenCalled();
     }
   );
+  it.each([false, true])(
+    'titles the roster for the owner when a participant sees no other grants (mobile: %s)',
+    (mobile) => {
+      mocks.mobile = mobile;
+      mountShare(false);
+      if (mobile) {
+        expect(screen.getByRole('tab', { name: 'Owner' })).toBeTruthy();
+        expect(screen.queryByRole('tab', { name: 'People' })).toBeNull();
+      } else {
+        expect(screen.getAllByText('Owner').length).toBeGreaterThan(0);
+        expect(
+          screen.queryByText('People with access to this agent session')
+        ).toBeNull();
+      }
+    }
+  );
+
+  it.each([false, true])(
+    'keeps the audience title when a participant sees other grants (mobile: %s)',
+    async (mobile) => {
+      mocks.mobile = mobile;
+      mocks.getAgentPermissions.mockResolvedValue(
+        ok({
+          id: 'session-permissions',
+          owner: SOMEONE_ELSE,
+          channelSharePermissions: [
+            { channel_id: 'shared-channel', access_level: 'view' },
+          ],
+        })
+      );
+      mountShare(false);
+      if (mobile)
+        await vi.waitFor(() =>
+          expect(screen.getByRole('tab', { name: 'People' })).toBeTruthy()
+        );
+      else
+        await vi.waitFor(() =>
+          expect(
+            screen.getByText('People with access to this agent session')
+          ).toBeTruthy()
+        );
+    }
+  );
+
   it('cancels an owner draft without sharing', () => {
     const { onOpenChange } = mountShare(true);
     selectChannel();
@@ -710,7 +778,7 @@ function mountChatShare() {
     isErr: () => false,
     value: {
       id: 'perm-1',
-      owner: 'owner',
+      owner: ME,
       linkShare: null,
       linkShareAccessLevel: null,
       teamShareAccessLevel: 'view',
@@ -721,7 +789,7 @@ function mountChatShare() {
     <ShareModal
       id="chat-1"
       name="Planning chat"
-      owner="owner"
+      owner={ME}
       itemType="chat"
       blockAlias="chat"
       userPermissions={Permissions.OWNER}
@@ -736,7 +804,7 @@ function mountCallShare() {
     isErr: () => false,
     value: {
       id: 'perm-call',
-      owner: 'owner',
+      owner: ME,
       linkShare: null,
       linkShareAccessLevel: null,
       teamShareAccessLevel: 'view',
@@ -747,7 +815,7 @@ function mountCallShare() {
     <ShareModal
       id="call-1"
       name="Weekly sync"
-      owner="owner"
+      owner={ME}
       itemType="call"
       blockAlias="call"
       userPermissions={Permissions.OWNER}
@@ -926,7 +994,7 @@ function mountProjectShare() {
     isErr: () => false,
     value: {
       id: 'perm-project',
-      owner: 'owner',
+      owner: ME,
       linkShare: null,
       linkShareAccessLevel: null,
       teamShareAccessLevel: 'view',
@@ -937,7 +1005,7 @@ function mountProjectShare() {
     <ShareModal
       id="project-1"
       name="Launch folder"
-      owner="owner"
+      owner={ME}
       itemType="project"
       blockAlias="project"
       userPermissions={Permissions.OWNER}
@@ -1039,7 +1107,7 @@ describe('native project sharing', () => {
     } = {}
   ) {
     mocks.inBlock = false;
-    const owner = options.owner ?? 'owner';
+    const owner = options.owner ?? ME;
     render(() => (
       <ShareModal
         id="initiative-1"
@@ -1048,7 +1116,7 @@ describe('native project sharing', () => {
         itemType="initiative"
         blockAlias="initiative"
         userPermissions={
-          owner === 'owner' ? Permissions.OWNER : Permissions.CAN_VIEW
+          owner === ME ? Permissions.OWNER : Permissions.CAN_VIEW
         }
         people={options.people}
         hasDirectShares={options.hasDirectShares}
@@ -1110,7 +1178,7 @@ describe('native project sharing', () => {
   });
 
   it('lets only the owner forward a project', () => {
-    mountProject({ owner: 'someone-else' });
+    mountProject({ owner: SOMEONE_ELSE });
     expect(
       screen.getByText(
         'Only the owner can share access to this project. You can copy a link for people who already have access.'
@@ -1124,7 +1192,7 @@ describe('native project sharing', () => {
     mocks.getInitiativePermissions.mockResolvedValue(
       ok({
         id: 'project-permissions',
-        owner: 'owner',
+        owner: ME,
         teamShareAccessLevel: 'view',
         channelSharePermissions: [
           { channel_id: 'channel-1', access_level: 'edit' },
@@ -1197,5 +1265,219 @@ describe('native project sharing', () => {
     expect(mocks.copyLink).toHaveBeenCalledWith(
       'https://macro.com/app/component/initiative-view~initiative-1~overview'
     );
+  });
+});
+
+describe('pipeline sharing', () => {
+  function mountPipeline(owner = ME) {
+    mocks.hasTeam = true;
+    mocks.getPipelinePermissions.mockResolvedValue(
+      ok({ id: 'pipeline-1', owner, teamShareAccessLevel: null })
+    );
+    render(() => (
+      <ShareModal
+        id="pipeline-1"
+        name="Sales"
+        owner={owner}
+        itemType="crm_pipeline"
+        blockAlias="database"
+        userPermissions={
+          owner === ME ? Permissions.OWNER : Permissions.CAN_VIEW
+        }
+        copyLink={mocks.copyLink}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+  }
+
+  it.each([false, true])(
+    'changes the pipeline team grant using the shared dialog (mobile: %s)',
+    async (mobile) => {
+      mocks.mobile = mobile;
+      mocks.updatePipelineTeamShare.mockImplementation(async (_id, shared) => {
+        mocks.getPipelinePermissions.mockResolvedValue(
+          ok({
+            id: 'pipeline-1',
+            owner: ME,
+            teamShareAccessLevel: shared ? 'edit' : null,
+          })
+        );
+        return ok({});
+      });
+      mountPipeline();
+      if (mobile) fireEvent.click(screen.getByRole('tab', { name: 'Team' }));
+      const control = await screen.findByRole('group', {
+        name: 'Team access level',
+      });
+      expect(control.getAttribute('data-value')).toBe('NONE');
+      expect(
+        screen.queryByRole('button', { name: 'Set Team access level view' })
+      ).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Select channel' })
+      ).toBeNull();
+      expect(screen.queryByText('Anyone with the link')).toBeNull();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Set Team access level edit' })
+      );
+      await vi.waitFor(() =>
+        expect(control.getAttribute('data-value')).toBe('edit')
+      );
+      expect(mocks.updatePipelineTeamShare).toHaveBeenCalledWith(
+        'pipeline-1',
+        true
+      );
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Set Team access level NONE' })
+      );
+      await vi.waitFor(() =>
+        expect(control.getAttribute('data-value')).toBe('NONE')
+      );
+      expect(mocks.updatePipelineTeamShare).toHaveBeenCalledWith(
+        'pipeline-1',
+        false
+      );
+      expect(mocks.blockPermissionsRead).not.toHaveBeenCalled();
+      expect(mocks.getDatabasePermissions).not.toHaveBeenCalled();
+      expect(mocks.updateDatabasePermissions).not.toHaveBeenCalled();
+      expect(mocks.editDocument).not.toHaveBeenCalled();
+    }
+  );
+
+  it('keeps the current grant when a pipeline sharing request fails', async () => {
+    mocks.updatePipelineTeamShare.mockResolvedValue(
+      err([{ code: 'FORBIDDEN', message: 'Not the owner' }])
+    );
+    mountPipeline();
+    const control = await screen.findByRole('group', {
+      name: 'Team access level',
+    });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level edit' })
+    );
+    const { toast } = await import('@core/component/Toast/Toast');
+    await vi.waitFor(() =>
+      expect(toast.alert).toHaveBeenCalledWith('Failed to change team access', {
+        subtext: 'Please try again',
+      })
+    );
+    expect(control.getAttribute('data-value')).toBe('NONE');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('lets a non-owner copy the pipeline link without changing access', () => {
+    mountPipeline(SOMEONE_ELSE);
+    expect(
+      screen.queryByRole('group', { name: 'Team access level' })
+    ).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Select channel' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Link' }));
+    expect(mocks.copyLink).toHaveBeenCalledOnce();
+    expect(mocks.updatePipelineTeamShare).not.toHaveBeenCalled();
+  });
+});
+
+it('database sharing reads its block permissions and disables public links', () => {
+  mocks.blockPermissionsRead.mockReturnValue({
+    isErr: () => false,
+    value: { id: 'database-id', owner: 'owner', channelSharePermissions: [] },
+  });
+  render(() => (
+    <ShareModal
+      id="database-id"
+      itemType="database"
+      blockAlias="database"
+      owner="owner"
+      name="Ideas"
+      userPermissions={Permissions.OWNER}
+      open
+      onOpenChange={() => {}}
+    />
+  ));
+  expect(mocks.blockPermissionsRead).toHaveBeenCalled();
+  expect(mocks.getDatabasePermissions).not.toHaveBeenCalled();
+  expect(screen.queryByText('Anyone with the link')).toBeNull();
+});
+
+describe('form share roles', () => {
+  it.each([false, true])(
+    'shows form link sharing in the native link area (mobile: %s)',
+    async (mobile) => {
+      mocks.mobile = mobile;
+      mocks.blockPermissionsRead.mockReturnValue({
+        isErr: () => false,
+        value: { id: 'form-id', owner: ME, channelSharePermissions: [] },
+      });
+      render(() => (
+        <ShareModal
+          id="form-id"
+          itemType="form"
+          blockAlias="form"
+          owner={ME}
+          name="RSVP"
+          userPermissions={Permissions.OWNER}
+          open
+          onOpenChange={() => {}}
+          linkSharing={() => <div>Form link controls</div>}
+        />
+      ));
+      if (mobile) {
+        expect(screen.queryByText('Form link controls')).toBeNull();
+        fireEvent.click(screen.getByRole('tab', { name: 'Link' }));
+      }
+      expect(await screen.findByText('Form link controls')).toBeTruthy();
+    }
+  );
+
+  it('shares a form opened outside its host like any entity', async () => {
+    mocks.blockPermissionsRead.mockReturnValue({
+      isErr: () => false,
+      value: { id: 'form-id', owner: ME, channelSharePermissions: [] },
+    });
+    render(() => (
+      <ShareModal
+        id="form-id"
+        itemType="form"
+        blockAlias="form"
+        owner={ME}
+        name="RSVP"
+        userPermissions={Permissions.OWNER}
+        open
+        onOpenChange={() => {}}
+      />
+    ));
+    expect(await screen.findByText('RSVP')).toBeTruthy();
+    expect(screen.queryByText('Loading form sharing…')).toBeNull();
+    expect(screen.queryByText('Anyone with the link')).toBeNull();
+  });
+
+  it('copies a form’s entity link unless its host supplies another', () => {
+    mocks.inBlock = false;
+    render(() => (
+      <ShareTrigger onClick={vi.fn()} id="form-id" blockType="form" />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
+    expect(mocks.copyLink).toHaveBeenCalledWith(
+      'https://macro.com/app/form/form-id'
+    );
+  });
+
+  it('offers View and Edit on a form, which has no comments, and every level elsewhere', () => {
+    expect(shareLevelsFor('form')).toEqual(['view', 'edit']);
+    expect(shareLevelsFor('document')).toBeUndefined();
+    render(() => (
+      <ShareOptions
+        editPermissionEnabled
+        allowedAccessLevels={shareLevelsFor('form')}
+        setPermissions={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole('button', { name: 'Set option comment' })
+    ).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Set option edit' })
+    ).toBeTruthy();
   });
 });

@@ -1,9 +1,10 @@
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { isPlatform, isTauri } from '@core/util/platform';
+import { createLazyMemo } from '@solid-primitives/memo';
 import { invoke } from '@tauri-apps/api/core';
-import { themeReactive } from '@theme/signals/themeReactive';
+import { resolvedThemeColors } from '@theme/signals/themeSignals';
 import Color from 'colorjs.io';
-import { type Accessor, createMemo } from 'solid-js';
+import type { Accessor } from 'solid-js';
 
 export type RgbaColor = {
   red: number;
@@ -26,8 +27,12 @@ export type CallKitDrawerTheme = {
 };
 
 export function createCallKitDrawerTheme(): Accessor<CallKitDrawerTheme> {
-  return createMemo(currentCallKitTheme, undefined, {
-    equals: (a, b) => callKitDrawerThemeKey(a) === callKitDrawerThemeKey(b),
+  return createLazyMemo<CallKitDrawerTheme>((previous) => {
+    const next = currentCallKitTheme();
+    return previous &&
+      callKitDrawerThemeKey(previous) === callKitDrawerThemeKey(next)
+      ? previous
+      : next;
   });
 }
 
@@ -52,13 +57,14 @@ export async function setNativeCallKitDrawerTheme(
 }
 
 function currentCallKitTheme(): CallKitDrawerTheme {
-  const b0 = currentThemeToken('b0');
-  const c0 = currentThemeToken('c0');
-  const b1 = currentThemeToken('b1');
-  const b2 = currentThemeToken('b2');
-  const b3 = currentThemeToken('b3');
-  const b4 = currentThemeToken('b4');
-  const c1 = currentThemeToken('c1');
+  const colors = resolvedThemeColors();
+  const b0 = colors['surface-0'];
+  const c0 = colors['content-0'];
+  const b1 = colors['surface-1'];
+  const b2 = colors['surface-2'];
+  const b3 = colors['edge-muted'];
+  const b4 = colors['edge'];
+  const c1 = colors['content-1'];
   const message = {
     l: (b1.l + b2.l) / 2,
     c: (b1.c + b2.c) / 2,
@@ -125,16 +131,6 @@ function currentCallKitTheme(): CallKitDrawerTheme {
       blue: 0.4,
       alpha: 1,
     }),
-  };
-}
-
-function currentThemeToken(
-  token: 'b0' | 'b1' | 'b2' | 'b3' | 'b4' | 'c0' | 'c1'
-) {
-  return {
-    l: themeReactive[token].l[0](),
-    c: themeReactive[token].c[0](),
-    h: themeReactive[token].h[0](),
   };
 }
 

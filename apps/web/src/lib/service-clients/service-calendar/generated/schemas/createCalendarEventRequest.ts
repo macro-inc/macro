@@ -9,6 +9,7 @@ import type { CreateCalendarEventRequestCalendarId } from './createCalendarEvent
 import type { CreateCalendarEventRequestConference } from './createCalendarEventRequestConference';
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
+import type { CreateCalendarEventRequestIdempotencyKey } from './createCalendarEventRequestIdempotencyKey';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
 import type { CreateCalendarEventRequestOutOfOffice } from './createCalendarEventRequestOutOfOffice';
 import type { CreateCalendarEventRequestReminders } from './createCalendarEventRequestReminders';
@@ -31,6 +32,8 @@ inbox default. */
   /** Connected inbox whose primary calendar receives the event; defaults
 to the requester's primary inbox. */
   emailLinkId?: CreateCalendarEventRequestEmailLinkId;
+  /** Stable retry identity, scoped to the authenticated organizer. */
+  idempotencyKey?: CreateCalendarEventRequestIdempotencyKey;
   /** Optional location label. */
   location?: CreateCalendarEventRequestLocation;
   outOfOffice?: CreateCalendarEventRequestOutOfOffice;

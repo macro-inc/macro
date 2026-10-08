@@ -128,21 +128,21 @@ export function signalFilter(entity: EntityData): boolean {
     case 'crm_contact':
       // CRM contacts only show in CRM views, not Inbox.
       return false;
-    case 'automation':
-      // Automations only show in the Agents > Scheduled tab, not Inbox.
+    case 'routine':
+      // Routines only show in the Agents > Scheduled tab, not Inbox.
       return false;
     case 'foreign':
       // Foreign entities (e.g. GitHub PRs) are gated by the inbox query on the
       // user's not-done notifications, so they're signal whenever returned.
       return true;
-    case 'reminder':
-      // A reminder that has fired is gated into the Inbox by its notification,
-      // same as the other notification-driven types.
-      return true;
     case 'calendar_event':
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.
       return true;
+    case 'database':
+    case 'form':
+      // Databases and forms are not Soup entities and never reach the Inbox.
+      return false;
   }
 }
 

@@ -4,11 +4,13 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
-    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchBotRequest, UpdateAgentRequest,
+    CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
+    UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
 use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
@@ -233,6 +235,15 @@ pub trait BotService: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
+    /// Change part of a manageable agent's instructions or settings, keeping
+    /// everything the patch leaves unnamed - owner and profile included.
+    fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
+
     /// List agents the caller can manage or start a managed session as.
     fn list_agents(
         &self,
@@ -374,6 +385,29 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
+/// Whether a Pipedream app slug is one an agent may pin.
+///
+/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
+/// the directory could not be asked, and the slug must not be stored.
+pub trait McpAppCatalog: Send + Sync + 'static {
+    /// `true` when `slug` is a connectable Pipedream app.
+    fn is_connectable_app(&self, slug: &str)
+    -> impl Future<Output = Result<bool, BotError>> + Send;
+}
+
+/// Every bot a team has owned, for removing the team.
+///
+/// `bots.team_id` is the only link from a team bot to its team, and it
+/// cascades when the team row is deleted, so ask before deleting the team.
+pub trait TeamBotRoster: Send + Sync + 'static {
+    /// The bots of `team_id` in id order, soft-deleted bots included. An
+    /// unknown team has none.
+    fn team_bot_ids(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
+}
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -386,6 +420,9 @@ pub enum BotError {
     /// Unauthorized.
     #[error("unauthorized")]
     Unauthorized,
+    /// The MCP app directory could not answer, so a slug was not stored.
+    #[error("{0}")]
+    Unavailable(String),
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),

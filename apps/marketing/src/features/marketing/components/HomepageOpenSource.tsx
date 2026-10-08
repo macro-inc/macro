@@ -1,32 +1,36 @@
-import { type JSX, onCleanup, onMount, Show } from 'solid-js';
-import {
-  ensureGithubStars,
-  githubStars,
-} from '../../../app/utils/utilGithubStars';
-import IconCasa from '../../../assets/designs/design-casa.svg';
-import IconIso from '../../../assets/designs/design-iso.svg';
-import IconSoc2 from '../../../assets/designs/design-soc2.svg';
-import IconGithub from '../../../assets/icons/icon-github.svg';
-import LogoA16z from '../../../assets/logos/a16z.svg';
-import { animateOpenSource } from './animateOpenSource';
+import { createMediaQuery } from '@solid-primitives/media';
+import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import { animateDemoEntrance } from './animateDemoEntrance';
+import { HomepageDemoCarousel } from './HomepageDemoCarousel';
+import { HomepageGithub } from './HomepageGithub';
+import { HomepageMobileOpenSource } from './HomepageMobileOpenSource';
 import './homepage-open-source.css';
 
-/** Open-source proof, connected to the product through native scroll position. */
-export function HomepageOpenSource(props: { children: JSX.Element }) {
+/** Lead with the live sample workspace; keep open-source proof underneath. */
+function DesktopHomepageOpenSource(props: {
+  children: JSX.Element;
+  showSidebarBreakdown: boolean;
+}) {
+  const [loaded, setLoaded] = createSignal(false);
   let section!: HTMLElement;
   let connection!: HTMLDivElement;
+  let frame!: HTMLIFrameElement;
   let line!: SVGPathElement;
 
   onMount(() => {
-    ensureGithubStars();
-    let scroller: HTMLElement = connection.parentElement!;
+    let scroller: HTMLElement = section.parentElement!;
     while (
       scroller.parentElement &&
       !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
     ) {
       scroller = scroller.parentElement;
     }
-    onCleanup(animateOpenSource(section, scroller));
+    onCleanup(animateDemoEntrance(section, scroller));
+    // The cream homepage preview carries its palette into the sample workspace.
+    if (document.documentElement.dataset.palette === 'cream') {
+      frame.src = '/demo?embedded=true&theme=cream';
+    }
+    if (!props.showSidebarBreakdown) return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     const card = connection.querySelector<HTMLElement>(
       '.homepage-sidebar-window'
@@ -90,68 +94,67 @@ export function HomepageOpenSource(props: { children: JSX.Element }) {
     <>
       <section
         ref={section}
-        class="homepage-open-source workspace-demo"
-        aria-labelledby="open-source-title"
+        class="homepage-embedded-demo workspace-demo"
+        aria-label="Explore Macro interactively"
+        id="interactive-demo"
       >
-        <a
-          class="homepage-github-link"
-          href="https://github.com/macro-inc/macro"
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Explore Macro on GitHub"
-        >
-          <div class="homepage-github-orbit">
-            <div class="homepage-github-mark glass">
-              <IconGithub aria-hidden="true" />
+        <div class="homepage-embedded-stage">
+          <div class="homepage-embedded-wallpaper">
+            <div class="homepage-embedded-window">
+              <div class="homepage-embedded-content">
+                <Show when={!loaded()}>
+                  <div class="homepage-embedded-loading" role="status">
+                    Opening your workspace…
+                  </div>
+                </Show>
+                <iframe
+                  ref={frame}
+                  src="/demo?embedded=true"
+                  loading="lazy"
+                  title="Embedded Macro sample workspace"
+                  onLoad={() => setLoaded(true)}
+                />
+              </div>
             </div>
-          </div>
-          <span class="homepage-github-stars">
-            <Show
-              when={githubStars() !== null}
-              fallback={<span>Explore the source ↗</span>}
-            >
-              <span class="homepage-github-star" aria-hidden="true">
-                ★
-              </span>
-              <span>{githubStars()?.toLocaleString('en-US')} stars</span>
-            </Show>
-          </span>
-        </a>
-        <h2 id="open-source-title">
-          Fully open source.
-          <br />
-          Yours to build on.
-        </h2>
-        <p class="homepage-open-source-subtext">
-          #1 on GitHub Trending in August.
-          <br />
-          Read the code. Make it your own.
-        </p>
-        <div class="homepage-open-source-badges">
-          <div class="homepage-open-source-backing">
-            <LogoA16z aria-label="Andreessen Horowitz" viewBox="0 0 169 40" />
-            <span>Backed by a16z · $30M+ raised</span>
-          </div>
-          <div class="homepage-open-source-security">
-            <div aria-label="Security certifications">
-              <IconIso aria-label="ISO 27001" />
-              <IconSoc2 aria-label="AICPA SOC 2" />
-              <IconCasa aria-label="CASA Tier 2" />
-            </div>
-            <span>ISO 27001 · SOC 2 · CASA Tier 2</span>
           </div>
         </div>
+        <HomepageDemoCarousel frame={() => frame} />
+        <HomepageGithub />
       </section>
-      <div ref={connection} class="homepage-sidebar-connection">
-        <svg
-          class="homepage-sidebar-connection-line"
-          aria-hidden="true"
-          fill="none"
-        >
-          <path ref={line} pathLength="1" />
-        </svg>
-        {props.children}
-      </div>
+      <Show when={props.showSidebarBreakdown}>
+        <div ref={connection} class="homepage-sidebar-connection">
+          <svg
+            class="homepage-sidebar-connection-line"
+            aria-hidden="true"
+            fill="none"
+          >
+            <path ref={line} pathLength="1" />
+          </svg>
+          {props.children}
+        </div>
+      </Show>
     </>
+  );
+}
+
+/** Desktop keeps the live workspace; mobile retains the original diagram story. */
+export function HomepageOpenSource(props: {
+  children: JSX.Element;
+  showSidebarBreakdown: boolean;
+}) {
+  const desktop = createMediaQuery('(min-width: 800px)', true);
+  return (
+    <Show
+      when={desktop()}
+      fallback={
+        <HomepageMobileOpenSource>{props.children}</HomepageMobileOpenSource>
+      }
+    >
+      <DesktopHomepageOpenSource
+        showSidebarBreakdown={props.showSidebarBreakdown}
+      >
+        {props.children}
+      </DesktopHomepageOpenSource>
+    </Show>
   );
 }

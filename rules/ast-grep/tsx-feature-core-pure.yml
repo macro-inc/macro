@@ -12,12 +12,21 @@ note: |-
   reactive view models in `primitives/`. The `dateBucket` import from
   `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
   is the documented exception for feed labels that must match soup views.
-  The shared @core/util/base64 codec is also pure and may be reused by email.
+  The shared @core/util/base64 codec, cron helpers, and dateSearch/parseTime parser are pure utilities and may be reused.
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
+  - apps/web/src/features/calendar-team/core/**
+  - apps/web/src/features/tasks-view/core/task-board*
+  - apps/web/src/features/routines/core/**
+  - apps/web/src/features/scheduling/core/**
+  - apps/web/src/features/usage/core/**
+  - apps/web/src/features/crm/core/**
+  - apps/web/src/features/slack-import/core/**
   - apps/web/src/features/channel/core/channel-invite*
   - apps/web/src/features/projects/core/**
+  - apps/web/src/features/channel/Call/chat/core/**
   - apps/web/src/features/block-agent/core/**
+  - apps/web/src/features/block-ai/core/**
   - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
@@ -27,12 +36,16 @@ files:
   - apps/web/src/features/email-message/core/**
   - apps/web/src/features/email-thread/core/**
   - apps/web/src/features/email-compose/core/**
-  - apps/web/src/features/agent-changes/core/**
+  - apps/web/src/features/changes/core/**
+  - apps/web/src/features/block-write/core/**
+  - apps/web/src/features/onboarding/core/**
+  - apps/web/src/features/auth/core/**
+  - apps/web/src/features/block-form/core/**
 rule:
   kind: string
   regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views|ui|component|context)(/|['"]))
   not:
-    regex: ^['"]@core/util/base64['"]
+    regex: ^['"]@core/util/(base64|cron|dateSearch/parseTime)['"]
   any:
     - inside:
         kind: import_statement

@@ -269,83 +269,6 @@ describe('makeGraphqlSoupInput', () => {
     });
   });
 
-  it('maps the reminder opt-in so reminders are not silently dropped', () => {
-    // `includeReminders` is what opts a query into reminders at all. Dropping
-    // it leaves the server on its default (exclude), which reads as an empty
-    // Reminders view rather than an error.
-    const input = makeInput({
-      include: { includeReminders: true },
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: { reminderFilter: { literal: { include: true } } },
-      },
-    });
-  });
-
-  it('maps the completed and fired reminder literals', () => {
-    const input = makeInput({
-      include: {
-        includeReminders: true,
-        reminderCompleted: false,
-        reminderFired: true,
-      },
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: {
-          // Literal order follows FIELD_CONFIG, which puts the opt-in last.
-          reminderFilter: {
-            and: {
-              left: { literal: { completed: false } },
-              right: {
-                and: {
-                  left: { literal: { fired: true } },
-                  right: { literal: { include: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('maps reminder id and entity literals', () => {
-    const input = makeGraphqlSoupInput({
-      params: { limit: 100, sort_method: 'updated_at' },
-      body: {
-        remf: {
-          '&': [{ l: { id: 'reminder-1' } }, { l: { ent: 'document:doc-1' } }],
-        },
-      } as never,
-    });
-
-    expect(input).toMatchObject({
-      initial: {
-        filters: {
-          reminderFilter: {
-            and: {
-              left: { literal: { id: 'reminder-1' } },
-              right: { literal: { entity: 'document:doc-1' } },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('throws for unknown reminder literals so callers can fall back', () => {
-    expect(() =>
-      makeGraphqlSoupInput({
-        params: { limit: 100, sort_method: 'updated_at' },
-        body: { remf: { l: { enabled: true } } } as never,
-      })
-    ).toThrow('Unsupported GraphQL Soup AST');
-  });
-
   it('maps calendar event id filters', () => {
     const input = makeGraphqlSoupInput({
       params: { limit: 100, sort_method: 'updated_at' },
@@ -356,6 +279,51 @@ describe('makeGraphqlSoupInput', () => {
       initial: {
         filters: {
           calendarEventFilter: { literal: { id: 'event-1' } },
+        },
+      },
+    });
+  });
+
+  it('translates CRM association and email attachment literals', () => {
+    const companyId = '0198a1b2-c3d4-7e5f-8061-728394a5b700';
+    expect(
+      makeGraphqlSoupInput({
+        params: { limit: 100, sort_method: 'updated_at' },
+        body: {
+          df: {
+            '|': [
+              {
+                l: {
+                  prop: {
+                    pd: '00000001-0000-0000-0000-00000000000c',
+                    v: { er: companyId },
+                  },
+                },
+              },
+              { l: { eap: { Domain: 'acme.com' } } },
+            ],
+          },
+        } as never,
+      })
+    ).toMatchObject({
+      initial: {
+        filters: {
+          documentFilter: {
+            or: {
+              left: {
+                literal: {
+                  property: {
+                    propertyDefinitionId:
+                      '00000001-0000-0000-0000-00000000000c',
+                    value: { entityRef: companyId },
+                  },
+                },
+              },
+              right: {
+                literal: { emailAttachmentParticipant: { domain: 'acme.com' } },
+              },
+            },
+          },
         },
       },
     });
@@ -443,15 +411,18 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
-  it('rejects email views for grouped queries instead of dropping them', () => {
-    expect(() =>
-      makeGraphqlGroupedSoupInput({
-        params: { limit: 100, sort_method: 'updated_at' },
-        body: { emailView: 'inbox' } as never,
-        groupBy: { type: 'entity_type' },
-      })
-    ).toThrow('Unsupported GraphQL Soup AST');
-  });
+  it.each(['inbox', 'drafts', 'sent', 'all'] as const)(
+    'rejects grouped %s mail, including the date-grouped cached-mail slice',
+    (emailView) => {
+      expect(() =>
+        makeGraphqlGroupedSoupInput({
+          params: { limit: 100, sort_method: 'updated_at' },
+          body: { emailView },
+          groupBy: { type: 'date' },
+        })
+      ).toThrow('email views are not supported by grouped GraphQL Soup yet');
+    }
+  );
 
   it('rejects unknown email views instead of using the GraphQL default', () => {
     expect(() =>

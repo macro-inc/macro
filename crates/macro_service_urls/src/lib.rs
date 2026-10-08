@@ -616,8 +616,8 @@ service_url! {
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {
             local: "http://localhost:8096",
-            dev: "https://lexical-service-dev.macroverse.workers.dev",
-            prod: "https://lexical-service-prod.macroverse.workers.dev",
+            dev: "https://dev-gateway.macro.com/lexical",
+            prod: "https://gateway.macro.com/lexical",
         },
         /// Sync service API URL.
         pub SyncServiceUrl {

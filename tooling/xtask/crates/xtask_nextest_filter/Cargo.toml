@@ -14,5 +14,6 @@ anyhow = { workspace = true }
 determinator = { workspace = true }
 guppy = { workspace = true }
 tempfile = { workspace = true }
+toml = { workspace = true }
 xtask_graph = { path = "../xtask_graph" }
 xtask_paths = { path = "../xtask_paths" }

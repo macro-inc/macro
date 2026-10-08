@@ -6,6 +6,8 @@ import { openNativeUpdateLink } from './native-update-link';
 export function NativeAppUpdateRequiredDialog(props: {
   open: boolean;
   onClose: () => void;
+  description?: string;
+  onRestart?: () => void;
 }) {
   const platform = getNativeMobilePlatform();
   const [linkFailed, setLinkFailed] = createSignal(false);
@@ -36,7 +38,7 @@ export function NativeAppUpdateRequiredDialog(props: {
               {title}
             </Dialog.Title>
             <Dialog.Description class="text-sm leading-5 text-ink-extra-muted">
-              {description}
+              {props.description ?? description}
             </Dialog.Description>
           </div>
           <p class="text-sm text-ink-extra-muted">
@@ -56,6 +58,15 @@ export function NativeAppUpdateRequiredDialog(props: {
                 onClick={() => void openStore()}
               >
                 Update app
+              </Button>
+            </Show>
+            <Show when={props.onRestart}>
+              <Button
+                variant="accent"
+                size="sm"
+                onClick={() => props.onRestart?.()}
+              >
+                Restart to update
               </Button>
             </Show>
             <Button onClick={props.onClose} variant="strong" size="sm">

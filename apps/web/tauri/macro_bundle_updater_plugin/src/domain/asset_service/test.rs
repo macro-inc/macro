@@ -160,41 +160,45 @@ async fn ota_to_embedded_transition_checks_the_previous_ota_first() {
 }
 
 #[tokio::test]
-async fn rollback_entrypoint_never_comes_from_the_previous_ota() {
-    let routes = BundleRoutes::new(1);
+async fn rollback_entrypoints_always_use_the_embedded_document() {
+    let routes = BundleRoutes::new(100);
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
         .await;
-    routes.transition_to(BundleSource::embedded(1)).await;
+    routes.transition_to(BundleSource::embedded(100)).await;
     let assets = FakeAssets::default();
     assets
-        .insert("/ota/2", "index.html", "stale entrypoint")
+        .insert("/ota/101", "index.html", "revoked document")
         .await;
     let resolver = BundleAssetResolver::new(routes, assets);
-    for entrypoint in ["", "index.html"] {
+
+    for request in ["", "index.html", "welcome"] {
         assert_eq!(
-            resolver.resolve(&path(entrypoint)).await.unwrap(),
+            resolver.resolve(&path(request)).await.unwrap(),
             BundleAssetResolution::Embedded
         );
     }
 }
 
 #[tokio::test]
-async fn missing_active_entrypoint_never_uses_the_previous_generation() {
-    let routes = BundleRoutes::new(1);
+async fn a_missing_ota_entrypoint_never_uses_the_previous_document() {
+    let routes = BundleRoutes::new(100);
     routes
-        .restore(BundleSource::ota(2, PathBuf::from("/ota/2")))
+        .restore(BundleSource::ota(101, PathBuf::from("/ota/101")))
         .await;
     routes
-        .transition_to(BundleSource::ota(3, PathBuf::from("/ota/3")))
+        .transition_to(BundleSource::ota(102, PathBuf::from("/ota/102")))
         .await;
     let assets = FakeAssets::default();
     assets
-        .insert("/ota/2", "index.html", "stale entrypoint")
+        .insert("/ota/101", "index.html", "stale document")
         .await;
     let resolver = BundleAssetResolver::new(routes, assets);
-    assert_eq!(
-        resolver.resolve(&path("index.html")).await.unwrap(),
-        BundleAssetResolution::NotFound
-    );
+
+    for request in ["", "index.html", "welcome"] {
+        assert_eq!(
+            resolver.resolve(&path(request)).await.unwrap(),
+            BundleAssetResolution::NotFound
+        );
+    }
 }

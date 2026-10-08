@@ -12,8 +12,63 @@ fn local_env() -> BTreeMap<String, String> {
     env
 }
 
+#[test]
+fn local_macro_api_tokens_can_be_signed_and_verified() {
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let env = local_env();
+    let claims = serde_json::json!({
+        "iss": env["MACRO_API_TOKEN_ISSUER"],
+        "exp": SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + 60,
+        "macro_user_id": "macro|local@example.test",
+    });
+    let mut header = Header::new(Algorithm::RS256);
+    header.kid = Some("macro".into());
+    let token = jsonwebtoken::encode(
+        &header,
+        &claims,
+        &EncodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PRIVATE_SECRET_KEY"].as_bytes()).unwrap(),
+    )
+    .unwrap();
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.set_issuer(&[&env["MACRO_API_TOKEN_ISSUER"]]);
+    let decoded = jsonwebtoken::decode::<serde_json::Value>(
+        &token,
+        &DecodingKey::from_rsa_pem(env["MACRO_API_TOKEN_PUBLIC_KEY"].as_bytes()).unwrap(),
+        &validation,
+    )
+    .unwrap();
+    assert_eq!(decoded.claims, claims);
+}
+
 /// Every key a local service relies on must be present — this is the test that
 /// replaces "someone remembers to update defaults.env".
+#[test]
+fn slack_import_worker_uses_local_resources_and_starts_paused() {
+    let env = local_env();
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_QUEUE"],
+        resources::queue_url(macro_queues::SlackImportQueue::LOCAL)
+    );
+    assert_eq!(
+        env["OVERRIDE_SLACK_IMPORT_DLQ"],
+        resources::queue_url(macro_queues::SlackImportDlq::LOCAL)
+    );
+    assert_eq!(env["UPLOAD_STAGING_BUCKET"], "bulk-upload-staging");
+    assert_eq!(
+        env["OVERRIDE_SEARCH_PROCESSING_SERVICE_URL"],
+        "http://search-processing-service:8080"
+    );
+    assert_eq!(
+        env["OVERRIDE_CONNECTION_GATEWAY_URL"],
+        "http://connection-gateway:8080"
+    );
+    assert_eq!(env["INTERNAL_API_KEY"], env["INTERNAL_API_SECRET_KEY"]);
+    assert_eq!(env["SLACK_IMPORT_ENABLED"], "false");
+    assert_eq!(env["SLACK_IMPORT_CONCURRENCY"], "1");
+}
+
 #[test]
 fn emits_required_keys() {
     let env = local_env();
@@ -57,6 +112,7 @@ fn emits_required_keys() {
         "GITHUB_CLIENT_ID",
         "GITHUB_CLIENT_SECRET",
         "GITHUB_IDP_ID",
+        "ACCOUNT_LINK_STATE_SECRET",
         "STRIPE_SECRET_KEY",
         "STRIPE_PRICE_ID",
         "STRIPE_WEBHOOK_SECRET_KEY",
@@ -270,6 +326,19 @@ fn auth_service_internal_key_matches_dss_auth_key() {
     );
 }
 
+/// The auth service also presents `SERVICE_INTERNAL_AUTH_KEY` to the connection
+/// gateway, the agent harness, and the scheduled-action service (account
+/// deletion), which validate `INTERNAL_API_KEY`. Deployed environments point
+/// both at one secret; locally they must match too.
+#[test]
+fn auth_service_internal_key_matches_the_shared_internal_key() {
+    let env = local_env();
+    assert_eq!(
+        env.get("SERVICE_INTERNAL_AUTH_KEY"),
+        env.get("INTERNAL_API_KEY"),
+    );
+}
+
 #[test]
 fn aws_creds_are_dummy() {
     let env = local_env();
@@ -297,8 +366,8 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         .to_env();
 
     assert_ne!(
-        a.get("SERVICE_INTERNAL_AUTH_KEY"),
-        b.get("SERVICE_INTERNAL_AUTH_KEY"),
+        a.get("INTERNAL_CALL_SECRET"),
+        b.get("INTERNAL_CALL_SECRET"),
         "per-instance secrets should differ between instances"
     );
     assert_eq!(
