@@ -13812,6 +13812,60 @@ export const WebSearchResponse = z.object({
   tool_use_id: z.string(),
 });
 
+export const DescribeCodeTools = z
+  .object({ names: z.array(z.string()).optional() })
+  .strict();
+
+export const CodeToolsDescription = z.object({
+  instructions: z.string(),
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      input_schema: z.union([z.string(), z.null()]).optional(),
+      output_schema: z.union([z.string(), z.null()]).optional(),
+    })
+  ),
+});
+
+export const ExecuteCode = z
+  .object({
+    execution_id: z.string(),
+    source: z.string(),
+    timeout_ms: z.number().int().gte(0).optional(),
+  })
+  .strict();
+
+export const ExecutionReceipt = z.object({
+  executionId: z.string(),
+  status: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.literal('running'),
+      z.literal('succeeded'),
+      z.literal('failed'),
+      z.literal('cancelled'),
+      z.literal('timed_out'),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  result: z.any().optional(),
+  error: z.union([z.string(), z.null()]).optional(),
+});
+
 export const ReadThread = z.object({
   contentType: z.enum([
     'channel',

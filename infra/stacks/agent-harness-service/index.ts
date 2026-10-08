@@ -164,3 +164,4 @@ export const agentHarnessServiceUrl = getServiceUrl(
 );
 export const agentHarnessEgressUrl = pulumi.interpolate`${service.egressDomain}`;
 export const agentHarnessServiceRoleArn = service.role.arn;
+export const agentHarnessServiceSecurityGroupId = service.serviceSg.id;

@@ -11,6 +11,7 @@ test-support = []
 forms = { path = "../forms", features = ["ai_tools", "gateway", "postgres", "scheduling"] }
 routines = { path = "../routines" }
 macro_auth = { path = "../macro_auth" }
+agent_code_mode = { path = "../agent_code_mode" }
 ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
 collab_surface = { path = "../collab_surface", features = ["postgres"] }
 initiative = { path = "../initiative", default-features = false, features = ["postgres", "resources", "toolset"] }

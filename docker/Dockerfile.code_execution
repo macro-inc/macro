@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+FROM rust:1.94 AS builder
+ENV SQLX_OFFLINE=true
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends cmake && \
+    rm -rf /var/lib/apt/lists/*
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
+    --mount=type=cache,target=/usr/local/cargo/git/db,sharing=shared \
+    --mount=type=cache,target=/app/target,id=rust-target-release,sharing=locked \
+    cargo build --locked --release --bin code_execution_service && \
+    strip /app/target/release/code_execution_service && \
+    cp /app/target/release/code_execution_service /app/svc
+
+FROM denoland/deno:2.9.6 AS deno
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates dumb-init curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid 10001 runner && useradd --uid 10001 --gid 10001 --no-create-home runner && \
+    mkdir /scratch && chown runner:runner /scratch && chmod 700 /scratch
+COPY --from=deno /usr/bin/deno /usr/local/bin/deno
+COPY --from=builder --chmod=755 /app/svc /app/svc
+USER 10001:10001
+WORKDIR /app
+# ECS preserves the image's ownership for this matched volume path.
+VOLUME ["/scratch"]
+ENV PORT=8112 DENO_BINARY=/usr/local/bin/deno DENO_SCRATCH_DIRECTORY=/scratch
+EXPOSE 8112
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s CMD curl -fsS http://127.0.0.1:8112/health || exit 1
+ENTRYPOINT ["dumb-init", "--", "/app/svc"]

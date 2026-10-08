@@ -354,6 +354,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "code-execution-service";
+          packageName = "code_execution_service";
+          binaries = [ "code_execution_service" ];
+        }
+        {
           serviceName = "preview-gateway";
           packageName = "preview_gateway";
           binaries = [ "preview_gateway" ];

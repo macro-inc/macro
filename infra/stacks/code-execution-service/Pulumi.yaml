@@ -1,0 +1,3 @@
+name: code-execution-service
+runtime: nodejs
+description: Private shared Deno execution runner

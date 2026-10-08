@@ -3,11 +3,33 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import type { ExecutionRecord } from '@service-agent-harness/generated/schemas';
 import { render } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
+
+const codeQuery = vi.hoisted(() => ({
+  record: undefined as ExecutionRecord | undefined,
+  read: vi.fn(),
+}));
+vi.mock('@queries/agent-session/code-execution', () => ({
+  useAgentCodeExecutionQuery: (
+    session: () => string,
+    execution: () => string | undefined
+  ) => {
+    codeQuery.read(session(), execution());
+    return {
+      isSuccess: true,
+      isPending: false,
+      isError: false,
+      get data() {
+        return codeQuery.record;
+      },
+    };
+  },
+}));
 
 // Rich renderers own their result controls; this test verifies dispatch and
 // context without mounting their split-layout and query dependencies.
@@ -1373,4 +1395,111 @@ describe('coding agent dispatch', () => {
       expect(view.queryByTestId('tool-card')).toBeNull();
     }
   );
+});
+
+describe('code execution results', () => {
+  const executionId = '019a0000-0000-7000-8000-000000000001';
+  const codePart = (server: string): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'execute-1',
+    status: 'completed',
+    name: { kind: 'mcp', server, tool: 'ExecuteCode' },
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { execution_id: executionId, source: 'return { count: 1 };' },
+      result: {
+        executionId,
+        status: 'failed',
+        result: { count: 1 },
+        error: null,
+      },
+      output: null,
+      error: null,
+    },
+  });
+
+  beforeEach(() => {
+    codeQuery.read.mockClear();
+    codeQuery.record = {
+      executionId,
+      source: 'return { count: 1 };',
+      status: 'failed',
+      result: null,
+      error: 'Later step failed',
+      calls: [
+        {
+          id: 'call-1',
+          name: 'ReadContent',
+          input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+          output: { content: { text: 'saved contents' }, comments: [] },
+          error: null,
+          status: 'completed',
+          outputOmitted: false,
+        },
+        {
+          id: 'call-2',
+          name: 'DisplayResults',
+          input: { view: { widgets: [] } },
+          output: { message: 'done' },
+          error: null,
+          status: 'completed',
+          outputOmitted: false,
+        },
+        {
+          id: 'call-3',
+          name: 'CreateDocument',
+          input: {},
+          output: null,
+          error: null,
+          status: 'unknown',
+          outputOmitted: false,
+        },
+      ],
+    };
+  });
+
+  it('loads trusted records and keeps custom components after a script failure', () => {
+    const part = codePart('macro_internal');
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getAllByTestId('tool-card')[0].dataset.status).toBe(
+      'failed'
+    );
+    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
+      'Failed'
+    );
+    expect(rendered.getByTestId('dashboard-view')).toBeDefined();
+    expect(rendered.container.textContent).toContain('Outcome unknown');
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+    expect(
+      JSON.parse(rendered.getByTestId('macro-tool').dataset.response ?? '')
+    ).toEqual({ content: { text: 'saved contents' }, comments: [] });
+  });
+
+  it('recovers completed inner results after Stop drops the final receipt', () => {
+    const part = codePart('macro_internal');
+    part.status = 'failed';
+    if (part.detail.kind === 'other') {
+      part.detail.result = null;
+      part.detail.output = null;
+    }
+    const rendered = render(() => (
+      <ToolCallPart part={part} context={context(false)} />
+    ));
+    expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
+    expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
+  });
+
+  it('does not let an external MCP server select the code-mode record view', () => {
+    codeQuery.read.mockClear();
+    const rendered = render(() => (
+      <ToolCallPart part={codePart('external')} context={context(false)} />
+    ));
+    expect(codeQuery.read).not.toHaveBeenCalled();
+    expect(rendered.queryByTestId('dashboard-view')).toBeNull();
+    expect(rendered.getByTestId('title').textContent).toBe('ExecuteCode');
+  });
 });

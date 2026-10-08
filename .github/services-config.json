@@ -40,6 +40,19 @@
         "user_link_cleanup_handler"
       ]
     },
+    "code-execution-service": {
+      "bootstrap_pending": "Configure the Doppler project and runner credential, and deploy the harness security-group export before activation",
+      "source_paths": [
+        "services/code_execution_service/**",
+        "crates/code_execution/**",
+        "docker/Dockerfile.code_execution",
+        "docker/Dockerfile.code_execution.prebuilt"
+      ],
+      "stack_path": "infra/stacks/code-execution-service/**",
+      "deploy_binaries": [
+        "code_execution_service"
+      ]
+    },
     "bulk-upload": {
       "source_paths": [
         "services/upload_extractor_lambda_handler/**",

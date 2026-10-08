@@ -438,3 +438,25 @@ describe.each(['GenerateImage', 'DispatchCodingAgent'])(
     });
   }
 );
+
+it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
+  const execution = tool({
+    name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    detail: {
+      kind: 'other',
+      input: null,
+      output: null,
+      result: null,
+      error: null,
+      acpKind: 'other',
+    },
+  });
+  expect(rendersOwnView(execution)).toBe(true);
+  expect(segmentParts([tool(), execution, tool()])).toEqual([
+    { kind: 'tools', start: 0, end: 1 },
+    { kind: 'part', start: 1, end: 2 },
+    { kind: 'tools', start: 2, end: 3 },
+  ]);
+  execution.name = { kind: 'mcp', server: 'external', tool: 'ExecuteCode' };
+  expect(rendersOwnView(execution)).toBe(false);
+});

@@ -81,6 +81,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 RecordingRealtime::new(),
             )),
             "localhost".into(),
+            None,
         );
         assert_eq!(
             rpc(app.clone(), None, "tools/list", serde_json::json!({}))
@@ -168,3 +169,5 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         );
     }
 }
+
+mod code_mode;

@@ -476,3 +476,24 @@ fn booking_link_mutations_execute_without_a_review_on_every_host() {
 }
 
 mod booking_links;
+
+#[test]
+fn code_mode_discovery_contains_the_real_dynamic_widget_contract() {
+    let tools = tools_for(AiHost::AgentSession);
+    let docs = agent_code_mode::outbound::tools::tool_documentation(&tools.toolset);
+    let display = docs
+        .iter()
+        .find(|tool| tool.name == "DisplayResults")
+        .unwrap();
+    assert_eq!(
+        display.input_schema,
+        serde_json::Value::Object(tools.toolset.tools["DisplayResults"].input_schema.clone())
+    );
+    let text = serde_json::to_string(&display.input_schema).unwrap();
+    assert!(text.contains("widgets"));
+    assert!(text.contains("$defs"));
+    assert!(
+        text.len() > 1000,
+        "SDK discovery must include widget structures, not an opaque view"
+    );
+}

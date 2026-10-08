@@ -10,6 +10,7 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
+mod code_mode;
 mod coding_agent;
 mod coding_agents;
 mod config;
@@ -207,6 +208,28 @@ async fn main() -> anyhow::Result<()> {
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
+}
+
+// Share the exact authenticated internal router between the listener and the
+// in-process MCP transport; internal tools are not third-party egress apps.
+fn internal_mcp_handler(
+    app: axum::Router,
+) -> agent_inmem::outbound::egress_mcp::InternalMcpHandler {
+    use http_body_util::BodyExt as _;
+    use tower::ServiceExt as _;
+    Arc::new(move |request| {
+        let app = app.clone();
+        Box::pin(async move {
+            let response = match app.oneshot(request.map(axum::body::Body::new)).await {
+                Ok(response) => response,
+                Err(never) => match never {},
+            };
+            response.map(|body| {
+                body.map_err(|error| -> agent_egress::domain::model::BoxError { Box::new(error) })
+                    .boxed_unsync()
+            })
+        })
+    })
 }
 
 async fn run() -> anyhow::Result<()> {
@@ -497,18 +520,6 @@ async fn run() -> anyhow::Result<()> {
     // against it, so the two must be the same string.
     let egress_base_url = AgentHarnessEgressUrl::new()?.to_string();
 
-    // One connector for the agent and the telemetry catalog. It pools each
-    // server's session for the life of the egress token, so a replaced agent
-    // task and the catalog's listing reuse the handshake instead of opening
-    // a second set of clients and dropping them when the listing ends.
-    let mcp_connector = Arc::new(AcpMcpConnector::new(EgressMcpClient::new(
-        Arc::clone(&egress),
-        &egress_base_url,
-    )));
-    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
-        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
-    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
-
     let tool_context = ai_tools::build_tool_service_context_from_env(
         pool.clone(),
         event_broker_tracker.clone(),
@@ -517,16 +528,89 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
-    // Macro's own tools run in-process here rather than through the egress
-    // proxy, so they are held for the owner by the same approvals.
-    let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(
-        RigTurnEngine::new(pool.clone(), tool_context).with_gate(Arc::new(
-            agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
-                session_repo.clone(),
-                Arc::clone(&tool_approvals),
-            ),
-        )),
+    let owner_tool_gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate> = Arc::new(
+        agent_inmem::outbound::approval_gate::OwnerApprovalGate::new(
+            session_repo.clone(),
+            Arc::clone(&tool_approvals),
+        ),
     );
+    let code_executor: Option<Arc<dyn code_execution::domain::ProgramExecutor>> =
+        match (&config.code_execution_url, &config.code_execution_token) {
+            (Some(endpoint), Some(token)) => Some(Arc::new(
+                code_execution::outbound::client::RunnerClient::new(
+                    endpoint.clone(),
+                    code_execution::protocol::ServiceToken::new(token.clone()).map_err(
+                        |error| anyhow::anyhow!("invalid code runner credential: {error}"),
+                    )?,
+                    4,
+                    16,
+                )
+                .map_err(|error| anyhow::anyhow!("invalid code runner configuration: {error}"))?,
+            )),
+            (None, None) => None,
+            _ => anyhow::bail!(
+                "CODE_EXECUTION_URL and CODE_EXECUTION_TOKEN must be configured together"
+            ),
+        };
+    let code_mode_enabled = code_executor.is_some();
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
+        Arc::new(agent_code_mode::domain::CodeModeService::new(
+            code_executor,
+            Arc::new(code_mode::ApprovedCodeTools::new(
+                Arc::new(agent_code_mode::outbound::tools::ToolsetDispatcher::new(
+                    ai_tools::tools_for(ai_tools::AiHost::AgentSession).toolset,
+                    tool_context.clone(),
+                    |base, identity| {
+                        let mut context = base.clone().with_actor(identity.bot);
+                        context.usage_context = ai_usage::UsageContext::new(
+                            ai_usage::AiFeature::AgentSession,
+                            identity.owner.clone(),
+                        );
+                        context
+                    },
+                )),
+                owner_tool_gate.clone(),
+            )),
+            Arc::new(agent_code_mode::outbound::postgres::PgExecutionStore::new(
+                pool.clone(),
+            )),
+            Arc::new(agent_code_mode::outbound::turns::SessionTurns(
+                session_repo.clone(),
+            )),
+        ));
+    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
+        Arc::new(
+            agent_session::domain::pull_request::SessionPullRequestService::new(
+                session_repo.clone(),
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_audience.clone(),
+                ),
+            ),
+        );
+    let internal_mcp = internal_mcp::router(
+        Arc::new(session_repo.clone()),
+        session_pull_requests.clone(),
+        url::Url::parse(&egress_base_url)?
+            .host_str()
+            .context("egress URL needs a host")?
+            .to_owned(),
+        code_mode_enabled.then(|| code_mode.clone()),
+    );
+    // One connector for the agent and the telemetry catalog. It pools each
+    // server's session for the life of the egress token, so a replaced agent
+    // task and the catalog's listing reuse the handshake instead of opening
+    // a second set of clients and dropping them when the listing ends.
+    let mcp_connector = Arc::new(AcpMcpConnector::new(
+        EgressMcpClient::new(Arc::clone(&egress), &egress_base_url)
+            .with_internal_mcp(internal_mcp_handler(internal_mcp.clone())),
+    ));
+    let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
+        Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
+    let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
+
+    let inmem_model_engine: Arc<dyn TurnEngine> =
+        Arc::new(RigTurnEngine::new(pool.clone(), tool_context).with_gate(owner_tool_gate));
     // A model provider cannot fetch images from a private local-stack hostname.
     // Resolve its static-file links through the existing attachment service,
     // including links replayed from earlier turns, before calling the model.
@@ -618,16 +702,6 @@ async fn run() -> anyhow::Result<()> {
             GithubSyncClientImpl::default(),
         ),
     ));
-    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
-        Arc::new(
-            agent_session::domain::pull_request::SessionPullRequestService::new(
-                session_repo.clone(),
-                ConnectionGatewayAgentSessionRealtime::new(
-                    connection_gateway.clone(),
-                    session_audience.clone(),
-                ),
-            ),
-        );
     let session_working_branches: Arc<
         dyn agent_session::domain::working_branch::SessionWorkingBranches,
     > = Arc::new(
@@ -638,14 +712,6 @@ async fn run() -> anyhow::Result<()> {
                 session_audience.clone(),
             ),
         ),
-    );
-    let internal_mcp = internal_mcp::router(
-        Arc::new(session_repo.clone()),
-        session_pull_requests.clone(),
-        url::Url::parse(&egress_base_url)?
-            .host_str()
-            .context("egress URL needs a host")?
-            .to_owned(),
     );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
@@ -1280,6 +1346,13 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let code_executions = agent_code_mode::inbound::axum_router::code_execution_router(
+        agent_code_mode::inbound::axum_router::CodeExecutionRouterState::new(
+            code_mode,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
             agent_session::domain::sharing::SessionSharingService::new(session_repo.clone()),
@@ -1309,7 +1382,8 @@ async fn run() -> anyhow::Result<()> {
             .with_coding_agents(coding_agents)
             .with_capabilities(capabilities)
             .with_pull_requests(pull_requests)
-            .with_tool_approvals(tool_approval_answers),
+            .with_tool_approvals(tool_approval_answers)
+            .with_code_executions(code_executions),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

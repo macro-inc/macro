@@ -1,0 +1,17 @@
+# Deployment image for Nix-built service binaries, including their runtime closure.
+FROM denoland/deno:2.9.6 AS deno
+FROM debian:trixie-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates dumb-init curl && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd --gid 10001 runner && useradd --uid 10001 --gid 10001 --no-create-home runner && \
+    mkdir /scratch && chown runner:runner /scratch && chmod 700 /scratch
+COPY --from=deno /usr/bin/deno /usr/local/bin/deno
+COPY ./prebuilt/nix-store/ /nix/store/
+COPY --chmod=755 ./prebuilt/code_execution_service /app/svc
+USER 10001:10001
+WORKDIR /app
+VOLUME ["/scratch"]
+ENV PORT=8112 DENO_BINARY=/usr/local/bin/deno DENO_SCRATCH_DIRECTORY=/scratch
+EXPOSE 8112
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s CMD curl -fsS http://127.0.0.1:8112/health || exit 1
+ENTRYPOINT ["dumb-init", "--", "/app/svc"]

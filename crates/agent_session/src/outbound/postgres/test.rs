@@ -3113,3 +3113,53 @@ async fn expired_warm_sessions_cannot_be_claimed(pool: PgPool) {
     AgentSessionRepo::delete(&repo, session.id).await.unwrap();
     assert!(repo.expire().await.unwrap().is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn active_execution_turn_excludes_stopped_archived_and_deleted_sessions(pool: PgPool) {
+    use crate::domain::ports::ActiveSessionTurn;
+    let repo = test_repo(&pool);
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    assert!(repo.active_turn(session.id).await.unwrap().is_none());
+    let action = macro_uuid::generate_uuid_v7();
+    for (state, active) in [
+        ("starting", true),
+        ("running", true),
+        ("blocked", true),
+        ("stopping", false),
+        ("idle", false),
+    ] {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_action_id = $2, turn_state = $3 WHERE id = $1",
+            session.id.as_uuid(),
+            action,
+            state
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            repo.active_turn(session.id)
+                .await
+                .unwrap()
+                .map(|id| id.as_uuid()),
+            active.then_some(action)
+        );
+    }
+    sqlx::query!(
+        "UPDATE agent_session SET turn_state = 'running', is_archived = true WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.active_turn(session.id).await.unwrap().is_none());
+    sqlx::query!(
+        "DELETE FROM agent_session WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(repo.active_turn(session.id).await.unwrap().is_none());
+}

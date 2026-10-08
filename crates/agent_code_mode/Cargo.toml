@@ -1,0 +1,38 @@
+[package]
+name = "agent_code_mode"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent_session = { path = "../agent_session", default-features = false }
+ai_toolset = { path = "../ai_toolset" }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+bot_id = { path = "../bot_id" }
+code_execution = { path = "../code_execution" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["json"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+agent_session = { path = "../agent_session", default-features = false, features = ["test-utils"] }
+entity_access = { path = "../entity_access", features = ["outbound"] }
+tower = { workspace = true, features = ["util"] }

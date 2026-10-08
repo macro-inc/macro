@@ -67,6 +67,10 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Private runner endpoint. Both this and its token must be configured.
+    pub code_execution_url: Option<String>,
+    /// Service credential sent only by the backend to the runner supervisor.
+    pub code_execution_token: Option<String>,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,

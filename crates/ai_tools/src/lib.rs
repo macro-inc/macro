@@ -300,6 +300,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
         .merge(&tools_for(AiHost::Chat))
+        .merge(&agent_code_mode::inbound::toolset::toolset())
         .merge(&read::read_thread())
         .build()
 }

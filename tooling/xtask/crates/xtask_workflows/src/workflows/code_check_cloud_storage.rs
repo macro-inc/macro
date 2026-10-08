@@ -169,8 +169,33 @@ fn test() -> Job {
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
+        .add_step(setup_execution_runtime())
+        .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Install the same pinned runtime shipped by the code-execution container.
+fn setup_execution_runtime() -> Step<gh_workflow::Use> {
+    Step::new("Set up code execution runtime")
+        .uses(
+            "denoland",
+            "setup-deno",
+            "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+        ) // v2
+        .add_with(("deno-version", "2.9.6"))
+        .if_condition(Expression::new(
+            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
+        ))
+}
+
+/// Exercise the real permission boundary and bidirectional bridge in CI.
+fn test_execution_runtime() -> Step<Run> {
+    Step::new("Test Deno sandbox and live host bridge")
+        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_typescript_parallel_tools_and_persists_ui_results -- --ignored")
+        .if_condition(Expression::new(
+            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
+        ))
 }
 
 /// Always-run collector used as the required status check. Its name must stay

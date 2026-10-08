@@ -50,6 +50,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
+  if (isCodeExecution(part)) return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&
@@ -102,4 +103,14 @@ export function segmentParts(parts: readonly MessagePart[]): PartSegment[] {
     }
   }
   return segments;
+}
+
+/** Only Macro's session-authenticated internal server may select this view. */
+export function isCodeExecution(part: MessagePart): boolean {
+  return (
+    part.kind === 'tool_use' &&
+    part.name.kind === 'mcp' &&
+    part.name.server === 'macro_internal' &&
+    part.name.tool === 'ExecuteCode'
+  );
 }

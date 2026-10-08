@@ -948,6 +948,46 @@ export type EmptyRequest = {
 };
 
 /**
+ * Caller-selected UUID persisted in tool input before execution begins.
+ */
+export type ExecutionId = string;
+
+/**
+ * Durable UI record. This is never included in the model's tool result.
+ */
+export type ExecutionRecord = {
+    /**
+     * Actual tool calls in dispatch order.
+     */
+    calls: Array<RecordedToolCall>;
+    /**
+     * Safe execution failure text.
+     */
+    error?: string | null;
+    /**
+     * Execution identity.
+     */
+    executionId: ExecutionId;
+    /**
+     * JSON returned by the program, if successful.
+     */
+    result?: unknown;
+    /**
+     * The submitted async TypeScript function body.
+     */
+    source: string;
+    /**
+     * Overall execution state.
+     */
+    status: ExecutionStatus;
+};
+
+/**
+ * The recorded outcome of a program.
+ */
+export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+
+/**
  * The provider-side identity of an externally-served session.
  */
 export type ExternalSessionResponse = {
@@ -1275,6 +1315,45 @@ export type QueuedActionDto = {
      * replaces.
      */
     prompt?: string | null;
+};
+
+/**
+ * A dispatch result; unfinished work is never reported as success.
+ */
+export type RecordedCallStatus = 'running' | 'completed' | 'failed' | 'unknown';
+
+/**
+ * A real inner call, recorded by trusted dispatch for the existing renderers.
+ */
+export type RecordedToolCall = {
+    /**
+     * Safe tool failure, if one was returned.
+     */
+    error?: string | null;
+    /**
+     * Stable, execution-scoped component identity.
+     */
+    id: string;
+    /**
+     * Arguments passed to the actual tool.
+     */
+    input: unknown;
+    /**
+     * Canonical Macro tool name from the allowlisted registry.
+     */
+    name: string;
+    /**
+     * Original tool output, retained independently of the program's return value.
+     */
+    output?: unknown;
+    /**
+     * Whether the response was omitted to keep the durable journal bounded.
+     */
+    outputOmitted: boolean;
+    /**
+     * A started call that never replied has an unknown side-effect outcome.
+     */
+    status: RecordedCallStatus;
 };
 
 /**
@@ -1964,6 +2043,35 @@ export type RefreshAgentSessionChangesResponses = {
 };
 
 export type RefreshAgentSessionChangesResponse = RefreshAgentSessionChangesResponses[keyof RefreshAgentSessionChangesResponses];
+
+export type GetCodeExecutionData = {
+    body?: never;
+    path: {
+        /**
+         * Owning session
+         */
+        session_id: string;
+        /**
+         * Execution receipt identity
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}';
+};
+
+export type GetCodeExecutionErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    500: unknown;
+};
+
+export type GetCodeExecutionResponses = {
+    200: ExecutionRecord;
+};
+
+export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
 
 export type ControlAgentSessionData = {
     body: ControlRequest;

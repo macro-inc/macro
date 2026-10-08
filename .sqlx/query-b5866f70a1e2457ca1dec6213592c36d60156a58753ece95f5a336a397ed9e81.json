@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record AS \"record: Json<ExecutionRecord>\" FROM agent_code_execution WHERE id = $1 AND agent_session_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record: Json<ExecutionRecord>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b5866f70a1e2457ca1dec6213592c36d60156a58753ece95f5a336a397ed9e81"
+}

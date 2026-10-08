@@ -59,6 +59,7 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        agent_code_mode::inbound::axum_router::get_code_execution,
         claude_auth::status,
         claude_auth::start,
         claude_auth::complete,

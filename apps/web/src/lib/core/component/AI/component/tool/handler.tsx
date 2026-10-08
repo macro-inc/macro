@@ -40,6 +40,7 @@ import {
   manageChannelParticipantsHandler,
   renameChannelHandler,
 } from './ChannelMutations';
+import { describeCodeToolsHandler, executeCodeHandler } from './CodeMode';
 import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
@@ -151,6 +152,8 @@ import {
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
+  ExecuteCode: executeCodeHandler,
+  DescribeCodeTools: describeCodeToolsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,

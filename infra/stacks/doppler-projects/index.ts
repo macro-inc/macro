@@ -20,6 +20,7 @@ const SERVICE_NAMES = [
   'preview-gateway',
   'slack-import-worker',
   'lexical-service',
+  'code-execution-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {

@@ -363,6 +363,16 @@ pub trait SessionOpener: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
 }
 
+/// The turn currently allowed to initiate work, from shared durable state.
+/// Stopping, ended, archived, and deleted sessions have no active turn.
+pub trait ActiveSessionTurn: Send + Sync + 'static {
+    /// Resolve the starting, running, or blocked turn independently of replica ownership.
+    fn active_turn(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<agent_runtime_protocol::domain::action::AgentActionId>>> + Send;
+}
+
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
 /// from spawned tasks - a Kafka consumer hands each message to its own task,
 /// and a repo whose futures are not `Send` cannot be used there.

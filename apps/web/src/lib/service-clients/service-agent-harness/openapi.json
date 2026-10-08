@@ -954,6 +954,59 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/code-executions/{execution_id}": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Fetch one execution only after the caller has obtained view access to its session.",
+        "operationId": "get_code_execution",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owning session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "execution_id",
+            "in": "path",
+            "description": "Execution receipt identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionRecord"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "500": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/control": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3425,6 +3478,49 @@
         "description": "A JSON body is required on writes, including start/disconnect (no form-based CSRF).",
         "additionalProperties": false
       },
+      "ExecutionId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Caller-selected UUID persisted in tool input before execution begins."
+      },
+      "ExecutionRecord": {
+        "type": "object",
+        "description": "Durable UI record. This is never included in the model's tool result.",
+        "required": ["executionId", "source", "status", "calls"],
+        "properties": {
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecordedToolCall"
+            },
+            "description": "Actual tool calls in dispatch order."
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe execution failure text."
+          },
+          "executionId": {
+            "$ref": "#/components/schemas/ExecutionId",
+            "description": "Execution identity."
+          },
+          "result": {
+            "description": "JSON returned by the program, if successful."
+          },
+          "source": {
+            "type": "string",
+            "description": "The submitted async TypeScript function body."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus",
+            "description": "Overall execution state."
+          }
+        }
+      },
+      "ExecutionStatus": {
+        "type": "string",
+        "description": "The recorded outcome of a program.",
+        "enum": ["running", "succeeded", "failed", "cancelled", "timed_out"]
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -3855,6 +3951,44 @@
           "prompt": {
             "type": ["string", "null"],
             "description": "The prompt's raw text, present for prompts only. What an edit\nreplaces."
+          }
+        }
+      },
+      "RecordedCallStatus": {
+        "type": "string",
+        "description": "A dispatch result; unfinished work is never reported as success.",
+        "enum": ["running", "completed", "failed", "unknown"]
+      },
+      "RecordedToolCall": {
+        "type": "object",
+        "description": "A real inner call, recorded by trusted dispatch for the existing renderers.",
+        "required": ["id", "name", "input", "outputOmitted", "status"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "Safe tool failure, if one was returned."
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable, execution-scoped component identity."
+          },
+          "input": {
+            "description": "Arguments passed to the actual tool."
+          },
+          "name": {
+            "type": "string",
+            "description": "Canonical Macro tool name from the allowlisted registry."
+          },
+          "output": {
+            "description": "Original tool output, retained independently of the program's return value."
+          },
+          "outputOmitted": {
+            "type": "boolean",
+            "description": "Whether the response was omitted to keep the durable journal bounded."
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecordedCallStatus",
+            "description": "A started call that never replied has an unknown side-effect outcome."
           }
         }
       },

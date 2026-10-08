@@ -1,0 +1,22 @@
+[package]
+name = "code_execution"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+futures = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+subtle = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "net", "process", "sync", "time"] }
+tokio-tungstenite = { workspace = true, features = ["connect"] }
+tokio-util = { workspace = true, features = ["codec", "rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

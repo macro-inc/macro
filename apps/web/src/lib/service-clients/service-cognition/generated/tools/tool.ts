@@ -91,6 +91,10 @@ type ToolParserMap = {
     response: types.ProjectOperationComplete;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeCodeTools: {
+    call: types.DescribeCodeTools;
+    response: types.CodeToolsDescription;
+  };
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
@@ -125,6 +129,7 @@ type ToolParserMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
+  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;
@@ -449,6 +454,10 @@ const toolParserMap = {
     response: schemas.ProjectOperationComplete,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
+  DescribeCodeTools: {
+    call: schemas.DescribeCodeTools,
+    response: schemas.CodeToolsDescription,
+  },
   DescribeDatabase: {
     call: schemas.DescribeDatabase,
     response: schemas.ToolDatabaseSchema,
@@ -482,6 +491,10 @@ const toolParserMap = {
   EditWordDocument: {
     call: schemas.EditWordDocument,
     response: schemas.WordDocumentResponse,
+  },
+  ExecuteCode: {
+    call: schemas.ExecuteCode,
+    response: schemas.ExecutionReceipt,
   },
   GenerateImage: {
     call: schemas.GenerateImage,
@@ -851,6 +864,10 @@ type ToolDataMap = {
     response: types.ProjectOperationComplete;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeCodeTools: {
+    call: types.DescribeCodeTools;
+    response: types.CodeToolsDescription;
+  };
   DescribeDatabase: {
     call: types.DescribeDatabase;
     response: types.ToolDatabaseSchema;
@@ -885,6 +902,7 @@ type ToolDataMap = {
     call: types.EditWordDocument;
     response: types.WordDocumentResponse;
   };
+  ExecuteCode: { call: types.ExecuteCode; response: types.ExecutionReceipt };
   GenerateImage: {
     call: types.GenerateImage;
     response: types.GenerateImageResponse;

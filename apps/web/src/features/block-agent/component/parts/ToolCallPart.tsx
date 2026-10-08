@@ -11,8 +11,9 @@
 
 import { hasToolRenderer } from '@core/component/AI/component/tool/handler';
 import { type JSX, Match, Show, Switch } from 'solid-js';
-import { rendersOwnView } from '../../state/tool-groups';
+import { isCodeExecution, rendersOwnView } from '../../state/tool-groups';
 import { settledToolStatus } from '../../ui';
+import { CodeExecutionPart } from '../../views/CodeExecutionPart';
 import { DisplayResultsToolCall } from './DisplayResultsToolCall';
 import { EditToolCall } from './EditToolCall';
 import { ExchangeToolCall } from './ExchangeToolCall';
@@ -59,6 +60,13 @@ export function ToolCallPart(props: {
   // its detail object; each child receives the current detail through an accessor.
   return (
     <Switch>
+      <Match when={isCodeExecution(props.part)}>
+        <CodeExecutionPart
+          part={props.part}
+          common={common()}
+          context={props.context}
+        />
+      </Match>
       <Match
         when={
           rendersOwnView(props.part) &&
@@ -108,7 +116,9 @@ export function ToolCallPart(props: {
           <Show
             when={
               props.part.name.kind === 'mcp' &&
-              props.part.name.server === 'macro' &&
+              (props.part.name.server === 'macro' ||
+                (props.part.name.server === 'macro_internal' &&
+                  props.part.name.tool === 'DescribeCodeTools')) &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}

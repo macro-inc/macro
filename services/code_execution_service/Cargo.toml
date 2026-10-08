@@ -1,0 +1,21 @@
+[package]
+name = "code_execution_service"
+version = "0.1.0"
+edition = "2024"
+publish = false
+default-run = "code_execution_service"
+
+[[bin]]
+name = "code_execution_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+axum = { workspace = true }
+code_execution = { path = "../../crates/code_execution" }
+doppler-config = { workspace = true }
+macro_config = { path = "../../crates/macro_config" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["net", "signal"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

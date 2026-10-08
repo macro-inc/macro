@@ -24,6 +24,7 @@ import type {
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
   EmptyRequest,
+  ExecutionRecord,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -1199,6 +1200,77 @@ export const refreshAgentSessionChanges = async (
     status: res.status,
     headers: res.headers,
   } as refreshAgentSessionChangesResponse;
+};
+
+/**
+ * @summary Fetch one execution only after the caller has obtained view access to its session.
+ */
+export type getCodeExecutionResponse200 = {
+  data: ExecutionRecord;
+  status: 200;
+};
+
+export type getCodeExecutionResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getCodeExecutionResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getCodeExecutionResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getCodeExecutionResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type getCodeExecutionResponseSuccess = getCodeExecutionResponse200 & {
+  headers: Headers;
+};
+export type getCodeExecutionResponseError = (
+  | getCodeExecutionResponse401
+  | getCodeExecutionResponse403
+  | getCodeExecutionResponse404
+  | getCodeExecutionResponse500
+) & {
+  headers: Headers;
+};
+
+export type getCodeExecutionResponse =
+  | getCodeExecutionResponseSuccess
+  | getCodeExecutionResponseError;
+
+export const getGetCodeExecutionUrl = (
+  sessionId: string,
+  executionId: string
+) => {
+  return `/agent-sessions/${sessionId}/code-executions/${executionId}`;
+};
+
+export const getCodeExecution = async (
+  sessionId: string,
+  executionId: string,
+  options?: RequestInit
+): Promise<getCodeExecutionResponse> => {
+  const res = await fetch(getGetCodeExecutionUrl(sessionId, executionId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCodeExecutionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCodeExecutionResponse;
 };
 
 /**

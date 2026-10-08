@@ -671,6 +671,28 @@ hosted AI spending, intercept only the tested AI request in Chrome DevTools and
 return the matching 402 body; restore the response afterward. Backend admission
 and settlement tests still require the isolated backend fixtures above.
 
+## Code mode in agent sessions
+
+When the backend has a code runner configured, the session's `macro_internal`
+server exposes `DescribeCodeTools` and `ExecuteCode`. Ask the agent to discover
+SDK methods, run a TypeScript body using `await sdk.ToolName(input)`, and return a
+small JSON result. Independent calls may use `Promise.all`.
+
+The transcript shows **Run code** while execution is in flight. Inner activity
+appears after the awaited call finishes: its recorded tool calls use the ordinary
+Macro components, and `DisplayResults` remains visible as a dashboard. Expand
+**Run code** to inspect the source and returned JSON. Expanding SDK discovery shows
+the actual method documentation. There is no per-inner-call live stream in v1.
+
+To verify locally, ask for two independent name searches in one code execution,
+then ask it to display the results. Check both inner result components, reload the
+session, and confirm the same records render again. Stop a longer execution and
+check that it ends without claiming unfinished calls succeeded. A script failure
+must retain results from calls that already finished; writes are not rolled back.
+Interactive tools such as sending email and creating a calendar event still use
+their ordinary direct approval/review flow. In a shared session, code-mode calls
+also obey the session owner's normal tool approvals.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the

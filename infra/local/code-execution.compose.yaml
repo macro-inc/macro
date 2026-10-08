@@ -1,0 +1,20 @@
+# Standalone opt-in runner. No database, Docker socket, or application credentials.
+services:
+  code-execution:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile.code_execution
+    ports:
+      - "127.0.0.1:8112:8112"
+    environment:
+      ENVIRONMENT: local
+      CODE_EXECUTION_TOKEN: ${CODE_EXECUTION_TOKEN:?set a dedicated token of at least 32 characters}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /scratch:rw,nosuid,nodev,noexec,size=536870912,uid=10001,gid=10001,mode=0700
+    pids_limit: 256
+    mem_limit: 2g
+    cpus: 2
+    stop_grace_period: 15s

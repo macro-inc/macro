@@ -80,6 +80,10 @@
       "name": "cloud-storage-service-stack",
       "version": "0.0.0",
     },
+    "stacks/code-execution-service": {
+      "name": "code-execution-service-stack",
+      "version": "0.0.0",
+    },
     "stacks/connection-gateway": {
       "name": "connection-gateway-stack",
       "version": "0.0.0",
@@ -546,6 +550,8 @@
     "cloud-storage-sha-cleanup-stack": ["cloud-storage-sha-cleanup-stack@workspace:stacks/sha-cleanup"],
 
     "cmd-shim": ["cmd-shim@8.0.0", "", {}, "sha512-Jk/BK6NCapZ58BKUxlSI+ouKRbjH1NLZCgJkYoab+vEHUY3f6OzpNBN9u7HFSv9J6TRDGs4PLOHezoKGaFRSCA=="],
+
+    "code-execution-service-stack": ["code-execution-service-stack@workspace:stacks/code-execution-service"],
 
     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ=="],
 

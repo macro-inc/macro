@@ -4387,6 +4387,19 @@ export type SearchResult = {
   page_age?: string | null;
   type: 'web_search_result';
 };
+/**
+ * Caller-selected UUID persisted in tool input before execution begins.
+ */
+export type ExecutionId = string;
+/**
+ * The recorded outcome of a program.
+ */
+export type ExecutionStatus =
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'timed_out';
 export type ContentType =
   | 'channel'
   | 'channel-message'
@@ -12398,6 +12411,81 @@ export interface WebSearchResponse {
 export interface WebSearchToolError {
   type: string;
   error_code: string;
+}
+/**
+ * Discover methods available to ExecuteCode. Call with names: [] for the compact catalog, then provide up to five exact names to retrieve their input and output JSON schemas. Each method is called as await sdk.<name>(input) and returns the documented JSON output. Schemas come from the same registered tools that execute the calls.
+ */
+export interface DescribeCodeTools {
+  /**
+   * Up to five exact SDK method names, or [] to list all available methods.
+   */
+  names?: string[];
+}
+/**
+ * Runtime and discovery instructions beside the selected schemas.
+ */
+export interface CodeToolsDescription {
+  /**
+   * How to execute methods and interpret discovery results.
+   */
+  instructions: string;
+  /**
+   * Registered methods; schemas are null in the compact catalog.
+   */
+  tools: CodeToolDescription[];
+}
+/**
+ * A model-facing contract with schemas encoded as JSON text. Provider tool
+ * results can reserve object keys such as `$ref` for multimedia references.
+ */
+export interface CodeToolDescription {
+  /**
+   * Exact method name under `sdk`.
+   */
+  name: string;
+  /**
+   * When and how to use this method.
+   */
+  description: string;
+  /**
+   * JSON-encoded input schema, including definitions; null in the catalog.
+   */
+  input_schema?: string | null;
+  /**
+   * JSON-encoded output schema, including definitions; null in the catalog.
+   */
+  output_schema?: string | null;
+}
+/**
+ * Run an async TypeScript function body in an isolated Deno sandbox. First use DescribeCodeTools to learn SDK methods. Call them as await sdk.ToolName({...}); use Promise.all for independent calls. Return a JSON-compatible value for the model; only that value and an execution receipt are returned, while real inner calls retain their normal Macro UI. No imports, filesystem, network, environment, subprocesses, or npm. Await all calls before returning. Human-interactive tools and subagents must be called directly. A failure or cancellation does not undo completed writes; never replay writes blindly.
+ */
+export interface ExecuteCode {
+  execution_id: ExecutionId;
+  /**
+   * Async TypeScript function body, at most 64 KiB. Example: const r = await sdk.NameSearch({name: 'launch'}); return r;
+   */
+  source: string;
+  /**
+   * Total deadline in milliseconds, from 1 to 30000; defaults to 30000.
+   */
+  timeout_ms?: number;
+}
+/**
+ * Compact model result with an identity the UI uses to load the durable record.
+ */
+export interface ExecutionReceipt {
+  executionId: ExecutionId;
+  status: ExecutionStatus;
+  /**
+   * Only the value explicitly returned by the program.
+   */
+  result?: {
+    [k: string]: unknown;
+  };
+  /**
+   * Safe failure text, when execution did not succeed.
+   */
+  error?: string | null;
 }
 /**
  * Read threaded content by ID(s). Supports reading channels, chats, and projects by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s). For documents, use ReadContent or ReadMetadata instead.
