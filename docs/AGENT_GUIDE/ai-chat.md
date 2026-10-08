@@ -19,8 +19,8 @@ already reports do not need another control request.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
-("hi there", "thanks") gets that line as the whole reply, and the chosen model
-never runs. A real task ("what is on my calendar tomorrow?") gets a short
+("hi there", "thanks") gets that line as the whole reply, and the chosen model,
+already started alongside it, is cancelled. A real task ("what is on my calendar tomorrow?") gets a short
 opener ("Let me check your calendar."), then the chosen model's answer after a
 blank line, with no second acknowledgement. The opener answers the user's
 words, never the prompt's hidden context. The sent prompt is fully opaque from

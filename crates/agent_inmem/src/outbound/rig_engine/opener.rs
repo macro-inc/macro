@@ -36,11 +36,11 @@ const MAX_TOKENS: u64 = 64;
 const TRANSCRIPT_MESSAGES: usize = 6;
 const TRANSCRIPT_MESSAGE_CHARS: usize = 600;
 
-/// Told to the turn's model, so its reply does not open a second time.
-pub(super) const ALREADY_OPENED: &str = "The first line of your reply has already been shown \
-to the user: a short acknowledgement written by a faster model, such as \"On it.\" or \"Let me \
-check your calendar.\". Begin with substance. Do not acknowledge the request or announce what \
-you are about to do.";
+/// Told to the turn's model, so its reply does not open a second time. "May":
+/// the opener can lose the race, skip, or fail, and then nothing was shown.
+pub(super) const ALREADY_OPENED: &str = "A faster model may already have shown the first line \
+of your reply: a short acknowledgement such as \"On it.\" or \"Let me check your calendar.\". \
+Begin with substance. Do not acknowledge the request or announce what you are about to do.";
 
 /// Who the line speaks as: the session's agent and the model behind it, so a
 /// question about either is answered truthfully rather than as the fast
@@ -99,23 +99,33 @@ pub(super) fn spawn(
                 )
                 .await
                 .cancellable();
-            let mut stream = match session.send_message(vec![prompt]).await {
+            // The turn stops listening once it has what it needs; stop the
+            // request then too, not at the next chunk.
+            let started = tokio::select! {
+                () = lines.closed() => return cancel.cancel(),
+                started = session.send_message(vec![prompt]) => started,
+            };
+            let mut stream = match started {
                 Ok(stream) => stream,
                 Err(error) => {
                     tracing::warn!(%error, "the opening line's model did not start");
                     return;
                 }
             };
-            while let Some(part) = stream.next().await {
+            loop {
+                let part = tokio::select! {
+                    () = lines.closed() => return cancel.cancel(),
+                    part = stream.next() => part,
+                };
                 match part {
-                    Ok(StreamPart::Content(delta)) => {
+                    None => return,
+                    Some(Ok(StreamPart::Content(delta))) => {
                         if lines.send(delta).await.is_err() {
-                            cancel.cancel();
-                            return;
+                            return cancel.cancel();
                         }
                     }
-                    Ok(_) => {}
-                    Err(error) => {
+                    Some(Ok(_)) => {}
+                    Some(Err(error)) => {
                         tracing::warn!(%error, "the opening line's model failed");
                         return;
                     }

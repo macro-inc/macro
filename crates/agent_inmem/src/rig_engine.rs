@@ -412,16 +412,37 @@ async fn drive_turn(
     let rig_messages = agent::to_rig_messages(&messages);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
+        let mut turn_spoke = false;
         // The opening line's model usually has its verdict long before this
-        // one's first token. Should this one speak first, its own opening
+        // one's first prose. Thinking passes through while the race goes on;
+        // should this model write prose or call a tool first, its own opening
         // stands and the line is dropped.
-        let race = tokio::select! {
-            biased;
-            part = stream.next() => Race::TurnFirst(part),
-            opening = tokio::time::timeout(
-                opener::VERDICT_TIMEOUT,
-                opener::verdict(&mut opening_line),
-            ) => Race::Opening(opening),
+        let race = {
+            let verdict =
+                tokio::time::timeout(opener::VERDICT_TIMEOUT, opener::verdict(&mut opening_line));
+            tokio::pin!(verdict);
+            loop {
+                tokio::select! {
+                    biased;
+                    part = stream.next() => {
+                        if !turn_spoke {
+                            turn_spoke = true;
+                            opener_span
+                                .record("agent.opener.turn_first_part_ms", elapsed_ms(started));
+                        }
+                        match part {
+                            Some(Ok(part @ (StreamPart::Thinking(_) | StreamPart::Usage(_)))) => {
+                                if parts.send(Ok(part)).await.is_err() {
+                                    loop_cancel.cancel();
+                                    return Ok(());
+                                }
+                            }
+                            part => break Race::TurnFirst(part),
+                        }
+                    }
+                    opening = &mut verdict => break Race::Opening(opening),
+                }
+            }
         };
         let mut separate = false;
         match race {
@@ -447,6 +468,7 @@ async fn drive_turn(
                 if let Some((complete, head)) = line {
                     let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
                     let mut line_chars = 0;
+                    let mut finished = false;
                     let mut delta = Some(head);
                     while let Some(text) = delta {
                         line_chars += text.chars().count();
@@ -457,16 +479,21 @@ async fn drive_turn(
                             loop_cancel.cancel();
                             return Ok(());
                         }
-                        delta = tokio::time::timeout_at(deadline, opening_line.recv())
-                            .await
-                            .ok()
-                            .flatten();
+                        delta = match tokio::time::timeout_at(deadline, opening_line.recv()).await {
+                            Ok(next) => {
+                                finished = next.is_none();
+                                next
+                            }
+                            Err(_) => None,
+                        };
                     }
-                    if complete {
+                    // Only a whole line stands alone: one that stalled or
+                    // came out empty leaves the reply to this model.
+                    if complete && finished && line_chars > 0 {
                         loop_cancel.cancel();
                         return Ok(());
                     }
-                    separate = true;
+                    separate = line_chars > 0;
                 }
             }
             Race::Opening(Ok(None)) => {
@@ -477,7 +504,6 @@ async fn drive_turn(
             }
         }
         drop(opening_line);
-        let mut turn_spoke = false;
         while let Some(part) = stream.next().await {
             if !turn_spoke {
                 turn_spoke = true;
