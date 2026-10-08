@@ -1519,7 +1519,7 @@ use their own speed controls.
 Preview the controls at `/app/debug/ui?ui=speed-toggle`.
 Click the bolt and verify its brief scale/rotation animation and highlighted state.
 Reload, change between supported models, and confirm the preference survives.
-Select an unsupported model and verify the bolt is inactive; switching back restores
+Select an unsupported model and verify the bolt is hidden; switching back restores
 the preference. With reduced motion enabled, toggling changes the state without
 animation. Native sessions confirm speed configuration before sending the prompt;
 a rejected configuration must retain the unsent draft and attachments.

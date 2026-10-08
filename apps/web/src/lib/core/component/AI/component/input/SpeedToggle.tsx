@@ -1,6 +1,6 @@
 import LightningIcon from '@phosphor-fill/lightning-fill.svg';
 import { Button, cn } from '@ui';
-import { onCleanup } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { acceleratedSpeed } from '../../constant/speed';
 import { fastModeEnabled, setFastModeEnabled } from '../../signal/speed';
 
@@ -35,24 +35,24 @@ export function SpeedToggle(props: { model: string }) {
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-composer"
-      label={label()}
-      aria-label={label()}
-      aria-pressed={enabled()}
-      aria-disabled={!speed()}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={toggle}
-      class={cn(
-        'shrink-0 transition-colors motion-reduce:transition-none',
-        enabled() ? 'text-accent bg-accent/10' : 'text-ink-muted',
-        !speed() && 'opacity-40'
-      )}
-    >
-      <span ref={bolt} class="flex items-center justify-center">
-        <LightningIcon class="size-4" />
-      </span>
-    </Button>
+    <Show when={speed()}>
+      <Button
+        variant="ghost"
+        size="icon-composer"
+        label={label()}
+        aria-label={label()}
+        aria-pressed={enabled()}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={toggle}
+        class={cn(
+          'shrink-0 transition-colors motion-reduce:transition-none',
+          enabled() ? 'text-accent bg-accent/10' : 'text-ink-muted'
+        )}
+      >
+        <span ref={bolt} class="flex items-center justify-center">
+          <LightningIcon class="size-4" />
+        </span>
+      </Button>
+    </Show>
   );
 }

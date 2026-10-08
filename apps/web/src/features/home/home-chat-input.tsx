@@ -139,7 +139,7 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
 
     if (backgroundSend) {
       // Send the message in the background without navigating
-      cognitionApiServiceClient.sendStreamChatMessage({
+      const sent = await cognitionApiServiceClient.sendStreamChatMessage({
         content: request.content,
         model: request.model,
         speed: request.speed,
@@ -148,6 +148,10 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
           request.attachments.length > 0 ? request.attachments : undefined,
         toolset: request.toolset,
       });
+      if (sent.isErr()) {
+        restoreDraft(request);
+        return;
+      }
       invalidateAllSoup();
     } else {
       // Store the pending send data for the chat to pick up

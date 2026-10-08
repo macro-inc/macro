@@ -52,6 +52,8 @@ export type StartConversation = {
   modelOverride?: string;
   effortOverride?: { configId: string; value: string };
   speedOverride?: { configId: string; value: string };
+  onDelivered?: () => void;
+  onFailure?: () => void;
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -228,8 +230,16 @@ export function NewChatPage(props: {
     const model = composerModelOverride();
     props.onStart({
       prompt,
+      onFailure: () => setDraft(prompt),
       ...(attachments.length > 0
-        ? { attachments: promptActionOf(prompt, attachments).attachments }
+        ? {
+            attachments: promptActionOf(prompt, attachments).attachments,
+            onDelivered: () => {
+              for (const attachment of attachments) {
+                attachmentTracker.removeAttachment(attachment.id);
+              }
+            },
+          }
         : {}),
       botId: persona.botId,
       repoUrl: repo,
@@ -247,7 +257,6 @@ export function NewChatPage(props: {
           }
         : {}),
     });
-    attachmentTracker.clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
     setEffortSelection(undefined);

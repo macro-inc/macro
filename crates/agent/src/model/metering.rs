@@ -466,8 +466,13 @@ impl Attempt {
         usage: UsageEvidence,
         delivered_speed: Option<&str>,
     ) -> Result<(), MeteringError> {
-        if let Some(pricing) = &self.pricing {
-            pricing.record(usage, delivered_speed)?;
+        if let Some(pricing) = &self.pricing
+            && let Err(error) = pricing.record(usage, delivered_speed)
+        {
+            if self.activated() {
+                return Err(error);
+            }
+            tracing::error!(invocation_id = ?self.id, ?error, "per-call usage not recorded; provider result preserved");
         }
         Ok(())
     }

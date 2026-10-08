@@ -17,6 +17,7 @@ import {
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
+import { NEW_CONVERSATION_ATTACHMENTS_KEY } from '../primitives/composer-draft';
 import { AgentPicker } from './AgentPicker';
 import { NewChatPage } from './NewChatPage';
 
@@ -322,6 +323,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
+        onFailure: expect.any(Function),
         prompt: 'Phone draft',
         botId: CURSOR_BOT_ID,
         modelOverride: 'gpt-5',
@@ -365,6 +367,7 @@ describe('agent-led new conversation', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
@@ -396,6 +399,7 @@ describe('agent-led new conversation', () => {
     ).toBe('Shared draft');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Shared draft',
       botId: undefined,
       repoUrl: undefined,
@@ -406,6 +410,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
@@ -426,6 +431,7 @@ describe('agent-led new conversation', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
@@ -474,6 +480,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       repoUrl: undefined,
     });
@@ -508,6 +515,7 @@ describe('agent-led new conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/other',
@@ -525,6 +533,7 @@ describe('agent-led new conversation', () => {
     await selectAgent(/Reviewer/);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: 'saved-agent',
       repoUrl: undefined,
@@ -554,6 +563,7 @@ describe('agent-led new conversation', () => {
       expect(screen.getByRole('button', { name: 'Branch' })).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith({
+        onFailure: expect.any(Function),
         prompt: 'Prompt',
         botId: 'saved-cloud-agent',
         repoUrl: undefined,
@@ -587,6 +597,7 @@ describe('agent-led new conversation', () => {
     expect(branch.hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: 'local-agent',
       repoUrl: 'https://github.com/macro-inc/macro',
@@ -668,6 +679,7 @@ describe('agent-led new conversation', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: CURSOR_BOT_ID,
       repoUrl: undefined,
@@ -751,6 +763,7 @@ describe('agent-led new conversation', () => {
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
+      onFailure: expect.any(Function),
       prompt: 'Prompt',
       botId: undefined,
       repoUrl: undefined,
@@ -908,6 +921,7 @@ it('starts a conversation with an uploaded image and no text', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(start).toHaveBeenCalledWith(
     expect.objectContaining({
+      onFailure: expect.any(Function),
       prompt: '',
       attachments: [
         {
@@ -919,4 +933,49 @@ it('starts a conversation with an uploaded image and no text', () => {
       ],
     })
   );
+});
+
+it('restores a text-only draft when startup configuration fails', () => {
+  mocks.attachments = [];
+  const start = page();
+  fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+    target: { value: 'Keep my unsent prompt' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
+    target: { value: '' },
+  });
+  start.mock.calls[0][0].onFailure();
+  expect(
+    (screen.getByRole('textbox', { name: 'Draft' }) as HTMLInputElement).value
+  ).toBe('Keep my unsent prompt');
+});
+
+it('retains uploaded attachments until first delivery is accepted', () => {
+  mocks.attachments = [
+    {
+      id: 'retained-file',
+      name: 'keep.txt',
+      kind: 'document',
+      mimeType: 'text/plain',
+      size: 12,
+    },
+  ];
+  localStorage.setItem(
+    NEW_CONVERSATION_ATTACHMENTS_KEY,
+    JSON.stringify(mocks.attachments)
+  );
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(
+    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+  ).toEqual(mocks.attachments);
+  start.mock.calls[0][0].onFailure();
+  expect(
+    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+  ).toEqual(mocks.attachments);
+  start.mock.calls[0][0].onDelivered();
+  expect(
+    JSON.parse(localStorage.getItem(NEW_CONVERSATION_ATTACHMENTS_KEY)!)
+  ).toEqual([]);
 });

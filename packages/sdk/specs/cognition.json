@@ -3761,6 +3761,10 @@
             "type": "string",
             "description": "The model to respond with (`provider/model` id)"
           },
+          "speed": {
+            "$ref": "#/components/schemas/ModelSpeed",
+            "description": "Inference speed, validated against the selected model. Defaults to standard."
+          },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet",
             "description": "Which toolset to use. Defaults to `all`"
@@ -4002,6 +4006,11 @@
             "format": "date-time"
           }
         }
+      },
+      "ModelSpeed": {
+        "type": "string",
+        "description": "The requested inference speed. Standard is backward compatible with old clients.",
+        "enum": ["standard", "fast", "ultrafast"]
       },
       "NewAttachment": {
         "type": "object",

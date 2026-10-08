@@ -617,13 +617,7 @@ impl Session {
         } else if self
             .financial_context
             .as_ref()
-            .is_some_and(MeteringContext::activated)
-        {
-            self.financial_context.clone()
-        } else if self
-            .financial_context
-            .as_ref()
-            .is_some_and(MeteringContext::records_per_call)
+            .is_some_and(|context| context.activated() || context.records_per_call())
         {
             self.financial_context.clone()
         } else if current.is_some() {

@@ -371,7 +371,7 @@ async fn finish_failure(attempt: Attempt, error: &http_client::Error) -> http_cl
             evidence = facts.evidence();
         }
     }
-    let pricing = attempt.record_cost(evidence.clone(), facts.delivered_speed());
+    let pricing = attempt.record_cost(evidence, facts.delivered_speed());
     let finalized = attempt.finish(outcome, evidence, facts.request_id).await;
     pricing.and(finalized).map_err(http_error)
 }

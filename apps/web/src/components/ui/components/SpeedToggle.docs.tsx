@@ -26,6 +26,12 @@ function SpeedsDemo() {
 export default defineDoc({
   name: 'AI speed toggle',
   category: 'Inputs',
+  guidelines: {
+    do: ['Show the usage multiplier when offering accelerated model speeds.'],
+    dont: [
+      'Show the lightning control for models that do not support fast mode.',
+    ],
+  },
   description:
     'A persistent, explicit paid-speed preference shared by chat composers. Click a bolt to preview the animation; the preference survives reloads.',
   demos: [

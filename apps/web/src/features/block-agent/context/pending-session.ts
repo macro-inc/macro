@@ -98,6 +98,10 @@ export type StartPendingSessionOptions = {
   effortOverride?: { configId: string; value: string };
   /** Inference speed confirmed before the first prompt. */
   speedOverride?: { configId: string; value: string };
+  /** Release the submitting composer's attachments after the first prompt is accepted. */
+  onDelivered?: () => void;
+  /** Restore the submitting draft when creation, configuration, or first delivery fails. */
+  onFailure?: () => void;
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -140,6 +144,7 @@ export function startPendingSession(
     trace?.end('failed', cause ?? new Error(message));
     releaseNavigation();
     setError(message);
+    options.onFailure?.();
   };
   const expiry = setTimeout(
     () => forgetPendingSession(id),
@@ -246,11 +251,12 @@ export function startPendingSession(
                 }
               );
               if (delivered.isErr()) {
-                releaseNavigation();
-                setError(
+                fail(
                   delivered.error.map((error) => error.message).join(' ') ||
                     'The first message could not be sent.'
                 );
+              } else {
+                options.onDelivered?.();
               }
             }
           } catch (error) {

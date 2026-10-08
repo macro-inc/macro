@@ -167,3 +167,49 @@ async fn child_completion_does_not_inherit_parent_speed_pricing() {
     assert_eq!(transport.calls.load(Ordering::SeqCst), 1);
     assert!(recorder.0.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn missing_delivered_tier_preserves_legacy_provider_results() {
+    for (protocol, model, speed, request_body, response) in [
+        (
+            WireProtocol::Responses,
+            "openai/gpt-6-astra",
+            ModelSpeed::Ultrafast,
+            json!({"model":"gpt-6-astra","service_tier":"ultrafast"}),
+            json!({"status":"completed","usage":{"input_tokens":10,"output_tokens":20}}),
+        ),
+        (
+            WireProtocol::Anthropic,
+            "anthropic/claude-opus-5-5",
+            ModelSpeed::Fast,
+            json!({"model":"claude-opus-5-5","speed":"fast"}),
+            json!({"usage":{"input_tokens":10,"output_tokens":20}}),
+        ),
+    ] {
+        let recorder = Arc::new(Recorder::default());
+        let context = MeteringContext::for_session(
+            recorder.clone(),
+            &UsageContext::system(AiFeature::Chat),
+            model,
+            speed,
+        )
+        .unwrap();
+        let provider = model.split_once('/').unwrap().0;
+        let client =
+            MeteredHttpClient::new(Transport::new(response.to_string()), provider, protocol);
+        context
+            .scope(async {
+                let request = Request::builder()
+                    .uri("https://example.test/api")
+                    .body(Bytes::from(request_body.to_string()))
+                    .unwrap();
+                let delivered = client.send::<_, Bytes>(request).await.unwrap();
+                assert_eq!(
+                    delivered.into_body().await.unwrap(),
+                    Bytes::from(response.to_string())
+                );
+            })
+            .await;
+        assert!(recorder.0.lock().unwrap().is_empty());
+    }
+}

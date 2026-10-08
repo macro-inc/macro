@@ -17,6 +17,7 @@ import {
   storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
+import { toast } from '@core/component/Toast/Toast';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -97,7 +98,7 @@ function SoupChatInputInner() {
 
     if (backgroundSend) {
       // Send the message in the background without navigating
-      cognitionApiServiceClient.sendStreamChatMessage({
+      const sent = await cognitionApiServiceClient.sendStreamChatMessage({
         content: request.content,
         model: request.model,
         speed: request.speed,
@@ -106,6 +107,14 @@ function SoupChatInputInner() {
           request.attachments.length > 0 ? request.attachments : undefined,
         toolset: { type: 'all' },
       });
+      if (sent.isErr()) {
+        input.attachments.setAttached(request.attachments);
+        editor.controls.setMarkdown(request.content);
+        toast.failure(
+          'Could not send the message. Your draft has been restored.'
+        );
+        return;
+      }
       invalidateAllSoup();
     } else {
       // Store the pending send data for the chat to pick up

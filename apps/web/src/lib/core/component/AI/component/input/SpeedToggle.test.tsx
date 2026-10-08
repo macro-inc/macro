@@ -61,7 +61,6 @@ it('leaves unsupported models at standard speed and respects reduced motion', ()
   expect(animate).not.toHaveBeenCalled();
   view.unmount();
   render(() => <SpeedToggle model={Model.gemini38Flash} />);
-  expect(screen.getByRole('button').getAttribute('aria-disabled')).toBe('true');
-  expect(screen.getByRole('button').getAttribute('aria-pressed')).toBe('false');
+  expect(screen.queryByRole('button')).toBeNull();
   expect(speedForModel(Model.gemini38Flash, true)).toBe('standard');
 });
