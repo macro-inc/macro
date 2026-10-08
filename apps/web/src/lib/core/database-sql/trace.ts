@@ -14,6 +14,8 @@ import type {
   RunError,
 } from './generated/types';
 
+import { profileDatabasePhase } from './profile';
+
 const PREFIX = '[database-sql]';
 /** Long statements are cut to this many characters on the run span. */
 const SQL_ATTRIBUTE_LENGTH = 4000;
@@ -46,6 +48,8 @@ export type DatabaseSqlReadContext = {
 
 /** What a row source tells a step about the GraphQL request it sends. */
 export interface DatabaseSqlStepTrace {
+  /** Convert a page under its fetch span, independent of ambient async context. */
+  decode<Value>(rows: number, operation: () => Value): Value;
   request(document: string, variables: unknown): void;
   /** W3C trace headers that put the request inside the step's span. */
   headers(): Record<string, string>;
@@ -72,6 +76,9 @@ export type DatabaseSqlStepRecord = {
 
 /** What the driver asks of a run's trace while it drives the engine. */
 export interface DatabaseSqlRunTrace {
+  /** Compile/open and start under this run even after an async boundary. */
+  open<Value>(operation: () => Promise<Value>): Promise<Value>;
+  start<Value>(operation: () => Value): Value;
   /** Read a step's rows inside its span; `count` says how many came back. */
   fetch<Value, Failure>(
     request: DatabaseSqlFetch,
@@ -214,6 +221,20 @@ export function traceDatabaseSqlRun<
   const steps: DatabaseSqlStepRecord[] = [];
   const pages = new Map<string, number>();
   const trace: DatabaseSqlRunTrace = {
+    async open(operation) {
+      const span = runSpan.span('database_sql.engine.open');
+      try {
+        return await span.run(operation);
+      } finally {
+        span.end();
+      }
+    },
+    start(operation) {
+      return profileDatabasePhase(
+        runSpan.span('database_sql.engine.start'),
+        operation
+      );
+    },
     fetch(request, read, count) {
       const kind = fetchKind(request);
       const table = fetchTable(request);
@@ -237,6 +258,11 @@ export function traceDatabaseSqlRun<
       span.setAttr('database_sql.page', page);
       span.setAttr('database_sql.hint_count', step.hints);
       const stepTrace: DatabaseSqlStepTrace = {
+        decode(rows, operation) {
+          const decodeSpan = span.span('database_sql.rows.decode');
+          decodeSpan.setAttr('database_sql.rows', rows);
+          return profileDatabasePhase(decodeSpan, operation);
+        },
         request: (document, variables) =>
           step.requests.push({ document, variables }),
         headers: () => {
@@ -321,6 +347,11 @@ export function traceDatabaseSqlRun<
       );
     })
     .orTee((failure) => {
+      if (failure.kind === 'cancelled') {
+        runSpan.setAttr('database_sql.cancelled', true);
+        finish({ error: 'cancelled' }, failure);
+        return;
+      }
       const engineError = failure.error;
       const detail = {
         ...(engineError

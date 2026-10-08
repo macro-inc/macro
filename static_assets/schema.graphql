@@ -450,6 +450,397 @@ input CreateInitiativeInput {
 }
 
 """
+Match the checked or unchecked state of a cell.
+"""
+input DatabaseViewCheckboxTest {
+	"""
+	Whether the cell must be checked.
+	"""
+	checked: Boolean!
+}
+
+"""
+How the conditions within a filter group combine.
+"""
+enum DatabaseViewConjunction {
+	"""
+	Require every condition.
+	"""
+	AND
+	"""
+	Require at least one condition.
+	"""
+	OR
+}
+
+"""
+An ordering comparison between instants.
+"""
+enum DatabaseViewDateOperator {
+	"""
+	The instant is before the comparison instant.
+	"""
+	BEFORE
+	"""
+	The instant is after the comparison instant.
+	"""
+	AFTER
+	"""
+	The instant is at or before the comparison instant.
+	"""
+	ON_OR_BEFORE
+	"""
+	The instant is at or after the comparison instant.
+	"""
+	ON_OR_AFTER
+}
+
+"""
+Compare a date cell with a UTC instant.
+"""
+input DatabaseViewDateTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewDateOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: DateTime!
+}
+
+"""
+Compare referenced entity identities with a set of entities.
+"""
+input DatabaseViewEntitiesTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Referenced entity identities.
+	"""
+	entities: [String!]!
+}
+
+"""
+A typed predicate on one column placement.
+"""
+input DatabaseViewFilterCondition {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	The comparison appropriate for this column.
+	"""
+	test: DatabaseViewFilterTest!
+}
+
+"""
+A conjunction of column conditions or nested groups.
+"""
+input DatabaseViewFilterGroup {
+	"""
+	Require every condition or at least one condition.
+	"""
+	conjunction: DatabaseViewConjunction!
+	"""
+	Column tests or nested groups.
+	"""
+	conditions: [DatabaseViewFilterNode!]!
+}
+
+"""
+Exactly one column condition or nested filter group.
+"""
+input DatabaseViewFilterNode @oneOf {
+	"""
+	A predicate on one column.
+	"""
+	condition: DatabaseViewFilterCondition
+	"""
+	A nested group of predicates.
+	"""
+	group: DatabaseViewFilterGroup
+}
+
+"""
+Exactly one test compatible with the selected column type.
+"""
+input DatabaseViewFilterTest @oneOf {
+	"""
+	Test cell emptiness.
+	"""
+	presence: DatabaseViewPresenceTest
+	"""
+	Test a text or link cell.
+	"""
+	text: DatabaseViewTextTest
+	"""
+	Test a numeric cell.
+	"""
+	number: DatabaseViewNumberTest
+	"""
+	Test a date cell.
+	"""
+	date: DatabaseViewDateTest
+	"""
+	Test a checkbox cell.
+	"""
+	checkbox: DatabaseViewCheckboxTest
+	"""
+	Test selected option identities.
+	"""
+	options: DatabaseViewOptionsTest
+	"""
+	Test referenced entity identities.
+	"""
+	entities: DatabaseViewEntitiesTest
+}
+
+"""
+A numeric equality or ordering comparison.
+"""
+enum DatabaseViewNumberOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The number is greater than the comparison value.
+	"""
+	GREATER_THAN
+	"""
+	The number is at least the comparison value.
+	"""
+	GREATER_THAN_OR_EQUAL
+	"""
+	The number is less than the comparison value.
+	"""
+	LESS_THAN
+	"""
+	The number is at most the comparison value.
+	"""
+	LESS_THAN_OR_EQUAL
+}
+
+"""
+Compare a numeric cell with a finite number.
+"""
+input DatabaseViewNumberTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewNumberOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: Float!
+}
+
+"""
+Compare selected option identities with a set of options.
+"""
+input DatabaseViewOptionsTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Option identities from the selected column.
+	"""
+	options: [ID!]!
+}
+
+"""
+The requested cell-presence condition.
+"""
+enum DatabaseViewPresenceOperator {
+	"""
+	The cell has no value.
+	"""
+	IS_EMPTY
+	"""
+	The cell has a value.
+	"""
+	IS_NOT_EMPTY
+}
+
+"""
+Test whether the cell has a value.
+"""
+input DatabaseViewPresenceTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewPresenceOperator!
+}
+
+"""
+Filtering and ordering applied to the entire table before pagination.
+"""
+input DatabaseViewQueryInput {
+	"""
+	Optional filter; omission includes every row.
+	"""
+	filter: DatabaseViewFilterGroup
+	"""
+	Ordering keys in priority order; omission uses manual row order.
+	"""
+	sort: [DatabaseViewSort!]! = []
+}
+
+"""
+A table view and its optional continuation, with a bounded page size.
+"""
+input DatabaseViewRowsInput {
+	"""
+	The table within the authorized database.
+	"""
+	tableId: ID!
+	"""
+	The complete filtering and ordering definition.
+	"""
+	query: DatabaseViewQueryInput!
+	"""
+	The preceding page’s opaque cursor; omit for the first page.
+	"""
+	cursor: String
+	"""
+	Page size from 1 through 500; defaults to 500.
+	"""
+	limit: Int
+}
+
+"""
+Membership and order belong to this page; row facts retain their shared identity.
+"""
+type DatabaseViewRowsPage {
+	"""
+	Rows in global view order, hydrated as canonical Soup entities.
+	"""
+	items: [GraphqlSoupDatabaseRow!]!
+	"""
+	Continuation for the next page; absent at the end of the result.
+	"""
+	nextCursor: String
+	"""
+	Table version against which this page was selected.
+	"""
+	version: Int!
+}
+
+"""
+A membership condition for single- or multi-valued cells.
+"""
+enum DatabaseViewSetOperator {
+	"""
+	The single-valued cell matches one supplied identity.
+	"""
+	IS_ANY_OF
+	"""
+	The single-valued cell matches no supplied identity.
+	"""
+	IS_NONE_OF
+	"""
+	The cell contains at least one supplied identity.
+	"""
+	HAS_ANY
+	"""
+	The cell contains every supplied identity.
+	"""
+	HAS_ALL
+	"""
+	The cell contains no supplied identity.
+	"""
+	HAS_NONE
+}
+
+"""
+One ordering key; earlier keys take precedence.
+"""
+input DatabaseViewSort {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	Ascending or descending value order.
+	"""
+	direction: DatabaseViewSortDirection!
+}
+
+"""
+The direction of a view ordering key.
+"""
+enum DatabaseViewSortDirection {
+	"""
+	Order values from lowest to highest.
+	"""
+	ASCENDING
+	"""
+	Order values from highest to lowest.
+	"""
+	DESCENDING
+}
+
+"""
+A text equality or substring comparison.
+"""
+enum DatabaseViewTextOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The text contains the comparison string.
+	"""
+	CONTAINS
+	"""
+	The text does not contain the comparison string.
+	"""
+	DOES_NOT_CONTAIN
+	"""
+	The text starts with the comparison string.
+	"""
+	STARTS_WITH
+	"""
+	The text ends with the comparison string.
+	"""
+	ENDS_WITH
+}
+
+"""
+Compare a text or link cell with a string.
+"""
+input DatabaseViewTextTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewTextOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: String!
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+"""
 Delete an event, one occurrence, or an occurrence onward.
 """
 input DeleteCalendarEventInput {
@@ -8123,6 +8514,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	A page filtered and ordered across the entire authorized table.
+	"""
+	databaseViewRows(databaseId: ID!, input: DatabaseViewRowsInput!): DatabaseViewRowsPage!
+	"""
 	One initiative accessible to the authenticated viewer.
 	"""
 	initiative(initiativeId: ID!): GraphqlSoupInitiative!
@@ -9076,6 +9471,10 @@ directive @oneOf on INPUT_OBJECT
 Directs the executor to skip this field or fragment when the `if` argument is true.
 """
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
 schema {
 	query: SoupQueryRoot
 	mutation: CompleteMutationRoot

@@ -60,7 +60,9 @@ The table selector matches the inset project/channel navigation. In narrow panes
 scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
 The **+** menu stays visible, and focusing or selecting a table reveals its tab.
 
-The grid’s sticky bottom summary shows the saved records in the current view.
+The grid’s sticky bottom summary shows the loaded saved records in the current view.
+While more pages remain, it says **records loaded** and calculations cover only
+those records. Loading every page makes the summary cover the full view.
 Choose **+ Add calculation** in a column’s footer for filled/unique counts, or
 sum, average, min, and max on numeric columns. Numeric columns default to Sum.
 Calculation choices are local to the open table, not saved with the view.
@@ -560,6 +562,35 @@ Schema edits update their UI optimistically and finish after the write commits;
 they do not wait for the background catalog refresh. A refused edit rolls back
 its optimistic state when no newer cache update has replaced it, then refreshes.
 A slow or failed refresh is not a reason to resend a successful mutation.
+
+## Checking large tables locally
+
+Use synthetic records on an isolated local stack and the
+[database profiling harness](../../apps/web/scripts/database-profile/README.md).
+Table views without formula columns filter and sort all stored records on the
+server before fetching pages of 500. Scroll near the bottom or choose **Load more**
+for the next page.
+The footer reports loaded records while more pages remain. Only visible grid
+rows are mounted, so count loaded records separately from DOM rows. Test a
+filter whose matches occur beyond the first page, and a sort whose first record
+would otherwise occur near the end of the table.
+
+**New** opens the blank row even in a long table. A duplicated record outside
+the loaded rows opens its record panel. A saved-record notice can also open a
+record that is not loaded; this does not mean it fails the current filters.
+Arrow keys and Tab must reveal and focus cells beyond the visible window.
+
+Boards, tables containing formula columns, and arbitrary SQL still use the
+existing engine reader with its 20,000-record cap. The engine computes formula
+values before filtering and sorting. Board lane/card ordering is applied to that
+result; check the incomplete-results notice when auditing those surfaces.
+
+After loading, switch between tables and views several times, edit a cell,
+open a select picker, add and delete a temporary record, and scroll. Confirm
+that edits preserve focus and that background refreshes leave the grid mounted.
+Count a browser crash or the database error boundary as a failed run, even if
+the grid appeared before it. Keep heap/CPU profiling runs separate from timing
+runs, and preserve existing local data.
 
 ### Embedded database editors
 

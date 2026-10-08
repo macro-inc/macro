@@ -3,7 +3,7 @@
 
 mod schema;
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};

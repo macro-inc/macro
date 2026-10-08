@@ -33,6 +33,8 @@ export type DatabaseSqlFailure =
   | { kind: 'crash'; message: string }
   /** The row source could not read what the engine asked for. */
   | { kind: 'fetch'; message: string }
+  /** The caller replaced or disposed this read. */
+  | { kind: 'cancelled' }
   /** The statement writes, and only reads run here. */
   | { kind: 'read-only' };
 
@@ -145,10 +147,13 @@ function nextStep(
 async function steps(
   query: DatabaseSqlQuery,
   source: RowSource,
-  trace: DatabaseSqlRunTrace
+  trace: DatabaseSqlRunTrace,
+  signal?: AbortSignal
 ): Promise<Result<Outcome, DatabaseSqlFailure>> {
-  let step = feed(() => query.start());
+  if (signal?.aborted) return err({ kind: 'cancelled' });
+  let step = trace.start(() => feed(() => query.start()));
   while (step.isOk()) {
+    if (signal?.aborted) return err({ kind: 'cancelled' });
     const current = step.value;
     if (current.step === 'done') {
       const { step: _done, ...outcome } = current;
@@ -156,18 +161,28 @@ async function steps(
     }
     step = await nextStep(query, current, source, trace);
   }
-  return err(step.error);
+  return err(signal?.aborted ? { kind: 'cancelled' } : step.error);
 }
 
 function drive(
   opened: () => Promise<DatabaseSqlQuery>,
   source: RowSource,
-  trace: DatabaseSqlRunTrace
+  trace: DatabaseSqlRunTrace,
+  signal?: AbortSignal
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
-  return ResultAsync.fromPromise(opened(), engineFailure).andThen(
-    (query) =>
-      new ResultAsync(steps(query, source, trace).finally(() => query.free()))
-  );
+  if (signal?.aborted) return errAsync({ kind: 'cancelled' });
+  return ResultAsync.fromPromise(trace.open(opened), (thrown) =>
+    signal?.aborted ? ({ kind: 'cancelled' } as const) : engineFailure(thrown)
+  ).andThen((query) => {
+    const read = async () => {
+      try {
+        return await steps(query, source, trace, signal);
+      } finally {
+        query.free();
+      }
+    };
+    return new ResultAsync(read());
+  });
 }
 
 /** Run a read-only statement to its outcome; a write is refused. */
@@ -178,12 +193,18 @@ export function runDatabaseSql(
     source,
     open = openDatabaseSqlQuery,
     context,
-  }: { source: RowSource; open?: OpenEngine; context?: DatabaseSqlReadContext }
+    signal,
+  }: {
+    source: RowSource;
+    open?: OpenEngine;
+    context?: DatabaseSqlReadContext;
+    signal?: AbortSignal;
+  }
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
   return traceDatabaseSqlRun(
     { kind: 'sql', sql },
     catalog,
-    (trace) => drive(() => open(catalog, sql), source, trace),
+    (trace) => drive(() => open(catalog, sql), source, trace, signal),
     context
   );
 }
@@ -196,12 +217,18 @@ export function runDatabaseView(
     source,
     open = openDatabaseViewQuery,
     context,
-  }: { source: RowSource; open?: OpenView; context?: DatabaseSqlReadContext }
+    signal,
+  }: {
+    source: RowSource;
+    open?: OpenView;
+    context?: DatabaseSqlReadContext;
+    signal?: AbortSignal;
+  }
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
   return traceDatabaseSqlRun(
     { kind: 'view', view },
     catalog,
-    (trace) => drive(() => open(catalog, view), source, trace),
+    (trace) => drive(() => open(catalog, view), source, trace, signal),
     context
   );
 }

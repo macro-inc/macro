@@ -6,6 +6,8 @@ pub mod catalog;
 pub mod events;
 pub mod journal;
 pub mod models;
+#[cfg(feature = "view_rows")]
+pub mod view_rows;
 
 #[cfg(feature = "ports")]
 pub mod storage;

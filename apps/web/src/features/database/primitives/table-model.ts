@@ -37,7 +37,7 @@ export type DatabaseTableModelOptions = {
   onResizeColumn?: (columnId: string, width: number) => void;
 };
 
-/** TanStack owns the display model; SQL owns which records match and their order. */
+/** TanStack owns columns; SQL owns which records match and their order. */
 export function createDatabaseTableModel(options: DatabaseTableModelOptions) {
   const columns = createMemo<ColumnDef<typeof features, DatabaseRow>[]>(() =>
     options.columns.map((column) => ({
@@ -146,6 +146,7 @@ export function createDatabaseTableModel(options: DatabaseTableModelOptions) {
   }
   return {
     table,
+    rows: () => options.rows,
     visibleColumns,
     width,
     resize,

@@ -78,6 +78,11 @@ describe('database questions', () => {
 });
 
 describe('queryErrorMessage', () => {
+  it('explains a cancelled read without presenting it as an engine failure', () => {
+    expect(queryErrorMessage({ kind: 'cancelled' }, false)).toBe(
+      'This request was cancelled. Try asking again.'
+    );
+  });
   it('explains that questions only read when a write is refused', () => {
     expect(queryErrorMessage({ kind: 'read-only' }, false)).toBe(
       'Questions only read your data. Ask a question about it above.'

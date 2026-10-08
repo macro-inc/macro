@@ -2,6 +2,42 @@ import { describe, expect, it } from 'vitest';
 import { gridRows, keepUnchangedRows, UNAVAILABLE_OPTION } from './grid-cells';
 
 describe('engine cells as grid values', () => {
+  it('reuses appended row vectors but recomputes after a cell or schema change', () => {
+    const catalog: Parameters<typeof gridRows>[1] = { tables: [] };
+    const columns: Parameters<typeof gridRows>[2] = [];
+    const outcome: Parameters<typeof gridRows>[0] = {
+      columns: [],
+      rows: [[]],
+      rowIds: ['first'],
+      readTables: ['table'],
+      truncated: false,
+      insertedRowIds: [],
+      changesApplied: 0,
+    };
+    const rows = gridRows(outcome, catalog, columns);
+    const previous = { outcome, catalog, columns, rows };
+    const appended = {
+      ...outcome,
+      rows: [...outcome.rows, []],
+      rowIds: ['first', 'second'],
+    };
+    const next = gridRows(appended, catalog, columns, previous);
+    expect(next).toEqual([
+      { rowId: 'first', cells: {} },
+      { rowId: 'second', cells: {} },
+    ]);
+    expect(next[0]).toBe(rows[0]);
+    expect(
+      gridRows({ ...outcome, rows: [[]] }, catalog, columns, previous)[0]
+    ).not.toBe(rows[0]);
+    expect(gridRows(outcome, { ...catalog }, columns, previous)[0]).not.toBe(
+      rows[0]
+    );
+    expect(gridRows(outcome, catalog, [...columns], previous)[0]).not.toBe(
+      rows[0]
+    );
+  });
+
   it('shows an option the catalog lacks instead of dropping it', () => {
     expect(
       gridRows(
@@ -84,6 +120,27 @@ describe('engine cells as grid values', () => {
 });
 
 describe('a new read of rows the grid already shows', () => {
+  it('keeps the displayed array when every row and its position is unchanged', () => {
+    const previous = [
+      { rowId: 'ada', cells: { name: 'Ada', guests: 2 } },
+      { rowId: 'grace', cells: { name: 'Grace', guests: 1 } },
+    ];
+    expect(
+      keepUnchangedRows(previous, [
+        { rowId: 'ada', cells: { name: 'Ada', guests: 2 } },
+        { rowId: 'grace', cells: { name: 'Grace', guests: 1 } },
+      ])
+    ).toBe(previous);
+
+    const reordered = keepUnchangedRows(previous, [
+      { rowId: 'grace', cells: { name: 'Grace', guests: 1 } },
+      { rowId: 'ada', cells: { name: 'Ada', guests: 2 } },
+    ]);
+    expect(reordered).not.toBe(previous);
+    expect(reordered).toEqual([previous[1], previous[0]]);
+    expect(keepUnchangedRows(previous, [])).toEqual([]);
+  });
+
   it('hands back the shown row for each row whose cells read the same', () => {
     const ada = { rowId: 'ada', cells: { name: 'Ada', guests: 2 } };
     const grace = { rowId: 'grace', cells: { name: 'Grace', guests: 1 } };

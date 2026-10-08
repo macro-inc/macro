@@ -33,6 +33,8 @@ mod tables;
 mod transfer;
 #[cfg(feature = "gateway")]
 mod undo;
+#[cfg(feature = "view_rows")]
+mod view_paging;
 #[cfg(feature = "gateway")]
 mod views;
 

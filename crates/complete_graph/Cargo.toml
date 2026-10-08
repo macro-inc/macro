@@ -32,6 +32,7 @@ graphql_email = { path = "../graphql_email" }
 graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
 graphql_initiative = { path = "../graphql_initiative" }
+graphql_databases = { path = "../graphql_databases" }
 graphql_notification = { path = "../graphql_notification" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
@@ -56,6 +57,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+databases_sql = { path = "../databases_sql" }
+models_databases = { path = "../models_databases" }
 activity = { path = "../activity", default-features = false, features = ["realtime"] }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }

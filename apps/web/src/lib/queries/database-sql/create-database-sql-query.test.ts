@@ -137,6 +137,34 @@ afterEach(() => {
 });
 
 describe('createDatabaseSqlQuery', () => {
+  it('does not open an engine for a pending catalog after its owner is disposed', async () => {
+    const pending = Promise.withResolvers<Catalog>();
+    const build = vi.fn(() => pending.promise);
+    const open = vi.fn(names);
+    const query = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createDatabaseSqlQuery(
+        () => ({ schema, sql: 'SELECT name FROM crm.deals' }),
+        {
+          client: () =>
+            createClient({ url: 'http://test.invalid', exchanges: [] }),
+          cacheHost: () => undefined,
+          people: async () => [],
+          catalog: build,
+          open,
+        }
+      );
+    });
+    await vi.waitFor(() => expect(build).toHaveBeenCalledTimes(1));
+    dispose?.();
+    pending.resolve(catalog);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(open).not.toHaveBeenCalled();
+    expect(query.outcome()).toBeUndefined();
+    expect(build).toHaveBeenCalledTimes(1);
+  });
+
   it.each([true, false])(
     'answers before the network only when cached rows exist (%s)',
     async (cacheHit) => {
@@ -587,8 +615,8 @@ describe('a refresh another run replaced', () => {
     );
 
     const refreshed = query.refresh();
-    setSql("SELECT name FROM crm.deals WHERE name = 'Acme'");
     await vi.waitFor(() => expect(answerRefresh).toBeDefined());
+    setSql("SELECT name FROM crm.deals WHERE name = 'Acme'");
     answerRefresh?.();
 
     expect(await refreshed).toEqual(ok({ landed: false }));

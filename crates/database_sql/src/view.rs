@@ -11,7 +11,7 @@ use models_databases::views::{DatabaseView, SchemaColumn, ViewProblem, check};
 use crate::catalog::{Catalog, Column, ColumnKind, Table};
 
 pub use board::{Board, BoardLane, board};
-pub use compile::compile_view;
+pub use compile::{compile_table_query, compile_view};
 
 /// The view's table, once the view checks out against it.
 fn checked_table<'catalog>(

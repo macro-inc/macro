@@ -3,9 +3,11 @@
 #[cfg(test)]
 mod test;
 
+use models_databases::TableId;
 use models_databases::views::{
     Conjunction, DatabaseView, DateOperator, FilterCondition, FilterGroup, FilterNode, FilterTest,
-    NumberOperator, PresenceOperator, SetOperator, SortDirection, TextOperator, ViewProblem,
+    NumberOperator, PresenceOperator, SetOperator, SortDirection, TextOperator, ViewLayout,
+    ViewProblem, ViewQuery,
 };
 
 use crate::catalog::{Catalog, Table};
@@ -25,8 +27,32 @@ pub fn compile_view(view: &DatabaseView, catalog: &Catalog) -> Result<SelectQuer
     Ok(compile_checked(view, checked_table(view, catalog)?))
 }
 
+/// Compile the filter and ordering of a table read, independent of its presentation.
+pub fn compile_table_query(
+    table_id: TableId,
+    query: &ViewQuery,
+    catalog: &Catalog,
+) -> Result<SelectQuery, ViewProblem> {
+    let table = catalog
+        .tables
+        .iter()
+        .find(|table| table.id == table_id)
+        .ok_or(ViewProblem::UnknownTable { table: table_id })?;
+    let columns = table
+        .columns
+        .iter()
+        .map(super::schema_column)
+        .collect::<Vec<_>>();
+    models_databases::views::check(query, &ViewLayout::Table { columns: vec![] }, &columns)?;
+    Ok(compile_query_checked(query, table))
+}
+
 /// [`compile_view`] once the view has checked out against `table`.
 pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery {
+    compile_query_checked(&view.query, table)
+}
+
+fn compile_query_checked(query: &ViewQuery, table: &Table) -> SelectQuery {
     let position = row_position_key(table.id);
     let mut bindings: Vec<Binding> = table
         .columns
@@ -42,8 +68,7 @@ pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery
         relation: 0,
         column: None,
     });
-    let order_by = view
-        .query
+    let order_by = query
         .sort
         .iter()
         .map(|key| Order {
@@ -72,8 +97,7 @@ pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery
             .map(|column| SelectItem::Column(column.id))
             .collect(),
         labels: vec![],
-        where_: view
-            .query
+        where_: query
             .filter
             .as_ref()
             .and_then(|group| group_filter(table, group)),

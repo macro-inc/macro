@@ -12,6 +12,7 @@ mod test_support;
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
 mod view_only;
+pub mod view_rows;
 
 pub use outcome::{ResultColumn, ResultSet, SqlOutcome, SqlStatement};
 pub use service::{ChartColumns, DatabasesSql, SqlError, SqlRequest};

@@ -61,6 +61,7 @@ members = [
   "crates/graphql_calendar",
   "crates/graphql_channel",
   "crates/graphql_common",
+  "crates/graphql_databases",
   "crates/graphql_email",
   "crates/graphql_entity_mutation",
   "crates/graphql_favorite",

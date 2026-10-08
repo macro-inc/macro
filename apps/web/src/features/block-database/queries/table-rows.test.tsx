@@ -8,7 +8,11 @@ import type {
 } from '@core/database-sql/generated/types';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { queryClient } from '@queries/client';
-import type { DatabaseSqlQueryCapabilities } from '@queries/database-sql/create-database-sql-query';
+import {
+  createDatabaseSqlQuery,
+  type DatabaseSqlQueryCapabilities,
+  type DatabaseSqlStatement,
+} from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
   applyDatabaseTableVersions,
@@ -298,6 +302,8 @@ function setup(
     addOption?: DatabaseRowsSource['addOption'];
     onSource?: (source: DatabaseRowsSource) => void;
     view?: Accessor<DatabaseView>;
+    table?: Accessor<DatabaseDetail['tables'][number]>;
+    viewQuery?: Parameters<typeof createDatabaseRowsSource>[0]['viewQuery'];
     onTableChanged?: (listener: (version: number) => void) => void;
     changes?: Parameters<typeof createDatabaseRowsSource>[0]['changes'];
   } = {}
@@ -314,10 +320,14 @@ function setup(
     source = createDatabaseRowsSource({
       databaseId: 'db',
       // Deliberately retain old props: retries must use the refreshed cache.
-      table: () => initialDetail.tables[0],
+      table: options.table ?? (() => initialDetail.tables[0]),
       view: options.view ?? (() => allGuests),
       applyOps,
       read: options.read ?? engine().read,
+      viewQuery:
+        options.viewQuery ??
+        ((statement) =>
+          createDatabaseSqlQuery(statement, options.read ?? engine().read)),
       changes: options.changes,
       onTableChanged:
         options.onTableChanged ??
@@ -361,6 +371,186 @@ afterEach(() => {
 });
 
 describe('database view reads', () => {
+  it.each([
+    [false, false],
+    [true, false],
+    [false, true],
+  ])(
+    'keeps displayed rows while formula routing changes (initial formula: %s, failed read: %s)',
+    async (initialFormula, failedRead) => {
+      const plain = detail();
+      const derived = structuredClone(plain);
+      const formula = structuredClone(derived.tables[0].columns[0]);
+      formula.column.id = 'status';
+      formula.column.property_definition_id = 'status-definition';
+      formula.column.config = {
+        kind: 'derived',
+        formula: { kind: 'number', value: 42 },
+      };
+      formula.definition.definition.id = 'status-definition';
+      formula.definition.definition.data_type = 'NUMBER';
+      formula.writable = false;
+      derived.tables[0].columns.push(formula);
+      const initial = initialFormula ? derived : plain;
+      const changed = initialFormula ? plain : derived;
+      const [table, setTable] = createSignal(initial.tables[0]);
+      let delayed = false;
+      let finish: ((answer: Outcome) => void) | undefined;
+      let fail: ((error: Error) => void) | undefined;
+      const reader = engine(() =>
+        delayed
+          ? new Promise((resolve, reject) => {
+              finish = resolve;
+              fail = reject;
+            })
+          : guests()
+      );
+      const loadMore = vi.fn(() => okAsync(undefined));
+      const { source, client } = setup(initial, () => okAsync([]), {
+        read: reader.read,
+        table,
+        viewQuery: (statement) => ({
+          ...createDatabaseSqlQuery(statement, reader.read),
+          pagination: {
+            hasMore: () => true,
+            loading: () => false,
+            version: () => 7,
+            loadMore,
+          },
+        }),
+      });
+      await waitFor(() =>
+        expect(source.snapshot()?.rows[0]?.cells.name).toBe('Ada')
+      );
+      delayed = true;
+      client.setQueryData(databasesKeys.detail('db').queryKey, changed);
+      setTable(changed.tables[0]);
+      await waitFor(() => expect(finish).toBeDefined());
+      expect(source.loading()).toBe(false);
+      expect(source.refreshing()).toBe(true);
+      expect(source.snapshot()?.rows[0]?.cells.name).toBe('Ada');
+      expect(source.pagination?.hasMore()).toBe(!initialFormula);
+      expect(source.snapshot()?.version).toBe(initialFormula ? 5 : 7);
+      if (!initialFormula) {
+        expect(await source.pagination!.loadMore()).toEqual(
+          ok({ landed: false })
+        );
+        expect(reader.reads).toHaveLength(2);
+      }
+      if (failedRead) {
+        fail!(new Error('Formula reader offline'));
+        await waitFor(() => expect(source.error()).toBeDefined());
+        expect(source.loading()).toBe(false);
+        expect(source.snapshot()?.rows[0]?.cells.name).toBe('Ada');
+        expect(source.snapshot()?.version).toBe(7);
+        expect(source.pagination?.hasMore()).toBe(true);
+        delayed = false;
+        expect((await source.pagination!.loadMore()).isOk()).toBe(true);
+        expect(source.error()).toBeUndefined();
+        expect(source.pagination?.hasMore()).toBe(false);
+        expect(reader.reads).toHaveLength(3);
+        expect(loadMore).not.toHaveBeenCalled();
+        return;
+      }
+      finish!(guests([{ id: 'record', name: 'Grace' }]));
+      await waitFor(() =>
+        expect(source.snapshot()?.rows[0]?.cells.name).toBe('Grace')
+      );
+      expect(source.pagination?.hasMore()).toBe(initialFormula);
+    }
+  );
+
+  it('keeps formula tables on the engine that computes their values and global order', async () => {
+    const schema = detail();
+    const column = schema.tables[0].columns[0];
+    const input = structuredClone(column);
+    input.column.id = 'amount';
+    input.column.property_definition_id = 'amount-definition';
+    input.sql_name = '"Amount"';
+    input.definition.definition.id = 'amount-definition';
+    input.definition.definition.display_name = 'Amount';
+    input.definition.definition.data_type = 'NUMBER';
+    schema.tables[0].columns.push(input);
+    column.column.config = {
+      kind: 'derived',
+      formula: { kind: 'column', column: 'amount' },
+    };
+    column.definition.definition.data_type = 'NUMBER';
+    column.writable = false;
+    const reader = engine(() => ({
+      ...guests(),
+      columns: [
+        { name: 'Name', column: 'definition', kind: 'number' },
+        { name: 'Amount', column: 'amount-definition', kind: 'number' },
+      ],
+      rows: [
+        [
+          { type: 'number', value: 42 },
+          { type: 'number', value: 42 },
+        ],
+      ],
+    }));
+    let pagedStatement: Accessor<DatabaseSqlStatement | undefined> | undefined;
+    const { source } = setup(schema, () => okAsync([]), {
+      read: reader.read,
+      view: () => ({
+        ...allGuests,
+        query: {
+          filter: null,
+          sort: [{ column: 'name', direction: 'descending' }],
+        },
+      }),
+      viewQuery: (statement) => {
+        pagedStatement = statement;
+        return createDatabaseSqlQuery(statement, reader.read);
+      },
+    });
+    await waitFor(() =>
+      expect(source.snapshot()?.rows).toEqual([
+        { rowId: 'record', cells: { name: 42, amount: 42 } },
+      ])
+    );
+    expect(pagedStatement?.()).toBeUndefined();
+    expect(reader.reads).toEqual([
+      { filter: null, sort: [{ column: 'name', direction: 'descending' }] },
+    ]);
+    expect(source.pagination?.hasMore() ?? false).toBe(false);
+  });
+
+  it('keeps every board row available for manual lane ordering beyond page one', async () => {
+    const complete = {
+      ...guests(),
+      rowIds: Array.from({ length: 501 }, (_, index) => `row-${index}`),
+      rows: Array.from({ length: 501 }, (_, index) => [
+        { type: 'text' as const, value: `Guest ${index}` },
+      ]),
+    };
+    const reader = engine(() => complete);
+    let pagedStatement: Accessor<DatabaseSqlStatement | undefined> | undefined;
+    const { source } = setup(detail(), () => okAsync([]), {
+      read: reader.read,
+      view: () => ({
+        ...allGuests,
+        layout: {
+          kind: 'board',
+          groupBy: 'status',
+          lanes: [],
+          cardFields: [],
+          title: 'name',
+          hideEmptyLanes: false,
+        },
+      }),
+      viewQuery: (statement) => {
+        pagedStatement = statement;
+        return createDatabaseSqlQuery(statement, reader.read);
+      },
+    });
+    await waitFor(() => expect(source.snapshot()?.rows).toHaveLength(501));
+    expect(source.snapshot()?.rows.at(-1)?.rowId).toBe('row-500');
+    expect(pagedStatement?.()).toBeUndefined();
+    expect(source.pagination?.hasMore() ?? false).toBe(false);
+  });
+
   it('runs the view in the engine and keeps the previous rows while a changed one loads', async () => {
     const [view, setView] = createSignal(allGuests);
     let finishSearch!: (outcome: Outcome) => void;
@@ -713,39 +903,40 @@ describe('a column type change', () => {
         table,
         view: () => allGuests,
         applyOps: vi.fn<ApplyOps>(),
-        read: {
-          client: () => client,
-          cacheHost: () => undefined,
-          people: async () => [],
-          catalog: async (schema) => ({
-            tables: [
-              {
-                id: 'guests-table',
-                databaseId: 'db',
-                database: 'Personal',
-                name: 'Guests',
-                source: 'database',
-                columns: schema.databases[0].tables[0].columns.map(
-                  (column) => ({
-                    id: column.definition,
-                    placement: column.id,
-                    name: column.name,
-                    kind:
-                      column.definition === 'number-definition'
-                        ? { kind: 'number' }
-                        : { kind: 'text' },
-                  })
-                ),
-              },
-            ],
+        viewQuery: (statement) =>
+          createDatabaseSqlQuery(statement, {
+            client: () => client,
+            cacheHost: () => undefined,
+            people: async () => [],
+            catalog: async (schema) => ({
+              tables: [
+                {
+                  id: 'guests-table',
+                  databaseId: 'db',
+                  database: 'Personal',
+                  name: 'Guests',
+                  source: 'database',
+                  columns: schema.databases[0].tables[0].columns.map(
+                    (column) => ({
+                      id: column.definition,
+                      placement: column.id,
+                      name: column.name,
+                      kind:
+                        column.definition === 'number-definition'
+                          ? { kind: 'number' }
+                          : { kind: 'text' },
+                    })
+                  ),
+                },
+              ],
+            }),
+            openView: async (catalog) =>
+              answering(
+                catalog.tables[0].columns[0].id === 'number-definition'
+                  ? await numbers
+                  : guests()
+              ),
           }),
-          openView: async (catalog) =>
-            answering(
-              catalog.tables[0].columns[0].id === 'number-definition'
-                ? await numbers
-                : guests()
-            ),
-        },
         onTableChanged: () => {},
         onCommitted: () => {},
         applyVersions: () => {},

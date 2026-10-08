@@ -4,6 +4,7 @@ import CopyIcon from '@phosphor/copy.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { getHashedPaletteColor } from '@ui/utils/palette';
 import {
@@ -18,6 +19,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { createHorizontalReorder } from '../../../components/drag-drop/create-horizontal-reorder';
 import { createReorderItem } from '../../../components/drag-drop/create-reorder';
 import { DragSessionSensors } from '../../../components/drag-drop/drag-session-sensors';
@@ -92,6 +94,8 @@ export type DatabaseTableProps = {
   titleColumnId?: string;
   isUnsavedRow?: (rowId: string) => boolean;
   onRowFocus?: (rowId: string | undefined) => void;
+  onLoadMore?: () => void;
+  hasMoreRows?: boolean;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];
   /** Scrolled into view and briefly tinted, e.g. the target of a relation. */
@@ -139,6 +143,7 @@ export type DatabaseTableProps = {
 
 export function DatabaseTable(props: DatabaseTableProps) {
   const columns = () => props.model.visibleColumns();
+  const rows = () => props.model.rows();
   const addColumn = children(() =>
     props.canEdit ? props.addColumn : undefined
   );
@@ -146,14 +151,74 @@ export function DatabaseTable(props: DatabaseTableProps) {
     addColumn
       .toArray()
       .some((child) => child != null && typeof child !== 'boolean');
-  const rows = () => props.model.table.getRowModel().rows;
   const summaryRows = createMemo(() =>
-    rows()
-      .filter((row) => !props.isUnsavedRow?.(row.id))
-      .map((row) => row.original)
+    rows().filter((row) => !props.isUnsavedRow?.(row.rowId))
   );
   let scrollContainer!: HTMLDivElement;
   let gridElement!: HTMLDivElement;
+  let virtualizer: VirtualizerHandle | undefined;
+  const [header, setHeader] = createSignal<HTMLDivElement>();
+  const headerSize = createElementSize(header);
+  const [focusedRow, setFocusedRow] = createSignal<string>();
+  let pendingFocus: { rowId: string; column: number } | undefined;
+  let revealFrame: number | undefined;
+  const cellElement = (rowId: string, column: number) => {
+    const index = selection.rowIndex().get(rowId);
+    return gridElement?.querySelector<HTMLElement>(
+      `[data-grid-row="${index}"][data-grid-column="${column}"]`
+    );
+  };
+  const cellIsVisible = (cell: HTMLElement) => {
+    // Virtualized rows are hidden until measured; focusing before then is ignored.
+    if (getComputedStyle(cell).visibility !== 'hidden') return true;
+    if (revealFrame === undefined)
+      revealFrame = requestAnimationFrame(() => {
+        revealFrame = undefined;
+        editRequestedCell();
+        focusRequestedCell();
+      });
+    return false;
+  };
+  onCleanup(() => {
+    if (revealFrame !== undefined) cancelAnimationFrame(revealFrame);
+  });
+  const revealRow = (rowId: string) => {
+    setFocusedRow(rowId);
+    const index = selection.rowIndex().get(rowId);
+    if (index === undefined || !virtualizer) return;
+    const headerHeight = headerSize.height ?? 40;
+    const summaryHeight =
+      gridElement.querySelector<HTMLElement>('[data-grid-summary]')
+        ?.offsetHeight ?? 0;
+    const top = virtualizer.getItemOffset(index) + headerHeight;
+    const bottom = top + virtualizer.getItemSize(index);
+    if (top < scrollContainer.scrollTop + headerHeight)
+      virtualizer.scrollToIndex(index, {
+        align: 'start',
+        offset: -headerHeight,
+      });
+    else if (
+      bottom >
+      scrollContainer.scrollTop + scrollContainer.clientHeight - summaryHeight
+    )
+      virtualizer.scrollToIndex(index, { align: 'end', offset: summaryHeight });
+  };
+  const focusRequestedCell = () => {
+    if (!pendingFocus) return;
+    const { rowId, column } = pendingFocus;
+    const cell = cellElement(rowId, column);
+    if (!cell || !cellIsVisible(cell)) return;
+    pendingFocus = undefined;
+    const columnId = columns()[column - 1]?.id;
+    const editor = columnId ? control(rowId, columnId) : undefined;
+    if (editor) {
+      editor.focus();
+      return;
+    }
+    (
+      cell.querySelector<HTMLElement>('button, input, [tabindex]') ?? cell
+    ).focus();
+  };
   const columnReorder = createHorizontalReorder({
     order: () => columns().map((column) => column.id),
     getViewport: () => scrollContainer,
@@ -184,19 +249,13 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (!pendingEdit || !props.canEdit) return;
     const editor = control(pendingEdit.rowId, pendingEdit.columnId);
     if (!editor) return;
+    const column =
+      columns().findIndex(({ id }) => id === pendingEdit?.columnId) + 1;
+    const cell = cellElement(pendingEdit.rowId, column);
+    if (!cell || !cellIsVisible(cell)) return;
     pendingEdit = undefined;
     editor.edit();
   };
-  props.controlsRef?.({
-    editCell: (rowId, columnId) => {
-      pendingEdit = { rowId, columnId };
-      editRequestedCell();
-    },
-    renameColumn: (columnId) => {
-      requestedHeader = columnId;
-      renameRequestedHeader();
-    },
-  });
   const register = (
     rowId: string,
     columnId: string,
@@ -215,11 +274,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
     }
     row.set(columnId, editor);
     editRequestedCell();
+    queueMicrotask(focusRequestedCell);
   };
   const navigate = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
     const editableColumns = columns().filter(canEditCell);
-    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const rowIndex = rows().findIndex((row) => row.rowId === rowId);
     const columnIndex = editableColumns.findIndex(
       (column) => column.id === columnId
     );
@@ -231,17 +291,19 @@ export function DatabaseTable(props: DatabaseTableProps) {
       return false;
     const row = rows()[Math.floor(nextIndex / editableColumns.length)];
     const column = editableColumns[nextIndex % editableColumns.length];
-    pendingEdit = { rowId: row.id, columnId: column.id };
+    pendingEdit = { rowId: row.rowId, columnId: column.id };
+    revealRow(row.rowId);
     editRequestedCell();
     return true;
   };
   const navigateRow = (rowId: string, columnId: string, direction: 1 | -1) => {
     if (!props.canEdit) return false;
     const column = columns().find((candidate) => candidate.id === columnId);
-    const rowIndex = rows().findIndex((row) => row.id === rowId);
+    const rowIndex = rows().findIndex((row) => row.rowId === rowId);
     const row = rows()[rowIndex + direction];
     if (rowIndex < 0 || !row || !column || !canEditCell(column)) return false;
-    pendingEdit = { rowId: row.id, columnId };
+    pendingEdit = { rowId: row.rowId, columnId };
+    revealRow(row.rowId);
     editRequestedCell();
     return true;
   };
@@ -274,7 +336,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     };
   };
   const selection = createCellSelection({
-    rows: () => rows().map((row) => row.id),
+    rows: () => rows().map((row) => row.rowId),
     columns: () => columns().map((column) => column.id),
     cellAt: (target) => {
       if (!(target instanceof Element) || !gridElement?.contains(target))
@@ -301,6 +363,26 @@ export function DatabaseTable(props: DatabaseTableProps) {
         ? (rows, columns) => props.onClearCells!(rows, columns)
         : undefined,
   });
+  props.controlsRef?.({
+    editCell: (rowId, columnId) => {
+      pendingEdit = { rowId, columnId };
+      revealRow(rowId);
+      editRequestedCell();
+    },
+    renameColumn: (columnId) => {
+      requestedHeader = columnId;
+      renameRequestedHeader();
+    },
+  });
+  const rowIds = createMemo(() => [...selection.rowIndex().keys()]);
+  createEffect(
+    on(
+      () => props.highlightRowId,
+      (rowId) => {
+        if (rowId) revealRow(rowId);
+      }
+    )
+  );
   const remoteRanges = createMemo(() =>
     (props.remoteUsers ?? []).flatMap((user) => {
       if (!user.rowId || !user.columnId) return [];
@@ -395,20 +477,27 @@ export function DatabaseTable(props: DatabaseTableProps) {
     );
     event.preventDefault();
     event.stopPropagation();
-    if (!next) return;
     const row = rows()[rowIndex];
     const column = columns()[columnIndex - 1];
-    const nextControl = row && column ? control(row.id, column.id) : undefined;
-    // Stepping down onto the new-record row starts typing there, like a spreadsheet.
-    if (
-      nextControl &&
+    if (!row || columnIndex < 0 || columnIndex > columns().length) return;
+    const editDraft =
       delta[0] === 1 &&
       props.canEdit &&
       column &&
       canEditCell(column) &&
-      props.isUnsavedRow?.(row.id)
-    )
-      nextControl.edit();
+      props.isUnsavedRow?.(row.rowId);
+    if (!next) {
+      if (editDraft) pendingEdit = { rowId: row.rowId, columnId: column.id };
+      else pendingFocus = { rowId: row.rowId, column: columnIndex };
+      revealRow(row.rowId);
+      editRequestedCell();
+      queueMicrotask(focusRequestedCell);
+      return;
+    }
+    const nextControl =
+      row && column ? control(row.rowId, column.id) : undefined;
+    // Stepping down onto the new-record row starts typing there, like a spreadsheet.
+    if (nextControl && editDraft) nextControl.edit();
     else if (nextControl) nextControl.focus();
     else
       (
@@ -421,6 +510,15 @@ export function DatabaseTable(props: DatabaseTableProps) {
     columnId?: string;
   }>();
   const contextRowId = () => contextTarget()?.rowId ?? '';
+  const keptRows = createMemo(() =>
+    [
+      ...new Set([focusedRow(), contextTarget()?.rowId, props.highlightRowId]),
+    ].flatMap((rowId) => {
+      const index =
+        rowId === undefined ? undefined : selection.rowIndex().get(rowId);
+      return index === undefined ? [] : [index];
+    })
+  );
   const rowButtons = new Map<string, HTMLButtonElement>();
   let afterClose: (() => void) | undefined;
   const deferAction = (action: () => void) => {
@@ -461,6 +559,17 @@ export function DatabaseTable(props: DatabaseTableProps) {
       <div
         ref={scrollContainer}
         class="@container/database-grid min-h-0 flex-1 overflow-auto overscroll-x-none scroll-py-10"
+        onScroll={(event) => {
+          const container = event.currentTarget;
+          if (
+            !props.isUnsavedRow?.(focusedRow() ?? '') &&
+            container.scrollHeight -
+              container.scrollTop -
+              container.clientHeight <
+              800
+          )
+            props.onLoadMore?.();
+        }}
       >
         <div
           ref={(grid) => {
@@ -491,9 +600,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
           tabIndex={-1}
           aria-multiselectable="true"
           aria-label={props.name}
-          aria-rowcount={rows().length + 2}
+          aria-rowcount={props.hasMoreRows ? -1 : rows().length + 2}
           aria-colcount={columns().length + 1 + Number(hasAddColumn())}
           data-grid
+          data-grid-saved-rows={summaryRows().length}
           class="relative flex min-h-full min-w-fit flex-col"
           onKeyDown={moveFocus}
           onFocusIn={(event) => {
@@ -502,7 +612,10 @@ export function DatabaseTable(props: DatabaseTableProps) {
                 ? event.target.closest<HTMLElement>('[data-grid-row-id]')
                     ?.dataset.gridRowId
                 : undefined;
-            if (rowId) props.onRowFocus?.(rowId);
+            if (rowId) {
+              setFocusedRow(rowId);
+              props.onRowFocus?.(rowId);
+            }
             if (!selection.range()) announceCell(cellAt(event.target));
           }}
           onFocusOut={(event) => {
@@ -527,6 +640,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           }}
         >
           <div
+            ref={setHeader}
             role="row"
             aria-rowindex={1}
             class="sticky top-0 z-1 grid min-h-10 border-b border-edge-muted bg-panel"
@@ -612,10 +726,23 @@ export function DatabaseTable(props: DatabaseTableProps) {
                     captureContext(event.target);
                 }}
               >
-                {/* Preserve editor identity when TanStack refreshes its row models. */}
-                <Key each={rows()} by="id">
-                  {(tableRow, index) => {
-                    const row = () => tableRow().original;
+                {/* Keep unchanged records and their editors mounted across reads. */}
+                <Virtualizer
+                  ref={(handle) => {
+                    virtualizer = handle;
+                  }}
+                  data={rowIds()}
+                  scrollRef={scrollContainer}
+                  startMargin={headerSize.height ?? 40}
+                  itemSize={41}
+                  bufferSize={240}
+                  keepMounted={keptRows()}
+                >
+                  {(rowId, index) => {
+                    const initial = rows()[index()];
+                    const row = createMemo(
+                      () => rows()[selection.rowIndex().get(rowId)!] ?? initial
+                    );
                     const highlighted = () =>
                       props.highlightRowId === row().rowId;
                     return (
@@ -635,8 +762,6 @@ export function DatabaseTable(props: DatabaseTableProps) {
                         data-grid-row-id={row().rowId}
                         data-highlighted={highlighted() ? '' : undefined}
                         aria-rowindex={index() + 2}
-                        // Off-screen rows skip style, layout and paint; they stay
-                        // in the DOM, the accessibility tree and find-in-page.
                         class="group grid min-h-10 border-b border-edge-muted/60 [contain-intrinsic-size:auto_41px] [content-visibility:auto] hover:bg-hover/50"
                         classList={{ 'bg-accent/15': highlighted() }}
                         style={{ 'grid-template-columns': template() }}
@@ -662,10 +787,11 @@ export function DatabaseTable(props: DatabaseTableProps) {
                           >
                             <button
                               ref={(button) => {
-                                rowButtons.set(row().rowId, button);
+                                rowButtons.set(rowId, button);
+                                queueMicrotask(focusRequestedCell);
                                 onCleanup(() => {
-                                  if (rowButtons.get(row().rowId) === button)
-                                    rowButtons.delete(row().rowId);
+                                  if (rowButtons.get(rowId) === button)
+                                    rowButtons.delete(rowId);
                                 });
                               }}
                               type="button"
@@ -681,9 +807,9 @@ export function DatabaseTable(props: DatabaseTableProps) {
                             </button>
                           </Show>
                         </div>
-                        <Key each={tableRow().getVisibleCells()} by="id">
-                          {(cell, columnIndex) => {
-                            const column = () => cell().column.columnDef.meta!;
+                        <Key each={columns()} by="id">
+                          {(column, columnIndex) => {
+                            const columnId = column().id;
                             const presence = () =>
                               presenceAt(row().rowId, column().id);
                             return (
@@ -731,7 +857,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                               >
                                 {props.renderCell(row, column, {
                                   onReady: (editor) =>
-                                    register(row().rowId, column().id, editor),
+                                    register(rowId, columnId, editor),
                                   onNavigate: (direction) =>
                                     navigate(
                                       row().rowId,
@@ -770,7 +896,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
                       </div>
                     );
                   }}
-                </Key>
+                </Virtualizer>
               </div>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
@@ -898,6 +1024,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
           <DatabaseTableSummary
             columns={columns()}
             rows={summaryRows()}
+            hasMoreRows={props.hasMoreRows}
             template={template()}
             addColumn={hasAddColumn()}
           />

@@ -26,10 +26,12 @@ import type {
 } from '../../../lib/core/database-sql/generated/types';
 import type { DatabaseWriteResult } from '../context/table-source';
 import type { DatabaseViewColumn } from '../core/database-view';
+import type { DatabaseRow } from '../core/table';
 import type { ViewChange } from '../core/view-state';
 import { allRecordsView } from '../core/views';
 import type { DatabaseWriteFailure } from '../core/write-failure';
 import { createFakeRowsSource, titleContains } from '../tests/fake-rows-source';
+import { GridResizeObserver } from '../tests/grid-resize-observer';
 import type { BoardPositions } from './database-board-view';
 import {
   type DatabaseRecordsActions,
@@ -217,12 +219,10 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   // JSDOM has no layout, so a highlighted row cannot scroll itself into view.
   Element.prototype.scrollIntoView = vi.fn();
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+  vi.stubGlobal('ResizeObserver', GridResizeObserver);
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
     }
   );
 });
@@ -1081,6 +1081,84 @@ describe('database table view', () => {
       false
     );
   });
+
+  it.each([false, true])(
+    'opens a duplicate beyond the loaded page without claiming it fails filters (filtered=%s)',
+    async (filtered) => {
+      const view = filtered
+        ? {
+            ...allRecords,
+            query: {
+              filter: {
+                conjunction: 'and' as const,
+                conditions: [
+                  {
+                    kind: 'condition' as const,
+                    column: 'title',
+                    test: {
+                      kind: 'text' as const,
+                      operator: 'contains' as const,
+                      value: 'Plan',
+                    },
+                  },
+                ],
+              },
+              sort: [],
+            },
+          }
+        : allRecords;
+      const fixture = createFakeRowsSource({
+        columns,
+        table: {
+          version: 1,
+          rows: Array.from({ length: 501 }, (_, index) => ({
+            rowId: `row-${index}`,
+            cells: { title: `Plan ${index}`, status: 'To do' },
+          })),
+        },
+        view,
+      });
+      fixture.setAnswer(() => (rows: DatabaseRow[]) => rows.slice(0, 500));
+      fixture.source.pagination = {
+        hasMore: () => true,
+        loading: () => false,
+        version: () => 1,
+        loadMore: () => okAsync(undefined),
+      };
+      fixture.persistWrites();
+      render(() => (
+        <DatabaseRecordsView
+          name="Projects"
+          source={fixture.source}
+          canEdit
+          view={view}
+          stored={false}
+          addColumn={() => null}
+          boardPositions={unplacedCards}
+        />
+      ));
+      fireEvent.contextMenu(
+        screen.getByRole('button', { name: 'Open Plan 0' })
+      );
+      const duplicate = await screen.findByRole('menuitem', {
+        name: 'Duplicate',
+      });
+      duplicate.focus();
+      fireEvent.keyDown(duplicate, { key: 'Enter' });
+      const dialog = await screen.findByRole('dialog');
+      expect(
+        within(dialog).getByRole('heading', { name: 'Plan 0' })
+      ).toBeTruthy();
+      expect(screen.queryByText(/doesn’t match your filters/)).toBeNull();
+      expect(screen.queryByText('Record created outside this view')).toBeNull();
+      expect(fixture.source.write).toHaveBeenCalledTimes(1);
+      expect(
+        fixture.source
+          .snapshot()
+          ?.retained.some((row) => row.rowId === 'created')
+      ).toBe(true);
+    }
+  );
 
   it('confirms a context-menu deletion and retries the same record without leaving a stale failure', async () => {
     const fixture = createFakeRowsSource({

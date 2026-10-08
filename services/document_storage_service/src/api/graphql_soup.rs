@@ -7,6 +7,7 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
 use axum::{
     Router,
+    body::HttpBody,
     extract::{OriginalUri, State, WebSocketUpgrade},
     http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
@@ -52,7 +53,7 @@ async fn graphql_handler(
     >,
     request_parts: Parts,
     request: GraphQLRequest,
-) -> GraphQLResponse {
+) -> Response {
     let acting_user = auth
         .authorization
         .as_ref()
@@ -63,11 +64,20 @@ async fn graphql_handler(
         acting_user.map(|user| user.macro_user_id.clone()),
         acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
     );
-    state
+    let result = state
         .graphql_soup_schema
         .execute(request.data(GraphqlRequestParts::new(request_parts)))
-        .await
-        .into()
+        .await;
+    graphql_response(result)
+}
+
+#[tracing::instrument(skip_all, name = "graphql.serialize", fields(response_bytes = tracing::field::Empty))]
+fn graphql_response(result: async_graphql::Response) -> Response {
+    let response = GraphQLResponse::from(result).into_response();
+    if let Some(bytes) = response.body().size_hint().exact() {
+        tracing::Span::current().record("response_bytes", bytes);
+    }
+    response
 }
 
 async fn subscription_handler(
@@ -171,6 +181,7 @@ fn insert_graphql_context_data(
     data.insert(state.favorites_service.clone());
     data.insert(state.channel_service.clone());
     data.insert(state.graphql_initiative_context.clone());
+    data.insert(state.graphql_database_rows_context.clone());
     data.insert(state.graphql_scheduled_action_context.clone());
     data.insert(state.graphql_calendar_context.clone());
     data.insert(state.graphql_calendar_mutation_context.clone());
@@ -242,3 +253,6 @@ fn insert_graphql_context_data(
         state.activity_reader.clone(),
     ));
 }
+
+#[cfg(test)]
+mod test;

@@ -31,7 +31,8 @@
             gi.group_total_count as "group_total_count",
             gi.row_in_group as "row_in_group"
         FROM GroupedItems gi
-        INNER JOIN database_rows r ON r.id::text = gi.id
+        -- Keep the indexed UUID column bare. Other Soup kinds can have legacy text ids.
+        INNER JOIN database_rows r ON r.id = (CASE WHEN gi.item_type = 'database_row' THEN gi.id END)::uuid
         INNER JOIN database_tables row_table ON row_table.id = r.table_id
         INNER JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE gi.item_type = 'database_row'

@@ -16,7 +16,7 @@ use item_filters::ast::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_grouping::{GroupByField, GroupingConfig};
-use models_pagination::{Identify, Query, SimpleSortMethod};
+use models_pagination::{Cursor, CursorVal, Identify, Query, SimpleSortMethod};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::database_row::SoupDatabaseRow;
 use std::sync::Arc;
@@ -282,6 +282,78 @@ async fn a_row_carries_every_cell_as_a_property(pool: PgPool) {
     assert_eq!(
         cells,
         vec![(STAGE, Some(PropertyValue::SelectOption(vec![WON])))]
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn detail_joins_accept_mixed_soup_ids(pool: PgPool) {
+    for detail in [
+        include_str!("../expanded/dynamic/database_row_detail.sql"),
+        include_str!("../expanded/dynamic/database_row_grouped_detail.sql"),
+    ] {
+        // Exercise the production fragments; SQLx cannot expand include_str! inside SQL.
+        let query = format!(
+            "WITH TopItems(item_type, id, sort_ts, group_key, group_total_count, row_in_group) AS (
+                VALUES
+                    ('chat', 'legacy-chat-id', now(), 'group', 3::bigint, 1::bigint),
+                    ('project', '70000000-0000-0000-0000-000000000001', now(), 'group', 3, 2),
+                    ('database_row', '70000000-0000-0000-0000-000000000003', now(), 'group', 3, 3)
+            ), GroupedItems AS (SELECT * FROM TopItems), details AS ({detail})
+            SELECT id FROM details"
+        );
+        let ids: Vec<String> = sqlx::query_scalar(&query).fetch_all(&pool).await.unwrap();
+        assert_eq!(ids, vec!["70000000-0000-0000-0000-000000000003"]);
+    }
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn created_cursor_pages_equal_timestamps_without_skipping_rows(pool: PgPool) {
+    sqlx::query!(
+        "UPDATE database_rows SET created_at = '2026-01-03T00:00:00Z' WHERE table_id = $1",
+        DEALS
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let filter = rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS))));
+    let first = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filter.clone()),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        first.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2]
+    );
+
+    let second = expanded_dynamic_cursor_soup(
+        &pool,
+        ExpandedDynamicCursorArgs {
+            user_id: viewer(),
+            limit: 2,
+            cursor: Query::Cursor(Cursor {
+                id: DEAL_2,
+                limit: 2,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::CreatedAt,
+                    last_val: "2026-01-03T00:00:00Z".parse().unwrap(),
+                },
+                filter,
+            }),
+            exclude_frecency: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        second.iter().map(Identify::id).collect::<Vec<_>>(),
+        vec![DEAL_1]
     );
 }
 

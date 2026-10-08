@@ -682,6 +682,18 @@ where
         async_graphql::ID(self.user_id.to_string())
     }
 
+    /// A page filtered and ordered across the entire authorized table.
+    async fn database_view_rows(
+        &self,
+        ctx: &Context<'_>,
+        database_id: ID,
+        input: graphql_databases::DatabaseViewRowsInput,
+    ) -> async_graphql::Result<
+        graphql_databases::DatabaseViewRowsPage<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    > {
+        graphql_databases::resolve_database_view_rows(ctx, database_id, input).await
+    }
+
     /// One initiative accessible to the authenticated viewer.
     async fn initiative(
         &self,

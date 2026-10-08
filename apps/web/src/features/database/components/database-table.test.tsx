@@ -8,10 +8,11 @@ import {
 } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { okAsync } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
+import { GridResizeObserver } from '../tests/grid-resize-observer';
 import { DatabaseTableView as DatabaseTable } from '../views/database-table-view';
 import type { DatabaseTableControls } from './database-table';
 import { GridCell } from './grid-cell';
@@ -51,7 +52,10 @@ const rows: DatabaseRow[] = [
   { rowId: 'one', cells: { name: 'First', notes: 'First note' } },
   { rowId: 'two', cells: { name: 'Second', notes: 'Second note' } },
 ];
-function setup(canEdit = true) {
+function setup(
+  canEdit = true,
+  ready?: (controls: DatabaseTableControls) => void
+) {
   const onAddColumnMount = vi.fn();
   function AddColumn() {
     onAddColumnMount();
@@ -73,12 +77,14 @@ function setup(canEdit = true) {
   const [columns, setColumns] = createSignal([name, readonly, notes]);
   const [records, setRecords] = createSignal(rows);
   const [unsavedRow, setUnsavedRow] = createSignal<string>();
+  const [hasMoreRows, setHasMoreRows] = createSignal(false);
   let controls!: DatabaseTableControls;
   render(() => (
     <DatabaseTable
       name="Tasks"
       rows={records()}
       isUnsavedRow={(rowId) => rowId === unsavedRow()}
+      hasMoreRows={hasMoreRows()}
       columns={columns()}
       titleColumnId="name"
       sort={[]}
@@ -88,6 +94,7 @@ function setup(canEdit = true) {
       addColumn={<AddColumn />}
       controlsRef={(tableControls) => {
         controls = tableControls;
+        ready?.(tableControls);
       }}
       getRowTitle={(row) => String(row.cells.name)}
       onOpen={onOpen}
@@ -124,6 +131,7 @@ function setup(canEdit = true) {
     controls,
     setRecords,
     setUnsavedRow,
+    setHasMoreRows,
   };
 }
 async function selectMenu(name: string) {
@@ -134,6 +142,12 @@ async function selectMenu(name: string) {
 
 let menuStyles: HTMLStyleElement;
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', GridResizeObserver);
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   Element.prototype.scrollIntoView = vi.fn();
   // JSDOM reports an empty animation name; presence expects CSS's default none.
@@ -146,9 +160,95 @@ afterEach(() => {
   cleanup();
   menuStyles.remove();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('spreadsheet interactions', () => {
+  it('scopes summary totals to loaded records until the final page', () => {
+    const { setHasMoreRows } = setup();
+    setHasMoreRows(true);
+    expect(
+      screen.getByRole('row', { name: 'Loaded records summary' }).textContent
+    ).toContain('2records loaded');
+    setHasMoreRows(false);
+    expect(
+      screen.getByRole('row', { name: 'Table summary' }).textContent
+    ).toContain('2records in view');
+  });
+
+  it('opens an edit requested synchronously when the table becomes ready', async () => {
+    setup(true, (controls) => controls.editCell('one', 'name'));
+    await waitFor(() => expect(screen.getByDisplayValue('First')).toBeTruthy());
+  });
+
+  it('mounts a bounded window and opens an editor outside that window', async () => {
+    const { setRecords, controls } = setup();
+    setRecords(
+      Array.from({ length: 1000 }, (_, index) => ({
+        rowId: `record-${index}`,
+        cells: { name: `Record ${index}` },
+      }))
+    );
+    expect(screen.getByRole('grid').getAttribute('aria-rowcount')).toBe('1002');
+    expect(document.querySelectorAll('[data-grid-row-id]').length).toBeLessThan(
+      80
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Name: Record 999. Click to edit' })
+    ).toBeNull();
+    controls.editCell('record-999', 'name');
+    await waitFor(() =>
+      expect(screen.getByDisplayValue('Record 999')).toBeTruthy()
+    );
+    expect(document.querySelectorAll('[data-grid-row-id]').length).toBeLessThan(
+      80
+    );
+  });
+
+  it('only reads changed rows while keeping column changes reactive', () => {
+    const [records, setRecords] = createSignal(rows);
+    const [columns, setColumns] = createSignal([name, notes]);
+    const reads: string[] = [];
+    render(() => (
+      <DatabaseTable
+        name="Tasks"
+        rows={records()}
+        columns={columns()}
+        sort={[]}
+        widths={{}}
+        canEdit={false}
+        pending={false}
+        addColumn={null}
+        getRowTitle={(row) => String(row.cells.name)}
+        onOpen={() => {}}
+        onSort={() => {}}
+        renderCell={(row, column) => {
+          const value = createMemo(() => {
+            const text = `${row().rowId}:${column().name}:${row().cells[column().id]}`;
+            reads.push(text);
+            return text;
+          });
+          return <span>{value()}</span>;
+        }}
+      />
+    ));
+    reads.length = 0;
+    setRecords([
+      { rowId: 'one', cells: { name: 'Changed', notes: 'First note' } },
+      rows[1],
+    ]);
+    expect(reads).toEqual(['one:Name:Changed', 'one:Notes:First note']);
+    expect(screen.getByText('two:Name:Second')).toBeTruthy();
+
+    reads.length = 0;
+    setColumns([name, { ...notes, name: 'Details' }]);
+    expect(reads.toSorted()).toEqual([
+      'one:Details:First note',
+      'two:Details:Second note',
+    ]);
+    expect(screen.getByText('one:Details:First note')).toBeTruthy();
+  });
+
   it('creates the add-column control once across grid layout and row updates', () => {
     const fixture = setup();
     expect(fixture.onAddColumnMount).toHaveBeenCalledOnce();

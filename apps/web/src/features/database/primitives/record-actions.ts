@@ -22,12 +22,14 @@ import type { createTableController } from './table-controller';
 /** How long a revealed row stays tinted. */
 const HIGHLIGHT_MS = 1_600;
 
-/** A saved record the view's filters leave out. */
+/** A saved record outside the currently loaded rows. */
 type HiddenSavedRecord = {
   rowId: string;
   created: boolean;
   /** The record was created, but the view has no column to type its first value in. */
   noEditableColumns?: boolean;
+  /** More pages remain, so absence does not prove a filter exclusion. */
+  unloaded?: boolean;
 };
 
 /** A new record: its first values, and whether to start editing it once saved. */
@@ -132,10 +134,14 @@ export function createRecordActions(options: {
     }
     if (
       mutation.kind !== 'delete' &&
-      options.constrained() &&
+      (options.constrained() || options.source.pagination?.hasMore()) &&
       !rows().some((row) => row.rowId === rowId)
     ) {
-      setHiddenSavedRecord({ rowId, created: mutation.kind === 'create' });
+      setHiddenSavedRecord({
+        rowId,
+        created: mutation.kind === 'create',
+        unloaded: options.source.pagination?.hasMore(),
+      });
     } else if (hiddenSavedRecord()?.rowId === rowId) {
       setHiddenSavedRecord(undefined);
     }
@@ -207,6 +213,7 @@ export function createRecordActions(options: {
       options.editCell(rowId, field.id);
     else if (!field)
       setHiddenSavedRecord({ rowId, created: true, noEditableColumns: true });
+    else open(rowId);
   }
   async function duplicateRow(rowId: string) {
     const actualId = actualRowId(rowId);

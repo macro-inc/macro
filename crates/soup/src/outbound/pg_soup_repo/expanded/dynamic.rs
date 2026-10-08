@@ -45,6 +45,7 @@ use models_soup::{
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
 use system_properties::{StatusOption, SystemPropertyKey};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -1229,6 +1230,7 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
             filter_ast::ExprFrame::And(a, b) => a || b,
             filter_ast::ExprFrame::Or(a, b) => a && b,
             filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectIdSelf(id)) => id.is_nil(),
             filter_ast::ExprFrame::Literal(ProjectLiteral::Importance(false)) => true,
             filter_ast::ExprFrame::Literal(_) => false,
         })
@@ -1808,7 +1810,6 @@ impl SoupRow {
         }
     }
 
-    #[tracing::instrument(err)]
     fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
         let document_server_facts = self.document_server_facts();
         Ok(SoupProjectionHydration {
@@ -1817,7 +1818,6 @@ impl SoupRow {
         })
     }
 
-    #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
@@ -1980,6 +1980,15 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
+    let mut connection = db
+        .acquire()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let items = build_query(cursor.filter(), exclude_frecency, *cursor.sort_method())
         .build()
         .bind(user_id.as_ref())
@@ -1998,8 +2007,11 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         // time costs ~1ms and keeps the plan stable.
         .persistent(false)
         .try_map(|row| SoupRow::from_row(&row)?.into_projection_hydration())
-        .fetch_all(db)
+        .fetch_all(&mut *connection)
+        .instrument(query_span.clone())
         .await?;
+    query_span.record("rows", items.len());
+    drop(query_span);
 
     Ok(items)
 }
@@ -2410,27 +2422,41 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         query = query.bind(et.clone());
     }
 
+    let mut connection = db
+        .acquire()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let rows: Vec<GroupedSoupRow> = query
         // Unnamed statement — same rationale as expanded_dynamic_cursor_soup:
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .fetch_all(db)
+        .fetch_all(&mut *connection)
+        .instrument(query_span.clone())
         .await?;
+    query_span.record("rows", rows.len());
+    drop(query_span);
+    drop(connection);
 
-    let items = rows
-        .into_iter()
-        .map(|row| {
-            Ok(ItemGroupingInfo {
-                item: row.item.into_soup_item()?,
-                key: row.group.group_key,
-                total_group_count: usize::try_from(row.group.group_total_count)
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
-                index_in_group: usize::try_from(row.group.row_in_group)
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+    let items = tracing::info_span!("soup.rows.convert", rows = rows.len()).in_scope(|| {
+        rows.into_iter()
+            .map(|row| {
+                Ok(ItemGroupingInfo {
+                    item: row.item.into_soup_item()?,
+                    key: row.group.group_key,
+                    total_group_count: usize::try_from(row.group.group_total_count)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    index_in_group: usize::try_from(row.group.row_in_group)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                })
             })
-        })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+            .collect::<Result<Vec<_>, sqlx::Error>>()
+    })?;
 
     Ok(items.into_iter())
 }

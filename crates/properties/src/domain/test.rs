@@ -1,5 +1,6 @@
 //! Unit tests for PropertiesServiceImpl using mockall-generated repo.
 
+mod database_rows;
 mod initiatives;
 mod options_batch;
 mod project_agents;

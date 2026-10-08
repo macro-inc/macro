@@ -44,4 +44,4 @@ pub use split::{
     GqlQuery, JoinPlan, KeyHint, MAX_KEY_HINT_VALUES, Plan, Propf, PropfLiteral, PropfValue,
     RelationPlan, Shape, split,
 };
-pub use view::{Board, BoardLane, board, compile_view};
+pub use view::{Board, BoardLane, board, compile_table_query, compile_view};

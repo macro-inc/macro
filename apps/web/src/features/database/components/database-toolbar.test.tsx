@@ -771,7 +771,8 @@ describe('database toolbar view controls', () => {
     expect(saving.textContent).toBe('Saving…');
   });
 
-  it('has no New button on a table view', () => {
+  it('creates a record from the table toolbar without scrolling through loaded rows', () => {
+    const createRecord = vi.fn();
     render(() => (
       <DatabaseToolbar
         columns={[]}
@@ -795,11 +796,12 @@ describe('database toolbar view controls', () => {
         onShowViewAs={vi.fn()}
         onDeleteView={vi.fn(() => okAsync(undefined))}
         onReorderViews={vi.fn()}
-        onCreateRecord={vi.fn()}
+        onCreateRecord={createRecord}
         canCreateRecord
       />
     ));
-    expect(screen.queryByRole('button', { name: 'New record' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'New record' }));
+    expect(createRecord).toHaveBeenCalledTimes(1);
   });
 });
 

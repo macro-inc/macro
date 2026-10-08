@@ -13,11 +13,12 @@ ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
+base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true }
 contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 database_sql = { path = "../database_sql", features = ["schema"] }
-databases = { path = "../databases", default-features = false, features = ["ports"] }
+databases = { path = "../databases", default-features = false, features = ["ports", "view_rows"] }
 email = { path = "../email", default-features = false }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
@@ -32,6 +33,7 @@ rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 soup = { path = "../soup", default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }

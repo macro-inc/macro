@@ -85,11 +85,15 @@ pages), identity, email links and filter/search projections, but not the viewer'
 `soup(...)` / `groupSoup(...)` page wrappers. `@cacheOnly` still controls the
 returned cursor projection; it is not an entity-eviction directive.
 
-Foreground Soup snapshots share a per-viewer budget of 64 pages and 512 KiB
+Foreground Soup snapshots share a per-viewer budget of 64 pages and 2 MiB
 (encoded fields plus retention metadata). Most recently written pages win; reads
 do not persist recency or cause a COMMIT. Individually oversized snapshots are
 not retained. Evicted snapshots miss and require a network refetch; their entity
 records and pending offline mutations remain available.
+
+The byte budget accommodates a capped 20,000-row database read at 500 rows per
+page, including filter-bearing cursors. A smaller budget evicted the beginning
+of a table while loading its end, forcing warm reads back onto the network.
 
 On the first compatible Turso open after this upgrade, a metadata-versioned
 transaction compacts only `GraphqlUser` records via the type/id index. It prefers

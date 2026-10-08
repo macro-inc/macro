@@ -14,6 +14,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { CellTextEditorProps } from '../../../components/cell-text-editor/types';
 import {
@@ -314,92 +315,93 @@ export function GridCell(props: GridCellProps) {
     />
   );
 
-  return (
-    <div ref={cell} class="relative min-w-0">
-      <Switch>
-        <Match when={cellKind() === 'editing'}>{renderEditor()}</Match>
-        <Match when={cellKind() === 'boolean'}>
-          <BooleanCell
+  const content: Record<GridCellKind, () => JSX.Element> = {
+    editing: renderEditor,
+    boolean: () => (
+      <BooleanCell
+        column={props.column}
+        value={props.value}
+        editable={editable()}
+        wrapperRef={(element) => {
+          booleanWrapper = element;
+        }}
+        inputRef={(element) => {
+          trigger = element;
+        }}
+        onNavigate={props.onNavigate}
+        onWrite={write}
+      />
+    ),
+    date: () => (
+      <DateCell
+        {...props}
+        onWrite={write}
+        onReady={(control) => {
+          popupControl = control;
+        }}
+      />
+    ),
+    select: () => (
+      <SelectCell
+        {...props}
+        onWrite={write}
+        onReady={(control) => {
+          popupControl = control;
+        }}
+      />
+    ),
+    'readonly-select': () => (
+      <div
+        ref={(element) => {
+          trigger = element;
+        }}
+        tabindex={-1}
+        class="px-2.5 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
+      >
+        <Show when={props.value !== null}>
+          <SelectPill label={String(props.value)} column={props.column} />
+        </Show>
+      </div>
+    ),
+    text: () => (
+      <div class="relative">
+        {/* Keep the resolved label and its subscription alive while picking. */}
+        <div
+          inert={isEntity() && editing()}
+          classList={{
+            invisible: isEntity() && editing() && draft() !== '',
+          }}
+        >
+          <TextCell
             column={props.column}
             value={props.value}
+            emptyLabel={props.emptyLabel}
             editable={editable()}
-            wrapperRef={(element) => {
-              booleanWrapper = element;
-            }}
-            inputRef={(element) => {
-              trigger = element;
-            }}
-            onNavigate={props.onNavigate}
-            onWrite={write}
-          />
-        </Match>
-        <Match when={cellKind() === 'date'}>
-          <DateCell
-            {...props}
-            onWrite={write}
-            onReady={(control) => {
-              popupControl = control;
-            }}
-          />
-        </Match>
-        <Match when={cellKind() === 'select'}>
-          <SelectCell
-            {...props}
-            onWrite={write}
-            onReady={(control) => {
-              popupControl = control;
-            }}
-          />
-        </Match>
-        <Match when={cellKind() === 'readonly-select'}>
-          <div
+            isEntity={isEntity()}
+            mentionPreview={mentionPreview()}
+            hasResolvedMentionLabel={hasResolvedMentionLabel()}
+            renderTextValue={props.renderTextValue}
+            renderMentionValue={props.renderMentionValue}
             ref={(element) => {
               trigger = element;
             }}
-            tabindex={-1}
-            class="px-2.5 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
-          >
-            <Show when={props.value !== null}>
-              <SelectPill label={String(props.value)} column={props.column} />
-            </Show>
-          </div>
-        </Match>
-        <Match when={cellKind() === 'text'}>
-          <div class="relative">
-            {/* Keep the resolved label and its subscription alive while picking. */}
-            <div
-              inert={isEntity() && editing()}
-              classList={{
-                invisible: isEntity() && editing() && draft() !== '',
-              }}
-            >
-              <TextCell
-                column={props.column}
-                value={props.value}
-                emptyLabel={props.emptyLabel}
-                editable={editable()}
-                isEntity={isEntity()}
-                mentionPreview={mentionPreview()}
-                hasResolvedMentionLabel={hasResolvedMentionLabel()}
-                renderTextValue={props.renderTextValue}
-                renderMentionValue={props.renderMentionValue}
-                ref={(element) => {
-                  trigger = element;
-                }}
-                onNavigate={props.onNavigate}
-                onBeginEdit={beginEdit}
-                onClearEntity={() => {
-                  setSelectedMention(undefined);
-                  void write(null);
-                }}
-              />
-            </div>
-            <Show when={isEntity() && editing()}>
-              <div class="absolute inset-x-0 top-0">{renderEditor()}</div>
-            </Show>
-          </div>
-        </Match>
-      </Switch>
+            onNavigate={props.onNavigate}
+            onBeginEdit={beginEdit}
+            onClearEntity={() => {
+              setSelectedMention(undefined);
+              void write(null);
+            }}
+          />
+        </div>
+        <Show when={isEntity() && editing()}>
+          <div class="absolute inset-x-0 top-0">{renderEditor()}</div>
+        </Show>
+      </div>
+    ),
+  };
+  return (
+    <div ref={cell} class="relative min-w-0">
+      <Dynamic component={content[cellKind()]} />
       <Show when={mentionOpen() && mentionsEnabled()}>
         {props.renderMentionPicker?.({
           get anchor() {

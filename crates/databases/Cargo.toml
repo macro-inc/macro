@@ -33,6 +33,8 @@ gateway = ["dep:anyhow", "dep:connection_gateway_client", "outbound"]
 # Driven adapters share the port contracts.
 outbound = ["ports"]
 ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
+# Ordered, filtered reads of a database view.
+view_rows = ["ports"]
 # Postgres persistence for databases/tables/columns/rows, and cells through
 # the properties adapter.
 postgres = [

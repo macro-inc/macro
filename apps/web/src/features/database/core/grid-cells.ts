@@ -55,11 +55,26 @@ function gridValue(
 }
 
 /** A row-shaped outcome's rows, with a cell for each of the table's columns. */
+export type GridRowsRead = {
+  outcome: Outcome;
+  catalog: Catalog;
+  columns: readonly ColumnDetail[];
+  rows: DatabaseRow[];
+};
+
+/** Convert new cells, reusing unchanged vectors only under the same schema. */
 export function gridRows(
   outcome: Outcome,
   catalog: Catalog,
-  columns: readonly ColumnDetail[]
+  columns: readonly ColumnDetail[],
+  previous?: GridRowsRead
 ): DatabaseRow[] {
+  const reusable =
+    previous?.catalog === catalog &&
+    previous.columns === columns &&
+    previous.outcome.columns === outcome.columns
+      ? previous
+      : undefined;
   const catalogColumns = new Map(
     catalog.tables.flatMap((table) =>
       table.columns.map((column) => [column.id, column] as const)
@@ -75,27 +90,36 @@ export function gridRows(
       kind: catalogColumns.get(definition)?.kind,
     };
   });
-  return outcome.rowIds.map((rowId, rowIndex) => ({
-    rowId,
-    cells: Object.fromEntries(
-      placed.map(({ id, index, kind }) => [
-        id,
-        gridValue(outcome.rows[rowIndex]?.[index] ?? null, kind),
-      ])
-    ),
-  }));
+  return outcome.rowIds.map((rowId, rowIndex) =>
+    reusable?.outcome.rowIds[rowIndex] === rowId &&
+    reusable.outcome.rows[rowIndex] === outcome.rows[rowIndex]
+      ? reusable.rows[rowIndex]
+      : {
+          rowId,
+          cells: Object.fromEntries(
+            placed.map(({ id, index, kind }) => [
+              id,
+              gridValue(outcome.rows[rowIndex]?.[index] ?? null, kind),
+            ])
+          ),
+        }
+  );
 }
 
-/** `next`, with each row whose cells read exactly as in `previous` kept as that row. */
+/** Reuse unchanged rows, and the array when their order also stays the same. */
 export function keepUnchangedRows(
-  previous: readonly DatabaseRow[],
+  previous: DatabaseRow[],
   next: DatabaseRow[]
 ): DatabaseRow[] {
   const shown = new Map(previous.map((row) => [row.rowId, row]));
-  return next.map((row) => {
+  const kept = next.map((row) => {
     const before = shown.get(row.rowId);
     return before && sameCells(before.cells, row.cells) ? before : row;
   });
+  return kept.length === previous.length &&
+    kept.every((row, index) => row === previous[index])
+    ? previous
+    : kept;
 }
 
 function sameCells(

@@ -3,6 +3,27 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
 #[test]
+fn nil_project_ids_are_impossible_but_parent_and_negated_filters_are_not() {
+    let nil = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::nil()));
+    let real = Expr::val(ProjectLiteral::ProjectIdSelf(Uuid::from_u128(1)));
+    assert!(project_filter_is_impossible(Some(&nil)));
+    assert!(project_filter_is_impossible(Some(&Expr::and(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::or(
+        nil.clone(),
+        real.clone()
+    ))));
+    assert!(!project_filter_is_impossible(Some(&Expr::is_not(nil))));
+    assert!(!project_filter_is_impossible(Some(&real)));
+    assert!(!project_filter_is_impossible(Some(&Expr::val(
+        ProjectLiteral::ProjectId(Uuid::nil())
+    ))));
+    assert!(!project_filter_is_impossible(None));
+}
+
+#[test]
 fn grouped_access_shape() {
     let filter = EntityFilterAst::mock_empty();
     let grouping = GroupingConfig {
