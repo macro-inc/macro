@@ -227,6 +227,7 @@ export function ChannelAvatar(props: {
         >
           <Entity.Icon
             entity={props.channel}
+            theme="monochrome"
             suppressClick
             showTooltip={false}
           />
