@@ -16,7 +16,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   protected async fetch(): Promise<CallRecordDetail> {
     return unwrap(
-      await this.client.storage.getCallRecord({ path: { call_id: this.id } })
+      await this.client.storage.getCallRecord({ path: { call_id: this.id } }),
     );
   }
 
@@ -35,7 +35,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   /** The channel the call belongs to, if it is a channel call. */
   readonly channel = this.mappedField('channelId', (id) =>
-    id ? Channel.byId(this.client, id) : undefined
+    id ? Channel.byId(this.client, id) : undefined,
   );
 
   /** The display name of the channel the call belongs to. */
@@ -43,7 +43,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
 
   /** The user who started the call. */
   readonly creator = this.mappedField('createdBy', (id) =>
-    User.byId(this.client, id)
+    User.byId(this.client, id),
   );
 
   /** Whether the call is still in progress. */
@@ -105,7 +105,7 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
       c.storage.editCallRecord({
         path: { call_id: this.id },
         body: { customName: name ?? '' },
-      })
+      }),
     );
   }
 
@@ -122,14 +122,14 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
         body: {
           sharePermission: { teamShareAccessLevel: shared ? 'view' : null },
         },
-      })
+      }),
     );
   }
 
   /** Delete the call record. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
-      c.storage.deleteCallRecord({ path: { call_id: this.id } })
+      c.storage.deleteCallRecord({ path: { call_id: this.id } }),
     );
   }
 

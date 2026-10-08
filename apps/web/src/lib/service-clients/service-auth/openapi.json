@@ -845,6 +845,105 @@
         }
       }
     },
+    "/github_pull_requests/enable-auto-merge": {
+      "post": {
+        "tags": ["github_pull_requests"],
+        "summary": "Enables auto-merge on a GitHub pull request as the authenticated user. Auto-merge\nwill merge the pull request automatically once all required status checks pass.\nGitHub applies the user's permissions and the repository's settings; a refusal\nis returned with GitHub's message.",
+        "operationId": "enable_auto_merge_github_pull_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableAutoMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnableAutoMergeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user cannot push to the repository",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No GitHub link, or the pull request is not visible to the user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Auto-merge cannot be enabled: draft, already merged, closed, or not allowed by repository settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/github_pull_requests/enrich": {
       "post": {
         "tags": ["github_pull_requests"],
@@ -5369,6 +5468,49 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EnableAutoMergeRequest": {
+        "type": "object",
+        "description": "A request to enable auto-merge on a pull request.",
+        "required": ["owner", "repo", "number"],
+        "properties": {
+          "mergeMethod": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubMergeMethod",
+                "description": "The merge method to use when auto-merging. Omitted means the first\nmethod the repository allows, in the order merge, squash, rebase."
+              }
+            ]
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The GitHub pull request number.",
+            "minimum": 0
+          },
+          "owner": {
+            "type": "string",
+            "description": "The GitHub repository owner or organization."
+          },
+          "repo": {
+            "type": "string",
+            "description": "The GitHub repository name."
+          }
+        }
+      },
+      "EnableAutoMergeResponse": {
+        "type": "object",
+        "description": "Response body for enabling auto-merge.",
+        "required": ["autoMergeEnabled"],
+        "properties": {
+          "autoMergeEnabled": {
+            "type": "boolean",
+            "description": "Whether auto-merge is now enabled."
+          }
+        }
       },
       "EnrichGithubPullRequestsProxyRequest": {
         "type": "object",

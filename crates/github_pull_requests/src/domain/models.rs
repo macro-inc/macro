@@ -24,13 +24,15 @@ pub use diff::{
 pub use index::{PullRequestIndexOutcome, PullRequestIndexRecord, PullRequestIndexSummary};
 pub use key::GithubKey;
 pub use pull_request::{
-    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubMergeMethod,
-    GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestMerge, GithubPullRequestRef,
-    GithubPullRequestReview, GithubPullRequestReviewDecision, GithubPullRequestReviewState,
-    GithubPullRequestStatus, GithubPullRequestUser, GithubRepositoryMergeSettings,
-    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse, latest_reviews,
+    EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichGithubPullRequestsProxyRequest,
+    EnrichGithubPullRequestsResponse, EnrichedGithubPullRequest,
+    GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubAutoMergeOutcome, GithubAutoMergeRejection,
+    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
+    GithubPullRequestMerge, GithubPullRequestRef, GithubPullRequestReview,
+    GithubPullRequestReviewDecision, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUser, GithubRepositoryMergeSettings, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse, latest_reviews,
 };
 
 /// A pull request's latest data, for the record stored for one source.

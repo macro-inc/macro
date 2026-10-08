@@ -80,91 +80,89 @@ function macro() {
 }
 
 describe('shared message API contracts', () => {
-  test.each([callId, replyId])(
-    'call message events hydrate call handles and keep replies in the call thread (%s)',
-    async (messageId) => {
-      const parent = { type: 'call', id: callId } as const;
-      const path = `/messages/call/${callId}`;
-      let record = message({
-        id: messageId,
+  test.each([
+    callId,
+    replyId,
+  ])('call message events hydrate call handles and keep replies in the call thread (%s)', async (messageId) => {
+    const parent = { type: 'call', id: callId } as const;
+    const path = `/messages/call/${callId}`;
+    let record = message({
+      id: messageId,
+      parent,
+      thread_id: messageId === callId ? null : callId,
+    });
+    const requests = serve(async (request) => {
+      const url = new URL(request.url);
+      if (url.pathname === `${path}/items/${messageId}`) {
+        if (request.method === 'PATCH') {
+          record = { ...record, ...(await request.json()) };
+        }
+        if (request.method === 'DELETE') {
+          record = { ...record, deleted_at: timestamp, content: '' };
+        }
+        return Response.json(record);
+      }
+      if (url.pathname === path && request.method === 'POST') {
+        const body = await request.json();
+        expect(body.thread_id).toBe(callId);
+        return Response.json(
+          message({ ...body, parent, id: rootId, thread_id: callId }),
+        );
+      }
+      return new Response(null, { status: 404 });
+    });
+    const client = macro();
+    const event = hydrateMessageEvent(client._client, {
+      event_type: 'message.posted',
+      metadata: {
         parent,
-        thread_id: messageId === callId ? null : callId,
-      });
-      const requests = serve(async (request) => {
-        const url = new URL(request.url);
-        if (url.pathname === `${path}/items/${messageId}`) {
-          if (request.method === 'PATCH') {
-            record = { ...record, ...(await request.json()) };
-          }
-          if (request.method === 'DELETE') {
-            record = { ...record, deleted_at: timestamp, content: '' };
-          }
-          return Response.json(record);
-        }
-        if (url.pathname === path && request.method === 'POST') {
-          const body = await request.json();
-          expect(body.thread_id).toBe(callId);
-          return Response.json(
-            message({ ...body, parent, id: rootId, thread_id: callId })
-          );
-        }
-        return new Response(null, { status: 404 });
-      });
-      const client = macro();
-      const event = hydrateMessageEvent(client._client, {
-        event_type: 'message.posted',
-        metadata: {
-          parent,
-          root_id: callId,
-          message_id: messageId,
-          thread_id: record.thread_id,
-          content: record.content,
-          sender: record.sender_id,
-          created_at: timestamp,
-          attachments: [],
-          mentions: [],
-        },
-      });
-      if (event.target.type !== 'call') throw new Error(event.target.type);
-      expect(requests).toHaveLength(0);
-      expect(event.target.call.id).toBe(callId);
-      expect(event.target.threadId).toBe(callId);
-      expect(event.target.message.id).toBe(messageId);
-      expect(event.target.message.call().id).toBe(callId);
-      expect(client.calls.byId(callId).message(messageId).callId).toBe(callId);
-      await expect(event.target.message.content()).resolves.toBe(
-        record.content
-      );
-      expect((await event.target.message.author()).id).toBe(record.sender_id);
+        root_id: callId,
+        message_id: messageId,
+        thread_id: record.thread_id,
+        content: record.content,
+        sender: record.sender_id,
+        created_at: timestamp,
+        attachments: [],
+        mentions: [],
+      },
+    });
+    if (event.target.type !== 'call') throw new Error(event.target.type);
+    expect(requests).toHaveLength(0);
+    expect(event.target.call.id).toBe(callId);
+    expect(event.target.threadId).toBe(callId);
+    expect(event.target.message.id).toBe(messageId);
+    expect(event.target.message.call().id).toBe(callId);
+    expect(client.calls.byId(callId).message(messageId).callId).toBe(callId);
+    await expect(event.target.message.content()).resolves.toBe(record.content);
+    expect((await event.target.message.author()).id).toBe(record.sender_id);
 
-      await event.target.message.edit('Edited call message');
-      await expect(event.target.message.content()).resolves.toBe(
-        'Edited call message'
-      );
-      const body = msg`Thanks ${client.users.byId('macro|colleague@example.com')}`;
-      const reply = await event.target.message.reply(body);
-      expect(reply.callId).toBe(callId);
-      await expect(reply.content()).resolves.toBe(body.content);
-      await event.target.message.delete();
+    await event.target.message.edit('Edited call message');
+    await expect(event.target.message.content()).resolves.toBe(
+      'Edited call message',
+    );
+    const body = msg`Thanks ${client.users.byId('macro|colleague@example.com')}`;
+    const reply = await event.target.message.reply(body);
+    expect(reply.callId).toBe(callId);
+    await expect(reply.content()).resolves.toBe(body.content);
+    await event.target.message.delete();
 
-      expect(
-        requests.map((request) => [
-          request.method,
-          new URL(request.url).pathname,
-        ])
-      ).toEqual([
-        ['GET', `${path}/items/${messageId}`],
-        ['PATCH', `${path}/items/${messageId}`],
-        ['GET', `${path}/items/${messageId}`],
-        ['POST', path],
-        ['DELETE', `${path}/items/${messageId}`],
-      ]);
-      await expect(requests[3]?.json()).resolves.toMatchObject({
-        ...body,
-        thread_id: callId,
-      });
-    }
-  );
+    expect(
+      requests.map((request) => [
+        request.method,
+        new URL(request.url).pathname,
+      ]),
+    ).toEqual([
+      ['GET', `${path}/items/${messageId}`],
+      ['PATCH', `${path}/items/${messageId}`],
+      ['GET', `${path}/items/${messageId}`],
+      ['POST', path],
+      ['DELETE', `${path}/items/${messageId}`],
+    ]);
+    await expect(requests[3]?.json()).resolves.toMatchObject({
+      ...body,
+      thread_id: callId,
+    });
+  });
 
   test('channel posts, lazy reads, edits, reactions, and deletes use message routes', async () => {
     let record = message();
@@ -215,8 +213,8 @@ describe('shared message API contracts', () => {
     ]);
     expect(
       requests.every(
-        (r) => r.headers.get('authorization') === 'Bearer user-token'
-      )
+        (r) => r.headers.get('authorization') === 'Bearer user-token',
+      ),
     ).toBe(true);
     await expect(requests[0]?.json()).resolves.toMatchObject(body);
     await expect(requests[4]?.json()).resolves.toEqual({
@@ -382,7 +380,7 @@ describe('shared message API contracts', () => {
         id: `reply-${index}`,
         thread_id: rootId,
         content: `Reply ${index}`,
-      })
+      }),
     );
     const full = thread(root, replies);
     const cursor = { id: root.id, created_at: timestamp };
@@ -398,7 +396,7 @@ describe('shared message API contracts', () => {
         return Response.json(
           selection.cursor
             ? { items: [listItem(thread(secondRoot))], next_cursor: null }
-            : { items: [listItem(full)], next_cursor: cursor }
+            : { items: [listItem(full)], next_cursor: cursor },
         );
       }
       return new Response(null, { status: 404 });
@@ -437,7 +435,7 @@ describe('shared message API contracts', () => {
       if (url.pathname === path && request.method === 'POST') {
         const body = await request.json();
         return Response.json(
-          body.thread_id ? reply : { ...root, content: body.content }
+          body.thread_id ? reply : { ...root, content: body.content },
         );
       }
       if (url.pathname === `${path}/items/${replyId}`) {
@@ -464,7 +462,7 @@ describe('shared message API contracts', () => {
 
     const writes = requests.filter((request) => request.method !== 'GET');
     expect(
-      writes.map((request) => [request.method, new URL(request.url).pathname])
+      writes.map((request) => [request.method, new URL(request.url).pathname]),
     ).toEqual([
       ['POST', path],
       ['POST', path],
@@ -482,7 +480,7 @@ describe('shared message API contracts', () => {
     const parent = { type: 'crm_contact', id: contactId } as const;
     const path = `/messages/crm_contact/${contactId}`;
     const requests = serve(() =>
-      Response.json(message({ parent, content: 'Met at the conference' }))
+      Response.json(message({ parent, content: 'Met at the conference' })),
     );
     const comment = await macro()
       .crm.contactById(contactId)
@@ -517,7 +515,7 @@ describe('shared message API contracts', () => {
     await user.channels.byId(channelId).send('User bot');
     expect(requests[3]?.headers.get('x-macro-bot-scope')).toBe('user');
     await expect(
-      user.channels.byId(channelId).message(rootId).reply('Reply')
+      user.channels.byId(channelId).message(rootId).reply('Reply'),
     ).rejects.toThrow('does not support threads');
     expect(requests).toHaveLength(4);
   });

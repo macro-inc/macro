@@ -9,9 +9,10 @@ use macro_user_id::{
 
 use crate::domain::{
     models::{
-        EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubLink, GithubMergeMethod,
-        GithubMergeOutcome, GithubMergeRejection, GithubPullRequestRef,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichedGithubPullRequest,
+        GithubAccessToken, GithubAutoMergeOutcome, GithubAutoMergeRejection, GithubError,
+        GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
+        GithubPullRequestRef, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -129,6 +130,41 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                     .default_method()
                     .ok_or_else(|| GithubError::PullRequestMergeRejected {
                         rejection: GithubMergeRejection::NotMergeable,
+                        message: "This repository does not allow any merge method.".to_string(),
+                    })
+            }
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    owner=%request.owner,
+                    repo=%request.repo,
+                    "failed to read repository merge settings, attempting a merge commit"
+                );
+                Ok(GithubMergeMethod::Merge)
+            }
+        }
+    }
+
+    /// The merge method for an auto-merge request that named none.
+    async fn resolve_auto_merge_method(
+        &self,
+        access_token: &GithubAccessToken,
+        request: &EnableAutoMergeRequest,
+    ) -> Result<GithubMergeMethod, GithubError> {
+        if let Some(method) = request.merge_method {
+            return Ok(method);
+        }
+
+        match self
+            .oauth
+            .get_repository_merge_settings(access_token.as_str(), &request.owner, &request.repo)
+            .await
+        {
+            Ok(settings) => {
+                settings
+                    .default_method()
+                    .ok_or_else(|| GithubError::AutoMergeRejected {
+                        rejection: GithubAutoMergeRejection::NotAllowed,
                         message: "This repository does not allow any merge method.".to_string(),
                     })
             }
@@ -310,6 +346,37 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             message: merge.message,
             pull_request,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn enable_auto_merge(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: EnableAutoMergeRequest,
+    ) -> Result<EnableAutoMergeResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+        let merge_method = self.resolve_auto_merge_method(&access_token, &request).await?;
+
+        let outcome = self
+            .oauth
+            .enable_auto_merge(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                merge_method,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        match outcome {
+            GithubAutoMergeOutcome::Enabled => Ok(EnableAutoMergeResponse {
+                auto_merge_enabled: true,
+            }),
+            GithubAutoMergeOutcome::Rejected { rejection, message } => {
+                Err(GithubError::AutoMergeRejected { rejection, message })
+            }
+        }
     }
 
     #[tracing::instrument(skip(self), err)]

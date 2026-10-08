@@ -25,6 +25,8 @@ import type {
   CheckoutSessionV2Response,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  EnableAutoMergeRequest,
+  EnableAutoMergeResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -223,6 +225,14 @@ export type GithubMergeErrorCode =
   | 'NO_GITHUB_LINK'
   | 'MERGE_REJECTED';
 
+/**
+ * Errors an enable-auto-merge can end in beyond the shared GitHub ones.
+ */
+export type GithubAutoMergeErrorCode =
+  | GithubReauthenticationErrorCode
+  | 'NO_GITHUB_LINK'
+  | 'AUTO_MERGE_REJECTED';
+
 /** The body the merge route answers with when the user has not linked GitHub. */
 const NO_GITHUB_LINK_MESSAGE = 'no github link found';
 
@@ -266,6 +276,34 @@ const githubMergeErrorResponseHandler: ErrorResponseHandler<GithubMergeErrorCode
     return {
       code: 'MERGE_REJECTED',
       message: message ?? 'GitHub declined to merge the pull request',
+    };
+  };
+
+/**
+ * Keeps GitHub's own words on a declined enable-auto-merge. GitHub names
+ * why it cannot be enabled (draft, not allowed on repo, etc.).
+ */
+const githubAutoMergeErrorResponseHandler: ErrorResponseHandler<GithubAutoMergeErrorCode> =
+  async function handleGithubAutoMergeErrorResponse(response) {
+    if (response.status === 428) {
+      return {
+        code: 'REAUTHENTICATION_REQUIRED',
+        message: 'GitHub reauthentication required',
+      };
+    }
+    if (![403, 404, 409, 422].includes(response.status)) {
+      return githubErrorResponseHandler(response);
+    }
+    const message = await readErrorMessage(response);
+    if (response.status === 404 && message === NO_GITHUB_LINK_MESSAGE) {
+      return {
+        code: 'NO_GITHUB_LINK',
+        message: 'Connect GitHub in Settings to enable auto-merge',
+      };
+    }
+    return {
+      code: 'AUTO_MERGE_REJECTED',
+      message: message ?? 'GitHub declined to enable auto-merge',
     };
   };
 
@@ -512,6 +550,18 @@ export const authServiceClient = {
           method: 'POST',
           body: JSON.stringify(args),
           errorResponseHandler: githubMergeErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+  async enableAutoMergeGithubPullRequest(args: EnableAutoMergeRequest) {
+    return (
+      await fetchWithAuth<EnableAutoMergeResponse, GithubAutoMergeErrorCode>(
+        `${authHost}/github_pull_requests/enable-auto-merge`,
+        {
+          method: 'POST',
+          body: JSON.stringify(args),
+          errorResponseHandler: githubAutoMergeErrorResponseHandler,
         }
       )
     ).map((result) => result);

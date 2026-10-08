@@ -1,8 +1,8 @@
 use github::domain::models::{
-    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GithubMergeMethod, GithubPullRequestCheckRun,
-    GithubPullRequestComment, GithubPullRequestRef, GithubPullRequestStatus,
-    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+    EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichGithubPullRequestsProxyRequest,
+    EnrichGithubPullRequestsResponse, EnrichedGithubPullRequest, GithubMergeMethod,
+    GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestRef,
+    GithubPullRequestStatus, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
 };
 use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
@@ -112,6 +112,7 @@ use model::user::{
                 /// /github_pull_requests
                 github_pull_requests::handler,
                 github_pull_requests::merge_handler,
+                github_pull_requests::enable_auto_merge_handler,
 
                 /// /oauth
                 oauth::oauth_redirect::handler,
@@ -269,6 +270,8 @@ use model::user::{
                         GithubMergeMethod,
                         MergeGithubPullRequestRequest,
                         MergeGithubPullRequestResponse,
+                        EnableAutoMergeRequest,
+                        EnableAutoMergeResponse,
 
                         UserQuota,
                         UserOrganizationResponse,

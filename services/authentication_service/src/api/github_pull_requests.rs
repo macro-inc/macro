@@ -7,8 +7,9 @@ use axum::{
 };
 use github::domain::{
     models::{
-        EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse, GithubError,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichGithubPullRequestsProxyRequest,
+        EnrichGithubPullRequestsResponse, GithubError, MergeGithubPullRequestRequest,
+        MergeGithubPullRequestResponse,
     },
     ports::GithubLinkService,
 };
@@ -89,10 +90,50 @@ impl IntoResponse for MergeGithubPullRequestError {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum EnableAutoMergeError {
+    #[error(transparent)]
+    Github(#[from] GithubError),
+}
+
+impl IntoResponse for EnableAutoMergeError {
+    fn into_response(self) -> Response {
+        let (status_code, message) = match self {
+            Self::Github(GithubError::NoLinkFound) => {
+                (StatusCode::NOT_FOUND, "no github link found".to_string())
+            }
+            Self::Github(GithubError::ReauthenticationRequired) => (
+                StatusCode::PRECONDITION_REQUIRED,
+                "reauthentication required".to_string(),
+            ),
+            // GitHub's own message names what blocks enabling auto-merge.
+            Self::Github(GithubError::AutoMergeRejected { message, .. }) => {
+                (StatusCode::CONFLICT, message)
+            }
+            Self::Github(error) => {
+                tracing::error!(error=?error, "failed to enable auto-merge on GitHub pull request");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error".to_string(),
+                )
+            }
+        };
+
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
+    }
+}
+
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/enrich", post(handler))
         .route("/merge", post(merge_handler))
+        .route("/enable-auto-merge", post(enable_auto_merge_handler))
 }
 
 /// Enriches GitHub pull request references with live GitHub data for the authenticated user.
@@ -158,6 +199,42 @@ pub async fn merge_handler(
     let response = ctx
         .github_link_service
         .merge_pull_request(&authorization.authorization.user.macro_user_id, request)
+        .await?;
+
+    Ok(Json(response))
+}
+
+/// Enables auto-merge on a GitHub pull request as the authenticated user. Auto-merge
+/// will merge the pull request automatically once all required status checks pass.
+/// GitHub applies the user's permissions and the repository's settings; a refusal
+/// is returned with GitHub's message.
+#[utoipa::path(
+    post,
+    path = "/github_pull_requests/enable-auto-merge",
+    operation_id = "enable_auto_merge_github_pull_request",
+    request_body = EnableAutoMergeRequest,
+    responses(
+        (status = 200, body = EnableAutoMergeResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, description = "The user cannot push to the repository", body = ErrorResponse),
+        (status = 404, description = "No GitHub link, or the pull request is not visible to the user", body = ErrorResponse),
+        (status = 409, description = "Auto-merge cannot be enabled: draft, already merged, closed, or not allowed by repository settings", body = ErrorResponse),
+        (status = 422, body = ErrorResponse),
+        (status = 428, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
+pub async fn enable_auto_merge_handler(
+    State(ctx): State<ApiContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    extract::Json(request): extract::Json<EnableAutoMergeRequest>,
+) -> Result<Json<EnableAutoMergeResponse>, EnableAutoMergeError> {
+    tracing::info!("enable_auto_merge_github_pull_request");
+
+    let response = ctx
+        .github_link_service
+        .enable_auto_merge(&authorization.authorization.user.macro_user_id, request)
         .await?;
 
     Ok(Json(response))

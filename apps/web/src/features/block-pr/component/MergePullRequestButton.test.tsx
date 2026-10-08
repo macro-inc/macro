@@ -34,7 +34,10 @@ vi.mock('@ui', async () => ({
   confirmDialog: vi.fn(),
 }));
 vi.mock('@service-auth/client', () => ({
-  authServiceClient: { mergeGithubPullRequest: vi.fn() },
+  authServiceClient: {
+    mergeGithubPullRequest: vi.fn(),
+    enableAutoMergeGithubPullRequest: vi.fn(),
+  },
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.success, failure: mocks.failure },
@@ -153,5 +156,50 @@ describe('MergePullRequestButton', () => {
     expect(
       screen.getByRole('button', { name: 'Merge pull request #6369' })
     ).toBeTruthy();
+  });
+
+  it('offers auto-merge when merge fails due to CI checks', async () => {
+    vi.mocked(confirmDialog)
+      .mockResolvedValueOnce(true) // merge confirmation
+      .mockResolvedValueOnce(true); // auto-merge confirmation
+    vi.mocked(authServiceClient.mergeGithubPullRequest).mockResolvedValue(
+      err([
+        {
+          code: 'MERGE_REJECTED',
+          message: 'Required status checks are not passing',
+        },
+      ])
+    );
+    vi.mocked(
+      authServiceClient.enableAutoMergeGithubPullRequest
+    ).mockResolvedValue(ok({ autoMergeEnabled: true }));
+    const onMerged = vi.fn();
+    renderButton({ status: 'open', onMerged });
+
+    fireEvent.click(screen.getByRole('button'));
+
+    await waitFor(() => expect(confirmDialog).toHaveBeenCalledTimes(2));
+    expect(confirmDialog).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: 'Enable auto-merge?',
+        confirmLabel: 'Enable auto-merge',
+      }),
+      expect.objectContaining({ owner: expect.any(Object) })
+    );
+    await waitFor(() =>
+      expect(
+        authServiceClient.enableAutoMergeGithubPullRequest
+      ).toHaveBeenCalledWith({
+        owner: 'macro-inc',
+        repo: 'macro',
+        number: 6369,
+      })
+    );
+    await waitFor(() =>
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Auto-merge enabled for macro-inc/macro#6369'
+      )
+    );
+    expect(mocks.failure).not.toHaveBeenCalled();
   });
 });

@@ -6,9 +6,9 @@ use super::pull_request_metadata::fetch_pull_request_metadata;
 
 use crate::domain::{
     models::{
-        GithubExchangeTokenResponse, GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection,
-        GithubPullRequestDetails, GithubPullRequestMerge, GithubRepositoryMergeSettings,
-        GithubUserInfo,
+        GithubAutoMergeOutcome, GithubAutoMergeRejection, GithubExchangeTokenResponse,
+        GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestDetails,
+        GithubPullRequestMerge, GithubRepositoryMergeSettings, GithubUserInfo,
     },
     ports::GithubOauth,
 };
@@ -378,5 +378,230 @@ impl GithubOauth for GithubOauthImpl {
             .unwrap_or_else(|_| "GitHub declined to merge the pull request.".to_string());
 
         Ok(GithubMergeOutcome::Rejected { rejection, message })
+    }
+
+    #[tracing::instrument(skip(self, access_token), err)]
+    async fn enable_auto_merge(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        merge_method: GithubMergeMethod,
+    ) -> Result<GithubAutoMergeOutcome, Self::Err> {
+        let node_id = self
+            .get_pull_request_node_id(access_token, owner, repo, number)
+            .await?;
+
+        let merge_method_graphql = match merge_method {
+            GithubMergeMethod::Merge => "MERGE",
+            GithubMergeMethod::Squash => "SQUASH",
+            GithubMergeMethod::Rebase => "REBASE",
+        };
+
+        let query = format!(
+            r#"mutation {{
+                enablePullRequestAutoMerge(input: {{
+                    pullRequestId: "{node_id}",
+                    mergeMethod: {merge_method_graphql}
+                }}) {{
+                    pullRequest {{
+                        autoMergeRequest {{
+                            enabledAt
+                        }}
+                    }}
+                }}
+            }}"#
+        );
+
+        #[derive(serde::Serialize)]
+        struct GraphQLRequest {
+            query: String,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLResponse {
+            data: Option<GraphQLData>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLData {
+            #[serde(rename = "enablePullRequestAutoMerge")]
+            enable_pull_request_auto_merge: Option<EnableAutoMergePayload>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct EnableAutoMergePayload {
+            #[serde(rename = "pullRequest")]
+            pull_request: Option<PullRequestPayload>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct PullRequestPayload {
+            #[serde(rename = "autoMergeRequest")]
+            auto_merge_request: Option<AutoMergeRequest>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct AutoMergeRequest {
+            #[serde(rename = "enabledAt")]
+            #[expect(dead_code, reason = "presence indicates success")]
+            enabled_at: Option<String>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLError {
+            message: String,
+            #[serde(rename = "type")]
+            error_type: Option<String>,
+        }
+
+        let response = self
+            .client
+            .post("https://api.github.com/graphql")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", USER_AGENT)
+            .json(&GraphQLRequest { query })
+            .timeout(REQUEST_TIMEOUT)
+            .send()
+            .await?;
+
+        let status = response.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED {
+            return Ok(GithubAutoMergeOutcome::Rejected {
+                rejection: GithubAutoMergeRejection::Forbidden,
+                message: "GitHub authentication failed".to_string(),
+            });
+        }
+
+        if !status.is_success() {
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            anyhow::bail!("failed to enable auto-merge (status {status}): {error_body}");
+        }
+
+        let graphql_response: GraphQLResponse = response.json().await?;
+
+        if let Some(errors) = graphql_response.errors {
+            if !errors.is_empty() {
+                let error = &errors[0];
+                let rejection = match error.error_type.as_deref() {
+                    Some("NOT_FOUND") => GithubAutoMergeRejection::NotFound,
+                    Some("FORBIDDEN") => GithubAutoMergeRejection::Forbidden,
+                    Some("UNPROCESSABLE") => GithubAutoMergeRejection::NotAllowed,
+                    _ => GithubAutoMergeRejection::Invalid,
+                };
+                return Ok(GithubAutoMergeOutcome::Rejected {
+                    rejection,
+                    message: error.message.clone(),
+                });
+            }
+        }
+
+        if graphql_response
+            .data
+            .and_then(|d| d.enable_pull_request_auto_merge)
+            .and_then(|p| p.pull_request)
+            .and_then(|pr| pr.auto_merge_request)
+            .is_some()
+        {
+            return Ok(GithubAutoMergeOutcome::Enabled);
+        }
+
+        Ok(GithubAutoMergeOutcome::Rejected {
+            rejection: GithubAutoMergeRejection::Invalid,
+            message: "Failed to enable auto-merge".to_string(),
+        })
+    }
+}
+
+impl GithubOauthImpl {
+    async fn get_pull_request_node_id(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+    ) -> Result<String, anyhow::Error> {
+        let query = format!(
+            r#"query {{
+                repository(owner: "{owner}", name: "{repo}") {{
+                    pullRequest(number: {number}) {{
+                        id
+                    }}
+                }}
+            }}"#
+        );
+
+        #[derive(serde::Serialize)]
+        struct GraphQLRequest {
+            query: String,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLResponse {
+            data: Option<GraphQLData>,
+            errors: Option<Vec<GraphQLError>>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLData {
+            repository: Option<Repository>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct Repository {
+            #[serde(rename = "pullRequest")]
+            pull_request: Option<PullRequest>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct PullRequest {
+            id: String,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct GraphQLError {
+            message: String,
+        }
+
+        let response = self
+            .client
+            .post("https://api.github.com/graphql")
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", USER_AGENT)
+            .json(&GraphQLRequest { query })
+            .timeout(REQUEST_TIMEOUT)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "unknown error".to_string());
+            anyhow::bail!(
+                "failed to fetch pull request node ID (status {status}): {error_body}",
+            );
+        }
+
+        let graphql_response: GraphQLResponse = response.json().await?;
+
+        if let Some(errors) = graphql_response.errors {
+            if !errors.is_empty() {
+                anyhow::bail!("GitHub GraphQL error: {}", errors[0].message);
+            }
+        }
+
+        graphql_response
+            .data
+            .and_then(|d| d.repository)
+            .and_then(|r| r.pull_request)
+            .map(|pr| pr.id)
+            .ok_or_else(|| anyhow::anyhow!("Pull request not found"))
     }
 }

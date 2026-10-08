@@ -20,14 +20,14 @@ export class QueuedAction {
   private constructor(
     private readonly client: MacroClient,
     private readonly sessionId: string,
-    private dto: QueuedActionDto
+    private dto: QueuedActionDto,
   ) {}
 
   /** Wrap a queue entry already in hand (e.g. from `AgentSession.queue()`). */
   static from(
     client: MacroClient,
     sessionId: string,
-    dto: QueuedActionDto
+    dto: QueuedActionDto,
   ): QueuedAction {
     return new QueuedAction(client, sessionId, dto);
   }
@@ -75,7 +75,7 @@ export class QueuedAction {
       await this.client.agentHarness.editQueuedAction({
         path: { session_id: this.sessionId, action_id: this.actionId },
         body: { prompt },
-      })
+      }),
     );
     this.dto = { ...this.dto, prompt };
     return this;
@@ -86,7 +86,7 @@ export class QueuedAction {
     unwrap(
       await this.client.agentHarness.steerQueuedAction({
         path: { session_id: this.sessionId, action_id: this.actionId },
-      })
+      }),
     );
   }
 
@@ -95,7 +95,7 @@ export class QueuedAction {
     unwrap(
       await this.client.agentHarness.removeQueuedAction({
         path: { session_id: this.sessionId, action_id: this.actionId },
-      })
+      }),
     );
   }
 }

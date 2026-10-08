@@ -21,7 +21,7 @@ export class DatabaseView {
     /** The table this view shows. */
     readonly table: DatabaseTable,
     /** Identifier of the view. */
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** A handle to a view by id, within a table. Details load on first access. */
@@ -35,7 +35,7 @@ export class DatabaseView {
     const found = views.find((view) => view.id === this.id);
     if (!found) {
       throw new MacroNotFoundError(
-        `view ${this.id} is not on table ${this.table.id}`
+        `view ${this.id} is not on table ${this.table.id}`,
       );
     }
     return found;

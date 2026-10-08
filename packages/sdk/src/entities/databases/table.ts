@@ -20,7 +20,7 @@ export class DatabaseTable {
     /** The database this table belongs to. */
     readonly database: Database,
     /** Identifier of the table. */
-    readonly id: string
+    readonly id: string,
   ) {}
 
   /** A handle to a table by id, within a database. Details load on first access. */
@@ -37,7 +37,7 @@ export class DatabaseTable {
     const found = tables.find((table) => table.table.id === this.id);
     if (!found) {
       throw new MacroNotFoundError(
-        `table ${this.id} is not in database ${this.database.id}`
+        `table ${this.id} is not in database ${this.database.id}`,
       );
     }
     return found;

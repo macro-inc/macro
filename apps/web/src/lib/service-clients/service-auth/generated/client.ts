@@ -27,6 +27,8 @@ import type {
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmptyResponse,
+  EnableAutoMergeRequest,
+  EnableAutoMergeResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   ErrorResponse,
@@ -1205,6 +1207,99 @@ export const verifyEmailLink = async (
     status: res.status,
     headers: res.headers,
   } as verifyEmailLinkResponse;
+};
+
+/**
+ * @summary Enables auto-merge on a GitHub pull request as the authenticated user. Auto-merge
+will merge the pull request automatically once all required status checks pass.
+GitHub applies the user's permissions and the repository's settings; a refusal
+is returned with GitHub's message.
+ */
+export type enableAutoMergeGithubPullRequestResponse200 = {
+  data: EnableAutoMergeResponse;
+  status: 200;
+};
+
+export type enableAutoMergeGithubPullRequestResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type enableAutoMergeGithubPullRequestResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type enableAutoMergeGithubPullRequestResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type enableAutoMergeGithubPullRequestResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type enableAutoMergeGithubPullRequestResponse422 = {
+  data: ErrorResponse;
+  status: 422;
+};
+
+export type enableAutoMergeGithubPullRequestResponse428 = {
+  data: ErrorResponse;
+  status: 428;
+};
+
+export type enableAutoMergeGithubPullRequestResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enableAutoMergeGithubPullRequestResponseSuccess =
+  enableAutoMergeGithubPullRequestResponse200 & {
+    headers: Headers;
+  };
+export type enableAutoMergeGithubPullRequestResponseError = (
+  | enableAutoMergeGithubPullRequestResponse401
+  | enableAutoMergeGithubPullRequestResponse403
+  | enableAutoMergeGithubPullRequestResponse404
+  | enableAutoMergeGithubPullRequestResponse409
+  | enableAutoMergeGithubPullRequestResponse422
+  | enableAutoMergeGithubPullRequestResponse428
+  | enableAutoMergeGithubPullRequestResponse500
+) & {
+  headers: Headers;
+};
+
+export type enableAutoMergeGithubPullRequestResponse =
+  | enableAutoMergeGithubPullRequestResponseSuccess
+  | enableAutoMergeGithubPullRequestResponseError;
+
+export const getEnableAutoMergeGithubPullRequestUrl = () => {
+  return `/github_pull_requests/enable-auto-merge`;
+};
+
+export const enableAutoMergeGithubPullRequest = async (
+  enableAutoMergeRequest: EnableAutoMergeRequest,
+  options?: RequestInit
+): Promise<enableAutoMergeGithubPullRequestResponse> => {
+  const res = await fetch(getEnableAutoMergeGithubPullRequestUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(enableAutoMergeRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enableAutoMergeGithubPullRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enableAutoMergeGithubPullRequestResponse;
 };
 
 /**

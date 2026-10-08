@@ -50,6 +50,10 @@ impl axum::response::IntoResponse for crate::domain::models::GithubError {
                 rejection,
                 message,
             } => (merge_rejection_status(rejection), message.into()),
+            // Auto-merge rejection follows the same pattern as merge rejection.
+            crate::domain::models::GithubError::AutoMergeRejected { rejection, message } => {
+                (auto_merge_rejection_status(rejection), message.into())
+            }
         };
 
         (
@@ -76,5 +80,20 @@ pub fn merge_rejection_status(
         GithubMergeRejection::NotFound => StatusCode::NOT_FOUND,
         GithubMergeRejection::Forbidden => StatusCode::FORBIDDEN,
         GithubMergeRejection::Invalid => StatusCode::UNPROCESSABLE_ENTITY,
+    }
+}
+
+/// The status a declined enable-auto-merge is reported with.
+#[cfg(feature = "axum")]
+pub fn auto_merge_rejection_status(
+    rejection: crate::domain::models::GithubAutoMergeRejection,
+) -> axum::http::StatusCode {
+    use crate::domain::models::GithubAutoMergeRejection;
+    use axum::http::StatusCode;
+    match rejection {
+        GithubAutoMergeRejection::NotAllowed => StatusCode::CONFLICT,
+        GithubAutoMergeRejection::NotFound => StatusCode::NOT_FOUND,
+        GithubAutoMergeRejection::Forbidden => StatusCode::FORBIDDEN,
+        GithubAutoMergeRejection::Invalid => StatusCode::UNPROCESSABLE_ENTITY,
     }
 }

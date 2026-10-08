@@ -76,11 +76,11 @@ const support: DatabaseDetail = {
 };
 
 function intercept(
-  respond: (request: Request) => Response | Promise<Response>
+  respond: (request: Request) => Response | Promise<Response>,
 ) {
   globalThis.fetch = (async (input) =>
     respond(
-      input instanceof Request ? input : new Request(input)
+      input instanceof Request ? input : new Request(input),
     )) as typeof fetch;
 }
 
@@ -210,7 +210,7 @@ describe('Database', () => {
       baseVersion: 7,
     });
     expect(requests[1]?.url).toBe(
-      `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}/infer-type`
+      `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}/infer-type`,
     );
     await expect(requests[1]?.json()).resolves.toEqual({
       dataType: 'ENTITY',
@@ -220,7 +220,7 @@ describe('Database', () => {
     await expect(
       macro.databases
         .byId('other')
-        .inferColumnType(column, { dataType: 'NUMBER', baseVersion: 7 })
+        .inferColumnType(column, { dataType: 'NUMBER', baseVersion: 7 }),
     ).rejects.toThrow('does not belong');
     expect(requests).toHaveLength(2);
   });
@@ -337,7 +337,7 @@ describe('Database', () => {
     await database.schema();
     expect(reads).toBe(4);
     await expect(
-      client().databases.byId('other').deleteColumn(column)
+      client().databases.byId('other').deleteColumn(column),
     ).rejects.toThrow('does not belong');
     expect(writes).toHaveLength(3);
   });
@@ -353,7 +353,7 @@ describe('Database', () => {
       if (request.method !== 'GET')
         writes.push({ url: request.url, body: await request.json() });
       return Response.json(
-        request.url.endsWith('/import') ? { id: tableId } : permissions
+        request.url.endsWith('/import') ? { id: tableId } : permissions,
       );
     });
     const database = client().databases.byId(databaseId);
@@ -552,10 +552,10 @@ describe('Database', () => {
     ]);
     expect(reads).toBe(3);
     await expect(
-      client().databases.byId('other').reorderTables([tickets])
+      client().databases.byId('other').reorderTables([tickets]),
     ).rejects.toThrow('does not belong');
     await expect(
-      client().databases.byId('other').deleteTable(tickets)
+      client().databases.byId('other').deleteTable(tickets),
     ).rejects.toThrow('does not belong');
     expect(writes).toHaveLength(2);
   });
@@ -585,7 +585,7 @@ describe('Database', () => {
         {
           kind: 'table',
           table: expect.stringMatching(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
           ),
           change: { kind: 'create', name: 'Guests' },
         },
@@ -817,7 +817,7 @@ describe('Database', () => {
             kind: 'column',
             table: tableId,
             column: expect.stringMatching(
-              /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+              /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
             ),
             change: {
               kind: 'create',
@@ -865,7 +865,7 @@ describe('Database', () => {
           kind: 'column',
           table: tableId,
           column: expect.stringMatching(
-            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+            /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
           ),
           change: {
             kind: 'create',
@@ -916,7 +916,7 @@ describe('Database', () => {
             options: [
               {
                 id: expect.stringMatching(
-                  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
                 ),
                 label: 'Maybe',
               },
@@ -957,7 +957,7 @@ describe('Database', () => {
           change: { kind: 'delete' },
         },
       ],
-      { baseVersions: [{ table, version: 7 }] }
+      { baseVersions: [{ table, version: 7 }] },
     );
     expect(opsBody).toEqual({
       ops: [
@@ -987,7 +987,7 @@ describe('Database', () => {
           column: null,
           taken: { kind: 'table', id: tableId },
         },
-        { status: 400 }
+        { status: 400 },
       );
     });
     const database = client().databases.byId(databaseId);
@@ -1032,7 +1032,7 @@ describe('Database', () => {
     if (!column) throw new Error('Missing fixture column');
     expect(await column.casts()).toEqual(casts);
     expect(urls[1]).toBe(
-      `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}/casts`
+      `${host}/databases/${databaseId}/tables/${tableId}/columns/${columnId}/casts`,
     );
   });
 

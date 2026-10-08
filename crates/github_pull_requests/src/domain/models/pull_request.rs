@@ -834,3 +834,74 @@ pub struct EnrichGithubPullRequestsResponse {
     /// Pull requests with enrichment fields populated when GitHub data was available.
     pub pull_requests: Vec<EnrichedGithubPullRequest>,
 }
+
+/// A request to enable auto-merge on a pull request.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EnableAutoMergeRequest {
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The merge method to use when auto-merging. Omitted means the first
+    /// method the repository allows, in the order merge, squash, rebase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_method: Option<GithubMergeMethod>,
+}
+
+impl EnableAutoMergeRequest {
+    /// The reference enrichment uses for this pull request.
+    pub fn to_reference(&self) -> GithubPullRequestRef {
+        GithubPullRequestRef {
+            github_key: format!("{}/{}/pull/{}", self.owner, self.repo, self.number),
+            owner: self.owner.clone(),
+            repo: self.repo.clone(),
+            number: self.number,
+            url: format!(
+                "https://github.com/{}/{}/pull/{}",
+                self.owner, self.repo, self.number
+            ),
+            display_name: format!("{}/{}#{}", self.owner, self.repo, self.number),
+        }
+    }
+}
+
+/// Response body for enabling auto-merge.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EnableAutoMergeResponse {
+    /// Whether auto-merge is now enabled.
+    pub auto_merge_enabled: bool,
+}
+
+/// Why GitHub declined to enable auto-merge on a pull request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GithubAutoMergeRejection {
+    /// The pull request cannot have auto-merge enabled: draft, already merged,
+    /// closed, or auto-merge is not allowed on the repository.
+    NotAllowed,
+    /// The user's token cannot see the pull request.
+    NotFound,
+    /// The user has no push access to the base repository.
+    Forbidden,
+    /// GitHub rejected the request as invalid.
+    Invalid,
+}
+
+/// GitHub's answer to an enable-auto-merge request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GithubAutoMergeOutcome {
+    /// Auto-merge was successfully enabled.
+    Enabled,
+    /// GitHub declined, with the message it gave for the user.
+    Rejected {
+        /// Why GitHub declined.
+        rejection: GithubAutoMergeRejection,
+        /// GitHub's message, written for the person who asked.
+        message: String,
+    },
+}

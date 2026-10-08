@@ -3,7 +3,8 @@
 use std::future::Future;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubAccessToken, GithubError, GithubExchangeTokenResponse,
+    EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichedGithubPullRequest,
+    GithubAccessToken, GithubAutoMergeOutcome, GithubError, GithubExchangeTokenResponse,
     GithubLink, GithubMergeMethod, GithubMergeOutcome, GithubPullRequestDetails,
     GithubPullRequestRef, GithubRepositoryMergeSettings, GithubUserInfo,
     MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
@@ -129,6 +130,19 @@ pub trait GithubOauth: Send + Sync + 'static {
         number: u64,
         merge_method: GithubMergeMethod,
     ) -> impl Future<Output = Result<GithubMergeOutcome, Self::Err>> + Send;
+
+    /// Enables auto-merge on a pull request as the user.
+    ///
+    /// GitHub declining the request is a [`GithubAutoMergeOutcome::Rejected`]
+    /// value, not an error: the request reached GitHub and was answered.
+    fn enable_auto_merge(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        merge_method: GithubMergeMethod,
+    ) -> impl Future<Output = Result<GithubAutoMergeOutcome, Self::Err>> + Send;
 }
 
 /// Repository for handling auth related actions.
@@ -217,4 +231,15 @@ pub trait GithubLinkService: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'static>>,
         request: MergeGithubPullRequestRequest,
     ) -> impl Future<Output = Result<MergeGithubPullRequestResponse, GithubError>> + Send;
+
+    /// Enables auto-merge on a pull request as the user, with their own GitHub
+    /// grant. GitHub applies the user's permissions and repository settings.
+    ///
+    /// An enable-auto-merge GitHub declines is
+    /// [`GithubError::AutoMergeRejected`] with GitHub's message.
+    fn enable_auto_merge(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        request: EnableAutoMergeRequest,
+    ) -> impl Future<Output = Result<EnableAutoMergeResponse, GithubError>> + Send;
 }

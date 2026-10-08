@@ -15,14 +15,15 @@ pub use app_jwt::AppJwt;
 #[cfg(feature = "sync")]
 pub(crate) use app_jwt::app_jwt;
 pub use github_pull_requests::domain::models::{
-    EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubKey,
-    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun,
-    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
-    GithubPullRequestMerge, GithubPullRequestRef, GithubPullRequestReview,
-    GithubPullRequestReviewState, GithubPullRequestStatus, GithubPullRequestUser,
-    GithubRepositoryMergeSettings, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    latest_reviews,
+    EnableAutoMergeRequest, EnableAutoMergeResponse, EnrichGithubPullRequestsProxyRequest,
+    EnrichGithubPullRequestsResponse, EnrichedGithubPullRequest,
+    GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GitRef, GithubAutoMergeOutcome,
+    GithubAutoMergeRejection, GithubKey, GithubMergeMethod, GithubMergeOutcome,
+    GithubMergeRejection, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestMerge, GithubPullRequestRef,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
+    GithubPullRequestUser, GithubRepositoryMergeSettings, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse, latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
@@ -87,6 +88,15 @@ pub enum GithubError {
     PullRequestMergeRejected {
         /// Why GitHub declined.
         rejection: GithubMergeRejection,
+        /// GitHub's message for the user.
+        message: String,
+    },
+    /// GitHub declined to enable auto-merge on the pull request. The message
+    /// is GitHub's own and is safe to show.
+    #[error("GitHub declined to enable auto-merge: {message}")]
+    AutoMergeRejected {
+        /// Why GitHub declined.
+        rejection: GithubAutoMergeRejection,
         /// GitHub's message for the user.
         message: String,
     },

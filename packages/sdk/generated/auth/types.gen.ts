@@ -427,6 +427,35 @@ export type EmptyResponse = {
 };
 
 /**
+ * A request to enable auto-merge on a pull request.
+ */
+export type EnableAutoMergeRequest = {
+    mergeMethod?: null | GithubMergeMethod;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for enabling auto-merge.
+ */
+export type EnableAutoMergeResponse = {
+    /**
+     * Whether auto-merge is now enabled.
+     */
+    autoMergeEnabled: boolean;
+};
+
+/**
  * Request body for the authenticated pull request enrichment proxy.
  */
 export type EnrichGithubPullRequestsProxyRequest = {
@@ -2209,6 +2238,40 @@ export type VerifyEmailLinkResponses = {
 };
 
 export type VerifyEmailLinkResponse = VerifyEmailLinkResponses[keyof VerifyEmailLinkResponses];
+
+export type EnableAutoMergeGithubPullRequestData = {
+    body: EnableAutoMergeRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/enable-auto-merge';
+};
+
+export type EnableAutoMergeGithubPullRequestErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot push to the repository
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * Auto-merge cannot be enabled: draft, already merged, closed, or not allowed by repository settings
+     */
+    409: ErrorResponse;
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type EnableAutoMergeGithubPullRequestError = EnableAutoMergeGithubPullRequestErrors[keyof EnableAutoMergeGithubPullRequestErrors];
+
+export type EnableAutoMergeGithubPullRequestResponses = {
+    200: EnableAutoMergeResponse;
+};
+
+export type EnableAutoMergeGithubPullRequestResponse = EnableAutoMergeGithubPullRequestResponses[keyof EnableAutoMergeGithubPullRequestResponses];
 
 export type EnrichGithubPullRequestsData = {
     body: EnrichGithubPullRequestsProxyRequest;

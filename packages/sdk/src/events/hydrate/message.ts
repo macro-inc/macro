@@ -55,7 +55,7 @@ function target(
     thread_id?: string | null;
     root_id: string;
   },
-  mentions: SimpleMention[] = []
+  mentions: SimpleMention[] = [],
 ): MessageEventTarget {
   const parent = metadata.parent;
   if (parent.type === 'call') {

@@ -71,8 +71,8 @@ describe('AgentSession', () => {
     expect(
       requests.every(
         (request) =>
-          request.headers.get('authorization') === 'Bearer user-token'
-      )
+          request.headers.get('authorization') === 'Bearer user-token',
+      ),
     ).toBe(true);
   });
 
@@ -113,7 +113,7 @@ describe('AgentSession', () => {
 
     expect(request?.method).toBe('PUT');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/name`
+      `https://agent.example.test/agent-sessions/${sessionId}/name`,
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
     await expect(request?.json()).resolves.toEqual({ name: 'Fix Flaky Tests' });
@@ -155,12 +155,12 @@ describe('AgentSession', () => {
     });
 
     await expect(
-      macro.agentSessions.byId(sessionId).setSandboxSize('large')
+      macro.agentSessions.byId(sessionId).setSandboxSize('large'),
     ).resolves.toBe('large');
 
     expect(request?.method).toBe('PUT');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/sandbox-size`
+      `https://agent.example.test/agent-sessions/${sessionId}/sandbox-size`,
     );
     await expect(request?.json()).resolves.toEqual({ size: 'large' });
   });
@@ -178,10 +178,10 @@ describe('AgentSession', () => {
     });
 
     await expect(macro.agentSessions.defaultSandboxSize()).resolves.toBe(
-      'small'
+      'small',
     );
     await expect(
-      macro.agentSessions.setDefaultSandboxSize('small')
+      macro.agentSessions.setDefaultSandboxSize('small'),
     ).resolves.toBe('small');
 
     expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
@@ -204,13 +204,13 @@ describe('AgentSession', () => {
 
     await expect(
       macro.agentSessions.repositoryBranches(
-        'https://github.com/macro-inc/macro'
-      )
+        'https://github.com/macro-inc/macro',
+      ),
     ).resolves.toEqual(['main', 'develop']);
 
     expect(request?.method).toBe('GET');
     expect(request?.url).toBe(
-      'https://agent.example.test/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro'
+      'https://agent.example.test/agent-repositories/branches?repoUrl=https%3A%2F%2Fgithub.com%2Fmacro-inc%2Fmacro',
     );
     expect(request?.headers.get('authorization')).toBe('Bearer user-token');
   });
@@ -229,7 +229,7 @@ describe('AgentSession', () => {
       if (request.url.endsWith('/control')) {
         return Response.json(
           { actionId: '0198a4cc-e138-7670-a308-a6b766602702', status: 'sent' },
-          { status: 200 }
+          { status: 200 },
         );
       }
       if (request.url.endsWith('/log')) {
@@ -238,7 +238,7 @@ describe('AgentSession', () => {
             bot: { id: session.botId, name: 'Agent', handle: 'agent' },
             entries: [],
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
       return new Response(null, { status: 200 });
@@ -276,7 +276,7 @@ describe('AgentSession', () => {
           actionId: '0198a4cc-e138-7670-a308-a6b766602703',
           status: 'queued',
         },
-        { status: 200 }
+        { status: 200 },
       );
     }) as typeof fetch;
     const macro = new Macro({
@@ -285,7 +285,7 @@ describe('AgentSession', () => {
     });
 
     await expect(
-      macro.agentSessions.byId(sessionId).prompt('Fix the flaky test')
+      macro.agentSessions.byId(sessionId).prompt('Fix the flaky test'),
     ).resolves.toEqual({
       actionId: '0198a4cc-e138-7670-a308-a6b766602703',
       status: 'queued',
@@ -293,7 +293,7 @@ describe('AgentSession', () => {
 
     expect(request?.method).toBe('POST');
     expect(request?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/control`
+      `https://agent.example.test/agent-sessions/${sessionId}/control`,
     );
     await expect(request?.json()).resolves.toEqual({
       type: 'prompt',
@@ -320,7 +320,7 @@ describe('AgentSession', () => {
               },
             ],
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
       return new Response(null, { status: 204 });
@@ -348,17 +348,17 @@ describe('AgentSession', () => {
       'DELETE',
     ]);
     expect(requests[1]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`,
     );
     await expect(requests[1]?.json()).resolves.toEqual({
       prompt: 'Also update the README',
     });
     expect(requests[2]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}/steer`,
     );
     expect(requests[2]?.headers.get('authorization')).toBe('Bearer user-token');
     expect(requests[3]?.url).toBe(
-      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`
+      `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`,
     );
   });
 });

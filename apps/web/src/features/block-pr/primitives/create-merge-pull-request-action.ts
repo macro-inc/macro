@@ -1,7 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
 import {
+  type EnableAutoMergeInput,
   type MergeGithubPullRequestInput,
+  useEnableAutoMergeMutation,
   useMergeGithubPullRequestMutation,
 } from '@queries/storage/pr-merge';
 import type { Accessor } from 'solid-js';
@@ -18,12 +20,41 @@ export type MergePullRequestAction = {
   pending: Accessor<boolean>;
 };
 
+export type EnableAutoMergeAction = {
+  /** Enable auto-merge on the pull request. */
+  enableAutoMerge: (target: MergePullRequestTarget) => Promise<void>;
+  pending: Accessor<boolean>;
+};
+
 function mergeFailureMessage(error: unknown): string {
-  // A declined merge carries GitHub's own reason; anything else is ours.
   if (error instanceof ThrownResultError && error.errors.length > 0) {
     return error.message;
   }
   return 'Failed to merge pull request';
+}
+
+function autoMergeFailureMessage(error: unknown): string {
+  if (error instanceof ThrownResultError && error.errors.length > 0) {
+    return error.message;
+  }
+  return 'Failed to enable auto-merge';
+}
+
+/**
+ * Detects if the merge failure is due to pending CI checks, which would
+ * make auto-merge a viable alternative. We check for specific GitHub error
+ * patterns related to status checks and branch protection rules, rather than
+ * generic "not mergeable" messages which could have other causes.
+ */
+function isAutoMergeCandidate(error: unknown): boolean {
+  if (!(error instanceof ThrownResultError)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('required status') ||
+    message.includes('status check') ||
+    message.includes('checks must pass') ||
+    message.includes('rule violations')
+  );
 }
 
 /**
@@ -34,6 +65,10 @@ function mergeFailureMessage(error: unknown): string {
 export function createMergePullRequestAction(options: {
   confirm: (target: MergePullRequestTarget) => Promise<boolean>;
   onMerged?: (target: MergePullRequestTarget) => void;
+  onAutoMergeCandidate?: (
+    target: MergePullRequestTarget,
+    errorMessage: string
+  ) => void;
 }): MergePullRequestAction {
   const mutation = useMergeGithubPullRequestMutation();
 
@@ -51,7 +86,12 @@ export function createMergePullRequestAction(options: {
     try {
       await mutation.mutateAsync(input);
     } catch (error) {
-      toast.failure(mergeFailureMessage(error));
+      const errorMessage = mergeFailureMessage(error);
+      if (isAutoMergeCandidate(error) && options.onAutoMergeCandidate) {
+        options.onAutoMergeCandidate(target, errorMessage);
+      } else {
+        toast.failure(errorMessage);
+      }
       return;
     }
     toast.success(`Merged ${name}`);
@@ -59,4 +99,35 @@ export function createMergePullRequestAction(options: {
   };
 
   return { merge, pending: () => mutation.isPending };
+}
+
+/**
+ * Enable auto-merge on a pull request. Auto-merge will merge the PR
+ * automatically once all required status checks pass.
+ */
+export function createEnableAutoMergeAction(options?: {
+  onEnabled?: (target: MergePullRequestTarget) => void;
+}): EnableAutoMergeAction {
+  const mutation = useEnableAutoMergeMutation();
+
+  const enableAutoMerge = async (target: MergePullRequestTarget) => {
+    if (mutation.isPending) return;
+    const name = prDisplayName(target);
+
+    const input: EnableAutoMergeInput = {
+      owner: target.owner,
+      repo: target.repo,
+      number: target.number,
+    };
+    try {
+      await mutation.mutateAsync(input);
+    } catch (error) {
+      toast.failure(autoMergeFailureMessage(error));
+      return;
+    }
+    toast.success(`Auto-merge enabled for ${name}`);
+    options?.onEnabled?.(target);
+  };
+
+  return { enableAutoMerge, pending: () => mutation.isPending };
 }

@@ -66,6 +66,7 @@ export const authExcluded = [
   'deleteTeamInviteHandler',
   'deleteUser',
   'disconnectCodex',
+  'enableAutoMergeGithubPullRequest',
   'enrichGithubPullRequests',
   'generateEmailLink',
   'getAiBillingPlans',
