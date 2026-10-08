@@ -303,27 +303,6 @@ export type CreateTeamRequest = {
 };
 
 /**
- * The request body to create a new user in fusionauth
- * NOTE: Never derive debug here as we don't want to accidentally log the password
- */
-export type CreateUserRequest = {
-    /**
-     * The primary email address of the user.
-     * This will be the user's root "profile".
-     */
-    email: string;
-    /**
-     * The password for the user.
-     * TODO: configure password policy and validate password before attempting to create user
-     */
-    password: string;
-    /**
-     * The unique username for the user.
-     */
-    username: string;
-};
-
-/**
  * Request body for [`create_credit_checkout_handler`].
  */
 export type CreditCheckoutRequestBody = {
@@ -3402,27 +3381,6 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
-
-export type CreateUserData = {
-    body: CreateUserRequest;
-    path?: never;
-    query?: never;
-    url: '/user';
-};
-
-export type CreateUserErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
-
-export type CreateUserResponses = {
-    200: EmptyResponse;
-};
-
-export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;

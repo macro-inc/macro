@@ -21,7 +21,6 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
-  CreateUserRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
   CursorApiKeyStatus,
@@ -4613,69 +4612,6 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
-};
-
-/**
- * @summary Creates a new user.
- */
-export type createUserResponse200 = {
-  data: EmptyResponse;
-  status: 200;
-};
-
-export type createUserResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type createUserResponse403 = {
-  data: ErrorResponse;
-  status: 403;
-};
-
-export type createUserResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type createUserResponseSuccess = createUserResponse200 & {
-  headers: Headers;
-};
-export type createUserResponseError = (
-  | createUserResponse400
-  | createUserResponse403
-  | createUserResponse500
-) & {
-  headers: Headers;
-};
-
-export type createUserResponse =
-  | createUserResponseSuccess
-  | createUserResponseError;
-
-export const getCreateUserUrl = () => {
-  return `/user`;
-};
-
-export const createUser = async (
-  createUserRequest: CreateUserRequest,
-  options?: RequestInit
-): Promise<createUserResponse> => {
-  const res = await fetch(getCreateUserUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(createUserRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: createUserResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as createUserResponse;
 };
 
 /**

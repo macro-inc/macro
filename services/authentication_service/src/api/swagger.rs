@@ -33,7 +33,6 @@ use crate::api::link::github::{GithubLinkStatusResponse, InitGithubLinkResponse}
 use crate::api::link::gmail::{GmailLinkStatusResponse, InitGmailLinkResponse};
 use crate::api::link::outlook::InitOutlookLinkResponse;
 use crate::api::merge::create_merge_request::CreateAccountMergeRequest;
-use crate::api::user::create_user::CreateUserRequest;
 use crate::api::user::get_legacy_user_permissions::GetLegacyUserPermissionsResponse;
 use crate::api::user::get_user_link_exists::UserLinkResponse;
 use crate::api::user::get_user_organization::UserOrganizationResponse;
@@ -124,7 +123,6 @@ use model::user::{
                 jwt::macro_api_token::handler,
 
                 /// /user
-                user::create_user::handler,
                 user::get_user_info::handler,
                 user::delete_user::handler,
                 user::post_profile_pictures::handler,
@@ -219,7 +217,6 @@ use model::user::{
                         UserTokensResponse,
                         UserLinkResponse,
                         MacroApiTokenResponse,
-                        CreateUserRequest,
                         ResendFusionauthVerifyUserEmailRequest,
                         GenerateEmailLinkRequest,
                         CreateInProgressLinkResponse,
