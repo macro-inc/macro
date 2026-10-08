@@ -21851,6 +21851,21 @@
           },
           {
             "type": "object",
+            "description": "Give a derived column a new formula. Its cells follow at once: it\nstores none.",
+            "required": ["formula", "kind"],
+            "properties": {
+              "formula": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "The formula, over the table's other columns."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["set_formula"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Remove one option of a select or tag column, and take it out of every\ncell holding it: a single-valued cell is emptied, a multi-valued one\nkeeps its other options. Like [`ColumnChange::UpdateOption`], an\noption of a shared property goes everywhere it is used.",
             "required": ["option", "kind"],
             "properties": {
@@ -21875,6 +21890,7 @@
           "create",
           "rename",
           "change_type",
+          "set_formula",
           "delete",
           "add_options",
           "update_option",
@@ -21904,6 +21920,21 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "Target table."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A derived column: its cells are computed from the row's others, and\nits definition, a number or date one, never holds a value.",
+            "required": ["formula", "kind"],
+            "properties": {
+              "formula": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "How its cells are computed."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["derived"]
               }
             }
           }
@@ -22215,6 +22246,17 @@
               "kind": {
                 "type": "string",
                 "enum": ["option_deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its formula changed.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["formula_set"]
               }
             }
           }
@@ -28015,6 +28057,81 @@
           }
         }
       },
+      "Formula": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The row's cell in another column of the table: a number, date or\nderived column.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column placement."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["column"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A constant. Added to or subtracted from a date, it counts days.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "The value; finite."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Two expressions combined.",
+            "required": ["operator", "left", "right", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["binary"]
+              },
+              "left": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "The left operand."
+              },
+              "operator": {
+                "$ref": "#/components/schemas/Operator",
+                "description": "How."
+              },
+              "right": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "The right operand."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An expression's negation.",
+            "required": ["operand", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["negate"]
+              },
+              "operand": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "The expression negated; a number."
+              }
+            }
+          }
+        ],
+        "description": "An expression over one row's cells."
+      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],
@@ -31703,6 +31820,25 @@
           },
           {
             "type": "object",
+            "description": "A derived column: its cells are what `formula` computes from the\nrow's other cells, and nothing writes them.",
+            "required": ["name", "formula", "source"],
+            "properties": {
+              "formula": {
+                "$ref": "#/components/schemas/Formula",
+                "description": "How its cells are computed: arithmetic over the table's number,\ndate and other derived columns."
+              },
+              "name": {
+                "type": "string",
+                "description": "The column's name, unique within the table ignoring case."
+              },
+              "source": {
+                "type": "string",
+                "enum": ["derived"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "An existing property, a person's, a team's or a system one, bound\ninto the table under its own name.",
             "required": ["property", "source"],
             "properties": {
@@ -32117,6 +32253,11 @@
           }
         ],
         "description": "What one op did, in the order the ops were sent, grouped as the ops are:\na result's `kind` is its op's, naming the same resource, and its\n`change` says what happened to it."
+      },
+      "Operator": {
+        "type": "string",
+        "description": "An arithmetic operator.",
+        "enum": ["add", "subtract", "multiply", "divide"]
       },
       "OptionRef": {
         "oneOf": [

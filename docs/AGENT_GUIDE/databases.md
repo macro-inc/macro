@@ -135,7 +135,23 @@ type change never empties a value; only deleting a cell, row, column, table or
 option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
 text. Changing a placement never changes another table that uses the same property.
-A relation can hold multiple records. **Delete column** opens a confirmation;
+A relation can hold multiple records.
+
+**Formula columns.** **Change type → Formula** opens the formula editor under the
+header. On a new, never-filled column the formula column takes its place and name;
+on any other column it is added right after it (named "Formula"). Type the formula
+(`{Unit price} * Quantity`, `Due + 7`, `Due - Started`) or click the column and
+`+ − × ÷ ( )` buttons below the input; only number, date and other formula columns
+are offered. The line under the input says whether it gives a number or a date, or
+why it does not parse (`The formula ends too soon.`, `A date can't be multiplied
+by a number.`); **Save** stays disabled until it does, and Enter saves. Names with
+spaces go in braces. Numbers added to a date count days; a date minus a date is
+the days between them. An empty number counts as 0 unless every input is empty.
+Formula columns show an ƒ icon, their cells are read-only, and their header menu
+has **Edit formula** instead of **Change type**. Values follow edits to their inputs
+at once, and sort and filter like numbers or dates. Deleting a column a formula uses
+is refused ("Total's formula uses Quantity; change that formula first").
+**Delete column** opens a confirmation;
 it removes this table’s column and values while preserving other tables.
 Drag a column header left or right to reorder it, or use **Move left / Move right**.
 To add a column next to another, right-click its header and choose **Insert left** or

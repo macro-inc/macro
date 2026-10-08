@@ -2,6 +2,7 @@ import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { errAsync, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
+import type { FormulaEditing } from '../context/formula-editing';
 import type { OptionEditing } from '../context/option-editing';
 import type { DatabaseApi, DatabaseCapabilities } from '../core/api';
 import { mergeDatabaseColumnOrder } from '../core/column-order';
@@ -104,6 +105,47 @@ export function createDatabaseController(args: {
       );
     },
   };
+  const formulaEditing: FormulaEditing = {
+    tableId,
+    columns: () => data.table()?.columns ?? [],
+    setFormula: (column, formula) =>
+      change(column, { kind: 'set_formula', formula }),
+    createFormulaColumn: ({ name, formula, beside, replace }) => {
+      const column = uuidv7();
+      const create: DatabaseOp = {
+        kind: 'column',
+        table: tableId,
+        column,
+        change: {
+          kind: 'create',
+          definition: { source: 'derived', name, formula },
+          ...(replace ? {} : { after: beside }),
+        },
+      };
+      const ops: DatabaseOp[] = replace
+        ? [
+            {
+              kind: 'column',
+              table: tableId,
+              column: beside,
+              change: { kind: 'delete' },
+            },
+            create,
+            {
+              kind: 'table',
+              table: tableId,
+              change: {
+                kind: 'reorder_columns',
+                order: (data.table()?.columns ?? []).map((existing) =>
+                  existing.id === beside ? column : existing.id
+                ),
+              },
+            },
+          ]
+        : [create];
+      return schemaApply(ops, data.table()?.version).map(() => column);
+    },
+  };
   const optionEditing: OptionEditing = {
     update: (column, option, request) =>
       change(column, { kind: 'update_option', option, ...request }).mapErr(
@@ -119,6 +161,8 @@ export function createDatabaseController(args: {
     data,
     optionEditing: () =>
       args.capabilities().editColumns ? optionEditing : undefined,
+    formulaEditing: () =>
+      args.capabilities().editColumns ? formulaEditing : undefined,
     capabilities: args.capabilities,
     apply,
     schemaEditing: () =>

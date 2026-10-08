@@ -1,5 +1,6 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import FunctionIcon from '@phosphor/function.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import {
@@ -51,6 +52,11 @@ export function ColumnTypeMenu(props: {
    * it is not offered.
    */
   onConvertToNewColumn?: (choice: DatabaseColumnConversionChoice) => void;
+  /**
+   * Offer a formula: it takes this column's place when `replaces`, else it
+   * goes in a new column beside it.
+   */
+  formula?: { replaces: boolean; choose: () => void };
 }) {
   const [open, setOpen] = createSignal(false);
   const protectedType = () =>
@@ -150,6 +156,26 @@ export function ColumnTypeMenu(props: {
               )}
             </For>
           </Dropdown.Group>
+          <Show when={props.formula}>
+            {(formula) => (
+              <Dropdown.Group>
+                <Dropdown.Item
+                  disabled={protectedType()}
+                  onSelect={() => formula().choose()}
+                >
+                  <FunctionIcon class="size-3.5 shrink-0 text-ink-muted" />
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <Dropdown.ItemLabel>Formula</Dropdown.ItemLabel>
+                    <Dropdown.ItemDescription class="text-xs text-ink-muted">
+                      {formula().replaces
+                        ? 'Computed from other columns'
+                        : 'Adds a formula column beside this one'}
+                    </Dropdown.ItemDescription>
+                  </span>
+                </Dropdown.Item>
+              </Dropdown.Group>
+            )}
+          </Show>
           <Show when={offeredTables().length}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Related table</Dropdown.GroupLabel>

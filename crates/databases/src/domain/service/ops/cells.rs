@@ -60,6 +60,12 @@ impl Planner {
         column: &ColumnEntry,
         value: &CellValue,
     ) -> Result<Option<PropertyValue>, DatabaseError> {
+        if column.column.formula().is_some() {
+            return Err(place.refuse(format!(
+                "\"{}\" is computed by its formula; write the columns it uses instead",
+                column.name()
+            )));
+        }
         let data_type = column.definition.definition.data_type;
         let misfit = || {
             place.refuse(format!(
