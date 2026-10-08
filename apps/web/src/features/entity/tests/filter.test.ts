@@ -117,6 +117,22 @@ describe('unreadFilterFn', () => {
     it('returns false when the optional notifications accessor is absent', () => {
       expect(unreadFilterFn(document())).toBe(false);
     });
+
+    it('reads a GraphQL soup notification array without calling it', () => {
+      const entity = {
+        ...document(),
+        notifications: [notification()],
+      } as WithNotification<DocumentEntity>;
+      expect(unreadFilterFn(entity)).toBe(true);
+      expect(
+        unreadFilterFn({
+          ...entity,
+          notifications: [
+            notification({ state: 'seen', viewed_at: firstView }),
+          ],
+        })
+      ).toBe(false);
+    });
   });
 
   describe('mixed scenarios', () => {

@@ -25,6 +25,22 @@ it('shows an unseen reminder dot on a read email without changing mailbox state'
   expect(unreadFilterFn(email)).toBe(false);
 });
 
+it('reads a GraphQL soup reminder array on a read email', () => {
+  const email = {
+    type: 'email',
+    id: 'thread',
+    isRead: true,
+    notifications: [
+      {
+        entity_type: 'email_thread',
+        notification_event_type: 'reminder',
+        state: 'unseen',
+      } as Notification,
+    ],
+  } as WithNotification<EmailEntity>;
+  expect(unreadFilterFn(email)).toBe(true);
+});
+
 it('keeps ordinary new-mail dots tied to mailbox read state', () => {
   const email = {
     type: 'email',
