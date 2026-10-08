@@ -5,4 +5,5 @@
 -- are valid keys and keep the copied order ahead of Revenue at '80'.
 UPDATE database_columns
 SET position = position || '80'
-WHERE position IN ('20', '40', '60');
+WHERE position IN ('20', '40', '60')
+  AND table_id IN (SELECT table_id FROM crm_pipeline_entities);
