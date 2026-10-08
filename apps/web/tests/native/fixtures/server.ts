@@ -1,5 +1,9 @@
 import { buildSchema, graphql } from 'graphql';
-import type { SoupInput } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
+import type {
+  FavoritesFilterInput,
+  GraphqlEmailExpr,
+  SoupInput,
+} from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
 import { bootstrapResponses } from './bootstrap';
 import capsules from './filter-capsules.json';
 import {
@@ -8,6 +12,7 @@ import {
   matrixAccounts,
   matrixTagSets,
   PEOPLE,
+  TIMESTAMP,
 } from './filter-corpus';
 import { accounts, fixtureId, mail, USER_ID } from './mail';
 
@@ -22,6 +27,16 @@ function excludesMail(input: SoupInput) {
     input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
     fixtureId(0)
   );
+}
+
+function previewThreadIds(tree: GraphqlEmailExpr | null | undefined): string[] {
+  if (tree?.literal?.threadId) return [String(tree.literal.threadId)];
+  if (tree?.or)
+    return [
+      ...previewThreadIds(tree.or.left),
+      ...previewThreadIds(tree.or.right),
+    ];
+  throw new Error('ItemPreviews requires explicit thread IDs');
 }
 
 export type RequestRecord = {
@@ -67,6 +82,19 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
   let pagesServed = 0;
 
   function soupPage(input: SoupInput, operation: string) {
+    if (operation === 'ItemPreviews' && corpus) {
+      // Favorite labels may request ID-scoped previews. These are not filtered
+      // Mail pages, and no preview query baseline is supplied to the matrix.
+      if (input.initial?.emailView !== 'ALL')
+        throw new Error('ItemPreviews requires ALL previews');
+      const ids = new Set(
+        previewThreadIds(input.initial.filters?.emailFilter?.tree)
+      );
+      const rows = corpus.filter((row) => row.favorite && ids.has(row.id));
+      if (rows.length !== ids.size)
+        throw new Error('ItemPreviews only serves fixture favorites');
+      return { items: rows.map((row) => row.api), nextCursor: null };
+    }
     if (operation === 'SoupMailBackfill') {
       let offset = 0;
       if (input.continuation) {
@@ -92,14 +120,21 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
         input.initial.filters.documentFilter?.literal?.id !== fixtureId(0);
       return { items: coreLane ? core : [], nextCursor: null };
     }
-    if (operation === 'SoupNotifications')
+    if (
+      operation === 'SoupNotifications' ||
+      (operation === 'ChannelUnreadPresence' && excludesMail(input))
+    )
       return { items: [], nextCursor: null };
     if (operation === 'Soup') {
       // The app sidebar also queries channel Soup, explicitly excluding mail.
       if (excludesMail(input)) {
         return { items: [], nextCursor: null };
       }
-      const signalTree = input.initial?.filters?.emailFilter?.tree;
+      const tree = input.initial?.filters?.emailFilter?.tree;
+      // The sidebar's unread badge adds read=false to the same Signal scope.
+      // It must not create online baselines for the offline Noise/All views.
+      const unreadOnly = tree?.and?.right?.literal?.read === false;
+      const signalTree = unreadOnly ? tree?.and?.left : tree;
       if (
         input.initial?.emailView !== 'INBOX' ||
         signalTree?.and?.left?.literal?.importance !== true ||
@@ -107,7 +142,12 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
       ) {
         throw new Error('Only the initial Signal view may be fetched online');
       }
-      return { items: signalMail, nextCursor: null };
+      return {
+        items: unreadOnly
+          ? signalMail.filter((item) => item.isRead === false)
+          : signalMail,
+        nextCursor: null,
+      };
     }
     throw new Error(`Unimplemented Soup operation: ${operation}`);
   }
@@ -141,7 +181,29 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
             id: USER_ID,
             emailLinks: filterMatrix ? matrixAccounts : accounts,
             emailLabels: [],
-            favorites: [],
+            favorites: ({ filter }: { filter?: FavoritesFilterInput | null }) =>
+              (corpus ?? [])
+                .filter(
+                  (row) =>
+                    row.favorite &&
+                    (!filter?.entityTypes?.length ||
+                      filter.entityTypes.some(
+                        (type) => type === row.api.entityType
+                      )) &&
+                    (!filter?.entityIds?.length ||
+                      filter.entityIds.includes(row.id))
+                )
+                .map((row, sortOrder) => ({
+                  id: `fixture-favorite:${row.id}`,
+                  entityType: row.api.entityType,
+                  entityId: row.id,
+                  sortOrder,
+                  createdAt: TIMESTAMP,
+                  fileType: row.fileType ?? null,
+                  documentSubType: null,
+                  channelType: null,
+                  channelId: null,
+                })),
             soup: ({ input }: { input: SoupInput }) =>
               soupPage(input, operation),
           },

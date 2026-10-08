@@ -130,9 +130,10 @@ export async function selectTab(browser: Browser, label: 'Noise' | 'All') {
   const tab = browser.$(
     `//nav[@aria-label="Email tabs"]//button[.//span[normalize-space(.)="${label}"]]`
   );
-  // Public Email tab hotkeys (see useViewTabHotkeys/EMAIL_TABS). Keep focus
-  // in the list; Enter would activate an email rather than the sidebar tab.
-  await browser.keys(label === 'Noise' ? '2' : '7');
+  // WebKitWebDriver's pointer clicks can hit the adjacent row in this Tauri
+  // window. Activate the labeled button's real UI handler, not query/cache state.
+  await tab.waitForDisplayed({ timeout: 5000 });
+  await tab.execute((element) => element.click());
   await browser.waitUntil(
     async () => (await tab.getAttribute('aria-current')) === 'page',
     {

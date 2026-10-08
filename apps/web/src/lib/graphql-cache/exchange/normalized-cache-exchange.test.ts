@@ -3060,7 +3060,7 @@ describe('normalizedCacheExchange', () => {
         };
         const onCacheError = vi.fn();
         const { forwarded } = harness(host, undefined, { onCacheError });
-        await tick();
+        await vi.waitFor(() => expect(host.commits).toHaveLength(2));
         expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
           'create',
           'edit',
@@ -3139,6 +3139,116 @@ describe('normalizedCacheExchange', () => {
         vi.clearAllTimers();
         vi.useRealTimers();
         vi.restoreAllMocks();
+      });
+
+      it.each(['restore', 'poll', 'online'] as const)(
+        'waits for restore readiness before claiming a mutation after %s',
+        async (wake) => {
+          const events = new EventTarget();
+          vi.spyOn(globalThis, 'addEventListener').mockImplementation(
+            events.addEventListener.bind(events)
+          );
+          const { forwarded } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const ready = deferred<void>();
+          vi.spyOn(host, 'currentRevision').mockImplementationOnce(async () => {
+            await ready.promise;
+            return INITIAL_CACHE_REVISION;
+          });
+          const claimNext = host.claimNextMutation.bind(host);
+          const claim = vi
+            .spyOn(host, 'claimNextMutation')
+            .mockImplementation(async (...args) => {
+              // Like the real host, a claim waits for initialization before
+              // admission. Its caller must not tag it with the earlier epoch.
+              await ready.promise;
+              return await claimNext(...args);
+            });
+          if (wake === 'restore') host.pushGeneration({ storage: 'preserved' });
+          if (wake === 'online') events.dispatchEvent(new Event('online'));
+          await vi.advanceTimersByTimeAsync(wake === 'poll' ? 30_000 : 0);
+          const claimsBeforeReady = claim.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(5_000);
+          // BFCache readiness conservatively invalidates the local epoch even
+          // when the durable database (including this queued head) survived.
+          host.pushGeneration({ storage: 'reset' });
+          const readyAt = Date.now();
+          ready.resolve();
+          await vi.advanceTimersByTimeAsync(1);
+
+          expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.commits).toHaveLength(1);
+          expect(host.rollbacks).toEqual([]);
+          expect(claimsBeforeReady).toBe(0);
+          expect(claim.mock.calls[0]).toEqual([
+            'exchange:test-client',
+            readyAt,
+            readyAt + 300_000,
+          ]);
+        }
+      );
+
+      it('retries failed readiness without acquiring a mutation lease', async () => {
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          data: optimistic,
+        });
+        const ready = vi
+          .spyOn(host, 'currentRevision')
+          .mockRejectedValueOnce(new CacheNavigationError());
+        const claim = vi.spyOn(host, 'claimNextMutation');
+        const { forwarded } = harness(host);
+        await vi.advanceTimersByTimeAsync(29_999);
+        expect(ready).toHaveBeenCalledOnce();
+        expect(claim).not.toHaveBeenCalled();
+        expect(forwarded).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(host.claims).toEqual(['restored-1']);
+        expect(host.commits).toHaveLength(1);
+        expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+      });
+
+      it('fences a successful claim if storage resets after admission', async () => {
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          variables: { input: { version: 'old' } },
+          data: optimistic,
+        });
+        const pendingClaim = deferred<void>();
+        const claimNext = host.claimNextMutation.bind(host);
+        vi.spyOn(host, 'claimNextMutation').mockImplementationOnce(
+          async (...args) => {
+            const claimed = await claimNext(...args);
+            await pendingClaim.promise;
+            return claimed;
+          }
+        );
+        const { forwarded } = harness(host);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(host.claims).toEqual(['restored-1']);
+        host.resetStorage();
+        // The replacement database can reuse the old transaction ID.
+        host.seedQueued({
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          variables: { input: { version: 'new' } },
+          data: optimistic,
+        });
+        pendingClaim.resolve();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(forwarded.map((op) => op.variables.input.version)).toEqual([
+          'new',
+        ]);
+        expect(host.commits).toHaveLength(1);
+        expect(host.rollbacks).toEqual([]);
       });
 
       it.each([

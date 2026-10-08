@@ -61,11 +61,14 @@ The six threads are IDs ending in 4, 6, 8, 9, 10, and 12:
 | Offline Noise | 4, 8, 10 |
 | Offline All | 4, 6, 8, 9, 10, 12 |
 
-Only the initial Signal view may receive an online Mail response. The other rows
-arrive via metadata backfill. Tests wait for the real three-page completion
+Only the initial Signal view and its sidebar unread badge may receive an online
+Mail response. The badge gets only unread Signal rows; Noise and All remain
+unavailable online. The other rows arrive via metadata backfill. Tests wait for the real three-page completion
 checkpoint, then read the six normalized records through native IPC before
-changing filters. Tab changes use the app's public numeric hotkeys (2 / 7) and
-verify `aria-current` before checking results. Assertions compare exact row
+changing filters. Tab changes activate the labeled sidebar buttons with DOM `click()` and verify
+`aria-current` before checking results. This exercises the real UI handlers, but
+not pointer hit-testing: WebKitWebDriver's native clicks can land on an adjacent
+row in the Tauri window, and All is now beyond the numeric tab shortcuts. Assertions compare exact row
 identities, not just counts.
 
 ## Exhaustive filter-selection matrix
@@ -74,18 +77,35 @@ identities, not just counts.
 bun run native:e2e:matrix
 ```
 
-This uses the new Email, Tasks and Channels views and the current Files view.
-It generates requests with their **production query builders**, including the
-real Files presets/type refinements and GraphQL translation. Grouping is pinned
-to `none` and sorting to `UPDATED_AT DESC`; neither selector is covered yet.
+This exercises the Soup-backed Email, Tasks and Channels views and the current
+Files view. It generates requests with their **production query builders**,
+including the real Files presets/type refinements and GraphQL translation.
+Grouping is pinned to `none` and sorting to `UPDATED_AT DESC`; neither selector
+is covered yet.
+
+All registered Email and Tasks tabs must have an explicit source classification.
+The nine Soup-backed Email tabs include Favorites and Archived; the three task
+predicate tabs are My tasks, Created by me and All tasks. Scheduled email uses
+the scheduled-message service, Reminders gets membership from its reminder
+collection, and Tasks → Projects uses a project collection. Those separate
+surfaces are reported in `outsidePredicateMatrix`, not exercised through their
+dormant Soup queries or claimed as offline predicate coverage. They need separate
+source-specific tests. Adding an unclassified tab fails the registry guard.
 
 The Cartesian product includes every static option and every subset of the
 bounded fixture domains (two people, two tags and two linked inboxes, including
 both All inboxes and an explicit empty inbox selection). Registry assertions
 fail when a UI gains an option/facet that has not been added to the matrix.
-The corpus has 75 entities and fits within one initial page: this suite does
-not claim coverage of non-Mail offline pagination or every possible real-world
-user/tag/file value.
+The corpus has 77 entities and fits within one initial page. Every file type,
+including Spreadsheet, has owned and shared examples; snippet and skill subtypes
+are keyed by category rather than array position. Mail includes both favorited
+and non-favorited threads across linked inboxes and shared-thread scope. The
+app chrome may fetch the favorites collection and ID-scoped label previews, but
+no preview or filtered-page membership baseline is supplied to native evaluation.
+The independent fixture oracle checks Favorites membership and Archived/done
+intersections without using the production compiler or cache results.
+This suite does not claim coverage of non-Mail offline pagination or every
+possible real-world user/tag/file value.
 
 After all five real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
@@ -97,12 +117,17 @@ chips intentionally do not change the server AST); every selection is asserted.
 
 Progress and failing inputs are saved to `filter-matrix.json`; the first request
 is also saved before native evaluation. Exact per-view count assertions guard
-against silently omitted selections: Email 20,160; Tasks 98,304; Files 69,632;
-Channels 3. The exhaustive suite has a 90-minute watchdog (individual native
+against silently omitted selections: Email 25,920 (9 × 2,880); Tasks 98,304
+(3 × 32,768); Files 139,264 (11 type options, including every subset); Channels 3.
+The complete matrix has **263,491 selections**. The exhaustive suite has a
+90-minute watchdog (individual native
 command timeouts are unchanged), rather than the smoke suite's four minutes.
 To isolate a failure, use `bun run native:e2e:matrix --matrix-view=tasks`
 (or `email`, `files`, `channels`). A focused run is not a full-matrix pass.
-The test build keeps the development UI protocol but optimizes the Turso VM.
+The test build keeps the development UI protocol but optimizes the Turso VM and
+SQL parser, like production. Unoptimized parser stack frames can exhaust the
+native worker stack on valid compound selections; do not reduce matrix coverage
+to avoid them.
 `filter-corpus.ts` owns fixture facts; `filter-capsules.json` is generated by the
 canonical Rust capsule encoder, not a hand-built wire format. After changing
 fixture document IDs or server-only facts, regenerate inside Nix:
