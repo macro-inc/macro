@@ -113,7 +113,10 @@ fn tool_error(error: rootcause::Report) -> ToolCallError {
         .downcast_current_context::<TeamCalendarError>()
     {
         Some(TeamCalendarError::InvalidQuery) => {
-            "The window must be positive, at most 370 days, and within one year past to two years future. Select at most 100 teammate ids."
+            "The window must be positive, at most 370 days, and within one year past to two years future."
+        }
+        Some(TeamCalendarError::TooManyMembers) => {
+            "Too many people selected. Choose at most 100 teammates using userIds; the requester is always included. Omitting userIds selects the whole team."
         }
         Some(TeamCalendarError::Disabled) => {
             "Team calendar sharing is not enabled for this deployment."

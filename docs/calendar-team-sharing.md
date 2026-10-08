@@ -36,6 +36,10 @@ event, occurrence, and exception snapshots. It must never fill missing details
 from a richer canonical event or another user's copy. Team-derived access does
 not become a new source for another team's access.
 
+Projection identities distinguish each eligible source copy. Two copies of the
+same meeting shared by the same member can appear separately because their
+visible details and contribution to that member's availability can differ.
+
 Google ACL `owner` means calendar manager access; it does not establish that the
 connected account is the calendar's data owner. OAuth read permission also does
 not itself describe consent to team redistribution. The release must accurately
@@ -124,6 +128,7 @@ does not make it a different original recurrence instance.
 includes the current team; a supplied list narrows to those teammates plus the
 requester, and an empty list checks only the requester. Unknown IDs never broaden
 the selection. At most 100 selected teammates plus the requester are supported.
+Larger selections return guidance to supply a smaller `userIds` list.
 The requester's own setting of `none` does not prevent reading their direct
 calendar sources for their own availability.
 
@@ -272,6 +277,10 @@ Release checks:
   cached details; a remaining independent entitlement is preserved.
 - [ ] Real Google fixtures confirm role-downgrade/redaction and recurrence payload
   behavior. Synthetic normalization tests alone do not establish provider behavior.
+- [ ] Real Google fixtures establish point-event and `endTimeUnspecified` payload
+  behavior. Existing storage rejects equal start/end times; unsupported payloads
+  must leave coverage unknown, never imply free time. Supporting point events
+  requires coordinated storage, query, and normalization changes.
 - [ ] Relevant Rust tests, SQLx preparation, generated API/tool/SDK artifacts,
   TypeScript checking, `just check`, and browser verification pass.
 

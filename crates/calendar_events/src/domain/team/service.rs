@@ -16,6 +16,9 @@ pub enum TeamCalendarError {
     /// The bounded query is outside supported limits.
     #[error("invalid calendar range, cursor, or page size")]
     InvalidQuery,
+    /// The requested availability selection exceeds the supported member bound.
+    #[error("too many people selected; choose at most 100 teammates using userIds")]
+    TooManyMembers,
     /// The source calendar is no longer directly visible to the requester.
     #[error("calendar not found")]
     NotFound,
@@ -203,7 +206,7 @@ impl<R: CalendarTeamRepository, N: CalendarTeamNotifier> CalendarTeamService
         }
         validate_range(&range)?;
         if user_ids.is_some_and(|ids| ids.len() > 100) {
-            return Err(rootcause::report!(TeamCalendarError::InvalidQuery).into());
+            return Err(rootcause::report!(TeamCalendarError::TooManyMembers).into());
         }
         let revision = self.repository.projection_revision(requester).await?;
         let mut source_range = range.clone();
@@ -235,7 +238,7 @@ impl<R: CalendarTeamRepository, N: CalendarTeamNotifier> CalendarTeamService
             member.user_id == requester || user_ids.is_none_or(|ids| ids.contains(&member.user_id))
         });
         if members.len() > 101 {
-            return Err(rootcause::report!(TeamCalendarError::InvalidQuery).into());
+            return Err(rootcause::report!(TeamCalendarError::TooManyMembers).into());
         }
         let owners: Vec<_> = members
             .iter()
@@ -323,6 +326,7 @@ fn project(
     };
     let identity = serde_json::to_vec(&(
         &source.shared_by,
+        source.source_id,
         &source.event.ical_uid,
         &source.occurrence.occurrence_key,
     ))

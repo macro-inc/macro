@@ -71,6 +71,38 @@ describe('team calendar query boundaries', () => {
     });
   });
 
+  it('retains distinct source copies across pages without combining masking or availability', async () => {
+    const followed = {
+      ...item,
+      id: 'opaque-followed-source',
+      kind: 'details' as const,
+      contributesToAvailability: false,
+      details: {
+        title: 'Shared calendar meeting',
+        description: 'Visible on the followed source',
+        location: null,
+        conferenceUrl: null,
+        organizerEmail: null,
+        organizerName: null,
+        attendees: [],
+        calendarName: 'Followed calendar',
+      },
+    };
+    const personal = { ...item, id: 'opaque-personal-source' };
+    vi.mocked(storageServiceClient.listTeamCalendar)
+      .mockResolvedValueOnce(
+        ok({ members: [], items: [followed], nextCursor: 'next-source' })
+      )
+      .mockResolvedValueOnce(
+        ok({ members: [], items: [personal], nextCursor: null })
+      );
+
+    const page = await fetchTeamCalendar(range);
+
+    expect(page.items).toEqual([followed, personal]);
+    expect(page.items[1]).not.toHaveProperty('details');
+  });
+
   it('loads the roster without asking the server to scan source events', async () => {
     const members = [
       {

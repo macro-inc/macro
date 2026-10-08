@@ -93,7 +93,7 @@ fn subscribed_busy_block_is_shared_without_claiming_personal_busyness() {
 }
 
 #[test]
-fn detailed_attendee_flags_are_viewer_relative_and_copies_have_one_identity() {
+fn detailed_attendee_flags_are_viewer_relative() {
     let row = source();
     let item = project(
         &row,
@@ -105,14 +105,34 @@ fn detailed_attendee_flags_are_viewer_relative_and_copies_have_one_identity() {
         panic!("expected details")
     };
     assert!(!details.attendees[0].is_self);
+}
+
+#[test]
+fn projection_identity_is_stable_per_source_and_distinct_across_provider_copies() {
+    let row = source();
     let mut other_source = row.clone();
     other_source.source_id = Uuid::now_v7();
     other_source.event.id = Uuid::now_v7();
+    other_source.calendar_id = Uuid::now_v7();
+    other_source.event.title = "Different source details".into();
+    other_source.contributes_to_availability = false;
+    other_source.owner_emails = vec!["subscriber@example.com".into()];
+    for sharing in [TeamCalendarSharing::BusyOnly, TeamCalendarSharing::All] {
+        let first = project(&row, sharing, &[]).unwrap();
+        let repeated = project(&row, sharing, &[]).unwrap();
+        let other = project(&other_source, sharing, &[]).unwrap();
+        assert_eq!(first.id, repeated.id);
+        assert_ne!(first.id, other.id);
+        assert!(first.contributes_to_availability);
+        assert!(!other.contributes_to_availability);
+        assert_ne!(first.id, row.source_id.to_string());
+    }
     assert_eq!(
-        item.id,
-        project(&other_source, TeamCalendarSharing::BusyOnly, &[])
+        project(&row, TeamCalendarSharing::BusyOnly, &[])
             .unwrap()
-            .id
+            .id,
+        project(&row, TeamCalendarSharing::All, &[]).unwrap().id,
+        "a policy change must update the same source projection"
     );
 }
 
@@ -144,6 +164,7 @@ fn a_private_exception_cannot_expose_its_replacement_title() {
 #[derive(Default)]
 struct Repository {
     owners: Mutex<Vec<String>>,
+    additional_members: usize,
     rows: Vec<TeamSourceOccurrence>,
     forbid_event_reads: bool,
     change_revision: bool,
@@ -167,6 +188,13 @@ impl CalendarTeamRepository for Repository {
             sharing: TeamCalendarSharing::BusyOnly,
             coverage: TeamCalendarCoverage::Ready,
         }];
+        members.extend(
+            (0..self.additional_members).map(|index| TeamCalendarMember {
+                user_id: format!("teammate-{index}"),
+                sharing: TeamCalendarSharing::BusyOnly,
+                coverage: TeamCalendarCoverage::Ready,
+            }),
+        );
         if include_self {
             members.push(TeamCalendarMember {
                 user_id: requester.into(),
@@ -355,7 +383,74 @@ async fn selected_unknown_ids_do_not_broaden_and_requester_is_always_included() 
 }
 
 #[tokio::test]
-async fn duplicate_source_selection_is_independent_of_page_size() {
+async fn oversized_availability_selection_returns_actionable_error_without_loading_sources() {
+    let service = CalendarTeamServiceImpl::new(
+        Repository {
+            additional_members: 100,
+            forbid_event_reads: true,
+            ..Repository::default()
+        },
+        true,
+    );
+    let explicit = (0..101)
+        .map(|index| format!("teammate-{index}"))
+        .collect::<Vec<_>>();
+    for selection in [None, Some(explicit.as_slice())] {
+        let error = service
+            .get_team_availability("viewer", range(), selection)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error
+                .as_ref()
+                .downcast_current_context::<TeamCalendarError>(),
+            Some(TeamCalendarError::TooManyMembers)
+        ));
+        assert!(
+            error
+                .to_string()
+                .contains("choose at most 100 teammates using userIds")
+        );
+    }
+    assert!(service.repository.owners.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn availability_accepts_exact_member_limit_and_explicit_subset_of_larger_team() {
+    let service = CalendarTeamServiceImpl::new(
+        Repository {
+            additional_members: 99,
+            ..Repository::default()
+        },
+        true,
+    );
+    let result = service
+        .get_team_availability("viewer", range(), None)
+        .await
+        .unwrap();
+    assert_eq!(result.members.len(), 101);
+    assert_eq!(service.repository.owners.lock().unwrap().len(), 101);
+
+    let service = CalendarTeamServiceImpl::new(
+        Repository {
+            additional_members: 100,
+            ..Repository::default()
+        },
+        true,
+    );
+    let result = service
+        .get_team_availability("viewer", range(), Some(&["owner".into()]))
+        .await
+        .unwrap();
+    assert_eq!(result.members.len(), 2);
+    assert_eq!(
+        service.repository.owners.lock().unwrap().as_slice(),
+        &["owner", "viewer"]
+    );
+}
+
+#[tokio::test]
+async fn distinct_source_projections_are_preserved_independent_of_page_size() {
     let first = source();
     let mut second = first.clone();
     second.source_id = Uuid::now_v7();
@@ -393,5 +488,12 @@ async fn duplicate_source_selection_is_independent_of_page_size() {
             .map(|item| (item.id.clone(), serde_json::to_value(item).unwrap()))
             .collect::<HashMap<_, _>>()
     };
-    assert_eq!(collect(all.items), collect(paged.items));
+    let all = collect(all.items);
+    let paged = collect(paged.items);
+    assert_eq!(
+        all.len(),
+        2,
+        "source identities must not collapse distinct copies"
+    );
+    assert_eq!(all, paged);
 }

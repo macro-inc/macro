@@ -141,7 +141,9 @@ impl From<rootcause::Report> for TeamCalendarApiError {
             .as_ref()
             .downcast_current_context::<TeamCalendarError>()
         {
-            Some(TeamCalendarError::InvalidQuery) => StatusCode::BAD_REQUEST,
+            Some(TeamCalendarError::InvalidQuery | TeamCalendarError::TooManyMembers) => {
+                StatusCode::BAD_REQUEST
+            }
             Some(TeamCalendarError::NotFound | TeamCalendarError::Disabled) => {
                 StatusCode::NOT_FOUND
             }
