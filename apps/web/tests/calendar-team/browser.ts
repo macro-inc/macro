@@ -60,6 +60,7 @@ let member = true;
 let connected = true;
 let hangTeamRequests = false;
 const mutations: unknown[] = [];
+const teamReadLimits: string[] = [];
 const teamMembers = [
   { userId: ALICE, sharing: 'all', coverage: 'ready' },
   { userId: BOB, sharing: 'busy_only', coverage: 'ready' },
@@ -203,12 +204,13 @@ await page.route('**/*', async (route) => {
       ],
     });
   if (path === '/dss/calendar-events/team') {
+    teamReadLimits.push(url.searchParams.get('limit') ?? 'default');
     if (hangTeamRequests) return new Promise<void>(() => {});
     return revoked
       ? respond({ message: 'Access revoked' }, 403)
       : respond({
           members: teamMembers,
-          items: url.searchParams.get('limit') === '1' ? [] : items,
+          items: url.searchParams.get('limit') === '0' ? [] : items,
           nextCursor: null,
         });
   }
@@ -280,6 +282,9 @@ try {
     .first()
     .waitFor({ timeout: 60000 });
   await expectRevealedCalendar();
+  await expect.poll(() => teamReadLimits.includes('0')).toBe(true);
+  assert.equal(teamReadLimits.includes('500'), true);
+  assert.equal(teamReadLimits.includes('1'), false);
   await page.screenshot({
     path: '/tmp/calendar-team-grid.png',
     fullPage: true,
@@ -331,6 +336,30 @@ try {
   await expect(
     page.getByRole('radio', { name: 'Busy blocks', exact: true })
   ).toBeChecked({ timeout: 30000 });
+  await expect(
+    page.getByText(
+      'including subscribed or delegated calendars, birthdays and holidays',
+      {
+        exact: false,
+      }
+    )
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Calendars unchecked in Google Calendar are included if synced.',
+      {
+        exact: false,
+      }
+    )
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      'Hiding a calendar in your Macro view does not change sharing.',
+      {
+        exact: false,
+      }
+    )
+  ).toBeVisible();
   await page.screenshot({
     path: '/tmp/calendar-team-settings.png',
     fullPage: true,
@@ -420,7 +449,13 @@ try {
 } finally {
   console.log(
     JSON.stringify(
-      { errors, requestFailures, unknown: [...new Set(unknown)], mutations },
+      {
+        errors,
+        requestFailures,
+        unknown: [...new Set(unknown)],
+        teamReadLimits: [...new Set(teamReadLimits)],
+        mutations,
+      },
       null,
       2
     )

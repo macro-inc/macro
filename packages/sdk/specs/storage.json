@@ -854,7 +854,7 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Maximum source occurrences, at most 2,000.",
+            "description": "Maximum source occurrences, at most 2,000. Zero returns the roster only.",
             "required": false,
             "schema": {
               "type": ["integer", "null"],

@@ -14,6 +14,8 @@ pub trait CalendarTeamRepository: Send + Sync + 'static {
         requester: &str,
     ) -> impl Future<Output = Result<String, Report>> + Send;
     /// Current teammates; include_self adds the requester's direct source context.
+    /// A routine refresh keeps a recent, verified successful snapshot usable;
+    /// stale, failed, unverified, or incomplete source coverage remains unknown.
     fn members(
         &self,
         requester: &str,
@@ -73,7 +75,7 @@ impl CalendarTeamNotifier for NoopTeamNotifier {
 
 /// Team calendar use cases. Provider writes are deliberately absent.
 pub trait CalendarTeamService: Send + Sync + 'static {
-    /// Paginated read-only team calendar projections.
+    /// Paginated read-only team calendar projections; limit zero reads only the roster.
     fn list_team_calendar(
         &self,
         requester: &str,

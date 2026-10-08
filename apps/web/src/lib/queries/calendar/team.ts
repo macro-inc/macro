@@ -108,27 +108,30 @@ export function useAvailabilityCalendarsQuery(
   }));
 }
 
+/** A zero-limit read authorizes the roster without scanning source events. */
+export async function fetchTeamCalendarMembers(signal?: AbortSignal) {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const page = await throwOnErr(() =>
+    storageServiceClient.listTeamCalendar({
+      start: start.toISOString(),
+      end: end.toISOString(),
+      limit: 0,
+      signal,
+    })
+  );
+  return page.members;
+}
+
 /** The roster is present even in an empty viewport; retain no event payload. */
 export function useTeamCalendarMembersQuery(
   identity: Accessor<CalendarTeamIdentity | undefined>
 ) {
   return useQuery(() => ({
     queryKey: calendarTeamKeys.members(identity()).queryKey,
-    queryFn: async ({ signal }) => {
-      const start = new Date();
-      start.setUTCHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setUTCDate(end.getUTCDate() + 1);
-      const page = await throwOnErr(() =>
-        storageServiceClient.listTeamCalendar({
-          start: start.toISOString(),
-          end: end.toISOString(),
-          limit: 1,
-          signal,
-        })
-      );
-      return page.members;
-    },
+    queryFn: ({ signal }) => fetchTeamCalendarMembers(signal),
     enabled: identity() !== undefined,
     ...freshness,
   }));

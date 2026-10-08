@@ -74,7 +74,7 @@ impl<R: CalendarTeamRepository, N: CalendarTeamNotifier> CalendarTeamService
             return Err(rootcause::report!(TeamCalendarError::Disabled).into());
         }
         validate_range(&range)?;
-        if !(1..=2000).contains(&limit) {
+        if limit > 2000 || (limit == 0 && cursor.is_some()) {
             return Err(rootcause::report!(TeamCalendarError::InvalidQuery).into());
         }
         let revision = self.repository.projection_revision(requester).await?;
@@ -85,6 +85,16 @@ impl<R: CalendarTeamRepository, N: CalendarTeamNotifier> CalendarTeamService
             return Err(rootcause::report!(TeamCalendarError::InvalidQuery).into());
         }
         let members = self.repository.members(requester, false, &range).await?;
+        if limit == 0 {
+            if self.repository.projection_revision(requester).await? != revision {
+                return Err(rootcause::report!(TeamCalendarError::InvalidQuery).into());
+            }
+            return Ok(TeamCalendarPage {
+                members,
+                items: vec![],
+                next_cursor: None,
+            });
+        }
         let owners: Vec<_> = members
             .iter()
             .filter(|member| member.sharing != TeamCalendarSharing::None)

@@ -59,6 +59,14 @@ event may therefore appear as shared source content without claiming that the
 sharing member is personally busy; projections explicitly identify whether the
 event contributes to personal availability.
 
+This includes synced system calendars and calendars unchecked in Google's
+calendar view. Unchecked (`selected = false`) is different from hidden from
+CalendarList; ingestion does not request Google's hidden-list entries.
+Directly delegated sources are shared under the delegate's own Macro setting,
+not the source owner's setting. A source owner's `none` does not revoke a
+delegate's independent access or sharing choice. Disclosures and consent review
+must cover this behavior before activation.
+
 Busy-only and private-event projections use a separate response shape, rather
 than blanking fields on a full event object. Details are allowed only for
 default/public visibility. An explicit private/confidential instance restricts
@@ -72,6 +80,11 @@ editing, deletion, RSVP, drag/reschedule, invitation, or copy-as-event-mention
 actions. A team view does not expand calendar search or generic event-detail
 authorization. Attendee `self` flags in detailed projections describe the viewer,
 not the source calendar account.
+
+The existing team out-of-office overlay also follows the server gate and requires
+explicit `all` sharing. Gate-off deployment suppresses that overlay; busy-only
+sharing does not disclose an out-of-office label. This is an intentional privacy
+change to the older overlay, not a claim that the person has no time off.
 
 Team projections and availability use server-confirmed source copies. An offline
 edit can appear immediately in the editor's own calendar through the mutation
@@ -121,6 +134,8 @@ range have complete coverage. Hidden sharing, absent calendars, incomplete or
 stale sync, access changes awaiting resync, unknown IDs, invalid all-day zones,
 conflicting copies, or truncation prevent a confident common-free result.
 Known busy intervals can still be useful when coverage is unknown.
+Those intervals come only from currently eligible sources: stale or revoked
+copies are withheld entirely, including from browsing.
 
 A malformed live event, recurring exception, or instance fails that calendar's
 sync batch; it is never silently dropped while declaring the range complete.
@@ -136,6 +151,12 @@ must also carry the current strict-normalization version; a legacy worker's sync
 completion is insufficient evidence of complete coverage. The all-day
 source query pads local dates around the UTC range; final intervals are converted
 using their own source zones and clipped to the exact requested instants.
+
+A quiet poll may continue serving its recent verified snapshot while the account
+is syncing. The first actual source or calendar change withdraws account
+freshness in the same transaction; teammate reads remain unavailable until the
+account finishes successfully. This prevents partially applied event moves from
+creating false free time. Starting a retry does not clear a known sync failure.
 
 Queries are bounded to the existing materialized horizon: one year past to two
 years future, at most 370 days per request. Availability loads at most 20,000
@@ -228,6 +249,9 @@ in the rollout.
    only after the release checks pass. A production rollout limited to selected
    teams requires an additional server-side team allowlist before that mode is
    used; it is not part of this change.
+   The same restriction applies to a team pilot in a shared dev environment.
+   Gate-off deployment, migration checks, and sync reconciliation may proceed
+   first; opening the global gate is not a substitute for isolated fixtures.
 4. Verify source freshness, resync failures, unavailable coverage, invalidated
    cursors, and unauthorized/disabled responses before expanding the cohort.
 5. Expand only after the checks below pass with the deployed provider integration.

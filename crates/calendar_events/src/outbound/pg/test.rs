@@ -1,6 +1,7 @@
 use super::*;
 mod snapshot_coverage;
 mod team_sharing;
+mod team_sync_coverage;
 use crate::domain::models::{
     GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleWatchChannel,
     OccurrenceException, OccurrenceListing, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,

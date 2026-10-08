@@ -77,11 +77,21 @@ impl CalendarTeamRepository for PgCalendarTeamRepository {
                 FROM team_user viewer JOIN team_user teammate ON teammate.team_id = viewer.team_id
                 WHERE viewer.user_id = $1 AND teammate.user_id <> $1
                 UNION SELECT $1::text WHERE $2
+            ), visible_accounts AS MATERIALIZED (
+                SELECT members.user_id, account.id AS account_id
+                FROM members JOIN calendar_accounts account ON account.owner_id = members.user_id
+                WHERE account.sync_status <> 'disabled'
+                UNION
+                SELECT members.user_id, account.id AS account_id
+                FROM members
+                JOIN macro_user_links link ON link.primary_macro_id = members.user_id
+                JOIN calendar_accounts account ON account.email_link_id = link.link_id
+                WHERE account.sync_status <> 'disabled'
             )
             SELECT members.user_id AS "user_id!",
                 COALESCE(policy.sharing, 'busy_only') AS "sharing!",
-                COALESCE((SELECT bool_and(
-                    account.sync_status = 'ready' AND account.last_sync_error IS NULL
+                COALESCE(bool_and(
+                    account.sync_status IN ('ready', 'syncing') AND account.last_sync_error IS NULL
                     AND COALESCE(account.last_synced_at > now() - interval '15 minutes', false)
                     AND calendar.last_sync_error IS NULL
                     AND COALESCE(calendar.materialized_starts_at <= $3 AND calendar.materialized_ends_at >= $4
@@ -93,13 +103,12 @@ impl CalendarTeamRepository for PgCalendarTeamRepository {
                           AND (pending_source.provider_access_role IS NULL
                             OR pending_source.provider_access_role IS DISTINCT FROM calendar.access_role)
                     )
-                ) FROM calendar_accounts account
-                LEFT JOIN calendars calendar ON calendar.account_id = account.id AND NOT calendar.is_deleted
-                WHERE account.sync_status <> 'disabled'
-                  AND (account.owner_id = members.user_id OR EXISTS (
-                    SELECT 1 FROM macro_user_links link WHERE link.link_id = account.email_link_id AND link.primary_macro_id = members.user_id
-                  ))), false) AS "ready!"
+                ), false) AS "ready!"
             FROM members LEFT JOIN calendar_team_sharing policy ON policy.user_id = members.user_id
+            LEFT JOIN visible_accounts visible ON visible.user_id = members.user_id
+            LEFT JOIN calendar_accounts account ON account.id = visible.account_id
+            LEFT JOIN calendars calendar ON calendar.account_id = account.id AND NOT calendar.is_deleted
+            GROUP BY members.user_id, policy.sharing
             ORDER BY members.user_id
         "#, requester, include_self, range.starts_at, range.ends_at, range.start_date, range.end_date).fetch_all(&self.pool).await.map_err(|error| rootcause::report!(error))?;
         rows.into_iter()

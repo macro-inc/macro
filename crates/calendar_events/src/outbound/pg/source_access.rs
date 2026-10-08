@@ -7,6 +7,23 @@ use crate::domain::models::GoogleEventSource;
 
 use super::report;
 
+/// A changed provider poll writes several source snapshots in separate
+/// transactions. Withdraw the account's prior completeness claim with its
+/// first visible change; successful account completion restores freshness.
+pub(super) async fn invalidate_account_freshness(
+    tx: &mut Transaction<'_, Postgres>,
+    account_id: uuid::Uuid,
+) -> Result<(), Report> {
+    sqlx::query!(
+        "UPDATE calendar_accounts SET last_synced_at=NULL WHERE id=$1 AND last_synced_at IS NOT NULL",
+        account_id,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
 /// An unchanged response verifies its content only when the role observed
 /// before its provider request still matches this account's calendar role.
 /// A delayed response must never upgrade itself to a newer stored role.

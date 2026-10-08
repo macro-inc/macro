@@ -238,9 +238,16 @@ impl PgCalendarRepository {
         .map_err(report)?;
         let mut tx = self.pool.begin().await.map_err(report)?;
         let mut log = ChangeLogBatch::default();
-        let id = upsert_calendar_tx(&mut tx, &mut log, email_link_id, account_id, calendar)
-            .await?
-            .id;
+        let id = upsert_calendar_tx(
+            &mut tx,
+            &mut log,
+            email_link_id,
+            account_id,
+            calendar,
+            false,
+        )
+        .await?
+        .id;
         log.commit(tx).await?;
         Ok(id)
     }
@@ -707,6 +714,7 @@ impl CalendarRepository for PgCalendarRepository {
     ) -> Result<CalendarEventWriteOutcome, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let user_mutation = matches!(write, CalendarEventWrite::UserMutation(_));
+        let provider_sync = matches!(write, CalendarEventWrite::GoogleBackfill { .. });
         let upsert = match write {
             CalendarEventWrite::GoogleBackfill {
                 key,
@@ -871,6 +879,9 @@ impl CalendarRepository for PgCalendarRepository {
                 change: CalendarEventChange::Unchanged,
             });
         };
+        if provider_sync {
+            source_access::invalidate_account_freshness(&mut tx, source.account_id).await?;
+        }
 
         // Content always follows the canonical copy. The schedule follows
         // whichever copy last wrote it: the canonical copy takes it when that
@@ -1301,8 +1312,15 @@ impl CalendarRepository for PgCalendarRepository {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
         let mut log = ChangeLogBatch::default();
-        let calendar =
-            upsert_calendar_tx(&mut tx, &mut log, key.email_link_id, account_id, calendar).await?;
+        let calendar = upsert_calendar_tx(
+            &mut tx,
+            &mut log,
+            key.email_link_id,
+            account_id,
+            calendar,
+            true,
+        )
+        .await?;
         log.commit(tx).await?;
         stored_google_calendar(calendar)
     }
@@ -1371,6 +1389,9 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
+            if !affected_event_ids.is_empty() {
+                source_access::invalidate_account_freshness(&mut tx, account_id).await?;
+            }
             for event_id in affected_event_ids {
                 if let Some(outcome) =
                     restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
@@ -1401,6 +1422,9 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
+            if !affected_event_ids.is_empty() {
+                source_access::invalidate_account_freshness(&mut tx, account_id).await?;
+            }
             for event_id in affected_event_ids {
                 if let Some(outcome) =
                     restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
@@ -1698,6 +1722,9 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
+        if !affected_event_ids.is_empty() {
+            source_access::invalidate_account_freshness(&mut tx, account_id).await?;
+        }
         for event_id in affected_event_ids {
             if let Some(outcome) =
                 restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
@@ -1741,6 +1768,9 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
+        if !flipped_calendars.is_empty() {
+            source_access::invalidate_account_freshness(&mut tx, account_id).await?;
+        }
         for calendar in flipped_calendars {
             log.record(
                 key.email_link_id,
@@ -1784,6 +1814,9 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
+        if !refreshed_copies.is_empty() {
+            source_access::invalidate_account_freshness(&mut tx, account_id).await?;
+        }
         for copy in refreshed_copies {
             log.record(
                 copy.source_link_id,
@@ -2350,6 +2383,7 @@ async fn upsert_calendar_tx(
     email_link_id: Uuid,
     account_id: Uuid,
     calendar: ProviderCalendar,
+    provider_sync: bool,
 ) -> Result<StoredCalendarRow, Report> {
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
@@ -2384,6 +2418,9 @@ async fn upsert_calendar_tx(
             || previous.is_primary != calendar.is_primary
             || previous.default_reminders != default_reminders
     });
+    if provider_sync && (visibly_changed || reminders_invalidated) {
+        source_access::invalidate_account_freshness(tx, account_id).await?;
+    }
     let anchor_zone = calendar.time_zone.clone();
     // Provider ACL changes and pre-migration snapshots need a full refresh
     // even when no event's sequence changed or the calendar has no sources.
@@ -2646,7 +2683,6 @@ impl CalendarBackfillRepository for PgCalendarRepository {
             r#"
             UPDATE calendar_accounts
             SET sync_status = 'syncing',
-                last_sync_error = NULL,
                 updated_at = now()
             WHERE email_link_id = $1
             "#,

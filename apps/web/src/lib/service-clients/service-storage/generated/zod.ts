@@ -1443,7 +1443,9 @@ export const listTeamCalendarQueryParams = zod.object({
     .number()
     .min(listTeamCalendarQueryLimitMin)
     .nullish()
-    .describe('Maximum source occurrences, at most 2,000.'),
+    .describe(
+      'Maximum source occurrences, at most 2,000. Zero returns the roster only.'
+    ),
 });
 
 export const listTeamCalendarResponse = zod

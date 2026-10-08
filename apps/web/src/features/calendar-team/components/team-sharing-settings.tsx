@@ -23,7 +23,7 @@ const choices: {
     value: 'all',
     title: 'Event details',
     description:
-      'Share events from every calendar synced to Macro, including calendars you follow. Private events stay hidden behind busy blocks. This does not change Google Calendar permissions.',
+      'Share details from every calendar synced to Macro, including subscribed or delegated calendars, birthdays and holidays. Calendars unchecked in Google Calendar are included if synced. Private and confidential events share only busy blocks when they block time. This does not change Google Calendar permissions.',
   },
   {
     value: 'none',
@@ -61,7 +61,7 @@ export function TeamSharingSettings(props: {
     <>
       <SettingsSection
         title="Team sharing"
-        description="Choose what teammates can read in Macro. Sharing does not invite them to events or give them Google Calendar access."
+        description="Choose what teammates can read in Macro. Hiding a calendar in your Macro view does not change sharing. Sharing does not invite them to events or give them Google Calendar access."
       >
         <SettingsCard>
           <Show

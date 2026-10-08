@@ -14815,7 +14815,7 @@ export type ListTeamCalendarData = {
          */
         cursor?: string | null;
         /**
-         * Maximum source occurrences, at most 2,000.
+         * Maximum source occurrences, at most 2,000. Zero returns the roster only.
          */
         limit?: number | null;
     };

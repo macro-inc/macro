@@ -101,7 +101,7 @@ pub struct TeamCalendarQuery {
     pub end: DateTime<Utc>,
     /// Continuation returned by the preceding page.
     pub cursor: Option<String>,
-    /// Maximum source occurrences, at most 2,000.
+    /// Maximum source occurrences, at most 2,000. Zero returns the roster only.
     pub limit: Option<u16>,
 }
 

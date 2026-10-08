@@ -1,7 +1,7 @@
 import { storageServiceClient } from '@service-storage/client';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchTeamCalendar } from '../team';
+import { fetchTeamCalendar, fetchTeamCalendarMembers } from '../team';
 import { calendarTeamKeys } from '../team-keys';
 
 vi.mock('@service-storage/client', () => ({
@@ -67,6 +67,29 @@ describe('team calendar query boundaries', () => {
       end: range.end,
       cursor: 'cursor',
       limit: 500,
+      signal: controller.signal,
+    });
+  });
+
+  it('loads the roster without asking the server to scan source events', async () => {
+    const members = [
+      {
+        userId: 'alice',
+        sharing: 'busy_only' as const,
+        coverage: 'ready' as const,
+      },
+    ];
+    vi.mocked(storageServiceClient.listTeamCalendar).mockResolvedValueOnce(
+      ok({ members, items: [], nextCursor: null })
+    );
+    const controller = new AbortController();
+
+    expect(await fetchTeamCalendarMembers(controller.signal)).toEqual(members);
+    expect(storageServiceClient.listTeamCalendar).toHaveBeenCalledTimes(1);
+    expect(storageServiceClient.listTeamCalendar).toHaveBeenCalledWith({
+      start: expect.stringMatching(/T00:00:00\.000Z$/),
+      end: expect.stringMatching(/T00:00:00\.000Z$/),
+      limit: 0,
       signal: controller.signal,
     });
   });

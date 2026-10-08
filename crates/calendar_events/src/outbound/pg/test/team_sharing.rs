@@ -3,6 +3,259 @@ use crate::domain::team::{CalendarTeamRepository, TeamCalendarCoverage, TeamCale
 use crate::outbound::pg_team::PgCalendarTeamRepository;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn routine_sync_keeps_verified_coverage_without_admitting_failed_or_stale_snapshots(
+    pool: PgPool,
+) {
+    let viewer = "macro|sync-viewer@example.com";
+    let owner = "macro|sync-owner@example.com";
+    insert_team(&pool, viewer, &[viewer, owner]).await;
+    let link = insert_link(&pool, owner).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account, calendar) = provider_ids(&repo, link).await;
+    repo.upsert_event_fixture(timed_upsert(
+        owner,
+        link,
+        (account, calendar),
+        "routine-sync",
+        "Existing meeting",
+        1,
+    ))
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendars SET synced_at=now(),materialized_starts_at='2026-07-01',materialized_ends_at='2026-08-01',materialized_start_date='2026-07-01',materialized_end_date='2026-08-01' WHERE account_id=$1",
+        account
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendars SET snapshot_normalization_version=1 WHERE account_id=$1",
+        account
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_accounts SET sync_status='ready',last_synced_at=now() WHERE id=$1",
+        account
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let team = PgCalendarTeamRepository::new(pool.clone());
+    let ready_revision = team.projection_revision(viewer).await.unwrap();
+
+    for (case, status, stale, account_error, calendar_error, verified, expected) in [
+        (
+            "routine refresh",
+            "syncing",
+            false,
+            None,
+            None,
+            1,
+            TeamCalendarCoverage::Ready,
+        ),
+        (
+            "stale authorization",
+            "syncing",
+            true,
+            None,
+            None,
+            1,
+            TeamCalendarCoverage::Unavailable,
+        ),
+        (
+            "account failure",
+            "syncing",
+            false,
+            Some("provider failure"),
+            None,
+            1,
+            TeamCalendarCoverage::Unavailable,
+        ),
+        (
+            "calendar failure",
+            "syncing",
+            false,
+            None,
+            Some("calendar failure"),
+            1,
+            TeamCalendarCoverage::Unavailable,
+        ),
+        (
+            "unverified snapshot",
+            "syncing",
+            false,
+            None,
+            None,
+            0,
+            TeamCalendarCoverage::Unavailable,
+        ),
+        (
+            "failed account status",
+            "error",
+            false,
+            None,
+            None,
+            1,
+            TeamCalendarCoverage::Unavailable,
+        ),
+    ] {
+        sqlx::query!(
+            "UPDATE calendar_accounts SET sync_status=$2,last_synced_at=CASE WHEN $3 THEN now()-interval '16 minutes' ELSE now() END,last_sync_error=$4 WHERE id=$1",
+            account,
+            status,
+            stale,
+            account_error,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            "UPDATE calendars SET last_sync_error=$2,snapshot_normalization_version=$3 WHERE id=$1",
+            calendar,
+            calendar_error,
+            verified,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            team.members(viewer, false, &july_2026_range())
+                .await
+                .unwrap()[0]
+                .coverage,
+            expected,
+            "{case}"
+        );
+        let sources = team
+            .sources(viewer, july_2026_range(), &[owner.to_owned()], None, 100)
+            .await
+            .unwrap();
+        if expected == TeamCalendarCoverage::Ready {
+            assert_eq!(sources.len(), 2, "{case}");
+            assert_eq!(
+                ready_revision,
+                team.projection_revision(viewer).await.unwrap(),
+                "entering a routine refresh must not invalidate an unchanged snapshot's cursor"
+            );
+        } else {
+            assert!(sources.is_empty(), "{case}");
+        }
+    }
+
+    // Exercise the real failure/retry lifecycle. A retained, recent certificate
+    // must not reopen known-failed coverage merely because its retry starts.
+    let grant = repo
+        .apply_google_grant(
+            link,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job = grant
+        .jobs
+        .iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: job.id,
+        email_link_id: link,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the calendar job should be claimable");
+    };
+    repo.fail_google_backfill(
+        key,
+        lease_token,
+        CalendarBackfillFailureDisposition::Retry,
+        "provider normalization failed",
+    )
+    .await
+    .unwrap();
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the failed calendar job should be retryable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    let retry = sqlx::query!(
+        "SELECT sync_status,last_sync_error,last_synced_at FROM calendar_accounts WHERE id=$1",
+        account,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(retry.sync_status, "syncing");
+    assert_eq!(
+        retry.last_sync_error.as_deref(),
+        Some("provider normalization failed")
+    );
+    assert!(retry.last_synced_at.is_some());
+    assert_eq!(
+        team.members(viewer, false, &july_2026_range())
+            .await
+            .unwrap()[0]
+            .coverage,
+        TeamCalendarCoverage::Unavailable,
+        "starting a retry does not clear the previously observed failure"
+    );
+    assert!(
+        team.sources(viewer, july_2026_range(), &[owner.to_owned()], None, 100)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    repo.commit_google_calendar_sync(
+        key,
+        lease_token,
+        account,
+        GoogleCalendarSyncSnapshot {
+            calendar_id: calendar,
+            next_sync_token: "recovered-token".to_owned(),
+            observed_provider_event_ids: None,
+            materialized_range: None,
+            cancelled_provider_event_ids: vec![],
+        },
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        team.members(viewer, false, &july_2026_range())
+            .await
+            .unwrap()[0]
+            .coverage,
+        TeamCalendarCoverage::Unavailable,
+        "a recovered calendar alone does not establish whole-account success"
+    );
+    repo.complete_google_backfill(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        team.members(viewer, false, &july_2026_range())
+            .await
+            .unwrap()[0]
+            .coverage,
+        TeamCalendarCoverage::Ready
+    );
+    assert_eq!(
+        team.sources(viewer, july_2026_range(), &[owner.to_owned()], None, 100)
+            .await
+            .unwrap()
+            .len(),
+        2,
+        "only successful account completion restores source eligibility"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_sources_require_current_membership_and_verified_source_entitlement(pool: PgPool) {
     let viewer = "macro|team-viewer@example.com";
     let owner = "macro|team-owner@example.com";

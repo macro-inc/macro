@@ -3,7 +3,10 @@ use crate::domain::models::{
     CalendarEvent, CalendarEventOverride, CalendarOccurrence, EventStart, EventTime, EventType,
     EventVisibility,
 };
-use std::sync::Mutex;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 
 fn source() -> TeamSourceOccurrence {
     let id = Uuid::now_v7();
@@ -142,9 +145,15 @@ fn a_private_exception_cannot_expose_its_replacement_title() {
 struct Repository {
     owners: Mutex<Vec<String>>,
     rows: Vec<TeamSourceOccurrence>,
+    forbid_event_reads: bool,
+    change_revision: bool,
+    revision_reads: AtomicUsize,
 }
 impl CalendarTeamRepository for Repository {
     async fn projection_revision(&self, _: &str) -> Result<String, Report> {
+        if self.revision_reads.fetch_add(1, Ordering::Relaxed) > 0 && self.change_revision {
+            return Ok("changed".into());
+        }
         Ok("current".into())
     }
     async fn members(
@@ -175,6 +184,7 @@ impl CalendarTeamRepository for Repository {
         cursor: Option<&TeamCalendarCursor>,
         limit: u32,
     ) -> Result<Vec<TeamSourceOccurrence>, Report> {
+        assert!(!self.forbid_event_reads, "roster must not load occurrences");
         *self.owners.lock().unwrap() = owners.to_vec();
         let mut rows: Vec<_> = self
             .rows
@@ -202,6 +212,10 @@ impl CalendarTeamRepository for Repository {
         Ok(rows)
     }
     async fn owned_emails(&self, _: &str) -> Result<Vec<String>, Report> {
+        assert!(
+            !self.forbid_event_reads,
+            "roster must not load owned emails"
+        );
         Ok(vec![])
     }
     async fn sharing(&self, _: &str) -> Result<TeamCalendarSharing, Report> {
@@ -215,6 +229,72 @@ impl CalendarTeamRepository for Repository {
     }
     async fn set_availability_calendar(&self, _: &str, _: Uuid, _: bool) -> Result<bool, Report> {
         Ok(false)
+    }
+}
+
+#[tokio::test]
+async fn roster_only_skips_event_reads_and_rejects_cursors_or_invalid_ranges() {
+    let service = CalendarTeamServiceImpl::new(
+        Repository {
+            forbid_event_reads: true,
+            ..Repository::default()
+        },
+        true,
+    );
+    let page = service
+        .list_team_calendar("viewer", range(), None, 0)
+        .await
+        .unwrap();
+    assert_eq!(page.members.len(), 1);
+    assert_eq!(page.members[0].user_id, "owner");
+    assert!(page.items.is_empty());
+    assert!(page.next_cursor.is_none());
+    assert_eq!(service.repository.revision_reads.load(Ordering::Relaxed), 2);
+
+    let cursor = TeamCalendarCursor {
+        revision: "current".into(),
+        user_id: "owner".into(),
+        source_id: Uuid::now_v7(),
+        occurrence_key: "x".into(),
+    };
+    assert!(
+        service
+            .list_team_calendar("viewer", range(), Some(cursor), 0)
+            .await
+            .is_err()
+    );
+    let mut invalid_range = range();
+    invalid_range.ends_at = invalid_range.starts_at;
+    assert!(
+        service
+            .list_team_calendar("viewer", invalid_range, None, 0)
+            .await
+            .is_err()
+    );
+    assert_eq!(service.repository.revision_reads.load(Ordering::Relaxed), 2);
+}
+
+#[tokio::test]
+async fn roster_only_enforces_the_gate_and_rechecks_authorization_revision() {
+    for (enabled, change_revision) in [(false, false), (true, true)] {
+        let service = CalendarTeamServiceImpl::new(
+            Repository {
+                forbid_event_reads: true,
+                change_revision,
+                ..Repository::default()
+            },
+            enabled,
+        );
+        assert!(
+            service
+                .list_team_calendar("viewer", range(), None, 0)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            service.repository.revision_reads.load(Ordering::Relaxed),
+            if enabled { 2 } else { 0 }
+        );
     }
 }
 
