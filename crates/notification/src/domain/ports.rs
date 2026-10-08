@@ -543,11 +543,12 @@ pub trait VoipPushDelivery: Send + Sync + 'static {
     fn send_voip_push(
         &self,
         endpoint_arn: &str,
+        recipient_id: &MacroUserIdStr<'_>,
         payload: &VoipPushPayload,
     ) -> impl Future<Output = Result<String, Report>> + Send;
 }
 
-/// Port for sending VoIP push notifications (PushKit / CallKit) to iOS devices.
+/// Port for sending native call pushes to iOS PushKit and Android FCM devices.
 ///
 /// VoIP pushes bypass the regular notification pipeline — they are delivered
 /// immediately without DB persistence and wake the app via PushKit so that

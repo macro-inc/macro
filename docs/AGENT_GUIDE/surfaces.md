@@ -2626,6 +2626,51 @@ first message. If startup reports a rejected setting or timeout, the first promp
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
+### Android native channel calls
+
+Android channel calls use a native call activity rather than browser media.
+After joining, the themed drawer shows a large participant tile and a horizontally
+scrolling participant strip; tap a strip tile to make it primary. Speaker toggles
+speaker mode (hold it for headset/Bluetooth routing), Mute and Video control capture, and **Leave** ends the call.
+The local primary video tile exposes Switch camera. Swipe the drawer handle down,
+tap outside the drawer, or use Back to enter PiP on supported devices; **Open call
+controls** in the web call controls restores the native surface. Leaving the channel does
+not end the call. Incoming calls expose Answer/Decline in the **Calls** notification
+channel, including while locked/backgrounded. PiP is a native, device-dependent
+flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
+follow the hardware matrix in [Android development](../ANDROID_DEVELOPMENT.md#native-calling).
+=======
+### Floating block information panels
+
+Actions live in the top bar immediately before Share, with consistent compact
+buttons (labels collapse on narrow headers). There are no Actions sections in
+information panels. Markdown/tasks include Ask Macro and document/task dispatch; email
+includes Ask Macro and Create task; PDF and calls include Ask Macro; native
+projects expose Delete project with its existing confirmation dialog.
+
+Standard metadata is quiet, non-collapsible text at the bottom of each panel,
+separated by a muted divider. Owner and available timestamps share one format;
+Markdown adds word/character counts. There is no standard Details or Stats
+disclosure. Agent runtime information remains in its dedicated Session section.
+
+Block information panels float over the right side of the block without changing
+the content width or its centered position. A single rounded bubble fits its
+contents, with `edge-muted` dividers between sections. Its height is capped at
+the block height with internal scrolling. At every width it starts closed and
+acts as a split-local overlay menu on desktop. The top-right sidebar icon, rotated
+180 degrees, opens it, and clicking outside dismisses it. On touch devices the
+control uses the Phosphor info-circle icon and opens the standard bottom drawer
+with a drag handle, scrollable sections, and safe-area/keyboard-aware spacing.
+Dismiss the drawer by swiping down or tapping its backdrop. Opening is never
+restored from saved preferences or triggered by the global chrome shortcut. The 320px bubble enters
+with a slight slide from the right and a 120ms fade;
+closing fades it out in 70ms.
+This applies across Markdown/tasks,
+snippets, email, calls, agents, pull requests, projects, and all file blocks
+including PDFs, images, code, video, canvas, unknown file types, and CRM company
+and contact views (both inside the CRM workspace and in standalone blocks).
+>>>>>>> origin/main
+
 ### Floating block information panels
 
 Actions live in the top bar immediately before Share, with consistent compact

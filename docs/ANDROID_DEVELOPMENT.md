@@ -460,3 +460,78 @@ Publication procedure for the hosting owner:
    route result. If rollback is needed, restore the saved JSON and metadata with
    a conditional write against the published ETag, then invalidate the same URL.
    Reconcile concurrent edits before restoring anything.
+
+## Native calling
+
+Channel calls use the Android `call-kit` plugin with a self-managed Telecom
+`ConnectionService` and a native LiveKit room. The WebView observes that room;
+reloading or navigating the web UI does not create another media session.
+Native calls require Android 8/API 26 or newer. Android 7 remains installable,
+but native call setup reports that the OS is unsupported.
+
+The existing Android push registration supplies the FCM endpoint. Call pushes
+are data-only, high priority, have a 60-second TTL, and include a recipient-specific
+LiveKit token and HTTPS ring-status URL. The receiver checks the registered
+account and message age. Tokens are kept in memory and never logged or persisted.
+While ringing, the native coordinator polls the existing ring-status endpoint;
+answering rechecks it before connecting. Answered-elsewhere, cancelled, expired,
+and invalid-token rings are dismissed. Transient verification failures allow a
+retry but cannot authorize an answer. Logout/account switching ends native calls.
+
+The **Calls** notification channel presents Answer/Decline and an ongoing End
+call action. Telecom handles headset/system actions and coordinates interruptions.
+Android's full-screen-intent setting controls whether a locked phone opens the
+call activity automatically; when unavailable, the call notification remains the
+entry point. Test both permission states. Microphone access is required to join;
+camera access is requested when enabling video, and Bluetooth access when selecting
+that route on Android 12 or newer. A denied permission does not silently enable
+capture.
+
+The native call activity presents a themed drawer at approximately 92% of the
+safe screen height, above navigation bars/cutouts. A large participant tile sits
+above a horizontally scrolling participant strip; tapping a strip tile selects
+it as primary. Speaker, Mute and Video form a compact control row, with Leave
+in the header and camera switching on the primary local video tile. Hold Speaker
+to select headset/Bluetooth routing. Back,
+tapping the scrim, or swiping the handle down enters PiP on supported devices.
+Without PiP support, dismissal returns to Macro while retaining audio. Audio continues in the
+foreground service while backgrounded. Camera capture stops when the call activity
+is backgrounded outside PiP. PiP uses native renderers and requires device support.
+The web call controls can reopen the native activity after returning to Macro.
+
+After a debug build generates Tauri's Gradle includes, run the plugin unit tests
+from `tauri/src-tauri/gen/android` with
+`./gradlew :tauri-plugin-call-kit:testDebugUnitTest`. Run
+`./gradlew :tauri-plugin-call-kit:connectedDebugAndroidTest` for native
+Telecom/foreground-notification instrumentation on an emulator or device.
+These tests use synthetic offers to check screen-on/off incoming presentation,
+decline/redelivery and stale/account filtering without connecting media. Shared tests run
+with `bun run test src/features/channel/Call/tests` from `apps/web`. Backend
+notification tests require the local SQLx test database described in
+[DATABASE_DEVELOPMENT.md](DATABASE_DEVELOPMENT.md), with `SQLX_OFFLINE` unset.
+
+For isolated native media testing, run a local LiveKit server in `--dev` mode
+bound to `0.0.0.0`, then add
+`-Pandroid.testInstrumentationRunnerArguments.livekitUrl=ws://10.0.2.2:7880`
+to the connected-test command on the standard Android emulator. The optional
+media test uses LiveKit's development credentials, a second native participant,
+and emulator microphone/camera permissions to verify video subscription, mute,
+camera start/stop, duplicate start, network interruption/reconnect, navigation/PiP
+and resource cleanup. Cleartext
+access is enabled only in the instrumentation APK. This test does not validate
+production FCM delivery or hardware audio quality.
+
+Hardware qualification is still required on Pixel and Samsung. For each device,
+record Android version, APK revision, permissions, route/accessory and results:
+
+| Flow | Required checks |
+| --- | --- |
+| Incoming | Foreground, background, locked, ordinary process death; answer, decline, timeout; full-screen permission allowed/denied |
+| Outgoing | Foreground start, lock/background after connecting, end from app/notification/headset |
+| Ring coordination | Caller cancels, answer on another device, duplicate/delayed push, logout/account switch while ringing |
+| Audio | Microphone denied/revoked, earpiece/speaker, wired headset, Bluetooth connect/disconnect, cellular-call interruption |
+| Lifecycle | Wi-Fi/cellular transitions, temporary offline/reconnect, navigation, WebView reload, foreground resume, no duplicate participant |
+| Video | Camera denial, front/back switch, remote video, supported PiP, PiP dismissal, background without PiP, end and reopen |
+
+A local build or JVM/shared-state test does not prove this hardware matrix. Play
+installation/distribution regression belongs to release workstream 07.

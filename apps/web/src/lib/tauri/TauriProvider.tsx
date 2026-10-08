@@ -106,7 +106,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
-  if (isTauri() && isPlatform('ios')) useCallKitSetup();
+  useCallKitSetup();
 
   const value: TauriContextValue = {
     os: osType(),

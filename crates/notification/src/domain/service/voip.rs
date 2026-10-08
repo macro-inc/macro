@@ -1,7 +1,7 @@
-//! VoIP push notification service.
+//! Native call push notification service.
 //!
-//! Sends PushKit VoIP pushes directly (no queue, no DB persistence) so that
-//! CallKit can display the native incoming-call UI on iOS.
+//! Delivers iOS PushKit and Android FCM call pushes directly, without queueing
+//! or DB persistence. Native clients own incoming-call presentation.
 
 #[cfg(test)]
 mod test;
@@ -18,7 +18,7 @@ use crate::domain::ports::{NotificationRepository, VoipPushDelivery, VoipPushSen
 
 const VOIP_PUSH_DELIVERY_CONCURRENCY: usize = 32;
 
-/// Direct APNS_VOIP sender for CallKit pushes.
+/// Direct sender for iOS and Android native call pushes.
 pub struct VoipPushServiceImpl<R, M> {
     repository: R,
     mobile: M,
@@ -48,7 +48,7 @@ where
                 let endpoint_arns: Vec<String> = endpoints
                     .into_iter()
                     .filter_map(|endpoint| match endpoint {
-                        DeviceEndpoint::IosVoip(arn) => Some(arn),
+                        DeviceEndpoint::IosVoip(arn) | DeviceEndpoint::Android(arn) => Some(arn),
                         _ => None,
                     })
                     .collect();
@@ -82,7 +82,7 @@ where
                 let user_id = user_id.clone();
                 async move {
                     let mobile = &self.mobile;
-                    match mobile.send_voip_push(arn, payload).await {
+                    match mobile.send_voip_push(arn, &user_id, payload).await {
                         Ok(_) => Some(user_id),
                         Err(e) => {
                             tracing::error!(
