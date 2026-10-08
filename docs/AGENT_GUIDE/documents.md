@@ -34,6 +34,40 @@ deleting the shared property definition). Pins are saved with the document.
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;
 they do not show a success toast.
+
+## Inline task checklist experiment (unverified)
+
+On branch `rahul/feat-inline-tasks`, task mentions show an editable status on the
+left instead of the task icon. Missing assignments show **No status**. Click the
+status to open its selector. Click or Tab-focus the title to rename it inline;
+Enter or blur saves and Escape cancels. Empty names show **Task name…**. The hover
+card still opens the task. Priority and assignee metadata remain on the right,
+without a duplicate status or trailing add-property button.
+
+In editable Markdown documents and task bodies, type `/task` and choose **Task**
+to focus an inline ghost draft instead of opening the composer. Other editor
+hosts retain their existing task composer. In nonempty paragraphs, insertion
+preserves text on both sides of the caret. Nested content remains intact, with
+the draft inserted beside its top-level block.
+
+Enter after any top-level task line, including before trailing whitespace,
+opens or refocuses the following draft. Enter at the end of an inline title saves
+on blur and continues the draft flow. Type a draft title and press Enter to
+immediately focus the next draft while task creation runs in the background.
+Tab indents a draft and Shift+Tab unindents it without leaving the input; new
+drafts inherit indentation. Indentation changes document layout, not task
+parent relationships. Left/Right enter and leave titles at their text boundaries;
+Up/Down navigate neighboring tasks, drafts, or document lines.
+
+Empty Enter or Escape returns to normal text. Backspace removes an empty ghost;
+at the start of a nonempty ghost, Backspace preserves its title as normal text.
+Draft titles remain local until submission. Creation uses existing task defaults
+and a parent task when drafting inside a task body. Failed creation preserves
+the title for retry. Successfully created tasks retain their IDs if mention
+insertion fails, so retry does not create duplicate tasks or overwrite content.
+Leaving while creation runs can leave a created task without its mention. No
+browser verification or automated checks have run for this experiment.
+
 ## Create a document from an editor
 
 Type `/document` in a Markdown slash menu and choose **Document**. The popover

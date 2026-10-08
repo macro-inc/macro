@@ -24,6 +24,8 @@ import {
   type MarkdownEditingSource,
   registerMarkdownEditing,
 } from '@core/component/LexicalMarkdown/editing/registerMarkdownEditing';
+import { INSERT_INLINE_TASK_DRAFT_COMMAND } from '@core/component/LexicalMarkdown/plugins/inline-task-draft/inlineTaskDraftPlugin';
+import { ActionCategory, type Action } from '@core/component/LexicalMarkdown/plugins/actions/types';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
   createProgressStatsStore,
@@ -79,9 +81,11 @@ import {
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { bufToString } from '@core/util/string';
+import { createTaskFromData } from '@core/util/taskCreation';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
   $isInlineSearchNode,
@@ -89,6 +93,7 @@ import {
   type PeerIdValidator,
 } from '@macro-inc/lexical-core';
 import { useDocTags } from '@property/tags';
+import CheckSquare from '@phosphor/check-square.svg';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
@@ -110,6 +115,7 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
 import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
+import { InlineTaskDraft } from './InlineTaskDraft';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
 
@@ -149,6 +155,7 @@ export function MarkdownEditor(props: {
   const { canEdit, canComment } = permissions;
   const blockId = documentId();
   const documentKind = kind();
+  const userId = useUserId();
   const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
   const documentTags = useDocTags(
     blockId,
@@ -352,12 +359,23 @@ export function MarkdownEditor(props: {
     const peerId = () => props.loroManager.peerIdStr;
     return createPeerIdValidator(peerId, true);
   };
-
   const editingSource: MarkdownEditingSource = {
     id: blockId,
     blockName: sourceBlockName,
     trackMentions: true,
   };
+  const inlineTaskActions: Action[] = documentKind === 'document' || documentKind === 'task'
+    ? [{
+        id: 'task',
+        name: 'Task',
+        keywords: ['task', 'todo', 'create'],
+        category: ActionCategory.ELEMENT,
+        icon: CheckSquare,
+        action: (editor) => {
+          editor.dispatchCommand(INSERT_INLINE_TASK_DRAFT_COMMAND, undefined);
+        },
+      }]
+    : [];
 
   // plugins
   plugins
@@ -762,6 +780,7 @@ export function MarkdownEditor(props: {
           canEdit={() => canEdit() ?? false}
           useBlockBoundary={true}
           showOpenTabs
+          additionalActions={inlineTaskActions}
           floatingMenus={
             <MarkdownPopup
               highlightLayerRef={highlightLayerRef() ?? editorContainerRef}
@@ -769,6 +788,28 @@ export function MarkdownEditor(props: {
             />
           }
         />
+
+        <Show when={documentKind === 'document' || documentKind === 'task'}>
+          <InlineTaskDraft
+            editor={editor}
+            canEdit={() => canEdit() ?? false}
+            isInlineMenuOpen={isInlineMenuOpen}
+            createTask={(title) =>
+              createTaskFromData(
+                {
+                  title,
+                  rawMarkdown: title,
+                  assigneeUserIds: [],
+                  dueDate: null,
+                },
+                {
+                  currentUserId: userId(),
+                  parentTaskId: documentKind === 'task' ? blockId : undefined,
+                }
+              )
+            }
+          />
+        </Show>
 
         <TagsMenu
           editor={editor}

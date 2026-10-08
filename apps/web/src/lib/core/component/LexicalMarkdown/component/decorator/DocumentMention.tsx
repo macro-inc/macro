@@ -17,6 +17,12 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { HoverCard } from '@core/component/HoverCard';
 import { InlineTaskProperties } from '@core/component/InlineTaskProperties';
+import { InlineTaskTitle } from '@core/component/InlineTaskTitle';
+import {
+  InlineTaskStatus,
+  InlineTaskStatusFallback,
+} from '@core/component/InlineTaskStatus';
+import { focusAdjacentTask, isPlainArrow } from '@core/component/inlineTaskNavigation';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import {
   itemToBlockName,
@@ -55,8 +61,13 @@ import { createCallback } from '@solid-primitives/rootless';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
+  COMMAND_PRIORITY_CRITICAL,
+  KEY_ARROW_LEFT_COMMAND,
+  KEY_ARROW_RIGHT_COMMAND,
+  type LexicalEditor,
   type EditorThemeClasses,
   KEY_ENTER_COMMAND,
+  SKIP_DOM_SELECTION_TAG,
 } from 'lexical';
 import type { JSX } from 'solid-js';
 import {
@@ -95,14 +106,27 @@ function MentionContainer(props: {
   icon: JSX.Element;
   text: JSX.Element;
   collapsed?: boolean;
+  isTask?: boolean;
 }) {
   return (
     <span class="pointer-events-auto">
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-[0.25em]">
+      <span
+        class="relative top-[0.125em] inline-flex ml-[0.25em]"
+        classList={{
+          'size-[1.125em] mr-[0.5em]': props.isTask,
+          'size-[1em] mr-[0.25em]': !props.isTask,
+        }}
+      >
         {props.icon}
       </span>
       <Show when={!props.collapsed}>
-        <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]">
+        <span
+          class={
+            props.isTask
+              ? undefined
+              : 'underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.125em]'
+          }
+        >
           {props.text}
         </span>
       </Show>
@@ -203,6 +227,8 @@ function InlinePreview(props: {
   documentName?: string;
   createdAt?: number;
   isRecentMention: () => boolean;
+  editor?: LexicalEditor;
+  nodeKey?: string;
 }) {
   const { item, ItemEntityIcon, documentProperties } = props.previewData;
 
@@ -221,12 +247,20 @@ function InlinePreview(props: {
           when={isSkill()}
           fallback={
             <MentionContainer
+              isTask={props.blockName === 'task'}
               icon={
-                <EntityIcon
-                  targetType={props.blockName as any}
-                  size="fill"
-                  class="animate-pulse"
-                />
+                <Show
+                  when={props.blockName === 'task'}
+                  fallback={
+                    <EntityIcon
+                      targetType={props.blockName as any}
+                      size="fill"
+                      class="animate-pulse"
+                    />
+                  }
+                >
+                  <InlineTaskStatusFallback />
+                </Show>
               }
               text={
                 <span
@@ -236,9 +270,9 @@ function InlinePreview(props: {
                   data-document-name={props.documentName}
                   class="opacity-50"
                 >
-                  <Show when={props.documentName} fallback={'Loading...'}>
-                    {(name) => name().replaceAll('\n', ' ').trim()}
-                  </Show>
+                  {props.blockName === 'task' && !props.documentName?.trim()
+                    ? 'Task name…'
+                    : (props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
                   <MentionAccessories
                     blockName={props.blockName}
                     blockParams={props.blockParams}
@@ -262,8 +296,16 @@ function InlinePreview(props: {
           when={isSkill()}
           fallback={
             <MentionContainer
+              isTask={props.blockName === 'task'}
               icon={
-                <EntityIcon targetType={props.blockName as any} size="fill" />
+                <Show
+                  when={props.blockName === 'task'}
+                  fallback={
+                    <EntityIcon targetType={props.blockName as any} size="fill" />
+                  }
+                >
+                  <InlineTaskStatusFallback />
+                </Show>
               }
               text={
                 <span
@@ -272,9 +314,9 @@ function InlinePreview(props: {
                   data-block-name={props.blockName}
                   data-document-name={props.documentName}
                 >
-                  <Show when={props.documentName} fallback={'Unknown'}>
-                    {(name) => name().replaceAll('\n', ' ').trim()}
-                  </Show>
+                  {props.blockName === 'task' && !props.documentName?.trim()
+                    ? 'Task name…'
+                    : (props.documentName || 'Unknown').replaceAll('\n', ' ').trim()}
                   <MentionAccessories
                     blockName={props.blockName}
                     blockParams={props.blockParams}
@@ -298,65 +340,89 @@ function InlinePreview(props: {
             when={isSkill()}
             fallback={
               <MentionContainer
+                isTask={props.blockName === 'task'}
                 icon={
-                  <ItemEntityIcon
-                    size="fill"
-                    theme={
-                      accessibleItem().type !== 'channel' &&
-                      props.theme?.['document-mention'] === 'chat-blue'
-                        ? 'monochrome'
-                        : undefined
+                  <Show
+                    when={props.blockName === 'task'}
+                    fallback={
+                      <ItemEntityIcon
+                        size="fill"
+                        theme={
+                          accessibleItem().type !== 'channel' &&
+                          props.theme?.['document-mention'] === 'chat-blue'
+                            ? 'monochrome'
+                            : undefined
+                        }
+                      />
                     }
-                  />
+                  >
+                    <InlineTaskStatus
+                      taskId={accessibleItem().id}
+                      previewProperties={documentProperties()}
+                    />
+                  </Show>
                 }
                 text={
-                  <span
-                    data-document-mention="true"
-                    data-document-id={accessibleItem().id}
-                    data-block-name={props.blockName}
-                    data-document-name={accessibleItem().name}
-                  >
-                    {accessibleItem().name.replaceAll('\n', ' ').trim()}
-                    <Show
-                      when={
-                        accessibleItem().type === 'call' &&
-                        accessibleItem().updatedAt
-                      }
-                    >
-                      {(timeStamp) => {
-                        return (
-                          <span class="text-current/50 text-[0.8em]">
-                            {` ${formatDate(timeStamp(), { showTime: true })}`}
-                          </span>
-                        );
-                      }}
-                    </Show>
-                    <Show when={matches(item(), isCalendarEventPreviewItem)}>
-                      {(calendarItem) => (
+                  <Show
+                    when={props.blockName === 'task'}
+                    fallback={
+                      <span
+                        data-document-mention="true"
+                        data-document-id={accessibleItem().id}
+                        data-block-name={props.blockName}
+                        data-document-name={accessibleItem().name}
+                      >
+                        {accessibleItem().name.replaceAll('\n', ' ').trim()}
                         <Show
-                          when={calendarMentionTimeLabel(calendarItem().event)}
+                          when={
+                            accessibleItem().type === 'call' &&
+                            accessibleItem().updatedAt
+                          }
                         >
-                          {(timeLabel) => (
+                          {(timeStamp) => (
                             <span class="text-current/50 text-[0.8em]">
-                              {` ${timeLabel()}`}
+                              {` ${formatDate(timeStamp(), { showTime: true })}`}
                             </span>
                           )}
                         </Show>
-                      )}
-                    </Show>
+                        <Show when={matches(item(), isCalendarEventPreviewItem)}>
+                          {(calendarItem) => (
+                            <Show
+                              when={calendarMentionTimeLabel(calendarItem().event)}
+                            >
+                              {(timeLabel) => (
+                                <span class="text-current/50 text-[0.8em]">
+                                  {` ${timeLabel()}`}
+                                </span>
+                              )}
+                            </Show>
+                          )}
+                        </Show>
+                        <MentionAccessories
+                          blockName={props.blockName}
+                          blockParams={props.blockParams}
+                        />
+                      </span>
+                    }
+                  >
+                    <InlineTaskTitle
+                      taskId={accessibleItem().id}
+                      name={accessibleItem().name}
+                      previewProperties={documentProperties()}
+                      editor={props.editor}
+                      nodeKey={props.nodeKey}
+                    />
                     <MentionAccessories
                       blockName={props.blockName}
                       blockParams={props.blockParams}
                     />
-                    <Show when={props.blockName === 'task'}>
-                      <Suspense>
-                        <InlineTaskProperties
-                          taskId={accessibleItem().id}
-                          previewProperties={documentProperties()}
-                        />
-                      </Suspense>
-                    </Show>
-                  </span>
+                    <Suspense>
+                      <InlineTaskProperties
+                        taskId={accessibleItem().id}
+                        previewProperties={documentProperties()}
+                      />
+                    </Suspense>
+                  </Show>
                 }
                 collapsed={props.collapsed}
               />
@@ -371,10 +437,18 @@ function InlinePreview(props: {
         )}
       </Match>
       <Match when={(item() as PreviewItemNoAccess).access === 'no_access'}>
-        <MentionContainer icon={<EyeSlashDuo />} text="No Access" />
+        <MentionContainer
+          icon={<EyeSlashDuo />}
+          text="No Access"
+          isTask={props.blockName === 'task'}
+        />
       </Match>
       <Match when={(item() as PreviewItemNoAccess).access === 'does_not_exist'}>
-        <MentionContainer icon={<TrashSimple />} text="Deleted" />
+        <MentionContainer
+          icon={<TrashSimple />}
+          text="Deleted"
+          isTask={props.blockName === 'task'}
+        />
       </Match>
     </Switch>
   );
@@ -556,7 +630,15 @@ export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
   }
   return (
     <MentionContainer
-      icon={<EntityIcon targetType={props.blockName as any} size="fill" />}
+      isTask={props.blockName === 'task'}
+      icon={
+        <Show
+          when={props.blockName === 'task'}
+          fallback={<EntityIcon targetType={props.blockName as any} size="fill" />}
+        >
+          <InlineTaskStatusFallback />
+        </Show>
+      }
       collapsed={props.collapsed}
       text={
         <span
@@ -565,7 +647,9 @@ export function DocumentMentionStatic(props: DocumentMentionDecoratorProps) {
           data-block-name={props.blockName}
           data-document-name={props.documentName}
         >
-          {(props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
+          {props.blockName === 'task' && !props.documentName?.trim()
+            ? 'Task name…'
+            : (props.documentName || 'Loading...').replaceAll('\n', ' ').trim()}
           <MentionAccessories
             blockName={verifyBlockName(props.blockName)}
             blockParams={props.blockParams}
@@ -686,13 +770,33 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     );
   });
 
+  if (editor && props.blockName === 'task') {
+    for (const [command, direction] of [
+      [KEY_ARROW_LEFT_COMMAND, 'previous'],
+      [KEY_ARROW_RIGHT_COMMAND, 'next'],
+    ] as const) {
+      autoRegister(editor.registerCommand(command, (event) => {
+        if (!isPlainArrow(event) || !focusAdjacentTask(editor, direction, props.key)) return false;
+        event.preventDefault();
+        return true;
+      }, COMMAND_PRIORITY_CRITICAL));
+    }
+  }
   if (editor) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (e) => {
           if (isSelectedAsNode()) {
-            open(e);
+            const title = props.blockName === 'task'
+              ? editor.getElementByKey(props.key)?.querySelector<HTMLElement>('[data-inline-task-title][tabindex="0"]')
+              : undefined;
+            if (title) {
+              e?.preventDefault();
+              title.focus();
+            } else {
+              open(e);
+            }
             return true;
           }
           return false;
@@ -702,32 +806,28 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     );
   }
 
-  // The internal model of the LexicalNode needs the fresh state of the document
-  // name for serialization.
+  // Refresh serialized names without taking focus from an inline task input.
+  const updateMentionName = (name: string) => {
+    setTimeout(() => {
+      editor?.update(
+        () => {
+          editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+            [props.documentId]: name,
+          });
+        },
+        { tag: SKIP_DOM_SELECTION_TAG }
+      );
+    });
+  };
   createEffect(() => {
     const i = item();
     if (i.loading) return;
     if (i.access === 'access') {
-      setTimeout(() => {
-        editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-          [props.documentId]: i.name,
-        });
-      });
+      updateMentionName(i.name);
     } else if (i.access === 'no_access') {
-      setTimeout(() => {
-        editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-          [props.documentId]: 'No Access',
-        });
-      });
-    } else if (i.access === 'does_not_exist') {
-      // Don't update to "Deleted" if this is a recent mention
-      if (!isRecentMention()) {
-        setTimeout(() => {
-          editor?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
-            [props.documentId]: 'Deleted',
-          });
-        });
-      }
+      updateMentionName('No Access');
+    } else if (i.access === 'does_not_exist' && !isRecentMention()) {
+      updateMentionName('Deleted');
     }
   });
 
@@ -753,8 +853,13 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   // Native listeners: inside an editable editor (the agent and chat
   // composers) the shell stops click propagation before Solid's delegated
   // handlers run, which left the chip inert there.
+  const isTaskTitleTarget = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest('[data-inline-task-title]');
+
   const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
+    if (props.blockName === 'task' && !isTaskTitleTarget(e.target)) return;
     e.stopPropagation();
+    if (props.blockName === 'task') return;
     const i = item();
     if (
       !i.loading &&
@@ -765,42 +870,55 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     }
   });
 
+  const handleMentionMouseDown: JSX.EventHandler<HTMLSpanElement, MouseEvent> = (event) => {
+    if (props.blockName === 'task' && !isTaskTitleTarget(event.target)) return;
+    navHandlers['on:mousedown'](event);
+  };
+
+  const MentionTrigger = () => (
+    <span class="relative inline">
+      <span
+        class="inline cursor-default rounded-xs"
+        classList={{
+          'size-full py-[0.125em] hover:bg-hover focus:bg-active': props.blockName !== 'task',
+          'bg-active text-ink': isSelectedAsNode(),
+        }}
+        style={{
+          'user-select': 'inherit',
+        }}
+        on:mousedown={handleMentionMouseDown}
+        on:click={navHandlers['on:click']}
+      >
+        <Switch>
+          <Match when={item()}>
+            <InlinePreview
+              previewData={previewData}
+              entity={itemEntity()}
+              blockName={verifyBlockName(props.blockName)}
+              blockParams={props.blockParams || {}}
+              theme={props.theme}
+              collapsed={isCollapsed()}
+              documentName={props.documentName}
+              createdAt={props.createdAt}
+              isRecentMention={isRecentMention}
+              editor={editor}
+              nodeKey={props.key}
+            />
+          </Match>
+        </Switch>
+      </span>
+      <MentionTooltip show={isSelectedAsNode()} text="Open" />
+    </span>
+  );
+
   return (
     <HoverCard
       open={previewCardOpen()}
       onOpenChange={setPreviewCardOpen}
       keepOpenOnTriggerPress={calendarOpen()?.kind === 'read_only'}
-      trigger={
-        <span class="relative">
-          <span
-            class="size-full py-[0.125em] cursor-default rounded-xs hover:bg-hover focus:bg-active"
-            classList={{
-              'bg-active text-ink': isSelectedAsNode(),
-            }}
-            style={{
-              'user-select': 'inherit',
-            }}
-            {...navHandlers}
-          >
-            <Switch>
-              <Match when={item()}>
-                <InlinePreview
-                  previewData={previewData}
-                  entity={itemEntity()}
-                  blockName={verifyBlockName(props.blockName)}
-                  blockParams={props.blockParams || {}}
-                  theme={props.theme}
-                  collapsed={isCollapsed()}
-                  documentName={props.documentName}
-                  createdAt={props.createdAt}
-                  isRecentMention={isRecentMention}
-                />
-              </Match>
-            </Switch>
-          </span>
-          <MentionTooltip show={isSelectedAsNode()} text="Open" />
-        </span>
-      }
+      trigger={<MentionTrigger />}
+      triggerClass={props.blockName === 'task' ? 'inline-block w-fit max-w-full align-baseline' : undefined}
+      triggerTabIndex={props.blockName === 'task' ? -1 : undefined}
       content={
         <PopupPreview
           mouseEnter={() => {}}

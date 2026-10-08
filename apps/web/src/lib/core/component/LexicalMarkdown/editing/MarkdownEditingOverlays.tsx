@@ -4,6 +4,7 @@ import { type Accessor, type JSX, Show } from 'solid-js';
 import { DecoratorRenderer } from '../component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
 import { ActionMenu } from '../component/menu/ActionsMenu';
+import type { Action } from '../plugins/actions/types';
 import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingEquationMenu } from '../component/menu/FloatingEquationMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
@@ -38,6 +39,8 @@ export function MarkdownEditingOverlays(props: {
   useBlockBoundary: boolean;
   /** Offer the user's open tabs in the mentions menu. */
   showOpenTabs?: boolean;
+  /** Editor-local slash actions replacing matching default IDs. */
+  additionalActions?: Action[];
   /** More floating menus sharing the group, e.g. a document's popups. */
   floatingMenus?: JSX.Element;
 }) {
@@ -86,6 +89,7 @@ export function MarkdownEditingOverlays(props: {
       <ActionMenu
         editor={props.editor}
         menu={props.editing.menus.actions}
+        additionalActions={props.additionalActions}
         actionContext={{
           sourceDocumentId: props.source.id,
           sourceBlockName: props.source.blockName,
