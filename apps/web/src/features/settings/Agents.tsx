@@ -48,6 +48,7 @@ import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { AgentSettingsDescription } from './components/agent-settings-description';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
+import { DefaultRepository } from './DefaultRepository';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
@@ -262,6 +263,7 @@ export function Agents(props: { navigation?: JSX.Element } = {}) {
           }
         >
           {props.navigation}
+          <DefaultRepository />
           <SettingsSection
             title="Team agents"
             description="Agents shared with your team, including Macro."

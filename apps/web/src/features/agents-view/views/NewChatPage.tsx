@@ -20,13 +20,14 @@ import {
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
-import { defaultBranchFor } from '../core/repository';
+import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
+import { createPreferredRepository } from '../primitives/preferred-repository';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createComposerModels } from '../queries/composer-models';
 import { createReachableRepositories } from '../queries/reachable-repositories';
@@ -83,15 +84,21 @@ export function NewChatPage(props: {
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
-  // A new conversation starts on Automatic until the caller picks a repository.
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>();
+  const preferredRepository = createPreferredRepository(userId());
+  // An explicit Auto-detect pick must override a saved repository, too.
+  const [repositoryOverride, setRepositoryOverride] = createSignal<{
+    url?: string;
+  }>();
   const persistedDraft = createPersistedComposerDraft();
   const draft = () => props.draft ?? persistedDraft.draft();
   const setDraft = (text: string) =>
     props.onDraftChange
       ? props.onDraftChange(text)
       : persistedDraft.setDraft(text);
-  const [branchOverride, setBranchOverride] = createSignal<string>();
+  const [branchOverride, setBranchOverride] = createSignal<{
+    repository: string;
+    branch: string;
+  }>();
   const recentAgentId = () => {
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
@@ -169,24 +176,47 @@ export function NewChatPage(props: {
     selected()?.harness === 'cursor' || localRuntime();
   const blocked = () => {
     const agent = selected();
-    return agent ? agent.unavailableReason : 'Choose an agent to start';
+    if (!agent) return 'Choose an agent to start';
+    if (agent.unavailableReason) return agent.unavailableReason;
+    if (canSelectRepository() && repoUrl()) {
+      if (reachable.loading()) return 'Loading repositories';
+      if (reachable.error()) return 'Retry loading repositories before sending';
+    }
+    return undefined;
   };
   // Listed only while the drawer can show them: chat agents never ask.
   const reachable = createReachableRepositories(coding);
+  const repoUrl = () => {
+    const override = repositoryOverride();
+    if (override) return override.url;
+    const preferred = preferredRepository.repository();
+    if (!preferred) return undefined;
+    // Keep the saved label while loading; never submit a stale default.
+    if (reachable.loading() || reachable.error()) return preferred;
+    return reachable
+      .repositories()
+      .find((repo) => sameRepository(repo.url, preferred))?.url;
+  };
   // Listed only while a repository is chosen: listing costs a GitHub call.
   const reachableBranches = createRepositoryBranches(() =>
     coding() && !localRuntime() ? repoUrl() : undefined
   );
   // A chosen branch, or where the selected repository's own clones start.
-  const repoBranch = () =>
-    localRuntime()
-      ? 'main'
-      : (branchOverride() ??
-        defaultBranchFor(reachable.repositories(), repoUrl()));
+  const repoBranch = () => {
+    if (localRuntime()) return 'main';
+    const override = branchOverride();
+    return override && override.repository === repoUrl()
+      ? override.branch
+      : defaultBranchFor(reachable.repositories(), repoUrl());
+  };
+  const selectBranch = (branch: string) => {
+    const repository = repoUrl();
+    if (repository) setBranchOverride({ repository, branch });
+  };
   const selectRepository = (url: string | undefined) => {
     // Another repository starts on its own default branch, not the last one's.
     if (url !== repoUrl()) setBranchOverride(undefined);
-    setRepoUrl(url);
+    setRepositoryOverride({ url });
     if (url) repositories.remember(url);
   };
 
@@ -306,7 +336,7 @@ export function NewChatPage(props: {
           onRetryBranches={reachableBranches.retry}
           onConnectGitHub={() => openSettings('Connected')}
           onSelectRepository={selectRepository}
-          onSelectBranch={setBranchOverride}
+          onSelectBranch={selectBranch}
         />
       }
       drawerOpen={coding()}
