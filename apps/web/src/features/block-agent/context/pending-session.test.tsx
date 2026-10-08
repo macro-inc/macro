@@ -125,8 +125,10 @@ afterEach(() => {
 });
 
 describe('pending navigation ownership', () => {
+  // A persona delivers its first prompt with a control POST once the session
+  // exists; these cover who owns the fold while that POST is out.
   it('keeps one fold and the prompt trace when the POST finishes before mount', async () => {
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
     const beforeMount = AgentSession.get(id);
     const trace = promptTrace();
@@ -199,7 +201,7 @@ describe('pending navigation ownership', () => {
     const delivery = deferred<ReturnType<typeof accepted>>();
     harness.create.mockReturnValue(creation.promise);
     harness.control.mockReturnValue(delivery.promise);
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     const destination = mount(id);
     creation.resolve(created(id));
     await settle();
@@ -223,7 +225,7 @@ describe('pending navigation ownership', () => {
   it('retains the POST owner when the destination unmounts during delivery', async () => {
     const delivery = deferred<ReturnType<typeof accepted>>();
     harness.control.mockReturnValue(delivery.promise);
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
     const destination = mount(id);
     await settle();
@@ -238,7 +240,7 @@ describe('pending navigation ownership', () => {
   });
 
   it('expires a ready session whose navigation never mounts', async () => {
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
     expect(AgentSession.get(id)).toBeDefined();
     await vi.advanceTimersByTimeAsync(5 * 60_000);
@@ -251,7 +253,7 @@ describe('pending navigation ownership', () => {
   it('bounds an abandoned create and does not retain a late result', async () => {
     const creation = deferred<ReturnType<typeof created>>();
     harness.create.mockReturnValue(creation.promise);
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(pendingSession(id)).toBeUndefined();
     creation.resolve(created(id));
@@ -264,7 +266,7 @@ describe('pending navigation ownership', () => {
   it('still delivers a slow create to its mounted destination after registry expiry', async () => {
     const creation = deferred<ReturnType<typeof created>>();
     harness.create.mockReturnValue(creation.promise);
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     const destination = mount(id);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(pendingSession(id)).toBeUndefined();
@@ -281,7 +283,7 @@ describe('pending navigation ownership', () => {
     harness.control.mockResolvedValue(
       err([{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }])
     );
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
     expect(pendingSession(id)?.error()).toBe('Runtime is disconnected.');
     expect(AgentSession.get(id)).toBeUndefined();
@@ -296,7 +298,7 @@ describe('pending navigation ownership', () => {
     harness.create.mockResolvedValue(
       err([{ code: 'HTTP_ERROR', message: 'Could not create session.' }])
     );
-    const id = startPendingSession({ prompt: 'Hello' });
+    const id = startPendingSession({ botId: 'persona', prompt: 'Hello' });
     await settle();
     const destination = mount(id);
     expect(pendingSession(id)?.error()).toBe('Could not create session.');
@@ -304,5 +306,101 @@ describe('pending navigation ownership', () => {
     expect(pendingSession(id)).toBeUndefined();
     expect(harness.get).not.toHaveBeenCalled();
     expect(fold.closeSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('first prompt on the create', () => {
+  it("sends the default persona's first prompt with the create and traces it from there", async () => {
+    const id = startPendingSession({ prompt: 'Hello', userId: 'me' });
+    await settle();
+
+    const [request] = harness.create.mock.calls[0];
+    expect(request).toEqual({
+      id,
+      prompt: 'Hello',
+      promptActionId: expect.any(String),
+    });
+    const actionId: string = request.promptActionId;
+    expect(harness.control).not.toHaveBeenCalled();
+    expect(issue).not.toHaveBeenCalled();
+
+    const destination = mount(id);
+    await settle();
+    expect(
+      fold.pushSession.mock.calls
+        .flatMap((call) => call[1] as FoldInput[])
+        .filter((input) => input.kind === 'speculated')
+    ).toEqual([
+      {
+        kind: 'speculated',
+        actionId,
+        action: { type: 'prompt', prompt: 'Hello' },
+        userId: 'me',
+      },
+    ]);
+    const acceptedAt = stage.mock.calls.findIndex(
+      ([name]) => name === 'accepted'
+    );
+    expect(acceptedAt).toBeGreaterThanOrEqual(0);
+    const trace = stage.mock.contexts[acceptedAt];
+    expect(trace).toBeInstanceOf(PromptTrace);
+
+    fold.pushSession.mockResolvedValueOnce([
+      {
+        kind: 'update',
+        message: {
+          agentSessionId: id,
+          turn: 1,
+          author: { kind: 'user', userId: 'me' },
+          requestId: actionId,
+          parts: [{ kind: 'text', text: 'Hello' }],
+          stop: null,
+          pending: false,
+        },
+      },
+      {
+        kind: 'new',
+        message: {
+          agentSessionId: id,
+          turn: 1,
+          author: { kind: 'agent' },
+          requestId: null,
+          parts: [{ kind: 'text', text: 'Ready' }],
+          stop: null,
+          pending: false,
+        },
+      },
+    ] satisfies FoldedStreamEvent[]);
+    AgentSession.ingest({
+      agentSessionId: id,
+      entries: [
+        {
+          id: 'confirmed-row',
+          createdAt: new Date().toISOString(),
+          direction: 'to_server',
+          content: { type: 'acp', jsonrpc: '2.0' },
+        } satisfies AgentSessionLogEntryDto,
+      ],
+    });
+    await settle();
+    const firstText = stage.mock.calls.findIndex(
+      ([name]) => name === 'first_text'
+    );
+    expect(firstText).toBeGreaterThanOrEqual(0);
+    expect(stage.mock.contexts[firstText]).toBe(trace);
+
+    destination.unmount();
+    expect(AgentSession.get(id)).toBeUndefined();
+    expect(fold.closeSession).toHaveBeenCalledExactlyOnceWith(id);
+  });
+
+  it("keeps an effort's first prompt for after the session is configured", async () => {
+    const id = startPendingSession({
+      prompt: 'Hello',
+      effortOverride: { configId: 'effort', value: 'high' },
+    });
+    await settle();
+
+    expect(harness.create.mock.calls[0][0]).toEqual({ id });
   });
 });

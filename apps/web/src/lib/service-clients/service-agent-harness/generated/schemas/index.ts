@@ -113,6 +113,7 @@ export * from './createAgentSessionRequestInstructions';
 export * from './createAgentSessionRequestModel';
 export * from './createAgentSessionRequestOwner';
 export * from './createAgentSessionRequestPrompt';
+export * from './createAgentSessionRequestPromptActionId';
 export * from './createAgentSessionRequestRepoBranch';
 export * from './createAgentSessionRequestRepoUrl';
 export * from './createAgentSessionRequestThread';

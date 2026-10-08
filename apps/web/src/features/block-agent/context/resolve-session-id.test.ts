@@ -32,6 +32,8 @@ const create = vi.hoisted(() => ({
   confirm: undefined as ((error?: string) => void) | undefined,
   release: vi.fn(),
   attribution: vi.fn(),
+  adopted: vi.fn(),
+  requests: [] as unknown[],
   confirmedModel: undefined as string | undefined,
   configReported: true,
   notify: undefined as (() => void) | undefined,
@@ -42,6 +44,7 @@ vi.mock('@service-agent-harness/client', () => ({
     create: vi.fn(
       (request: { id: string }) =>
         new Promise((resolve) => {
+          create.requests.push(request);
           create.resolve = (id: string = request.id) =>
             resolve({
               isErr: () => false,
@@ -78,6 +81,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       };
       return {
         load: async () => {},
+        adoptPrompt: create.adopted,
         issue: async (action: AgentAction, options: unknown) => {
           create.attribution(options);
           const result = await create.control(id, action);
@@ -340,7 +344,10 @@ describe('an id whose create is in flight', () => {
         deliver = resolve;
       })
     );
-    const placeholder = startPendingSession({ prompt: 'Hello' });
+    const placeholder = startPendingSession({
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       expect(resolved.pendingPrompt()).toBe('Hello');
@@ -451,7 +458,10 @@ describe('an id whose create is in flight', () => {
       isErr: () => true,
       error: [{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }],
     });
-    const placeholder = startPendingSession({ prompt: 'Hello' });
+    const placeholder = startPendingSession({
+      botId: 'persona',
+      prompt: 'Hello',
+    });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);
       create.resolve?.();
@@ -476,12 +486,10 @@ describe('an id whose create is in flight', () => {
 });
 
 it.each(['Describe this', ''])(
-  'delivers first-prompt attachments with text %j',
+  'delivers first-prompt attachments with text %j on the create',
   async (prompt) => {
-    create.control.mockResolvedValue({
-      isErr: () => false,
-      value: { actionId: 'image-action', status: 'accepted' },
-    });
+    create.requests.length = 0;
+    create.adopted.mockClear();
     const attachments = [
       {
         uri: 'https://static.macro.com/file/image-id',
@@ -492,29 +500,35 @@ it.each(['Describe this', ''])(
     const id = startPendingSession({ prompt, attachments });
     create.resolve?.();
     await flush();
-    expect(create.control).toHaveBeenCalledWith(id, {
-      type: 'prompt',
-      prompt,
-      attachments,
-    });
+    expect(create.requests).toEqual([
+      {
+        id,
+        prompt,
+        promptActionId: expect.any(String),
+        promptAttachments: attachments,
+      },
+    ]);
+    expect(create.control).not.toHaveBeenCalled();
+    expect(create.adopted).toHaveBeenCalledWith(
+      (create.requests[0] as { promptActionId: string }).promptActionId,
+      { type: 'prompt', prompt, attachments },
+      { userId: 'session-owner', trace: expect.any(PromptTrace) }
+    );
   }
 );
 
 it.each([undefined, 'explicit-user'])(
   'attributes the first prompt when userId is %s',
   async (userId) => {
-    create.attribution.mockClear();
-    create.control.mockResolvedValue({
-      isErr: () => false,
-      value: { actionId: 'prompt-id' },
-    });
+    create.adopted.mockClear();
     startPendingSession({ prompt: 'Hello', userId });
     create.resolve?.();
     await flush();
-    expect(create.attribution).toHaveBeenCalledWith({
-      userId: userId ?? 'session-owner',
-      trace: expect.any(PromptTrace),
-    });
+    expect(create.adopted).toHaveBeenCalledWith(
+      expect.any(String),
+      { type: 'prompt', prompt: 'Hello' },
+      { userId: userId ?? 'session-owner', trace: expect.any(PromptTrace) }
+    );
   }
 );
 

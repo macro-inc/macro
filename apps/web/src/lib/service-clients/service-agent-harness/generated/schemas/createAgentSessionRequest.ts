@@ -10,10 +10,12 @@ import type { CreateAgentSessionRequestInstructions } from './createAgentSession
 import type { CreateAgentSessionRequestModel } from './createAgentSessionRequestModel';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
+import type { CreateAgentSessionRequestPromptActionId } from './createAgentSessionRequestPromptActionId';
 import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
 import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionRequestWorkspace';
+import type { PromptAttachment } from './promptAttachment';
 
 /**
  * Request body for `POST /agent-sessions`.
@@ -71,6 +73,10 @@ needs an owner. */
 only - an external runtime sends its own first prompt through the
 control endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
+  promptActionId?: CreateAgentSessionRequestPromptActionId;
+  /** Files `prompt` refers to, in the order the user attached them.
+Requires `prompt`. */
+  promptAttachments?: PromptAttachment[];
   /** Starting branch for a managed coding session's selected repository.
 Omitted, the session starts on the repository's default branch. */
   repoBranch?: CreateAgentSessionRequestRepoBranch;

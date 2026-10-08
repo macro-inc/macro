@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use agent_runtime_protocol::domain::{
-    action::{AgentAction, AgentActionId},
+    action::{AgentAction, AgentActionId, PromptAttachment},
     schema::v0::SystemEvent,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
@@ -54,8 +54,9 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    ExternalSessionRequester, ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession,
-    RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread, persona_for_owner,
+    ExternalSessionRequester, FirstPrompt, ManagedPersonaError, OpenExternalAgentSession,
+    OpenManagedSession, RequestedExternalSession, SelectedPersona, SessionOpener, SessionThread,
+    persona_for_owner,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -1651,6 +1652,15 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
+    /// Id to deliver `prompt` under, minted by the caller so the prompt it
+    /// already shows is the row the log confirms. Requires `prompt`; omitted,
+    /// the service mints one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_action_id: Option<AgentActionId>,
+    /// Files `prompt` refers to, in the order the user attached them.
+    /// Requires `prompt`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_attachments: Vec<PromptAttachment>,
     /// Explicit GitHub repository for a managed Cursor session, as one of the
     /// urls `GET /agent-repositories` lists for the caller. Access is checked
     /// for the session owner. For external sessions this is informational:
@@ -1768,6 +1778,8 @@ pub enum CreateSessionApiError {
     MixedSessionShape,
     /// The thread named neither a parent nor a channel.
     ThreadParentRequired,
+    /// A first prompt's id or files arrived without the prompt itself.
+    PromptDetailsWithoutPrompt,
     /// A field the request cannot honour for a persona whose runtime is its
     /// operator's: they configure it, or the caller sends it separately.
     ExternalPersonaUnsupported(&'static str),
@@ -1831,6 +1843,10 @@ impl IntoResponse for CreateSessionApiError {
             Self::ThreadParentRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "thread.parent is required".to_owned(),
+            ),
+            Self::PromptDetailsWithoutPrompt => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "promptActionId and promptAttachments require a prompt".to_owned(),
             ),
             Self::ExternalPersonaUnsupported(field) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -2020,6 +2036,17 @@ pub async fn create_agent_session_handler<
     // the row, the response and every runtime see one representation of
     // absence, whichever shape the request turns out to be.
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
+    let first_prompt = match request.prompt {
+        Some(prompt) => Some(FirstPrompt {
+            action_id: request.prompt_action_id,
+            prompt,
+            attachments: request.prompt_attachments,
+        }),
+        None if request.prompt_action_id.is_some() || !request.prompt_attachments.is_empty() => {
+            return Err(CreateSessionApiError::PromptDetailsWithoutPrompt);
+        }
+        None => None,
+    };
 
     // No workspace means the managed shape. A bot id selects a managed
     // persona; the domain resolver owns its user/team/channel authorization
@@ -2065,7 +2092,7 @@ pub async fn create_agent_session_handler<
                     // caller that sent one would otherwise never learn it was
                     // ignored. A model is different - it is applied when the
                     // session binds, like the persona's own.
-                    if request.prompt.is_some() {
+                    if first_prompt.is_some() {
                         return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
                     }
                     let owner = owner
@@ -2114,7 +2141,7 @@ pub async fn create_agent_session_handler<
                         )
                     })?,
                 owner,
-                prompt: request.prompt,
+                prompt: first_prompt,
                 profile,
                 instructions,
                 model: request.model.filter(|model| !model.trim().is_empty()),
@@ -2131,7 +2158,7 @@ pub async fn create_agent_session_handler<
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it, and it runs on
     // whatever model its operator configured, which is not ours to set.
-    if request.prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
+    if first_prompt.is_some() || request.repo_branch.is_some() || request.model.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;

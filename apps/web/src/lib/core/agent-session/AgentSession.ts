@@ -437,6 +437,26 @@ export class AgentSession {
     });
   }
 
+  /**
+   * Show a prompt another request already delivered - the create that opened
+   * this session can carry its first one - and trace it to its first output.
+   * Nothing is sent: the delivery named `actionId`, so the confirmed row
+   * promotes this speculation in place, or, having landed first, makes it a
+   * no-op.
+   */
+  adoptPrompt(
+    actionId: string,
+    action: AgentAction,
+    options: { userId?: string; trace: PromptTrace }
+  ): void {
+    this.expect(actionId, action, { userId: options.userId });
+    if (this.closed) {
+      options.trace.end('released');
+      return;
+    }
+    this.prompts.add(options.trace);
+  }
+
   /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
   retract(actionId: string): void {
     void this.enqueue({ kind: 'retracted', actionId });

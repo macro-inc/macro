@@ -180,11 +180,12 @@ where
                 )
                 .await;
             if let Some(prompt) = request.prompt {
+                let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction {
-                        id: AgentActionId::mint(),
-                        action: AgentAction::prompt(prompt),
+                        id,
+                        action,
                         actor: Some(owner_user),
                         announce: None,
                     }),
@@ -329,12 +330,13 @@ where
         // Raw, through the session's own command worker: dispatch is where a
         // prompt is composed, and the worker is what serializes this first
         // prompt against any control prompt racing the session's birth.
-        if let Some(raw_prompt) = request.prompt {
+        if let Some(prompt) = request.prompt {
+            let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
                 HarnessCommand::Deliver(DeliverAction {
-                    id: AgentActionId::mint(),
-                    action: AgentAction::prompt(raw_prompt),
+                    id,
+                    action,
                     actor: Some(owner_user),
                     announce: None,
                 }),

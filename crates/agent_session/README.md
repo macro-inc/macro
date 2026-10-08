@@ -86,7 +86,7 @@ join the same trace. Its `*_at_ms` attributes are milliseconds from the send:
 | Stage | Attribute | Where |
 | --- | --- | --- |
 | New session created, loaded, configured | `agent.prompt.created_at_ms`, `loaded_at_ms`, `configured_at_ms` | browser |
-| Control POST answered, including dispatch to the runtime | `agent.prompt.accepted_at_ms` | browser |
+| Prompt accepted, including dispatch to the runtime: the control POST answered, or the create for a first prompt that rode on it | `agent.prompt.accepted_at_ms` | browser |
 | `session/prompt` → first model chunk, per call | `macro.genai.chat.time_to_first_chunk_ms` on `chat_streaming` | harness |
 | `session/prompt` → first text at the session actor | `macro.genai.turn.time_to_first_text_ms` on `invoke_agent` | harness |
 | First agent output of any kind folded | `agent.prompt.first_output_at_ms` | browser |

@@ -791,6 +791,12 @@ export type CreateAgentSessionRequest = {
      * control endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
+    promptActionId?: null | AgentActionId;
+    /**
+     * Files `prompt` refers to, in the order the user attached them.
+     * Requires `prompt`.
+     */
+    promptAttachments?: Array<PromptAttachment>;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
