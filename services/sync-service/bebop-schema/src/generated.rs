@@ -544,6 +544,334 @@ impl<'raw> ::bebop::SubRecord<'raw> for InitializeFromSnapshotRequest<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for InitializeFromSnapshotRequest<'raw> {}
 
+/// Multiplex envelope between the browser and the sync-router (rides the
+/// connection-gateway socket as binary frames). Inner payloads are the
+/// existing FromPeer/FromRemote unions, already bebop-encoded — the router
+/// forwards them without parsing.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ToRouter<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    RouterSubscribe {
+        doc_id: &'raw str,
+        token: &'raw str,
+    },
+
+    /// Discriminator 2
+    RouterUnsubscribe {
+        doc_id: &'raw str,
+    },
+
+    /// Discriminator 3
+    RouterFrame {
+        doc_id: &'raw str,
+        payload: ::bebop::SliceWrapper<'raw, u8>,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ToRouter<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            ToRouter::Unknown => {
+                0
+            }
+            Self::RouterSubscribe {
+                doc_id: ref _doc_id,
+                token: ref _token,
+            }
+            => {
+                _doc_id.serialized_size() +
+                _token.serialized_size()
+            }
+            Self::RouterUnsubscribe {
+                doc_id: ref _doc_id,
+            }
+            => {
+                _doc_id.serialized_size()
+            }
+            Self::RouterFrame {
+                doc_id: ref _doc_id,
+                payload: ref _payload,
+            }
+            => {
+                _doc_id.serialized_size() +
+                _payload.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::RouterSubscribe {
+                doc_id: ref _doc_id,
+                token: ref _token,
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+                _token._serialize_chained(dest)?;
+            }
+            Self::RouterUnsubscribe {
+                doc_id: ref _doc_id,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+            }
+            Self::RouterFrame {
+                doc_id: ref _doc_id,
+                payload: ref _payload,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+                _payload._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ToRouter::RouterSubscribe {
+                    doc_id: v0,
+                    token: v1,
+                }
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ToRouter::RouterUnsubscribe {
+                    doc_id: v0,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                ToRouter::RouterFrame {
+                    doc_id: v0,
+                    payload: v1,
+                }
+            }
+            _ => {
+                i = len;
+                ToRouter::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for ToRouter<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FromRouter<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    RouterSubscribed {
+        doc_id: &'raw str,
+    },
+
+    /// Discriminator 2
+    RouterSubscribeFailed {
+        doc_id: &'raw str,
+        reason: &'raw str,
+    },
+
+    /// Discriminator 3
+    RouterDocFrame {
+        doc_id: &'raw str,
+        payload: ::bebop::SliceWrapper<'raw, u8>,
+    },
+
+    /// Discriminator 4
+    RouterDocClosed {
+        doc_id: &'raw str,
+        reason: &'raw str,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for FromRouter<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            FromRouter::Unknown => {
+                0
+            }
+            Self::RouterSubscribed {
+                doc_id: ref _doc_id,
+            }
+            => {
+                _doc_id.serialized_size()
+            }
+            Self::RouterSubscribeFailed {
+                doc_id: ref _doc_id,
+                reason: ref _reason,
+            }
+            => {
+                _doc_id.serialized_size() +
+                _reason.serialized_size()
+            }
+            Self::RouterDocFrame {
+                doc_id: ref _doc_id,
+                payload: ref _payload,
+            }
+            => {
+                _doc_id.serialized_size() +
+                _payload.serialized_size()
+            }
+            Self::RouterDocClosed {
+                doc_id: ref _doc_id,
+                reason: ref _reason,
+            }
+            => {
+                _doc_id.serialized_size() +
+                _reason.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::RouterSubscribed {
+                doc_id: ref _doc_id,
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+            }
+            Self::RouterSubscribeFailed {
+                doc_id: ref _doc_id,
+                reason: ref _reason,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+                _reason._serialize_chained(dest)?;
+            }
+            Self::RouterDocFrame {
+                doc_id: ref _doc_id,
+                payload: ref _payload,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+                _payload._serialize_chained(dest)?;
+            }
+            Self::RouterDocClosed {
+                doc_id: ref _doc_id,
+                reason: ref _reason,
+            }
+            => {
+                4u8._serialize_chained(dest)?;
+                _doc_id._serialize_chained(dest)?;
+                _reason._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                FromRouter::RouterSubscribed {
+                    doc_id: v0,
+                }
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                FromRouter::RouterSubscribeFailed {
+                    doc_id: v0,
+                    reason: v1,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                FromRouter::RouterDocFrame {
+                    doc_id: v0,
+                    payload: v1,
+                }
+            }
+            4 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                FromRouter::RouterDocClosed {
+                    doc_id: v0,
+                    reason: v1,
+                }
+            }
+            _ => {
+                i = len;
+                FromRouter::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for FromRouter<'raw> {}
+
 #[cfg(feature = "bebop-owned-all")]
 pub mod owned {
     #![allow(warnings)]
@@ -1211,4 +1539,414 @@ pub mod owned {
         }
     }
 
-    impl<'raw> ::bebop::Record<'raw> for InitializeFromSnapshotRequest {}}
+    impl<'raw> ::bebop::Record<'raw> for InitializeFromSnapshotRequest {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum ToRouter {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        RouterSubscribe {
+            doc_id: String,
+            token: String,
+        },
+
+        /// Discriminator 2
+        RouterUnsubscribe {
+            doc_id: String,
+        },
+
+        /// Discriminator 3
+        RouterFrame {
+            doc_id: String,
+            payload: ::std::vec::Vec<u8>,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::ToRouter<'raw>> for ToRouter {
+        fn from(value: super::ToRouter) -> Self {
+            match value {
+                super::ToRouter::Unknown => {
+                    Self::Unknown
+                }
+                super::ToRouter::RouterSubscribe {
+                    doc_id: _doc_id,
+                    token: _token,
+                }
+                => {
+                    Self::RouterSubscribe {
+                        doc_id: _doc_id.into(),
+                        token: _token.into(),
+                    }
+                }
+                super::ToRouter::RouterUnsubscribe {
+                    doc_id: _doc_id,
+                }
+                => {
+                    Self::RouterUnsubscribe {
+                        doc_id: _doc_id.into(),
+                    }
+                }
+                super::ToRouter::RouterFrame {
+                    doc_id: _doc_id,
+                    payload: _payload,
+                }
+                => {
+                    Self::RouterFrame {
+                        doc_id: _doc_id.into(),
+                        payload: _payload.iter().map(|value| value).collect(),
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for ToRouter {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                ToRouter::Unknown => {
+                    0
+                }
+                Self::RouterSubscribe {
+                    doc_id: ref _doc_id,
+                    token: ref _token,
+                }
+                => {
+                    _doc_id.serialized_size() +
+                    _token.serialized_size()
+                }
+                Self::RouterUnsubscribe {
+                    doc_id: ref _doc_id,
+                }
+                => {
+                    _doc_id.serialized_size()
+                }
+                Self::RouterFrame {
+                    doc_id: ref _doc_id,
+                    payload: ref _payload,
+                }
+                => {
+                    _doc_id.serialized_size() +
+                    _payload.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::RouterSubscribe {
+                    doc_id: ref _doc_id,
+                    token: ref _token,
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                    _token._serialize_chained(dest)?;
+                }
+                Self::RouterUnsubscribe {
+                    doc_id: ref _doc_id,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                }
+                Self::RouterFrame {
+                    doc_id: ref _doc_id,
+                    payload: ref _payload,
+                }
+                => {
+                    3u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                    _payload._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ToRouter::RouterSubscribe {
+                        doc_id: v0,
+                        token: v1,
+                    }
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ToRouter::RouterUnsubscribe {
+                        doc_id: v0,
+                    }
+                }
+                3 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    ToRouter::RouterFrame {
+                        doc_id: v0,
+                        payload: v1,
+                    }
+                }
+                _ => {
+                    i = len;
+                    ToRouter::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ToRouter {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum FromRouter {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        RouterSubscribed {
+            doc_id: String,
+        },
+
+        /// Discriminator 2
+        RouterSubscribeFailed {
+            doc_id: String,
+            reason: String,
+        },
+
+        /// Discriminator 3
+        RouterDocFrame {
+            doc_id: String,
+            payload: ::std::vec::Vec<u8>,
+        },
+
+        /// Discriminator 4
+        RouterDocClosed {
+            doc_id: String,
+            reason: String,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::FromRouter<'raw>> for FromRouter {
+        fn from(value: super::FromRouter) -> Self {
+            match value {
+                super::FromRouter::Unknown => {
+                    Self::Unknown
+                }
+                super::FromRouter::RouterSubscribed {
+                    doc_id: _doc_id,
+                }
+                => {
+                    Self::RouterSubscribed {
+                        doc_id: _doc_id.into(),
+                    }
+                }
+                super::FromRouter::RouterSubscribeFailed {
+                    doc_id: _doc_id,
+                    reason: _reason,
+                }
+                => {
+                    Self::RouterSubscribeFailed {
+                        doc_id: _doc_id.into(),
+                        reason: _reason.into(),
+                    }
+                }
+                super::FromRouter::RouterDocFrame {
+                    doc_id: _doc_id,
+                    payload: _payload,
+                }
+                => {
+                    Self::RouterDocFrame {
+                        doc_id: _doc_id.into(),
+                        payload: _payload.iter().map(|value| value).collect(),
+                    }
+                }
+                super::FromRouter::RouterDocClosed {
+                    doc_id: _doc_id,
+                    reason: _reason,
+                }
+                => {
+                    Self::RouterDocClosed {
+                        doc_id: _doc_id.into(),
+                        reason: _reason.into(),
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for FromRouter {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                FromRouter::Unknown => {
+                    0
+                }
+                Self::RouterSubscribed {
+                    doc_id: ref _doc_id,
+                }
+                => {
+                    _doc_id.serialized_size()
+                }
+                Self::RouterSubscribeFailed {
+                    doc_id: ref _doc_id,
+                    reason: ref _reason,
+                }
+                => {
+                    _doc_id.serialized_size() +
+                    _reason.serialized_size()
+                }
+                Self::RouterDocFrame {
+                    doc_id: ref _doc_id,
+                    payload: ref _payload,
+                }
+                => {
+                    _doc_id.serialized_size() +
+                    _payload.serialized_size()
+                }
+                Self::RouterDocClosed {
+                    doc_id: ref _doc_id,
+                    reason: ref _reason,
+                }
+                => {
+                    _doc_id.serialized_size() +
+                    _reason.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::RouterSubscribed {
+                    doc_id: ref _doc_id,
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                }
+                Self::RouterSubscribeFailed {
+                    doc_id: ref _doc_id,
+                    reason: ref _reason,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                    _reason._serialize_chained(dest)?;
+                }
+                Self::RouterDocFrame {
+                    doc_id: ref _doc_id,
+                    payload: ref _payload,
+                }
+                => {
+                    3u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                    _payload._serialize_chained(dest)?;
+                }
+                Self::RouterDocClosed {
+                    doc_id: ref _doc_id,
+                    reason: ref _reason,
+                }
+                => {
+                    4u8._serialize_chained(dest)?;
+                    _doc_id._serialize_chained(dest)?;
+                    _reason._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    FromRouter::RouterSubscribed {
+                        doc_id: v0,
+                    }
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    FromRouter::RouterSubscribeFailed {
+                        doc_id: v0,
+                        reason: v1,
+                    }
+                }
+                3 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    FromRouter::RouterDocFrame {
+                        doc_id: v0,
+                        payload: v1,
+                    }
+                }
+                4 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    FromRouter::RouterDocClosed {
+                        doc_id: v0,
+                        reason: v1,
+                    }
+                }
+                _ => {
+                    i = len;
+                    FromRouter::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for FromRouter {}}

@@ -1,4 +1,5 @@
 import { resumeDocumentSpan } from '@block-md/observability';
+import { SYNC_VIA_GATEWAY } from '@core/constant/featureFlags';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import type {
   InitialSync,
@@ -6,8 +7,10 @@ import type {
   SyncError,
   TimeoutError,
 } from '@macro-inc/collaboration/collab/source';
+import { GatewaySyncTransport } from '@macro-inc/collaboration/sync-service/gateway';
 import {
   createSyncSocket,
+  type SyncSocket,
   type SyncWebsocket,
 } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -16,6 +19,7 @@ import {
 } from '@macro-inc/collaboration/sync-service/source';
 import type { UrlResolver } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import { resolveWsUrl as resolveGatewayWsUrl } from '@service-connection/websocket-url';
 import { storageServiceClient } from '@service-storage/client';
 import type { ResultAsync } from 'neverthrow';
 import type { DocumentSyncAuthorization } from './authorization';
@@ -103,6 +107,21 @@ export function createSyncServiceSocket(
   );
 }
 
+let gatewayTransport: GatewaySyncTransport | undefined;
+function syncGatewayTransport(): GatewaySyncTransport {
+  gatewayTransport ??= new GatewaySyncTransport(resolveGatewayWsUrl);
+  return gatewayTransport;
+}
+
+async function refreshPermissionToken(documentId: string): Promise<string> {
+  const response =
+    await storageServiceClient.permissionsTokens.createPermissionToken({
+      document_id: documentId,
+    });
+  if (response.isErr()) throw new Error('Unable to authorize sync connection');
+  return response.value.token;
+}
+
 export const createSyncServiceSource = (
   documentId: string,
   token: string | undefined,
@@ -111,7 +130,13 @@ export const createSyncServiceSource = (
   source: LiveSyncSource;
   doInitialSync: () => ResultAsync<InitialSync, SyncError>;
 } => {
-  const ws = createSyncServiceSocket(documentId, token, authorization);
+  const ws: SyncSocket = SYNC_VIA_GATEWAY
+    ? syncGatewayTransport().attach(
+        documentId,
+        authorization ? undefined : token,
+        authorization?.getToken ?? (() => refreshPermissionToken(documentId))
+      )
+    : createSyncServiceSocket(documentId, token, authorization);
   const state = createWebsocketStateSignal(ws);
   const source = new SyncServiceSource(ws, documentId, {
     status: () => mapToSyncStatus(state()),

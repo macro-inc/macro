@@ -155,6 +155,7 @@ members = [
   "services/sha_cleanup_worker",
   "services/slack_import_worker",
   "services/static_file_service",
+  "services/sync-router",
   "services/sync-service",
   "services/sync-service/bebop-schema",
   "services/unfurl_service",

@@ -181,7 +181,7 @@ async fn stage_label(pool: &PgPool, company: Uuid) -> Option<String> {
 }
 
 #[sqlx::test(migrations = false)]
-async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) {
+async fn copies_populated_visible_companies_with_values_and_team_access(pool: PgPool) {
     let team = fixture(&pool).await;
     let open = company(&pool, team, false).await;
     let won = company(&pool, team, false).await;
@@ -217,12 +217,13 @@ async fn copies_all_visible_companies_with_values_and_team_access(pool: PgPool) 
             .fetch_one(&pool)
             .await
             .unwrap(),
-        Some(4)
+        Some(3)
     );
     assert_eq!(stage_label(&pool, open).await.as_deref(), Some("Demo"));
     assert_eq!(stage_label(&pool, won).await.as_deref(), Some("Customer"));
     assert_eq!(stage_label(&pool, lost).await.as_deref(), Some("Churned"));
     assert_eq!(stage_label(&pool, unstaged).await, None);
+    assert_eq!(cell(&pool, unstaged, "Company").await, None);
     assert_eq!(cell(&pool, hidden, "Company").await, None);
     assert_eq!(
         cell(&pool, open, "Owner").await,
@@ -444,6 +445,10 @@ async fn invalid_values_roll_back_the_entire_copy_and_can_retry(pool: PgPool) {
         .map(|_| macro_uuid::generate_uuid_v7())
         .collect::<Vec<_>>();
     sqlx::query!("INSERT INTO crm_companies (id, team_id, first_interaction, last_interaction) SELECT id, $1, now(), now() FROM UNNEST($2::uuid[]) AS input(id)", team, &ids).execute(&pool).await.unwrap();
+    // Populated rows survive the follow-up migration that removes empty Sales rows.
+    for id in &ids {
+        stage(&pool, *id, StageOption::Lead).await;
+    }
     let last = *ids.iter().max().unwrap();
     // Legacy property writes permit bad types; the migration must detect them.
     value(

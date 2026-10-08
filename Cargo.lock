@@ -4610,6 +4610,7 @@ dependencies = [
  "model-entity",
  "models_bulk_upload",
  "opentelemetry",
+ "postcard",
  "redis",
  "secretsmanager_client",
  "serde",
@@ -4651,7 +4652,9 @@ dependencies = [
 name = "connection_gateway_models"
 version = "0.1.0"
 dependencies = [
+ "macro_user_id",
  "model-entity",
+ "postcard",
  "serde",
  "serde_json",
  "utoipa",
@@ -18818,6 +18821,29 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sync_router"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bebop",
+ "connection_gateway_models",
+ "futures",
+ "macro_entrypoint",
+ "macro_env_var",
+ "mockall",
+ "opentelemetry",
+ "postcard",
+ "redis",
+ "sync_service_bebop_schema",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tracing",
+ "tracing-opentelemetry",
+ "workspace-hack",
 ]
 
 [[package]]

@@ -3725,12 +3725,14 @@
       "crates/connection_gateway_models",
       "crates/cowlike",
       "crates/macro_tower_layers",
+      "crates/macro_user_id",
       "crates/model-entity",
       "crates/workspace-hack"
     ],
     "connection_gateway_models": [
       "crates/connection_gateway_models",
       "crates/cowlike",
+      "crates/macro_user_id",
       "crates/model-entity",
       "crates/workspace-hack"
     ],
@@ -12357,6 +12359,18 @@
       "crates/model-entity",
       "crates/stream",
       "crates/workspace-hack"
+    ],
+    "sync_router": [
+      "crates/connection_gateway_models",
+      "crates/cowlike",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-entity",
+      "crates/workspace-hack",
+      "services/sync-router",
+      "services/sync-service/bebop-schema"
     ],
     "sync_service": [
       "crates/macro_sync_service_jwt",

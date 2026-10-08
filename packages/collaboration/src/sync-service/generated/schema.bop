@@ -7,11 +7,10 @@ union FromPeer {
     byte[] awareness;
   }
   3 -> struct PeerRequestSince {
-    // We send a version vector instead of frontiers because the client may
-    // have local ops the server hasn't received yet (offline edits or
-    // unflushed WAL on reconnect). Frontiers would reference those ops
-    // directly and `frontiersToVV` would panic on the server. A VV is just
-    // per-peer counters — unknown peers are harmless.
+    // We send a version vector instead of a frontier from the client to
+    // request updates. This is because I could make updates while offline,
+    // and then when I request updates I want to request updates up to a
+    // point that doesn't exist on the server.
     byte[] vv;
   }
   4 -> struct PeerRequestSnapshot {}
@@ -56,3 +55,45 @@ struct InitializeFromSnapshotRequest {
   byte[] snapshot;
 }
 
+
+/*
+ * Multiplex envelope between the browser and the sync-router (rides the
+ * connection-gateway socket as binary frames). Inner payloads are the
+ * existing FromPeer/FromRemote unions, already bebop-encoded — the router
+ * forwards them without parsing.
+ */
+union ToRouter {
+  1 -> struct RouterSubscribe {
+    string docId;
+    // DocumentPermissionToken; passed through to the downstream unverified
+    // (the downstream authenticates, exactly as with a direct connection).
+    string token;
+  }
+  2 -> struct RouterUnsubscribe {
+    string docId;
+  }
+  3 -> struct RouterFrame {
+    string docId;
+    // A serialized FromPeer, untouched.
+    byte[] payload;
+  }
+}
+
+union FromRouter {
+  1 -> struct RouterSubscribed {
+    string docId;
+  }
+  2 -> struct RouterSubscribeFailed {
+    string docId;
+    string reason;
+  }
+  3 -> struct RouterDocFrame {
+    string docId;
+    // A serialized FromRemote, untouched.
+    byte[] payload;
+  }
+  4 -> struct RouterDocClosed {
+    string docId;
+    string reason;
+  }
+}

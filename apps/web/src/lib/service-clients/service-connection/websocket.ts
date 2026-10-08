@@ -1,7 +1,4 @@
 import { createBlockEffect, inBlock } from '@core/block';
-import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
-import { SERVER_HOSTS } from '@core/constant/servers';
-import { fetchToken } from '@core/util/fetchWithToken';
 import {
   ArrayQueue,
   createSocketEffect,
@@ -11,14 +8,12 @@ import {
   WebsocketBuilder,
 } from '@macro-inc/collaboration/websocket';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
-import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 import { instrumentGatewaySocket } from './presence-telemetry';
+import { resolveWsUrl } from './websocket-url';
 
 export { parseWebsocketPayload } from './websocket-payload';
-
-const wsHost: string = SERVER_HOSTS['connection-gateway'];
 
 export type ConnectionGatewayWebsocket = Websocket<
   ToWebsocketMessage,
@@ -29,17 +24,6 @@ export type FromWebsocketMessage = {
   type: string;
   data: any;
 };
-
-async function resolveWsUrl() {
-  if (ENABLE_BEARER_TOKEN_AUTH) {
-    const apiToken = await getMacroApiToken();
-    if (!apiToken) throw new Error('No Macro API token');
-
-    return `${wsHost}?macro-api-token=${apiToken}`;
-  }
-  await fetchToken();
-  return wsHost;
-}
 
 export const ws = new WebsocketBuilder(resolveWsUrl)
   .withSerializer(

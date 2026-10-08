@@ -1,5 +1,6 @@
 pub mod connection;
 pub mod dynamodb;
+pub mod fanout;
 pub mod redis;
 pub mod sender;
 pub mod stream_event;
