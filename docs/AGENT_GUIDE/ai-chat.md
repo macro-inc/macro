@@ -1302,6 +1302,8 @@ must stay hidden; subsequent live messages must still appear.
   it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
   visible. Scroll up inside the list to reach newer entries; no extra count row hides
   messages. Each prompt starts as a single-line preview, including long messages.
+  The preview is rendered markdown: links and `@` mention chips appear as they do
+  in the transcript, never as their `<m-link>` / `<m-document-mention>` markup.
   Click a preview (or press Enter/Space on it) to open its editor; opening another
   row collapses the previous one. The expanded editor scrolls within the smaller of
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
