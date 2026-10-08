@@ -82,7 +82,7 @@ beforeEach(() => {
 });
 
 describe('connect-app chip', () => {
-  it('connects in place when a chat owns the continuation', () => {
+  it('connects in place when an agent session owns the continuation', () => {
     const connect = vi.fn(async () => {});
     render(() => (
       <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
@@ -104,7 +104,7 @@ describe('connect-app chip', () => {
     expect(mocks.requestConnectApp).not.toHaveBeenCalled();
   });
 
-  it('disables connection while the chat cannot safely continue', () => {
+  it('disables connection while the agent session cannot safely continue', () => {
     const connect = vi.fn(async () => {});
     render(() => (
       <AppConnectionContext.Provider value={{ connect, disabled: () => true }}>

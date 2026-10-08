@@ -10,7 +10,7 @@ function setup() {
   });
   const deps = {
     disabled: () => false,
-    revision: () => 'chat:message',
+    revision: () => 'session:message',
     connect: vi.fn(() => outcome),
     resume: vi.fn(async () => {}),
     notify: vi.fn(),
@@ -51,11 +51,11 @@ describe('connector continuation', () => {
   );
 
   it.each(['changed', 'generating', 'unmounted'] as const)(
-    'does not resume a chat that is %s',
+    'does not resume a session that is %s',
     async (state) => {
       const { deps, flow, finish, dispose } = setup();
       const pending = flow.connect(app);
-      if (state === 'changed') deps.revision = () => 'chat:new-message';
+      if (state === 'changed') deps.revision = () => 'session:new-message';
       if (state === 'generating') deps.disabled = () => true;
       if (state === 'unmounted') dispose();
       finish('connected');

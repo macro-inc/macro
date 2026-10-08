@@ -1,7 +1,7 @@
 import type { PipedreamConnectOutcome } from '@queries/pipedream-connectors';
 import { createSignal, onCleanup } from 'solid-js';
 
-/** Resume only the chat turn that initiated a successful connection. */
+/** Resume only the agent turn that initiated a successful connection. */
 export function createConnectorContinuation(deps: {
   disabled: () => boolean;
   revision: () => string;

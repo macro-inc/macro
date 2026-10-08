@@ -255,14 +255,14 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
-    // Chat rebuilds the caller's connector toolset on each continuation.
-    // Pinned agent sessions have a separate MCP policy and are not widened here.
+    // Connector discovery belongs to agent sessions. Their runtime refreshes
+    // the permitted connector list before the next turn after authorization.
     let toolset = match host {
-        AiHost::Chat => toolset.add_tool::<
+        AiHost::AgentSession => toolset.add_tool::<
             pipedream_mcp::inbound::toolset::DiscoverConnectors,
             ToolConnectorToolContext,
         >(),
-        AiHost::AgentSession | AiHost::ChannelBot | AiHost::Mcp => toolset,
+        AiHost::Chat | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     // External MCP clients have no `LoadTools`, so they get every schema.
     let deferred = match host {
@@ -302,7 +302,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// sent to AI providers.
 pub fn all_tool_frontend_schemas() -> FrontendSchemas {
     frontend_schemas_builder()
-        .merge(&tools_for(AiHost::Chat))
+        .merge(&tools_for(AiHost::AgentSession))
         .merge(&read::read_thread())
         .build()
 }

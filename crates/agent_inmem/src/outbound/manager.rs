@@ -185,6 +185,7 @@ impl InMemAgentManager {
             turn_lock: tokio::sync::Mutex::new(()),
             mcp: Arc::clone(&self.mcp),
             mcp_tools: std::sync::Mutex::new(None),
+            mcp_servers: std::sync::Mutex::new(Vec::new()),
             mcp_connect: std::sync::Mutex::new(None),
             client_renders_forms: AtomicBool::new(false),
             enable_dev_commands: self.enable_dev_commands,

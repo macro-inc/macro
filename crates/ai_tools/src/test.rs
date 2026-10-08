@@ -16,15 +16,15 @@ use super::*;
 use ai_toolset::ToolSet as _;
 
 #[test]
-fn connector_discovery_is_eager_in_chat_and_does_not_widen_other_hosts() {
+fn connector_discovery_is_eager_only_in_agent_sessions() {
     assert!(EAGER_TOOLS.contains(&"DiscoverConnectors"));
     assert!(
-        tools_for(AiHost::Chat)
+        tools_for(AiHost::AgentSession)
             .toolset
             .tools
             .contains_key("DiscoverConnectors")
     );
-    for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
         assert!(
             !tools_for(host)
                 .toolset
@@ -232,18 +232,15 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
     assert!(prompt.contains("review card"));
     assert!(!prompt.contains("PendingUserExecution"));
     assert_eq!(
-        session
-            .toolset
-            .request_schemas()
-            .map(|schemas| schemas.len()),
+        session.toolset.request_schemas().map(|schemas| schemas
+            .into_iter()
+            .filter(|schema| schema.name != "DiscoverConnectors")
+            .count()),
         tools_for(AiHost::Chat)
             .toolset
             .request_schemas()
-            .map(|schemas| schemas
-                .into_iter()
-                .filter(|schema| schema.name != "DiscoverConnectors")
-                .count()),
-        "the same tools as chat except chat-only connector discovery"
+            .map(|schemas| schemas.len()),
+        "the same tools as chat except agent-session connector discovery"
     );
 }
 
@@ -303,6 +300,10 @@ fn frontend_schemas_build() {
         assert!(names.insert(name), "duplicate frontend tool: {name}");
     }
     assert!(names.contains("QueryDatabase"));
+    assert!(names.contains("DiscoverConnectors"));
+    for name in tools_for(AiHost::Chat).toolset.tools.keys() {
+        assert!(names.contains(name.as_str()), "missing chat tool: {name}");
+    }
     for name in [
         "CreateDatabase",
         "CreateTable",
@@ -441,7 +442,7 @@ fn the_mcp_host_defers_nothing() {
 
 #[test]
 fn every_eager_tool_exists() {
-    let tools = tools_for(AiHost::Chat);
+    let tools = tools_for(AiHost::AgentSession);
     for name in EAGER_TOOLS {
         assert!(
             tools.toolset.tools.contains_key(*name),

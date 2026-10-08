@@ -6376,7 +6376,7 @@ export interface ToolRelation {
   tableId: string;
 }
 /**
- * Find an integration when SearchTools cannot find the capability needed for the user's task. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same chat to load and call the new tools.
+ * Find an integration when an external app is missing or a workflow requires an unconnected account, including native import tools that need a connector. Use SearchTools for available actions. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same agent session to load and call the new tools.
  */
 export interface DiscoverConnectors {
   request: DiscoveryRequest;
