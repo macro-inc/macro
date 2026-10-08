@@ -293,7 +293,8 @@ the shimmer.
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
-  The submenu focuses the `Search models` field so you can type immediately.
+  Opening the picker focuses the `Search models` field so you can type immediately;
+  hovering an agent does the same in its submenu.
   Clicking an agent directly, or pressing Enter/Space on its focused row, uses
   its default and clears any previous model override. Right Arrow still opens
   the model submenu; choosing a submenu model selects both the agent and that

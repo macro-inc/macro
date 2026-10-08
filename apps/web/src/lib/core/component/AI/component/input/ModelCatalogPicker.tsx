@@ -126,8 +126,9 @@ function focusSearchAfterMenuOpen(input: () => HTMLInputElement | undefined) {
 }
 
 /**
- * Hover-opened subs never move focus into the catalog, and two later races
- * would steal the caret even after we do:
+ * Hover-opened subs never move focus into the catalog, click-opened pickers
+ * lose the caret to Kobalte's selected row, and two later races would steal
+ * it even after we focus search:
  *   1. Focusing before the portaled DismissableLayer registers looks like
  *      "focus outside" to the parent and closes the menu tree. The timeout
  *      + rAF in `focusSearchAfterMenuOpen` waits past that onMount.
@@ -239,6 +240,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           modelRow={props.modelRow}
           emptyMessage={props.emptyMessage}
           searchPlaceholder={props.searchPlaceholder}
+          autoFocusSearch
           searchRef={(element) => {
             searchRef = element;
           }}
@@ -266,8 +268,9 @@ export function ModelCatalogMenu(
   > & {
     searchRef?: (element: HTMLInputElement) => void;
     /**
-     * Focus search when this catalog mounts — used by hover-opened agent
-     * submenus, which never fire the root menu's `onOpenAutoFocus`.
+     * Focus search when this catalog mounts — click-opened pickers and
+     * hover-opened agent submenus, which never fire (or lose) the root
+     * menu's `onOpenAutoFocus`.
      */
     autoFocusSearch?: boolean;
     onClose?: () => void;

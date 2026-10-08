@@ -108,6 +108,27 @@ describe('agent model selector', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('focuses search when the touch sheet opens a long catalog', async () => {
+    device.touch = true;
+    render(() => (
+      <AgentModelSelector
+        model="gpt-5-0"
+        options={Array.from({ length: 12 }, (_, index) => ({
+          id: `gpt-5-${index}`,
+          name: `GPT-5 variant ${index}`,
+          description: null,
+          group: null,
+        }))}
+        onSelect={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Agent model/ }));
+    const search = await screen.findByRole('textbox', {
+      name: 'Search models',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+  });
+
   it('keeps a harness display name when the harness has one', () => {
     render(() => (
       <AgentModelSelector

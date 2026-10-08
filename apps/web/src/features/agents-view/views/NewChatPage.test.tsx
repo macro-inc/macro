@@ -9,6 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentKind } from '../core/agent-kind';
@@ -350,6 +351,15 @@ describe('agent-led new conversation', () => {
       })
     );
   });
+  it('focuses search when the phone agent sheet opens', async () => {
+    mocks.touch = true;
+    page();
+    fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+    const search = await screen.findByRole('textbox', {
+      name: 'Search agents and models',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+  });
   it('offers both kinds without a mode or model control and starts with the agent default', async () => {
     const send = page();
     expect(
@@ -620,6 +630,16 @@ describe('agent-led new conversation', () => {
     const row = screen.getByRole('menuitem', { name: /Laptop agent/ });
     expect(row.getAttribute('aria-disabled')).toBe('true');
     expect(row.textContent).toContain('Its runtime is disconnected');
+  });
+
+  it('focuses model search when the picker is opened by click', async () => {
+    const user = userEvent.setup();
+    page();
+    await user.click(screen.getByRole('button', { name: 'Agent' }));
+    const search = await screen.findByRole('textbox', {
+      name: 'Search models',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(search));
   });
 
   it('focuses model search when hovering an agent submenu', async () => {

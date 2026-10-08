@@ -129,6 +129,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
       </Dropdown.Trigger>
       <Dropdown.Content
         class="w-80 max-w-[calc(100vw-1rem)] overflow-hidden"
+        onOpenAutoFocus={(event) => event.preventDefault()}
         onPointerDown={(event: PointerEvent) => event.stopPropagation()}
         onMouseDown={(event: MouseEvent) => event.stopPropagation()}
       >
@@ -137,6 +138,7 @@ function DesktopAgentPicker(props: AgentPickerProps) {
             <Show when={macro()}>
               {(agent) => (
                 <ModelCatalogMenu
+                  autoFocusSearch
                   value={
                     props.selected?.id === agent().id ? (model() ?? null) : null
                   }

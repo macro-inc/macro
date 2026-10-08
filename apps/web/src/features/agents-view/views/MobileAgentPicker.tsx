@@ -91,6 +91,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
             </h2>
           </div>
           <input
+            ref={(element) => element.focus()}
             aria-label="Search agents and models"
             placeholder="Search"
             value={query()}

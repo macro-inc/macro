@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { Dropdown } from '@ui';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -169,6 +170,29 @@ describe('shared model selector', () => {
     fireEvent.keyDown(model, { key: 'Enter' });
     expect(select).toHaveBeenCalledWith('gpt-5-59');
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+  });
+
+  it('focuses the search field when the catalog is opened by click', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <ModelSelector
+        model="gpt-5-0"
+        label="GPT-5 variant 0"
+        options={Array.from({ length: 60 }, (_, index) => ({
+          id: `gpt-5-${index}`,
+          name: `GPT-5 variant ${index}`,
+          group: 'GPT',
+        }))}
+        onSelect={vi.fn()}
+      />
+    ));
+    await user.click(screen.getByRole('button', { name: 'Model' }));
+    const search = await screen.findByRole('textbox', {
+      name: 'Search models',
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(search);
+    });
   });
 
   it('keeps the session selector visible while its catalog arrives', async () => {

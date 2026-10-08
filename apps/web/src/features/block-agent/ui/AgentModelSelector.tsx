@@ -153,6 +153,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             <div class="mx-4 mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-edge-muted bg-surface px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
               <input
+                ref={(element) => element.focus()}
                 type="text"
                 aria-label="Search models"
                 placeholder="Search models"
