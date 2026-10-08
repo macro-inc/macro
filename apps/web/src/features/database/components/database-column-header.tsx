@@ -465,19 +465,17 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
                                   props.columnCasts?.(props.column.id, open)
                                 }
                                 onChange={(change) => void changeType(change)}
-                                formula={
-                                  formulas && {
-                                    replaces: formulaReplaces(),
-                                    choose: () => {
-                                      const replace = formulaReplaces();
-                                      requested = () =>
-                                        setFormulaEditing({
-                                          kind: 'create',
-                                          replace,
-                                        });
-                                      setMenuOpen(false);
-                                    },
-                                  }
+                                onFormula={
+                                  formulas &&
+                                  (() => {
+                                    const replace = formulaReplaces();
+                                    requested = () =>
+                                      setFormulaEditing({
+                                        kind: 'create',
+                                        replace,
+                                      });
+                                    setMenuOpen(false);
+                                  })
                                 }
                                 onConvertToNewColumn={
                                   props.onConvert &&

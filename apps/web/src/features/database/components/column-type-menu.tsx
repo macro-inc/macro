@@ -52,11 +52,8 @@ export function ColumnTypeMenu(props: {
    * it is not offered.
    */
   onConvertToNewColumn?: (choice: DatabaseColumnConversionChoice) => void;
-  /**
-   * Offer a formula: it takes this column's place when `replaces`, else it
-   * goes in a new column beside it.
-   */
-  formula?: { replaces: boolean; choose: () => void };
+  /** Offer a formula; the host decides where the formula column goes. */
+  onFormula?: () => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const protectedType = () =>
@@ -156,22 +153,17 @@ export function ColumnTypeMenu(props: {
               )}
             </For>
           </Dropdown.Group>
-          <Show when={props.formula}>
-            {(formula) => (
+          <Show when={props.onFormula}>
+            {(onFormula) => (
               <Dropdown.Group>
                 <Dropdown.Item
                   disabled={protectedType()}
-                  onSelect={() => formula().choose()}
+                  onSelect={() => onFormula()()}
                 >
                   <FunctionIcon class="size-3.5 shrink-0 text-ink-muted" />
-                  <span class="flex min-w-0 flex-1 flex-col">
-                    <Dropdown.ItemLabel>Formula</Dropdown.ItemLabel>
-                    <Dropdown.ItemDescription class="text-xs text-ink-muted">
-                      {formula().replaces
-                        ? 'Computed from other columns'
-                        : 'Adds a formula column beside this one'}
-                    </Dropdown.ItemDescription>
-                  </span>
+                  <Dropdown.ItemLabel class="flex-1">
+                    Formula
+                  </Dropdown.ItemLabel>
                 </Dropdown.Item>
               </Dropdown.Group>
             )}
