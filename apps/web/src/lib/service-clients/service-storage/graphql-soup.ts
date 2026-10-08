@@ -23,7 +23,10 @@ import {
   entityFromArgument,
 } from '@graphql-cache/index';
 import { registerCacheHost } from '@graphql-cache/lifecycle';
-import { isOwnerLockUnavailableError } from '@graphql-cache/protocol';
+import {
+  isAdmittedEnqueueUncertainError,
+  isOwnerLockUnavailableError,
+} from '@graphql-cache/protocol';
 import { getBrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { Telemetry } from '@macro-inc/observability';
@@ -519,11 +522,14 @@ export function getGraphqlSoupClient(): Client {
       operationKind?: Operation['kind']
     ) => {
       try {
-        // Navigation deliberately rejects outstanding reads, and a tab on
-        // another deployed build can own the database. Neither is an error;
-        // unexpected disposal still reports.
+        // Navigation cancels outstanding work. Admitted enqueues retain their
+        // uncertainty code to prevent unsafe retries, but preserve navigation
+        // as their cause. Only that expected cancellation is quiet; uncertain
+        // transport failures and unexpected disposal must still report.
         if (
           error instanceof CacheNavigationError ||
+          (isAdmittedEnqueueUncertainError(error) &&
+            error.cause instanceof CacheNavigationError) ||
           isOwnerLockUnavailableError(error)
         )
           return;
