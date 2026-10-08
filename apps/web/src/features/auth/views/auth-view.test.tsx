@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthIntent } from '../context/auth-context';
 import type { FakeAuthWorld } from '../tests/fake-auth-context';
@@ -44,6 +45,30 @@ function setup(
     options.world
   );
   return { fake, verified, signIn };
+}
+
+/** As `setup`, but the session code can arrive after the view has mounted. */
+function setupWithTokenSignal(
+  options: { world?: Partial<FakeAuthWorld> } = {}
+) {
+  const [token, setToken] = createSignal<string | undefined>(undefined);
+  const { fake } = renderWithFakeAuth(
+    () => (
+      <AuthView
+        intent="login"
+        showApple={false}
+        compact={false}
+        token={token()}
+        signedIn={(user) => (
+          <p data-testid="signed-in">
+            {user().email} {user().tutorialComplete ? 'returning' : 'new'}
+          </p>
+        )}
+      />
+    ),
+    options.world
+  );
+  return { fake, setToken };
 }
 
 const click = (name: string | RegExp) =>
@@ -216,6 +241,36 @@ describe('single sign-on', () => {
       world: { sessionTokens: { 'tok-1': 'sso@acme.com' } },
     });
     await screen.findByText('sso@acme.com new');
+  });
+
+  // The desktop app is already parked on the signed-out route when the
+  // `macro://` auth callback comes back, so the session code arrives as a
+  // query-only navigation that never remounts this view.
+  it('redeems a session code that arrives after mount', async () => {
+    const { setToken } = setupWithTokenSignal({
+      world: { sessionTokens: { 'tok-deep-link': 'sso@acme.com' } },
+    });
+    await screen.findByRole('button', { name: 'Continue with Google' });
+
+    setToken('tok-deep-link');
+
+    await screen.findByText('sso@acme.com new');
+  });
+
+  it('redeems a late session code only once', async () => {
+    const { fake, setToken } = setupWithTokenSignal({
+      world: { sessionTokens: { 'tok-deep-link': 'sso@acme.com' } },
+    });
+    setToken('tok-deep-link');
+    await screen.findByText('sso@acme.com new');
+
+    setToken('tok-deep-link');
+
+    await waitFor(() =>
+      expect(
+        fake.calls().filter((call) => call === 'redeem:tok-deep-link')
+      ).toHaveLength(1)
+    );
   });
 
   it('reports a session code that cannot be redeemed', async () => {
