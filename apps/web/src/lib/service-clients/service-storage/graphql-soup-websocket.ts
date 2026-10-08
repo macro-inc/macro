@@ -1,6 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { Client, OperationResult } from '@urql/core';
+import {
+  channelNotificationRefresh,
+  disposeChannelNotificationRefresh,
+} from '../../queries/channel/notification-refresh';
 import {
   ActivityUpdatesDocument,
   type ActivityUpdatesSubscription,
@@ -123,7 +128,9 @@ const LIVE_UPDATE_SUBSCRIPTIONS: readonly {
 ] as const;
 
 /** Owns the realtime subscriptions served by the Soup GraphQL websocket. */
-export function createGraphqlSoupSubscriptionsLifecycle(): {
+export function createGraphqlSoupSubscriptionsLifecycle(
+  options: { suspendOnPagehide?: boolean } = {}
+): {
   replace(
     client?: Pick<Client, 'subscription' | 'query'>,
     host?: CacheHost
@@ -131,6 +138,9 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
   connected(): void;
   dispose(): void;
 } {
+  let currentClient: Pick<Client, 'subscription' | 'query'> | undefined;
+  let currentHost: CacheHost | undefined;
+  let suspended = false;
   let unsubscribes: Array<() => void> = [];
   let activity: ReturnType<typeof createActivityUpdatesHandler> | undefined;
   let channels: ReturnType<typeof createChannelListUpdatesHandler> | undefined;
@@ -144,12 +154,34 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
     channels = undefined;
   };
 
-  return {
-    replace(client, host) {
+  const onPagehide = () => {
+    suspended = true;
+    if (currentClient) channelNotificationRefresh(currentClient).suspend(true);
+    // The graphql-ws client is lazy: removing all subscriptions closes the
+    // socket without permanently disposing it, so it can reconnect on restore.
+    unsubscribeAll();
+  };
+  const onPageshow = (event: PageTransitionEvent) => {
+    if (!event.persisted || !suspended) return;
+    suspended = false;
+    if (currentClient) channelNotificationRefresh(currentClient).suspend(false);
+    lifecycle.replace(currentClient, currentHost);
+  };
+  if (options.suspendOnPagehide) {
+    addEventListener('pagehide', onPagehide);
+    addEventListener('pageshow', onPageshow);
+  }
+
+  const lifecycle = {
+    replace(client?: Pick<Client, 'subscription' | 'query'>, host?: CacheHost) {
+      if (currentClient && currentClient !== client)
+        disposeChannelNotificationRefresh(currentClient);
+      currentClient = client;
+      currentHost = host;
       unsubscribeAll();
-      if (!client) return;
+      if (!client || suspended) return;
       activity = createActivityUpdatesHandler(client);
-      channels = createChannelListUpdatesHandler(client);
+      channels = createChannelListUpdatesHandler(client, host);
       const activityHandler = activity;
       const channelHandler = channels;
 
@@ -176,7 +208,12 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
               const patch = (result.data as NotificationUpdatesSubscription)
                 .notificationUpdates;
               publishNotificationPatch(patch);
-              channelHandler.onPatch(patch);
+              const metadata = normalizedCacheResultMetadata(result);
+              void channelHandler.onPatch(
+                patch,
+                metadata?.source === 'live-network' &&
+                  metadata.cacheEffectsApplied === true
+              );
             }
             if (result.error) {
               console.warn(errorMessage, result.error);
@@ -195,6 +232,16 @@ export function createGraphqlSoupSubscriptionsLifecycle(): {
       activity?.reconnect();
       channels?.reconnect();
     },
-    dispose: unsubscribeAll,
+    dispose() {
+      if (options.suspendOnPagehide) {
+        removeEventListener('pagehide', onPagehide);
+        removeEventListener('pageshow', onPageshow);
+      }
+      if (currentClient) disposeChannelNotificationRefresh(currentClient);
+      currentClient = undefined;
+      currentHost = undefined;
+      unsubscribeAll();
+    },
   };
+  return lifecycle;
 }

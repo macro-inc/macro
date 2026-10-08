@@ -1,3 +1,7 @@
+use cache_core::calendar::{
+    CalendarCommit, CalendarCommitOutcome, CalendarRangeRequest, CalendarRangeSnapshot,
+    CalendarRangeStorage,
+};
 use cache_core::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState,
@@ -90,8 +94,9 @@ impl Storage for BrowserStorage {
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
+        bucket: &str,
     ) -> Result<Vec<SearchDocument>, Self::Error> {
-        self.inner.load_search_documents(profile).await
+        self.inner.load_search_documents(profile, bucket).await
     }
 
     async fn browse_search_documents(
@@ -155,9 +160,10 @@ impl Storage for BrowserStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         self.inner
-            .defer_mutation(id, claim, next_attempt_at_ms, error)
+            .defer_mutation(id, claim, next_attempt_at_ms, error, server_failure)
             .await
     }
 
@@ -254,5 +260,21 @@ impl PredicateIndexStorage for BrowserStorage {
         query: &ValidatedIndexQuery,
     ) -> Result<PredicateQueryResult, Self::Error> {
         self.inner.query_predicate_index(query).await
+    }
+}
+
+impl CalendarRangeStorage for BrowserStorage {
+    async fn query_calendar_ranges(
+        &self,
+        request: &CalendarRangeRequest,
+    ) -> Result<CalendarRangeSnapshot, Self::Error> {
+        self.inner.query_calendar_ranges(request).await
+    }
+
+    async fn calendar_commit(
+        &mut self,
+        commit: &CalendarCommit,
+    ) -> Result<CalendarCommitOutcome, Self::Error> {
+        self.inner.calendar_commit(commit).await
     }
 }

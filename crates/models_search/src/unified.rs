@@ -17,7 +17,7 @@ use item_filters::{
     CalendarEventFilters, CallFilters, ChannelFilters, ChatFilters, DocumentFilters, EmailFilters,
     EntityFilters, ProjectFilters, ast::document::resolve_file_types,
 };
-use model_file_type::FileAssociation;
+use model_file_type::{FileAssociation, FileType};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -123,6 +123,17 @@ pub fn is_searchable_association(assoc: &FileAssociation) -> bool {
     )
 }
 
+/// Whether documents of a file type have their content indexed by the search
+/// processing service: the searchable associations, and the design files the
+/// native engines read - Figma designs, Photoshop documents, and Illustrator
+/// documents - while other vector files are not.
+pub fn is_searchable_file_type(file_type: &FileType) -> bool {
+    matches!(
+        file_type,
+        FileType::Fig | FileType::Psd | FileType::Psb | FileType::Ai
+    ) || is_searchable_association(&file_type.macro_app_path())
+}
+
 /// Converted entity filters for the search service.
 /// Determines which entity types to include based on NIL UUID exclusion
 /// and expands file association prefixes (e.g. `assoc:code`) to concrete extensions.
@@ -177,7 +188,7 @@ fn expand_file_types_for_search(file_types: Vec<String>) -> Vec<String> {
     file_types
         .iter()
         .flat_map(|ft| resolve_file_types(ft))
-        .filter(|ty| is_searchable_association(&ty.macro_app_path()))
+        .filter(is_searchable_file_type)
         .map(|ty| ty.as_str().to_string())
         .collect()
 }

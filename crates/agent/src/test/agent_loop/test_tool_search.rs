@@ -344,3 +344,48 @@ async fn mcp_calls_from_two_providers_loaded_sequentially() {
     expect_json_ok(&result, "mcp__a__t1");
     expect_json_ok(&result, "mcp__b__t2");
 }
+
+/// Sessions are rebuilt every turn, so a tool loaded on an earlier turn would
+/// be gone on the next, and the model would pay a reload round trip each time.
+/// A catalog tool the history already called is loaded before the first
+/// request instead; one the history never called stays out.
+#[tokio::test]
+async fn a_tool_called_earlier_in_the_conversation_is_loaded_upfront() {
+    use rig_core::OneOrMany;
+    use rig_core::message::{AssistantContent, Message};
+
+    let model = MockCompletionModel::from_stream_turns([vec![
+        MockStreamEvent::text("done"),
+        MockStreamEvent::final_response_with_default_usage(),
+    ]]);
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> = Arc::new(FakeCombined::new());
+    let mut session = util::session(toolset, Arc::new(()), model.clone()).await;
+
+    let stream = session
+        .send_message(vec![
+            Message::user("use integration a"),
+            Message::Assistant {
+                id: None,
+                content: OneOrMany::one(AssistantContent::tool_call(
+                    "call-a",
+                    "mcp__a__t1",
+                    serde_json::json!({}),
+                )),
+            },
+            Message::tool_result("call-a", "{\"ok\":\"mcp__a__t1\"}"),
+            Message::user("again"),
+        ])
+        .await
+        .expect("send_message should start the stream");
+    let result = util::collect(stream).await;
+    assert!(result.error.is_none(), "{:?}", result.error);
+
+    let requests = model.requests();
+    let advertised: Vec<&str> = requests[0]
+        .tools
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect();
+    assert!(advertised.contains(&"mcp__a__t1"), "{advertised:?}");
+    assert!(!advertised.contains(&"mcp__b__t2"), "{advertised:?}");
+}

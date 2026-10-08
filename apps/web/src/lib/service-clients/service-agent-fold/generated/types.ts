@@ -157,6 +157,14 @@ export type Control =
       /**  The model slug requested by the caller. */
       model: string;
     }
+  /**  The runtime was asked to change an advertised session setting. */
+  | {
+      kind: 'set_config_option';
+      /**  Opaque config id supplied by the runtime. */
+      config_id: string;
+      /**  Opaque select value requested by the caller. */
+      value: string;
+    }
   /**  The runtime was asked to compact its context. */
   | { kind: 'compact' }
   /**  The runtime was asked to stop its current work. */
@@ -413,6 +421,43 @@ export type ElicitationSchema = {
   required: string[];
 };
 
+/**  An external page where the person can act on a [`FailureNotice`]. */
+export type FailureLink = {
+  /**  The link's text, e.g. `Manage Cursor usage`. */
+  label: string;
+  /**  The page, absolute. */
+  url: string;
+};
+
+/**
+ *  A turn failure the person who prompted can act on, in their terms.
+ *
+ *  A runtime attaches this to the `session/prompt` error as its `data`; the
+ *  fold reads it back onto the failed turn's stop reason. It exists so a
+ *  billing wall or a disconnected integration renders as an instruction with
+ *  somewhere to go, not as the runtime's error text - and so the runtime's
+ *  error text, which for a report includes source locations, never has to
+ *  double as the thing a person reads.
+ */
+export type FailureNotice = {
+  /**  Which class of failure, for readers that treat one specially. */
+  kind: FailureNoticeKind;
+  /**  One short line naming what happened. */
+  title: string;
+  /**  What it means and what to do, in plain language. */
+  body: string;
+  /**  Where acting on it happens, when that is somewhere else. */
+  link?: FailureLink | null;
+};
+
+/**  The classes of actionable failure a runtime can report. */
+export type FailureNoticeKind =
+  /**
+   *  The person's own account with the provider has no budget left for
+   *  this work; the fix is on the provider's billing page.
+   */
+  'provider_usage_limit';
+
 /**  A file modification a tool reported. */
 export type FileDiff = {
   /**  The file that changed. */
@@ -575,6 +620,34 @@ export type MessagePart =
       /**  How the request has resolved so far. */
       outcome: PermissionOutcome;
     }
+  /**
+   *  An MCP tool call the egress proxy is holding, or held, until the
+   *  session's owner approved it: made in a turn somebody else prompted.
+   */
+  | {
+      kind: 'tool_approval';
+      /**  The approval an answer names. */
+      approvalId: string;
+      /**  `macro`, or the connected app's slug. */
+      serverSlug: string;
+      /**  What a person calls the server the tool is on. */
+      serverName: string;
+      /**  The tool called. */
+      toolName: string;
+      /**  What it was called with. */
+      arguments: unknown;
+      /**  Who prompted the turn; absent for a bot on nobody's behalf. */
+      requestedBy: string | null;
+      /**  Where it stands. */
+      status: ToolApprovalStatus;
+      /**  Who resolved it, when a person did. */
+      resolvedBy: string | null;
+      /**
+       *  Approved for good: the person who asked may make the calls it
+       *  covers without the owner being asked again.
+       */
+      remembered: boolean;
+    }
   /**  A user-issued control operation on the session. */
   | {
       kind: 'control';
@@ -677,7 +750,14 @@ export type PendingInteraction =
   /**  A form, URL consent, or user tool review. */
   | ({
       kind: 'elicitation';
-    } & PendingElicitation);
+    } & PendingElicitation)
+  /**
+   *  An MCP tool call held until the session's owner approves it. Only
+   *  the owner may approve or decline; anyone with edit access may cancel.
+   */
+  | ({
+      kind: 'tool_approval';
+    } & PendingToolApproval);
 
 /**  A permission request the current connection can still answer. */
 export type PendingPermission = {
@@ -689,6 +769,22 @@ export type PendingPermission = {
   toolCall: ToolUseId;
   /**  The options the agent offered. */
   options: PermissionOption[];
+};
+
+/**  A held MCP tool call the owner can still answer. */
+export type PendingToolApproval = {
+  /**  The approval an answer names. */
+  approvalId: string;
+  /**  The turn the call was made in. */
+  turn: number;
+  /**  `macro`, or the connected app's slug. */
+  serverSlug: string;
+  /**  What a person calls the server the tool is on. */
+  serverName: string;
+  /**  The tool called. */
+  toolName: string;
+  /**  Who prompted the turn; absent for a bot on nobody's behalf. */
+  requestedBy: string | null;
 };
 
 /**  One choice offered for a permission request. */
@@ -786,6 +882,47 @@ export type PlanEntryStatus =
   /**  Successfully completed. */
   | 'completed';
 
+/**  The supported ACP session-config shapes. */
+export type SessionConfigKind =
+  /**  A single-value selector. */
+  | {
+      type: 'select';
+      /**  The value currently selected by the agent. */
+      currentValue: string;
+      /**  Choices in the order advertised by the agent. */
+      options: SessionConfigSelectOption[];
+    }
+  /**  An on/off setting. */
+  | {
+      type: 'boolean';
+      /**  The value currently selected by the agent. */
+      currentValue: boolean;
+    };
+
+/**  One session setting advertised by an ACP agent. */
+export type SessionConfigOption = {
+  /**  Opaque id to return in `session/set_config_option`. */
+  id: string;
+  /**  Human-readable label supplied by the agent. */
+  name: string;
+  /**  Optional explanatory copy supplied by the agent. */
+  description: string | null;
+  /**  ACP semantic category, such as `model` or `thought_level`. */
+  category: string | null;
+} & SessionConfigKind;
+
+/**  One value in an ACP select option. */
+export type SessionConfigSelectOption = {
+  /**  Opaque value to return in `session/set_config_option`. */
+  value: string;
+  /**  Human-readable label supplied by the agent. */
+  name: string;
+  /**  Optional explanatory copy supplied by the agent. */
+  description: string | null;
+  /**  Optional group heading supplied by the agent. */
+  group: string | null;
+};
+
 /**
  *  Session-level state derived from the log, latest-wins and carried whole.
  *  Fields start absent and fill in as the log reveals them.
@@ -802,6 +939,11 @@ export type SessionMetadata = {
   model: string | null;
   /**  The models the runtime offers, in the order it listed them. */
   supportedModels: ModelOption[];
+  /**
+   *  Every setting the ACP agent currently advertises. The list is replaced
+   *  whole whenever ACP returns a new `configOptions` snapshot.
+   */
+  configOptions: SessionConfigOption[];
   /**  Session title, when the harness reports one. */
   title: string | null;
   /**
@@ -870,6 +1012,12 @@ export type StopReason =
       kind: 'failed';
       /**  The runtime's error message, verbatim. */
       message: string;
+      /**
+       *  The failure in the person's terms, when the runtime classified it
+       *  as one they can act on. Absent for an opaque failure, which a
+       *  reader shows as `message` alone.
+       */
+      notice?: FailureNotice | null;
     };
 
 /**
@@ -905,6 +1053,19 @@ export type SubagentResult = {
   /**  What kinds of tools the subagent called. */
   stats: ToolStats | null;
 };
+
+/**  Where a held call stands. */
+export type ToolApprovalStatus =
+  /**  Held until the owner answers. */
+  | 'pending'
+  /**  The owner approved it; the call went through. */
+  | 'approved'
+  /**  The owner refused it; the call did not run. */
+  | 'denied'
+  /**  Someone with edit access, the agent, or the session gave up on it. */
+  | 'cancelled'
+  /**  Nobody answered in time. */
+  | 'expired';
 
 /**
  *  What a tool call actually did.
@@ -1188,7 +1349,10 @@ export type TurnState =
   | 'running'
   /**  A stop was issued against the open turn and no stop reason has arrived. */
   | 'stopping'
-  /**  The open turn is waiting on a permission or elicitation response. */
+  /**
+   *  The open turn is waiting on a permission, elicitation, or tool
+   *  approval response.
+   */
   | 'blocked'
   /**  The runtime reported `disconnected`; whatever was open is not moving. */
   | 'disconnected';

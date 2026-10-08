@@ -1,7 +1,9 @@
 import { queryClient } from '@queries/client';
+import { invalidateCalendarInvitations } from './invitations';
 import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
 import { invalidateCalendarEventPreviews } from './mention-preview';
 import { invalidateCalendarOccurrences } from './occurrences';
+import { resetTeamCalendarQueries } from './team-cache';
 import { invalidateTeamOutOfOffice } from './team-ooo';
 
 /**
@@ -11,6 +13,8 @@ import { invalidateTeamOutOfOffice } from './team-ooo';
  * calendar mention chips.
  */
 export function invalidateCalendarViews(): void {
+  void resetTeamCalendarQueries();
+  void invalidateCalendarInvitations();
   invalidateCalendarOccurrences();
   invalidateCalendarEventPreviews();
   invalidateTeamOutOfOffice();
@@ -32,12 +36,18 @@ export function handleRefreshCalendar(payload: unknown): void {
     typeof payload === 'object' && payload !== null
       ? (payload as { event?: unknown; link_id?: unknown })
       : undefined;
+  if (event?.event === 'team_sharing_changed') {
+    void resetTeamCalendarQueries();
+    return;
+  }
   if (event?.event !== 'synced' || typeof event.link_id !== 'string') return;
+  void resetTeamCalendarQueries();
 
   // An in-flight RSVP holds optimistic occurrence state a refetch would
   // clobber; the last RSVP to settle re-invalidates occurrences itself, so
   // only the caches without optimistic writes refresh meanwhile.
   if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) === 0) {
+    void invalidateCalendarInvitations();
     invalidateCalendarOccurrences();
   }
   invalidateCalendarEventPreviews();

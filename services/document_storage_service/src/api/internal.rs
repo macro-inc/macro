@@ -1,3 +1,7 @@
+mod purge_owned_entity;
+
+pub(crate) use purge_owned_entity::OwnedPurgeState;
+
 use super::{
     context::ApiContext,
     documents::{export_document, get_document_version},
@@ -14,7 +18,8 @@ use super::{
     user::populate_items,
 };
 use crate::api::context::{
-    AuthorizationService, DocumentService, EntityAccessService, ProjectService,
+    AuthorizationService, DocumentService, DssChatPurgeService, DssDocumentPurger,
+    EntityAccessService, ProjectService,
 };
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
@@ -103,7 +108,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents",
             post(
-                documents_hex::inbound::axum_router::create_document::create_document_handler::<
+                documents_hex::inbound::axum_router::create_document::create_document_internal_handler::<
                     DocumentService,
                     EntityAccessService,
                     AuthorizationService,
@@ -204,6 +209,16 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route("/item_ids", get(get_item_ids::get_item_ids_handler))
         .route("/validate_item_ids", post(validate_item_ids::handler))
+        .route(
+            purge_owned_entity::ROUTE,
+            delete(
+                purge_owned_entity::handler::<
+                    DssDocumentPurger,
+                    DssChatPurgeService,
+                    ProjectService,
+                >,
+            ),
+        )
         .route("/health", get(health_handler))
 }
 

@@ -5,7 +5,9 @@ use tracing::trace;
 use worker::{Env, Error, Result, State};
 
 use crate::{
-    state::DocumentState, storage::backends::durable_kv::DurableKVStorage, timeit, timeit_log,
+    state::{DocumentState, ImportedUpdate},
+    storage::backends::durable_kv::DurableKVStorage,
+    timeit, timeit_log,
 };
 
 pub mod backends;
@@ -119,13 +121,12 @@ impl SessionStorage {
         Ok(res)
     }
 
-    /// Append a new pending operation to the operation log and return the
-    /// Lexical node IDs that were touched (for blame tracking).
+    /// Persist an update and return its change status and touched Lexical nodes.
     pub async fn append_pending_operation(
         &self,
         operation: &[u8],
         document_state: &DocumentState,
-    ) -> Result<Vec<String>> {
+    ) -> Result<ImportedUpdate> {
         self.oplog.apply_op(document_state, operation).await
     }
 

@@ -8,7 +8,8 @@ There are two entry points:
 - `@macro-inc/email-renderer`: deterministic HTML/CSS preparation, quote and
   signature selection, and serializable output. It runs in Node without DOM APIs.
 - `@macro-inc/email-renderer/browser`: Shadow DOM mounting, computed color
-  adaptation, font normalization, width fitting, image visibility, and cleanup.
+  adaptation, font normalization, wide-content scrolling, image visibility, and
+  cleanup.
   It requires a browser, but no framework.
 
 ```ts
@@ -50,7 +51,7 @@ not another untrusted input boundary. The browser layer owns one host's shadow
 tree and all listeners, resize observers, and resource lifetimes it starts.
 The host can be attached before mounting or inserted later by the framework.
 Color preparation waits until it is connected and runs once per content update;
-resizes and image loads then only refit layout. A microtask handles synchronous
+resizes and image loads then only refresh overflow. A microtask handles synchronous
 insertion, and ResizeObserver handles later attachment without polling. Color
 preparation does not depend on animation frames being scheduled.
 
@@ -59,8 +60,9 @@ restarts color processing from the original prepared HTML, so toggling themes
 does not accumulate transformations. `setExpanded(false)` hides images and applies
 a three-line CSS text clamp inside its containment boundary. Tables and other
 atomic layouts may remain taller; this is not a fixed-height preview. Expansion
-removes the text clamp and restores width fitting. These toggles preserve content
-and resource identity. `dispose` is idempotent, aborts work, disconnects observers,
+removes the text clamp, keeps designed email at its native size, and gives any
+remaining wide canvas horizontal overflow. These toggles preserve content and
+resource identity. `dispose` is idempotent, aborts work, disconnects observers,
 removes listeners, and empties the shadow tree. Updating a disposed
 renderer does nothing. Mount a new instance into a new host.
 

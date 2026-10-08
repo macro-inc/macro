@@ -34,6 +34,11 @@ fn tool_input_schemas_satisfy_strict_mode() {
             generate_validated_input_schema::<CreateCalendarEvent>().map(|schema| schema.name),
         ),
         (
+            "CreateConfirmedCalendarEvent",
+            generate_validated_input_schema::<CreateConfirmedCalendarEvent>()
+                .map(|schema| schema.name),
+        ),
+        (
             "UpdateCalendarEvent",
             generate_validated_input_schema::<UpdateCalendarEvent>().map(|schema| schema.name),
         ),
@@ -204,6 +209,7 @@ impl CalendarMutationService for MockMutations {
         _calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
+        _responding_email: Option<String>,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
         self.answered
             .lock()
@@ -233,8 +239,7 @@ impl CalendarOccurrenceService for MockOccurrences {
         _range: OccurrenceRange,
         cursor: Option<crate::domain::models::CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> Result<Vec<(crate::domain::models::CalendarEvent, CalendarOccurrence)>, rootcause::Report>
-    {
+    ) -> Result<Vec<crate::domain::models::OccurrenceListing>, rootcause::Report> {
         let rows = self.rows.lock().unwrap().clone();
         let start = cursor
             .map(|cursor| {
@@ -243,7 +248,18 @@ impl CalendarOccurrenceService for MockOccurrences {
                     .map_or(rows.len(), |position| position + 1)
             })
             .unwrap_or(0);
-        let mut page: Vec<_> = rows.into_iter().skip(start).collect();
+        let mut page: Vec<_> = rows
+            .into_iter()
+            .skip(start)
+            .map(
+                |(event, occurrence)| crate::domain::models::OccurrenceListing {
+                    event,
+                    occurrence,
+                    link_id: uuid::Uuid::nil(),
+                    exception: Default::default(),
+                },
+            )
+            .collect();
         page.truncate(usize::from(limit));
         Ok(page)
     }
@@ -253,6 +269,13 @@ impl CalendarOccurrenceService for MockOccurrences {
         _requester_id: &str,
     ) -> Result<CalendarSyncStatus, rootcause::Report> {
         Ok(self.status)
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::VisibleCalendar>, rootcause::Report> {
+        unreachable!("calendar tools list calendars through the mutation service")
     }
 
     async fn mention_previews(
@@ -344,6 +367,116 @@ async fn mcp_toolset_executes_create_directly() {
 
     assert_eq!(event["eventId"], Uuid::from_u128(7).to_string());
     assert_eq!(mutations.created.lock().unwrap().len(), 1);
+}
+
+/// The confirmed variant takes exactly `CreateCalendarEvent`'s fields plus
+/// the confirmation, and the confirmation is required: the schema is the gate.
+#[test]
+fn create_confirmed_is_create_plus_a_required_confirmation() {
+    let confirmed = generate_validated_input_schema::<CreateConfirmedCalendarEvent>().unwrap();
+    let plain = generate_validated_input_schema::<CreateCalendarEvent>().unwrap();
+    assert_eq!(confirmed.name, "CreateConfirmedCalendarEvent");
+    assert!(
+        confirmed.description.contains("userConfirmation"),
+        "{}",
+        confirmed.description
+    );
+
+    let confirmed = confirmed.schema.to_value();
+    let plain = plain.schema.to_value();
+    let properties = |schema: &serde_json::Value| {
+        let mut names: Vec<String> = schema["properties"]
+            .as_object()
+            .expect("an object schema")
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    };
+    let mut expected = properties(&plain);
+    expected.push("userConfirmation".to_owned());
+    expected.sort();
+    assert_eq!(properties(&confirmed), expected);
+    assert!(
+        confirmed["required"]
+            .as_array()
+            .expect("required is an array")
+            .contains(&serde_json::json!("userConfirmation")),
+        "{confirmed:#}"
+    );
+}
+
+/// The confirmed tool is registered beside the deferring one, executes in
+/// the loop rather than deferring, and creates exactly what the plain tool
+/// would have.
+#[tokio::test]
+async fn confirmed_create_executes_directly_in_the_user_tool_toolset() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let mut args = create_tool_args();
+    args["userConfirmation"] = serde_json::json!("yes, go ahead and put it on the calendar");
+    let event = calendar_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateConfirmedCalendarEvent",
+            &args,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(event["eventId"], Uuid::from_u128(7).to_string());
+    let created = mutations.created.lock().unwrap();
+    let (_, _, draft) = created.first().expect("one create call");
+    assert_eq!(draft.title, "Design review");
+}
+
+/// Composer-less hosts already create directly through the plain tool, so
+/// the confirmed variant would be a second name for the same thing there.
+#[tokio::test]
+async fn mcp_toolset_omits_the_confirmed_create() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let mut args = create_tool_args();
+    args["userConfirmation"] = serde_json::json!("yes");
+    let result = mcp_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateConfirmedCalendarEvent",
+            &args,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(ai_toolset::ToolSetError::NotFound(_))),
+        "{result:?}"
+    );
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn confirmed_create_refuses_a_blank_confirmation() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let mut args = create_tool_args();
+    args["userConfirmation"] = serde_json::json!("   ");
+    let error = calendar_toolset()
+        .try_tool_call(
+            context.0,
+            request_context(),
+            "CreateConfirmedCalendarEvent",
+            &args,
+        )
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("userConfirmation"),
+        "{}",
+        error.description
+    );
+    assert!(mutations.created.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

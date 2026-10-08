@@ -2,7 +2,9 @@ import type { Transformer } from '@lexical/markdown';
 import { I_AGENT_CONTEXT } from './agentContext';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
+import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
+import { I_DATABASE_QUERY, I_DATABASE_QUERY_BLOCK } from './databaseQuery';
 import { I_HTML_RENDER } from './htmlRender';
 import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
 import {
@@ -22,6 +24,7 @@ import {
   E_PR_MENTION,
   E_TAG_MENTION,
   E_USER_MENTION,
+  I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   I_CONNECT_APP,
   I_CONTACT_MENTION,
@@ -49,7 +52,7 @@ import {
   SEARCH_MATCH,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
-import { I_VIDEO } from './video';
+import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 export { isConversionOnlyTransformer };
@@ -60,10 +63,13 @@ export { isConversionOnlyTransformer };
  * standard markdown syntax.
  */
 export const INTERNAL_TRANSFORMERS: Transformer[] = [
+  I_DATABASE_QUERY_BLOCK,
+  I_DATABASE_QUERY,
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   I_HTML_RENDER,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,
@@ -76,6 +82,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_MENTION,
   I_DOCUMENT_CARD,
   I_PR_MENTION,
+  I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
@@ -92,6 +99,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_CONNECT_APP,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
+  I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
@@ -99,8 +107,11 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
  * External transformers for converting Lexical to and from to GitHub Flavored (ish) Markdown.
  */
 export const EXTERNAL_TRANSFORMERS: Transformer[] = [
+  I_DATABASE_QUERY_BLOCK,
+  I_DATABASE_QUERY,
   HR,
   MARK_XML,
+  VIDEO_LINK,
   I_VIDEO,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
@@ -137,11 +148,14 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
  * Complete set of transformers supporting both internal and external markdown operations.
  */
 export const ALL_TRANSFORMERS: Transformer[] = [
+  I_DATABASE_QUERY_BLOCK,
+  I_DATABASE_QUERY,
   I_SNAPSHOT_NODE, // Must be before mentions to avoid matching inner tags in snapshot content
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   I_HTML_RENDER,
   E_PASTE_NODE,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,
@@ -163,6 +177,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_DOCUMENT_CARD,
   E_DOCUMENT_CARD,
   I_PR_MENTION,
+  I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   E_AGENT_SESSION_MENTION,
   E_PR_MENTION,
@@ -188,5 +203,6 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];

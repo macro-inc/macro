@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 const live = vi.hoisted(() => ({
   acquire: vi.fn(),
+  load: vi.fn(),
   release: vi.fn(),
   issue: vi.fn(),
   snapshot: {
@@ -49,7 +50,7 @@ vi.mock('@core/agent-session/AgentSession', () => ({
       live.acquire(id);
       return {
         id,
-        load: () => Promise.resolve({ session: {}, bot: {} }),
+        load: live.load,
         snapshot: () => Promise.resolve(live.snapshot),
         subscribe: (listener: (events: unknown[]) => void) => {
           live.listeners.add(listener);
@@ -69,6 +70,8 @@ vi.mock('@core/user', () => ({
   getDisplayName: (id: string) =>
     id === 'macro|alice@macro.com' ? 'Alice Owner' : '',
 }));
+let viewer = 'macro|alice@macro.com';
+vi.mock('@core/context/user', () => ({ useUserId: () => () => viewer }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn(), success: vi.fn() },
 }));
@@ -173,6 +176,33 @@ describe('createMagicChipModel', () => {
       },
     });
     live.issue.mockResolvedValue({ isErr: () => false });
+    live.load.mockResolvedValue({ session: {}, bot: {} });
+  });
+
+  it('reports a failed load only while the chip is mounted', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const loads: Array<(error: Error) => void> = [];
+    live.load.mockImplementation(
+      () => new Promise((_, reject) => loads.push(reject))
+    );
+    const [mounted, unmounted] = [0, 1].map(() =>
+      createRoot((dispose) => {
+        createModel(props);
+        return dispose;
+      })
+    );
+    unmounted?.();
+    loads[1]?.(new Error('agent session released: session'));
+    await settle();
+    expect(consoleError).not.toHaveBeenCalled();
+
+    loads[0]?.(new Error('agent session log could not be fetched: session'));
+    await settle();
+    expect(consoleError).toHaveBeenCalledOnce();
+    mounted?.();
+    consoleError.mockRestore();
   });
 
   it.each([0, '0'])(
@@ -534,7 +564,7 @@ describe('createMagicChipModel', () => {
 
     expect(presentation()).toEqual({
       kind: 'working',
-      activity: { label: 'Session disconnected', busy: false },
+      activity: { label: 'Session disconnected', busy: false, tone: 'stopped' },
     });
 
     dispose();
@@ -619,6 +649,52 @@ describe('createMagicChipModel', () => {
     expect(live.issue).not.toHaveBeenCalled();
 
     dispose();
+  });
+
+  it('says what a held tool call wants, as yours to the owner', async () => {
+    live.snapshot = {
+      messages: [prompt, openResponse],
+      metadata: {
+        pendingInteractions: [
+          {
+            kind: 'tool_approval',
+            approvalId: 'a1',
+            turn: 0,
+            serverSlug: 'macro',
+            serverName: 'Macro',
+            toolName: 'GetThread',
+            requestedBy: 'macro|bob@macro.com',
+          },
+        ],
+      } as unknown as SessionMetadata,
+    };
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        ownerId: 'macro|alice@macro.com',
+        canEdit: true,
+      },
+    });
+    const action = async () => {
+      let presentation!: ReturnType<
+        typeof createMagicChipModel
+      >['presentation'];
+      const dispose = createRoot((rootDispose) => {
+        presentation = createModel(props).presentation;
+        return rootDispose;
+      });
+      await settle();
+      const shown = presentation();
+      dispose();
+      return shown.kind === 'asking' ? shown.asking.action : undefined;
+    };
+
+    expect(await action()).toBe('Wants to read your email');
+    viewer = 'macro|bob@macro.com';
+    expect(await action()).toBe("Wants to read the owner's email");
+    viewer = 'macro|alice@macro.com';
   });
 
   it("a question from a later turn is not this chip's, and the live metadata moves it", async () => {

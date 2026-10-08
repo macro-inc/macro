@@ -220,15 +220,14 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
       ? createCalendarOccurrenceQueryRange(window.start, window.end)
       : undefined;
   });
-  const { sourceById } = useCalendarSources();
-  const occurrenceData = useCalendarOccurrenceData({ range, sourceById });
-  const availableExistingEvents = createMemo(() =>
-    occurrenceData.occurrencesQuery.isPlaceholderData
-      ? []
-      : occurrenceData.visibleEvents()
-  );
+  const { sourceById, sourcesReady } = useCalendarSources();
+  const occurrenceData = useCalendarOccurrenceData({
+    range,
+    sourceById,
+    sourcesReady,
+  });
   const existingEvents = createMemo(() =>
-    availableExistingEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
+    occurrenceData.visibleEvents().slice(0, MAX_EXISTING_PREVIEW_EVENTS)
   );
   const previewEvents = createMemo(() => {
     const event = previewEvent();
@@ -307,7 +306,7 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        class="rounded-lg px-2"
+                        class="px-2"
                         onClick={goToEvent}
                       >
                         <CalendarIcon class="size-3.5" />
@@ -317,7 +316,6 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      class="rounded-lg"
                       label={`Previous ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('previous')}
                     >
@@ -326,7 +324,6 @@ export function CalendarToolEventPreview(props: CalendarToolEventPreviewProps) {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      class="rounded-lg"
                       label={`Next ${previewView() === 'dayGridMonth' ? 'month' : 'week'}`}
                       onClick={() => navigate('next')}
                     >

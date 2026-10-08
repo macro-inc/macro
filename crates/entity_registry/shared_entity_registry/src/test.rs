@@ -59,6 +59,39 @@ fn try_from_rejects_every_unregistered_entity_type() {
 }
 
 #[test]
+fn registered_kinds_serialize_as_their_entity_type_spelling() {
+    let expected = [
+        (RegisteredEntityType::Project, r#""project""#),
+        (RegisteredEntityType::Document, r#""document""#),
+        (RegisteredEntityType::Chat, r#""chat""#),
+        (RegisteredEntityType::AgentSession, r#""agent_session""#),
+        (
+            RegisteredEntityType::ScheduledAction,
+            r#""scheduled_action""#,
+        ),
+    ];
+    for (kind, json) in expected {
+        assert_eq!(serde_json::to_string(&kind).unwrap(), json);
+        assert_eq!(
+            serde_json::from_str::<RegisteredEntityType>(json).unwrap(),
+            kind
+        );
+    }
+}
+
+#[test]
+fn deserializing_an_unregistered_kind_fails() {
+    let error = serde_json::from_str::<RegisteredEntityType>(r#""team""#).unwrap_err();
+    assert_eq!(error.to_string(), "team is not a registered entity type");
+
+    let error = serde_json::from_str::<RegisteredEntityType>(r#""Document""#).unwrap_err();
+    assert!(
+        error.to_string().starts_with("unknown variant `Document`"),
+        "{error}"
+    );
+}
+
+#[test]
 fn try_new_accepts_chat_and_rejects_initiative() {
     let owner = Owner::parse(OwnerType::User, "macro|hutch@macro.com").unwrap();
     let id = Uuid::from_u128(1);

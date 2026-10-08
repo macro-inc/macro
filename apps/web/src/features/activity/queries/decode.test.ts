@@ -3,8 +3,10 @@ import { decodeActivityEvent } from './decode';
 import {
   callStartedEvent,
   createdEvent,
+  databaseCreatedEvent,
   deletedEvent,
   editedEvent,
+  formRespondedEvent,
   messagedEvent,
   openedEvent,
   participantAddedEvent,
@@ -24,6 +26,7 @@ describe('decodeActivityEvent', () => {
     [messagedEvent, { kind: 'messaged' as const }],
     [sentEvent, { kind: 'email-sent' as const }],
     [callStartedEvent, { kind: 'call-started' as const }],
+    [formRespondedEvent, { kind: 'responded' as const }],
     [
       propertyChangedEvent,
       {
@@ -55,6 +58,9 @@ describe('decodeActivityEvent', () => {
     expect(decodeActivityEvent(createdEvent).entityType).toBe('document');
     expect(decodeActivityEvent(messagedEvent).entityType).toBe('channel');
     expect(decodeActivityEvent(sentEvent).entityType).toBe('email-thread');
+    expect(decodeActivityEvent(databaseCreatedEvent).entityType).toBe(
+      'database'
+    );
   });
 
   it('keeps the unknown-action tag so describeAction can humanize it', () => {
@@ -75,6 +81,13 @@ describe('decodeActivityEvent', () => {
     });
   });
 
+  it('decodes database activity now that its editor is available', () => {
+    expect(
+      decodeActivityEvent({ ...createdEvent, entityType: 'DATABASE' })
+        .entityType
+    ).toBe('database');
+  });
+
   it('never drops a row when the action typename is unrecognized', () => {
     const fragment = {
       ...createdEvent,
@@ -86,4 +99,8 @@ describe('decodeActivityEvent', () => {
       tag: 'GraphqlActivityTimeTravelled',
     });
   });
+});
+
+it('decodes a form as its own entity type', () => {
+  expect(decodeActivityEvent(formRespondedEvent).entityType).toBe('form');
 });

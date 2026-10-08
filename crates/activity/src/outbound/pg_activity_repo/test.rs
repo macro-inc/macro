@@ -4,7 +4,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{Action, Actor, CommonAction};
+use crate::domain::models::{Action, ActionTag, Actor, CommonAction, PropertyChange};
+use crate::domain::ports::EntityActivityReads;
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -12,6 +13,39 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 
 fn nz(limit: u32) -> NonZeroU32 {
     NonZeroU32::new(limit).expect("non-zero test limit")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn entity_history_cursor_is_stable_and_scoped_to_one_entity(
+    pool: PgPool,
+) -> Result<(), sqlx::Error> {
+    let repo = PgActivityRepo::new(pool);
+    let rows = vec![
+        seed(1, CommonAction::Created, "one"),
+        seed(2, CommonAction::Edited, "one"),
+        seed(3, CommonAction::Edited, "one"),
+        seed(4, CommonAction::Created, "other"),
+    ];
+    repo.insert_activities(&rows).await?;
+    repo.insert_activities(&rows).await?;
+    let first = repo
+        .entity_feed(EntityType::Document, "one", None, nz(2))
+        .await?;
+    assert_eq!(first.records.len(), 2);
+    assert!(first.records.iter().all(|row| row.entity_id == "one"));
+    let next = first.next.expect("second page");
+    let second = repo
+        .entity_feed(EntityType::Document, "one", Some(next), nz(2))
+        .await?;
+    assert_eq!(second.records.len(), 1);
+    assert!(second.next.is_none());
+    assert!(
+        first
+            .records
+            .iter()
+            .all(|row| row.id != second.records[0].id)
+    );
+    Ok(())
 }
 
 fn seed(source_event: u128, action: CommonAction, entity_id: &str) -> Activity {
@@ -747,4 +781,164 @@ async fn subject_overview_includes_first_havana_midnight_when_window_starts_on_f
         vec![("2026-10-31".to_owned(), 1)]
     );
     assert_eq!(ending_on_fallback.total(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn timeline_filters_parents_actions_and_pages_both_directions(pool: PgPool) {
+    use crate::domain::timeline::{ActivityTimeline, ActivityTimelineQuery, TimelineSelection};
+    let repo = PgActivityRepo::new(pool);
+    let rows: Vec<_> = [
+        (101, CommonAction::Created, "timeline"),
+        (102, CommonAction::Deleted, "timeline"),
+        (103, CommonAction::Opened, "timeline"),
+        (104, CommonAction::Created, "other"),
+        (105, CommonAction::Created, "timeline"),
+    ]
+    .into_iter()
+    .map(|(id, action, entity)| {
+        Activity::common(
+            Uuid::from_u128(id),
+            0,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            entity,
+            action,
+            chrono::DateTime::from_timestamp(1_000, 0).unwrap(),
+        )
+    })
+    .collect();
+    repo.insert_activities(&rows).await.unwrap();
+    let mut expected: Vec<_> = rows
+        .iter()
+        .filter(|row| row.entity_id == "timeline" && row.action != Action::Opened)
+        .map(|row| row.id)
+        .collect();
+    expected.sort_by(|a, b| b.cmp(a));
+    let query = |cursor, newer, limit| ActivityTimelineQuery {
+        entity_type: EntityType::Document,
+        entity_id: "timeline".into(),
+        selection: TimelineSelection::new(&[ActionTag::Created, ActionTag::Deleted], &[]),
+        cursor,
+        newer,
+        limit,
+    };
+    let first = repo.read(query(None, false, 2)).await.unwrap();
+    assert_eq!(
+        first.iter().map(|r| r.id).collect::<Vec<_>>(),
+        expected[..2]
+    );
+    let last = first.last().unwrap();
+    let older = repo
+        .read(query(Some((last.occurred_at, last.id)), false, 2))
+        .await
+        .unwrap();
+    assert_eq!(
+        older.iter().map(|r| r.id).collect::<Vec<_>>(),
+        expected[2..]
+    );
+    let newer = repo
+        .read(query(Some((older[0].occurred_at, older[0].id)), true, 2))
+        .await
+        .unwrap();
+    assert_eq!(
+        newer.iter().map(|r| r.id).collect::<Vec<_>>(),
+        vec![expected[1], expected[0]]
+    );
+    let from_start = repo.read(query(None, true, 2)).await.unwrap();
+    assert_eq!(
+        from_start.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![expected[2], expected[1]]
+    );
+    for (newer, boundary) in [(true, &first[0]), (false, &older[0])] {
+        assert!(
+            repo.read(query(Some((boundary.occurred_at, boundary.id)), newer, 2))
+                .await
+                .unwrap()
+                .is_empty(),
+            "exhausted cursors never repeat the boundary entry"
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn timeline_properties_narrow_property_changes_in_storage(pool: PgPool) {
+    use crate::domain::timeline::{ActivityTimeline, ActivityTimelineQuery, TimelineSelection};
+    const STATUS: Uuid = Uuid::from_u128(1);
+    let repo = PgActivityRepo::new(pool);
+    let changed = |property: Uuid| {
+        CommonAction::PropertyChanged(PropertyChange {
+            property: property.to_string(),
+            from: None,
+            to: Some(serde_json::json!("Done")),
+        })
+    };
+    let rows: Vec<_> = [
+        (201, changed(STATUS)),
+        (202, changed(Uuid::from_u128(2))),
+        (203, CommonAction::Created),
+        (204, CommonAction::Edited),
+    ]
+    .into_iter()
+    .map(|(id, action)| {
+        Activity::common(
+            Uuid::from_u128(id),
+            0,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "task",
+            action,
+            chrono::DateTime::from_timestamp(1_000 + id as i64, 0).unwrap(),
+        )
+    })
+    .collect();
+    repo.insert_activities(&rows).await.unwrap();
+    for properties in [&[STATUS][..], &[]] {
+        let selection = TimelineSelection::new(
+            &[ActionTag::PropertyChanged, ActionTag::Created],
+            properties,
+        );
+        let read = repo
+            .read(ActivityTimelineQuery {
+                entity_type: EntityType::Document,
+                entity_id: "task".into(),
+                selection,
+                cursor: None,
+                newer: false,
+                limit: 10,
+            })
+            .await
+            .unwrap();
+        // Storage and live delivery must agree on every row.
+        let mut expected: Vec<_> = rows
+            .iter()
+            .filter(|row| selection.includes(&row.action))
+            .map(|row| row.id)
+            .collect();
+        expected.reverse();
+        assert_eq!(read.iter().map(|row| row.id).collect::<Vec<_>>(), expected);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn timeline_index_skips_exactly_the_unindexed_actions(pool: PgPool) {
+    use crate::domain::timeline::UNINDEXED_TIMELINE_ACTIONS;
+    let predicate: String = sqlx::query_scalar(
+        "SELECT pg_get_expr(indpred, indrelid) FROM pg_index
+         WHERE indexrelid = 'idx_activity_events_entity_action_timeline'::regclass",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    // Timeline queries repeat this predicate; a drift would leave them
+    // falling back to the wider entity index.
+    let tags: Vec<String> = UNINDEXED_TIMELINE_ACTIONS
+        .iter()
+        .map(|&tag| format!("'{}'::text", <&str>::from(tag)))
+        .collect();
+    assert_eq!(
+        predicate,
+        format!("(action <> ALL (ARRAY[{}]))", tags.join(", "))
+    );
 }

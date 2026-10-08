@@ -1,83 +1,41 @@
-import type { BlockAlias, BlockName } from '@core/block';
 import { Permissions } from '@core/component/SharePermissions';
-import { ShareModal } from '@core/component/TopBar/ShareButton';
+import { toast } from '@core/component/Toast/Toast';
+import { openShareModal } from '@core/component/TopBar/shareModal';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import type { ItemType } from '@service-storage/client';
-import { createSignal, Show } from 'solid-js';
+import type { DialogHandle } from '@ui';
 import {
   isShareableEntityType,
   type ShareableEntityData,
 } from './shareable-entity';
 
-type GlobalShareModalProps = {
+/** Opens the share modal for an entity outside of its block. */
+export const openGlobalShareModal = async (props: {
   entity: ShareableEntityData;
-  onClose?: () => void;
-};
-
-const [globalModalProps, setGlobalModalProps] =
-  createSignal<GlobalShareModalProps | null>(null);
-const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
-  id: 'global-share',
-});
-
-const getEntityBlockAlias = (
-  entity: ShareableEntityData
-): BlockName | BlockAlias => {
-  return itemToBlockName(entity) ?? 'unknown';
-};
-
-const getEntityItemType = (entity: ShareableEntityData): ItemType => {
-  return entity.type;
-};
-
-export const openGlobalShareModal = (props: GlobalShareModalProps) => {
-  if (!isShareableEntityType(props.entity.type)) {
-    console.warn(
-      `Cannot share entity of type ${props.entity.type} - not supported`
-    );
+}): Promise<DialogHandle | undefined> => {
+  const { entity } = props;
+  // A form shares its respond link and audience at its own access level.
+  if (entity.type === 'form') {
+    try {
+      const { openFormShareModal } = await import(
+        '@app/features/block-form/form-global-sharing'
+      );
+      return await openFormShareModal(entity.id);
+    } catch {
+      toast.failure('This form’s sharing couldn’t be loaded.');
+      return;
+    }
+  }
+  if (!isShareableEntityType(entity.type)) {
+    console.warn(`Cannot share entity of type ${entity.type} - not supported`);
     return;
   }
-  setGlobalModalProps(props);
-  setModalOpen(true);
-};
 
-const closeGlobalShareModal = () => {
-  const props = globalModalProps();
-  setModalOpen(false);
-  setGlobalModalProps(null);
-  props?.onClose?.();
-};
-
-/**
- * Global share modal component - should be mounted once at the app level
- */
-export const GlobalShareModal = () => {
-  const handleSetIsOpen = (isOpen: boolean) => {
-    if (!isOpen) {
-      closeGlobalShareModal();
-    }
-    setModalOpen(isOpen);
-  };
-
-  return (
-    <Show when={globalModalProps()}>
-      {(propsAccessor) => {
-        const entity = () => propsAccessor().entity;
-
-        return (
-          <ShareModal
-            isSharePermOpen={modalOpen()}
-            setIsSharePermOpen={handleSetIsOpen}
-            id={entity().id}
-            blockAlias={getEntityBlockAlias(entity())}
-            itemType={getEntityItemType(entity())}
-            name={entity().name}
-            userPermissions={Permissions.OWNER}
-            owner={entity().ownerId}
-          />
-        );
-      }}
-    </Show>
-  );
+  return openShareModal({
+    id: entity.id,
+    blockAlias: itemToBlockName(entity) ?? 'unknown',
+    itemType: entity.type,
+    name: entity.name,
+    userPermissions: Permissions.OWNER,
+    owner: entity.ownerId,
+  });
 };

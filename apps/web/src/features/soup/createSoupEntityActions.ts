@@ -1,3 +1,4 @@
+import { createCrmEntityActionItems } from '@app/features/crm/crm-action-items';
 import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
@@ -9,9 +10,7 @@ import {
   makeCopyLinkAction,
   makeCreateReminderAction,
   makeDeleteAction,
-  makeEditReminderAction,
   makeFavoriteAction,
-  makeHideCompanyAction,
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
@@ -23,24 +22,24 @@ import {
   makeMuteAction,
   makeRemoveFromProjectAction,
   makeRenameAction,
-  makeSetCompanyPropertyAction,
   makeShareAction,
-  markReminderTargetDone,
 } from '@app/features/next-soup/actions';
 import {
-  markReminderSeenOnOpen,
+  markCalendarNotificationSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { itemToBlockName } from '@core/constant/allBlocks';
+import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
-import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
+import { isEmailEntity, isTaskEntity } from '@entity';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -68,6 +67,7 @@ type BuildActionGroups = (
     // Provided only where the menu host can anchor a tag picker for the
     // right-clicked row.
     openTagPicker?: () => void;
+    openProjectPicker?: () => void;
     /**
      * The split hosting the list. Open actions route through it so they match
      * their click/hotkey equivalents.
@@ -91,11 +91,13 @@ export const viewedProjectIdFromContent = (content: {
 
 export function createSoupEntityActions(): {
   buildActionGroups: BuildActionGroups;
+  isFavorited: (entity: EntityData) => boolean;
 } {
   const analytics = useAnalytics();
+  const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const hiddenMutation = useSetCompanyHiddenMutation();
+  const crmActions = createCrmEntityActionItems();
 
   const markDone = makeMarkDoneAction({
     userId: () => userId(),
@@ -130,21 +132,11 @@ export function createSoupEntityActions(): {
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
-  // Setting a reminder puts the row down: it marks it done, so the list drops
-  // it and the reminder is what brings it back.
-  const createReminderAction = makeCreateReminderAction({
-    onCreated: markReminderTargetDone(markDone),
-  });
-  const editReminderAction = makeEditReminderAction();
+  const createReminderAction = makeCreateReminderAction();
   const shareAction = makeShareAction();
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
-  const hideCompanyAction = makeHideCompanyAction({
-    setHidden: (companyId, hidden) =>
-      hiddenMutation.mutateAsync({ companyId, hidden }),
-  });
-  const setCompanyPropertyAction = makeSetCompanyPropertyAction();
 
   const buildActionGroups: BuildActionGroups = (
     soup,
@@ -153,6 +145,7 @@ export function createSoupEntityActions(): {
       viewContext,
       viewedProjectId,
       openTagPicker,
+      openProjectPicker,
       splitHandle,
       createActionNavigationHandler,
     }
@@ -246,17 +239,7 @@ export function createSoupEntityActions(): {
       if (!entity || entity.type === 'foreign') return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // A reminder opens its own editor — a `reminder-view` component split —
-      // not what it references, so a standalone reminder is openable too and
-      // the dedup check is against that editor split, not the reference.
-      if (entity.type === 'reminder') {
-        const open = splitManager.getSplitByContent(
-          'component',
-          `reminder-view~${entity.id}`
-        );
-        if (open) return undefined;
-        return entity;
-      }
+      // Reminder route claims perform identity reuse when the action runs.
       const contentId =
         entity.type === 'channel_message' || entity.type === 'channel_thread'
           ? entity.channelId
@@ -277,7 +260,7 @@ export function createSoupEntityActions(): {
         });
       }
 
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
 
       // Match row navigation, including a thread row's driving message.
       await openEntityInSplitFromUnifiedList(entity, {
@@ -288,7 +271,7 @@ export function createSoupEntityActions(): {
       });
     };
 
-    if (openableEntity()) {
+    if (viewContext.supportsOpenInNewSplit && openableEntity()) {
       topItems.push({
         id: 'open-in-split',
         label: 'Open in new split',
@@ -312,22 +295,6 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // Takes Rename's slot, and its 'r' key. The two cannot both appear:
-    // `renameAction.canExecute` ends at `entity.ownerId === userId()`, and a
-    // reminder row's `ownerId` is always `''` (both soup mappers set it — a
-    // reminder is private to its owner, so the row carries no owner id) while
-    // `userId()` is a macro id or undefined. Renaming one would fail anyway;
-    // its name is its description, which only the reminders API can change.
-    // Single-entity only: the editor asks about one reminder's time.
-    if (entities.length === 1 && editReminderAction.canExecute(entities[0])) {
-      middleItems.push({
-        id: 'edit-reminder',
-        label: 'Edit reminder',
-        hotkeyToken: TOKENS.entity.action.rename,
-        onClick: handle(editReminderAction.executeWithSoup),
-      });
-    }
-
     if (canExecuteAll(favoriteAction.canExecute)) {
       const allFavorited = entities.every((entity) =>
         favoriteAction.isFavorited(entity)
@@ -342,6 +309,11 @@ export function createSoupEntityActions(): {
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
+      middleItems.push({
+        id: 'snooze',
+        label: 'Snooze notifications…',
+        onClick: () => muteAction.snooze(entities),
+      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
@@ -373,6 +345,20 @@ export function createSoupEntityActions(): {
         id: 'add-tag',
         label: 'Add tag',
         onClick: openTagPicker,
+      });
+    }
+
+    if (
+      projectsFlag().enabled &&
+      openProjectPicker &&
+      canExecuteAll(isTaskEntity)
+    ) {
+      middleItems.push({
+        id: 'set-initiative',
+        label: 'Add to project…',
+        onClick: () => {
+          if (isFeatureEnabled(enableProjects)) openProjectPicker();
+        },
       });
     }
 
@@ -469,39 +455,7 @@ export function createSoupEntityActions(): {
       });
     }
 
-    // CRM group: Set stage/owner/revenue on the whole company
-    // selection, Hide / Unhide for a single company.
-    const crmItems: SoupEntityActionItem[] = [];
-
-    for (const [field, label] of [
-      ['stage', 'Set stage'],
-      ['owner', 'Set owner'],
-      ['revenue', 'Set revenue'],
-    ] as const) {
-      if (
-        !canExecuteAll((entity) =>
-          setCompanyPropertyAction.canExecute(entity, field)
-        )
-      )
-        continue;
-      crmItems.push({
-        id: `set-${field}`,
-        label,
-        onClick: () => setCompanyPropertyAction.execute(entities, field),
-      });
-    }
-
-    const singleEntity = entities.length === 1 ? entities[0] : undefined;
-    if (
-      singleEntity?.type === 'crm_company' &&
-      hideCompanyAction.canExecute(singleEntity)
-    ) {
-      crmItems.push({
-        id: 'hide-company',
-        label: singleEntity.hidden ? 'Unhide' : 'Hide',
-        onClick: handle(hideCompanyAction.executeWithSoup),
-      });
-    }
+    const crmItems = crmActions(entities, soup);
 
     // Delete group
     const deleteItems: SoupEntityActionItem[] = [];
@@ -510,7 +464,9 @@ export function createSoupEntityActions(): {
       deleteItems.push({
         id: 'delete',
         label: 'Delete',
-        hotkeyToken: TOKENS.entity.action.delete,
+        hotkeyToken: entities.every(isEmailEntity)
+          ? TOKENS.email.trash
+          : TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
         destructive: true,
       });
@@ -521,5 +477,5 @@ export function createSoupEntityActions(): {
       .map((items) => ({ items }));
   };
 
-  return { buildActionGroups };
+  return { buildActionGroups, isFavorited: favoriteAction.isFavorited };
 }

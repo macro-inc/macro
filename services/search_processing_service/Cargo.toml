@@ -43,7 +43,10 @@ path = "src/doppler_config.rs"
 
 [dependencies]
 agent_session = { path = "../../crates/agent_session", default-features = false, features = ["outbound"] }
-agent_fold = { path = "../../crates/agent_fold" }
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound", "ports"] }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
+agent_fold = { path = "../../crates/folds/agent_fold" }
 anyhow = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
@@ -51,6 +54,7 @@ aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 call = { path = "../../crates/call", default-features = false, optional = true }
 channels = { path = "../../crates/channels", default-features = false, optional = true }
+messages = { path = "../../crates/messages", features = ["broker"] }
 chat = { path = "../../crates/chat", default-features = false, optional = true }
 chrono = { workspace = true }
 comms_db_client = { path = "../../crates/comms_db_client" }
@@ -83,6 +87,9 @@ macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
+ai_engine = { path = "../../crates/ai_engine" }
+fig_engine = { path = "../../crates/fig_engine" }
+psd_engine = { path = "../../crates/psd_engine" }
 doppler-config = { workspace = true }
 model = { path = "../../crates/model" }
 model_owner = { path = "../../crates/model_owner" }

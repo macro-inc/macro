@@ -1,7 +1,7 @@
-import { entityDetailTarget } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { entityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { makeShareAction } from '@app/features/next-soup/actions';
 import {
-  markReminderSeenOnOpen,
+  markCalendarNotificationSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -57,7 +57,7 @@ export function createDriveHostActions(options: {
       // Nested project/content targets reach this adapter. The main row
       // consumes Cmd/Ctrl itself for selection.
       if (event?.metaKey || event?.ctrlKey) {
-        markReminderSeenOnOpen(entity, notificationSource);
+        markCalendarNotificationSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
 
         return;
@@ -69,7 +69,7 @@ export function createDriveHostActions(options: {
         return;
       }
 
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
 
       if (entity.type === 'document' && !openInNewSplit && !location) {
         const target = entityDetailTarget.document({
@@ -79,7 +79,7 @@ export function createDriveHostActions(options: {
           fallbackName: entity.name,
         });
 
-        if (navigation.navigate(target, { event })) return;
+        if (navigation.openRoot(target, { event })) return;
       }
 
       void openEntityInSplitFromUnifiedList(entity, {
@@ -100,18 +100,30 @@ export function createDriveHostActions(options: {
 
       if (favorite.entityType === 'document') {
         const block = favoriteBlockName(favorite);
+        let subType:
+          | { type: 'task'; is_completed: boolean }
+          | { type: 'snippet' | 'skill' }
+          | undefined;
+        if (block === 'task') {
+          subType = { type: block, is_completed: false };
+        } else if (block === 'snippet' || block === 'skill') {
+          subType = { type: block };
+        }
 
         const target = entityDetailTarget.document({
           id: favorite.entityId,
           fileType: favorite.fileType ?? undefined,
-          subType:
-            block === 'snippet' || block === 'skill'
-              ? { type: block }
-              : undefined,
+          subType,
           fallbackName: name,
         });
 
-        if (navigation.navigate(target, { event })) return;
+        if (
+          navigation.openRoot(target, {
+            event,
+            location: { kind: 'tab', tab: 'owned' },
+          })
+        )
+          return;
       }
 
       const result = layout.openWithSplit(favoriteSplitContent(favorite), {

@@ -41,8 +41,12 @@ const getEntityUrlParams = (
 };
 
 const getEntityUrl = (entity: EntityData): string => {
-  // TODO(dev-rb/github): Return the Macro /pr/:id URL.
-  if (isGithubPrEntity(entity)) return entity.metadata.url;
+  if (isGithubPrEntity(entity)) {
+    return buildSimpleEntityUrl({
+      type: 'reviews/pr',
+      id: encodeURIComponent(entity.id),
+    });
+  }
 
   return buildSimpleEntityUrl(
     {
@@ -54,10 +58,7 @@ const getEntityUrl = (entity: EntityData): string => {
 };
 
 export const makeCopyLinkAction = () => {
-  // A reminder has no block of its own, so `/app/reminder/{id}` resolves to
-  // nothing the orchestrator can open — there is no link to copy.
-  const canExecute = (entity: EntityData): boolean =>
-    entity.type !== 'reminder';
+  const canExecute = (_entity: EntityData): boolean => true;
 
   const execute = async (entities: EntityData[]) => {
     // Only copy link for the first entity (doesn't make sense for bulk)

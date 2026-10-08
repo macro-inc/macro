@@ -1,3 +1,6 @@
+use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use crate::calendar_request_gate::RedisCalendarRequestGate;
+use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use axum::extract::FromRef;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
@@ -12,13 +15,10 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
-use email_service::calendar_request_gate::RedisCalendarRequestGate;
-use email_service::calendar_tokens::CalendarTokenProviderAdapter;
 
-use email_service::config::Config;
-use email_service::outbound::email_api::GmailApi;
-use email_service::util::redis::RedisClient;
+use crate::config::Config;
+use crate::outbound::email_api::GmailApi;
+use crate::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
@@ -60,6 +60,12 @@ pub(crate) type EmailSvc = EmailServiceImpl<
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
+    pub invitation_resolver: Arc<
+        calendar_events::domain::invitations::CalendarInvitationResolver<
+            calendar_events::outbound::pg::PgCalendarRepository,
+        >,
+    >,
     pub db: sqlx::Pool<sqlx::Postgres>,
     pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
     // The raw client is retained only for Gmail webhook JWKS/JWT authentication.

@@ -95,34 +95,34 @@ impl LocalE2eServices {
         )
     }
 
-    /// URL for posting a channel message through document storage's channels hex API.
-    pub fn post_channel_message_url(&self, channel_id: &str) -> String {
+    /// URL for reading and posting messages of a channel through the shared message API.
+    pub fn channel_messages_url(&self, channel_id: &str) -> String {
         format!(
-            "{}/channels/{}/message",
+            "{}/messages/channel/{}",
             self.document_storage_url, channel_id
         )
     }
 
-    /// URL for patching or deleting a channel message through document storage's channels hex API.
+    /// URL for reading, patching, or deleting one channel message through the shared message API.
     pub fn channel_message_url(&self, channel_id: &str, message_id: &str) -> String {
         format!(
-            "{}/channels/{}/message/{}",
+            "{}/messages/channel/{}/items/{}",
             self.document_storage_url, channel_id, message_id
         )
     }
 
-    /// URL for posting a channel reaction through document storage's channels hex API.
-    pub fn post_channel_reaction_url(&self, channel_id: &str) -> String {
+    /// URL for toggling the caller's reaction on a channel message.
+    pub fn channel_message_reactions_url(&self, channel_id: &str, message_id: &str) -> String {
         format!(
-            "{}/channels/{}/reaction",
-            self.document_storage_url, channel_id
+            "{}/messages/channel/{}/items/{}/reactions",
+            self.document_storage_url, channel_id, message_id
         )
     }
 
-    /// URL for posting a channel typing update through document storage's channels hex API.
-    pub fn post_channel_typing_url(&self, channel_id: &str) -> String {
+    /// URL for posting a channel typing update through the shared message API.
+    pub fn channel_typing_url(&self, channel_id: &str) -> String {
         format!(
-            "{}/channels/{}/typing",
+            "{}/messages/channel/{}/typing",
             self.document_storage_url, channel_id
         )
     }

@@ -59,6 +59,7 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     id: JSON.stringify([item.eventId, item.occurrenceKey]),
     eventId: item.eventId,
     occurrenceKey: item.occurrenceKey,
+    teamProjection: { ownerId: item.ownerId, kind: 'details' },
     isCancelled: false,
     isReadOnly: true,
     attendees: [],
@@ -104,10 +105,15 @@ export function useTeamOooEvents(
     })
   );
   const events = createMemo(() => {
-    // Read data only on success: a failed overlay fetch degrades to no events
-    // since the grid's own state is driven by the occurrences query, and gating
-    // on success keeps this off the pending/errored resource read that suspends.
-    if (!teamOooEnabled() || !isRangeSupported() || !query.isSuccess) {
+    // Pending reads suspend, and placeholder data belongs to the previous
+    // range. Neither can supply events for the current viewport.
+    if (
+      !teamOooEnabled() ||
+      !isRangeSupported() ||
+      !query.isSuccess ||
+      query.isPaused ||
+      query.isPlaceholderData
+    ) {
       return [];
     }
     return query.data.map(mapTeamOooItem);
@@ -124,6 +130,8 @@ export function useTeamOooEvents(
 export interface TeamOooWindow {
   ownerId: string;
   eventId: string;
+  /** Read-only event model used to open the shared event details surface. */
+  event: CalendarEvent;
   occurrenceKey: string;
   /** Teammate display name, resolved reactively from the shared cache. */
   name: string;
@@ -159,7 +167,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const windows = createMemo<TeamOooWindow[]>(() => {
     // Read data only on success so a pending query never hits the suspending
     // resource read and an errored refetch never surfaces stale rows.
-    if (!query.isSuccess) return [];
+    if (!query.isSuccess || query.isPaused) return [];
     return query.data.map((item) => {
       const time = item.time;
       const [start, end, allDay] =
@@ -171,6 +179,7 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
         eventId: item.eventId,
         occurrenceKey: item.occurrenceKey,
         name: getDisplayName(tryMacroId(item.ownerId)),
+        event: mapTeamOooItem(item),
         title: item.title ?? undefined,
         start,
         end,
@@ -182,6 +191,6 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   return {
     windows,
     isPending: () => query.isPending,
-    isError: () => query.isError,
+    isError: () => query.isError || query.isPaused,
   };
 }

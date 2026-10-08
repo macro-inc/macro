@@ -1,0 +1,20 @@
+---
+title: SaveDatabaseView
+description: >-
+  Save a table or kanban board view of one table of a Macro database.
+---
+
+# SaveDatabaseView
+
+Save a table or kanban board view of one table of a Macro database. Views are shared with everyone who can open the database, so saving one needs edit access. Call DescribeDatabase first: a view names columns and select options by their ids, never by name. The filter's conditions combine with one `and` or `or`, each test fitting its column's type (text, number, date, checkbox, options, entities, or presence for any column); sort keys order the rows. A board groups its cards into lanes by a single-select or single-person column: one lane per option, or per person its cards name, plus one for cards with an empty cell; no other column type can group a board. A lane's `key` has a `kind`: `option` with the option's `id`, `user` with the person's user `id`, or `none`. A card's title is a column, the board's `title`, the first by default. Saving under a name the table already has replaces that view, so read `created` in the result; DeleteDatabaseView removes a view. Views change presentation, never records, and cannot save charts or SQL.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `databaseId` | string | Yes | Database id from ListDatabases. |
+| `tableId` | string | Yes | Table id from DescribeDatabase. |
+| `name` | string | Yes | Name shown in the table's view tabs. |
+| `filter` | ToolFilter | No | Which rows the view shows; every row when left out. |
+| `sort` | SortKey[] | No | The sort keys, first key first; the table's own order when empty. |
+| `layout` | RequestedLayout | Yes | A layout as an op asks for it: a board may leave its card title out. |

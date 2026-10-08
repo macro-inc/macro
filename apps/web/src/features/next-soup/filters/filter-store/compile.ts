@@ -31,7 +31,6 @@ type QueryTarget =
   | 'fef'
   | 'ccf'
   | 'asf'
-  | 'remf'
   | 'propf';
 
 export type TargetAstMap = {
@@ -171,10 +170,6 @@ const FIELD_CONFIG: Record<
   agentSessionId: { target: 'asf', field: 'id' },
   agentSessionOwnerId: { target: 'asf', field: 'o' },
   includeAgentSessions: { target: 'asf', field: 'inc', unit: true },
-  reminderId: { target: 'remf', field: 'id' },
-  reminderCompleted: { target: 'remf', field: 'comp' },
-  reminderFired: { target: 'remf', field: 'fired' },
-  includeReminders: { target: 'remf', field: 'inc', unit: true },
 };
 
 const DATE_RANGE_FIELDS: Record<
@@ -236,7 +231,6 @@ const emptyTargetAstLists = (): Record<QueryTarget, BackendAst[]> => ({
   fef: [],
   ccf: [],
   asf: [],
-  remf: [],
   propf: [],
 });
 

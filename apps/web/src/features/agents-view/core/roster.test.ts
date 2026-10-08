@@ -103,15 +103,17 @@ describe('buildAgentRoster', () => {
     expect(saved[3]?.runtime.label).toBe('Disconnected runtime');
   });
 
-  it('cannot start a saved agent on a connected macrod runtime from here', () => {
+  it('can start a saved agent on a connected macrod runtime from here', () => {
     const roster = buildAgentRoster({
       ...EMPTY,
       runtimes: [{ id: 'h1', name: 'wolf-laptop', connected: true }],
       agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
     });
-    expect(roster.at(-1)?.unavailableReason).toBe(
-      'Runs on its own machine · start it from a channel mention'
-    );
+    expect(roster.at(-1)?.runtime).toEqual({
+      label: 'wolf-laptop',
+      connected: true,
+    });
+    expect(roster.at(-1)?.unavailableReason).toBeUndefined();
   });
 });
 

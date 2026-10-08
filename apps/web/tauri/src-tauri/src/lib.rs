@@ -23,6 +23,8 @@ use staged_upload::cleanup_stale_staged_files;
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
+#[cfg(target_os = "android")]
+mod android_tls;
 mod tauri_protocol;
 
 pub(crate) const APP_SCHEME: &str = "macro";
@@ -31,8 +33,12 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use url::Url;
 
+mod desktop_update;
 mod device;
+mod diagnostics;
 mod logging;
+#[cfg(target_os = "macos")]
+mod macos_notification_permission;
 mod share_target;
 mod staged_upload;
 
@@ -87,6 +93,7 @@ mod debug;
 /// If the webview attempts to naviate to other domains,
 /// they will be opened in the systems default browser
 static ALLOWED_DOMAINS: &[&str] = &[
+    "https://tauri.localhost",
     "http://tauri.localhost",
     "tauri://localhost",
     "http://localhost:3000",
@@ -114,6 +121,9 @@ type Type = std::sync::OnceLock<
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tracing_subscriber::EnvFilter;
+
+    let diagnostics = diagnostics::Diagnostics::from_launch();
+    let recording = diagnostics.is_recording();
 
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| logging::default_filter(cfg!(debug_assertions)));
@@ -157,13 +167,23 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     {
         builder = builder
-            .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_auth::init())
+            .plugin(tauri_plugin_notifications::init())
+            .plugin(tauri_plugin_virtual_keyboard::init())
             .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
             .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())
             .plugin(tauri_plugin_photo_library::init())
             .plugin(tauri_plugin_call_kit::init());
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        builder = builder
+            .plugin(tauri_plugin_android_auth::init())
+            .plugin(tauri_plugin_android_mobile::init())
+            .plugin(tauri_plugin_android_push::init());
     }
 
     // register the rest of the common plugins
@@ -204,17 +224,13 @@ pub fn run() {
             // Builds without this feature (just ios-dev, ios-build-no-update)
             // must never check for or apply OTA bundles on their own; manual
             // checks from settings still work.
-            .with_auto_update(cfg!(feature = "auto_apply_update")),
+            .with_auto_update(cfg!(feature = "auto_apply_update") && !recording),
         );
 
     #[cfg(mobile)]
     {
         // register mobile specific plugins
-        builder = builder
-            .plugin(tauri_plugin_safe_area_insets::init())
-            .plugin(tauri_plugin_notifications::init())
-            .plugin(tauri_plugin_virtual_keyboard::init())
-            .plugin(tauri_plugin_auth::init());
+        builder = builder.plugin(tauri_plugin_haptics::init());
     }
 
     // Window origin differs by platform:
@@ -249,15 +265,27 @@ pub fn run() {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            desktop_update::get_native_update_status,
+            desktop_update::restart_native_update,
+            diagnostics::read_desktop_diagnostics,
+            #[cfg(target_os = "macos")]
+            macos_notification_permission::get_macos_notification_permission,
+            #[cfg(target_os = "macos")]
+            macos_notification_permission::request_macos_notification_permission,
             graphql_cache_plugin::commands::graphql_cache_init,
+            graphql_cache_plugin::commands::graphql_cache_init_with_schema,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
+            graphql_cache_plugin::commands::graphql_cache_current_storage_generation,
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_entity_filter,
+            graphql_cache_plugin::commands::graphql_cache_calendar_range,
+            graphql_cache_plugin::commands::graphql_cache_calendar_commit,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
+            graphql_cache_plugin::commands::graphql_cache_inspect_mutations,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
             graphql_cache_plugin::commands::graphql_cache_inspect_query,
             graphql_cache_plugin::commands::graphql_cache_claim_next_mutation,
@@ -283,7 +311,10 @@ pub fn run() {
             flush_launch_deep_link,
             staged_upload::upload_staged_file_to_presigned_url,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            #[cfg(desktop)]
+            desktop_update::setup(app, recording)?;
+            diagnostics::setup(app, diagnostics);
             #[cfg(any(target_os = "linux", all(windows, debug_assertions)))]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -301,7 +332,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |app_handle, event| match &event {
-            RunEvent::Ready => {
+            RunEvent::Ready if !recording => {
                 #[cfg(feature = "auto_apply_update")]
                 {
                     let app = app_handle.clone();
@@ -354,6 +385,10 @@ pub fn run() {
                         }
                     });
                 }
+            }
+            #[cfg(desktop)]
+            RunEvent::ExitRequested { api, .. } => {
+                desktop_update::on_exit_requested(app_handle, api)
             }
             RunEvent::Exit => {
                 if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {
@@ -444,12 +479,19 @@ enum LaunchState {
 }
 
 /// Convert a deep link url into a `navigate` event for the frontend router.
-#[tracing::instrument(err, skip(handle))]
+#[tracing::instrument(err, skip(handle, url))]
 fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Report> {
+    // Auth callbacks belong exclusively to the native browser session. They
+    // must not reach SPA routing or application logs, even via an explicit intent.
+    if url.scheme() == APP_SCHEME && url.host_str() == Some("android-auth") {
+        return Ok(());
+    }
     // Universal/App links come in as https:// URLs, custom scheme links come in as macro://
     let macro_scheme = match url.scheme() {
         s if s == APP_SCHEME => MacroScheme::new(url)?,
-        "http" | "https" => MacroScheme::from_url(&url)?,
+        "http" | "https" if navigation_plugin::is_app_link(APP_LINK_HOSTS, &url) => {
+            MacroScheme::from_url(&url)?
+        }
         scheme => {
             return Err(report!("unexpected deep link scheme: {}", scheme));
         }
@@ -462,7 +504,6 @@ fn emit_navigate_for_deep_link(url: Url, handle: &AppHandle) -> Result<(), Repor
     // we send a navigate event instead of calling navigate directly
     // because navigate performs a full browser navigation
 
-    tracing::trace!("{payload:?}");
     Ok(handle.emit("navigate", payload)?)
 }
 
@@ -471,7 +512,6 @@ fn attach_deep_link_handler(app: &mut tauri::App) {
         let handle = app.handle().clone();
         move |ev| {
             let urls = ev.urls();
-            tracing::trace!("received open url event {urls:?}");
             let Some(url) = urls.into_iter().next() else {
                 tracing::warn!("open url event contained no urls");
                 return;
@@ -544,7 +584,7 @@ fn flush_launch_deep_link(app: AppHandle, delivery: tauri::State<'_, DeepLinkDel
     };
 
     if let Some(url) = to_emit {
-        tracing::debug!("flushing deep link {url}");
+        tracing::debug!("flushing launch deep link");
         emit_navigate_for_deep_link(url, &app).log_and_consume();
     }
 }

@@ -4,7 +4,7 @@
 //! Every candidate is gated on existence, deletion and access, and on the
 //! request's filters where soup owns the fold (documents, chats, projects,
 //! calendar events, properties). Channel, channel-thread, email,
-//! foreign-entity and reminder candidates are gated on access (plus the
+//! foreign-entity candidates are gated on access (plus the
 //! notification-state and, for emails, importance conjuncts their trees
 //! imply): their filter trees fold in their own domains' query
 //! builders, so the service applies them in full when it hydrates the page
@@ -33,7 +33,7 @@ use crate::domain::models::{NotifiedEntity, NotifiedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, implied_conjuncts_sql,
     includes_channels, includes_chats, includes_documents, includes_email_threads,
-    includes_projects, project_gate, uuid_guarded,
+    includes_initiatives, includes_projects, initiative_gate, project_gate, uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
@@ -130,20 +130,6 @@ fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
     )
 }
 
-/// Reminders are private to their owner, which is the whole access check.
-fn reminder_gate() -> String {
-    uuid_guarded(
-        ID_SQL,
-        format!(
-            r#"EXISTS (
-                SELECT 1 FROM reminder r
-                WHERE r.id = {ID_SQL}::uuid
-                AND r.user_id = $1
-            )"#
-        ),
-    )
-}
-
 /// Agent sessions are authorized through `entity_access`, whose sources are
 /// the same user / channel / team ids the query's `user_source_ids` CTE
 /// already collects - the predicate the agent-session leg's own queries use.
@@ -198,6 +184,9 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     if includes_chats(req.filter) {
         types.push(EntityType::Chat.into());
     }
+    if includes_initiatives(req.filter) {
+        types.push(EntityType::Initiative.into());
+    }
     if includes_projects(req.filter) {
         types.push(EntityType::Project.into());
     }
@@ -216,7 +205,7 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     {
         types.push(EntityType::CalendarEvent.into());
     }
-    // Foreign entities and reminders carry no properties, so the filter is
+    // Foreign entities carry no properties, so the filter is
     // settled type-wide like it is for channels.
     if req.hydratable.foreign_entities
         && propertyless_ok
@@ -227,11 +216,8 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     {
         types.push(EntityType::ForeignEntity.into());
     }
-    if req.hydratable.reminders && propertyless_ok {
-        types.push(EntityType::Reminder.into());
-    }
     // Agent sessions hydrate through the main by-ids query like documents,
-    // but are opt-in by filter like reminders, and carry no properties.
+    // but are opt-in by filter and carry no properties.
     if includes_agent_sessions(req.filter) && propertyless_ok {
         types.push(EntityType::AgentSession.into());
     }
@@ -247,12 +233,12 @@ fn build_query(filter: Option<&EntityFilterAst>) -> String {
         document_gate = document_gate(ID_SQL, filter),
         chat_gate = chat_gate(ID_SQL, filter),
         project_gate = project_gate(ID_SQL, filter),
+        initiative_gate = initiative_gate(ID_SQL, filter),
         channel_gate = channel_gate(ID_SQL, filter),
         channel_thread_gate = channel_thread_gate(ID_SQL, filter),
         email_gate = email_gate(ID_SQL, filter),
         calendar_event_gate = calendar_event_gate(filter),
         foreign_entity_gate = foreign_entity_gate(filter),
-        reminder_gate = reminder_gate(),
         agent_session_gate = agent_session_gate(),
     )
 }

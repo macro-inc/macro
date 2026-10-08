@@ -158,6 +158,15 @@ struct ProducerTransport(Either<FutureProducer, FutureProducer<MskIamClientConte
 pub trait GroupName {
     /// Stable Kafka consumer group ID used for partition balancing and offsets.
     const GROUP_NAME: &'static str;
+
+    /// Where the group starts on a partition it has no committed offset for.
+    ///
+    /// Partitions the group already committed on resume from that offset either
+    /// way; this only decides the first read of a partition the group has never
+    /// consumed, such as one of a topic newly added to its subscription.
+    /// `Earliest` replays everything the topic still retains there; `Latest`
+    /// starts at the next record published.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Earliest;
 }
 
 /// Marker type for a consumer that does not subscribe or persist offsets.
@@ -167,7 +176,8 @@ pub trait GroupName {
 /// or commit operations and therefore does not create durable group state.
 pub struct Ungrouped;
 
-/// Starting position for manually assigned ungrouped topic partitions.
+/// Starting position for a partition a consumer has no committed offset for:
+/// every partition of an ungrouped consumer, and new partitions of a group.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitialOffset {
     /// Consume all currently retained records before continuing with new ones.
@@ -212,9 +222,13 @@ fn producer_config(brokers: &str) -> ClientConfig {
 
 fn grouped_config<T: GroupName>(brokers: &str) -> ClientConfig {
     let mut config = consumer_config(brokers);
-    config
-        .set("group.id", T::GROUP_NAME)
-        .set("auto.offset.reset", "earliest");
+    config.set("group.id", T::GROUP_NAME).set(
+        "auto.offset.reset",
+        match T::INITIAL_OFFSET {
+            InitialOffset::Earliest => "earliest",
+            InitialOffset::Latest => "latest",
+        },
+    );
     config
 }
 

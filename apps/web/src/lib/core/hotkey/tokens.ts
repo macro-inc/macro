@@ -29,6 +29,7 @@ export const TOKENS = {
   unifiedList: {
     navigation: {
       parent: 'unifiedList.navigation.parent',
+      collapseGroup: 'unifiedList.navigation.collapseGroup',
       child: 'unifiedList.navigation.child',
     },
   },
@@ -117,8 +118,6 @@ export const TOKENS = {
     goToLeader: 'sidebar.goToLeader',
     goTo: {
       home: 'sidebar.goTo.home',
-      gettingStarted: 'sidebar.goTo.gettingStarted',
-      inbox: 'sidebar.goTo.inbox',
       recent: 'sidebar.goTo.recent',
       activity: 'sidebar.goTo.activity',
       calendar: 'sidebar.goTo.calendar',
@@ -128,8 +127,10 @@ export const TOKENS = {
       documents: 'sidebar.goTo.documents',
       markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
+      reminders: 'sidebar.goTo.reminders',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
+      reviews: 'sidebar.goTo.reviews',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },
@@ -148,6 +149,7 @@ export const TOKENS = {
     previousMessage: 'email.previousMessage',
     nextMessage: 'email.nextMessage',
     cancelReply: 'email.cancelReply',
+    trash: 'email.trash',
     blockSender: 'email.blockSender',
     markSenderSignal: 'email.markSenderSignal',
     markSenderNoise: 'email.markSenderNoise',
@@ -203,6 +205,7 @@ export const TOKENS = {
     paste: 'canvas.paste',
     zoomIn: 'canvas.zoomIn',
     zoomOut: 'canvas.zoomOut',
+    zoomFit: 'canvas.zoomFit',
     undo: 'canvas.undo',
     redo: 'canvas.redo',
     cancel: 'canvas.cancel',
@@ -232,6 +235,12 @@ export const TOKENS = {
       bent: 'canvas.line.bent',
       close: 'canvas.line.close',
     },
+  },
+
+  database: {
+    search: 'database.search',
+    undo: 'database.undo',
+    redo: 'database.redo',
   },
 
   // markdown editor
@@ -265,6 +274,7 @@ export const TOKENS = {
 
   // create menu
   create: {
+    call: 'create.call',
     note: 'create.note',
     noteNewSplit: 'create.noteNewSplit',
     email: 'create.email',
@@ -276,6 +286,12 @@ export const TOKENS = {
     chatNewSplit: 'create.chatNewSplit',
     canvas: 'create.canvas',
     canvasNewSplit: 'create.canvasNewSplit',
+    photoshop: 'create.photoshop',
+    photoshopNewSplit: 'create.photoshopNewSplit',
+    design: 'create.design',
+    designNewSplit: 'create.designNewSplit',
+    illustration: 'create.illustration',
+    illustrationNewSplit: 'create.illustrationNewSplit',
     spreadsheet: 'create.spreadsheet',
     spreadsheetNewSplit: 'create.spreadsheetNewSplit',
     project: 'create.project',
@@ -284,13 +300,18 @@ export const TOKENS = {
     codeNewSplit: 'create.codeNewSplit',
     task: 'create.task',
     taskNewSplit: 'create.taskNewSplit',
+    initiative: 'create.initiative',
     snippet: 'create.snippet',
     snippetNewSplit: 'create.snippetNewSplit',
-    automation: 'create.automation',
+    routine: 'create.routine',
     skill: 'create.skill',
     reminder: 'create.reminder',
     agent: 'create.agent',
     agentNewSplit: 'create.agentNewSplit',
+    database: 'create.database',
+    databaseNewSplit: 'create.databaseNewSplit',
+    form: 'create.form',
+    formNewSplit: 'create.formNewSplit',
     close_menu: 'create.close_menu',
   },
 

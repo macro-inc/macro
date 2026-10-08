@@ -400,6 +400,106 @@ fn a_stream_interruption_projects_to_nothing() {
     );
 }
 
+/// The stream broke, nothing came after it, and the run's outcome arrived by
+/// polling: the captured text is the front of an answer whose end was never
+/// streamed, and a restatement that does not continue it is that answer, not
+/// a rewrite. It follows as its own passage rather than being dropped.
+#[test]
+fn a_restated_answer_after_a_stream_gap_is_appended_whole() {
+    let run = CursorRunId::new("gap");
+    let mut machine = ReplayMachine::default();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                text: "Looking into".into(),
+            })),
+        )
+        .unwrap();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::StreamInterrupted {
+                reason: "error decoding response body".into(),
+                last_event_id: Some("evt-1".into()),
+                attempt: 1,
+            },
+        )
+        .unwrap();
+    let updates = machine
+        .push(
+            Some(&run),
+            &JournalInput::Poll(
+                serde_json::json!({"status": "FINISHED", "result": "The bell icon was hidden by a stale flag."})
+                    .to_string(),
+            ),
+        )
+        .unwrap();
+    let text: String = updates
+        .iter()
+        .filter_map(|update| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        text, "\n\nThe bell icon was hidden by a stale flag.",
+        "the whole answer follows the fragment as a fresh passage"
+    );
+    assert_eq!(
+        machine.runs[&run].text, "The bell icon was hidden by a stale flag.",
+        "the answer of record is the restated one"
+    );
+    assert_eq!(machine.terminal_status(&run), Some(RunStatus::Finished));
+}
+
+/// A resume that continued the stream leaves no gap: content after the
+/// interruption clears it, and a restatement that then differs is Cursor's
+/// rewrite - inline images dropped - which the streamed text still outranks.
+#[test]
+fn a_resumed_stream_has_no_gap_to_fill() {
+    let run = CursorRunId::new("resumed");
+    let mut machine = ReplayMachine::default();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                text: "captured ".into(),
+            })),
+        )
+        .unwrap();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::StreamInterrupted {
+                reason: "error decoding response body".into(),
+                last_event_id: Some("evt-1".into()),
+                attempt: 1,
+            },
+        )
+        .unwrap();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                text: "answer".into(),
+            })),
+        )
+        .unwrap();
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::Poll(
+                serde_json::json!({"status": "FINISHED", "result": "different answer"}).to_string(),
+            ),
+        )
+        .unwrap();
+    assert_eq!(machine.runs[&run].text, "captured answer");
+}
+
 /// The screenshot turn of dev session 01a0b4ed-29e1-7634-9a67-b87aa0d3efe8:
 /// Cursor streamed `<img src="hello_world_browser.png" ... />` a token at a
 /// time, the file only ever existed in its sandbox, and the same image then

@@ -5,21 +5,12 @@ import {
 } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
-import { channelThreadRootId } from '@notifications/channel-thread-root';
 import {
   nextNotificationState,
   notificationStatesForFilter,
 } from '@notifications/notification-state';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
-import {
-  bumpSoupEntityNotifiedAt,
-  hasSoupEntity,
-  optimisticUpdateSoupItemUpdatedAt,
-  refetchSoupEntity,
-  restoreSoupEntityToDoneFilteredQueries,
-  type SoupEntityTag,
-} from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { notificationServiceClient } from '@service-notification/client';
 import type { ApiUserNotification } from '@service-notification/generated/schemas/apiUserNotification';
@@ -34,7 +25,6 @@ import {
   useMutation,
 } from '@tanstack/solid-query';
 import { type Accessor, createSignal, untrack } from 'solid-js';
-import { match, P } from 'ts-pattern';
 import { z } from 'zod';
 import { queryClient } from '../client';
 import {
@@ -43,6 +33,7 @@ import {
   type UpdateNotificationsResult,
 } from './graphql/user-notifications';
 import { notificationKeys } from './keys';
+import { updateSoupForNotification } from './notification-soup';
 
 function stripOwnerId({
   owner_id: _,
@@ -922,37 +913,6 @@ export async function getNotificationById(
   return stripOwnerId(res as NotificationItem);
 }
 
-function notificationEntityTypeToSoupTag(
-  entityType: UnifiedNotification['entity_type']
-): SoupEntityTag | null {
-  return match(entityType)
-    .with('document', () => 'document' as const)
-    .with('chat', () => 'chat' as const)
-    .with('channel', () => 'channel' as const)
-    .with('project', () => 'project' as const)
-    .with('email_thread', () => 'emailThread' as const)
-    .with('foreign_entity', () => 'foreignEntity' as const)
-    .with('reminder', () => 'reminder' as const)
-    .with('calendar_event', () => 'calendarEvent' as const)
-    .with('agent_session', () => 'agentSession' as const)
-    .with(
-      P.union(
-        'user',
-        'team',
-        'call',
-        'channel_message',
-        'static_file',
-        'crm_company',
-        'crm_contact',
-        'skill',
-        'scheduled_action',
-        'initiative'
-      ),
-      () => null
-    )
-    .exhaustive();
-}
-
 /**
  * Snapshot the cached notification objects for the given ids. The returned
  * items can later be put back via `restoreUserNotifications`. Optimistic
@@ -1023,64 +983,10 @@ export function restoreUserNotifications(notifications: NotificationItem[]) {
   });
 }
 
-/** The firing a reminder notification was written for, when it records one. */
-function reminderFiringOf(notification: NotificationItem): number | undefined {
-  const metadata = notification.notification_metadata;
-  if (metadata?.tag !== 'reminder') return undefined;
-  const { scheduledFor } = metadata.content;
-  if (!scheduledFor) return undefined;
-  const at = new Date(scheduledFor).getTime();
-  return Number.isNaN(at) ? undefined : at;
-}
-
-/**
- * Whether `existing` is an earlier firing of the reminder `arriving` is for.
- *
- * A recurring reminder produces one notification per firing, all pointing at
- * the same reminder. The two surfaces deliberately differ in what they do with
- * that, and it is worth stating plainly because the code pulls both ways:
- *
- * - **Push alerts are per firing.** The APNS collapse key includes the firing,
- *   so today's lock-screen alert does not replace yesterday's unread one.
- * - **The notification list keeps one row per reminder.** A month away should
- *   not return thirty identical "standup" rows to work through; the outstanding
- *   firing is the one that matters.
- *
- * The dispatcher enforces the second server-side by retracting earlier firings
- * as the next is delivered. That delete has no realtime event, and the arriving
- * notification is merged into the cache without a refetch, so nothing here
- * would otherwise notice — this is what keeps the two sides agreeing.
- *
- * Matched on the firing rather than on the reminder alone, so a redelivery of
- * the *same* firing arriving under a fresh notification id replaces its twin
- * instead of being treated as a new occurrence, and a row from a firing later
- * than the arriving one is left alone.
- */
-function isSupersededReminder(
-  existing: NotificationItem,
-  arriving: NotificationItem
-): boolean {
-  if (arriving.entity_type !== 'reminder') return false;
-  if (existing.entity_type !== 'reminder') return false;
-  if (existing.entity_id !== arriving.entity_id) return false;
-  // Same notification, not a superseded one — that case is handled as a
-  // duplicate insert.
-  if (existing.id === arriving.id) return false;
-
-  const existingFiring = reminderFiringOf(existing);
-  const arrivingFiring = reminderFiringOf(arriving);
-  // Either side predates the firing being recorded, so there is nothing to
-  // compare: fall back to one-row-per-reminder, which is the policy anyway.
-  if (existingFiring === undefined || arrivingFiring === undefined) return true;
-
-  return existingFiring <= arrivingFiring;
-}
-
 export function optimisticInsertNotification(
   notification: UnifiedNotification
 ) {
   const item = notification as NotificationItem;
-  const soupTag = notificationEntityTypeToSoupTag(notification.entity_type);
 
   trackUnconfirmedInsert(item);
 
@@ -1093,30 +999,6 @@ export function optimisticInsertNotification(
     );
     if (exists) return data;
 
-    // Clear the firing this one replaces before inserting, so a daily reminder
-    // shows one row rather than one per day since the user last looked.
-    //
-    // Retired from `unconfirmedInserts` as well as dropped from the pages. A
-    // superseded firing that arrived over the websocket is still tracked
-    // there, and `reapplyUnconfirmedInserts` re-prepends anything it finds
-    // missing from the pages — so removing it here alone would put it back on
-    // the next query success and leave it sitting beside its replacement.
-    const superseded = data.pages.flatMap((page) =>
-      page.items.filter((n) => isSupersededReminder(n, item)).map((n) => n.id)
-    );
-    if (superseded.length > 0) {
-      retireUnconfirmedInserts(superseded);
-      const ids = new Set(superseded);
-      data = {
-        ...data,
-        pages: data.pages.map((page) =>
-          page.items.some((n) => ids.has(n.id))
-            ? { ...page, items: page.items.filter((n) => !ids.has(n.id)) }
-            : page
-        ),
-      };
-    }
-
     return {
       ...data,
       pages: data.pages.map((page, index) =>
@@ -1125,48 +1007,7 @@ export function optimisticInsertNotification(
     };
   });
 
-  if (soupTag) {
-    if (hasSoupEntity(notification.entity_id)) {
-      if (notification.created_at) {
-        optimisticUpdateSoupItemUpdatedAt(
-          notification.entity_id,
-          soupTag,
-          notification.created_at
-        );
-      }
-    } else {
-      refetchSoupEntity(notification.entity_id, soupTag);
-    }
-
-    // The inbox's notified_at order moves the notified row up right away
-    // rather than on the next refetch of the page. A mention or thread reply
-    // belongs to its channel-thread row — the row the soup feed keys it on —
-    // so that is the row stamped (and fetched in, when it is not cached yet),
-    // not the channel's.
-    const threadRootId = channelThreadRootId(notification);
-    if (notification.created_at) {
-      bumpSoupEntityNotifiedAt(
-        threadRootId ?? notification.entity_id,
-        notification.created_at
-      );
-    }
-    if (threadRootId && !hasSoupEntity(threadRootId)) {
-      refetchSoupEntity(threadRootId, 'channelThread');
-    }
-
-    // A cached row may be absent from the done-filtered feeds — dropped when
-    // it was marked done, or the feed was fetched while it had nothing
-    // outstanding. The field merges above only patch rows already present,
-    // so put the row back where it is missing; otherwise this notification
-    // stays invisible in the inbox until the next refetch. No-op for rows
-    // the refetch paths above insert.
-    if (notification.state !== 'done') {
-      restoreSoupEntityToDoneFilteredQueries(
-        threadRootId ?? notification.entity_id,
-        notification.state
-      );
-    }
-  }
+  updateSoupForNotification(notification);
 
   // Cache is already updated via setQueriesData above. Mark as stale without
   // refetching — refetchType default would re-fetch every cached page of the

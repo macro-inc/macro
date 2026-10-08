@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "macro",
+  "productName": "Macro",
   "version": "../../package.json",
   "identifier": "com.macro.app.prod",
   "build": {
@@ -22,6 +22,13 @@
         "width": 800,
         "height": 600,
         "resizable": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 20
+        },
+        "hiddenTitle": true,
         "fullscreen": false,
         "backgroundThrottling": "disabled"
       }
@@ -66,20 +73,29 @@
         },
         {
           "host": "macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "dev.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         },
         {
           "host": "staging.macro.com",
-          "pathPrefix": [
+          "path": [
             "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
           ]
         }
       ],

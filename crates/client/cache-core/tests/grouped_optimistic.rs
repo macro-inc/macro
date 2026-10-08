@@ -149,6 +149,7 @@ fn group_page_without_destination() -> Json {
 
 fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -178,6 +179,7 @@ fn patch(bin: &str, operation: LinkOperation) -> OptimisticLinkPatch {
 
 fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -206,6 +208,7 @@ fn remove_bin_patch(bin: &str) -> OptimisticLinkPatch {
 
 fn upsert_bin_patch(bin: &str) -> OptimisticLinkPatch {
     OptimisticLinkPatch {
+        record_root: None,
         query: GROUP_MEMBERSHIP_QUERY.into(),
         operation_name: Some("GroupSoupMembership".into()),
         variables_json: serde_json::to_string(&query_variables()).unwrap(),
@@ -293,6 +296,7 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000021",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -301,6 +305,7 @@ fn cache_only_read_observes_move_and_rollback_restores_it() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -377,6 +382,7 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000022",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -385,6 +391,7 @@ fn success_reapplies_recipe_and_returns_deduplicated_revalidation() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -457,6 +464,7 @@ fn missing_destination_is_created_with_the_updated_item() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    client_metadata: None,
                     uuid: "00000000-0000-4000-8000-000000000023",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
@@ -465,6 +473,7 @@ fn missing_destination_is_created_with_the_updated_item() {
                     link_patches: &patches,
                     revalidations: &[],
                     created_at_ms: 0,
+                    identity_bindings: &[],
                 },
             )
             .await
@@ -535,6 +544,7 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        client_metadata: None,
                         uuid: "00000000-0000-4000-8000-000000000024",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
@@ -543,6 +553,7 @@ fn missing_destination_rejects_the_whole_patch_set_without_enqueueing() {
                         link_patches: &patches,
                         revalidations: &[],
                         created_at_ms: 0,
+                        identity_bindings: &[],
                     },
                 )
                 .await

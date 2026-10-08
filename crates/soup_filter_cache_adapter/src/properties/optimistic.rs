@@ -21,6 +21,7 @@ fn upgrade(mut mutation: OptimisticProjectionMutation) -> OptimisticProjectionMu
 /// Prepare property-specific optimistic patches without snapshotting unrelated
 /// properties from older layers. The existing queue owns commit/rollback/replay.
 pub async fn augment_optimistic<S: PredicateIndexStorage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation: Option<&str>,
@@ -28,7 +29,7 @@ pub async fn augment_optimistic<S: PredicateIndexStorage>(
     data: &Value,
     mutations: Vec<OptimisticProjectionMutation>,
 ) -> Result<Vec<OptimisticProjectionMutation>, ProjectionError<S::Error>> {
-    let changes = prepare(storage, query, operation, variables, data, true).await?;
+    let changes = prepare(schema, storage, query, operation, variables, data, true).await?;
     let keys: Vec<_> = mutations
         .iter()
         .map(|mutation| mutation.record_key().clone())
@@ -54,7 +55,7 @@ pub async fn augment_optimistic<S: PredicateIndexStorage>(
                     .exact_facts
                     .iter()
                     .chain(&document.exact_facts)
-                    .filter(|fact| !facts::is_property_attribute(&fact.attribute))
+                    .filter(|fact| !is_extension_attribute(&fact.attribute))
                     .map(|fact| fact.attribute.clone())
                     .collect();
                 OptimisticProjectionMutation::Patch {

@@ -7,8 +7,8 @@ import type { FileOperation } from '@components/app/split-layout/components/Spli
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
 import type { ProjectEntity } from '@entity';
+import ShareIcon from '@icon/share.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import ShareIcon from '@phosphor/share.svg';
 import { For, Show } from 'solid-js';
 import type { DriveLocationBreadcrumb } from '../core/breadcrumbs';
 import type { DriveFolder } from '../core/types';

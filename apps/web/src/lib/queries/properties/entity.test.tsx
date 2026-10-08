@@ -16,8 +16,12 @@ import {
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, onEnd, pipe } from 'wonka';
-import { EntityPropertiesDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  DeleteEntityPropertyDocument,
+  EntityPropertiesDocument,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
 import { createUrqlQuery } from '../../urql-solid';
+import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 
 const useFeatureFlagMock = vi.hoisted(() => vi.fn());
 const graphqlEntityPropertyMutationMock = vi.hoisted(() => vi.fn());
@@ -29,6 +33,29 @@ const buildEntityPropertiesInputMock = vi.hoisted(() => vi.fn());
 const mapGraphqlEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const createGraphqlEntityPropertiesQueryMock = vi.hoisted(() => vi.fn());
 const graphqlQueryMock = vi.hoisted(() => vi.fn());
+const initiativePropertyQueryMock = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]) => ({ toPromise: async () => ({ data: {} }) }))
+);
+const initiativePropertyDeleteMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    toPromise: async () => ({
+      data: {
+        deleteEntityProperty: {
+          __typename: 'GraphqlCacheDeletion',
+          graphqlTypeName: 'GraphqlProperty',
+          entityId: 'assignment-1',
+        },
+      },
+    }),
+  }))
+);
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({
+    query: initiativePropertyQueryMock,
+    mutation: initiativePropertyDeleteMock,
+  }),
+}));
 const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const deleteEntityPropertyMock = vi.hoisted(() => vi.fn());
 const addEntityPropertyOptionMock = vi.hoisted(() => vi.fn());
@@ -86,6 +113,13 @@ vi.mock('../../service-clients/service-properties/client', () => ({
 }));
 
 vi.mock('./graphql/entity', () => ({
+  refetchGraphqlInitiativeProperties: async (initiativeId: string) => {
+    await initiativePropertyQueryMock(
+      EntityPropertiesDocument,
+      { input: buildGraphqlEntitySoupInput('INITIATIVE', initiativeId)! },
+      { requestPolicy: 'network-only' }
+    ).toPromise();
+  },
   createGraphqlEntityPropertiesQuery: createGraphqlEntityPropertiesQueryMock,
   createGraphqlAddEntityPropertyMutation:
     createGraphqlAddEntityPropertyMutationMock,
@@ -644,14 +678,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     vi.restoreAllMocks();
   });
 
-  it('submits GraphQL optimism while offline for the durable cache queue', async () => {
+  it('submits GraphQL optimism while offline and waits for durable settlement', async () => {
     onlineManager.setOnline(false);
-    graphqlEntityPropertyMutationMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-offline',
-    });
+    let commit!: (disposition: { kind: 'committed' }) => void;
+    graphqlEntityPropertyMutationMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          commit = resolve;
+        })
+    );
 
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+    const pending = mutation.mutateAsync(variables);
+    await vi.waitFor(() =>
+      expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce()
+    );
+    expect(mutation.isPending).toBe(true);
+    onlineManager.setOnline(true);
+    commit({ kind: 'committed' });
+    await expect(pending).resolves.toBeUndefined();
 
     expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce();
     expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledWith({
@@ -661,13 +705,24 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
   });
 
-  it('treats queued GraphQL saves as accepted submissions', async () => {
-    graphqlEntityPropertyMutationMock.mockResolvedValue({
-      kind: 'queued',
-      transactionId: 'txn-queued',
-    });
+  it('keeps GraphQL saves pending until settlement without snapshot rollback', async () => {
+    let commit!: (disposition: { kind: 'committed' }) => void;
+    graphqlEntityPropertyMutationMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          commit = resolve;
+        })
+    );
 
-    await expect(mutation.mutateAsync(variables)).resolves.toBeUndefined();
+    const pending = mutation.mutateAsync(variables);
+    await vi.waitFor(() =>
+      expect(graphqlEntityPropertyMutationMock).toHaveBeenCalledOnce()
+    );
+    expect(mutation.isPending).toBe(true);
+    expect(invalidateSoupEntityMock).not.toHaveBeenCalled();
+    expect(toastFailureMock).not.toHaveBeenCalled();
+    commit({ kind: 'committed' });
+    await expect(pending).resolves.toBeUndefined();
 
     expect(optimisticUpdateSoupEntityMock).not.toHaveBeenCalled();
     expect(rollbackMock).not.toHaveBeenCalled();
@@ -742,6 +797,29 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     });
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('removes a native project property through GraphQL even when the Soup flag is off', async () => {
+    graphqlSoupEnabledMock.mockReturnValue(false);
+    await deleteMutation.mutateAsync({
+      entityPropertyId: 'assignment-1',
+      entityType: 'INITIATIVE',
+      entityId: 'initiative-1',
+    });
+    expect(deleteEntityPropertyMock).not.toHaveBeenCalled();
+    expect(initiativePropertyDeleteMock).toHaveBeenCalledWith(
+      DeleteEntityPropertyDocument,
+      {
+        entityPropertyId: 'assignment-1',
+        entityType: 'INITIATIVE',
+        entityId: 'initiative-1',
+      }
+    );
+    expect(initiativePropertyQueryMock).toHaveBeenCalledWith(
+      EntityPropertiesDocument,
+      { input: buildGraphqlEntitySoupInput('INITIATIVE', 'initiative-1')! },
+      { requestPolicy: 'network-only' }
+    );
   });
 
   it('invalidates REST projections after delete and option writes', async () => {

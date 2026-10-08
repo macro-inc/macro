@@ -23,8 +23,9 @@
  * Mutations:
  * - With an optimistic response (see `executeOptimisticMutation`): the
  *   mutation and layer are durably queued before the ordered runner forwards
- *   it. Retryable failures retain optimism for background replay; permanent
- *   failures roll back. A caller whose operation is blocked behind the queue
+ *   it. Retryable failures retain optimism for background replay, but the tenth
+ *   server failure permanently rolls back; transport failures are not counted.
+ *   Other permanent failures roll back immediately. A caller blocked behind the queue
  *   head receives a synthetic `queued` disposition instead of waiting.
  * - Without one: forwarded normally; successful responses are normalized
  *   through the standard write path so dependent cached queries update.
@@ -35,7 +36,9 @@
  */
 
 import {
+  type Client,
   CombinedError,
+  createRequest,
   type Exchange,
   makeOperation,
   type Operation,
@@ -71,6 +74,7 @@ import {
   isAdmittedEnqueueUncertainError,
   isCacheRevision,
   isOwnerEpochLostError,
+  isOwnerLockUnavailableError,
   type QueryRevalidationWire,
 } from '../protocol';
 import { createDeferredQueryRereads } from './deferred-query-rereads';
@@ -78,8 +82,10 @@ import {
   compileEntityResolvers,
   type EntityResolverConfig,
 } from './entity-resolvers';
+import type { QueryRevalidation } from './optimistic';
 import {
   normalizedEntityKey,
+  notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
@@ -103,6 +109,25 @@ const HYDRATION_DOCUMENT_CONTEXT_KEY = 'normalizedCacheHydrationDocument';
 const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+const MAX_MUTATION_SERVER_FAILURES = 10;
+const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
+
+async function boundedMutationLifecycle<T>(work: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('Mutation recovery timed out')),
+          MUTATION_LIFECYCLE_TIMEOUT_MS
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 
@@ -110,6 +135,8 @@ const NORMALIZED_CACHE_RESULT_METADATA_KEY = '__macroNormalizedCache';
 export type NormalizedCacheResultMetadata =
   | {
       source: 'live-network';
+      /** Subscription effects finished successfully in this cache generation. */
+      cacheEffectsApplied?: boolean;
       revision?: CacheRevision;
       /** Local-only acknowledgement; never rejects or republishes response data. */
       persistence?: Promise<CacheRevision | undefined>;
@@ -128,17 +155,31 @@ export function normalizedCacheResultMetadata(
     return { source };
   }
   if (source !== 'live-network') return;
-  const { revision, persistence } = metadata as {
+  const { revision, persistence, cacheEffectsApplied } = metadata as {
+    cacheEffectsApplied?: unknown;
     revision?: unknown;
     persistence?: unknown;
   };
   return {
     source,
+    ...(typeof cacheEffectsApplied === 'boolean'
+      ? { cacheEffectsApplied }
+      : {}),
     ...(isCacheRevision(revision) ? { revision } : {}),
-    ...(persistence instanceof Promise
+    ...(isThenable(persistence)
       ? { persistence: persistence as Promise<CacheRevision | undefined> }
       : {}),
   };
+}
+
+// zone.js replaces the global Promise, so a native async function's promise
+// fails `instanceof Promise` in the app.
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function withResultMetadata(
@@ -155,10 +196,14 @@ function withResultMetadata(
 }
 
 type QueueAttemptContext = {
+  mutation?: ClaimedMutation;
   transactionId: string;
   leaseOwner: string;
   leaseGeneration: string;
   attemptCount: number;
+  serverFailureCount: number;
+  /** Transport-only metadata; urql drops the response on error-free payloads. */
+  response?: Response;
 };
 
 function queueAttemptOf(op: Operation): QueueAttemptContext | undefined {
@@ -263,19 +308,22 @@ function retryDelayMs(attemptCount: number): number {
   return Math.min(1_000 * 2 ** Math.max(0, attemptCount - 1), 60_000);
 }
 
-/** Applies a hard network bound well inside the durable queue lease. */
+/** Bounds network time inside the lease and retains HTTP status for settlement. */
 function withQueueRequestTimeout(op: Operation): Operation {
   const operationFetch = op.context.fetch ?? globalThis.fetch;
+  const attempt = queueAttemptOf(op);
   return makeOperation(op.kind, op, {
     ...op.context,
-    fetch: (input, init) => {
+    fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
-      return operationFetch(input, {
+      const response = await operationFetch(input, {
         ...init,
         signal: init?.signal
           ? AbortSignal.any([init.signal, timeoutSignal])
           : timeoutSignal,
       });
+      if (attempt) attempt.response = response;
+      return response;
     },
   });
 }
@@ -417,7 +465,31 @@ function queuedMutationResult(
   );
 }
 
+/** Only an authoritative GraphQL rejection carries a domain failure code. */
+function mutationErrorCode(
+  error: CombinedError | undefined
+): string | undefined {
+  if (error?.networkError) return;
+  const code = error?.graphQLErrors[0]?.extensions.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 export interface NormalizedCacheExchangeOptions {
+  /** Best-effort startup recovery before per-mutation admission. */
+  prepareMutationQueue?: () => Promise<void>;
+  /** False discards obsolete client intent without sending it to the server. */
+  beforeMutationAttempt?: (mutation: ClaimedMutation) => Promise<boolean>;
+  /** Persist domain recovery state for a replayed result, including when its UI is closed. */
+  onMutationAttemptResult?: (
+    mutation: ClaimedMutation,
+    result: OperationResult,
+    retry: boolean
+  ) => Promise<void>;
+  /** Domain-specific deletions inferred from a successful server response. */
+  deletedRecordKeys?: (result: OperationResult) => string[];
+  /** Return true to transfer a committed query refresh to an active reader's queue.
+   * Persisted descriptors without an owner retain the normal network fallback. */
+  delegateRevalidation?: (client: Client, query: QueryRevalidation) => boolean;
   /** Schema-typed singular entity relations derived from field arguments. */
   entityResolvers?: EntityResolverConfig;
   /** Called when cache work fails; the operation may degrade or emit uncertainty. */
@@ -766,18 +838,33 @@ export function normalizedCacheExchange(
           resolveRoute: (result: OperationResult | undefined) => void;
         }
       >();
-      const subscriptionEffectChains = new Map<number, Promise<void>>();
+      const subscriptionEffectChains = new Map<number, Promise<boolean>>();
+      // Teardown invalidates queued effects, including when the same operation
+      // is immediately resubscribed after a back/forward-cache restore.
+      const subscriptionGenerations = new Map<number, object>();
       let attemptInFlight = false;
+      let queuePreparation: Promise<void> | undefined;
       let drainRunning = false;
+      let drainRequested = false;
       let deferredUntil: number | undefined;
       let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
       function scheduleDrain(delayMs = 0): void {
         if (drainTimer !== undefined) clearTimeout(drainTimer);
-        drainTimer = setTimeout(() => {
-          drainTimer = undefined;
-          void drainQueue();
-        }, delayMs);
+        drainTimer = setTimeout(
+          () => {
+            drainTimer = undefined;
+            void drainQueue();
+          },
+          drainRequested ? 0 : delayMs
+        );
+      }
+
+      function wakeDrain(): void {
+        // Keep the wakeup until the runner can claim again. An interrupted
+        // claim/settlement may still be unwinding and scheduling its backoff.
+        drainRequested = true;
+        scheduleDrain();
       }
 
       function resolveLiveOperationsAsQueued(): void {
@@ -793,8 +880,95 @@ export function normalizedCacheExchange(
       async function routeClaimedMutation(
         claimed: ClaimedMutation
       ): Promise<void> {
+        attemptInFlight = true;
+        try {
+          if (options.prepareMutationQueue) await prepareQueueRecovery();
+          if (
+            options.beforeMutationAttempt &&
+            !(await boundedMutationLifecycle(() =>
+              options.beforeMutationAttempt!(claimed)
+            ))
+          ) {
+            await host.rollbackOptimisticWrite(
+              claimed.transactionId,
+              { owner: queueOwner, generation: claimed.leaseGeneration },
+              'Obsolete local intent',
+              'LOCAL_SUPERSEDED'
+            );
+            attemptInFlight = false;
+            resolveLiveOperationsAsQueued();
+            scheduleDrain();
+            return;
+          }
+        } catch {
+          queuePreparation = undefined;
+          try {
+            const live = liveQueuedOps.get(claimed.transactionId);
+            const operation =
+              live?.operation ??
+              makeOperation(
+                'mutation',
+                createRequest(
+                  replayDocument(claimed.query, claimed.operationName),
+                  claimed.variables
+                ),
+                { url: '', requestPolicy: 'network-only' }
+              );
+            const failure = new CombinedError({
+              graphQLErrors: [
+                {
+                  message: 'Unable to prepare the saved mutation for replay',
+                  extensions: { code: 'LOCAL_RECOVERY_FAILED' },
+                },
+              ],
+            });
+            const result: OperationResult = {
+              operation,
+              data: undefined,
+              error: failure,
+              stale: false,
+              hasNext: false,
+            };
+            await recordAttemptResult(
+              {
+                mutation: claimed,
+                transactionId: claimed.transactionId,
+                leaseOwner: queueOwner,
+                leaseGeneration: claimed.leaseGeneration,
+                attemptCount: claimed.attemptCount,
+                serverFailureCount: claimed.serverFailureCount ?? 0,
+              },
+              result,
+              false
+            );
+            await host.rollbackOptimisticWrite(
+              claimed.transactionId,
+              { owner: queueOwner, generation: claimed.leaseGeneration },
+              failure.message,
+              'LOCAL_RECOVERY_FAILED'
+            );
+            liveQueuedOps.delete(claimed.transactionId);
+            live?.resolveRoute(
+              withOptimisticMutationDisposition(result, {
+                kind: 'permanently-failed',
+                transactionId: claimed.transactionId,
+              })
+            );
+            deferredUntil = undefined;
+          } finally {
+            attemptInFlight = false;
+            resolveLiveOperationsAsQueued();
+            scheduleDrain();
+          }
+          return;
+        }
         deferredUntil = undefined;
-        if (claimed.superseded) {
+        // A superseded create can already exist on the server. Replay it to
+        // recover its identity before sending the newer edit or discard.
+        // Older hosts omit this flag: conservatively replay rather than loop
+        // forever asking the engine to discard a write it must retain.
+        if (claimed.superseded && claimed.requiresConfirmation === false) {
+          attemptInFlight = false;
           const discarded = await host.deferOptimisticWrite(
             claimed.transactionId,
             { owner: queueOwner, generation: claimed.leaseGeneration },
@@ -817,10 +991,12 @@ export function normalizedCacheExchange(
         }
         attemptInFlight = true;
         const attempt: QueueAttemptContext = {
+          mutation: claimed,
           transactionId: claimed.transactionId,
           leaseOwner: queueOwner,
           leaseGeneration: claimed.leaseGeneration,
           attemptCount: claimed.attemptCount,
+          serverFailureCount: claimed.serverFailureCount ?? 0,
         };
         const live = liveQueuedOps.get(claimed.transactionId);
         if (live) {
@@ -835,6 +1011,7 @@ export function normalizedCacheExchange(
             )
           );
         } else {
+          let replayOperation: Operation | undefined;
           try {
             const replay = client.mutation(
               replayDocument(claimed.query, claimed.operationName),
@@ -845,6 +1022,7 @@ export function normalizedCacheExchange(
               }
             );
             await replay.toPromise().then((result) => {
+              replayOperation = result.operation;
               // Normal exchange results settle the attempt in writeThrough
               // before resolving. Reject only an otherwise-unhandled error.
               if (result.error && attemptInFlight) {
@@ -853,14 +1031,23 @@ export function normalizedCacheExchange(
             });
           } catch (error) {
             try {
-              await host.rollbackOptimisticWrite(
+              const rolledBack = await host.rollbackOptimisticWrite(
                 claimed.transactionId,
                 {
                   owner: queueOwner,
                   generation: claimed.leaseGeneration,
                 },
-                error instanceof Error ? error.message : String(error)
+                error instanceof Error ? error.message : String(error),
+                error instanceof CombinedError
+                  ? mutationErrorCode(error)
+                  : undefined
               );
+              if (rolledBack.kind === 'rolled-back') {
+                revalidateAfterSettlement(
+                  rolledBack.revalidations ?? [],
+                  replayOperation
+                );
+              }
             } finally {
               attemptInFlight = false;
               scheduleDrain();
@@ -880,8 +1067,16 @@ export function normalizedCacheExchange(
         }
         if (drainRunning) return;
         drainRunning = true;
+        drainRequested = false;
         try {
+          if (options.prepareMutationQueue) await prepareQueueRecovery();
           const now = Date.now();
+          // A wakeup probes immediately, but must retain a future retry
+          // deadline if the durable head is not eligible yet. Consume expired
+          // hints so a head leased by another runner cannot cause a busy loop.
+          if (deferredUntil !== undefined && deferredUntil <= now) {
+            deferredUntil = undefined;
+          }
           const claimed = await host.claimNextMutation(
             queueOwner,
             now,
@@ -889,10 +1084,15 @@ export function normalizedCacheExchange(
           );
           if (!claimed) {
             resolveLiveOperationsAsQueued();
+            // Short retries keep their deadline; uncertain five-minute lease
+            // backoffs must not prevent regular polling after a wakeup.
             scheduleDrain(
               deferredUntil === undefined
                 ? EMPTY_QUEUE_POLL_MS
-                : Math.max(0, deferredUntil - Date.now())
+                : Math.min(
+                    EMPTY_QUEUE_POLL_MS,
+                    Math.max(0, deferredUntil - Date.now())
+                  )
             );
             return;
           }
@@ -905,13 +1105,57 @@ export function normalizedCacheExchange(
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         } finally {
           drainRunning = false;
+          if (drainRequested) scheduleDrain();
         }
       }
 
-      function revalidateAfterCommit(
+      async function prepareQueueRecovery(): Promise<void> {
+        try {
+          queuePreparation ??= boundedMutationLifecycle(() =>
+            options.prepareMutationQueue!()
+          );
+          await queuePreparation;
+        } catch (error) {
+          queuePreparation = undefined;
+          console.warn(
+            '[graphql-cache] Unable to prepare mutation recovery',
+            error
+          );
+        }
+      }
+
+      async function recordAttemptResult(
+        attempt: QueueAttemptContext,
+        result: OperationResult,
+        retry: boolean
+      ): Promise<void> {
+        if (!attempt.mutation || !options.onMutationAttemptResult) return;
+        try {
+          await boundedMutationLifecycle(() =>
+            options.onMutationAttemptResult!(attempt.mutation!, result, retry)
+          );
+        } catch (error) {
+          try {
+            options.onCacheError?.(error, result.operation);
+          } catch {
+            /* Diagnostics cannot retain a failed queue head. */
+          }
+        }
+      }
+
+      function revalidateAfterSettlement(
         revalidations: QueryRevalidationWire[],
-        mutation: Operation
+        mutation?: Operation
       ): void {
+        const reportError = (error: unknown, operation = mutation) => {
+          // Diagnostics cannot turn a durably settled attempt back into a retry.
+          if (!operation) return;
+          try {
+            options.onCacheError?.(error, operation);
+          } catch {
+            // The settlement is already final.
+          }
+        };
         for (const revalidation of revalidations) {
           try {
             const variables: unknown = JSON.parse(revalidation.variablesJson);
@@ -922,19 +1166,29 @@ export function normalizedCacheExchange(
             ) {
               throw new Error('cache revalidation variables are not an object');
             }
+            const document = replayDocument(
+              revalidation.query,
+              revalidation.operationName
+            );
+            if (
+              options.delegateRevalidation?.(client, {
+                document,
+                variables: variables as Record<string, unknown>,
+              })
+            )
+              continue;
             void client
-              .query(
-                replayDocument(revalidation.query, revalidation.operationName),
-                variables as Record<string, unknown>,
-                { requestPolicy: 'network-only' }
-              )
+              .query(document, variables as Record<string, unknown>, {
+                requestPolicy: 'network-only',
+              })
               .toPromise()
               .then((result) => {
-                if (result.error) throw result.error;
+                if (result.error)
+                  reportError(result.error, mutation ?? result.operation);
               })
-              .catch((error) => options.onCacheError?.(error, mutation));
+              .catch(reportError);
           } catch (error) {
-            options.onCacheError?.(error, mutation);
+            reportError(error);
           }
         }
       }
@@ -1014,6 +1268,7 @@ export function normalizedCacheExchange(
         op: Operation
       ): Promise<OperationResult | undefined> {
         if (host.disabled) {
+          notifyOptimisticMutationEnqueued(op);
           enqueueForward(op);
           return undefined;
         }
@@ -1035,6 +1290,9 @@ export function normalizedCacheExchange(
           data: optimistic.optimisticResponse,
           linkPatches: optimistic.linkPatches,
           revalidations: optimistic.revalidations,
+          identityBindings: optimistic.identityBindings,
+          clientMetadata: optimistic.clientMetadata,
+          uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
         const now = Date.now();
         const claim = {
@@ -1051,6 +1309,12 @@ export function normalizedCacheExchange(
             // The old-scope queue may already contain the side effect. It is
             // unsafe to forward or retry without a coordinator fence.
             return uncertainEnqueueResult(op, error);
+          }
+          // Another context holds the database, so the enqueue never reached
+          // an engine. Send it as a disabled cache would.
+          if (isOwnerLockUnavailableError(error)) {
+            enqueueForward(op);
+            return undefined;
           }
           // A cached bin/page may disappear between inspect and enqueue. Do
           // not expose a partial relation move: retain entity optimism and
@@ -1079,11 +1343,15 @@ export function normalizedCacheExchange(
                 linkPatches: [],
                 revalidations: [
                   ...args.revalidations,
-                  ...args.linkPatches.map((patch) => ({
-                    query: patch.query,
-                    operationName: patch.operationName,
-                    variablesJson: patch.variablesJson,
-                  })),
+                  // Fragment recipes are not executable queries. Their callers
+                  // provide targeted recovery queries in args.revalidations.
+                  ...args.linkPatches
+                    .filter((patch) => !patch.recordRoot)
+                    .map((patch) => ({
+                      query: patch.query,
+                      operationName: patch.operationName,
+                      variablesJson: patch.variablesJson,
+                    })),
                 ],
               },
               claim
@@ -1117,6 +1385,7 @@ export function normalizedCacheExchange(
             resolveRoute: resolve,
           });
         });
+        notifyOptimisticMutationEnqueued(op);
         try {
           await match(enqueue.initialClaim)
             .with({ kind: 'claimed' }, ({ mutation }) =>
@@ -1145,9 +1414,12 @@ export function normalizedCacheExchange(
       /** Applies operation cache effects serially and isolates every failure. */
       async function applyOperationCacheEffects(
         op: Operation,
-        effects: CacheEffect[]
-      ): Promise<void> {
+        effects: CacheEffect[],
+        isCurrent: () => boolean = () => true
+      ): Promise<boolean> {
+        let applied = true;
         for (const effect of effects) {
+          if (!isCurrent()) return false;
           try {
             if (effect.kind === 'write') {
               await host.writeQuery({
@@ -1160,11 +1432,13 @@ export function normalizedCacheExchange(
               await host.deleteRecords([effect.key]);
             }
           } catch (error) {
+            applied = false;
             // One failed cache effect must neither skip later effects nor
             // prevent delivery of the original operation result.
             options.onCacheError?.(error, op);
           }
         }
+        return applied && isCurrent();
       }
 
       // Persistence is still ordered/durable, but foreground query consumers do
@@ -1187,7 +1461,8 @@ export function normalizedCacheExchange(
         };
         try {
           await invalidateOlderRetainedFallback(state, resultVersion);
-          if (result.data == null) return undefined;
+          // Resolver failures must not persist partial nulls as authoritative absence.
+          if (result.data == null || result.error) return undefined;
           const isActive = () =>
             queryStates.get(op.key) === state && activeOps.has(op.key);
           const writeArgs = {
@@ -1215,11 +1490,12 @@ export function normalizedCacheExchange(
           }
           try {
             const write = await host.writeQuery(writeArgs);
+            const deletion = await deleteReportedRecords(result);
             state.networkRegistrationSatisfied = writeArgs.registerDependencies;
             if (state.retainedReplacementFallback === retained) {
               state.retainedReplacementFallback = undefined;
             }
-            return write.revision;
+            return deletion?.revision ?? write.revision;
           } catch (error) {
             reportError(error);
             // An old-owner failure can arrive after this write started. Retain
@@ -1253,6 +1529,17 @@ export function normalizedCacheExchange(
         }
       }
 
+      async function deleteReportedRecords(result: OperationResult) {
+        const op = result.operation;
+        if (result.error || result.hasNext || result.data == null) return;
+        try {
+          const keys = options.deletedRecordKeys?.(result) ?? [];
+          if (keys.length) return await host.deleteRecords(keys);
+        } catch (error) {
+          options.onCacheError?.(error, op);
+        }
+      }
+
       async function writeThrough(
         result: OperationResult
       ): Promise<OperationResult> {
@@ -1267,19 +1554,31 @@ export function normalizedCacheExchange(
           // overtake a later delete. Subscribers still receive each original
           // result after its effects settle.
           const previousEffects =
-            subscriptionEffectChains.get(op.key) ?? Promise.resolve();
+            subscriptionEffectChains.get(op.key) ?? Promise.resolve(true);
+          const generation = subscriptionGenerations.get(op.key);
           const effects = previousEffects.then(() =>
-            applyOperationCacheEffects(op, operationCacheEffects(result.data))
+            applyOperationCacheEffects(
+              op,
+              operationCacheEffects(result.data),
+              () =>
+                generation !== undefined &&
+                subscriptionGenerations.get(op.key) === generation
+            )
           );
           subscriptionEffectChains.set(op.key, effects);
           try {
-            await effects;
+            const cacheEffectsApplied = await effects;
+            return withResultMetadata(result, {
+              source: 'live-network',
+              cacheEffectsApplied,
+            });
           } finally {
             if (subscriptionEffectChains.get(op.key) === effects) {
               subscriptionEffectChains.delete(op.key);
             }
           }
         } else if (op.kind === 'query' && isHydrateOnly(op)) {
+          if (result.error) return { ...result, data: undefined };
           if (result.data == null) return result;
           try {
             const hydration = await host.hydrateQuery({
@@ -1290,12 +1589,16 @@ export function normalizedCacheExchange(
               identity: options.extractIdentity?.(result.data),
               entityResolvers,
             });
+            const deletion = await deleteReportedRecords(result);
             return withResultMetadata(
               {
                 ...result,
                 data: hydration.kind === 'data' ? hydration.data : undefined,
               },
-              { source: 'live-network', revision: hydration.revision }
+              {
+                source: 'live-network',
+                revision: deletion?.revision ?? hydration.revision,
+              }
             );
           } catch (error) {
             options.onCacheError?.(error, op);
@@ -1320,7 +1623,7 @@ export function normalizedCacheExchange(
           state.networkError = result.error;
           // Publication, not persistence, supersedes an older cache snapshot.
           // A failed network request still permits a slower offline cache hit.
-          if (result.data != null) state.cacheReadVersion += 1;
+          if (result.data != null && !result.error) state.cacheReadVersion += 1;
           const persistence = persistQueryResult(result, state, version);
           return withResultMetadata(result, {
             source: 'live-network',
@@ -1341,6 +1644,20 @@ export function normalizedCacheExchange(
               | 'superseded'
               | 'permanently-failed' = 'queued';
             try {
+              const response = result.error?.response ?? attempt.response;
+              const httpServerFailure = (response?.status ?? 0) >= 500;
+              // A valid GraphQL payload can arrive over HTTP 5xx without an
+              // urql error. Never commit it or bypass the retry policy.
+              if (httpServerFailure && !result.error) {
+                result = {
+                  ...result,
+                  data: undefined,
+                  error: new CombinedError({
+                    networkError: new Error(`HTTP ${response.status}`),
+                    response,
+                  }),
+                };
+              }
               if (result.error || result.data == null) {
                 let retry = false;
                 if (result.error && options.shouldRetryMutation) {
@@ -1350,13 +1667,39 @@ export function normalizedCacheExchange(
                     options.onCacheError?.(error, op);
                   }
                 }
+                // urql represents HTTP 5xx as networkError too. Count actual
+                // server responses, never connection failures or timeouts.
+                const serverFailure =
+                  httpServerFailure ||
+                  (result.error?.graphQLErrors.length ?? 0) > 0;
+                if (
+                  retry &&
+                  serverFailure &&
+                  attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES
+                ) {
+                  retry = false;
+                  result = {
+                    ...result,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: `Mutation stopped after ${MAX_MUTATION_SERVER_FAILURES} server failures: ${result.error?.message}`,
+                          extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
+                        },
+                      ],
+                      response: result.error?.response,
+                    }),
+                  };
+                }
+                await recordAttemptResult(attempt, result, retry);
                 if (retry) {
                   retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
                   const deferred = await host.deferOptimisticWrite(
                     attempt.transactionId,
                     claim,
                     retryAt,
-                    result.error?.message ?? 'mutation returned no data'
+                    result.error?.message ?? 'mutation returned no data',
+                    serverFailure
                   );
                   if (deferred.kind === 'discarded-superseded') {
                     retryAt = undefined;
@@ -1370,7 +1713,8 @@ export function normalizedCacheExchange(
                   const rolledBack = await host.rollbackOptimisticWrite(
                     attempt.transactionId,
                     claim,
-                    result.error?.message ?? 'mutation returned no data'
+                    result.error?.message ?? 'mutation returned no data',
+                    mutationErrorCode(result.error)
                   );
                   if (rolledBack.kind === 'discarded-superseded') {
                     replacementTransactionId =
@@ -1378,9 +1722,14 @@ export function normalizedCacheExchange(
                     disposition = 'superseded';
                   } else {
                     disposition = 'permanently-failed';
+                    revalidateAfterSettlement(
+                      rolledBack.revalidations ?? [],
+                      op
+                    );
                   }
                 }
               } else {
+                await recordAttemptResult(attempt, result, false);
                 const committed = await host.commitOptimisticWrite(
                   attempt.transactionId,
                   claim,
@@ -1393,10 +1742,41 @@ export function normalizedCacheExchange(
                     data: result.data,
                   }
                 );
-                if (committed.kind === 'committed-superseded') {
+                for (const error of committed.identityErrors ?? []) {
+                  try {
+                    options.onCacheError?.(new Error(error), op);
+                  } catch {
+                    // A diagnostic callback cannot undo confirmed settlement.
+                  }
+                }
+                if (committed.kind === 'failed') {
+                  const error = new Error(committed.error);
+                  try {
+                    options.onCacheError?.(error, op);
+                  } catch {
+                    // A diagnostic callback cannot undo confirmed settlement.
+                  }
+                  result = {
+                    ...result,
+                    data: undefined,
+                    error: new CombinedError({ networkError: error }),
+                  };
+                  replacementTransactionId = committed.replacementTransactionId;
+                  disposition = replacementTransactionId
+                    ? 'superseded'
+                    : 'permanently-failed';
+                  if (!replacementTransactionId) {
+                    revalidateAfterSettlement(
+                      committed.revalidations ?? [],
+                      op
+                    );
+                  }
+                } else if (committed.kind === 'committed-superseded') {
+                  await deleteReportedRecords(result);
                   replacementTransactionId = committed.replacementTransactionId;
                   disposition = 'superseded';
                 } else {
+                  await deleteReportedRecords(result);
                   const effects = operationCacheEffects(result.data);
                   if (effects.some((effect) => effect.kind === 'delete')) {
                     // Commit already normalized the complete result. Replay only
@@ -1404,7 +1784,7 @@ export function normalizedCacheExchange(
                     // identical to a non-optimistic operation.
                     await applyOperationCacheEffects(op, effects);
                   }
-                  revalidateAfterCommit(committed.revalidations ?? [], op);
+                  revalidateAfterSettlement(committed.revalidations ?? [], op);
                   disposition = 'committed';
                 }
               }
@@ -1445,6 +1825,7 @@ export function normalizedCacheExchange(
               op,
               operationCacheEffects(result.data)
             );
+            await deleteReportedRecords(result);
           }
           if (optimistic) {
             return withOptimisticMutationDisposition(result, {
@@ -1492,7 +1873,11 @@ export function normalizedCacheExchange(
         shared,
         filter((op) => op.kind !== 'query' && op.kind !== 'mutation'),
         tap((op) => {
+          if (op.kind === 'subscription') {
+            subscriptionGenerations.set(op.key, {});
+          }
           if (op.kind === 'teardown') {
+            subscriptionGenerations.delete(op.key);
             activeOps.delete(op.key);
             queryStates.delete(op.key);
             affectedRereads.forget(op.key);
@@ -1509,8 +1894,12 @@ export function normalizedCacheExchange(
 
       if (!host.disabled) {
         scheduleDrain();
+        // Includes BFCache restoration, even with no active query keys. The
+        // host gates claims on initialization; durable leases still decide
+        // which head is runnable after reconnecting.
+        host.onCacheGenerationChanged(wakeDrain);
         if (typeof addEventListener === 'function') {
-          addEventListener('online', () => scheduleDrain());
+          addEventListener('online', wakeDrain);
         }
       }
       void unsubscribePush;

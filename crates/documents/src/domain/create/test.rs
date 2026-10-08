@@ -1,11 +1,16 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use activity::Attribution;
+use bot_id::{BotId, NonSystemBotId};
 use macro_user_id::user_id::MacroUserIdStr;
+use model::document::FileType;
+use model_owner::CreationPrincipal;
 
-use super::{DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument};
+use super::{
+    DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
+    NewPlainTextDocument, RepoDocumentKind, RepoDocumentSubtype, file_shas,
+};
 use crate::domain::content::DocumentContent;
-use crate::domain::models::{CreateDocumentRepoArgs, CreateTaskRequest, DocumentError};
+use crate::domain::models::{CreateTaskRequest, DocumentError, InitialLinkShare, NewDocument};
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
@@ -15,7 +20,6 @@ use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
 };
 use model::document::response::DocumentResponseMetadata;
-use model_owner::Owner;
 
 const DOCUMENT_ID: &str = "created-task";
 const EMAIL_SEED: &str = r#"<m-document-mention>{"documentId":"thread-7","blockName":"email","documentName":"Re: invoice"}</m-document-mention>"#;
@@ -24,27 +28,41 @@ fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap()
 }
 
+fn team_bot() -> CreationPrincipal {
+    CreationPrincipal::TeamBot {
+        bot: NonSystemBotId::new(BotId::TEST_A).unwrap(),
+        team: uuid::Uuid::from_u128(7),
+    }
+}
+
 #[derive(Default)]
 struct FakeCreationService {
-    calls: Mutex<Vec<CreateDocumentRepoArgs>>,
+    calls: Mutex<Vec<(CreationPrincipal, NewDocument)>>,
+    task_principals: Mutex<Vec<CreationPrincipal>>,
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail_content_update: bool,
 }
 
 impl DocumentCreationService for FakeCreationService {
     async fn create_document(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        args: CreateDocumentRepoArgs,
+        principal: &CreationPrincipal,
+        document: NewDocument,
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
-        let file_type = args.file_type.map(|kind| kind.to_string());
-        self.calls.lock().unwrap().push(args);
+        let file_type = document.file_type.map(|kind| kind.to_string());
+        self.lifecycle.lock().unwrap().push("create");
+        self.calls
+            .lock()
+            .unwrap()
+            .push((principal.clone(), document));
         Ok(CreateDocumentResponseData {
             document_response: DocumentResponse {
                 document_metadata: DocumentResponseMetadataWithContent::new(
                     DocumentResponseMetadata {
                         document_id: DOCUMENT_ID.to_string(),
                         document_version_id: 1,
-                        owner: Owner::User(user_id),
+                        owner: principal.owner(),
                         document_name: "task".to_string(),
                         file_type: file_type.clone(),
                         sha: None,
@@ -68,11 +86,12 @@ impl DocumentCreationService for FakeCreationService {
 
     async fn handle_task_properties(
         &self,
-        _user_id: MacroUserIdStr<'static>,
+        principal: &CreationPrincipal,
         _document_id: &str,
         _request: &CreateTaskRequest,
-        _attribution: &Attribution,
     ) -> Result<(), DocumentError> {
+        self.task_principals.lock().unwrap().push(principal.clone());
+        self.lifecycle.lock().unwrap().push("properties");
         Ok(())
     }
 
@@ -85,11 +104,17 @@ impl DocumentCreationService for FakeCreationService {
         _document_id: &str,
         _content: DocumentContent,
     ) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("content_ready");
+        if self.fail_content_update {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "content update failed"
+            )));
+        }
         Ok(())
     }
 
     async fn cleanup_created_document(&self, _document_id: &str) {
-        panic!("unexpected cleanup_created_document call")
+        self.lifecycle.lock().unwrap().push("cleanup");
     }
 }
 
@@ -101,6 +126,27 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
         _document_id: &str,
         _markdown: &str,
     ) -> Result<Vec<u8>, DocumentError> {
+        Ok(vec![1, 2, 3])
+    }
+}
+
+struct RecordingMarkdownInitializer {
+    lifecycle: Arc<Mutex<Vec<&'static str>>>,
+    fail: bool,
+}
+
+impl MarkdownInitializationPort for RecordingMarkdownInitializer {
+    async fn initialize_existing_markdown(
+        &self,
+        _document_id: &str,
+        _markdown: &str,
+    ) -> Result<Vec<u8>, DocumentError> {
+        self.lifecycle.lock().unwrap().push("initialize");
+        if self.fail {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "initialization failed"
+            )));
+        }
         Ok(vec![1, 2, 3])
     }
 }
@@ -118,7 +164,7 @@ impl DocumentBytesUploadPort for FakeBytesUploader {
 
 #[derive(Default)]
 struct RecordingMentionTracker {
-    calls: Mutex<Vec<(String, String, String)>>,
+    calls: Mutex<Vec<(String, Option<String>, String)>>,
     fail: bool,
 }
 
@@ -130,7 +176,7 @@ impl RecordingMentionTracker {
         }
     }
 
-    fn calls(&self) -> Vec<(String, String, String)> {
+    fn calls(&self) -> Vec<(String, Option<String>, String)> {
         self.calls.lock().unwrap().clone()
     }
 }
@@ -139,12 +185,12 @@ impl DocumentMentionTrackingPort for &RecordingMentionTracker {
     async fn track_document_mentions(
         &self,
         document_id: &str,
-        user_id: &MacroUserIdStr<'static>,
+        user_id: Option<&MacroUserIdStr<'static>>,
         markdown: &str,
     ) -> anyhow::Result<()> {
         self.calls.lock().unwrap().push((
             document_id.to_string(),
-            user_id.as_ref().to_string(),
+            user_id.map(|user| user.as_ref().to_string()),
             markdown.to_string(),
         ));
         if self.fail {
@@ -167,17 +213,104 @@ fn task_document(markdown: &str) -> NewMarkdownTextDocument {
 }
 
 #[tokio::test]
-async fn markdown_creation_tracks_the_seeded_mentions_once() {
+async fn task_assignments_are_applied_only_after_content_is_readable() {
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
     let tracker = RecordingMentionTracker::default();
     let creator = DocumentCreator::new(
-        FakeCreationService::default(),
-        FakeMarkdownInitializer,
+        FakeCreationService {
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        RecordingMarkdownInitializer {
+            lifecycle: lifecycle.clone(),
+            fail: false,
+        },
         FakeBytesUploader,
         &tracker,
     );
 
     creator
-        .create_markdown_text(owner(), task_document(EMAIL_SEED))
+        .create_markdown_text(
+            &CreationPrincipal::User(owner()),
+            task_document("Do the assigned work"),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        *lifecycle.lock().unwrap(),
+        ["create", "initialize", "content_ready", "properties"]
+    );
+}
+
+#[tokio::test]
+async fn failed_task_content_never_applies_assignments() {
+    for fail_initialization in [true, false] {
+        let lifecycle = Arc::new(Mutex::new(Vec::new()));
+        let tracker = RecordingMentionTracker::default();
+        let creator = DocumentCreator::new(
+            FakeCreationService {
+                lifecycle: lifecycle.clone(),
+                fail_content_update: !fail_initialization,
+                ..Default::default()
+            },
+            RecordingMarkdownInitializer {
+                lifecycle: lifecycle.clone(),
+                fail: fail_initialization,
+            },
+            FakeBytesUploader,
+            &tracker,
+        );
+
+        assert!(
+            creator
+                .create_markdown_text(
+                    &CreationPrincipal::User(owner()),
+                    task_document("Do the assigned work")
+                )
+                .await
+                .is_err()
+        );
+
+        let lifecycle = lifecycle.lock().unwrap();
+        assert!(!lifecycle.contains(&"properties"));
+        assert_eq!(lifecycle.last(), Some(&"cleanup"));
+        assert!(tracker.calls().is_empty());
+    }
+}
+
+fn creator(
+    tracker: &RecordingMentionTracker,
+) -> DocumentCreator<
+    FakeCreationService,
+    FakeMarkdownInitializer,
+    FakeBytesUploader,
+    &RecordingMentionTracker,
+> {
+    DocumentCreator::new(
+        FakeCreationService::default(),
+        FakeMarkdownInitializer,
+        FakeBytesUploader,
+        tracker,
+    )
+}
+
+fn repo_kind() -> RepoDocumentKind {
+    RepoDocumentKind {
+        file_type: Some(FileType::Md),
+        sha: "sha".to_string(),
+        subtype: RepoDocumentSubtype::Regular,
+        team_id: None,
+        share_with_team: false,
+    }
+}
+
+#[tokio::test]
+async fn markdown_creation_tracks_the_seeded_mentions_once() {
+    let tracker = RecordingMentionTracker::default();
+
+    creator(&tracker)
+        .create_markdown_text(&CreationPrincipal::User(owner()), task_document(EMAIL_SEED))
         .await
         .expect("creation should succeed");
 
@@ -185,7 +318,7 @@ async fn markdown_creation_tracks_the_seeded_mentions_once() {
         tracker.calls(),
         vec![(
             DOCUMENT_ID.to_string(),
-            "macro|owner@example.com".to_string(),
+            Some("macro|owner@example.com".to_string()),
             EMAIL_SEED.to_string(),
         )]
     );
@@ -194,15 +327,9 @@ async fn markdown_creation_tracks_the_seeded_mentions_once() {
 #[tokio::test]
 async fn mention_tracking_failure_does_not_fail_creation() {
     let tracker = RecordingMentionTracker::failing();
-    let creator = DocumentCreator::new(
-        FakeCreationService::default(),
-        FakeMarkdownInitializer,
-        FakeBytesUploader,
-        &tracker,
-    );
 
-    let created = creator
-        .create_markdown_text(owner(), task_document(EMAIL_SEED))
+    let created = creator(&tracker)
+        .create_markdown_text(&CreationPrincipal::User(owner()), task_document(EMAIL_SEED))
         .await
         .expect("creation should survive a mention tracking failure");
 
@@ -211,24 +338,70 @@ async fn mention_tracking_failure_does_not_fail_creation() {
 }
 
 #[tokio::test]
+async fn a_task_is_created_and_propertied_as_one_principal() {
+    let bot_for_user = CreationPrincipal::BotForUser {
+        bot: bot_id::MACRO_AI_BOT_ID,
+        user: owner(),
+    };
+    for principal in [CreationPrincipal::User(owner()), bot_for_user, team_bot()] {
+        let tracker = RecordingMentionTracker::default();
+        let creator = creator(&tracker);
+
+        creator
+            .create_markdown_text(&principal, task_document(EMAIL_SEED))
+            .await
+            .expect("creation should succeed");
+
+        let calls = creator.document_service.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, principal);
+        assert_eq!(
+            *creator.document_service.task_principals.lock().unwrap(),
+            vec![principal.clone()]
+        );
+    }
+}
+
+#[tokio::test]
+async fn mentions_are_tracked_with_an_optional_acting_user() {
+    let bot_for_user = CreationPrincipal::BotForUser {
+        bot: bot_id::MACRO_AI_BOT_ID,
+        user: owner(),
+    };
+    for (principal, expected_user) in [
+        (bot_for_user, Some("macro|owner@example.com")),
+        (team_bot(), None),
+    ] {
+        let tracker = RecordingMentionTracker::default();
+
+        creator(&tracker)
+            .create_markdown_text(&principal, task_document(EMAIL_SEED))
+            .await
+            .expect("creation should succeed");
+
+        let tracked_users: Vec<Option<String>> = tracker
+            .calls()
+            .into_iter()
+            .map(|(_, user, _)| user)
+            .collect();
+        assert_eq!(tracked_users, vec![expected_user.map(str::to_string)]);
+    }
+}
+
+#[tokio::test]
 async fn native_spreadsheet_creation_uses_shared_service_without_upload_or_markdown() {
     let tracker = RecordingMentionTracker::default();
-    let creator = DocumentCreator::new(
-        FakeCreationService::default(),
-        FakeMarkdownInitializer,
-        FakeBytesUploader,
-        &tracker,
-    );
+    let creator = creator(&tracker);
     let project = uuid::Uuid::new_v4();
+    let principal = CreationPrincipal::BotForUser {
+        bot: bot_id::MACRO_AI_BOT_ID,
+        user: MacroUserIdStr::try_from_email("owner@macro.com").unwrap(),
+    };
     let result = creator
         .create_spreadsheet(
-            MacroUserIdStr::try_from_email("owner@macro.com").unwrap(),
+            &principal,
             NewDocumentMetadata::builder("Budget")
                 .project_id(project)
-                .attribution(Attribution::delegated(
-                    activity::Actor::new_from_bot(bot_id::MACRO_AI_BOT_ID),
-                    MacroUserIdStr::try_from_email("owner@macro.com").unwrap(),
-                ))
                 .build(),
         )
         .await
@@ -237,16 +410,116 @@ async fn native_spreadsheet_creation_uses_shared_service_without_upload_or_markd
     assert_eq!(result.file_type.as_deref(), Some("spreadsheet"));
     let calls = creator.document_service.calls.lock().unwrap();
     assert_eq!(calls.len(), 1);
-    let args = &calls[0];
-    assert_eq!(args.file_type, Some(model::document::FileType::Spreadsheet));
-    assert_eq!(args.sha, crate::domain::models::EMPTY_SHA256);
-    assert_eq!(args.document_name, "Budget");
-    assert_eq!(args.project_id, Some(project));
-    assert_eq!(
-        args.user_id,
-        MacroUserIdStr::try_from_email("owner@macro.com").unwrap()
-    );
-    assert!(args.attribution.is_some());
-    assert!(args.sub_type.is_none());
+    let (called_principal, document) = &calls[0];
+    assert_eq!(*called_principal, principal);
+    assert_eq!(document.file_type, Some(FileType::Spreadsheet));
+    assert_eq!(document.sha, crate::domain::models::EMPTY_SHA256);
+    assert_eq!(document.document_name, "Budget");
+    assert_eq!(document.project_id, Some(project));
+    assert!(document.sub_type.is_none());
     assert!(tracker.calls().is_empty());
+}
+
+#[test]
+fn link_share_defaults_to_the_entity_default_unless_set_exactly() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    use models_permissions::share_permission::{LinkShare, LinkShareState};
+
+    let document = NewDocumentMetadata::new("test").into_new_document(repo_kind());
+    assert_eq!(document.initial_link_share, InitialLinkShare::EntityDefault);
+
+    let state = LinkShareState::On {
+        scope: LinkShare::Team,
+        level: AccessLevel::View,
+    };
+    let document = NewDocumentMetadata::builder("description")
+        .initial_link_share(state)
+        .build()
+        .into_new_document(repo_kind());
+    assert_eq!(document.initial_link_share, InitialLinkShare::Exact(state));
+}
+
+#[test]
+fn initiative_description_is_a_markdown_only_subtype_without_task_properties() {
+    let err = NewPlainTextDocument::builder(NewDocumentMetadata::new("test"))
+        .file_type(FileType::Txt)
+        .text("hello")
+        .markdown_subtype(MarkdownSubtype::InitiativeDescription)
+        .build()
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "bad request: initiative descriptions must be markdown documents"
+    );
+
+    NewPlainTextDocument::builder(NewDocumentMetadata::new("test"))
+        .file_type(FileType::Md)
+        .text("# goals")
+        .markdown_subtype(MarkdownSubtype::InitiativeDescription)
+        .build()
+        .unwrap();
+    assert_eq!(
+        RepoDocumentSubtype::MarkdownInitiativeDescription.sub_type(),
+        Some(document_sub_type::DocumentSubType::InitiativeDescription)
+    );
+}
+
+#[test]
+fn new_plain_text_rejects_non_markdown_task() {
+    let err = NewPlainTextDocument::builder(NewDocumentMetadata::new("test"))
+        .file_type(FileType::Txt)
+        .text("hello")
+        .markdown_subtype(MarkdownSubtype::from_task_flag(true, None))
+        .build()
+        .unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "bad request: tasks must be markdown documents"
+    );
+}
+
+#[test]
+fn new_plain_text_accepts_markdown_task() {
+    NewPlainTextDocument::builder(NewDocumentMetadata::new("test"))
+        .file_type(FileType::Md)
+        .text("# hello")
+        .task_flag(true, None)
+        .build()
+        .unwrap();
+}
+
+#[test]
+fn task_flag_shares_only_when_a_team_was_resolved() {
+    let team_id = uuid::Uuid::from_u128(7);
+    for (resolved_team, expected_share) in [(None, false), (Some(team_id), true)] {
+        let MarkdownSubtype::Task {
+            share_with_team,
+            team_id: numbering_team,
+            property_values,
+        } = MarkdownSubtype::from_task_flag(true, resolved_team)
+        else {
+            panic!("a task flag builds a task subtype");
+        };
+        assert_eq!(share_with_team, expected_share);
+        assert_eq!(numbering_team, resolved_team);
+        assert!(property_values.is_none());
+    }
+    assert!(matches!(
+        MarkdownSubtype::from_task_flag(false, Some(team_id)),
+        MarkdownSubtype::Note
+    ));
+}
+
+#[test]
+fn test_file_shas() {
+    let hashes = file_shas(b"hello");
+    assert_eq!(
+        hashes.hex,
+        "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+    );
+    assert_eq!(
+        hashes.base64,
+        "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="
+    );
 }

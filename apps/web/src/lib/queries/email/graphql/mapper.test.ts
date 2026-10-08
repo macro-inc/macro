@@ -7,6 +7,7 @@ import { mapGraphqlEmailThreadPage } from './mapper';
 
 const message: EmailThreadMessageFieldsFragment = {
   __typename: 'GraphqlSoupEmailMessage',
+  calendarInvitations: [],
   id: 'message-1',
   providerId: 'provider-message-1',
   threadId: 'thread-1',
@@ -76,6 +77,31 @@ function thread(
 ): EmailThreadPageFieldsFragment {
   return {
     __typename: 'GraphqlSoupEmailThread',
+    ownerId: 'user-1',
+    entityType: 'EMAIL_THREAD',
+    cacheProjection: null,
+    displayName: null,
+    emailName: null,
+    snippet: null,
+    senderEmail: null,
+    senderName: null,
+    senderPhotoUrl: null,
+    isDraft: false,
+    isSignal: false,
+    isImportant: false,
+    isFavorited: false,
+    sortTs: '2026-08-06T12:00:00Z',
+    viewedAt: null,
+    frecencyScore: null,
+    mailAllPreview: null,
+    mailDraftPreview: null,
+    mailSentPreview: null,
+    mailDraftState: null,
+    participants: [],
+    attachments: [],
+    properties: [],
+    notifications: [],
+
     id: 'thread-1',
     providerId: 'provider-thread-1',
     linkId: 'link-1',
@@ -83,6 +109,7 @@ function thread(
     isRead: false,
     projectId: 'project-1',
     latestInboundMessageTs: '2026-08-06T12:00:00Z',
+    reminderReturnedAt: null,
     createdAt: '2026-08-01T00:00:00Z',
     updatedAt: '2026-08-06T12:02:00Z',
     viewerPermission: {

@@ -15,6 +15,18 @@ import type { CalendarEventSourceContent } from '@service-storage/generated/sche
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
+import { answeringGraphqlCalendarHost } from './graphql/flag';
+import {
+  committedEvent,
+  executeGraphqlCreate,
+  executeGraphqlDelete,
+  executeGraphqlRsvp,
+  executeGraphqlUpdate,
+} from './graphql/mutations';
+import {
+  type CalendarInvitationsData,
+  invalidateCalendarInvitations,
+} from './invitations';
 import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
 import { invalidateCalendarEventPreviews } from './mention-preview';
 import {
@@ -64,6 +76,7 @@ function patchEventItems(
 }
 
 export interface RsvpCalendarEventArgs {
+  respondingEmail?: string;
   eventId: string;
   response: Exclude<AttendeeResponseStatus, 'needs_action'>;
   /** How much of a recurring series to answer for; defaults to all of it. */
@@ -96,7 +109,7 @@ function answeredByRsvp(
 }
 
 type RsvpCallbacks = MutationCallbacks<
-  CalendarEventEntity,
+  CalendarEventEntity | undefined,
   Error,
   RsvpCalendarEventArgs,
   RsvpMutationContext
@@ -109,33 +122,51 @@ type RsvpMutationContext = CalendarMutationContext & {
 
 let rsvpRevisionCounter = 0;
 /**
- * Latest optimistic writer per (event, occurrence). Value equality cannot
+ * Latest optimistic writer per (event, occurrence, attendee). Value equality cannot
  * tell overlapping same-response mutations apart, so rollback ownership is
  * tracked explicitly: an older mutation's failure must not revert an
  * occurrence a newer mutation has since answered.
  */
 const rsvpLastWriter = new Map<string, number>();
 
-const rsvpWriterKey = (eventId: string, occurrenceKey: string) =>
-  JSON.stringify([eventId, occurrenceKey]);
-
-function selfResponseOf(
-  item: CalendarOccurrenceItem
-): AttendeeResponseStatus | undefined {
-  return item.event.attendees.find((attendee) => attendee.isSelf)
-    ?.responseStatus;
+function respondingAttendee(
+  item: CalendarOccurrenceItem,
+  args: RsvpCalendarEventArgs
+) {
+  return item.event.attendees.find((attendee) =>
+    args.respondingEmail
+      ? attendee.email.toLowerCase() === args.respondingEmail.toLowerCase()
+      : attendee.isSelf
+  );
 }
 
-function withSelfResponse(
+function rsvpWriterKey(
   item: CalendarOccurrenceItem,
+  args: RsvpCalendarEventArgs
+) {
+  const attendee = respondingAttendee(item, args);
+  return JSON.stringify([
+    item.event.id,
+    item.occurrence.occurrenceKey,
+    attendee?.email.toLowerCase(),
+  ]);
+}
+
+function withResponse(
+  item: CalendarOccurrenceItem,
+  args: RsvpCalendarEventArgs,
   response: AttendeeResponseStatus
 ): CalendarOccurrenceItem {
+  const selected = respondingAttendee(item, args);
+  if (!selected) return item;
   return {
     ...item,
     event: {
       ...item.event,
       attendees: item.event.attendees.map((attendee) =>
-        attendee.isSelf ? { ...attendee, responseStatus: response } : attendee
+        attendee === selected
+          ? { ...attendee, responseStatus: response }
+          : attendee
       ),
     },
   };
@@ -154,21 +185,57 @@ function patchOccurrenceQueries(
   );
 }
 
+/** RSVP updates share writer ownership across viewport and invitation projections. */
+function patchRsvpQueries(
+  update: (items: CalendarOccurrenceItem[]) => CalendarOccurrenceItem[]
+) {
+  patchOccurrenceQueries(update);
+  queryClient.setQueriesData<CalendarInvitationsData>(
+    { queryKey: calendarKeys.invitations._def },
+    (old) => {
+      if (!old) return old;
+      let changed = false;
+      const next = Object.fromEntries(
+        Object.entries(old).map(([id, item]) => {
+          if (item.kind !== 'resolved') return [id, item];
+          const current = { event: item.event, occurrence: item.occurrence };
+          const [updated] = update([current]);
+          if (updated === current) return [id, item];
+          changed = true;
+          return [
+            id,
+            { ...item, event: updated.event, occurrence: updated.occurrence },
+          ];
+        })
+      );
+      // Writing an unaffected thread would also clear its failed-refresh state.
+      return changed ? next : undefined;
+    }
+  );
+}
+
 /** Previous self responses of the occurrences a scoped answer covers. */
 function readAnsweredResponses(
   args: RsvpCalendarEventArgs
 ): Map<string, AttendeeResponseStatus> {
   const previous = new Map<string, AttendeeResponseStatus>();
-  for (const [, data] of queryClient.getQueriesData<CalendarOccurrencesData>({
-    queryKey: calendarKeys.occurrences._def,
-  })) {
-    for (const item of data?.items ?? []) {
-      if (!answeredByRsvp(item, args)) continue;
-      const key = item.occurrence.occurrenceKey;
-      if (previous.has(key)) continue;
-      const response = selfResponseOf(item);
-      if (response !== undefined) previous.set(key, response);
-    }
+  const occurrences = queryClient
+    .getQueriesData<CalendarOccurrencesData>({
+      queryKey: calendarKeys.occurrences._def,
+    })
+    .flatMap(([, data]) => data?.items ?? []);
+  const invitations = queryClient
+    .getQueriesData<CalendarInvitationsData>({
+      queryKey: calendarKeys.invitations._def,
+    })
+    .flatMap(([, data]) => Object.values(data ?? {}))
+    .filter((item) => item.kind === 'resolved');
+  for (const item of [...occurrences, ...invitations]) {
+    if (!answeredByRsvp(item, args)) continue;
+    const key = rsvpWriterKey(item, args);
+    const response = respondingAttendee(item, args)?.responseStatus;
+    if (response !== undefined && !previous.has(key))
+      previous.set(key, response);
   }
   return previous;
 }
@@ -188,16 +255,20 @@ function readAnsweredResponses(
 export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
   return useMutation(() => ({
     mutationKey: RSVP_MUTATION_KEY,
-    mutationFn: async (args: RsvpCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: RsvpCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) return committedEvent(await executeGraphqlRsvp(host, args));
+      return await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
           response: args.response,
+          respondingEmail: args.respondingEmail,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
-      CalendarEventEntity,
+      CalendarEventEntity | undefined,
       Error,
       RsvpCalendarEventArgs,
       RsvpMutationContext
@@ -208,43 +279,42 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
           await queryClient.cancelQueries({
             queryKey: calendarKeys.occurrences._def,
           });
+          await queryClient.cancelQueries({
+            queryKey: calendarKeys.invitations._def,
+          });
           const previous = readAnsweredResponses(args);
-          for (const occurrenceKey of previous.keys()) {
-            rsvpLastWriter.set(
-              rsvpWriterKey(args.eventId, occurrenceKey),
-              revision
-            );
+          for (const key of previous.keys()) {
+            rsvpLastWriter.set(key, revision);
           }
-          patchOccurrenceQueries((items) =>
+          patchRsvpQueries((items) =>
             items.map((item) =>
               answeredByRsvp(item, args)
-                ? withSelfResponse(item, args.response)
+                ? withResponse(item, args, args.response)
                 : item
             )
           );
           return {
             rollback: () => {
-              patchOccurrenceQueries((items) =>
+              patchRsvpQueries((items) =>
                 items.map((item) => {
                   if (!answeredByRsvp(item, args)) return item;
-                  const occurrenceKey = item.occurrence.occurrenceKey;
-                  if (
-                    rsvpLastWriter.get(
-                      rsvpWriterKey(args.eventId, occurrenceKey)
-                    ) !== revision
-                  ) {
+                  const key = rsvpWriterKey(item, args);
+                  if (rsvpLastWriter.get(key) !== revision) {
                     return item;
                   }
-                  const restored = previous.get(occurrenceKey);
+                  const restored = previous.get(key);
                   if (restored === undefined) return item;
-                  if (selfResponseOf(item) !== args.response) return item;
-                  return withSelfResponse(item, restored);
+                  if (
+                    respondingAttendee(item, args)?.responseStatus !==
+                    args.response
+                  )
+                    return item;
+                  return withResponse(item, args, restored);
                 })
               );
             },
             release: () => {
-              for (const occurrenceKey of previous.keys()) {
-                const key = rsvpWriterKey(args.eventId, occurrenceKey);
+              for (const key of previous.keys()) {
                 if (rsvpLastWriter.get(key) === revision) {
                   rsvpLastWriter.delete(key);
                 }
@@ -258,6 +328,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
           if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
             return;
           }
+          void invalidateCalendarInvitations();
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
@@ -365,14 +436,20 @@ type DeleteCallbacks = MutationCallbacks<
 /** Deletes an event (a recurring event's entire series) at the provider. */
 export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: DeleteCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: DeleteCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) {
+        await executeGraphqlDelete(host, args);
+        return;
+      }
+      return await throwOnErr(() =>
         emailClient.deleteCalendarEvent(args.eventId, {
           calendarId: args.calendarId,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
       unknown,
       Error,
@@ -384,6 +461,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
           patchOccurrenceCaches((items) => applyDeletion(items, args)),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
+          void invalidateCalendarInvitations();
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
@@ -410,7 +488,7 @@ export interface UpdateCalendarEventArgs {
 }
 
 type UpdateCallbacks = MutationCallbacks<
-  CalendarEventEntity,
+  CalendarEventEntity | undefined,
   Error,
   UpdateCalendarEventArgs,
   CalendarMutationContext
@@ -487,17 +565,20 @@ function applyEventPatch(
  */
 export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: UpdateCalendarEventArgs) =>
-      await throwOnErr(() =>
+    mutationFn: async (args: UpdateCalendarEventArgs) => {
+      const host = answeringGraphqlCalendarHost();
+      if (host) return committedEvent(await executeGraphqlUpdate(host, args));
+      return await throwOnErr(() =>
         emailClient.updateCalendarEvent(args.eventId, {
           ...args.patch,
           calendarId: args.calendarId,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
-      ),
+      );
+    },
     ...withCallbacks<
-      CalendarEventEntity,
+      CalendarEventEntity | undefined,
       Error,
       UpdateCalendarEventArgs,
       CalendarMutationContext
@@ -517,6 +598,7 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
         },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
+          void invalidateCalendarInvitations();
           invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
@@ -535,14 +617,18 @@ type CreateCallbacks = MutationCallbacks<
 
 /**
  * Creates an event on the selected calendar, defaulting to the requester's
- * primary calendar when no `calendarId` is given. There is no optimistic
- * insert — the entity id is only known once the provider echo lands — so
- * the viewport refetches on settle.
+ * primary calendar when no `calendarId` is given. With calendar reads on the
+ * cache, the event shows at once under a client id the server echo replaces;
+ * over REST the entity id is only known once the provider echo lands, so the
+ * viewport refetches on settle.
  */
 export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
   return useMutation(() => ({
-    mutationFn: async (args: CreateCalendarEventRequest) =>
-      await throwOnErr(() => emailClient.createCalendarEvent(args)),
+    mutationFn: async (args: CreateCalendarEventRequest) => {
+      if (answeringGraphqlCalendarHost())
+        return (await executeGraphqlCreate(args)).event;
+      return await throwOnErr(() => emailClient.createCalendarEvent(args));
+    },
     ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
       {
         onSettled: () => invalidateCalendarOccurrences(),

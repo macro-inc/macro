@@ -1,4 +1,5 @@
 import { throwOnErr } from '@core/util/result';
+import type { GithubPullRequestLabel } from '@entity/types/entity';
 import { authServiceClient } from '@service-auth/client';
 import type {
   EnrichedGithubPullRequest,
@@ -10,14 +11,18 @@ import type {
   GithubPullRequestsResponse,
 } from '@service-storage/generated/schemas';
 import {
-  type QueryClient,
+  type QueryFunctionContext,
+  type QueryKey,
   useQuery,
-  useQueryClient,
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { documentGithubPullRequestsKeys } from './keys';
+import {
+  documentGithubPullRequestsKeys,
+  githubPullRequestRefreshKeys,
+} from './keys';
 
 const DOCUMENT_GITHUB_PULL_REQUESTS_STALE_TIME = 60 * 1000;
+const GITHUB_PULL_REQUEST_REFRESH_STALE_TIME = 5 * 60 * 1000;
 
 type DocumentIdInput =
   | string
@@ -43,12 +48,13 @@ function readEnabled(enabled: EnabledInput | undefined): boolean {
 
 /**
  * Storage pull request extended with enrichment-only fields. The documents
- * service doesn't expose body/author yet, so they only arrive via the live
- * enrich merge and must stay optional.
+ * service doesn't expose body/author/labels yet, so they only arrive via the
+ * live enrich merge or stored metadata and must stay optional.
  */
 export type GithubPullRequestWithDetails = GithubPullRequest & {
   description?: string | null;
   authorLogin?: string | null;
+  labels?: GithubPullRequestLabel[] | null;
 };
 
 function toGithubPullRequestRef(
@@ -159,10 +165,8 @@ export async function fetchDocumentGithubPullRequests(
   return mergedResponse;
 }
 
-// Cached callbacks outlive the caller; only the resolved id and the observer's
-// client (an app- or test-level object, not component state) enter them.
+// Cached callbacks outlive the caller; only the resolved id enters them.
 function documentGithubPullRequestsQueryOptions(
-  queryClient: QueryClient,
   documentId: string | null | undefined,
   enabled: boolean
 ) {
@@ -172,7 +176,7 @@ function documentGithubPullRequestsQueryOptions(
 
   return {
     queryKey,
-    queryFn: () => {
+    queryFn: ({ client }: QueryFunctionContext) => {
       if (!documentId) {
         throw new Error(
           'Document ID is required to fetch GitHub pull requests'
@@ -180,7 +184,7 @@ function documentGithubPullRequestsQueryOptions(
       }
       return fetchDocumentGithubPullRequests(documentId, {
         onInitialResponse: (initialResponse) => {
-          queryClient.setQueryData(queryKey, initialResponse);
+          client.setQueryData(queryKey, initialResponse);
         },
       });
     },
@@ -193,12 +197,51 @@ export function useDocumentGithubPullRequestsQuery(
   documentId: DocumentIdInput,
   enabled?: EnabledInput
 ) {
-  const queryClient = useQueryClient();
   return useQuery(() =>
     documentGithubPullRequestsQueryOptions(
-      queryClient,
       readDocumentId(documentId),
       readEnabled(enabled)
     )
+  );
+}
+
+// Cached callbacks outlive the caller, so the refresh takes the reference and
+// the keys to invalidate as plain values, never the caller's closures.
+function githubPullRequestRefreshQueryOptions(
+  reference: GithubPullRequestRef | undefined,
+  refreshedKeys: readonly QueryKey[]
+) {
+  return {
+    queryKey: githubPullRequestRefreshKeys.refresh(reference?.githubKey ?? '')
+      .queryKey,
+    enabled: reference !== undefined,
+    queryFn: async ({ client }: QueryFunctionContext) => {
+      const result = await authServiceClient.enrichGithubPullRequests({
+        pullRequests: [reference!],
+      });
+      if (result.isErr()) return false;
+      for (const queryKey of refreshedKeys) {
+        void client.invalidateQueries({ queryKey });
+      }
+      return true;
+    },
+    staleTime: GITHUB_PULL_REQUEST_REFRESH_STALE_TIME,
+    retry: false,
+    refetchOnWindowFocus: false,
+  };
+}
+
+/**
+ * Refresh one pull request from GitHub with the viewer's linked account, which
+ * rewrites every stored copy, then invalidate `refreshedKeys` so readers of the
+ * stored copy load it again. Without a linked account, or when GitHub is
+ * unavailable, the stored copy stays as it is.
+ */
+export function useRefreshGithubPullRequest(
+  pullRequest: Accessor<GithubPullRequestRef | undefined>,
+  refreshedKeys: Accessor<readonly QueryKey[]>
+) {
+  return useQuery(() =>
+    githubPullRequestRefreshQueryOptions(pullRequest(), refreshedKeys())
   );
 }

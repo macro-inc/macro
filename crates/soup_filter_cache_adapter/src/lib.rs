@@ -5,7 +5,7 @@
 //! Cache crates receive only the generic query and projection IR produced here.
 
 use cache_core::document::{Document, FieldNode, OperationKind, Selection};
-use cache_core::meta::{self, FieldKind};
+use cache_core::meta::FieldKind;
 use cache_core::predicate::{ProjectionIncompleteKind, ProjectionMutation};
 use graphql_soup_filter_input::materialize_graphql_filter;
 use indexmap::IndexMap;
@@ -24,6 +24,8 @@ use soup_filter_projection::{
 use std::collections::HashSet;
 
 mod channels;
+mod database_rows;
+mod direct_patch;
 pub mod mail;
 mod notifications;
 pub mod properties;
@@ -142,6 +144,7 @@ pub fn reconciliation_baseline_entry(
 /// membership from an existing complete projection. A missing base remains
 /// explicitly incomplete.
 pub fn authoritative_projection_mutations(
+    schema: &cache_core::meta::Schema,
     query: &str,
     operation_name: Option<&str>,
     data: &serde_json::Value,
@@ -152,11 +155,11 @@ pub fn authoritative_projection_mutations(
         .operation(operation_name)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let root_type = match operation.kind {
-        OperationKind::Query => meta::QUERY_ROOT_TYPE,
-        OperationKind::Mutation => meta::MUTATION_ROOT_TYPE.ok_or_else(|| {
+        OperationKind::Query => schema.query_root(),
+        OperationKind::Mutation => schema.mutation_root().ok_or_else(|| {
             SoupFilterCacheAdapterError("GraphQL schema has no mutation root".to_owned())
         })?,
-        OperationKind::Subscription => meta::SUBSCRIPTION_ROOT_TYPE.ok_or_else(|| {
+        OperationKind::Subscription => schema.subscription_root().ok_or_else(|| {
             SoupFilterCacheAdapterError("GraphQL schema has no subscription root".to_owned())
         })?,
     };
@@ -169,6 +172,7 @@ pub fn authoritative_projection_mutations(
     let mut mutations = IndexMap::new();
     let mut has_unbound_incomplete_entity = false;
     walk_authoritative_object(
+        schema,
         &operation.selection_set,
         root_type,
         root,
@@ -190,6 +194,7 @@ pub fn authoritative_projection_mutations(
 }
 
 fn walk_authoritative_object(
+    schema: &cache_core::meta::Schema,
     selections: &[Selection],
     declared_type: &str,
     object: &serde_json::Map<String, serde_json::Value>,
@@ -201,22 +206,24 @@ fn walk_authoritative_object(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(declared_type);
     let mut fields = Vec::new();
-    collect_applicable_fields(selections, concrete_type, &mut fields);
+    collect_applicable_fields(schema, selections, concrete_type, &mut fields);
 
     if let Some(partition) = projection_partition(concrete_type) {
-        let (mut projection_object, valid_selection) =
-            if partition == vocabulary::channel_partition() {
-                match channels::selected_object(object, &fields) {
-                    Ok(selected) => (selected, true),
-                    // Use the original ID only to invalidate a conflicting snapshot;
-                    // never interpret conflicting nullable aliases as absent facts.
-                    Err(()) => (object.clone(), false),
-                }
-            } else {
-                (object.clone(), true)
-            };
+        let (mut projection_object, valid_selection) = if partition
+            == vocabulary::channel_partition()
+            || partition == vocabulary::database_row_partition()
+        {
+            match direct_patch::selected_object(object, &fields) {
+                Ok(selected) => (selected, true),
+                // Use the original ID only to invalidate a conflicting snapshot;
+                // never interpret conflicting nullable aliases as absent facts.
+                Err(()) => (object.clone(), false),
+            }
+        } else {
+            (object.clone(), true)
+        };
         projection_object.remove("notifications");
-        if let Some(snapshot) = notifications::selected_snapshot(object, &fields) {
+        if let Some(snapshot) = notifications::selected_snapshot(schema, object, &fields) {
             projection_object.insert("notifications".into(), snapshot);
         }
         let mut projection_fields = fields
@@ -299,7 +306,7 @@ fn walk_authoritative_object(
         let Some(value) = object.get(&field.response_key) else {
             continue;
         };
-        let Some(field_meta) = meta::field_meta(concrete_type, &field.name) else {
+        let Some(field_meta) = schema.field_meta(concrete_type, &field.name) else {
             continue;
         };
         if field_meta.ty.kind != FieldKind::Composite {
@@ -307,6 +314,7 @@ fn walk_authoritative_object(
         }
         match value {
             serde_json::Value::Object(child) => walk_authoritative_object(
+                schema,
                 &field.selection_set,
                 field_meta.ty.name,
                 child,
@@ -317,6 +325,7 @@ fn walk_authoritative_object(
                 for child in children {
                     if let serde_json::Value::Object(child) = child {
                         walk_authoritative_object(
+                            schema,
                             &field.selection_set,
                             field_meta.ty.name,
                             child,
@@ -332,6 +341,7 @@ fn walk_authoritative_object(
 }
 
 fn collect_applicable_fields<'a>(
+    schema: &cache_core::meta::Schema,
     selections: &'a [Selection],
     concrete_type: &str,
     fields: &mut Vec<&'a FieldNode>,
@@ -344,9 +354,9 @@ fn collect_applicable_fields<'a>(
                 selection_set,
             } if type_condition
                 .as_deref()
-                .is_none_or(|condition| meta::type_matches(concrete_type, condition)) =>
+                .is_none_or(|condition| schema.type_matches(concrete_type, condition)) =>
             {
-                collect_applicable_fields(selection_set, concrete_type, fields);
+                collect_applicable_fields(schema, selection_set, concrete_type, fields);
             }
             Selection::Fragment { .. } => {}
         }
@@ -592,6 +602,9 @@ fn complete_v4_projection_for_object(
     if partition == vocabulary::channel_partition() {
         return channels::complete(record_key, object);
     }
+    if partition == vocabulary::database_row_partition() {
+        return database_rows::complete(record_key, object);
+    }
     let input =
         direct_projection_input_for_object(record_key, &partition, object, None).ok_or(())?;
     let sub_type = if input.kind == SoupFlatEntityKind::Document {
@@ -608,7 +621,14 @@ fn authoritative_v4_patch_for_object(
     partition: Token,
     object: &serde_json::Map<String, serde_json::Value>,
 ) -> Result<ProjectionMutation, ()> {
-    if partition == vocabulary::channel_partition() {
+    let authoritative_patch = if partition == vocabulary::channel_partition() {
+        Some(channels::patch(record_key.clone(), object, None)?)
+    } else if partition == vocabulary::database_row_partition() {
+        Some(database_rows::patch(record_key.clone(), object, None)?)
+    } else {
+        None
+    };
+    if let Some(patch) = authoritative_patch {
         let OptimisticProjectionMutation::Patch {
             record_key,
             profile,
@@ -616,7 +636,7 @@ fn authoritative_v4_patch_for_object(
             exact,
             integers,
             sorts,
-        } = channels::patch(record_key, object, None)?
+        } = patch
         else {
             return Err(());
         };
@@ -748,6 +768,11 @@ fn optimistic_projection_for_object(
         // base but cannot fabricate a complete, newly accessible channel.
         return channels::patch(record_key, object, Some(created_at_ms)).ok();
     }
+    if partition == vocabulary::database_row_partition() {
+        // Rows are authoritative like channels: optimism patches a known
+        // base but cannot fabricate a newly visible row.
+        return database_rows::patch(record_key, object, Some(created_at_ms)).ok();
+    }
     let kind = projection_kind(&partition)?;
     if kind != SoupFlatEntityKind::Document
         && let Some(input) = direct_projection_input_for_object(
@@ -869,6 +894,7 @@ fn projection_partition(typename: &str) -> Option<Token> {
         "GraphqlSoupProject" => Some(vocabulary::project_partition()),
         "GraphqlSoupChat" => Some(vocabulary::chat_partition()),
         "GraphqlSoupChannel" => Some(vocabulary::channel_partition()),
+        "GraphqlSoupDatabaseRow" => Some(vocabulary::database_row_partition()),
         _ => None,
     }
 }

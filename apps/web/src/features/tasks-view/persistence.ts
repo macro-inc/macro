@@ -17,7 +17,7 @@ export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
 
 const taskTabSchema = z
-  .enum(['my-tasks', 'created-by-me', 'team-tasks'])
+  .enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects'])
   .catch('my-tasks');
 
 const taskGroupBySchema = z.enum([
@@ -40,6 +40,7 @@ const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  layout: z.enum(['list', 'board']).catch('list').default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
   groupBy: taskGroupBySchema.default('priority'),
@@ -54,6 +55,7 @@ type TasksEntryState = z.infer<typeof tasksEntryStateSchemaWithDefaults>;
 
 const DEFAULT_TASKS_ENTRY_STATE = {
   version: 1,
+  layout: 'list',
   tab: 'my-tasks',
   search: '',
   groupBy: 'priority',
@@ -70,12 +72,6 @@ const tasksListStateSchemaWithDefaults = z.object({
 
 type TasksListEntryState = z.infer<typeof tasksListStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_LIST_ENTRY_STATE = {
-  version: 1,
-  focusKey: undefined,
-  scrollOffset: 0,
-} satisfies TasksListEntryState;
-
 export type TasksListStateSnapshot = {
   focusKey: TasksListEntryState['focusKey'];
   scrollOffset: TasksListEntryState['scrollOffset'];
@@ -89,6 +85,7 @@ export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
 function selectEntryState(state: TasksViewState): TasksEntryState {
   return {
     version: 1,
+    layout: state.layout,
     tab: state.tab,
     search: state.search,
     groupBy: state.groupBy,
@@ -101,10 +98,13 @@ function selectEntryState(state: TasksViewState): TasksEntryState {
 function createTasksEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
+  scopeKey?: string;
 }): PersistenceStorage<TasksViewState> {
   return createEntryPersistenceStorage({
     handle: options.handle,
-    key: TASKS_ENTRY_STATE_KEY,
+    key: options.scopeKey
+      ? `${TASKS_ENTRY_STATE_KEY}:${options.scopeKey}`
+      : TASKS_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
@@ -112,6 +112,7 @@ function createTasksEntryStorage(options: {
       const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
         ...current,
+        layout: restored.layout,
         tab: restored.tab,
         search: restored.search,
         groupBy: restored.groupBy,
@@ -125,16 +126,17 @@ function createTasksEntryStorage(options: {
 }
 
 export function createTasksListEntryStorage(
-  handle: EntryPersistenceHandle
+  handle: EntryPersistenceHandle,
+  scopeKey?: string
 ): PersistenceStorage<TasksListStateSnapshot> {
   return createEntryPersistenceStorage({
     handle,
-    key: TASKS_LIST_ENTRY_STATE_KEY,
+    key: scopeKey
+      ? `${TASKS_LIST_ENTRY_STATE_KEY}:${scopeKey}`
+      : TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       const result = tasksListStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success
-        ? result.data
-        : DEFAULT_TASKS_LIST_ENTRY_STATE;
+      const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
         ...current,
@@ -155,6 +157,7 @@ export type CreateTasksViewPersistenceOptions = {
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restorePreferences?: boolean;
+  scopeKey?: string;
 };
 
 /** Persists Tasks navigation and user-level sidebar preferences. */
@@ -171,6 +174,7 @@ export function createTasksViewPersistence(
       createTasksEntryStorage({
         handle: options.handle,
         restore: options.restoreEntryState ?? true,
+        scopeKey: options.scopeKey,
       }),
     ],
   };

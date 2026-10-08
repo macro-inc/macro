@@ -12,6 +12,10 @@
 //!   entities through [`EntityActivityLoader`] so it costs nothing when not
 //!   selected and one query when it is.
 //!
+//! - the timeline of one database ([`resolve_database_activity`]) or form
+//!   ([`resolve_form_activity`]), which are not Soup items and so are read by
+//!   id behind a view receipt.
+//!
 //! Items carry `entityType`/`entityId` references only — clients resolve
 //! entity names from their normalized Soup cache rather than hydrating
 //! entities here.
@@ -26,6 +30,8 @@ mod objects;
 mod overview;
 /// Realtime activity subscription root and patch union.
 mod subscriptions;
+/// The access-checked timeline of one database or form.
+mod timeline;
 
 pub use activity::{ActivitySubscriptionService, NoOpActivitySubscriptionService};
 pub use feed::{
@@ -44,3 +50,4 @@ pub use overview::{
     resolve_activity_overview,
 };
 pub use subscriptions::{ActivitySubscriptionRoot, GraphqlActivityPatch, subscribe_to_activity};
+pub use timeline::{resolve_database_activity, resolve_form_activity};

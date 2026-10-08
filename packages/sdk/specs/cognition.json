@@ -413,6 +413,16 @@
               }
             }
           },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -1087,6 +1097,35 @@
         }
       }
     },
+    "/import/runs/{source}/discover": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Discover candidates for user selection without auto-importing them.",
+        "operationId": "discover_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "description": "Import source",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Discovery accepted (idempotent)"
+          },
+          "400": {
+            "description": "Unknown import source or discovery not supported"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/import/runs/{source}/dismiss": {
       "post": {
         "tags": ["import"],
@@ -1139,8 +1178,28 @@
           "400": {
             "description": "Unknown import source"
           },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Internal server error"
+          },
+          "503": {
+            "description": "AI usage validation unavailable; retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
           }
         }
       }
@@ -2002,10 +2061,34 @@
             "description": "Unauthorized"
           },
           "402": {
-            "description": "Payment required — user lacks access to the requested model"
+            "description": "Payment required — the user's AI allowance is used up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
           },
           "403": {
-            "description": "Forbidden"
+            "description": "Forbidden — user lacks access to the requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageError"
+                }
+              }
+            }
           }
         }
       }
@@ -2089,10 +2172,37 @@
             "description": "Unauthorized"
           },
           "402": {
-            "description": "Payment required"
+            "description": "Payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No access to the requested model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI usage validation unavailable — retry later",
             "content": {
               "application/json": {
                 "schema": {
@@ -2127,6 +2237,21 @@
           }
         }
       },
+      "AiAdmissionErrorBody": {
+        "type": "object",
+        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable denial or unavailability code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation, without internal billing diagnostics."
+          }
+        }
+      },
       "AiFeature": {
         "type": "string",
         "description": "Everything we use AI for. The wire / DB form of each variant is its\n`snake_case` name.",
@@ -2143,7 +2268,8 @@
           "import",
           "agent_session",
           "agent_repository_choice",
-          "dictation"
+          "dictation",
+          "image_generation"
         ]
       },
       "AssistantMessagePart": {
@@ -2553,6 +2679,10 @@
         "description": "Error response for chat message endpoints",
         "required": ["error"],
         "properties": {
+          "code": {
+            "type": ["string", "null"],
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
+          },
           "error": {
             "type": "string"
           },
@@ -2890,6 +3020,47 @@
           }
         }
       },
+      "DatabaseChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Databases, tables, columns or saved views.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schema"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["count", "kind"],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["rows"]
+              }
+            }
+          }
+        ],
+        "description": "What a successful tool call committed to the user's databases."
+      },
       "DocumentCognitionServiceApiVersion": {
         "type": "string",
         "enum": ["v1", "v2"]
@@ -2981,11 +3152,15 @@
           "static_file",
           "crm_company",
           "crm_contact",
+          "crm_pipeline",
           "reminder",
           "skill",
           "agent_session",
           "scheduled_action",
-          "initiative"
+          "initiative",
+          "database",
+          "database_row",
+          "form"
         ]
       },
       "ErrorBody": {
@@ -3427,7 +3602,9 @@
           "azw3",
           "djvu",
           "xls",
+          "xlsm",
           "ppt",
+          "doc",
           "pptx",
           "xlsx",
           "db",
@@ -3449,6 +3626,9 @@
           "ps",
           "dxf",
           "dwg",
+          "fig",
+          "psd",
+          "psb",
           "stl",
           "obj",
           "fbx",
@@ -3721,7 +3901,7 @@
       "Initiator": {
         "type": "string",
         "description": "Where an import entity was first staged from. Provenance only — never a\nvisibility filter.",
-        "enum": ["onboarding", "chat"]
+        "enum": ["onboarding", "chat", "archive", "manual"]
       },
       "JwtPayload": {
         "type": "object",
@@ -4106,6 +4286,16 @@
             "format": "float",
             "description": "Price per audio minute (USD), absent for token billing."
           },
+          "price_per_million_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
+          "price_per_million_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+          },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
@@ -4339,6 +4529,16 @@
             "format": "float",
             "description": "Price per minute of audio (USD), or null for token-only pricing."
           },
+          "price_per_mil_cache_read": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-read input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache reads then stay unpriced."
+          },
+          "price_per_mil_cache_write": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per million cache-write input tokens (USD). Omit it when the model\nhas no published rate: calls that report cache writes then stay unpriced."
+          },
           "price_per_mil_in": {
             "type": ["number", "null"],
             "format": "float",
@@ -4410,9 +4610,23 @@
         "description": "Metadata for one staged Slack channel.",
         "required": ["name"],
         "properties": {
+          "archived": {
+            "type": "boolean",
+            "description": "Whether Slack has archived this channel."
+          },
           "channel_id": {
             "type": ["string", "null"],
             "description": "Slack's channel id (e.g. `C0123456789`), stable across renames."
+          },
+          "member_count": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Total human members in the Slack channel.",
+            "minimum": 0
+          },
+          "members_resolved": {
+            "type": "boolean",
+            "description": "Whether `participants` reflects a live membership read."
           },
           "name": {
             "type": "string",
@@ -4423,7 +4637,7 @@
             "items": {
               "$ref": "#/components/schemas/SlackParticipant"
             },
-            "description": "The channel's most relevant members, when discoverable."
+            "description": "Slack members matched to the Macro team roster when discovery resolved membership."
           },
           "purpose": {
             "type": ["string", "null"],
@@ -4568,10 +4782,44 @@
         "type": "object",
         "required": ["error"],
         "properties": {
+          "code": {
+            "type": ["string", "null"],
+            "description": "Stable machine-readable code for admission errors (402 or 503)."
+          },
           "error": {
             "type": "string"
           }
         }
+      },
+      "StructuredCompletionOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The answer, shaped by the request's `output_schema`.",
+            "required": ["result", "status"],
+            "properties": {
+              "result": {},
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The model failed after committing database changes, so there is no\nanswer but `tool_activity` says what was saved.",
+            "required": ["reason", "status"],
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["interrupted"]
+              }
+            }
+          }
+        ]
       },
       "StructuredCompletionRequest": {
         "type": "object",
@@ -4596,15 +4844,64 @@
       },
       "StructuredCompletionResponse": {
         "type": "object",
-        "required": ["result"],
+        "required": ["outcome", "toolActivity"],
         "properties": {
-          "result": {}
+          "outcome": {
+            "$ref": "#/components/schemas/StructuredCompletionOutcome"
+          },
+          "toolActivity": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StructuredToolActivity"
+            },
+            "description": "Actual completed tools, independent of the model's claims."
+          }
+        }
+      },
+      "StructuredToolActivity": {
+        "type": "object",
+        "description": "One tool call the agent finished, and what it did.",
+        "required": ["name", "outcome"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ToolOutcome"
+          }
         }
       },
       "TargetType": {
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
         "enum": ["user", "team"]
+      },
+      "ToolOutcome": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["changes", "status"],
+            "properties": {
+              "changes": {
+                "$ref": "#/components/schemas/DatabaseChange"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["succeeded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["failed"]
+              }
+            }
+          }
+        ]
       },
       "ToolSet": {
         "oneOf": [
@@ -4625,6 +4922,26 @@
               "type": {
                 "type": "string",
                 "enum": ["none"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["databases_read_only"]
               }
             }
           }
@@ -4812,12 +5129,31 @@
       "Usage": {
         "type": "object",
         "description": "Measured usage for one invocation.",
-        "required": ["input_tokens", "output_tokens", "model", "created_at"],
+        "required": [
+          "input_tokens",
+          "output_tokens",
+          "cache_read_input_tokens",
+          "cache_write_input_tokens",
+          "model",
+          "created_at"
+        ],
         "properties": {
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
             "description": "Audio duration in seconds, absent for token billing."
+          },
+          "cache_read_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "minimum": 0
+          },
+          "cache_write_input_tokens": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "minimum": 0
           },
           "created_at": {
             "type": "string",
@@ -4827,7 +5163,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio billing.",
             "minimum": 0
           },
           "model": {

@@ -7,6 +7,7 @@
 //! - `GET /{document_id}/location_v3` — get document content location (presigned URL)
 //! - `GET /{document_id}/branch_name` — get short ID + task-aware git branch name (when the document is a task)
 //! - `GET /{document_id}/github_prs` — get GitHub pull requests associated with a task document
+//! - `POST /github_prs/tasks` — get the tasks linked to each of a batch of GitHub pull requests
 //! - `GET /{document_id}/short_id` — get document short ID
 //! - `GET`/`PUT /{document_id}/team_share` — get/set the document's team-share state
 //! - `POST /create_markdown` — create and initialize a markdown document
@@ -34,6 +35,7 @@ pub mod get_branch_name;
 pub mod get_cached_snapshot_url;
 pub mod get_document;
 pub mod get_document_by_team_slug;
+pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
@@ -55,6 +57,7 @@ use axum::{
     response::IntoResponse,
 };
 use entity_access::domain::ports::EntityAccessService;
+use entity_registry::NonUserOwners;
 use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
@@ -78,6 +81,7 @@ use self::{
     get_cached_snapshot_url::get_cached_snapshot_url_handler,
     get_document::get_document_handler,
     get_document_by_team_slug::get_document_by_team_slug_handler,
+    get_github_pull_request_tasks::get_github_pull_request_tasks_handler,
     get_github_pull_requests::get_github_pull_requests_handler,
     get_location::get_location_v3_handler,
     get_short_id::get_short_id_handler,
@@ -178,6 +182,8 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     pub creator: DefaultDocumentCreator<T>,
     /// JWT secret for signing document permission tokens.
     pub document_permission_jwt_secret: String,
+    /// Whether a team bot with no acting user may own what it creates.
+    pub non_user_owners: NonUserOwners,
 }
 
 // Manual Clone impl so T, Svc, and Auth don't need to be Clone.
@@ -193,6 +199,7 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             #[cfg(feature = "document_create_adapters")]
             creator: self.creator.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
+            non_user_owners: self.non_user_owners,
         }
     }
 }
@@ -206,6 +213,12 @@ impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for Arc<Svc> {
 impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
         state.authorization_state.clone()
+    }
+}
+
+impl<T, Svc, Auth> FromRef<DocumentRouterState<T, Svc, Auth>> for NonUserOwners {
+    fn from_ref(state: &DocumentRouterState<T, Svc, Auth>) -> Self {
+        state.non_user_owners
     }
 }
 
@@ -295,6 +308,10 @@ where
         .route(
             "/create_task",
             axum::routing::post(create_task_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/github_prs/tasks",
+            axum::routing::post(get_github_pull_request_tasks_handler::<T, Svc, Auth>),
         )
         .route(
             "/similarity_search",

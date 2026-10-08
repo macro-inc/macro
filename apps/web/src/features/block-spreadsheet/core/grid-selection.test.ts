@@ -45,10 +45,15 @@ describe('spreadsheet selection', () => {
     ).toEqual(['A1', 'B1', 'A2', 'B2']);
   });
 
-  it('bounds name-box navigation to the MVP sheet', () => {
+  it('bounds name-box navigation to the supported grid', () => {
     expect(positionFromAddress(' z200 ')).toEqual({ row: 199, column: 25 });
+    expect(positionFromAddress('aa1')).toEqual({ row: 0, column: 26 });
+    expect(positionFromAddress('XFD100000')).toEqual({
+      row: 99_999,
+      column: 16_383,
+    });
     expect(positionFromAddress('A0')).toBeUndefined();
-    expect(positionFromAddress('A1001')).toBeUndefined();
-    expect(positionFromAddress('AA1')).toBeUndefined();
+    expect(positionFromAddress('A100001')).toBeUndefined();
+    expect(positionFromAddress('XFE1')).toBeUndefined();
   });
 });

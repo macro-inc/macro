@@ -1,4 +1,5 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { isPlatform } from '@core/util/platform';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
@@ -64,6 +65,9 @@ export function AttachFilesAction(
 }
 
 export function AttachNativeMediaAction() {
+  // Android's WebView picker supports documents and media. Open it directly
+  // inside the click gesture instead of awaiting an unavailable iOS plugin.
+  if (isPlatform('android')) return <AttachFilesAction />;
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 

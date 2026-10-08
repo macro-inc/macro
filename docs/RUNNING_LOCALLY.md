@@ -66,7 +66,24 @@ cd apps/web
 bun run dev
 ```
 
-The first run, or a run after a wasm version change, may build wasm packages. Vite prints a local URL when it is ready.
+The first run, or a run after a wasm version change, may build wasm packages.
+Vite detects your hostname and prints `https://<hostname>:3000/app/` when ready
+(`PORT` overrides the port). It generates a certificate with the same stable
+development CA as `just local`; trust `infra/local/certs/ca.pem` once on the
+machine running the browser. See the [certificate README](../infra/local/certs/README.md).
+The visiting machine must resolve the hostname and reach that port. No Docker
+proxy or Tailscale is needed. Vite forwards hosted development API and WebSocket
+requests through `/__macro_dev/` on this same origin, so arbitrary machine
+hostnames do not need to be added to the deployed CORS allowlist. Authentication
+cookies are scoped to the visiting hostname; sign in with an email code on that
+hostname rather than relying on an existing `.macro.com` cookie. Google/SSO
+redirects still use the hosted authentication service’s redirect allowlist, which
+does not currently include arbitrary development hostnames.
+
+Use `MACRO_DEV_HTTPS=false bun run dev` for an HTTP-only workflow. Tauri and the
+local stack's internal Vite server keep using HTTP automatically; the stack
+provides HTTPS through its proxy. Builds and preview servers are unchanged.
+`MACRO_DEV_PROXY=false` opts out of the hosted API proxy.
 
 ## Run the local stack
 
@@ -92,6 +109,10 @@ just run_local --no-doppler
 
 The local stack does not need Doppler. It uses the code-defined local configuration with dummy AWS credentials and fixed test secrets. Most contributors are not on the team, so this is the common path.
 
+Local authentication includes a working signing key pair for Macro API tokens,
+which settings actions such as enabling CRM require. New teams start with CRM
+disabled; enable it in Settings > CRM before creating pipelines.
+
 The stack boots with stubbed values for every config the services require, including the third-party integrations (Google, GitHub, Stripe, CloudFront). Those flows do not work against real services with the stubs. The rest of the stack is fully functional: auth, documents, email, and search.
 
 To use a real integration locally, supply its keys via `--env-file` — see [Integration Secrets](#integration-secrets) below.
@@ -113,19 +134,56 @@ This command:
 
 When startup finishes, the command prints the frontend URL and the important service URLs.
 
+The reverse proxy is HTTPS at `https://localhost:8090` (or the instance's proxy port) using a generated machine certificate signed by the checked-in development CA. Trust `infra/local/certs/ca.pem` once so the browser accepts it; see that directory's README. Local Caddy also reflects any `Origin` (wildcard CORS) so `https://` and `*.localhost` frontends can call the proxy.
+For document sync, local Caddy normalizes the upstream `Origin` to the worker's
+accepted localhost origin so HTTPS machine hostnames can open WebSockets.
+Sync's local Durable Object, KV, R2 and D1 state lives in the Compose `sync_state`
+volume so replacing its container preserves document content. When upgrading an
+existing stack without that mount, stop sync and copy `/app/.wrangler/state` into
+the volume before replacing the container. A restart alone does not rebuild its
+compiled worker; rebuild the sync image after backend protocol changes.
+
 Open the frontend URL in your browser.
 
 The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
-and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
-other presigned uploads use the public endpoint in browser-facing URLs. If an
-upload attempts `localhost:4566` on a named instance, rebuild the service and
-reload its generated environment; named instances publish storage on their own
-port.
+and `LOCAL_AWS_PUBLIC_URL` (the app's HTTPS origin with `/local-storage`).
+Document downloads and presigned uploads use this storage proxy, so remote
+browsers do not need a separate localhost storage connection. Container clients
+translate that public endpoint back to LocalStack internally. If a download or
+upload still attempts HTTP localhost, rebuild the services, reload the generated
+environment and proxy, and hard-refresh the browser to discard cached URLs.
+
+If LocalStack loses its temporary resources after a restart, restore missing
+buckets, queues, tables, and keys without resetting Postgres or volumes:
+`cargo x localstack-provision --instance <name>`. Include `--port-base` if the
+instance uses an explicit port base. This restores resources, not lost objects.
 
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
+
+### Recover an existing instance without resetting data
+
+`run_local` and `stack up` initialize clean state, including snapshot restoration.
+Do not use them to recover an instance whose application or auth data must
+survive. Keep its generated env/Compose files and existing named volumes; start
+stopped containers with `docker start`, or recreate only the affected services
+with the same Compose project/files and `up -d --no-deps --no-build <service>`.
+Never use `down -v`, `reset_local`, or `destroy_local` for this recovery.
+
+On SELinux hosts, FusionAuth can become healthy while silently skipping an
+unreadable kickstart. The generated per-instance kickstart directory uses
+`:ro,Z`: read-only with a private container label. Regenerate the override with
+`cargo x gen-compose --instance <name>`, then recreate only FusionAuth against
+its existing volumes. Verify the kickstart is readable in the container and the
+configured application API returns 200 with the local API key; a healthy process
+alone does not prove kickstart ran. Do not disable SELinux, change host permissions,
+or delete the FusionAuth database. Diagnose other bind-mount denials separately;
+private labels must not be applied to directories shared by several containers.
+
+For the synthetic Slack recovery harness and separate browser/native coverage,
+see [the Slack import runbook](SLACK_ARCHIVE_IMPORT_RUNBOOK.md).
 
 ### Seeding sample data (recommended)
 
@@ -161,10 +219,10 @@ A `--no-doppler` stack boots with deterministic stubs for every value the servic
 | --- | --- | --- |
 | Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | Google SSO and Gmail inbox linking are unavailable. Local signup still works. The email service reports no Gmail grant and skips inbox syncing. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
-| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup still works: the create-user webhook detects the stub key and skips the real Stripe call. It stores a placeholder customer id instead. |
+| Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |
 
-The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
+The other stubbed keys (`REDIS_HOST`, `MACRO_DB_URL`, `INTERNAL_API_KEY`, `AUTHENTICATION_SERVICE_SECRET_KEY`, `ACCOUNT_LINK_STATE_SECRET`, `OPENSEARCH_USERNAME`, `OPENSEARCH_PASSWORD`) are internal plumbing with correct local values — you never need to override them.
 
 To turn on an integration, create a `local.env` with the real values. Then pass it
 to `run_local`:
@@ -250,12 +308,39 @@ infra/local/generated/<instance>
 
 ### Access a remote dev server through one URL
 
-`run_local` and `run_dev` serve API requests and backend WebSockets through Vite,
-so the browser needs only the frontend port. For example, forward a remote
-instance's frontend with `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
-`http://localhost:3000/app/`. A WebSocket-capable reverse proxy can instead expose
-that frontend under a different hostname/port, including HTTPS. Vite HMR follows
-the page's origin; no separate HMR or backend port forward is needed.
+`just local` (the `run_local` alias) and `run_dev` call `hostname`, add that
+name to Vite's allowed hosts, and issue a certificate for it using the stable
+CA in `infra/local/certs`. Startup prints `https://<hostname>:<proxy-port>/app/`.
+Caddy serves backend routes directly and forwards frontend assets and HMR to
+Vite, so the browser only needs the HTTPS proxy port.
+Login fallback redirects, Pipedream origins, MCP callbacks, and file permalinks
+use that same HTTPS origin for attached local stacks.
+If your host firewall blocks Docker-to-host traffic, allow the instance's
+Docker network to reach the Vite port through `host.docker.internal`.
+Startup verifies `/app/` through the HTTPS proxy before printing “ready”;
+a listening Vite port alone is insufficient. Persistent 502s with proxy logs such
+as `dial tcp <host-gateway>:<vite-port>: i/o timeout` can indicate this firewall
+path is blocked. Firewall rules must cover the current instance's Docker network
+and frontend port, which can differ between instances.
+
+If `/app/` succeeds but the page stays blank, inspect script requests as well as
+API requests. Intermittent 502s for Vite modules can come from the burst of
+Docker-to-host connections during startup. The generated proxy limits Vite to
+16 upstream connections so module requests queue instead of exhausting the host
+listener. After applying an updated proxy configuration, restart only the
+instance's proxy and reload the page; existing databases and volumes can stay.
+
+Trust `infra/local/certs/ca.pem` in the visiting browser once (see the
+[certificate README](../infra/local/certs/README.md)), then open that URL.
+The visiting machine must resolve the hostname and reach the proxy port over
+your network. Tailscale is not required. The generated certificate also covers
+`localhost`, `*.localhost`, `127.0.0.1`, and `::1`. Other aliases require a
+matching certificate and a Vite allowlist entry; arbitrary names are not
+accepted automatically.
+
+An SSH forward to the HTTP Vite port still works for localhost-only access:
+`ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
+`http://localhost:3000/app/`. HMR follows the page's host, port, and protocol.
 
 The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
 server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
@@ -265,6 +350,10 @@ enabled browser telemetry also use same-origin paths. Bare `bun run dev` without
 these variables still uses hosted services; `TAURI_DEV_HOST` remains an explicit
 native HMR override. Keep local dev stacks private: same-origin routing does not
 add authentication or make passwordless local login safe to publish.
+
+The launcher sets `NODE_EXTRA_CA_CERTS` for Vite so its HTTP and WebSocket
+forwarding verifies the backend certificate. Plain HTTP on a remote hostname
+cannot retain the app's secure login cookies; use the printed HTTPS URL.
 
 The stack launches Vite directly with Node (available in the Nix shell), because
 Bun's Node HTTP compatibility currently hangs on Vite's proxied WebSocket

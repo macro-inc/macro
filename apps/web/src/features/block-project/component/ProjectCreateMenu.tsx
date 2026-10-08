@@ -1,9 +1,20 @@
+import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
+import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
+import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableAiEditor,
+  enableChatV3Agents,
+  enableFigViewer,
+  enablePsdEditor,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
@@ -150,6 +161,54 @@ const BLOCK_CREATE_SPECS: CreateBlockSpec[] = [
     },
   },
   {
+    label: 'Photoshop file',
+    blockName: 'psd' as BlockName,
+    hotkeyToken: TOKENS.create.photoshop,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="psd" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createPsdDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create Photoshop file');
+      return id;
+    },
+  },
+  {
+    label: 'Design',
+    blockName: 'fig' as BlockName,
+    hotkeyToken: TOKENS.create.design,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="fig" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createFigDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create design');
+      return id;
+    },
+  },
+  {
+    label: 'Illustrator file',
+    blockName: 'ai' as BlockName,
+    hotkeyToken: TOKENS.create.illustration,
+    icon: () => (
+      <div class="size-4 shrink-0">
+        <EntityIcon targetType="ai" size="shrinkFill" theme="monochrome" />
+      </div>
+    ),
+    loading: true,
+    createFn: async (projectId) => {
+      const id = await createAiDocument({ projectId, source: 'project' });
+      if (!id) throw new Error('Failed to create Illustrator file');
+      return id;
+    },
+  },
+  {
     label: 'Folder',
     blockName: 'project' as BlockName,
     hotkeyToken: TOKENS.create.project,
@@ -238,6 +297,13 @@ function ProjectCreateDialog(props: {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
+    return true;
+  };
 
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
@@ -247,17 +313,23 @@ function ProjectCreateDialog(props: {
             <Dialog.Title class="text-base font-semibold text-ink pb-3">
               Create in {props.name}
             </Dialog.Title>
-            <For
-              each={BLOCK_CREATE_SPECS.filter(
-                (spec) =>
-                  spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-              )}
-            >
+            <For each={BLOCK_CREATE_SPECS.filter(offered)}>
               {(spec) => (
                 <button
                   class="flex items-center gap-2 py-1 text-sm hover:bg-hover w-full text-left min-h-11"
                   onClick={() => {
                     props.onClose();
+                    if (
+                      spec.blockName === 'chat' &&
+                      isFeatureEnabled(enableChatV3Agents)
+                    ) {
+                      void openChatWithAgent({
+                        type: 'project',
+                        id: props.projectId,
+                        name: props.name,
+                      });
+                      return;
+                    }
                     createBlock({
                       blockName: spec.blockName,
                       loading: spec.loading,
@@ -291,24 +363,38 @@ function MenuItem(props: MenuItemProps) {
   );
 }
 
-function MenuContent(props: { projectId: string }) {
+function MenuContent(props: { projectId: string; name: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   const createBlock = makeCreateBlock({ replaceSplit, insertSplit });
   const spreadsheetAccess = useSpreadsheetAccess();
+  const offered = (spec: CreateBlockSpec) => {
+    if (spec.blockName === 'spreadsheet') return spreadsheetAccess();
+    if (spec.blockName === 'psd') return isFeatureEnabled(enablePsdEditor);
+    if (spec.blockName === 'fig') return isFeatureEnabled(enableFigViewer);
+    if (spec.blockName === 'ai') return isFeatureEnabled(enableAiEditor);
+    return true;
+  };
 
   const items = (): MenuItemProps[] =>
-    BLOCK_CREATE_SPECS.filter(
-      (spec) => spec.blockName !== 'spreadsheet' || spreadsheetAccess()
-    ).map((spec) => ({
+    BLOCK_CREATE_SPECS.filter(offered).map((spec) => ({
       label: spec.label,
       Icon: spec.icon,
-      action: () =>
-        createBlock({
+      action: () => {
+        if (spec.blockName === 'chat' && isFeatureEnabled(enableChatV3Agents)) {
+          void openChatWithAgent({
+            type: 'project',
+            id: props.projectId,
+            name: props.name,
+          });
+          return;
+        }
+        return createBlock({
           blockName: spec.blockName,
           loading: spec.loading,
           createFn: () => spec.createFn(props.projectId),
           params: spec.params,
-        }),
+        });
+      },
     }));
 
   return (
@@ -349,7 +435,7 @@ export function useProjectCreateTools(
   return { tools, CreateDialog };
 }
 
-export function ProjectCreateMenu(props: { id: string }) {
+export function ProjectCreateMenu(props: { id: string; name: string }) {
   const [open, setOpen] = createSignal(false);
   return (
     <Dropdown open={open()} onOpenChange={setOpen}>
@@ -365,7 +451,7 @@ export function ProjectCreateMenu(props: { id: string }) {
           <CaretDown />
         </Dropdown.Trigger>
       </div>
-      <MenuContent projectId={props.id} />
+      <MenuContent projectId={props.id} name={props.name} />
     </Dropdown>
   );
 }

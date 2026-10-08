@@ -9,7 +9,7 @@ export const TASK_STATUS_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STATUS.CANCELED, label: 'Canceled' },
 ] as const;
 
-const TASK_PRIORITY_OPTIONS = [
+export const TASK_PRIORITY_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.PRIORITY.URGENT, label: 'Urgent' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.HIGH, label: 'High' },
   { value: PROPERTY_OPTION_IDS.PRIORITY.MEDIUM, label: 'Medium' },
@@ -116,6 +116,27 @@ export const getTaskAssigneeIds = (
   return value.value
     .filter((reference) => reference.entity_type === 'USER')
     .map((reference) => reference.entity_id);
+};
+
+/**
+ * Ids of the entities a task's entity-reference property points at, e.g.
+ * the CRM companies in its Companies property.
+ */
+export const getTaskReferencedEntityIds = (
+  entity: TaskEntityWithProperties,
+  propertyDefinitionId: string
+): string[] => {
+  const value = getTaskPropertyByDefinitionId(
+    entity,
+    propertyDefinitionId
+  )?.value;
+  if (
+    value?.type !== 'EntityReference' ||
+    !isEntityReferenceArray(value.value)
+  ) {
+    return [];
+  }
+  return value.value.map((reference) => reference.entity_id);
 };
 
 /**

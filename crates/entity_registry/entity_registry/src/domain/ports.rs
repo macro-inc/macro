@@ -42,6 +42,13 @@ pub trait EntityRegistryRepository: Clone + Send + Sync + 'static {
         entity_type: Option<RegisteredEntityType>,
     ) -> impl Future<Output = EntityRegistryResult<Vec<EntityRecord>>> + Send;
 
+    /// Live and soft-deleted rows owned by `owner`, newest-created first with
+    /// `id` as the tie-break.
+    fn list_all_owned_by(
+        &self,
+        owner: &Owner,
+    ) -> impl Future<Output = EntityRegistryResult<Vec<EntityRecord>>> + Send;
+
     /// Live and deleted row counts for one kind.
     fn count_by_type(
         &self,
@@ -70,6 +77,14 @@ pub trait EntityRegistryService: Clone + Send + Sync + 'static {
         &self,
         owner: &Owner,
         entity_type: Option<RegisteredEntityType>,
+    ) -> impl Future<Output = EntityRegistryResult<Vec<EntityRecord>>> + Send;
+
+    /// Live and soft-deleted rows owned by `owner`, newest-created first with
+    /// `id` as the tie-break. For callers that must remove everything an
+    /// owner holds, the trash included.
+    fn list_all_owned_by(
+        &self,
+        owner: &Owner,
     ) -> impl Future<Output = EntityRegistryResult<Vec<EntityRecord>>> + Send;
 
     /// Live and deleted row counts for one kind.

@@ -3,6 +3,10 @@ import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { useQuery } from '@tanstack/solid-query';
 import { agentRepositoryKeys } from './keys';
 
+function fetchAgentRepositories() {
+  return throwOnErr(() => agentHarnessServiceClient.listRepositories());
+}
+
 /**
  * The GitHub repositories the signed-in user can hand a coding session: every
  * repository under an installation of Macro's GitHub App they or their teams
@@ -13,10 +17,6 @@ import { agentRepositoryKeys } from './keys';
  * Kept fresh for a while: the harness caches the listing for ten minutes
  * itself, and installing the App somewhere new is rare and deliberate.
  */
-function fetchAgentRepositories() {
-  return throwOnErr(() => agentHarnessServiceClient.listRepositories());
-}
-
 export function useAgentRepositoriesQuery(enabled: () => boolean = () => true) {
   return useQuery(() => ({
     queryKey: agentRepositoryKeys.list.queryKey,

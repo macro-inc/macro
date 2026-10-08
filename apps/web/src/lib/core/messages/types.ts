@@ -1,7 +1,9 @@
-import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
-import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
-import type { MessageParent } from '@service-storage/messages';
+import type {
+  CountedReaction,
+  MessageAttachment,
+  MessageParent,
+  MessageSender,
+} from '@service-storage/messages';
 
 export type MessageData = {
   parent?: MessageParent;
@@ -10,14 +12,14 @@ export type MessageData = {
   content: string;
   sender_id: string;
   /** Structured sender identity; carries bot name/avatar for bot senders. */
-  sender?: ApiMessageSender;
+  sender?: MessageSender;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
   edited_at?: string | null;
   thread_id?: string | null;
-  attachments: ApiMessageAttachment[];
-  reactions: ApiCountedReaction[];
+  attachments: MessageAttachment[];
+  reactions: CountedReaction[];
 };
 
 export type MessageActionEvent = MouseEvent | KeyboardEvent;

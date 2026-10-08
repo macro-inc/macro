@@ -63,6 +63,130 @@ fn user(local: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{local}@example.com")).expect("valid user id")
 }
 
+#[tokio::test]
+async fn moving_task_does_not_announce_hidden_source_project_to_the_actor() {
+    struct Removed;
+    impl crate::DomainActivity for Removed {
+        const ENTITY_TYPE: EntityType = EntityType::Initiative;
+        fn entity_id(&self) -> &str {
+            "hidden-source"
+        }
+        fn into_action(self) -> crate::Action {
+            crate::Action::TaskRemoved(crate::InitiativeTaskChange {
+                task_id: "task".into(),
+            })
+        }
+    }
+    let actor = user("task-editor");
+    let source_owner = user("source-owner");
+    let broker = RecordingPublisher::default();
+    let announcements = ActivityAnnouncements::new(
+        broker.clone(),
+        FakeAudience {
+            by_entity: HashMap::from([
+                ("hidden-source".into(), vec![source_owner.clone()]),
+                ("task".into(), vec![source_owner.clone(), actor.clone()]),
+            ]),
+        },
+    );
+    announcements
+        .publish_recorded(&[Activity::from_domain(
+            Uuid::now_v7(),
+            0,
+            Actor::new_from_user(actor.clone()),
+            None,
+            Removed,
+            Utc::now(),
+        )])
+        .await;
+    let deliveries = broker.recorded_events();
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].0, source_owner.as_ref());
+    assert!(
+        deliveries
+            .iter()
+            .all(|(recipient, _)| recipient != actor.as_ref())
+    );
+}
+
+#[tokio::test]
+async fn project_subject_with_public_link_access_still_receives_activity() {
+    struct PublicProject;
+    impl ActivityAudienceExpander for PublicProject {
+        type Err = std::convert::Infallible;
+        async fn entity_audience(
+            &self,
+            _: EntityType,
+            _: &str,
+        ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+            Ok(Vec::new())
+        }
+        async fn viewer_can_see(
+            &self,
+            _: EntityType,
+            _: &str,
+            _: &MacroUserIdStr<'_>,
+        ) -> Result<bool, Self::Err> {
+            Ok(true)
+        }
+    }
+    let actor = user("editor");
+    let broker = RecordingPublisher::default();
+    let announcements = ActivityAnnouncements::new(broker.clone(), PublicProject);
+    let row = Activity::common(
+        Uuid::now_v7(),
+        0,
+        Actor::new_from_user(actor.clone()),
+        None,
+        EntityType::Initiative,
+        "public-project",
+        CommonAction::Edited,
+        Utc::now(),
+    );
+    announcements.publish_recorded(&[row]).await;
+    assert_eq!(broker.recorded_events()[0].0, actor.as_ref());
+}
+
+#[tokio::test]
+async fn project_membership_realtime_requires_task_access_as_well_as_project_access() {
+    struct Membership;
+    impl crate::DomainActivity for Membership {
+        const ENTITY_TYPE: EntityType = EntityType::Initiative;
+        fn entity_id(&self) -> &str {
+            "initiative-1"
+        }
+        fn into_action(self) -> crate::Action {
+            crate::Action::TaskAdded(crate::InitiativeTaskChange {
+                task_id: "private-task".into(),
+            })
+        }
+    }
+    let owner = user("owner");
+    let watcher = user("watcher");
+    let broker = RecordingPublisher::default();
+    let announcements = ActivityAnnouncements::new(
+        broker.clone(),
+        FakeAudience {
+            by_entity: HashMap::from([
+                ("initiative-1".into(), vec![owner.clone(), watcher]),
+                ("private-task".into(), vec![owner.clone()]),
+            ]),
+        },
+    );
+    let row = Activity::from_domain(
+        Uuid::from_u128(3),
+        0,
+        Actor::new_from_user(owner.clone()),
+        None,
+        Membership,
+        Utc::now(),
+    );
+    announcements.publish_recorded(&[row]).await;
+    let deliveries = broker.recorded_events();
+    assert_eq!(deliveries.len(), 1);
+    assert_eq!(deliveries[0].0, owner.as_ref());
+}
+
 fn edited(ordinal: u32, actor: Actor<'static>, entity_id: &str) -> Activity {
     Activity::common(
         Uuid::from_u128(7),
@@ -211,5 +335,66 @@ async fn purge_invalidation_needs_no_deleted_entity_audience() {
             "activity-invalidated".into(),
             ActivityTopicEvent::Invalidated
         )]
+    );
+}
+
+#[tokio::test]
+async fn form_activity_reaches_only_its_subject_never_the_forms_other_grantees() {
+    struct Responded;
+    impl crate::DomainActivity for Responded {
+        const ENTITY_TYPE: EntityType = EntityType::Form;
+        fn entity_id(&self) -> &str {
+            "form-1"
+        }
+        fn into_action(self) -> crate::Action {
+            crate::Action::Responded
+        }
+    }
+    let respondent = user("respondent");
+    let other_respondent = user("other-respondent");
+    let editor = user("editor");
+    let broker = RecordingPublisher::default();
+    // A form's grantees include every respondent it was shared with at View,
+    // a channel's members among them.
+    let announcements = ActivityAnnouncements::new(
+        broker.clone(),
+        FakeAudience {
+            by_entity: HashMap::from([(
+                "form-1".to_string(),
+                vec![other_respondent.clone(), editor.clone(), respondent.clone()],
+            )]),
+        },
+    );
+    let response = Activity::from_domain(
+        Uuid::from_u128(5),
+        0,
+        Actor::new_from_user(respondent.clone()),
+        None,
+        Responded,
+        Utc::now(),
+    );
+    let renamed = Activity::common(
+        Uuid::from_u128(6),
+        0,
+        Actor::new_from_user(editor.clone()),
+        None,
+        EntityType::Form,
+        "form-1",
+        CommonAction::Edited,
+        Utc::now(),
+    );
+
+    announcements.publish_recorded(&[response, renamed]).await;
+
+    let events = broker.recorded_events();
+    let recipients: Vec<&str> = events.iter().map(|(key, _)| key.as_str()).collect();
+    assert_eq!(recipients.len(), 2, "{recipients:?}");
+    assert!(recipients.contains(&respondent.as_ref()));
+    assert!(recipients.contains(&editor.as_ref()));
+    assert_eq!(rows_for(&events, respondent.as_ref()).len(), 1);
+    assert_eq!(rows_for(&events, editor.as_ref()).len(), 1);
+    assert_eq!(
+        rows_for(&events, editor.as_ref())[0].subject_id,
+        editor.as_ref()
     );
 }

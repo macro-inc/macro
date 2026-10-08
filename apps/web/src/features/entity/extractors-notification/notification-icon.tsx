@@ -1,16 +1,19 @@
 import type { NotificationType } from '@core/types';
 import GithubIcon from '@icon/mcp-github.svg';
 import type { NotificationStack } from '@notifications';
+import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatIcon from '@phosphor/chat.svg';
+import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/files.svg';
 import PhoneIcon from '@phosphor/phone-call.svg';
 import QuestionIcon from '@phosphor/question.svg';
+import SmileyIcon from '@phosphor/smiley.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import UserPlusIcon from '@phosphor/user-plus.svg';
 import { cn } from '@ui';
@@ -34,11 +37,19 @@ function getNotificationIcon(
   return match(type)
     .with('channel_mention', () => AtIcon)
     .with('document_mention', () => FilesIcon)
-    .with('mentioned_in_document_comment', () => AtIcon)
-    .with('replied_to_document_comment_thread', () => ArrowBendUpLeftIcon)
-    .with('commented_on_document', () => ChatIcon)
+    .with(
+      P.union(
+        'mentioned_in_document_comment',
+        'replied_to_document_comment_thread',
+        'commented_on_document',
+        'crm_discussion'
+      ),
+      () => ChatTeardropIcon
+    )
+    .with('initiative_discussion', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
+    .with('channel_message_reaction', () => SmileyIcon)
     .with('new_email', () => EnvelopeIcon)
     .with('channel_invite', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)
@@ -76,6 +87,12 @@ export function NotificationIcon(props: NotificationIconProps) {
   };
 
   const icon = () => {
+    const metadata = (props.notification ?? props.stack?.notifications[0])
+      ?.notification_metadata;
+    if (isEntityDiscussionEvent(metadata)) {
+      if (metadata.content.reason === 'mention') return AtIcon;
+      if (metadata.content.reason === 'reply') return ArrowBendUpLeftIcon;
+    }
     const type = notificationType();
     if (!type) return ChatIcon;
     return getNotificationIcon(type);

@@ -27,6 +27,8 @@ export interface CalendarOccurrenceData {
 export interface CalendarOccurrenceDataOptions {
   range: Accessor<CalendarOccurrenceQueryRange | undefined>;
   sourceById?: Accessor<ReadonlyMap<string, CalendarSource>>;
+  /** Wait for calendar metadata before painting source colors. */
+  sourcesReady?: Accessor<boolean>;
   isSourceVisible?: (sourceId: string) => boolean;
   queryOptions?: Accessor<CalendarOccurrencesQueryOptions>;
 }
@@ -51,7 +53,12 @@ export function useCalendarOccurrenceData(
     }
   );
   const events = createMemo(() => {
-    if (!isRangeSupported()) return [];
+    if (
+      !isRangeSupported() ||
+      !occurrencesQuery.isSuccess ||
+      options.sourcesReady?.() === false
+    )
+      return [];
     const sourceById = options.sourceById?.();
     return (occurrencesQuery.data?.items ?? []).map((item) =>
       mapCalendarOccurrence(item, {
@@ -71,8 +78,9 @@ export function useCalendarOccurrenceData(
   const isLoading = () =>
     options.range() === undefined ||
     (isRangeSupported() &&
-      (occurrencesQuery.isPending || occurrencesQuery.isPlaceholderData));
+      (occurrencesQuery.isPending || options.sourcesReady?.() === false));
   const isSyncing = () =>
+    occurrencesQuery.isSuccess &&
     occurrencesQuery.data?.syncStatus === CalendarSyncStatus.syncing;
 
   return {

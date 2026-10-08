@@ -16,45 +16,57 @@ import {
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { blockFileSignal } from '@core/signal/load';
+import { useShareModal } from '@core/component/TopBar/shareModal';
+import { blockFileSignal, blockMetadataSignal } from '@core/signal/load';
+import { useGetPermissions } from '@core/signal/permissions';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
-import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';
 import { useCanvasDocument } from '../context/canvas-document-context';
 import { useToolManager } from '../signal/toolManager';
 import { useRenderState } from '../store/RenderState';
+import type { CanvasDocumentChrome } from './CanvasDocument';
 
-export function TopBar() {
+export function TopBar(props: { next?: CanvasDocumentChrome } = {}) {
   const analytics = useAnalytics();
 
-  const toolManager = useToolManager();
-  const { getLocation } = useRenderState();
-  const [getCurrentSavedFile] =
-    useCanvasDocument().state.signals.currentSavedFile;
+  const toolManager = props.next ? undefined : useToolManager();
+  const getLocation = props.next?.location ?? useRenderState().getLocation;
+  const getCurrentSavedFile =
+    props.next?.savedFile ??
+    useCanvasDocument().state.signals.currentSavedFile[0];
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
   const canvasFile = blockFileSignal.get;
 
-  const shareCtx = useShareDialogContext();
+  const permissions = useGetPermissions();
+  const openShare = useShareModal(() => ({
+    id: documentId,
+    blockAlias: 'canvas',
+    itemType: 'document',
+    name: fileName() ?? '',
+    userPermissions: permissions(),
+    owner: blockMetadataSignal()?.owner,
+  }));
+  const copyEntityLink = useCopyLink();
 
   let ref!: HTMLDivElement;
   onMount(() => {
-    toolManager.ignoreMouseEvents(ref);
+    toolManager?.ignoreMouseEvents(ref);
   });
 
   const downloadDocument = createCallback(async () => {
@@ -72,19 +84,9 @@ export function TopBar() {
       [URL_PARAMS.y]: location.y.toString(),
       [URL_PARAMS.s]: location.s.toString(),
     };
-    const url = buildSimpleEntityUrl(
-      {
-        type: 'canvas',
-        id: documentId,
-      },
-      params
+    copyEntityLink(
+      buildSimpleEntityUrl({ type: 'canvas', id: documentId }, params)
     );
-    if (!url) {
-      toast.failure('failed to copy url');
-      return;
-    }
-    navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
     analytics.track('copy_share_link', { blockType: 'canvas' });
   };
 
@@ -117,9 +119,11 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
+      action: openShare,
       condition: () => !!canvasFile(),
-      buttonComponent: () => <ShareTrigger copyLink={copyLink} />,
+      buttonComponent: () => (
+        <ShareTrigger onClick={openShare} copyLink={copyLink} />
+      ),
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

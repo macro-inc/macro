@@ -5,6 +5,11 @@ use std::collections::HashSet;
 #[cfg(test)]
 mod test;
 
+#[cfg(feature = "admission")]
+use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
+#[cfg(feature = "admission")]
+use std::sync::Arc;
+
 use agent_session::domain::error::Result;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
 use agent_session::domain::ports::AgentSessionRepo;
@@ -170,6 +175,8 @@ pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, Hist
     replies: Replies,
     judge: Judge,
     history: History,
+    #[cfg(feature = "admission")]
+    admission: Arc<dyn AiAdmissionService>,
 }
 
 impl<Repo, Bots, Teams, Channels, Replies, Judge, History>
@@ -185,7 +192,7 @@ where
 {
     /// Creates a trigger service backed by session, bot, membership, and
     /// participation lookups.
-    pub const fn new(
+    pub fn new(
         sessions: Repo,
         bots: Bots,
         teams: Teams,
@@ -202,7 +209,17 @@ where
             replies,
             judge,
             history,
+            #[cfg(feature = "admission")]
+            admission: Arc::new(DisabledAiAdmissionService),
         }
+    }
+
+    /// Configure admission for implicit classification, including image captions.
+    /// Explicit mentions and deterministic reply routing are admitted downstream.
+    #[cfg(feature = "admission")]
+    pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
+        self.admission = admission;
+        self
     }
 
     /// Whether `posted` may address `bot_id` under the bot's current scope.
@@ -219,30 +236,44 @@ where
             return Ok(false);
         };
 
+        self.agent_is_available_for(&caller, &posted.parent, bot_id)
+            .await
+    }
+
+    async fn agent_is_available_for(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+        bot_id: BotId,
+    ) -> Result<bool> {
         if let Some(agent) = self.bots.get_agent(bot_id).await? {
             if !agent.bot.has_agent {
                 return Ok(false);
             }
-            // Channel selection restricts channel placement. Document invocation
-            // requires ownership or team membership and is independently bounded
-            // by the invoking user's document access at execution time.
-            if matches!(posted.parent, MessageParent::Document(_)) {
-                return self.owner_allows(&caller, agent.bot.owner.as_ref()).await;
-            }
-            let MessageParent::Channel(channel_id) = posted.parent else {
-                unreachable!()
+            // Channel selection restricts channel placement. Other conversations,
+            // including call chat, require ownership or team membership and are
+            // bounded by the invoking user's parent access at execution time.
+            let channel_id = match parent {
+                MessageParent::Channel(channel_id) => channel_id,
+                MessageParent::Document(_)
+                | MessageParent::Initiative(_)
+                | MessageParent::CrmCompany(_)
+                | MessageParent::CrmContact(_)
+                | MessageParent::Call(_) => {
+                    return self.owner_allows(caller, agent.bot.owner.as_ref()).await;
+                }
             };
             return match agent.channel_scope {
                 AgentChannelScope::All => match agent.bot.owner {
                     Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
                     Some(BotOwner::Team { team_id }) => {
-                        self.teams.user_has_team(caller, team_id).await
+                        self.teams.user_has_team(caller.clone(), team_id).await
                     }
                     None => Ok(false),
                 },
                 AgentChannelScope::Selected => {
                     self.channels
-                        .bot_active_in_channel(channel_id, bot_id)
+                        .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
             };
@@ -256,15 +287,47 @@ where
         }
         match bot.kind {
             BotKind::System => Ok(true),
-            BotKind::Owned => match &posted.parent {
+            BotKind::Owned => match parent {
                 MessageParent::Channel(channel_id) => {
                     self.channels
                         .bot_active_in_channel(*channel_id, bot_id)
                         .await
                 }
-                MessageParent::Document(_) => self.owner_allows(&caller, bot.owner.as_ref()).await,
+                MessageParent::Document(_)
+                | MessageParent::Initiative(_)
+                | MessageParent::CrmCompany(_)
+                | MessageParent::CrmContact(_)
+                | MessageParent::Call(_) => self.owner_allows(caller, bot.owner.as_ref()).await,
             },
         }
+    }
+
+    /// Recheck task access and agent ownership before an assignment starts work.
+    pub async fn authorize_task_assignment(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+        root_id: Uuid,
+        bot_id: BotId,
+    ) -> Result<Option<AuthorizedInvocation>> {
+        if !matches!(parent, MessageParent::Document(_))
+            || !self.agent_is_available_for(caller, parent, bot_id).await?
+        {
+            return Ok(None);
+        }
+        self.history
+            .authorize_invocation(caller, parent, root_id)
+            .await
+    }
+
+    /// Whether this assignment's discussion already has a session for the agent.
+    pub async fn assignment_has_session(&self, root_id: Uuid, bot_id: BotId) -> Result<bool> {
+        Ok(matches!(
+            self.sessions
+                .find_for_thread(Some(root_id), Some(bot_id))
+                .await?,
+            ThreadSession::CreatedFromThread(_)
+        ))
     }
 
     async fn owner_allows(
@@ -423,9 +486,9 @@ where
         };
         // Only a user implicitly addresses an agent; bot traffic must always
         // mention explicitly, or bots would relay each other forever.
-        if posted.sender.as_user().is_none() {
+        let Some(_user) = posted.sender.as_user() else {
             return Ok(None);
-        }
+        };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
@@ -462,6 +525,15 @@ where
                 return Ok(None);
             }
         };
+
+        // The judge may caption attachments before classifying. Admit the whole
+        // optional operation before entering that port, never retrying through a
+        // different model on rejection. Returning no event preserves broker ack.
+        #[cfg(feature = "admission")]
+        if let Err(error) = self.admission.admit(_user, AiFeature::Automation).await {
+            tracing::info!(code = error.code(), "skipping agent trigger inference");
+            return Ok(None);
+        }
 
         if self
             .is_addressed_to_agent(posted, &self.transcript(posted, invocation, &session).await)

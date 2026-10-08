@@ -57,7 +57,7 @@ impl DiscussionContextReader for Context {
     ) -> Result<DiscussionContext, rootcause::Report> {
         Ok(DiscussionContext {
             name: "Document".into(),
-            owner: "owner".into(),
+            owner: Some("owner".into()),
             file_type: None,
             is_task: false,
             participants: vec!["revoked".into(), "viewer".into()],
@@ -150,7 +150,11 @@ async fn edits_and_reactions_only_publish_live_updates() {
     let MessageChange::Posted { message, .. } = event.change else {
         unreachable!()
     };
-    event.change = MessageChange::ReactionChanged { message };
+    event.change = MessageChange::ReactionChanged {
+        message,
+        emoji: "👍".to_string(),
+        added: true,
+    };
     DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
         .publish(event)
         .await
@@ -188,6 +192,29 @@ async fn document_mentions_inherit_link_sharing_for_uuid_parents() {
     assert_eq!(*shares.0.lock().unwrap(), vec![document]);
 }
 
+#[tokio::test]
+async fn initiative_mentions_recheck_access_without_granting_document_shares() {
+    let log = DeliveryLog::default();
+    let shares = Shares::default();
+    let delivery = DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
+        .with_sharing(shares.clone());
+    let mut event = event();
+    event.parent = MessageParent::Initiative(Uuid::from_u128(23));
+    delivery.publish(event).await.unwrap();
+    assert!(shares.0.lock().unwrap().is_empty());
+    assert_eq!(
+        *log.live.lock().unwrap(),
+        HashSet::from(["viewer".to_owned()])
+    );
+    assert!(
+        !log.notices
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(user, _)| user == "revoked")
+    );
+}
+
 #[derive(Clone, Default)]
 struct Sink(Arc<Mutex<Vec<MessageParent>>>);
 impl MessageEventPublisher for Sink {
@@ -207,8 +234,14 @@ async fn document_events_never_reach_channel_delivery_and_vice_versa() {
     channel.parent = MessageParent::Channel(Uuid::from_u128(4));
     publisher.publish(document.clone()).await.unwrap();
     publisher.publish(channel.clone()).await.unwrap();
+    let mut initiative = event();
+    initiative.parent = MessageParent::Initiative(Uuid::from_u128(5));
+    publisher.publish(initiative.clone()).await.unwrap();
     assert_eq!(*channels.0.lock().unwrap(), vec![channel.parent]);
-    assert_eq!(*discussions.0.lock().unwrap(), vec![document.parent]);
+    assert_eq!(
+        *discussions.0.lock().unwrap(),
+        vec![document.parent, initiative.parent]
+    );
 }
 
 #[tokio::test]
@@ -223,5 +256,54 @@ async fn channel_events_are_rejected_by_discussion_delivery() {
             .is_err()
     );
     assert!(log.live.lock().unwrap().is_empty());
+    assert!(log.notices.lock().unwrap().is_empty());
+}
+
+struct OwnerlessContext;
+impl DiscussionContextReader for OwnerlessContext {
+    async fn context(
+        &self,
+        parent: &MessageParent,
+        root: Uuid,
+    ) -> Result<DiscussionContext, rootcause::Report> {
+        let mut context = Context.context(parent, root).await?;
+        context.owner = None;
+        context.link_share_access = None;
+        Ok(context)
+    }
+}
+
+#[tokio::test]
+async fn crm_records_without_an_owner_only_notify_mentions_and_participants() {
+    let log = DeliveryLog::default();
+    let shares = Shares::default();
+    let delivery = DiscussionDelivery::new(OwnerlessContext, Access, log.clone(), log.clone())
+        .with_sharing(shares.clone());
+    let mut event = event();
+    event.parent = MessageParent::CrmContact(Uuid::from_u128(24));
+    delivery.publish(event).await.unwrap();
+    assert!(shares.0.lock().unwrap().is_empty());
+    assert_eq!(
+        *log.notices.lock().unwrap(),
+        vec![("viewer".into(), CommentNotificationReason::Mention)]
+    );
+}
+
+#[tokio::test]
+async fn call_chat_only_reaches_authorized_live_subscribers() {
+    let log = DeliveryLog::default();
+    let mut event = event();
+    event.parent = MessageParent::Call(Uuid::from_u128(9));
+    if let MessageChange::Posted { message, .. } = &mut event.change {
+        message.parent = event.parent.clone();
+    }
+    DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
+        .publish(event)
+        .await
+        .unwrap();
+    assert_eq!(
+        *log.live.lock().unwrap(),
+        HashSet::from(["viewer".to_owned()])
+    );
     assert!(log.notices.lock().unwrap().is_empty());
 }

@@ -96,10 +96,6 @@ export function useRevokeGtmInviteLinkMutation(
   }));
 }
 
-/**
- * The public welcome page's view of a link. Every fetch counts as an "open"
- * on the dashboard, so the result is pinned for the page's lifetime.
- */
 function publicGtmInviteLinkQueryOptions(token: string) {
   return queryOptions({
     queryKey: gtmInviteKeys.publicLink(token).queryKey,
@@ -113,6 +109,10 @@ function publicGtmInviteLinkQueryOptions(token: string) {
   });
 }
 
+/**
+ * The public welcome page's view of a link. Every fetch counts as an "open"
+ * on the dashboard, so the result is pinned for the page's lifetime.
+ */
 export function usePublicGtmInviteLinkQuery(
   token: Accessor<string | undefined>
 ) {

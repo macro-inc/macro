@@ -26,10 +26,6 @@ pub fn build_appimage() -> Workflow {
             )),
         )
         .add_job("build-appimage", build_appimage_job("${{ inputs.ref }}"))
-        .add_job(
-            "publish-appimage",
-            publish_appimage_job("${{ inputs.ref }}").add_needs("build-appimage"),
-        )
 }
 
 /// Build the AppImage job, checking out and naming artifacts from `ref_expr`.
@@ -41,6 +37,7 @@ pub fn build_appimage_job(ref_expr: &str) -> Job {
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::derive_artifact_metadata(ref_expr))
+        .add_step(prepare_desktop_release(ref_expr))
         .add_step(nix_build_appimage())
         .add_step(collect_appimage())
         .add_step(steps::upload_artifact(
@@ -50,9 +47,12 @@ pub fn build_appimage_job(ref_expr: &str) -> Job {
         .add_step(steps::teardown_nix())
 }
 
-/// Publish AppImage artifacts from the workflow run to the release tag.
-pub fn publish_appimage_job(ref_expr: &str) -> Job {
-    publish_job(ref_expr, xtask_paths::runtime_path!("release-artifacts/*"))
+/// Embed one release identity in the native app and its bundled frontend.
+pub fn prepare_desktop_release(ref_expr: &str) -> Step<Run> {
+    Step::new("Prepare desktop release identity")
+        .run("nix develop --command bun apps/web/scripts/desktop-release.mjs prepare \"$RAW_REF\"")
+        .shell("bash")
+        .add_env(("RAW_REF", ref_expr))
 }
 
 /// Publish desktop artifacts from the workflow run to the release tag.

@@ -1,4 +1,5 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -7,6 +8,7 @@ import {
   getDisplayName,
   getInitialsFromName,
 } from '@core/user';
+import { writeClipboardData } from '@core/util/dataTransfer';
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
@@ -15,6 +17,7 @@ import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import MapPinIcon from '@phosphor/map-pin.svg';
 import PhoneIcon from '@phosphor/phone.svg';
@@ -39,11 +42,16 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
-import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  isSameLocalDate,
+  isTimedPointEvent,
+  parseLocalDate,
+} from '../utils/calendar-date';
 import {
   parseMacroAppLink,
   sanitizeCalendarDescription,
 } from '../utils/calendar-description';
+import { safeConferenceUrl } from '../utils/conference-link';
 import {
   type CalendarPerson,
   eventAttribution,
@@ -57,6 +65,10 @@ import {
   REMINDER_METHOD_POPUP,
   resolveReminderOverrides,
 } from '../utils/event-reminders';
+import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../utils/macro-call-link';
 import { formatRecurrenceDescription } from '../utils/recurrence';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -320,22 +332,13 @@ function formatEventSchedule(
       : `${formatShortDate.format(start)}–${formatShortDate.format(inclusiveEnd)} · All day`;
   }
 
+  if (isTimedPointEvent(event)) {
+    return `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)} · No duration`;
+  }
+
   return isSameLocalDate(start, end)
     ? `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)}–${formatCalendarTime(end, timeFormat)}`
     : `${formatDate.format(start)}, ${formatCalendarTime(start, timeFormat)}–${formatDate.format(end)}, ${formatCalendarTime(end, timeFormat)}`;
-}
-
-function safeConferenceUrl(value: string | undefined) {
-  if (!value) return undefined;
-
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:'
-      ? url.toString()
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -501,19 +504,25 @@ export function EventDetails(props: {
   timeFormat: CalendarTimeFormat;
   defaultReminders?: EventReminderOverride[];
 }) {
-  const conferenceUrl = createMemo(() =>
-    safeConferenceUrl(props.event.conferenceUrl)
+  const macroMeetingUrl = () => calendarMacroCallUrl(props.event);
+  const conferenceUrl = createMemo(
+    () => macroMeetingUrl() ?? safeConferenceUrl(props.event.conferenceUrl)
   );
   const conferenceLabel = () =>
-    props.event.conferenceProvider === 'google_meet'
-      ? 'Join Google Meet'
-      : 'Join meeting';
+    macroMeetingUrl()
+      ? 'Join Macro call'
+      : props.event.conferenceProvider === 'google_meet'
+        ? 'Join Google Meet'
+        : 'Join meeting';
   const attribution = createMemo(() => eventAttribution(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
+  const eventContent = createMemo(() =>
+    removeCalendarMacroCall(props.event, macroMeetingUrl())
+  );
   const descriptionHtml = createMemo(() =>
-    sanitizeCalendarDescription(props.event.description ?? '')
+    sanitizeCalendarDescription(eventContent().description)
   );
   const openDescriptionLink = createCallback((event: MouseEvent) => {
     const anchor = (event.target as Element | null)?.closest('a[href]');
@@ -544,7 +553,7 @@ export function EventDetails(props: {
   });
 
   return (
-    <div class="grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
+    <div class="ph-no-capture grid min-w-0 grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 gap-y-5 p-1 text-sm text-ink-muted sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:gap-y-3 sm:text-xs">
       <span
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
@@ -584,17 +593,33 @@ export function EventDetails(props: {
       <Show when={conferenceUrl()}>
         {(url) => (
           <div class="contents">
-            <VideoCameraIcon class="size-5 self-center text-ink-extra-muted sm:size-4" />
-            <Button
-              fullWidth
-              variant="cta"
-              size="sm"
-              class="h-8 rounded-lg [&_svg]:size-3.5!"
-              onClick={() => openExternalUrl(url())}
-            >
-              {conferenceLabel()}
-              <ArrowSquareOutIcon />
-            </Button>
+            <VideoCameraIcon class="mt-2 size-5 text-ink-extra-muted sm:size-4" />
+            <div class="flex min-w-0 items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 min-w-0 bg-hover text-ink not-touch:not-disabled:hover:bg-active [&_svg]:size-3.5!"
+                onClick={() => openExternalUrl(url())}
+              >
+                {conferenceLabel()}
+                <ArrowSquareOutIcon />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0"
+                label="Copy call link"
+                onClick={async () => {
+                  if (await writeClipboardData({ 'text/plain': url() })) {
+                    toast.success('Call link copied');
+                  } else {
+                    toast.failure('Could not copy call link');
+                  }
+                }}
+              >
+                <CopyIcon class="size-3.5" />
+              </Button>
+            </div>
           </div>
         )}
       </Show>
@@ -607,7 +632,7 @@ export function EventDetails(props: {
         )}
       </Show>
 
-      <Show when={props.event.location?.trim()}>
+      <Show when={eventContent().location.trim()}>
         {(location) => <EventLocationItem location={location()} />}
       </Show>
 

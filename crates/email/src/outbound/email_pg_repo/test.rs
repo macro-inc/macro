@@ -9,9 +9,12 @@ mod message;
 mod preview;
 mod project;
 mod project_scope_dynamic_query;
+mod reminder_collection;
+mod scheduled;
 mod settings;
 mod signal_flag;
 mod thread;
+mod thread_archive;
 mod thread_labels;
 mod thread_unread;
 
@@ -44,3 +47,5 @@ async fn sync_all_signal_flags(pool: &Pool<Postgres>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+mod followup;

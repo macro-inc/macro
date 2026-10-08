@@ -74,6 +74,7 @@ const SIG_THREAD_TRASH_ONLY: &str = "00000000-0000-0000-0000-00000000d204";
 const SIG_THREAD_VIP_ADDRESS: &str = "00000000-0000-0000-0000-00000000d205";
 const SIG_THREAD_DOMAIN_MUTED: &str = "00000000-0000-0000-0000-00000000d206";
 const SIG_THREAD_DRAFT: &str = "00000000-0000-0000-0000-00000000d207";
+const SIG_THREAD_MACRO_DIGEST: &str = "00000000-0000-0000-0000-00000000d209";
 
 async fn fetch_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<bool> {
     Ok(sqlx::query_scalar!(
@@ -168,6 +169,20 @@ async fn signal_domain_override_mutes_unlabeled_message(
     // other@corp.com has no address exception, so the domain mute applies.
     sync_signal(&pool, SIG_THREAD_DOMAIN_MUTED).await?;
     assert!(!fetch_signal(&pool, SIG_THREAD_DOMAIN_MUTED).await?);
+    Ok(())
+}
+
+// Macro's own notification emails are never signal: the exclusion is
+// case-insensitive on the sender domain and beats both the unlabeled
+// default and an explicit address-important override.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sync_thread_signal_flag"))
+)]
+async fn signal_cleared_for_macro_notification_sender(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    assert!(fetch_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?);
+    sync_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?;
+    assert!(!fetch_signal(&pool, SIG_THREAD_MACRO_DIGEST).await?);
     Ok(())
 }
 
@@ -314,6 +329,71 @@ async fn repeated_metadata_recompute_is_noop(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(
         thread_after_second.updated_at, thread_after_first.updated_at,
         "no-op metadata recompute must not rewrite the row"
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../email/fixtures", scripts("email_thread_labels"))
+)]
+async fn returned_sent_only_metadata_preserves_visibility_without_rewriting(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let sent_label = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_labels (id, link_id, provider_label_id, name) VALUES ($1, $2, 'SENT', 'SENT')",
+        sent_label, link_id,
+    ).execute(&pool).await?;
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = TRUE WHERE thread_id = $1",
+        thread_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_message_labels (message_id, label_id) SELECT id, $2 FROM email_messages WHERE thread_id = $1",
+        thread_id, sent_label,
+    ).execute(&pool).await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    // All ordinary metadata already matches, including raw inbox_visible=false.
+    sqlx::query!(
+        "UPDATE email_threads SET reminder_returned_at = NOW() WHERE id = $1",
+        thread_id
+    )
+    .execute(&pool)
+    .await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    let restored = sqlx::query!(
+        "SELECT inbox_visible, latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        restored.inbox_visible,
+        "the effective override must repair false visibility"
+    );
+    assert!(restored.latest_inbound_message_ts.is_none());
+
+    // A fixed old timestamp makes an unintended rewrite observable without sleeps.
+    let previous = sqlx::query_scalar!(
+        "UPDATE email_threads SET updated_at = '2000-01-01T00:00:00Z' WHERE id = $1 RETURNING updated_at",
+        thread_id,
+    ).fetch_one(&pool).await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    let repeated = sqlx::query!(
+        "SELECT inbox_visible, updated_at FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(repeated.inbox_visible);
+    assert_eq!(
+        repeated.updated_at, previous,
+        "matching effective visibility must not rewrite metadata"
     );
     Ok(())
 }

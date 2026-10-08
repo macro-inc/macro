@@ -63,13 +63,36 @@ pub struct PreparedUpdate {
 }
 
 /// Signed-token attribution stored alongside the existing operation log.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct DocumentAttribution {
     pub actor: String,
     pub on_behalf_of: Option<String>,
 }
 
 impl DocumentAttribution {
+    /// Resolve only verified session claims. Human edits are direct actions;
+    /// an explicit agent actor retains the user it is acting on behalf of.
+    pub fn from_session_claims(
+        actor: Option<String>,
+        user_id: Option<String>,
+    ) -> Result<Option<Self>, DocumentError> {
+        match (actor, user_id) {
+            (Some(actor), user_id) => Self::from_signed_claims(actor, user_id).map(Some),
+            (None, Some(user_id)) => {
+                // Human identities retain the user-claim bound; long valid
+                // email addresses can exceed the explicit agent-actor bound.
+                if user_id.len() > 1024 {
+                    return Err(DocumentError::Invalid("Invalid signed attribution."));
+                }
+                Ok(Some(Self {
+                    actor: user_id,
+                    on_behalf_of: None,
+                }))
+            }
+            (None, None) => Ok(None),
+        }
+    }
+
     pub fn from_signed_claims(
         actor: String,
         on_behalf_of: Option<String>,
@@ -122,8 +145,24 @@ pub fn snapshot(
     _access: &DocumentAccess,
     doc: &LoroDoc,
 ) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(doc, ExportMode::Snapshot)
+}
+
+/// Current state without prior history, at the same editable revision. This
+/// bounds readers' work by live content rather than the document's age.
+pub fn shallow_snapshot(
+    _access: &DocumentAccess,
+    doc: &LoroDoc,
+) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
+    export_state(
+        doc,
+        ExportMode::ShallowSnapshot(Cow::Owned(doc.state_frontiers())),
+    )
+}
+
+fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>), DocumentError> {
     let snapshot = doc
-        .export(ExportMode::Snapshot)
+        .export(mode)
         .map_err(|_| DocumentError::Invalid("The document snapshot could not be exported."))?;
     if snapshot.len() > MAX_BINARY_BYTES {
         return Err(DocumentError::TooLarge);

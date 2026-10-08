@@ -17,11 +17,16 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
+initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
+crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_egress = { path = "../../crates/agent_egress" }
-agent_fold = { path = "../../crates/agent_fold" }
+agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
@@ -43,12 +48,20 @@ cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 claude_cloud_agents = { path = "../../crates/claude_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+entity_registry = { path = "../../crates/entity_registry/entity_registry", default-features = false }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "ports",
   "sync",
 ] }
+github_pull_requests = { path = "../../crates/github_pull_requests", default-features = false, features = [
+  "outbound",
+  "s3",
+  "service",
+] }
+mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }
@@ -56,17 +69,22 @@ macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_queues = { path = "../../crates/macro_queues" }
 lexical_client = { path = "../../crates/lexical_client" }
+document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
+properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
+static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
+system_properties = { path = "../../crates/system_properties" }
 channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
+model_owner = { path = "../../crates/model_owner" }
 axum = { workspace = true }
 axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }
@@ -95,6 +113,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
+tower-http = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
@@ -102,3 +121,4 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["test-utils"] }

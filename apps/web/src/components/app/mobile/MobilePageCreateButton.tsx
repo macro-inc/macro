@@ -4,7 +4,7 @@ import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
 } from '@app/features/command/Launcher';
-import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { openCreateCompanyModal } from '@app/features/crm/crm-create';
 import { hapticImpact } from '@core/mobile/haptics';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
@@ -13,6 +13,7 @@ import MoreIcon from '@phosphor/dots-three.svg';
 import EmailIcon from '@phosphor/envelope-simple.svg';
 import DocumentIcon from '@phosphor/file-text.svg';
 import TaskIcon from '@phosphor/list-checks.svg';
+import PhoneIcon from '@phosphor/phone.svg';
 import CreateIcon from '@phosphor/plus.svg';
 import { Show } from 'solid-js';
 import {
@@ -62,6 +63,26 @@ export function MobilePageCreateButton() {
     }),
     { label: 'More', icon: MoreIcon, onSelect: openCreateMenu },
   ];
+  const calendarActions = (): MobileCreateMenuItem[] => {
+    const blocks = createBlocks();
+    const call = blocks.find((block) => block.blockName === 'call');
+    return [
+      {
+        label: 'Event',
+        icon: CalendarIcon,
+        onSelect: () => openEventComposer(),
+      },
+      ...(call
+        ? [
+            {
+              label: 'Call',
+              icon: PhoneIcon,
+              onSelect: () => void call.keyDownHandler(),
+            },
+          ]
+        : []),
+    ];
+  };
   const action = () =>
     actionForView(foregroundView()) ?? {
       label: 'New',
@@ -71,24 +92,31 @@ export function MobilePageCreateButton() {
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
       <Show
-        when={foregroundView() === 'inbox'}
+        when={foregroundView() === 'home'}
         fallback={
-          <MobileDockIsland class="shrink-0">
-            <button
-              type="button"
-              aria-label={
-                action().label === 'New'
-                  ? 'New'
-                  : `New ${action().label.toLowerCase()}`
-              }
-              onPointerDown={() => hapticImpact('light')}
-              onClick={() => action().onSelect()}
-              class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
-            >
-              <CreateIcon class="size-5.5 shrink-0" />
-              <span>{action().label}</span>
-            </button>
-          </MobileDockIsland>
+          <Show
+            when={foregroundView() === 'calendar' && calendarEnabled()}
+            fallback={
+              <MobileDockIsland class="shrink-0">
+                <button
+                  type="button"
+                  aria-label={
+                    action().label === 'New'
+                      ? 'New'
+                      : `New ${action().label.toLowerCase()}`
+                  }
+                  onPointerDown={() => hapticImpact('light')}
+                  onClick={() => action().onSelect()}
+                  class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
+                >
+                  <CreateIcon class="size-5.5 shrink-0" />
+                  <span>{action().label}</span>
+                </button>
+              </MobileDockIsland>
+            }
+          >
+            <MobileCreateMenu items={calendarActions()} />
+          </Show>
         }
       >
         <MobileCreateMenu items={quickActions()} />

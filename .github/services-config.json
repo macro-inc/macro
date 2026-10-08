@@ -4,10 +4,12 @@
       "source_paths": [
         "services/agent_harness_service/**",
         "crates/agent_harness/**",
-        "crates/agent_fold/**",
+        "crates/folds/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
-        "crates/agent_runtime_protocol/**"
+        "crates/agent_runtime_protocol/**",
+        "crates/agent_preview/**",
+        "crates/agent_egress/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
@@ -120,6 +122,17 @@
     "document-storage-service": {
       "source_paths": [
         "services/document_storage_service/**",
+        "services/slack_import_worker/**",
+        "crates/slack_integration/**",
+        "crates/channels/**",
+        "crates/messages/**",
+        "crates/import/**",
+        "crates/macro_queues/**",
+        "crates/macro_service_urls/**",
+        "crates/teams/**",
+        "crates/invite_email/**",
+        "crates/notification/**",
+        "crates/model_notifications/**",
         "crates/call/**",
         "crates/github/**",
         "crates/initiative/**",
@@ -130,7 +143,8 @@
       ],
       "stack_path": "infra/stacks/cloud-storage-service/**",
       "deploy_binaries": [
-        "document_storage_service"
+        "document_storage_service",
+        "slack_import_worker"
       ],
       "deploy_lambdas": [
         "delete_chat_handler",
@@ -191,7 +205,11 @@
     },
     "search-processing-service": {
       "source_paths": [
-        "services/search_processing_service/**"
+        "services/search_processing_service/**",
+        "crates/models_search/**",
+        "crates/models_opensearch/**",
+        "crates/opensearch_client/**",
+        "crates/comms_db_client/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",
       "deploy_binaries": [
@@ -228,6 +246,14 @@
       "deploy_lambdas": [
         "image_optimizer"
       ]
+    },
+    "lexical-service": {
+      "source_paths": [
+        "services/lexical-service/**",
+        "packages/lexical-core/**",
+        "docker/lexical-service.Dockerfile"
+      ],
+      "stack_path": "infra/stacks/lexical-service/**"
     },
     "unfurl-service": {
       "source_paths": [
@@ -295,6 +321,16 @@
         "crates/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
+    },
+    "preview-gateway": {
+      "source_paths": [
+        "services/preview_gateway/**",
+        "crates/agent_preview/**"
+      ],
+      "stack_path": "infra/stacks/preview-gateway/**",
+      "deploy_binaries": [
+        "preview_gateway"
+      ]
     }
   }
 }

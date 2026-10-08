@@ -11,6 +11,7 @@ type AttachmentState = Pick<
   EmailFormContextValue['attachments'],
   | 'list'
   | 'assignAttachmentId'
+  | 'markAttachmentUploaded'
   | 'clearAttachmentId'
   | 'removeByFile'
   | 'removeById'
@@ -37,21 +38,61 @@ export async function refuseAttachmentsOffline(
 /** Attachment transport and completion, independent of draft/send orchestration. */
 export function createAttachmentPersistence(options: {
   attachments: AttachmentState;
+  /** Durable working copies must not hide attachments still present on the server. */
+  confirmRemoval?: boolean;
   draftId: Accessor<string | null | undefined>;
   inboxId: Accessor<string | undefined>;
   services: Pick<
     EmailAttachmentStorage,
-    'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
+    | 'uploadAttachments'
+    | 'addForwardedAttachments'
+    | 'removeAttachment'
+    | 'removeForwardedAttachment'
   >;
 }) {
   // An assigned ID only proves that the attachment record exists. Every save
   // must also wait for content uploads started by earlier concurrent saves.
   const inFlight = new Set<Promise<void>>();
   const [uploading, setUploading] = createSignal(false);
+  let generation = 0;
+  const [removals, setRemovals] = createSignal(0);
 
   return {
-    uploading,
+    uploading: () => uploading() || removals() > 0,
+    removing: () => removals() > 0,
+    /** Local files can be uploaded again; remote-only draft files cannot be cloned. */
+    detach() {
+      generation += 1;
+      let removed = 0;
+      for (const attachment of options.attachments.list()) {
+        if (attachment.type === 'local') {
+          options.attachments.clearAttachmentId(attachment.file);
+        } else if (attachment.type === 'remote') {
+          options.attachments.removeById(attachment.attachmentId);
+          removed += 1;
+        }
+      }
+      return removed;
+    },
     async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
+      const uploadGeneration = generation;
+      const stillCurrent = () =>
+        uploadGeneration === generation && options.draftId() === draftId;
+      for (const attachment of options.attachments.list()) {
+        if (
+          attachment.type !== 'local' ||
+          !attachment.uploadPending ||
+          !attachment.attachmentId
+        )
+          continue;
+        await options.services.removeAttachment({
+          draftId,
+          attachmentId: attachment.attachmentId,
+          inboxId: inbox.inboxId,
+        });
+        if (!stillCurrent()) return;
+        options.attachments.clearAttachmentId(attachment.file);
+      }
       const attachments = options.attachments
         .list()
         .filter(
@@ -66,8 +107,17 @@ export function createAttachmentPersistence(options: {
           draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           inboxId: inbox.inboxId,
-          onAttachmentAdded: options.attachments.assignAttachmentId,
-          onAttachmentUploadFailed: options.attachments.clearAttachmentId,
+          onAttachmentAdded: (file, id) => {
+            if (stillCurrent())
+              options.attachments.assignAttachmentId(file, id);
+          },
+          onAttachmentUploaded: (file, id) => {
+            if (stillCurrent())
+              options.attachments.markAttachmentUploaded(file, id);
+          },
+          onAttachmentUploadFailed: (file) => {
+            if (stillCurrent()) options.attachments.clearAttachmentId(file);
+          },
         });
         const settled = run.then(
           () => undefined,
@@ -83,27 +133,54 @@ export function createAttachmentPersistence(options: {
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
       if (run) await run;
+      if (!stillCurrent()) return;
+      const forwarded = options.attachments
+        .list()
+        .filter((attachment) => attachment.type === 'forwarded');
+      if (forwarded.length) {
+        await options.services.addForwardedAttachments({
+          draftId,
+          inboxId: inbox.inboxId,
+          attachments: forwarded.map(({ attachmentId }) => ({ attachmentId })),
+        });
+      }
     },
-    remove(attachment: DraftFormAttachment) {
+    async remove(attachment: DraftFormAttachment) {
       const state = options.attachments;
-      if (attachment.type === 'local') state.removeByFile(attachment.file);
-      else if (attachment.type === 'forwarded')
-        state.removeForwarded(attachment.attachmentId);
-      else state.removeById(attachment.attachmentId);
-
       const draftId = options.draftId();
-      if (!draftId || !attachment.attachmentId) return;
+      const removalGeneration = generation;
       const operation =
         attachment.type === 'forwarded'
           ? options.services.removeForwardedAttachment
           : options.services.removeAttachment;
-      void operation({
-        draftId,
-        attachmentId: attachment.attachmentId,
-        inboxId: options.inboxId(),
-      }).catch(() => {
-        // The attachment query reports removal failures; keep optimistic removal.
-      });
+      const request =
+        draftId && attachment.attachmentId
+          ? {
+              draftId,
+              attachmentId: attachment.attachmentId,
+              inboxId: options.inboxId(),
+            }
+          : undefined;
+      if (options.confirmRemoval && request) {
+        setRemovals((count) => count + 1);
+        try {
+          await operation(request);
+        } finally {
+          setRemovals((count) => count - 1);
+        }
+        if (generation !== removalGeneration || options.draftId() !== draftId)
+          return false;
+      }
+      if (attachment.type === 'local') state.removeByFile(attachment.file);
+      else if (attachment.type === 'forwarded')
+        state.removeForwarded(attachment.attachmentId);
+      else state.removeById(attachment.attachmentId);
+      if (!options.confirmRemoval && request) {
+        void operation(request).catch(() => {
+          // Preserve the existing REST composer's optimistic removal behavior.
+        });
+      }
+      return true;
     },
   };
 }

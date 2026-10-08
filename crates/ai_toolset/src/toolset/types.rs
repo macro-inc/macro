@@ -61,6 +61,8 @@ pub type AsyncToolCollection<ToolSetContext> = ToolCollection<AsyncToolObject<To
 pub struct RequestSchema {
     /// The name of the tool.
     pub name: String,
+    /// What the tool does, sent as the provider tool definition's description.
+    pub description: String,
     /// The JSON schema for the tool's input parameters.
     pub schema: Schema,
 }

@@ -1,22 +1,36 @@
+import ArrowUp from '@phosphor/arrow-up.svg';
+import { Button } from '@ui';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
- * is read off the fold — the turn discriminant and the messages' pending
- * marks — so the composer keeps no state of its own.
+ * comes from the fold. The composer also holds the model selector while a
+ * combined model-and-effort change waits for runtime confirmation.
  */
 
-import { useOptionalAgentChanges } from '@app/features/agent-changes/context/agent-changes-controller';
+import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
-  createInputAttachmentTracker,
   type InputAttachmentData,
   uploadInputAttachments,
 } from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
-import { type Component, For, Show } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { changingModel, hasPendingStop } from '../state/control-message';
+import {
+  createSessionAttachmentTracker,
+  createSessionComposerDraft,
+} from '../primitives/session-composer-draft';
+import {
+  changingConfig,
+  changingModel,
+  hasPendingStop,
+} from '../state/control-message';
+import {
+  type EffortSelection,
+  effortConfigOption,
+  effortLabel,
+} from '../state/session-config';
 import {
   AgentInput,
   type AgentInputProps,
@@ -26,8 +40,10 @@ import {
   QueuedPrompts,
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
+import { AgentModelMenuItem } from './AgentModelMenuItem';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
+import { ToolApprovalRequest } from './ToolApprovalRequest';
 
 export function AgentComposer(props: {
   /**
@@ -41,21 +57,30 @@ export function AgentComposer(props: {
   const Input = props.input ?? AgentInput;
   const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
+    session,
+    selectModel,
     displayName,
     userId,
     interactions,
+    toolApprovals,
     issue,
     loadFailed,
     messages,
     metadata,
     pending,
     queue,
-    session,
     sendNext,
+    steer,
     turn,
     registerQuoteInsert,
+    initialInput,
+    sessionId,
   } = useAgentSession();
-  const changes = useOptionalAgentChanges();
+  const persistedDraft = createSessionComposerDraft(
+    sessionId,
+    () => initialInput
+  );
+  const changes = useOptionalChanges();
   const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is
@@ -68,6 +93,29 @@ export function AgentComposer(props: {
     } catch {
       toast.failure(failure);
     }
+  };
+
+  const [configuring, setConfiguring] = createSignal(false);
+  const chooseModel = async (model: string, selection?: EffortSelection) => {
+    if (readOnly() || configuring()) return;
+    setConfiguring(true);
+    try {
+      await selectModel(model, selection);
+    } catch (error) {
+      toast.failure(
+        error instanceof Error
+          ? error.message
+          : 'The model settings could not be changed'
+      );
+    } finally {
+      setConfiguring(false);
+    }
+  };
+
+  const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  const changingEffort = () => {
+    const option = effort();
+    return option ? changingConfig(messages(), option.id) : undefined;
   };
 
   // A turn is open in some form: the send button becomes a stop square and
@@ -100,7 +148,7 @@ export function AgentComposer(props: {
   // the static file service - documents too, not only media - because the
   // agent can only reach a file by a URL it can fetch. The chips and the
   // upload flow are the channel composer's.
-  const attachmentTracker = createInputAttachmentTracker();
+  const attachmentTracker = createSessionAttachmentTracker(sessionId);
   const attachFiles = (files: File[]) => {
     if (readOnly()) return;
     void uploadInputAttachments({
@@ -154,20 +202,54 @@ export function AgentComposer(props: {
     <>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
-          <QueuedPrompts
-            items={queuedItems()}
-            disabled={readOnly()}
-            onEdit={(actionId, prompt) => {
-              if (!readOnly()) void queue.edit(actionId, prompt);
-            }}
-            onRemove={(actionId) => {
-              if (!readOnly()) void queue.remove(actionId);
-            }}
-            onNavigateBelow={() => focusInput?.()}
-            registerFocusFromBelow={(focus) => {
-              focusQueueBottom = focus;
-            }}
-          />
+          <div class="mb-1 flex items-center justify-between gap-2 px-1">
+            <span class="text-xs text-ink-muted">
+              {queuedItems().length} queued
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              class="touch:min-h-11"
+              aria-label="Send next queued message now"
+              disabled={
+                readOnly() ||
+                loadFailed() ||
+                pending() ||
+                turn() === 'stopping' ||
+                turn() === 'starting'
+              }
+              onClick={() => {
+                if (!readOnly()) sendNext();
+              }}
+            >
+              <ArrowUp class="size-4" />
+              Send next
+            </Button>
+          </div>
+          <div class="max-h-[25dvh] overflow-y-auto overscroll-contain">
+            <QueuedPrompts
+              items={queuedItems()}
+              disabled={readOnly()}
+              onEdit={(actionId, prompt) => {
+                if (!readOnly()) void queue.edit(actionId, prompt);
+              }}
+              onRemove={(actionId) => {
+                if (!readOnly()) void queue.remove(actionId);
+              }}
+              onSteer={
+                busy() &&
+                !readOnly() &&
+                turn() !== 'stopping' &&
+                turn() !== 'starting'
+                  ? (actionId) => steer(actionId)
+                  : undefined
+              }
+              onNavigateBelow={() => focusInput?.()}
+              registerFocusFromBelow={(focus) => {
+                focusQueueBottom = focus;
+              }}
+            />
+          </div>
         </div>
       </Show>
       <Show when={resuming()}>
@@ -189,7 +271,17 @@ export function AgentComposer(props: {
           </div>
         )}
       </For>
+      <For each={toolApprovals.pending()}>
+        {(approval) => (
+          <div class="mb-2 min-w-0">
+            <ToolApprovalRequest request={approval} />
+          </div>
+        )}
+      </For>
       <Input
+        initialInput={initialInput}
+        draft={persistedDraft.draft()}
+        onDraftChange={persistedDraft.setDraft}
         placeholder={
           readOnly()
             ? 'You have view-only access to this agent session'
@@ -242,13 +334,32 @@ export function AgentComposer(props: {
             model={metadata()?.model ?? null}
             changingTo={changingModel(messages(), metadata()?.model ?? null)}
             options={metadata()?.supportedModels ?? []}
-            disabled={loadFailed() || readOnly()}
-            onSelect={(model) =>
-              void act(
-                { type: 'setModel', model },
-                'The model could not be changed'
-              )
+            effortLabel={effortLabel(effort(), changingEffort())}
+            disabled={
+              loadFailed() ||
+              readOnly() ||
+              pending() ||
+              configuring() ||
+              changingEffort() !== undefined
             }
+            onSelect={(model) => void chooseModel(model)}
+            modelRow={(row) => (
+              <AgentModelMenuItem
+                {...row}
+                harness={session()?.harness}
+                effort={
+                  row.option.id === metadata()?.model ? effort() : undefined
+                }
+                effortValue={
+                  row.option.id === metadata()?.model
+                    ? changingEffort()
+                    : undefined
+                }
+                onSelectEffort={(selection) =>
+                  void chooseModel(row.option.id, selection)
+                }
+              />
+            )}
           />
         }
       />

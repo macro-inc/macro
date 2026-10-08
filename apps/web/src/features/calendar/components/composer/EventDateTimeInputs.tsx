@@ -9,6 +9,7 @@ import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
+import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
 import {
   DAY_TIME_OPTIONS,
   type EventTimeOption,
@@ -52,8 +53,13 @@ interface EventTimeInputProps {
   /** Highlighted option; defaults to `value` on the anchor day. */
   selectedId?: string;
   onChange: (option: EventTimeOption) => void;
+  /** Called when the native control is cleared; omitted where empty is invalid UI. */
+  onClear?: () => void;
   onFocus?: () => void;
   disabled?: boolean;
+  invalid?: boolean;
+  /** Native time precision in seconds. Calendar fields keep quarter-hour slots by default. */
+  step?: number;
   hideLabel?: boolean;
   class?: string;
 }
@@ -109,12 +115,13 @@ export function EventTimeInput(props: EventTimeInputProps) {
         <input
           id={props.id}
           type="time"
-          step={900}
+          step={props.step ?? 900}
           value={props.value}
           disabled={props.disabled}
+          aria-invalid={props.invalid || undefined}
           aria-expanded={open()}
           aria-haspopup="listbox"
-          class="w-full appearance-none rounded-md border border-edge-muted bg-surface py-1.5 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:hidden"
+          class="w-full appearance-none rounded-md border border-edge-muted bg-control py-1.5 pr-7 pl-2 text-xs text-ink outline-none focus:border-accent aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20 disabled:opacity-50 [&::-webkit-calendar-picker-indicator]:hidden"
           onFocus={() => {
             props.onFocus?.();
             setDropdownOpen(true);
@@ -122,7 +129,10 @@ export function EventTimeInput(props: EventTimeInputProps) {
           onClick={() => setDropdownOpen(true)}
           onInput={(event) => {
             const value = event.currentTarget.value;
-            if (value && value !== props.value) {
+            if (!value) {
+              props.onClear?.();
+              setOpen(false);
+            } else if (value !== props.value) {
               props.onChange(resolveTimeOption(options(), value));
             }
           }}
@@ -139,7 +149,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
         />
       </div>
 
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={4}>
           <Popover.Content
             class="z-action-menu max-h-64 min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass menu-open-animation"
@@ -180,7 +190,7 @@ export function EventTimeInput(props: EventTimeInputProps) {
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }

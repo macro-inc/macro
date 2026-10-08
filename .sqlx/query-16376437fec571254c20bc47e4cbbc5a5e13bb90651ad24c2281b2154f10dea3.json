@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET sync_token='legacy',synced_at=now(),materialized_starts_at='2026-07-01',materialized_ends_at='2026-08-01',materialized_start_date='2026-07-01',materialized_end_date='2026-08-01' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "16376437fec571254c20bc47e4cbbc5a5e13bb90651ad24c2281b2154f10dea3"
+}

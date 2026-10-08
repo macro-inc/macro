@@ -115,18 +115,20 @@ export function CollapsedInput(props: CollapsedInputProps) {
           </Button>
         </Show>
         {props.trailingAction}
-        <Show when={!isMobile() || !props.disabled}>
-          <SendButton
-            appearance="composer"
-            pending={props.pending}
-            disabled={props.disabled || props.pending}
-            onPointerDown={(event) => {
-              event.preventDefault();
-              void props.onSend?.();
-            }}
-            data-collapsed-input-send
-          />
-        </Show>
+        {/* Fades out rather than unmounting, the way the expanded composer's
+            send action does: dropping it would slide the trailing action
+            across as soon as the draft emptied. */}
+        <SendButton
+          appearance="composer"
+          pending={props.pending}
+          hidden={isMobile() && props.disabled}
+          disabled={props.disabled || props.pending}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            void props.onSend?.();
+          }}
+          data-collapsed-input-send
+        />
       </ComposerSurface>
     </Layer>
   );

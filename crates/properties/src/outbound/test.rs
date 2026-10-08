@@ -768,6 +768,31 @@ fn assert_option_mutation(
     );
 }
 
+async fn seed_select_options(
+    pool: &Pool<Postgres>,
+    definition: Uuid,
+    ids: &[Uuid],
+) -> anyhow::Result<()> {
+    use crate::domain::database_option_writer::DatabaseOptionWriter;
+    let mut transaction = pool.begin().await?;
+    let options = ids
+        .iter()
+        .map(|id| {
+            (
+                *id,
+                models_properties::service::property_option::PropertyOptionValue::String(
+                    id.to_string(),
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+    PropertiesPgRepo::new(pool.clone())
+        .add_options_in(&mut transaction, definition, &options)
+        .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties_seed"))
@@ -778,6 +803,7 @@ async fn add_option_attaches_appends_and_dedupes(pool: Pool<Postgres>) -> anyhow
     let entity_id = "entity-tags-add";
     let opt_a = macro_uuid::generate_uuid_v7();
     let opt_b = macro_uuid::generate_uuid_v7();
+    seed_select_options(&pool, def_id, &[opt_a, opt_b]).await?;
 
     // First add attaches the property and returns its complete persisted state.
     let first = repo
@@ -822,6 +848,7 @@ async fn remove_option_strips_and_is_tolerant(pool: Pool<Postgres>) -> anyhow::R
     let opt_a = macro_uuid::generate_uuid_v7();
     let opt_b = macro_uuid::generate_uuid_v7();
     let opt_c = macro_uuid::generate_uuid_v7();
+    seed_select_options(&pool, def_id, &[opt_a, opt_b, opt_c]).await?;
 
     let attached = repo
         .add_entity_property_option(entity_id, EntityType::Document, def_id, opt_a)
@@ -925,6 +952,7 @@ async fn bulk_update_options_composes_and_returns_finals(
     let opt_a = macro_uuid::generate_uuid_v7();
     let opt_b = macro_uuid::generate_uuid_v7();
     let opt_c = macro_uuid::generate_uuid_v7();
+    seed_select_options(&pool, def_id, &[opt_a, opt_b, opt_c]).await?;
 
     // First bulk update attaches the property and adds A and B.
     let first = repo
@@ -983,6 +1011,7 @@ async fn bulk_update_options_concurrent_no_lost_update(pool: Pool<Postgres>) -> 
     let entity_id = "entity-bulk-concurrent";
     let opt_a = macro_uuid::generate_uuid_v7();
     let opt_b = macro_uuid::generate_uuid_v7();
+    seed_select_options(&pool, def_id, &[opt_a, opt_b]).await?;
 
     // Start from {A}.
     repo.bulk_update_entity_property_options(
@@ -1045,6 +1074,7 @@ async fn bulk_update_options_partial_failure_rolls_back(
     // No such property definition, so writing it violates the foreign key.
     let missing_def_id = macro_uuid::generate_uuid_v7();
     let orphan_option = macro_uuid::generate_uuid_v7();
+    seed_select_options(&pool, def_id, &[existing, attempted]).await?;
 
     // Establish a committed baseline value on the valid property.
     repo.bulk_update_entity_property_options(

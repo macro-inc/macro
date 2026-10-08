@@ -32,6 +32,8 @@ export function describeRun(entry: FeedEntry): {
 export function describeAction(action: ActivityAction, count = 1): string {
   if (count < 2) {
     return match(action)
+      .with({ kind: 'task-added' }, () => 'added a task')
+      .with({ kind: 'task-removed' }, () => 'removed a task')
       .with({ kind: 'created' }, () => 'created this')
       .with({ kind: 'edited' }, () => 'made an edit')
       .with({ kind: 'opened' }, () => 'opened this')
@@ -42,10 +44,13 @@ export function describeAction(action: ActivityAction, count = 1): string {
       .with({ kind: 'participant-added' }, () => 'added a participant')
       .with({ kind: 'participant-removed' }, () => 'removed a participant')
       .with({ kind: 'call-started' }, () => 'started a call')
+      .with({ kind: 'responded' }, () => 'responded')
       .with({ kind: 'unknown' }, (unknown) => unknown.tag.replaceAll('_', ' '))
       .exhaustive();
   }
   return match(action)
+    .with({ kind: 'task-added' }, () => `added ${count} tasks`)
+    .with({ kind: 'task-removed' }, () => `removed ${count} tasks`)
     .with({ kind: 'created' }, () => `created this ${count} times`)
     .with({ kind: 'edited' }, () => `made ${count} edits`)
     .with({ kind: 'opened' }, () => `opened this ${count} times`)
@@ -59,6 +64,7 @@ export function describeAction(action: ActivityAction, count = 1): string {
       () => `removed ${count} participants`
     )
     .with({ kind: 'call-started' }, () => `started ${count} calls`)
+    .with({ kind: 'responded' }, () => `responded ${count} times`)
     .with(
       { kind: 'unknown' },
       (unknown) => `${unknown.tag.replaceAll('_', ' ')} ${count} times`
@@ -77,6 +83,14 @@ export function describeActionForEntity(action: ActivityAction): {
   connector?: string;
 } {
   return match(action)
+    .with({ kind: 'task-added' }, () => ({
+      verb: 'added a task',
+      connector: 'to',
+    }))
+    .with({ kind: 'task-removed' }, () => ({
+      verb: 'removed a task',
+      connector: 'from',
+    }))
     .with({ kind: 'created' }, () => ({
       verb: 'created',
     }))
@@ -109,6 +123,7 @@ export function describeActionForEntity(action: ActivityAction): {
       verb: 'started a call',
       connector: 'in',
     }))
+    .with({ kind: 'responded' }, () => ({ verb: 'responded', connector: 'to' }))
     .with({ kind: 'unknown' }, (unknown) => ({
       verb: unknown.tag.replaceAll('_', ' '),
       connector: 'on',

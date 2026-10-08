@@ -16,7 +16,7 @@ use crate::domain::event_runs::{
     EventRunRepository, FinalizationResult, FinalizeEventRun, PageSize, PendingEventRun,
 };
 use crate::domain::event_trigger::{ActionTrigger, EventReference};
-use crate::domain::models::{MAX_ACTION_TIME, ScheduledAction};
+use crate::domain::models::{ActionExecutionRecord, MAX_ACTION_TIME, ScheduledAction};
 
 #[cfg(test)]
 mod test;
@@ -122,13 +122,14 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT id AS action_id, owner, enabled, configuration_revision,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
-            WHERE enabled AND trigger_type = 'events'
+            WHERE enabled AND event_filters IS NOT NULL
               AND ($1::uuid IS NULL OR id > $1)
               AND event_activated_at <= $2
-              AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
+              AND (event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
+                OR ($6::text IS NOT NULL AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($6::text)))))
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $3::text, 'id', $4::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $3::text, 'general', $6::text, 'id', $4::text))
             ORDER BY id
             LIMIT $5
             "#,
@@ -137,6 +138,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.event_name().as_str(),
             event.entity_id().to_string(),
             i64::from(limit.get()),
+            event.event_name().general_event().map(|name| name.as_str()),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -168,7 +170,7 @@ impl EventRunRepository for PgEventRunRepo {
             r#"
             SELECT id AS action_id, owner, enabled, configuration_revision,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
-            FROM scheduled_action WHERE id = $1 AND trigger_type = 'events'
+            FROM scheduled_action WHERE id = $1 AND event_filters IS NOT NULL
             "#,
             action_id,
         )
@@ -190,11 +192,11 @@ impl EventRunRepository for PgEventRunRepo {
         let eligible = sqlx::query_scalar!(
             r#"
             SELECT id FROM scheduled_action
-            WHERE id = $1 AND enabled AND trigger_type = 'events'
+            WHERE id = $1 AND enabled AND event_filters IS NOT NULL
               AND configuration_revision = $2 AND event_activated_at <= $3
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? (@.events[*] == $event && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $4::text, 'id', $5::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
+                  jsonb_build_object('event', $4::text, 'general', $6::text, 'id', $5::text))
             FOR UPDATE
             "#,
             action_id,
@@ -202,6 +204,7 @@ impl EventRunRepository for PgEventRunRepo {
             event.published_at(),
             event.event_name().as_str(),
             event.entity_id().to_string(),
+            event.event_name().general_event().map(|name| name.as_str()),
         )
         .fetch_optional(&mut *tx)
         .await?;
@@ -247,7 +250,7 @@ impl EventRunRepository for PgEventRunRepo {
                 WHERE action_id = a.id AND state = 'pending'
                 ORDER BY admission_order LIMIT 1
             ) r
-            WHERE a.enabled AND a.trigger_type = 'events'
+            WHERE a.enabled AND a.event_filters IS NOT NULL
               AND a.configuration_revision = r.configuration_revision
               AND (a.claimed IS NULL OR a.claimed < $1)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run s WHERE s.action_id = a.id AND s.state = 'started')
@@ -287,7 +290,7 @@ impl EventRunRepository for PgEventRunRepo {
             SELECT id, owner, name, kind, task, created_at, updated_at, enabled,
                    event_filters AS "event_filters!", event_activated_at AS "event_activated_at!"
             FROM scheduled_action
-            WHERE id = $1 AND enabled AND trigger_type = 'events' AND configuration_revision = $2
+            WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2
               AND (claimed IS NULL OR claimed < $3)
               AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run WHERE action_id = $1 AND state = 'started')
             "#,
@@ -392,6 +395,9 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(action) = action else {
+            // Drop only queues rollback. Release the action lock before returning
+            // so an immediate SKIP LOCKED reconciliation can observe this action.
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         };
         let stored = sqlx::query!(
@@ -405,17 +411,21 @@ impl EventRunRepository for PgEventRunRepo {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(stored) = stored else {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         };
         if stored.claim_token != Some(run.token.as_uuid()) {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         }
         if stored.state == "finished" {
+            tx.rollback().await?;
             return Ok(FinalizationResult::AlreadyFinalized);
         }
         // Delayed bookkeeping may still finish its own claim. Reconciliation
         // uses the same lock: whichever terminal transition commits first wins.
         if stored.state != "started" || action.claim_token != stored.claim_token {
+            tx.rollback().await?;
             return Ok(FinalizationResult::StaleClaim);
         }
         let mut execution_record_id = None;
@@ -491,13 +501,80 @@ impl EventRunRepository for PgEventRunRepo {
         Ok(())
     }
 
+    async fn skip_pending(
+        &self,
+        key: EventRunKey,
+        revision: ConfigurationRevision,
+        reason: CancellationReason,
+        record: ActionExecutionRecord,
+    ) -> Result<(), Report> {
+        if record.action_id != key.action_id {
+            bail!("execution record belongs to another action");
+        }
+        let mut tx = self.pool.begin().await?;
+        sqlx::query_scalar!(
+            "SELECT id FROM scheduled_action WHERE id = $1 FOR UPDATE",
+            key.action_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let skipped = sqlx::query_scalar!(
+            r#"
+            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4
+            WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
+            RETURNING event_id
+            "#,
+            key.action_id,
+            key.event_id.as_uuid(),
+            revision.get(),
+            serde_json::to_value(EventRunOutcome::Cancelled { reason })?,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        if skipped.is_none() {
+            tx.rollback().await?;
+            return Ok(());
+        }
+        let id = generate_uuid_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO action_execution_record
+                (id, action_id, resource_id, start_time, end_time, is_success, result, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "#,
+            id,
+            key.action_id,
+            record.resource_id,
+            record.start_time,
+            record.end_time,
+            record.is_success,
+            record.result,
+            record.created_at,
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            r#"
+            UPDATE scheduled_action_event_run SET execution_record_id = $3
+            WHERE action_id = $1 AND event_id = $2
+            "#,
+            key.action_id,
+            key.event_id.as_uuid(),
+            id,
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     async fn reconcile(&self, now: DateTime<Utc>, limit: PageSize) -> Result<u16, Report> {
         let candidates = sqlx::query!(
             r#"
             SELECT r.action_id, r.event_id FROM scheduled_action_event_run r
             JOIN scheduled_action a ON a.id = r.action_id
             WHERE (r.state = 'started' AND r.deadline <= $1)
-               OR (r.state = 'pending' AND (NOT a.enabled OR a.trigger_type <> 'events'
+               OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
                    OR a.configuration_revision <> r.configuration_revision))
             ORDER BY r.admission_order LIMIT $2 FOR UPDATE OF a SKIP LOCKED
             "#,
@@ -523,7 +600,7 @@ impl EventRunRepository for PgEventRunRepo {
                 FROM scheduled_action a
                 WHERE r.action_id = $1 AND r.event_id = $2 AND a.id = r.action_id
                   AND ((r.state = 'started' AND r.deadline <= $3)
-                    OR (r.state = 'pending' AND (NOT a.enabled OR a.trigger_type <> 'events'
+                    OR (r.state = 'pending' AND (NOT a.enabled OR a.event_filters IS NULL
                         OR a.configuration_revision <> r.configuration_revision)))
                 RETURNING r.claim_token
                 "#,

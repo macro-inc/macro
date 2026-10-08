@@ -10,7 +10,9 @@ export const EMAIL_DIGEST_NOTIFICATION_TYPE =
 
 export type NotificationEventGroupId =
   | 'channels'
+  | 'projects'
   | 'documents'
+  | 'crm'
   | 'tasks'
   | 'calendar'
   | 'email'
@@ -49,6 +51,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Thread replies',
         description: 'Replies in threads you are part of',
       },
+      {
+        type: 'channel_message_reaction',
+        label: 'Message reactions',
+        description: 'When someone reacts to one of your messages',
+      },
     ],
   },
   {
@@ -74,6 +81,30 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'commented_on_document',
         label: 'New comments',
         description: 'Comments on documents you own',
+      },
+    ],
+  },
+  {
+    id: 'projects',
+    label: 'Projects',
+    events: [
+      {
+        type: 'initiative_discussion',
+        label: 'Discussion',
+        description:
+          'Mentions, replies, and comments on projects you own or are assigned to',
+      },
+    ],
+  },
+  {
+    id: 'crm',
+    label: 'Companies & contacts',
+    events: [
+      {
+        type: 'crm_discussion',
+        label: 'Discussion',
+        description:
+          'Mentions, replies, and comments on companies you own and their contacts',
       },
     ],
   },
@@ -186,6 +217,9 @@ export const MUTED_ENTITY_TYPE_LABELS: Record<string, string> = {
   foreign: 'GitHub',
   foreign_entity: 'GitHub',
   project: 'Folder',
+  initiative: 'Project',
+  crm_company: 'Company',
+  crm_contact: 'Contact',
   reminder: 'Reminder',
   team: 'Team',
 };

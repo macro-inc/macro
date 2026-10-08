@@ -1,5 +1,10 @@
 use crate::NotificationState;
-use sqlx::PgPool;
+use sqlx::{Connection, PgPool};
+
+/// CI clones every test database from a `template1` that already holds the macrodb
+/// schema (`just setup_test_template`). These tests build their own schema, so they
+/// start from an empty `public` schema.
+const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
 
 const LEGACY_SCHEMA: &str = include_str!(
     "../../../../macro_db_client/migrations/20260126170641_create_notification_tables.sql"
@@ -20,6 +25,7 @@ async fn migration_normalizes_legacy_states_without_changing_timestamps(
 ) -> Result<(), sqlx::Error> {
     // DDL and the pre-cutover fixture cannot be checked against the current
     // development schema. Execute the real migration scripts in an isolated DB.
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_INDEXES).execute(&pool).await?;
     sqlx::raw_sql(
@@ -33,12 +39,18 @@ async fn migration_normalizes_legacy_states_without_changing_timestamps(
             ('invalid', '00000000-0000-0000-0000-000000000001', true, NULL, false, '2020-01-03', '2020-01-01');",
     ).execute(&pool).await?;
 
+    // One connection for the round-trip: DROP TYPE + CREATE TYPE assigns a new
+    // OID, and a pooled connection would otherwise reuse a prepared SELECT whose
+    // result type still names the dropped enum ("cached plan must not change
+    // result type").
+    let mut conn = pool.acquire().await?;
     for _ in 0..2 {
-        sqlx::raw_sql(UP).execute(&pool).await?;
+        sqlx::raw_sql(UP).execute(&mut *conn).await?;
+        conn.clear_cached_statements().await?;
         let rows = sqlx::query!(
             r#"SELECT user_id, state as "state!: NotificationState", seen_at, sent, deleted_at, created_at
                FROM user_notification ORDER BY user_id"#,
-        ).fetch_all(&pool).await?;
+        ).fetch_all(&mut *conn).await?;
         assert_eq!(rows.len(), 4);
         for row in rows {
             assert_eq!(row.created_at.to_string(), "2020-01-01 00:00:00");
@@ -64,13 +76,14 @@ async fn migration_normalizes_legacy_states_without_changing_timestamps(
                 _ => panic!("unexpected fixture row"),
             }
         }
-        sqlx::raw_sql(DOWN).execute(&pool).await?;
+        sqlx::raw_sql(DOWN).execute(&mut *conn).await?;
     }
     Ok(())
 }
 
 #[sqlx::test(migrations = false)]
 async fn state_defaults_and_constraints_are_enforced(pool: PgPool) -> Result<(), sqlx::Error> {
+    sqlx::raw_sql(EMPTY_PUBLIC_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_SCHEMA).execute(&pool).await?;
     sqlx::raw_sql(LEGACY_INDEXES).execute(&pool).await?;
     sqlx::raw_sql(UP).execute(&pool).await?;

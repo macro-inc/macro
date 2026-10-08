@@ -1,8 +1,9 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
-    ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
+    AgentAssignedToTaskEvent, AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent,
+    ChannelEventMetadata, ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata,
+    ThreadMessageKind,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
@@ -15,9 +16,19 @@ use messages::domain::events::MessagePostedMetadata;
 use messages::domain::models::MessageParent;
 
 use super::*;
-use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand, StaticFileLinks};
+use crate::domain::model::{
+    AgentKind, AgentRuntimeConfig, HarnessCommand, MentionOrigin, OpenSession, SessionOrigin,
+    StaticFileLinks,
+};
 use agent_runtime_protocol::domain::action::PromptAttachment;
 use channels::domain::broker_events::ChannelEventAttachment;
+
+fn mention_origin(open: &OpenSession) -> &MentionOrigin {
+    let SessionOrigin::Mention(origin) = &open.origin else {
+        panic!("expected a mention origin");
+    };
+    origin
+}
 
 fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
     Some(AgentRuntimeConfig {
@@ -115,11 +126,11 @@ fn a_mention_for_our_bot_opens_a_session() {
     assert_eq!(open.runtime.kind, AgentKind::InMemory);
     assert_eq!(open.runtime.model, "configured-model");
     assert_eq!(open.runtime.instructions, "configured instructions");
-    assert_eq!(open.origin.message_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).message_id, Uuid::from_u128(2));
     // A top-level mention roots its own thread.
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
-    assert_eq!(open.origin.sender, user());
-    assert_eq!(open.origin.content, "@claude fix the tests");
+    assert_eq!(mention_origin(&open).thread_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).sender, user());
+    assert_eq!(mention_origin(&open).content, "@claude fix the tests");
 }
 
 #[test]
@@ -140,7 +151,7 @@ fn a_threaded_mention_answers_into_its_thread() {
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.thread_id, thread);
+    assert_eq!(mention_origin(&open).thread_id, thread);
 }
 
 #[test]
@@ -286,8 +297,8 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
     else {
         panic!("a new-session event should open");
     };
-    assert_eq!(open.origin.parent, document());
-    assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
+    assert_eq!(mention_origin(&open).parent, document());
+    assert_eq!(mention_origin(&open).thread_id, Uuid::from_u128(2));
 
     let followed =
         AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
@@ -303,6 +314,92 @@ fn a_document_mention_opens_and_follows_up_on_its_document() {
     };
     assert_eq!(session_id, AgentSessionId::TEST_A);
     assert_eq!(prompt.origin.parent, document());
+}
+
+fn assigned_to_task() -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(
+        AgentAssignedToTaskEvent {
+            bot_id: BotId::TEST_A,
+            parent: document(),
+            discussion_id: Uuid::from_u128(2),
+            actor: user(),
+            prompt: "Complete the assigned task".to_owned(),
+        },
+    ))
+}
+
+#[test]
+fn assigning_a_managed_agent_opens_on_the_task_discussion() {
+    let event = assigned_to_task();
+    assert_eq!(agent_trigger_bot_id(&event), Some(BotId::TEST_A));
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
+            .expect("a managed assignment opens a session")
+    else {
+        panic!("an assignment should open a session");
+    };
+    assert_eq!(open.bot_id, BotId::TEST_A);
+    let SessionOrigin::TaskAssignment(origin) = open.origin else {
+        panic!("an assignment must retain its own origin");
+    };
+    assert_eq!(origin.parent, document());
+    assert_eq!(origin.discussion_id, Uuid::from_u128(2));
+    assert_eq!(origin.actor, user());
+    assert_eq!(origin.prompt, "Complete the assigned task");
+}
+
+#[test]
+fn assigning_an_external_agent_leaves_session_creation_to_its_runtime() {
+    assert_eq!(
+        route_agent_trigger(assigned_to_task(), runtime(AgentKind::External), &links(),)
+            .unwrap_err(),
+        Skipped::ForeignBot,
+    );
+}
+
+#[test]
+fn task_discussion_followups_keep_the_managed_and_external_session_origin() {
+    let thread_id = Uuid::from_u128(7);
+    let message_id = Uuid::from_u128(8);
+    let followed =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: BotId::TEST_A,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: MessagePostedMetadata {
+                message_id,
+                thread_id: Some(thread_id),
+                root_id: thread_id,
+                content: "Include a regression test".to_owned(),
+                ..document_message(ChannelSender::new_from_user(user()))
+            },
+        }));
+    let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) =
+        route_agent_trigger(followed.clone(), runtime(AgentKind::InMemory), &links())
+            .expect("a managed follow-up delivers")
+    else {
+        panic!("a managed follow-up should deliver");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(
+        deliver.action,
+        AgentAction::prompt("Include a regression test")
+    );
+    let origin = deliver.announce.expect("a task follow-up announces");
+    assert_eq!(origin.parent, document());
+    assert_eq!(origin.thread_id, thread_id);
+    assert_eq!(origin.message_id, message_id);
+
+    let RoutedTrigger::Announce(session_id, prompt) =
+        route_agent_trigger(followed, runtime(AgentKind::External), &links())
+            .expect("an external follow-up announces")
+    else {
+        panic!("an external follow-up should announce");
+    };
+    assert_eq!(session_id, AgentSessionId::TEST_A);
+    assert_eq!(prompt.origin.parent, document());
+    assert_eq!(prompt.origin.thread_id, thread_id);
+    assert_eq!(prompt.origin.message_id, message_id);
 }
 
 #[test]
@@ -388,7 +485,7 @@ fn a_mention_with_attached_files_opens_with_them_as_prompt_attachments() {
         panic!("a new-session event should open");
     };
     assert_eq!(
-        open.origin.attachments,
+        mention_origin(&open).attachments,
         vec![
             PromptAttachment::new(
                 format!("https://static.example/file/{}", Uuid::from_u128(0x10)),

@@ -10,6 +10,16 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * Metadata together with the caller's effective grant.
+ */
+export type AccessiblePipeline = Pipeline & {
+    /**
+     * Highest effective access.
+     */
+    grant: AccessLevel;
+};
+
+/**
  * A currently active call, as returned by the batch active-calls listing.
  */
 export type ActiveCallSummary = {
@@ -47,6 +57,26 @@ export type ActiveCallsResponse = {
 };
 
 /**
+ * Active quick-call metadata available to its authenticated owner or attendees.
+ */
+export type ActiveMeeting = Meeting & {
+    /**
+     * Creator identity for displaying the caller in the authenticated active list.
+     */
+    createdBy: string;
+};
+
+/**
+ * The authenticated actor's active quick calls, including their creators.
+ */
+export type ActiveMeetingsResponse = {
+    /**
+     * Persistent meeting invitations for currently active sessions.
+     */
+    meetings: Array<ActiveMeeting>;
+};
+
+/**
  * The kind of activity a user performs in a channel.
  */
 export type ActivityType = 'view' | 'interact';
@@ -62,7 +92,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -120,6 +150,13 @@ export type Agent = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent works in a repository, which decides how it answers
+     * a channel mention: a coding agent posts a magic chip into its live
+     * session, a chat agent replies in the thread. Chosen in the agent's
+     * settings; the persona's word, not the runtime's.
+     */
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -234,6 +271,12 @@ export type AgentSessionLifecycleEvent = {
      */
     metadata: TurnEndedMetadata;
 } | {
+    event_type: 'agent_session.command_rejected';
+    /**
+     * An accepted command was refused before runtime execution.
+     */
+    metadata: CommandRejectedMetadata;
+} | {
     event_type: 'agent_session.settled';
     /**
      * A turn ended with nothing queued behind it.
@@ -283,10 +326,6 @@ export type AnchorId = PdfAnchorId & {
     fileType: 'pdf';
 };
 
-export type AnchorRequest = PdfAnchorRequest & {
-    fileType: 'pdf';
-};
-
 export type AnchorResponse = {
     data: Array<Anchor>;
 };
@@ -294,24 +333,10 @@ export type AnchorResponse = {
 export type AnnotationIncrementalUpdate = {
     payload: {
         documentId: string;
-        response: CreateCommentResponse;
-        sender: string;
-    };
-    updateType: 'create-comment';
-} | {
-    payload: {
-        documentId: string;
         response: CreateUnthreadedAnchorResponse;
         sender: string;
     };
     updateType: 'create-anchor';
-} | {
-    payload: {
-        documentId: string;
-        response: EditCommentResponse;
-        sender: string;
-    };
-    updateType: 'edit-comment';
 } | {
     payload: {
         documentId: string;
@@ -322,17 +347,25 @@ export type AnnotationIncrementalUpdate = {
 } | {
     payload: {
         documentId: string;
-        response: DeleteCommentResponse;
-        sender: string;
-    };
-    updateType: 'delete-comment';
-} | {
-    payload: {
-        documentId: string;
         response: DeleteUnthreadedAnchorResponse;
         sender: string;
     };
     updateType: 'delete-anchor';
+};
+
+/**
+ * One question's answer: a value for its column, typed as the column's
+ * cells are.
+ */
+export type Answer = {
+    /**
+     * The question.
+     */
+    question: string;
+    /**
+     * The value; `clear` for no answer.
+     */
+    value: CellValue;
 };
 
 /**
@@ -503,56 +536,9 @@ export type ApiChannelAttachmentsPage = {
 };
 
 /**
- * A channel message returned by the message-context endpoint.
- */
-export type ApiChannelContextMessage = {
-    /**
-     * Channel id.
-     */
-    channel_id: string;
-    /**
-     * Message content.
-     */
-    content: string;
-    /**
-     * When the message was created.
-     */
-    created_at: string;
-    /**
-     * When the message was soft-deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * When the message was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Message id.
-     */
-    id: string;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * Parent thread id for replies.
-     */
-    thread_id?: string | null;
-    /**
-     * When the message was last updated.
-     */
-    updated_at: string;
-};
-
-/**
- * Channel detail: metadata, active participants, and a recent page of messages.
+ * Channel detail: metadata and active participants.
  *
- * `messages` is the newest-first first page (size controlled by `limit`); use the
- * dedicated `/{channel_id}/messages` endpoint for cursor pagination.
+ * Messages are read through `/messages/channel/{channel_id}`.
  */
 export type ApiChannelDetail = {
     /**
@@ -567,10 +553,6 @@ export type ApiChannelDetail = {
      * Channel type.
      */
     channel_type: ChannelType;
-    /**
-     * Recent messages (newest-first first page).
-     */
-    messages: Array<ApiChannelMessage>;
     /**
      * Active participants.
      */
@@ -661,83 +643,6 @@ export type ApiChannelListParticipant = {
 export type ApiChannelListType = 'public' | 'private' | 'direct_message' | 'team';
 
 /**
- * A top-level channel message with thread info.
- */
-export type ApiChannelMessage = {
-    /**
-     * Attachments on this message.
-     */
-    attachments: Array<ApiMessageAttachment>;
-    /**
-     * Channel id.
-     */
-    channel_id: string;
-    /**
-     * Message content.
-     */
-    content: string;
-    /**
-     * When the message was created.
-     */
-    created_at: string;
-    /**
-     * When the message was soft-deleted.
-     */
-    deleted_at?: string | null;
-    /**
-     * When the message was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Message id.
-     */
-    id: string;
-    /**
-     * Reactions on this message.
-     */
-    reactions: Array<ApiCountedReaction>;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * Thread metadata and preview.
-     */
-    thread: ApiThreadInfo;
-    /**
-     * When the message was last updated.
-     */
-    updated_at: string;
-};
-
-/**
- * Position of a message in the channel/thread model.
- */
-export type ApiChannelMessageKind = 'topLevelMessage' | 'threadReply';
-
-/**
- * Paginated response of channel messages.
- */
-export type ApiChannelMessagesPage = {
-    /**
-     * Messages on this page.
-     */
-    items: Array<ApiChannelMessage>;
-    /**
-     * Cursor for the next page, null if no more pages.
-     */
-    next_cursor?: string | null;
-    /**
-     * Cursor for the previous page, null if no newer page exists.
-     */
-    previous_cursor?: string | null;
-};
-
-/**
  * A channel participant.
  */
 export type ApiChannelParticipant = {
@@ -824,26 +729,12 @@ export type ApiChannelWithLatest = {
 };
 
 /**
- * A reaction with emoji and user list.
- */
-export type ApiCountedReaction = {
-    /**
-     * The emoji string.
-     */
-    emoji: string;
-    /**
-     * User ids who added this reaction.
-     */
-    users: Array<string>;
-};
-
-/**
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export type ApiEntityFilterAst = {
     /**
-     * Filters applied to agent sessions (wire key `asf`). Like reminders,
-     * empty/omitted returns **no** agent sessions: they are opt-in, so the
+     * Filters applied to agent sessions (wire key `asf`). An empty or
+     * omitted filter returns **no** agent sessions: they are opt-in, so the
      * caller must send `inc`, an id, or an owner to get any.
      */
     asf?: unknown;
@@ -868,6 +759,10 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied to the channel entity
      */
     chanf?: unknown;
+    /**
+     * Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+     */
+    crmf?: unknown;
     /**
      * the filters that should be applied to the channel-thread entity
      */
@@ -898,9 +793,17 @@ export type ApiEntityFilterAst = {
      */
     ef?: unknown;
     /**
+     * Restrict to the authenticated viewer's favorites before pagination when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the filters that should be applied to foreign entity records
      */
     fef?: unknown;
+    /**
+     * the filters that should be applied to GitHub pull request records, on top of `fef`
+     */
+    ghprf?: unknown;
     /**
      * the filters that should be applied to the project entity
      */
@@ -909,12 +812,6 @@ export type ApiEntityFilterAst = {
      * the filters that should be applied based on entity properties
      */
     propf?: unknown;
-    /**
-     * Filters applied to reminders (wire key `remf`). Unlike every other
-     * filter here, empty/omitted returns **no** reminders: they are opt-in,
-     * so the caller must send `inc`, an id, or an entity to get any.
-     */
-    remf?: unknown;
 };
 
 /**
@@ -968,67 +865,6 @@ export type ApiGroupMeta = {
 };
 
 /**
- * An attachment on a message.
- */
-export type ApiMessageAttachment = {
-    /**
-     * When the attachment was created.
-     */
-    created_at: string;
-    /**
-     * Entity id.
-     */
-    entity_id: string;
-    /**
-     * Type of entity.
-     */
-    entity_type: string;
-    /**
-     * Height (for images).
-     */
-    height?: number | null;
-    /**
-     * Attachment id.
-     */
-    id: string;
-    /**
-     * Width (for images).
-     */
-    width?: number | null;
-};
-
-/**
- * Public sender identity for channel messages.
- */
-export type ApiMessageSender = {
-    /**
-     * Avatar URL for bot senders.
-     */
-    avatar_url?: string | null;
-    /**
-     * Sender id without the storage namespace prefix.
-     */
-    id: string;
-    /**
-     * Display name for bot senders.
-     */
-    name?: string | null;
-    /**
-     * For an agent (bot) message, the id of the user who triggered it.
-     */
-    triggered_by?: string | null;
-    /**
-     * Sender type.
-     */
-    type: ApiMessageSenderType;
-};
-
-/**
- * Public sender type.
- */
-export type ApiMessageSenderType = 'user' | 'bot';
-
-/**
  * Participant role in API responses.
  */
 export type ApiParticipantListRole = 'owner' | 'admin' | 'member';
@@ -1044,89 +880,60 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
- * Resolution metadata for any channel message id.
+ * What a committed batch answers: a result per op, and the journal's change
+ * for each table version it produced.
  */
-export type ApiResolvedChannelMessage = {
+export type AppliedOps = {
     /**
-     * Channel this message belongs to.
+     * The journal's changes.
      */
-    channel_id: string;
+    changes: Array<CommittedChange>;
     /**
-     * When the requested message was created.
+     * One result per op, in order.
      */
-    created_at: string;
-    /**
-     * Whether the message is top-level or a thread reply.
-     */
-    kind: ApiChannelMessageKind;
-    /**
-     * The requested message id.
-     */
-    message_id: string;
-    /**
-     * The top-level parent/thread id. Equals message_id for top-level messages.
-     */
-    thread_id: string;
+    results: Array<OpResult>;
 };
 
 /**
- * Thread metadata and preview replies.
+ * A batch of ops for one database, applied in order, in one transaction,
+ * together or not at all.
  */
-export type ApiThreadInfo = {
+export type ApplyOpsRequest = {
     /**
-     * Timestamp of the latest reply.
+     * The version each named table must still be at, as the caller read
+     * it. A table that moved refuses the batch as a conflict, so a schema
+     * edit made against what the caller saw does not overwrite another's.
+     * Left out, ops are last-write-wins.
      */
-    latest_reply_at?: string | null;
+    baseVersions?: {
+        [key: string]: TableVersion;
+    };
     /**
-     * Last N replies for thread preview.
+     * The ops, in the order they apply, each grouped by the resource it
+     * changes (`table`, `column`, `rows`, `view`, `reorder_tables`) with a
+     * `change` saying how. Every one names a table of this database, or one
+     * an earlier op of the batch creates: tables, columns, options and
+     * views carry ids the client mints (UUIDv7), so a later op can name
+     * them. An id that already names something refuses the batch.
      */
-    preview: Array<ApiThreadReply>;
-    /**
-     * Total reply count.
-     */
-    reply_count: number;
+    ops: Array<DatabaseOp>;
 };
 
 /**
- * A thread reply shown in preview.
+ * What each op of a batch did.
  */
-export type ApiThreadReply = {
+export type ApplyOpsResponse = {
     /**
-     * Attachments on this reply.
+     * The journal's change for each table version the batch produced: the
+     * ids `POST /databases/{id}/changes/{change}/undo` takes.
      */
-    attachments: Array<ApiMessageAttachment>;
+    changes: Array<CommittedChange>;
     /**
-     * Reply content.
+     * One result per op, in the order the ops were sent. Each is grouped as
+     * its op is: the same outer `kind`, naming the same ids, with a
+     * `change` saying what happened.
      */
-    content: string;
-    /**
-     * When the reply was created.
-     */
-    created_at: string;
-    /**
-     * When the reply was edited.
-     */
-    edited_at?: string | null;
-    /**
-     * Reply id.
-     */
-    id: string;
-    /**
-     * Reactions on this reply.
-     */
-    reactions: Array<ApiCountedReaction>;
-    /**
-     * Structured sender identity.
-     */
-    sender: ApiMessageSender;
-    /**
-     * Sender user id.
-     */
-    sender_id: string;
-    /**
-     * When the reply was last updated.
-     */
-    updated_at: string;
+    results: Array<OpResult>;
 };
 
 /**
@@ -1145,45 +952,6 @@ export type ApprovePairingRequest = {
      * Owning team. Omit for a private, user-owned harness.
      */
     team_id?: string | null;
-};
-
-/**
- * Status written onto one assign result.
- */
-export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
-
-/**
- * Assign-tasks HTTP body.
- */
-export type AssignTasksRequest = {
-    /**
-     * Task ids to assign, in request order.
-     */
-    taskIds: Array<string>;
-};
-
-/**
- * Assign-tasks HTTP response.
- */
-export type AssignTasksResponse = {
-    /**
-     * Outcomes in request order after dedupe.
-     */
-    results: Array<AssignTasksResult>;
-};
-
-/**
- * Per-task outcome of an assign call.
- */
-export type AssignTasksResult = {
-    /**
-     * What happened to the task.
-     */
-    status: AssignTaskStatus;
-    /**
-     * Task id this outcome describes.
-     */
-    taskId: string;
 };
 
 /**
@@ -1218,6 +986,76 @@ export type AttachmentChange = {
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
+
+/**
+ * Who may respond to a form.
+ */
+export type Audience = 'members' | 'public';
+
+/**
+ * Where one viewer is inside a database right now: ephemeral, relayed to
+ * the other viewers and never stored. A missing row or column means the
+ * viewer is on the table but on no cell. Optional end row and column IDs
+ * mark the opposite corner of a rectangular cell selection.
+ */
+export type Awareness = {
+    /**
+     * The column placement of the focused cell, if any.
+     */
+    columnId?: string;
+    /**
+     * Whether the cell is open for editing.
+     */
+    editing?: boolean;
+    /**
+     * The opposite column corner of a selected rectangle, if any.
+     */
+    endColumnId?: string;
+    /**
+     * The opposite row corner of a selected rectangle, if any.
+     */
+    endRowId?: string;
+    /**
+     * Whether the viewer left the database; other viewers drop their state.
+     */
+    left?: boolean;
+    /**
+     * This mounted client's random peer id, distinct from its authenticated user.
+     * Older clients omit it and remain visible as one peer per user.
+     */
+    peerId?: string;
+    /**
+     * The row of the focused cell, if any.
+     */
+    rowId?: string;
+    /**
+     * The table the viewer is looking at.
+     */
+    tableId: string;
+};
+
+/**
+ * The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped
+ * when the server relayed it so receivers can drop older relays.
+ */
+export type AwarenessRelay = {
+    /**
+     * The database the viewer is in.
+     */
+    databaseId: string;
+    /**
+     * When the server relayed it, in milliseconds since the Unix epoch.
+     */
+    relayedAt: number;
+    /**
+     * Where the viewer is.
+     */
+    state: Awareness;
+    /**
+     * The viewer.
+     */
+    userId: string;
+};
 
 export type BTreeMap = {
     [key: string]: string;
@@ -1317,6 +1155,20 @@ export type BomPart = {
      * There is an index on sha for more performant queries based on it.
      */
     sha: string;
+};
+
+/**
+ * An existing native Macro scheduling event offered after an accepted response.
+ */
+export type BookingTarget = {
+    /**
+     * The event type to book.
+     */
+    eventTypeId: string;
+    /**
+     * The scheduling profile that owns the event.
+     */
+    profileId: string;
 };
 
 /**
@@ -1421,6 +1273,32 @@ export type BotOwner = {
      */
     team_id: string;
     type: 'team';
+};
+
+/**
+ * Bot identity for rendering, including the sponsor and soft-delete time.
+ *
+ * `owner` is none only for a registry system bot. A persisted row always has
+ * a sponsor.
+ */
+export type BotOwnerProfile = {
+    /**
+     * Avatar URL. Registry system bots have none.
+     */
+    avatar_url?: string | null;
+    /**
+     * Soft-delete time. Absent for an active bot and for a registry system bot.
+     */
+    deleted_at?: string | null;
+    /**
+     * Bot id.
+     */
+    id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    owner?: null | BotOwner;
 };
 
 /**
@@ -1962,7 +1840,7 @@ export type CallRecord = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -1989,11 +1867,16 @@ export type CallRecord = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests (both active and historic). Guests only ever exist
+     * on standalone meeting calls, never on channel calls.
+     */
+    guests: Array<CallRecordGuest>;
+    /**
      * Whether the call is currently active (from `calls` table).
      */
     isActive: boolean;
     /**
-     * Participants (both active and historic).
+     * Macro-account participants (both active and historic).
      */
     participants: Array<CallRecordParticipant>;
     /**
@@ -2040,6 +1923,28 @@ export type CallRecord = {
 };
 
 /**
+ * A non-account guest as returned in a [`CallRecord`].
+ */
+export type CallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript `speaker_id`.
+     */
+    id: GuestId;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
  * A participant as returned in a [`CallRecord`] (historic — includes `left_at`).
  */
 export type CallRecordParticipant = {
@@ -2052,7 +1957,7 @@ export type CallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -2081,7 +1986,7 @@ export type CallRecordPreviewData = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -2158,7 +2063,11 @@ export type CallTokenResponse = {
     /**
      * The channel this call is associated with.
      */
-    channelId: string;
+    channelId?: string | null;
+    /**
+     * RTC participant identity.
+     */
+    participantId: string;
     /**
      * The RTC room name.
      */
@@ -2168,10 +2077,205 @@ export type CallTokenResponse = {
      */
     serverUrl: string;
     /**
+     * Meeting link capability, when joined using a link.
+     */
+    shareToken?: string | null;
+    /**
      * The RTC token for connecting to the room.
      */
     token: string;
 };
+
+/**
+ * Where one card sits on a board: its lane, and its fractional key there.
+ * A card whose row has since moved to another lane has no place until it is
+ * moved again.
+ */
+export type CardPosition = {
+    /**
+     * The lane.
+     */
+    lane: LaneKey;
+    /**
+     * The card's key in that lane.
+     */
+    position: string;
+    /**
+     * The card's row.
+     */
+    row: string;
+};
+
+/**
+ * Whether a column's values convert to a type.
+ */
+export type CastVerdict = 'safe' | 'checked' | 'never';
+
+/**
+ * A cell's value. It must fit the column's type: text for a text column,
+ * options of the column for a select, and so on.
+ */
+export type CellValue = {
+    type: 'text';
+    /**
+     * Free text.
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * A finite number.
+     */
+    value: number;
+} | {
+    type: 'boolean';
+    /**
+     * A checkbox.
+     */
+    value: boolean;
+} | {
+    type: 'date';
+    /**
+     * A date-time.
+     */
+    value: string;
+} | {
+    type: 'link';
+    /**
+     * Complete http or https URLs; at most one for a single-valued column.
+     */
+    value: Array<string>;
+} | {
+    type: 'options';
+    /**
+     * Options of a select or tag column; at most one for a single-valued
+     * column.
+     */
+    value: Array<OptionRef>;
+} | {
+    type: 'entities';
+    /**
+     * References to Macro entities of the kind the column points at; at
+     * most one for a single-valued column.
+     */
+    value: Array<EntityRef>;
+} | {
+    type: 'rows';
+    /**
+     * Rows of the table a relation column points at.
+     */
+    value: Array<string>;
+} | {
+    type: 'clear';
+};
+
+/**
+ * One cell of a row: which column, and its new value.
+ */
+export type CellWrite = {
+    /**
+     * The column placement.
+     */
+    column: string;
+    /**
+     * The value, or [`CellValue::Clear`] to empty the cell.
+     */
+    value: CellValue;
+};
+
+/**
+ * One changed file.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangedFileDto = {
+    /**
+     * Lines added.
+     */
+    additions: number;
+    /**
+     * The diff carries no text for this file.
+     */
+    binary: boolean;
+    /**
+     * Lines removed.
+     */
+    deletions: number;
+    /**
+     * What happened to the file.
+     */
+    kind: FileChangeKindDto;
+    /**
+     * The file's hunks were left out of the patch to fit the size budget.
+     */
+    patchOmitted: boolean;
+    /**
+     * The file's path after the change, or before it for a deletion.
+     */
+    path: string;
+    /**
+     * Where a renamed file came from.
+     */
+    previousPath?: string | null;
+};
+
+/**
+ * One changeset: the files a patch touches and what happened to each.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangesetDto = {
+    /**
+     * Lines added across all files.
+     */
+    additions: number;
+    /**
+     * The side the work started from.
+     */
+    base: GitRefDto;
+    /**
+     * When the diff was taken.
+     */
+    capturedAt: string;
+    /**
+     * Lines removed across all files.
+     */
+    deletions: number;
+    /**
+     * Every changed file, in patch order.
+     */
+    files: Array<ChangedFileDto>;
+    /**
+     * The side carrying the work.
+     */
+    head: GitRefDto;
+    /**
+     * The changeset's id; a different id means different changes.
+     */
+    id: string;
+    /**
+     * Size of the patch the matching patch route serves; zero when nothing
+     * changed.
+     */
+    patchBytes: number;
+    /**
+     * `https://github.com/owner/name`, when known.
+     */
+    repository?: string | null;
+    /**
+     * Where the diff was read from.
+     */
+    source: ChangesetSourceDto;
+    /**
+     * Some files' hunks were left out of the patch.
+     */
+    truncated: boolean;
+};
+
+/**
+ * The source of a changeset's diff, on the wire.
+ */
+export type ChangesetSourceDto = 'github_pull_request';
 
 /**
  * Channel metadata in soup payloads.
@@ -2250,28 +2354,6 @@ export type ChannelDeletedMetadata = {
      * The id of the deleted channel.
      */
     channel_id: string;
-};
-
-/**
- * Attachment payload carried by channel wire events.
- */
-export type ChannelEventAttachment = {
-    /**
-     * Attachment id.
-     */
-    attachment_id: string;
-    /**
-     * Creation timestamp of the attachment row.
-     */
-    created_at: string;
-    /**
-     * Attached entity id.
-     */
-    entity_id: string;
-    /**
-     * Attached entity type (e.g. `document`).
-     */
-    entity_type: string;
 };
 
 /**
@@ -2402,46 +2484,6 @@ export type ChannelLabelsList = {
 };
 
 /**
- * Metadata for [`ChannelTopicEvent::Mentioned`].
- */
-export type ChannelMentionedMetadata = {
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Type of channel containing the message.
-     */
-    channel_type: ChannelType;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Creation timestamp reported by the repository.
-     */
-    created_at: string;
-    /**
-     * The mentioned entity this event is about (`user`, `bot`, `document`, …).
-     *
-     * The message's full mention list travels on `channel.message_posted`.
-     */
-    mentioned: SimpleMention;
-    /**
-     * The id of the message carrying the mention.
-     */
-    message_id: string;
-    /**
-     * Message author; may be a bot.
-     */
-    sender: ChannelSender;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-};
-
-/**
  * Lightweight channel message for soup payloads.
  */
 export type ChannelMessage = {
@@ -2477,198 +2519,6 @@ export type ChannelMessage = {
      * Update timestamp.
      */
     updated_at: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageAttachmentCreated`].
- */
-export type ChannelMessageAttachmentCreatedMetadata = {
-    /**
-     * Actor that added the attachments.
-     */
-    actor: ChannelSender;
-    /**
-     * Attachments created by this mutation.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message the attachments were added to.
-     */
-    message_id: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageAttachmentRemoved`].
- */
-export type ChannelMessageAttachmentRemovedMetadata = {
-    /**
-     * Actor that removed the attachments.
-     */
-    actor: ChannelSender;
-    /**
-     * Attachments removed by this mutation.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message the attachments were removed from.
-     */
-    message_id: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessageDeleted`].
- */
-export type ChannelMessageDeletedMetadata = {
-    /**
-     * Actor that deleted the message; not necessarily the author.
-     */
-    actor: ChannelSender;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Deletion (tombstone) timestamp reported by the repository.
-     */
-    deleted_at?: string | null;
-    /**
-     * The id of the deleted message.
-     */
-    message_id: string;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-};
-
-/**
- * Filters for channel message queries.
- */
-export type ChannelMessageFilters = {
-    /**
-     * When set, only return top-level messages with channel activity at or after
-     * this timestamp. Activity means either the message itself was created after
-     * this time, or a thread reply was created after this time.
-     *
-     * Accepts the legacy JSON field `last_activity` for backwards compatibility.
-     */
-    activity_after?: string | null;
-    /**
-     * When set, only return top-level messages with channel activity before this
-     * timestamp. Activity means either the parent message or at least one thread
-     * reply falls in the requested activity window.
-     */
-    activity_before?: string | null;
-    /**
-     * When set, only return top-level messages created at or after this timestamp.
-     */
-    created_after?: string | null;
-    /**
-     * When set, only return top-level messages created strictly after this timestamp.
-     */
-    created_after_exclusive?: string | null;
-    /**
-     * When set, only return top-level messages created before this timestamp.
-     */
-    created_before?: string | null;
-    /**
-     * When non-empty, only return messages with these IDs.
-     */
-    message_ids?: Array<string>;
-    /**
-     * When set, only return top-level messages where the message itself or
-     * any active thread reply has a notification for the requesting user that
-     * matches these notification state constraints.
-     */
-    notification_filters?: NotificationFilters;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessagePatched`].
- */
-export type ChannelMessagePatchedMetadata = {
-    /**
-     * Actor that patched the message.
-     */
-    actor: ChannelSender;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Message body after the patch.
-     */
-    content: string;
-    /**
-     * Edit timestamp, when the patch marked the message edited.
-     */
-    edited_at?: string | null;
-    /**
-     * The id of the patched message.
-     */
-    message_id: string;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-    /**
-     * Update timestamp reported by the repository.
-     */
-    updated_at: string;
-};
-
-/**
- * Metadata for [`ChannelTopicEvent::MessagePosted`].
- */
-export type ChannelMessagePostedMetadata = {
-    /**
-     * Attachments persisted with the message.
-     */
-    attachments: Array<ChannelEventAttachment>;
-    /**
-     * Channel containing the message.
-     */
-    channel_id: string;
-    /**
-     * Type of channel containing the message.
-     */
-    channel_type: ChannelType;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Creation timestamp reported by the repository.
-     */
-    created_at: string;
-    /**
-     * Mentions attached to the message.
-     */
-    mentions: Array<SimpleMention>;
-    /**
-     * The id of the posted message.
-     */
-    message_id: string;
-    /**
-     * Message author; may be a bot.
-     */
-    sender: ChannelSender;
-    /**
-     * Thread parent id when the message is a thread reply.
-     */
-    thread_id?: string | null;
-    /**
-     * For an agent (bot) message, the id of the user who triggered it.
-     */
-    triggered_by?: string | null;
 };
 
 /**
@@ -2741,6 +2591,20 @@ export type ChannelParticipantRemovedMetadata = {
      * Users removed by this mutation.
      */
     removed_user_ids: Array<MacroUserIdStr>;
+};
+
+/**
+ * Metadata for a channel picture update, including removals.
+ */
+export type ChannelPictureChangedMetadata = {
+    /**
+     * User who changed the picture.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * Channel whose picture changed.
+     */
+    channel_id: string;
 };
 
 /**
@@ -2821,6 +2685,12 @@ export type ChannelThreadFilters = {
  * Events that can be published to [`MacroChannelsTopic`].
  */
 export type ChannelTopicEvent = {
+    event_type: 'channel.picture_changed';
+    /**
+     * A channel's profile picture changed.
+     */
+    metadata: ChannelPictureChangedMetadata;
+} | {
     event_type: 'channel.created';
     /**
      * A channel was created.
@@ -2838,42 +2708,6 @@ export type ChannelTopicEvent = {
      * A channel was deleted.
      */
     metadata: ChannelDeletedMetadata;
-} | {
-    event_type: 'channel.message_posted';
-    /**
-     * A message was posted.
-     */
-    metadata: ChannelMessagePostedMetadata;
-} | {
-    event_type: 'channel.mentioned';
-    /**
-     * An entity (user, bot, document, …) was mentioned in a message.
-     */
-    metadata: ChannelMentionedMetadata;
-} | {
-    event_type: 'channel.message_patched';
-    /**
-     * A message's content was patched.
-     */
-    metadata: ChannelMessagePatchedMetadata;
-} | {
-    event_type: 'channel.message_deleted';
-    /**
-     * A message was soft-deleted.
-     */
-    metadata: ChannelMessageDeletedMetadata;
-} | {
-    event_type: 'channel.message_attachment_created';
-    /**
-     * Attachments were added to a message.
-     */
-    metadata: ChannelMessageAttachmentCreatedMetadata;
-} | {
-    event_type: 'channel.message_attachment_removed';
-    /**
-     * Attachments were removed from a message.
-     */
-    metadata: ChannelMessageAttachmentRemovedMetadata;
 } | {
     event_type: 'channel.participant_added';
     /**
@@ -3067,7 +2901,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -3084,22 +2918,384 @@ export type CollabSurfaceTokenResponse = {
     token: string;
 };
 
-export type Comment = {
-    commentId: number;
-    createdAt?: string | null;
-    deletedAt?: string | null;
-    metadata?: unknown;
-    order?: number | null;
-    owner: string;
-    sender?: string | null;
-    text: string;
-    threadId: number;
-    updatedAt?: string | null;
+/**
+ * A column: the placement of a property definition on a table.
+ *
+ * The definition carries name, [`DataType`], multi-select flag, and options;
+ * this carries only where it appears and column-kind configuration.
+ */
+export type Column = {
+    config: null | ColumnConfig;
+    /**
+     * The placement's own label, which also names it in SQL; `None` shows
+     * the definition's name.
+     */
+    display_name: string | null;
+    /**
+     * Identifier of the placement.
+     */
+    id: string;
+    /**
+     * Whether the first nonempty value may settle this new text column's type.
+     */
+    infer_type: boolean;
+    /**
+     * Whether a row may omit this cell; empty collections also count as absent.
+     */
+    nullable?: boolean;
+    /**
+     * Fractional index for column ordering.
+     */
+    position: string;
+    /**
+     * The bound property definition.
+     */
+    property_definition_id: string;
+    /**
+     * Schema operations reserved by a feature; ordinary edits cannot clear them.
+     */
+    protections?: Array<ColumnProtection>;
+    /**
+     * Table the column appears on.
+     */
+    table_id: string;
 };
 
-export type CommentThread = {
-    comments: Array<Comment>;
-    thread: Thread;
+/**
+ * What changing a column to one type would do to its values: the dry run
+ * of a type change, for one target.
+ */
+export type ColumnCast = {
+    /**
+     * Whether the values convert.
+     */
+    cast: CastVerdict;
+    /**
+     * The target property type.
+     */
+    data_type: DataType;
+    /**
+     * Up to three of the values that would not convert.
+     */
+    examples: Array<string>;
+    /**
+     * For a `checked` cast, how many cells would not convert.
+     */
+    failures: number;
+    /**
+     * Whether the target holds several values.
+     */
+    is_multi_select: boolean;
+    /**
+     * Why nothing converts, for a `never` cast.
+     */
+    reason: string | null;
+    /**
+     * Whether the target is a relation to another table's rows.
+     */
+    relation: boolean;
+    specific_entity_type: null | EntityType;
+    /**
+     * For a `checked` cast with failures, what is wrong with them, as in
+     * `3 values aren't numbers`.
+     */
+    summary: string | null;
+};
+
+/**
+ * A change to one column.
+ */
+export type ColumnChange = {
+    /**
+     * The column it goes right after; left out, it goes after the
+     * table's last column.
+     */
+    after?: string;
+    /**
+     * What the column holds.
+     */
+    definition: NewColumn;
+    kind: 'create';
+} | {
+    kind: 'rename';
+    /**
+     * Its new name, unique within the table ignoring case.
+     */
+    name: string;
+    /**
+     * The name the caller saw. Given, the rename is refused if the
+     * column goes by another one now.
+     */
+    previousName?: string;
+} | {
+    kind: 'change_type';
+    /**
+     * The type it becomes.
+     */
+    to: ColumnKind;
+} | {
+    kind: 'delete';
+} | {
+    kind: 'add_options';
+    /**
+     * The options, each under an id the client mints.
+     */
+    options: Array<NewOption>;
+} | {
+    /**
+     * Its new colour, a hex string like `#RRGGBB`, or `null` to clear
+     * it; left out, it keeps its own. A tag option always has one.
+     */
+    color?: string | null;
+    kind: 'update_option';
+    /**
+     * Its new label; left out, it keeps its own. Labels are unique
+     * within a column, ignoring case.
+     */
+    label?: string;
+    /**
+     * The option.
+     */
+    option: string;
+} | {
+    kind: 'delete_option';
+    /**
+     * The option.
+     */
+    option: string;
+};
+
+/**
+ * How a change touched a column.
+ */
+export type ColumnChangeKind = 'create' | 'rename' | 'change_type' | 'delete' | 'add_options' | 'update_option' | 'delete_option' | 'reorder' | 'infer_type' | 'related';
+
+/**
+ * A relation column: its cells reference rows of another table.
+ */
+export type ColumnConfig = {
+    /**
+     * Target database.
+     */
+    database_id: string;
+    kind: 'link';
+    /**
+     * Target table.
+     */
+    table_id: string;
+};
+
+/**
+ * What a column's values become under another type, for a new column of
+ * that type beside it: the values that convert, the options they need,
+ * and how many do not convert. Nothing is changed by reading it.
+ */
+export type ColumnConversion = {
+    /**
+     * Each row whose value converts, with that value, options named by
+     * label.
+     */
+    cells: Array<ConvertedCell>;
+    /**
+     * How many values do not convert, and are left out.
+     */
+    misfits: number;
+    /**
+     * The option labels a new select or tag column needs, in order.
+     */
+    options: Array<string>;
+    /**
+     * The table's version the cells were read at; a batch writing the new
+     * column sends it as its base version.
+     */
+    tableVersion: TableVersion;
+};
+
+/**
+ * The type a column's values are converted to.
+ */
+export type ColumnConversionRequest = {
+    /**
+     * The type of the column the values would go to.
+     */
+    to: ColumnKind;
+};
+
+/**
+ * One column placement with the definition behind it.
+ */
+export type ColumnDetail = {
+    /**
+     * The placement.
+     */
+    column: Column;
+    /**
+     * The bound definition (name, type, options).
+     */
+    definition: PropertyDefinitionWithOptions;
+    /**
+     * Whether the definition belongs to something beyond this database (a
+     * person's, a team's or a system property), so changing its options
+     * changes them everywhere that property is used.
+     */
+    shared_outside_database: boolean;
+    /**
+     * The name SQL refers to the column by: its display name, quoted.
+     */
+    sql_name: string;
+    /**
+     * Whether SQL may write this column.
+     */
+    writable: boolean;
+};
+
+/**
+ * A type a column can have.
+ */
+export type ColumnKind = {
+    type: 'text';
+} | {
+    type: 'number';
+} | {
+    type: 'boolean';
+} | {
+    type: 'date';
+} | {
+    type: 'link';
+} | {
+    /**
+     * Whether a cell holds several options.
+     */
+    multi: boolean;
+    type: 'select';
+} | {
+    /**
+     * Whether a cell holds several options.
+     */
+    multi: boolean;
+    type: 'select_number';
+} | {
+    type: 'tag';
+} | {
+    /**
+     * Whether a cell holds several references.
+     */
+    multi: boolean;
+    /**
+     * What the references point at.
+     */
+    target: EntityKind;
+    type: 'entity';
+} | {
+    /**
+     * The database of the related table.
+     */
+    database: string;
+    /**
+     * The related table.
+     */
+    table: string;
+    type: 'relation';
+};
+
+/**
+ * A schema operation reserved by a feature using a column.
+ */
+export type ColumnProtection = 'delete' | 'change_type';
+
+/**
+ * What happened to a column.
+ */
+export type ColumnResult = {
+    kind: 'created';
+} | {
+    kind: 'renamed';
+} | {
+    kind: 'type_changed';
+} | {
+    kind: 'deleted';
+} | {
+    /**
+     * The options created, in order: those sent, less any whose label
+     * the column already had.
+     */
+    added: Array<string>;
+    kind: 'options_added';
+} | {
+    kind: 'option_updated';
+} | {
+    kind: 'option_deleted';
+};
+
+/**
+ * Sanitized public details of a command refused before runtime execution.
+ */
+export type CommandFailure = {
+    /**
+     * Stable public denial or unavailability code.
+     */
+    code: string;
+    /**
+     * Public explanation, never an internal error report.
+     */
+    message: string;
+    /**
+     * Whether retrying later may succeed without a policy change.
+     */
+    retryable: boolean;
+};
+
+/**
+ * An accepted command was refused before it could start a runtime turn.
+ */
+export type CommandRejectedMetadata = {
+    /**
+     * The command that will not execute.
+     */
+    action_id: AgentActionId;
+    actor?: null | MacroUserIdStr;
+    /**
+     * The command's thread announcement, when one was created.
+     */
+    announcement_message_id?: string | null;
+    /**
+     * Safe details for clients and downstream consumers.
+     */
+    failure: CommandFailure;
+    /**
+     * The session.
+     */
+    identity: SessionIdentity;
+};
+
+/**
+ * One change a committed batch journaled: a table, the version the batch
+ * produced, and the journal's id for it.
+ */
+export type CommittedChange = {
+    /**
+     * The journal's id of the change.
+     */
+    change: number;
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The version the batch produced.
+     */
+    version: TableVersion;
+};
+
+/**
+ * Explicit upload completion; a seal can be submitted separately with an empty list.
+ */
+export type CompleteUploads = {
+    seal?: null | ConversationSeal;
+    /**
+     * Registered identities to verify against storage (at most 50).
+     */
+    uploads: Array<UploadId>;
 };
 
 /**
@@ -3117,6 +3313,145 @@ export type CommentThread = {
  * so an unrelated edit never disturbs it.
  */
 export type ConferenceProvider = 'google_meet' | 'other';
+
+/**
+ * How a group's conditions combine.
+ */
+export type Conjunction = 'and' | 'or';
+
+/**
+ * Source Slack conversation ID (C, G or D prefix); unique only within a source.
+ */
+export type ConversationId = string;
+
+/**
+ * Slack conversation kind. Public Slack channels map to Macro Team, never Public.
+ */
+export type ConversationKind = 'public_channel' | 'private_channel' | 'direct_message' | 'group_direct_message';
+
+/**
+ * Full selected conversation metadata, persisted before granting any uploads.
+ */
+export type ConversationMetadata = {
+    /**
+     * Source archived flag (does not silently archive a reused Macro target).
+     */
+    archived: boolean;
+    createdAt?: null | SlackTimestamp;
+    creatorId?: null | SlackUserId;
+    /**
+     * Single archive folder name, not a backend object key.
+     */
+    folder: KeySegment;
+    /**
+     * Source conversation kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Complete source member list, including members unknown to Macro.
+     */
+    memberIds: Array<SlackUserId>;
+    /**
+     * Advisory only; null means not yet counted, not zero.
+     */
+    messageCount?: number | null;
+    /**
+     * Original display name; not a storage key.
+     */
+    name: string;
+    /**
+     * Stable Slack identity.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Admin-visible progress for one selected conversation.
+ */
+export type ConversationProgress = {
+    /**
+     * Whether the selected source conversation was archived.
+     */
+    archived: boolean;
+    /**
+     * Authorized target only; absent for inaccessible reused targets.
+     */
+    channelId?: string | null;
+    /**
+     * Durably committed record counts.
+     */
+    counters: ImportCounters;
+    error?: null | ImportError;
+    /**
+     * Persisted source kind.
+     */
+    kind: ConversationKind;
+    /**
+     * Persisted source display name, never the reused Macro target's name.
+     */
+    name: string;
+    /**
+     * Null until sealed; zero is a valid sealed empty manifest.
+     */
+    partCount?: number | null;
+    /**
+     * Independent indexing state.
+     */
+    search: SearchState;
+    /**
+     * Source identity (always visible to the importing team's administrator).
+     */
+    slackChannelId: ConversationId;
+    /**
+     * Durable state.
+     */
+    status: ConversationStatus;
+    /**
+     * Number of parts whose object identity has been verified.
+     */
+    verifiedParts: number;
+    /**
+     * Non-fatal metadata/skip explanations.
+     */
+    warnings: Array<ImportWarning>;
+};
+
+/**
+ * Complete immutable expected part set for one conversation, including zero parts.
+ */
+export type ConversationSeal = {
+    /**
+     * SHA-256 of canonical descriptor lines; zero parts hash the empty byte string.
+     */
+    manifestSha256: Sha256Digest;
+    /**
+     * Exact number of registered parts, starting at index zero.
+     */
+    partCount: number;
+    /**
+     * Selected source conversation.
+     */
+    slackChannelId: ConversationId;
+};
+
+/**
+ * Durable per-conversation lifecycle.
+ */
+export type ConversationStatus = 'awaiting_uploads' | 'queued' | 'importing' | 'completed' | 'skipped' | 'failed';
+
+/**
+ * One row's converted value.
+ */
+export type ConvertedCell = {
+    /**
+     * The row.
+     */
+    row: string;
+    /**
+     * Its value under the new type.
+     */
+    value: CellValue;
+};
 
 /**
  * Query parameters for the copy document endpoint.
@@ -3209,6 +3544,11 @@ export type CreateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -3380,44 +3720,6 @@ export type CreateChannelScopedBotResponse = {
     token: BotToken;
 };
 
-export type CreateCommentRequest = {
-    anchor?: null | AnchorRequest;
-    mentions?: null | Mentions;
-    metadata?: unknown;
-    text: string;
-    threadId?: number | null;
-    threadMetadata?: unknown;
-};
-
-export type CreateCommentResponse = CommentThread & {
-    anchor?: null | Anchor;
-    documentId: string;
-};
-
-/**
- * Request body for `POST /crm/comments/{entity_type}/{entity_id}`.
- */
-export type CreateCrmCommentRequest = {
-    /**
-     * Arbitrary client metadata for the comment.
-     */
-    metadata?: unknown;
-    /**
-     * The comment body (markdown).
-     */
-    text: string;
-    /**
-     * Existing thread to append to. Omit to start a new thread on the
-     * addressed entity.
-     */
-    threadId?: string | null;
-    /**
-     * Metadata to set on a newly created thread (ignored when replying
-     * without a value).
-     */
-    threadMetadata?: unknown;
-};
-
 /**
  * Request body for `POST /crm/companies`.
  */
@@ -3446,6 +3748,16 @@ export type CreateCrmContactRequest = {
     email: string;
     /**
      * Display name for the contact.
+     */
+    name: string;
+};
+
+/**
+ * Request body for creating a database.
+ */
+export type CreateDatabaseRequest = {
+    /**
+     * Display name.
      */
     name: string;
 };
@@ -3583,12 +3895,48 @@ export type CreateEntityMentionResponse = {
 };
 
 /**
+ * A request to create a form.
+ */
+export type CreateForm = {
+    /**
+     * Its name; a new database takes it too.
+     */
+    name: string;
+    /**
+     * Where its responses go.
+     */
+    source: FormSource;
+};
+
+/**
+ * Create command. Team identity is deliberately absent.
+ */
+export type CreateImport = {
+    /**
+     * Full, unique selected conversations (at most the configured bound).
+     */
+    conversations: Array<ConversationMetadata>;
+    /**
+     * Replay with the same semantic payload returns the original job; changes conflict.
+     */
+    idempotencyToken: CreateToken;
+    /**
+     * Default true at the client; false still requires users and zero-part seals.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Binding or explicit unknown-source confirmation.
+     */
+    source: SourceIdentity;
+};
+
+/**
  * Create-initiative HTTP body.
  */
 export type CreateInitiativeRequest = {
     /**
-     * Initial markdown for the description document. Not stored on the initiative; later
-     * edits happen in the document editor.
+     * Initial markdown for the description surface. Not stored on the initiative; later
+     * edits happen in the collaborative description editor.
      */
     description?: string | null;
     /**
@@ -3600,7 +3948,13 @@ export type CreateInitiativeRequest = {
      */
     name: string;
     /**
-     * When true, share with the owner's team at create time.
+     * Property values set as the owner within the create. A value the properties
+     * service rejects fails the whole create; no initiative is left behind.
+     */
+    propertyValues?: Array<InitialPropertyValue>;
+    /**
+     * Share with the owner's team at create time. Defaults to true; users without
+     * a team create an unshared initiative. Explicit false skips the team grant.
      */
     shareWithTeam?: boolean | null;
 };
@@ -3651,6 +4005,28 @@ export type CreateMarkdownDocumentResponse = {
 };
 
 /**
+ * Inputs for creating a meeting without starting its RTC room.
+ */
+export type CreateMeetingRequest = {
+    /**
+     * Optional unused room reserved by this actor on the setup screen.
+     */
+    preparationId?: string | null;
+    /**
+     * Optional scheduled end.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Optional scheduled start.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Optional display title.
+     */
+    title?: string | null;
+};
+
+/**
  * Request to open a pairing: the daemon asks for a code the user approves.
  *
  * The daemon serializes this, so both derives are used.
@@ -3669,6 +4045,24 @@ export type CreatePairingRequest = {
      */
     name: string;
     scope?: null | RequestedHarnessScope;
+};
+
+/**
+ * Request to create an empty pipeline with the standard CRM columns.
+ */
+export type CreatePipeline = {
+    /**
+     * Pipeline name.
+     */
+    name: string;
+    /**
+     * Company or contact entries.
+     */
+    recordType: PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
 };
 
 export type CreateProjectRequest = {
@@ -3691,28 +4085,6 @@ export type CreateProjectResponse = {
      * Indicates if an error occurred
      */
     error: boolean;
-};
-
-/**
- * Request body for creating a reminder.
- */
-export type CreateReminderRequest = {
-    /**
-     * What to remind the caller about.
-     */
-    description: string;
-    /**
-     * Id of the entity to attach the reminder to. Requires `entityType`.
-     */
-    entityId?: string | null;
-    /**
-     * Type of the entity to attach the reminder to. Requires `entityId`.
-     */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: ReminderSchedule;
 };
 
 /**
@@ -3835,6 +4207,11 @@ export type CreateTaskResponse = {
      */
     token: string;
 };
+
+/**
+ * Client-generated create idempotency token, scoped to team and administrator.
+ */
+export type CreateToken = string;
 
 export type CreateUnthreadedAnchorRequest = CreateUnthreadedPdfAnchorRequest & {
     fileType: 'pdf';
@@ -4007,76 +4384,6 @@ export type CreatedUserApiKey = {
      * User-facing name.
      */
     name: string;
-};
-
-/**
- * A single comment within a [`CrmThread`].
- */
-export type CrmComment = {
-    /**
-     * The comment id.
-     */
-    commentId: string;
-    /**
-     * When the comment was created.
-     */
-    createdAt: string;
-    /**
-     * When the comment was soft-deleted, if ever.
-     */
-    deletedAt?: string | null;
-    /**
-     * Arbitrary client metadata.
-     */
-    metadata?: unknown;
-    /**
-     * Optional explicit ordering within the thread; the frontend falls
-     * back to `createdAt` when absent.
-     */
-    order?: number | null;
-    /**
-     * Macro user id of the comment author.
-     */
-    owner: string;
-    /**
-     * Macro user id of the actual sender, when distinct from `owner`.
-     */
-    sender?: string | null;
-    /**
-     * The comment body (markdown).
-     */
-    text: string;
-    /**
-     * The id of the thread this comment belongs to.
-     */
-    threadId: string;
-    /**
-     * When the comment was last updated.
-     */
-    updatedAt: string;
-};
-
-/**
- * Which CRM entity a comment thread is attached to. Serializes to
- * `crm_company` / `crm_contact` — matching the `entityType` the frontend
- * uses elsewhere when building entity URLs — and is parsed from the
- * `{entity_type}` path segment on the comment routes.
- */
-export type CrmCommentEntityType = 'crm_company' | 'crm_contact';
-
-/**
- * A [`CrmThread`] with its comments nested under it — the unit the
- * frontend renders.
- */
-export type CrmCommentThread = {
-    /**
-     * The thread's comments, oldest first.
-     */
-    comments: Array<CrmComment>;
-    /**
-     * The thread.
-     */
-    thread: CrmThread;
 };
 
 /**
@@ -4312,48 +4619,6 @@ export type CrmTeamSettingsResponse = {
 };
 
 /**
- * A CRM comment thread: the parent record one or more comments hang off.
- */
-export type CrmThread = {
-    /**
-     * When the thread was created.
-     */
-    createdAt: string;
-    /**
-     * When the thread was soft-deleted, if ever.
-     */
-    deletedAt?: string | null;
-    /**
-     * The id of the CRM company or contact this thread belongs to.
-     */
-    entityId: string;
-    /**
-     * Which CRM entity kind this thread belongs to.
-     */
-    entityType: CrmCommentEntityType;
-    /**
-     * Arbitrary client metadata.
-     */
-    metadata?: unknown;
-    /**
-     * Macro user id of the thread creator.
-     */
-    owner: string;
-    /**
-     * Whether the thread is resolved.
-     */
-    resolved: boolean;
-    /**
-     * The thread id.
-     */
-    threadId: string;
-    /**
-     * When the thread was last updated.
-     */
-    updatedAt: string;
-};
-
-/**
  * One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
  *
  * `custom_speaker = None` clears any existing override for this
@@ -4377,40 +4642,162 @@ export type CustomSpeakerAssignment = {
  */
 export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
 
-export type DeleteAnchorInfo = AnchorId & {
-    deleted: boolean;
-};
-
-export type DeleteCommentRequest = {
-    removeAnchorThreadOnly?: boolean | null;
-};
-
-export type DeleteCommentResponse = {
-    anchor?: null | DeleteAnchorInfo;
-    commentId: number;
-    documentId: string;
-    thread: DeleteThreadInfo;
+/**
+ * A database: a named collection of tables, owned and shared as one entity.
+ */
+export type Database = {
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Identifier.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owning user.
+     */
+    owner_id: string;
+    /**
+     * Set when trashed.
+     */
+    trashed_at: string | null;
 };
 
 /**
- * Outcome of soft-deleting a CRM comment: reports whether the parent thread
- * was soft-deleted too (it is when the deleted comment was its last live one).
+ * Everything a client needs to render and edit one database: tables,
+ * column placements with their definitions, and the SQL names the query
+ * surface exposes them under.
  */
-export type DeleteCrmCommentResult = {
+export type DatabaseDetail = {
     /**
-     * The deleted comment's id.
+     * The database.
      */
-    commentId: string;
+    database: Database;
     /**
-     * Whether the thread itself was soft-deleted because no live comments
-     * remained.
+     * The viewer's access.
      */
-    threadDeleted: boolean;
+    grant: AccessLevel;
     /**
-     * The thread the comment belonged to.
+     * Tables in tab order.
      */
-    threadId: string;
+    tables: Array<TableDetail>;
 };
+
+/**
+ * One write to a database: its tables, columns, options, rows or views,
+ * grouped by the resource it changes. A request's ops apply in order and
+ * together, or not at all, and every op names a table of the database the
+ * request is for (or, creating one, adds it there).
+ */
+export type DatabaseOp = {
+    /**
+     * What changes.
+     */
+    change: TableChange;
+    kind: 'table';
+    /**
+     * The table; for a creation, its new id, minted by the client, which
+     * later ops of the request may name.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: ColumnChange;
+    /**
+     * The column; for a creation, its new id, minted by the client,
+     * which later ops of the request may name.
+     */
+    column: string;
+    kind: 'column';
+    /**
+     * The table.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: RowsChange;
+    kind: 'rows';
+    /**
+     * The table the rows belong to.
+     */
+    table: string;
+} | {
+    /**
+     * What changes.
+     */
+    change: ViewChange;
+    kind: 'view';
+    /**
+     * The view's table.
+     */
+    table: string;
+    /**
+     * The view; for a creation, its new id, minted by the client.
+     */
+    view: string;
+} | {
+    kind: 'reorder_tables';
+    /**
+     * Every table, in its new order.
+     */
+    order: Array<string>;
+};
+
+/**
+ * A view of one table, as stored.
+ */
+export type DatabaseView = {
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * The view.
+     */
+    id: string;
+    /**
+     * How it draws them.
+     */
+    layout: ViewLayout;
+    /**
+     * Its name, unique among the table's views ignoring case.
+     */
+    name: string;
+    /**
+     * Where it sorts among the table's views: a fractional key.
+     */
+    position: string;
+    /**
+     * Which rows it shows, in what order.
+     */
+    query: ViewQuery;
+    /**
+     * The table it shows.
+     */
+    tableId: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * How a date cell compares to a date-time.
+ */
+export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
 
 /**
  * Response body for `DELETE /channels/mentions/{mention_id}`.
@@ -4422,39 +4809,22 @@ export type DeleteEntityMentionResponse = {
     deleted: boolean;
 };
 
-/**
- * Query parameters for deleting a message.
- */
-export type DeleteMessageQuery = {
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-export type DeleteThreadInfo = {
-    deleted: boolean;
-    threadId: number;
-};
-
 export type DeleteUnthreadedAnchorRequest = DeleteUnthreadedPdfAnchorRequest & {
     fileType: 'pdf';
 };
 
 export type DeleteUnthreadedAnchorResponse = AnchorId & {
     documentId: string;
-    threadId?: number | null;
+    /**
+     * Root of the discussion that was deleted with the anchor, if it had one.
+     */
+    rootId?: string | null;
 };
 
 export type DeleteUnthreadedPdfAnchorRequest = {
     anchorType: 'highlight';
     uuid: string;
 };
-
-/**
- * Id of the markdown document that holds an initiative's description.
- */
-export type DescriptionDocumentId = string;
 
 /**
  * Returns basic information of a document used for some db queries
@@ -4522,6 +4892,10 @@ export type DocumentContentUploadedMetadata = {
  */
 export type DocumentCopiedMetadata = {
     /**
+     * Who mechanically created the copy.
+     */
+    actor?: string | null;
+    /**
      * The id of the newly created copy.
      */
     document_id: string;
@@ -4530,6 +4904,7 @@ export type DocumentCopiedMetadata = {
      */
     document_name: string;
     file_type?: null | FileType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The principal who owns the new copy.
      */
@@ -4604,6 +4979,7 @@ export type DocumentDeletedMetadata = {
      * Project the document belonged to, when any.
      */
     project_id?: string | null;
+    sub_type?: null | DocumentSubType;
 };
 
 /**
@@ -4968,8 +5344,7 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_descrip
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
-     * Who mechanically changed the content. Absent on events published
-     * before attribution, and on human-only collab sessions.
+     * Legacy single-editor attribution; newer Sync callers send `editors`.
      */
     actor?: string | null;
     /**
@@ -4981,9 +5356,24 @@ export type DocumentSyncContentUpdatedMetadata = {
      */
     document_version_id?: string | null;
     /**
+     * Distinct editors since the preceding snapshot notification.
+     */
+    editors?: Array<DocumentSyncEditor>;
+    /**
      * File type of the sync document, resolved by the document backend.
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
+};
+
+/**
+ * An editor reported by Sync from an authenticated session.
+ */
+export type DocumentSyncEditor = {
+    /**
+     * User or bot that performed the edit.
+     */
+    actor: string;
     on_behalf_of?: null | MacroUserIdStr;
 };
 
@@ -5141,31 +5531,6 @@ export type EditCallTranscriptRequest = {
     assignments: Array<CustomSpeakerAssignment>;
 };
 
-export type EditCommentRequest = {
-    mentions?: null | Mentions;
-    metadata?: unknown;
-    text?: string | null;
-    threadId: number;
-};
-
-export type EditCommentResponse = Comment & {
-    documentId: string;
-    documentName: string;
-    documentOwner: string;
-    fileType?: string | null;
-    subType?: null | DocumentSubType;
-};
-
-/**
- * Request body for `PATCH /crm/comments/comment/{comment_id}`.
- */
-export type EditCrmCommentRequest = {
-    /**
-     * The new comment body (markdown).
-     */
-    text: string;
-};
-
 /**
  * Edit document response.
  */
@@ -5305,6 +5670,117 @@ export type EmailFilters = {
 };
 
 /**
+ * Public status shown on email and in the Reminders editor.
+ */
+export type EmailFollowup = {
+    /**
+     * Condition, defaulting to no reply for new follow-ups.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * Canonical owned/delegated inbox.
+     */
+    linkId: string;
+    /**
+     * Confirmed schedule.
+     */
+    remindAt: string;
+    /**
+     * Identity of the snooze and its delivery records.
+     */
+    reminderId: string;
+    /**
+     * Last accepted operation; edits/removal compare this to prevent stale undo.
+     */
+    revision: string;
+    /**
+     * Durable lifecycle progress.
+     */
+    state: FollowupState;
+    /**
+     * Conversation identity.
+     */
+    threadId: string;
+};
+
+/**
+ * Idempotent email command. Reusing an operation ID with different data fails.
+ */
+export type EmailFollowupCommand = {
+    /**
+     * Reply condition.
+     */
+    condition: EmailReminderCondition;
+    /**
+     * None for creation, the current revision for edits.
+     */
+    expectedRevision?: string | null;
+    /**
+     * Unique request identity retained across network retries.
+     */
+    operationId: string;
+    /**
+     * One future instant; conditional recurrence is deliberately absent.
+     */
+    remindAt: string;
+    type: 'set';
+} | {
+    /**
+     * Reject removal if a newer edit has replaced this operation.
+     */
+    expectedRevision: string;
+    /**
+     * Unique request identity.
+     */
+    operationId: string;
+    type: 'remove';
+    /**
+     * Undo restores original visibility; ordinary Remove returns to inbox.
+     */
+    undo?: boolean;
+};
+
+/**
+ * Lookup response, including an email with no follow-up yet.
+ */
+export type EmailFollowupResponse = {
+    followup?: null | EmailFollowup;
+};
+
+/**
+ * When an email follow-up should return the conversation.
+ */
+export type EmailReminderCondition = 'if_no_reply' | 'regardless';
+
+/**
+ * A page of original-email identities and private reminder metadata.
+ */
+export type EmailReminderPage = {
+    /**
+     * Original threads ordered by their snooze return time.
+     */
+    items: Array<EmailReminderSummary>;
+    /**
+     * Progress through all examined candidates, absent at exhaustion.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * An original thread with its active snooze.
+ */
+export type EmailReminderSummary = {
+    /**
+     * Active snooze, including the revision required for edits or removal.
+     */
+    followup: EmailFollowup;
+    /**
+     * Original email identity, never a mirror reminder identity.
+     */
+    threadId: string;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -5328,7 +5804,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -5372,9 +5848,17 @@ export type EntityFilters = {
      */
     email_filters?: EmailFilters;
     /**
+     * Restrict results to the authenticated viewer's favorites when true.
+     */
+    favorites_only?: boolean | null;
+    /**
      * the bundled [ForeignEntityFilters]
      */
     foreign_entity_filters?: ForeignEntityFilters;
+    /**
+     * Initiative filters. Initiatives are opt-in.
+     */
+    initiative_filters?: InitiativeFilters;
     /**
      * the bundled [ProjectFilters]
      */
@@ -5383,10 +5867,6 @@ export type EntityFilters = {
      * property-based filters applied across entity types
      */
     property_filters?: Array<PropertyFilter>;
-    /**
-     * the bundled [ReminderFilters]
-     */
-    reminder_filters?: ReminderFilters;
     /**
      * How the `tag_option_ids` combine: `any` (default) matches entities
      * holding at least one selected tag, `all` requires every selected tag.
@@ -5399,6 +5879,11 @@ export type EntityFilters = {
      */
     tag_option_ids?: Array<string>;
 };
+
+/**
+ * A kind of Macro entity a reference column can point at.
+ */
+export type EntityKind = 'USER' | 'DOCUMENT' | 'TASK' | 'COMPANY' | 'CONTACT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'PROJECT' | 'THREAD' | 'CALENDAR_EVENT' | 'INITIATIVE';
 
 /**
  * A user's permission for an entity, discriminated by entity kind.
@@ -5439,6 +5924,20 @@ export type EntityPermissionResponse = {
 };
 
 /**
+ * A reference to one Macro entity.
+ */
+export type EntityRef = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * What kind of entity it is; it must be the kind the column points at.
+     */
+    entityType: EntityKind;
+};
+
+/**
  * Entity reference for entity-type property values.
  */
 export type EntityReference = {
@@ -5454,7 +5953,7 @@ export type EntityReference = {
 /**
  * Type of entity that can be referenced by entity properties.
  */
-export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type EntityType = 'CALENDAR_EVENT' | 'CALL_RECORD' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DATABASE_ROW' | 'CONTACT' | 'DOCUMENT' | 'INITIATIVE' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * A plain old json error response for use with axum.
@@ -5513,7 +6012,7 @@ export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
  */
 export type EventTime = {
     /**
-     * Exclusive end instant.
+     * Exclusive end instant; equal to the start for an imported point event.
      */
     endsAt: string;
     kind: 'timed';
@@ -5611,7 +6110,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -5633,7 +6132,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
 };
 
 /**
@@ -5645,6 +6144,11 @@ export type FavoritesList = {
      */
     favorites: Array<Favorite>;
 };
+
+/**
+ * What happened to a file, on the wire.
+ */
+export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
 
 export type FileSystemNodeWithIds = {
     document_id: string;
@@ -5674,7 +6178,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'xlsm' | 'ppt' | 'doc' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'fig' | 'psd' | 'psb' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -5685,6 +6189,113 @@ export type FileTypeUpdate = {
      */
     set: FileType;
 } | 'clear';
+
+/**
+ * A test of one column's cells.
+ */
+export type FilterCondition = {
+    /**
+     * The column tested.
+     */
+    column: string;
+    /**
+     * What its cell must be. The test's kind must fit the column's type.
+     */
+    test: FilterTest;
+};
+
+/**
+ * Conditions joined by one conjunction.
+ */
+export type FilterGroup = {
+    /**
+     * The conditions and nested groups. A group without any keeps every
+     * row.
+     */
+    conditions: Array<FilterNode>;
+    /**
+     * Whether every condition must hold, or any one.
+     */
+    conjunction: Conjunction;
+};
+
+/**
+ * One entry of a group: a condition, or a group of its own.
+ */
+export type FilterNode = (FilterCondition & {
+    kind: 'condition';
+}) | (FilterGroup & {
+    kind: 'group';
+});
+
+/**
+ * What a column's cell must be, by the kind of value the column holds.
+ */
+export type FilterTest = {
+    kind: 'presence';
+    /**
+     * Empty, or not.
+     */
+    operator: PresenceOperator;
+} | {
+    kind: 'text';
+    /**
+     * How the cell compares.
+     */
+    operator: TextOperator;
+    /**
+     * The text compared against, ignoring case for the containment
+     * tests.
+     */
+    value: string;
+} | {
+    kind: 'number';
+    /**
+     * How the cell compares.
+     */
+    operator: NumberOperator;
+    /**
+     * The number compared against; finite.
+     */
+    value: number;
+} | {
+    kind: 'date';
+    /**
+     * How the cell compares.
+     */
+    operator: DateOperator;
+    /**
+     * The date-time compared against.
+     */
+    value: string;
+} | {
+    /**
+     * Whether the box is checked.
+     */
+    checked: boolean;
+    kind: 'checkbox';
+} | {
+    kind: 'options';
+    /**
+     * How the cell's options relate to these.
+     */
+    operator: SetOperator;
+    /**
+     * Options of the column; at least one.
+     */
+    options: Array<string>;
+} | {
+    /**
+     * Entity ids, or for a relation the related rows' ids; at least
+     * one.
+     */
+    entities: Array<string>;
+    kind: 'entities';
+    /**
+     * How the cell's references relate to these.
+     */
+    operator: SetOperator;
+};
 
 export type FolderItem = {
     fileType?: null | FileType;
@@ -5707,6 +6318,11 @@ export type FolderItem = {
      */
     sha: string;
 };
+
+/**
+ * Durable progress of an email operation.
+ */
+export type FollowupState = 'archiving' | 'pending' | 'returning' | 'returned' | 'cancelled' | 'removed';
 
 /**
  * A persisted mapping to an entity owned by an external system.
@@ -5773,6 +6389,408 @@ export type ForeignEntityFilters = {
      * GitHub PR notification is done/seen).
      */
     notification_filters?: NotificationFilters;
+};
+
+/**
+ * A form: a view of one database table whose rows are its responses.
+ */
+export type Form = {
+    /**
+     * Who may respond.
+     */
+    audience: Audience;
+    /**
+     * When it stops taking responses, if it does.
+     */
+    closesAt: string | null;
+    /**
+     * What a respondent reads once their response is saved; empty for the
+     * default.
+     */
+    confirmationMessage: string;
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * The database holding its responses.
+     */
+    databaseId: string;
+    /**
+     * What respondents read under the name.
+     */
+    description: string;
+    /**
+     * The form.
+     */
+    id: string;
+    /**
+     * Its display name. A standalone form follows the database it created;
+     * a form attached to an existing table has its own name.
+     */
+    name: string;
+    /**
+     * Its owner.
+     */
+    ownerId: string;
+    /**
+     * The person column each signed-in submission names its respondent in;
+     * `null` once deleted.
+     */
+    respondentColumnId: string | null;
+    /**
+     * Whether its owner closed it.
+     */
+    status: FormStatus;
+    /**
+     * The date column each submission stamps; `null` once deleted.
+     */
+    submittedColumnId: string | null;
+    /**
+     * The table whose rows are its responses.
+     */
+    tableId: string;
+    /**
+     * Whether respondents may read option tallies.
+     */
+    tallyVisible: boolean;
+    /**
+     * When its facts or layout last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * The caller's level on a form: view responds, edit changes questions and
+ * reads responses, owner also sets the audience, closes and trashes it.
+ */
+export type FormAccess = 'view' | 'edit' | 'owner';
+
+/**
+ * A ready collaborative form and the result of publishing its latest draft.
+ */
+export type FormCollaboration = {
+    /**
+     * The latest validated form. The form id also identifies its surface.
+     */
+    detail: FormDetail;
+    /**
+     * Why the current draft cannot yet replace the respondent layout.
+     * Only editors can request this result.
+     */
+    publicationError?: FormPublicationProblem;
+};
+
+/**
+ * A form with its layout, as the caller may see it.
+ */
+export type FormDetail = {
+    /**
+     * The caller's level on it.
+     */
+    access: FormAccess;
+    /**
+     * The form's facts.
+     */
+    form: Form;
+    /**
+     * Its sections, in order.
+     */
+    sections: Array<FormSectionDetail>;
+    /**
+     * Whether its database is in the trash, so it has no table to show or
+     * write: its sections keep no questions and it takes no responses.
+     */
+    tableGone: boolean;
+};
+
+/**
+ * What went wrong with a forms request.
+ */
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+
+/**
+ * Why a forms request was refused or failed.
+ */
+export type FormErrorResponse = {
+    /**
+     * What went wrong.
+     */
+    code: FormErrorCode;
+    /**
+     * What went wrong, in words.
+     */
+    message: string;
+    problem: null | LayoutProblem;
+    /**
+     * The question it is about, if one.
+     */
+    question: string | null;
+};
+
+/**
+ * Every section of a form, in order.
+ */
+export type FormLayout = {
+    /**
+     * The sections, first first.
+     */
+    sections: Array<FormSection>;
+};
+
+/**
+ * An editor's saved draft is not yet the version respondents can use.
+ */
+export type FormPublicationProblem = {
+    kind: 'invalidDraft';
+} | {
+    kind: 'layout';
+    /**
+     * The invariant the editor needs to repair.
+     */
+    problem: LayoutProblem;
+} | {
+    kind: 'widgetMismatch';
+    /**
+     * The question to repair.
+     */
+    question: string;
+} | {
+    kind: 'fileUploadNeedsSignIn';
+} | {
+    kind: 'pending';
+};
+
+/**
+ * A question with its column's facts.
+ */
+export type FormQuestionDetail = {
+    /**
+     * The column it writes.
+     */
+    column: string;
+    /**
+     * What respondents read under the title.
+     */
+    helpText: string;
+    /**
+     * The question.
+     */
+    id: string;
+    /**
+     * The column's type.
+     */
+    kind: ColumnKind;
+    /**
+     * The column's options, in order, for a select or tag column.
+     */
+    options: Array<QuestionOption>;
+    /**
+     * Whether a response must answer it.
+     */
+    required: boolean;
+    /**
+     * The column's name.
+     */
+    title: string;
+    widget: null | Widget;
+};
+
+/**
+ * One entry of a form's submission ledger: who answered, when, and where
+ * the answers went.
+ */
+export type FormResponse = {
+    /**
+     * The form.
+     */
+    formId: string;
+    /**
+     * The entry.
+     */
+    id: string;
+    /**
+     * The row holding the answers; `null` when stopped, or once the row was
+     * deleted from the table.
+     */
+    row: string | null;
+    /**
+     * Saved, or stopped at a gate.
+     */
+    status: ResponseStatus;
+    /**
+     * The gate that stopped it.
+     */
+    stoppedAtSection: string | null;
+    /**
+     * When it was first submitted.
+     */
+    submittedAt: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * One section of a layout: questions on one screen, or a gate the answers
+ * so far must pass.
+ */
+export type FormSection = {
+    /**
+     * What respondents read under the title.
+     */
+    description: string;
+    /**
+     * The section, under an id the client mints.
+     */
+    id: string;
+    kind: 'questions';
+    /**
+     * Its questions, in order.
+     */
+    questions: Array<QuestionLayout>;
+    /**
+     * Its title; may be empty.
+     */
+    title: string;
+} | {
+    /**
+     * Its description, for editors.
+     */
+    description: string;
+    /**
+     * The section, under an id the client mints.
+     */
+    id: string;
+    kind: 'gate';
+    /**
+     * What a stopped respondent reads.
+     */
+    message: string;
+    /**
+     * The rules, naming only columns asked in earlier sections.
+     */
+    rules: FilterGroup;
+    /**
+     * Its title, for editors.
+     */
+    title: string;
+} | {
+    /**
+     * What respondents read before choosing a time.
+     */
+    description: string;
+    /**
+     * The section, under an id the client mints.
+     */
+    id: string;
+    kind: 'booking';
+    /**
+     * The native booking event. Respondent layouts never include this target.
+     */
+    target: BookingTarget;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
+ * One section of a form as it reads.
+ */
+export type FormSectionDetail = {
+    /**
+     * Its description.
+     */
+    description: string;
+    /**
+     * The section.
+     */
+    id: string;
+    kind: 'questions';
+    /**
+     * Its questions, in order.
+     */
+    questions: Array<FormQuestionDetail>;
+    /**
+     * Its title.
+     */
+    title: string;
+} | {
+    /**
+     * Its description.
+     */
+    description: string;
+    /**
+     * The section.
+     */
+    id: string;
+    kind: 'gate';
+    /**
+     * What a stopped respondent reads.
+     */
+    message: string;
+    /**
+     * The rules.
+     */
+    rules: FilterGroup;
+    /**
+     * Its title.
+     */
+    title: string;
+} | {
+    /**
+     * Its description.
+     */
+    description: string;
+    /**
+     * The section.
+     */
+    id: string;
+    kind: 'booking';
+    /**
+     * Editors can configure the destination; respondent layouts omit it.
+     */
+    target?: BookingTarget;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
+ * Where a new form's responses go.
+ */
+export type FormSource = {
+    kind: 'new';
+} | {
+    /**
+     * The table's database.
+     */
+    databaseId: string;
+    kind: 'table';
+    /**
+     * The table.
+     */
+    tableId: string;
+};
+
+/**
+ * Whether a form takes responses, as its owner set it. A form also stops
+ * taking them once its closing time passes.
+ */
+export type FormStatus = 'open' | 'closed';
+
+/**
+ * How the table's rows answer each choice question.
+ */
+export type FormTally = {
+    /**
+     * One tally per select, numeric select, tag or checkbox question, in
+     * layout order.
+     */
+    questions: Array<QuestionTally>;
 };
 
 export type GenericErrorResponse = {
@@ -6028,16 +7046,6 @@ export type GetInstructionsDocumentResponse = {
 };
 
 /**
- * Response from the message-context endpoint.
- */
-export type GetMessageWithContextResponse = {
-    /**
-     * Messages around the requested message in chronological order.
-     */
-    messages: Array<ApiChannelContextMessage>;
-};
-
-/**
  * Result of a get-or-create channel operation.
  */
 export type GetOrCreateAction = 'get' | 'create';
@@ -6140,6 +7148,39 @@ export type GetUserHistoryResponse = {
 };
 
 /**
+ * One end of the compared range.
+ */
+export type GitRefDto = {
+    /**
+     * The branch name, when known.
+     */
+    name?: string | null;
+    /**
+     * The commit, when known.
+     */
+    sha?: string | null;
+};
+
+/**
+ * A label among the visible GitHub pull requests. Labels with the same name in different
+ * repositories count together.
+ */
+export type GithubLabelFacet = {
+    /**
+     * The label's most recently synced color, as six hex digits without `#`.
+     */
+    color?: string | null;
+    /**
+     * Number of visible pull requests with the label.
+     */
+    count: number;
+    /**
+     * The label's name.
+     */
+    name: string;
+};
+
+/**
  * Display-ready data for a GitHub pull request associated with a task.
  */
 export type GithubPullRequest = {
@@ -6198,6 +7239,31 @@ export type GithubPullRequest = {
 };
 
 /**
+ * Response body for `GET /github_pull_requests/{id}/changes/patch`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesPatchResponse = {
+    /**
+     * The git-style unified diff of the changeset.
+     */
+    patch: string;
+};
+
+/**
+ * Response body for `GET /github_pull_requests/{id}/changes`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type GithubPullRequestChangesResponse = {
+    changeset?: null | ChangesetDto;
+    /**
+     * Why there are no changes, in a sentence the user can act on.
+     */
+    error?: string | null;
+};
+
+/**
  * A check run associated with a GitHub pull request.
  */
 export type GithubPullRequestCheckRun = {
@@ -6239,6 +7305,10 @@ export type GithubPullRequestComment = {
      * GitHub's relationship label for the author, when available.
      */
     authorAssociation?: string | null;
+    /**
+     * The stable numeric GitHub user id for the comment author, when available.
+     */
+    authorId?: number | null;
     /**
      * The GitHub login for the comment author, when available.
      */
@@ -6295,6 +7365,124 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * Repositories, authors, assignees, and labels among the GitHub pull requests a caller can see,
+ * each with the number of pull requests it covers.
+ */
+export type GithubPullRequestFacets = {
+    /**
+     * Assignees, most pull requests first.
+     */
+    assignees: Array<GithubUserFacet>;
+    /**
+     * Authors, most pull requests first.
+     */
+    authors: Array<GithubUserFacet>;
+    /**
+     * Labels, most pull requests first.
+     */
+    labels: Array<GithubLabelFacet>;
+    /**
+     * Repositories, most pull requests first.
+     */
+    repositories: Array<GithubRepositoryFacet>;
+};
+
+/**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * Where a pull request's review stands, from its reviewers' latest reviews.
+ */
+export type GithubPullRequestReviewDecision = 'approved' | 'changes_requested' | 'review_required';
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
+ * The tasks linked to one GitHub pull request.
+ */
+export type GithubPullRequestTasks = {
+    /**
+     * The pull request's `owner/repo/pull/number` key, as requested.
+     */
+    githubKey: string;
+    /**
+     * Ids of the task documents the pull request references, oldest link first. Empty when
+     * the caller cannot see the pull request. The caller may still lack access to a task.
+     */
+    taskIds: Array<string>;
+};
+
+/**
+ * Request body for looking up the tasks linked to GitHub pull requests.
+ */
+export type GithubPullRequestTasksRequest = {
+    /**
+     * Pull request `owner/repo/pull/number` keys, at most 100.
+     */
+    githubKeys: Array<string>;
+};
+
+/**
+ * The tasks linked to each requested GitHub pull request.
+ */
+export type GithubPullRequestTasksResponse = {
+    /**
+     * One entry per requested pull request, in request order.
+     */
+    pullRequests: Array<GithubPullRequestTasks>;
+};
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
+};
+
+/**
  * Response containing all GitHub pull requests associated with a task.
  */
 export type GithubPullRequestsResponse = {
@@ -6302,6 +7490,42 @@ export type GithubPullRequestsResponse = {
      * Parsed pull requests, in repository query order.
      */
     pullRequests: Array<GithubPullRequest>;
+};
+
+/**
+ * A repository among the visible GitHub pull requests.
+ */
+export type GithubRepositoryFacet = {
+    /**
+     * Number of visible pull requests in the repository.
+     */
+    count: number;
+    /**
+     * The repository's most recently synced name, as `owner/repo`.
+     */
+    repository: string;
+    /**
+     * The numeric GitHub repository id, which survives renames and transfers.
+     */
+    repositoryId: string;
+};
+
+/**
+ * A GitHub user among the visible pull requests, as an author or an assignee.
+ */
+export type GithubUserFacet = {
+    /**
+     * Number of visible pull requests the user opened, or is assigned to.
+     */
+    count: number;
+    /**
+     * The user's numeric GitHub user id.
+     */
+    githubUserId: string;
+    /**
+     * The user's most recently synced GitHub login, when known.
+     */
+    login?: string | null;
 };
 
 /**
@@ -6386,6 +7610,26 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
  * Sort method for grouped queries (frecency not supported).
  */
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
+
+/**
+ * A non-account guest of a single call session.
+ *
+ * The id doubles as the guest's RTC participant identity, so identities are
+ * opaque UUIDs and never share a namespace (or a column) with Macro user
+ * ids. Only the server mints them; Macro users keep `macro|…` identities,
+ * so an RTC identity classifies as exactly one of the two.
+ */
+export type GuestId = string;
+
+/**
+ * Public guest join inputs. The server generates the participant identity.
+ */
+export type GuestJoinRequest = {
+    /**
+     * Guest's name, displayed to everyone in the room.
+     */
+    displayName: string;
+};
 
 /**
  * A registered user-run harness.
@@ -6532,6 +7776,179 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * Committed counters, never optimistic browser or uncommitted worker counts.
+ */
+export type ImportCounters = {
+    /**
+     * Previously committed source identities.
+     */
+    duplicates: number;
+    /**
+     * Newly persisted messages.
+     */
+    imported: number;
+    /**
+     * Source records examined through the committed checkpoint.
+     */
+    processed: number;
+    /**
+     * Newly persisted reactions.
+     */
+    reactions: number;
+    /**
+     * Unsupported, empty or otherwise deliberately skipped records.
+     */
+    skipped: number;
+};
+
+/**
+ * Public error codes; never carry raw provider errors, keys, emails or source text.
+ */
+export type ImportError = 'disabled' | 'invalid_input' | 'limit_exceeded' | 'unavailable' | 'admin_required' | 'source_mismatch' | 'conflict' | 'upload_mismatch' | 'lease_lost' | 'retryable' | 'internal';
+
+/**
+ * Configurable bounds shared with browser staging and enforced again by the worker.
+ */
+export type ImportLimits = {
+    /**
+     * Maximum selected conversations.
+     */
+    conversations: number;
+    /**
+     * Maximum historical batch payload bytes.
+     */
+    databaseBatchBytes: number;
+    /**
+     * Maximum messages in a historical batch.
+     */
+    databaseBatchMessages: number;
+    /**
+     * Maximum users, root metadata or individual day JSON bytes.
+     */
+    jsonBytes: number;
+    /**
+     * Maximum NDJSON part bytes.
+     */
+    partBytes: number;
+    /**
+     * Maximum records per part.
+     */
+    partRecords: number;
+    /**
+     * Maximum bytes per NDJSON record, including newline.
+     */
+    recordBytes: number;
+    /**
+     * Maximum descriptors or completion identities per call.
+     */
+    registrationBatch: number;
+    /**
+     * Maximum selected temporary data bytes across all uploads.
+     */
+    selectedBytes: number;
+    /**
+     * Maximum ZIP entries scanned by the browser.
+     */
+    zipEntries: number;
+};
+
+/**
+ * Admin list result, also supplying upload limits before a job exists.
+ */
+export type ImportPage = {
+    /**
+     * At most 50 job receipts, newest first.
+     */
+    jobs: Array<ImportProgress>;
+    /**
+     * Effective server limits.
+     */
+    limits: ImportLimits;
+    nextCursor?: null | JobId;
+    /**
+     * Binding summary used by the picker confirmation.
+     */
+    sourceBinding: SourceBinding;
+};
+
+/**
+ * Common receipt returned by create, completion, finalize, cancel and progress.
+ */
+export type ImportProgress = {
+    /**
+     * All selected conversations, bounded by the create limit.
+     */
+    conversations: Array<ConversationProgress>;
+    /**
+     * Persisted creation time, also the final historical-time fallback.
+     */
+    createdAt: string;
+    /**
+     * Immutable history option confirmed when creating this job.
+     */
+    includeMessageHistory: boolean;
+    /**
+     * Stable job identity.
+     */
+    jobId: JobId;
+    /**
+     * Server bounds for staging and registration.
+     */
+    limits: ImportLimits;
+    /**
+     * Registration closure time; cancellation also closes registration.
+     */
+    registrationClosedAt?: string | null;
+    /**
+     * Monotonic job revision for polling/websocket invalidation.
+     */
+    revision: number;
+    /**
+     * Immutable source confirmation from this job, not the current team binding.
+     */
+    source: SourceIdentity;
+    /**
+     * Durable job lifecycle.
+     */
+    status: JobStatus;
+    /**
+     * Last durable lifecycle/progress update.
+     */
+    updatedAt: string;
+    /**
+     * Whether users metadata is verified and pinned.
+     */
+    usersVerified: boolean;
+};
+
+/**
+ * An import is identified once, before sending, so retries cannot duplicate rows.
+ */
+export type ImportTable = {
+    /**
+     * Header names, in order. All imported values remain text.
+     */
+    columns: Array<string>;
+    /**
+     * New table's display name.
+     */
+    name: string;
+    /**
+     * Stable key for this import, retained through retries.
+     */
+    requestId: string;
+    /**
+     * Rectangular text rows. Empty fields are preserved.
+     */
+    rows: Array<Array<string>>;
+};
+
+/**
+ * Non-fatal, sanitized explanations displayed in admin progress.
+ */
+export type ImportWarning = 'creation_time_from_message' | 'creation_time_from_job' | 'unresolvable_direct_message' | 'target_unavailable' | 'uploads_incomplete';
+
+/**
  * Display attribution for a comment imported from an external document.
  */
 export type ImportedAuthor = {
@@ -6561,6 +7978,49 @@ export type InFlightTurnSummary = {
 };
 
 /**
+ * Settled schema and the version against which its first value can be written.
+ */
+export type InferColumnTypeOutcome = {
+    /**
+     * Updated placement, property definition, and SQL name.
+     */
+    column: ColumnDetail;
+    /**
+     * Version after settling the column.
+     */
+    table_version: TableVersion;
+};
+
+/**
+ * Request to settle an empty column's first-value type.
+ */
+export type InferColumnTypeRequest = {
+    /**
+     * Table version used when interpreting the first value.
+     */
+    baseVersion: TableVersion;
+    /**
+     * First-value type: STRING, NUMBER, or ENTITY.
+     */
+    dataType: DataType;
+    specificEntityType?: null | EntityType;
+};
+
+/**
+ * A property value set on a new initiative as part of its create.
+ */
+export type InitialPropertyValue = {
+    /**
+     * Property definition to set.
+     */
+    propertyDefinitionId: string;
+    /**
+     * Value, validated by the properties service like any other property write.
+     */
+    value: SetPropertyValue;
+};
+
+/**
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
@@ -6568,10 +8028,6 @@ export type InitiativeDetail = {
      * When the initiative was created.
      */
     createdAt: string;
-    /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6607,6 +8063,40 @@ export type InitiativeDetail = {
 };
 
 /**
+ * Filters for initiatives.
+ */
+export type InitiativeFilters = {
+    /**
+     * Inclusive lower due-date bound.
+     */
+    due_after?: string | null;
+    /**
+     * Inclusive upper due-date bound.
+     */
+    due_before?: string | null;
+    /**
+     * Opt this query into initiatives at all. Initiatives are off by
+     * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
+     * Asking for specific `initiative_ids` or `owners` also opts in.
+     */
+    include?: boolean;
+    /**
+     * Initiative ids to filter by. Empty to include all accessible initiatives.
+     */
+    initiative_ids?: Array<string>;
+    /**
+     * Case-insensitive name substring.
+     */
+    name?: string | null;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
+     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
+     * owner.
+     */
+    owners?: Array<string>;
+};
+
+/**
  * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
  */
 export type InitiativeId = string;
@@ -6625,10 +8115,6 @@ export type InitiativeList = {
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
-    /**
-     * The markdown document holding the description; open it in the editor.
-     */
-    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6666,6 +8152,26 @@ export type InputReceivedMetadata = {
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
 
+/**
+ * A single email recipient for a call invitation.
+ */
+export type InviteMeetingRequest = {
+    /**
+     * Recipient email; no Macro account is required.
+     */
+    email: string;
+};
+
+/**
+ * Registered teammates selected for an incoming call invitation.
+ */
+export type InviteMeetingUsersRequest = {
+    /**
+     * Human user principals; bot principals and historical bare bot UUIDs are invalid.
+     */
+    userIds: Array<string>;
+};
+
 export type Item = ({
     type: 'document';
 } & BasicDocument) | ({
@@ -6680,11 +8186,109 @@ export type ItemWithUserAccessLevel = {
 };
 
 /**
+ * Import job identity. Generate UUIDv7 in application code.
+ */
+export type JobId = string;
+
+/**
+ * Job lifecycle. Cancellation remains in progress while any lease is active.
+ */
+export type JobStatus = 'uploading' | 'processing' | 'completed' | 'completed_with_errors' | 'failed' | 'cancelling' | 'cancelled';
+
+/**
+ * Single safe source folder/key segment; never a path or authorization proof.
+ */
+export type KeySegment = string;
+
+/**
+ * How one lane shows in a board layout.
+ */
+export type Lane = {
+    /**
+     * Whether it is hidden.
+     */
+    hidden?: boolean;
+    /**
+     * The lane.
+     */
+    key: LaneKey;
+};
+
+/**
+ * A lane of a board, named by what its cards' grouping cells hold: one
+ * option of a select, one person, or nothing.
+ */
+export type LaneKey = {
+    /**
+     * The cards holding this option of the board's select column.
+     */
+    id: string;
+    kind: 'option';
+} | {
+    /**
+     * The cards naming this person in the board's person column.
+     */
+    id: string;
+    kind: 'user';
+} | {
+    kind: 'none';
+};
+
+/**
  * Latest-message bundle for soup payloads.
  */
 export type LatestMessage = {
     latest_message?: null | ChannelMessage;
     latest_non_thread_message?: null | ChannelMessage;
+};
+
+/**
+ * Why a layout does not fit the form's table.
+ */
+export type LayoutProblem = {
+    kind: 'bookingMustBeLast';
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'unknownColumn';
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'managedColumn';
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'repeatedColumn';
+} | {
+    /**
+     * The id.
+     */
+    id: string;
+    kind: 'repeatedId';
+} | {
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'gateNamesLaterColumn';
+} | {
+    kind: 'gateRule';
+    /**
+     * Why.
+     */
+    reason: string;
+} | {
+    kind: 'textTooLong';
+    /**
+     * The longest allowed.
+     */
+    max: number;
 };
 
 /**
@@ -6712,6 +8316,40 @@ export type ListWebhooksResponse = {
      * The caller's webhooks, newest first. Signing secrets are omitted.
      */
     webhooks: Array<Webhook>;
+};
+
+/**
+ * A database as listed for a viewer.
+ */
+export type ListedDatabase = {
+    /**
+     * The database.
+     */
+    database: Database;
+    /**
+     * The viewer's access.
+     */
+    grant: AccessLevel;
+    /**
+     * Tables in tab order, so discovery can find a table independently of
+     * the containing database's display name.
+     */
+    tables: Array<Table>;
+};
+
+/**
+ * A form the caller reaches through a grant, as the forms catalog lists
+ * it, with the caller's level on it.
+ */
+export type ListedForm = {
+    /**
+     * The caller's level on it.
+     */
+    access: FormAccess;
+    /**
+     * The form's facts.
+     */
+    form: Form;
 };
 
 export type LocationResponseData = {
@@ -6771,9 +8409,101 @@ export type LocationResponseV3 = {
 
 export type MacroUserIdStr = string;
 
-export type Mentions = {
-    mentionId: string;
-    users: Array<string>;
+/**
+ * Persistent meeting metadata. No channel contents or archived media are exposed.
+ */
+export type Meeting = {
+    /**
+     * Currently active call session, if any.
+     */
+    callId?: string | null;
+    /**
+     * Associated channel, for links to existing channel calls only.
+     */
+    channelId?: string | null;
+    /**
+     * Persistent meeting identifier.
+     */
+    id: string;
+    /**
+     * Scheduled end, or none for an instant meeting.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Scheduled start, or none for an instant meeting.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Bearer capability embedded in the invitation URL.
+     */
+    shareToken: MeetingToken;
+    /**
+     * Human-readable meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Whether the authenticated caller can invite teammates to this meeting.
+ */
+export type MeetingInvitePermissions = {
+    /**
+     * True for the owner of an uncancelled standalone meeting.
+     */
+    canInvite: boolean;
+};
+
+/**
+ * Minimal waiting-room display data, without account identities or call content.
+ */
+export type MeetingParticipant = {
+    /**
+     * Profile image, when available for a Macro member.
+     */
+    avatarUrl?: string | null;
+    /**
+     * Name displayed in the waiting room.
+     */
+    displayName: string;
+};
+
+/**
+ * People currently connected to a meeting's room.
+ */
+export type MeetingParticipants = {
+    /**
+     * Human attendees only; transcription agents are excluded.
+     */
+    participants: Array<MeetingParticipant>;
+};
+
+/**
+ * An empty room reservation, not a started call or an invitation.
+ */
+export type MeetingPreparation = {
+    /**
+     * After this deadline Start falls back to ordinary room creation.
+     */
+    expiresAt: string;
+    /**
+     * Also the reserved RTC room's UUID and prospective call ID.
+     */
+    id: string;
+};
+
+/**
+ * A bearer capability that grants access only to a meeting's RTC room.
+ */
+export type MeetingToken = string;
+
+/**
+ * Uncancelled standalone meetings visible in the requested meeting list.
+ */
+export type MeetingsResponse = {
+    /**
+     * Persistent meeting invitations, most recently created first.
+     */
+    meetings: Array<Meeting>;
 };
 
 /**
@@ -6867,6 +8597,66 @@ export type MessageAttachment = {
 };
 
 /**
+ * Attachments added to a message, on post or by a later edit.
+ */
+export type MessageAttachmentCreatedMetadata = {
+    /**
+     * Actor that added the attachments.
+     */
+    actor: ChannelSender;
+    /**
+     * Attachments created by this mutation.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Message the attachments were added to.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+};
+
+/**
+ * Attachments removed from a message by an edit.
+ */
+export type MessageAttachmentRemovedMetadata = {
+    /**
+     * Actor that removed the attachments.
+     */
+    actor: ChannelSender;
+    /**
+     * Attachments removed by this mutation.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Message the attachments were removed from.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+};
+
+/**
  * Kind of message change; notification policy only runs for posted messages.
  */
 export type MessageChange = {
@@ -6909,6 +8699,14 @@ export type MessageChange = {
     type: 'message_deleted';
 } | {
     /**
+     * Whether the reaction was added (`true`) or removed (`false`).
+     */
+    added: boolean;
+    /**
+     * Emoji whose membership changed.
+     */
+    emoji: string;
+    /**
      * Persisted message.
      */
     message: Message;
@@ -6936,13 +8734,43 @@ export type MessageChange = {
  */
 export type MessageCursor = {
     /**
-     * Last root creation time.
+     * Last message creation time or activity occurrence time.
      */
     created_at: string;
     /**
-     * Last root UUID, used to break timestamp ties.
+     * Last entry UUID, used to break timestamp ties across both sources.
      */
     id: string;
+};
+
+/**
+ * A committed message tombstone.
+ */
+export type MessageDeletedMetadata = {
+    /**
+     * Actor that deleted the message; not necessarily the author.
+     */
+    actor: ChannelSender;
+    /**
+     * Tombstone timestamp reported by the repository.
+     */
+    deleted_at?: string | null;
+    /**
+     * The id of the deleted message.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
 };
 
 /**
@@ -6973,6 +8801,28 @@ export type MessageEvent = {
 };
 
 /**
+ * An attachment persisted with a message.
+ */
+export type MessageEventAttachment = {
+    /**
+     * Attachment row identifier.
+     */
+    attachment_id: string;
+    /**
+     * Attachment creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Referenced entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Referenced entity type.
+     */
+    entity_type: string;
+};
+
+/**
  * Root message with its small thread preview, independent of its parent type.
  */
 export type MessageListItem = Message & {
@@ -6984,6 +8834,45 @@ export type MessageListItem = Message & {
      * Bounded reply preview; full replies load on expansion.
      */
     thread: MessageThreadPreview;
+};
+
+/**
+ * One mentioned entity in a committed post; the full mention list travels on
+ * the posted fact.
+ */
+export type MessageMentionedMetadata = {
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Message creation timestamp.
+     */
+    created_at: string;
+    /**
+     * The mentioned entity this fact is about (`user`, `bot`, `document`, …).
+     */
+    mentioned: SimpleMention;
+    /**
+     * The id of the message carrying the mention.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Message author; may be a bot.
+     */
+    sender: ChannelSender;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
 };
 
 /**
@@ -7013,6 +8902,30 @@ export type MessageParent = {
      */
     id: DocumentId;
     type: 'document';
+} | {
+    /**
+     * An initiative, presented as a project in the application.
+     */
+    id: string;
+    type: 'initiative';
+} | {
+    /**
+     * A CRM company.
+     */
+    id: string;
+    type: 'crm_company';
+} | {
+    /**
+     * A CRM contact.
+     */
+    id: string;
+    type: 'crm_contact';
+} | {
+    /**
+     * A video call and its persistent chat thread.
+     */
+    id: string;
+    type: 'call';
 };
 
 /**
@@ -7035,6 +8948,90 @@ export type MessagePatch = {
      * Client mutation nonce.
      */
     nonce?: string | null;
+};
+
+/**
+ * A committed content edit.
+ */
+export type MessagePatchedMetadata = {
+    /**
+     * Actor that patched the message.
+     */
+    actor: ChannelSender;
+    /**
+     * Macro Markdown body after the patch.
+     */
+    content: string;
+    /**
+     * Edit timestamp, when the patch marked the message edited.
+     */
+    edited_at?: string | null;
+    /**
+     * The id of the patched message.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation.
+     */
+    root_id: string;
+    /**
+     * Root identifier for a reply; absent for a root.
+     */
+    thread_id?: string | null;
+    /**
+     * Update timestamp reported by the repository.
+     */
+    updated_at: string;
+};
+
+/**
+ * A committed post, independent of the surface presenting the conversation.
+ */
+export type MessagePostedMetadata = {
+    /**
+     * Persisted attachments available to authorized consumers.
+     */
+    attachments: Array<MessageEventAttachment>;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Message creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Explicit mentions recorded with the post.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Posted message identifier.
+     */
+    message_id: string;
+    /**
+     * Entity that owns the message and determines access to it.
+     */
+    parent: MessageParent;
+    /**
+     * Stable identity of the conversation, shared by roots and replies.
+     */
+    root_id: string;
+    /**
+     * Author, including bot principals.
+     */
+    sender: ChannelSender;
+    /**
+     * Root identifier for a reply; absent for a new root.
+     */
+    thread_id?: string | null;
+    /**
+     * User whose invocation produced a bot response.
+     */
+    triggered_by?: string | null;
 };
 
 /**
@@ -7071,6 +9068,36 @@ export type MessageThreadPreview = {
      * Total live reply count.
      */
     reply_count: number;
+};
+
+/**
+ * One chronological entry in a parent's timeline.
+ */
+export type MessageTimelineEntry = {
+    /**
+     * The message and thread state.
+     */
+    message: MessageListItem;
+    type: 'message';
+} | {
+    /**
+     * The recorded activity.
+     */
+    activity: TimelineActivity;
+    type: 'activity';
+};
+
+/**
+ * A bounded, newest-first window of a parent's messages and activity, ordered
+ * by the server on one `(timestamp, id)` keyset.
+ */
+export type MessageTimelinePage = {
+    /**
+     * Messages and activity, newest first.
+     */
+    entries: Array<MessageTimelineEntry>;
+    next_cursor?: null | MessageCursor;
+    previous_cursor?: null | MessageCursor;
 };
 
 /**
@@ -7113,6 +9140,69 @@ export type MessageTimelineQuery = {
 };
 
 /**
+ * Lifecycle events for the common message service, one per committed fact.
+ * Reactions and typing never reach the topic.
+ */
+export type MessageTopicEvent = {
+    event_type: 'message.posted';
+    /**
+     * A user or bot posted a root or reply.
+     */
+    metadata: MessagePostedMetadata;
+} | {
+    event_type: 'message.patched';
+    /**
+     * A message's content was patched.
+     */
+    metadata: MessagePatchedMetadata;
+} | {
+    event_type: 'message.deleted';
+    /**
+     * A message was tombstoned.
+     */
+    metadata: MessageDeletedMetadata;
+} | {
+    event_type: 'message.mentioned';
+    /**
+     * An entity (user, bot, document, …) was mentioned in a posted message.
+     */
+    metadata: MessageMentionedMetadata;
+} | {
+    event_type: 'message.attachment_created';
+    /**
+     * Attachments were added to a message.
+     */
+    metadata: MessageAttachmentCreatedMetadata;
+} | {
+    event_type: 'message.attachment_removed';
+    /**
+     * Attachments were removed from a message.
+     */
+    metadata: MessageAttachmentRemovedMetadata;
+};
+
+/**
+ * A signed-in respondent's own response, with its answers as the row
+ * holds them now.
+ */
+export type MyResponse = {
+    /**
+     * The row's cells for the form's current questions, the empty ones
+     * left out; none when the row is gone.
+     */
+    answers: Array<Answer>;
+    /**
+     * The form's booking step, while the saved row still passes the form's
+     * current required questions and gates.
+     */
+    booking?: UnlockedBooking;
+    /**
+     * The ledger entry.
+     */
+    response: FormResponse;
+};
+
+/**
  * An attachment to add to a message.
  */
 export type NewAttachment = {
@@ -7135,25 +9225,51 @@ export type NewAttachment = {
 };
 
 /**
- * New attachment to add to a channel message.
+ * What a new column holds.
  */
-export type NewChannelAttachment = {
+export type NewColumn = {
     /**
-     * Attachment entity id.
+     * Let the column's first value settle its type: only for a plain
+     * text column.
      */
-    entity_id: string;
+    inferType?: boolean;
     /**
-     * Attachment entity type.
+     * The column's name, unique within the table ignoring case.
      */
-    entity_type: string;
+    name: string;
     /**
-     * Optional rendered height.
+     * For a select or tag column, the options it starts with, in
+     * order, each under an id the client mints. A select column with
+     * none accepts nothing until options are added.
      */
-    height?: number | null;
+    options?: Array<NewOption>;
+    source: 'new';
     /**
-     * Optional rendered width.
+     * Its type. A relation names the table whose rows it holds, one the
+     * caller can see.
      */
-    width?: number | null;
+    type: ColumnKind;
+} | {
+    /**
+     * The property's definition.
+     */
+    property: string;
+    source: 'existing';
+};
+
+/**
+ * A select or tag option to create.
+ */
+export type NewOption = {
+    /**
+     * Its id, minted by the client; later ops of the request may name it.
+     */
+    id: string;
+    /**
+     * Its label, unique within the column ignoring case. A numeric
+     * select's labels are numbers.
+     */
+    label: string;
 };
 
 /**
@@ -7203,6 +9319,59 @@ export type NewThreadAnchor = {
      * Vertical position as a fraction of the page height.
      */
     y_pct: number;
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent or null for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
+};
+
+/**
+ * A view's contents as an op creates it; the server gives it its id,
+ * position and times.
+ */
+export type NewView = {
+    /**
+     * How it draws them; a board left without a card title gets the
+     * table's first column.
+     */
+    layout: RequestedLayout;
+    /**
+     * Its name.
+     */
+    name: string;
+    /**
+     * Which rows it shows, in what order.
+     */
+    query?: ViewQuery;
 };
 
 /**
@@ -7220,6 +9389,146 @@ export type NotificationFilters = {
  * The mutually exclusive lifecycle states of a user's notification.
  */
 export type NotificationState = 'unseen' | 'seen' | 'done';
+
+/**
+ * How a number cell compares to a number.
+ */
+export type NumberOperator = 'is' | 'isNot' | 'greaterThan' | 'greaterThanOrEqual' | 'lessThan' | 'lessThanOrEqual';
+
+/**
+ * A batch of ops for one database and the versions its tables must be at.
+ */
+export type OpBatch = {
+    /**
+     * The version each named table must still be at; the batch is refused
+     * as a conflict if one moved. Without one, ops are last-write-wins.
+     */
+    baseVersions?: {
+        [key: string]: TableVersion;
+    };
+    /**
+     * The ops, in the order they apply.
+     */
+    ops: Array<DatabaseOp>;
+};
+
+/**
+ * Why an op of a batch was refused. Nothing in the batch was written.
+ */
+export type OpRefusalResponse = {
+    /**
+     * The column placement at fault, when one is.
+     */
+    column: string | null;
+    /**
+     * What is wrong.
+     */
+    message: string;
+    /**
+     * The refused op's index in the request.
+     */
+    op: number;
+    /**
+     * The row's index within the op, when one row is at fault.
+     */
+    row: number | null;
+    taken: null | TakenId;
+};
+
+/**
+ * What one op did, in the order the ops were sent, grouped as the ops are:
+ * a result's `kind` is its op's, naming the same resource, and its
+ * `change` says what happened to it.
+ */
+export type OpResult = {
+    /**
+     * What happened to it.
+     */
+    change: TableResult;
+    kind: 'table';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * Its version once the request committed; left out when the op
+     * removed it.
+     */
+    tableVersion?: TableVersion;
+} | {
+    /**
+     * What happened to it.
+     */
+    change: ColumnResult;
+    /**
+     * The column.
+     */
+    column: string;
+    kind: 'column';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+} | {
+    /**
+     * What happened to them.
+     */
+    change: RowsResult;
+    kind: 'rows';
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+} | {
+    /**
+     * What happened to it.
+     */
+    change: ViewResult;
+    kind: 'view';
+    /**
+     * The view's table.
+     */
+    table: string;
+    /**
+     * The table's version once the request committed.
+     */
+    tableVersion: TableVersion;
+    /**
+     * The view.
+     */
+    view: string;
+} | {
+    kind: 'reorder_tables';
+    /**
+     * Every table, in its new order, with its version once the request
+     * committed.
+     */
+    tables: Array<VersionedTable>;
+};
+
+/**
+ * A select option, by its id or by its label.
+ */
+export type OptionRef = {
+    /**
+     * An option the column has.
+     */
+    id: string;
+} | {
+    /**
+     * An option's label, matched without regard to case. An unknown label
+     * is refused.
+     */
+    label: string;
+};
 
 /**
  * A pending pairing, as shown to the approving user.
@@ -7325,32 +9634,6 @@ export type PatchChannelRequest = {
  */
 export type PatchMessageNotificationPolicy = 'Default' | 'NotifyAsPostedMessage';
 
-/**
- * Request to patch a channel message.
- */
-export type PatchMessageRequest = {
-    /**
-     * Attachment ids to remove.
-     */
-    attachment_ids_to_delete?: Array<string> | null;
-    /**
-     * Attachments to add.
-     */
-    attachments_to_add?: Array<NewChannelAttachment> | null;
-    /**
-     * Optional replacement message body.
-     */
-    content?: string | null;
-    /**
-     * Optional replacement mentions.
-     */
-    mentions?: Array<SimpleMention> | null;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
 export type PatchProjectRequestV2 = {
     /**
      * The new name of the project.
@@ -7403,14 +9686,6 @@ export type PdfAnchorId = {
     uuid: string;
 };
 
-export type PdfAnchorRequest = (PdfPlaceableCommentAnchorRequest & {
-    anchorType: 'free-comment';
-}) | (PdfHighlightAnchorRequest & {
-    anchorType: 'highlight';
-}) | (UnthreadedPdfUuidRequest & {
-    anchorType: 'attachment';
-});
-
 export type PdfHighlightAnchor = {
     alpha: number;
     blue: number;
@@ -7427,7 +9702,6 @@ export type PdfHighlightAnchor = {
     red: number;
     rootId?: string | null;
     text: string;
-    threadId?: number | null;
     updatedAt?: string | null;
     uuid: string;
 };
@@ -7472,24 +9746,7 @@ export type PdfPlaceableCommentAnchor = {
     rootId?: string | null;
     rotation: number;
     shouldLockOnSave: boolean;
-    threadId?: number | null;
     uuid: string;
-    wasDeleted: boolean;
-    wasEdited: boolean;
-    widthPct: number;
-    xPct: number;
-    yPct: number;
-};
-
-export type PdfPlaceableCommentAnchorRequest = {
-    allowableEdits?: unknown;
-    heightPct: number;
-    originalIndex: number;
-    originalPage: number;
-    page: number;
-    rotation: number;
-    shouldLockOnSave: boolean;
-    uuid?: string | null;
     wasDeleted: boolean;
     wasEdited: boolean;
     widthPct: number;
@@ -7528,6 +9785,66 @@ export type PinnedItem = {
      */
     pinIndex: number;
 };
+
+/**
+ * Pipeline metadata; table schema and data are read through the database service.
+ */
+export type Pipeline = {
+    /**
+     * Creation time.
+     */
+    createdAt: string;
+    /**
+     * Dedicated backing database.
+     */
+    databaseId: string;
+    /**
+     * Entity identity, used with `CrmPipeline` access receipts.
+     */
+    id: string;
+    /**
+     * Pipeline display name.
+     */
+    name: string;
+    /**
+     * Protected primary column.
+     */
+    primaryColumnId: string;
+    /**
+     * Kind of the primary reference.
+     */
+    recordType: PipelineRecordType;
+    /**
+     * Whether the pipeline has a team grant.
+     */
+    sharing: PipelineSharing;
+    /**
+     * Table of entries.
+     */
+    tableId: string;
+    /**
+     * Team owning the pipeline; references retain their own access controls.
+     */
+    teamId: string;
+    /**
+     * Trashed pipelines are omitted from navigation.
+     */
+    trashedAt: string | null;
+    /**
+     * Owning user; sharing never changes ownership.
+     */
+    userId: string;
+};
+
+/**
+ * Which CRM entity each row references. Fixed when a pipeline is created.
+ */
+export type PipelineRecordType = 'company' | 'contact';
+
+/**
+ * Initial sharing, or the desired team grant. Individual ownership is preserved.
+ */
+export type PipelineSharing = 'private' | 'team';
 
 /**
  * Request body for `POST /channels/activity`.
@@ -7600,68 +9917,6 @@ export type PostMessage = {
 export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
 /**
- * Request to send a channel message.
- */
-export type PostMessageRequest = {
-    /**
-     * Attachments to add after message creation.
-     */
-    attachments: Array<NewChannelAttachment>;
-    /**
-     * Message body.
-     */
-    content: string;
-    /**
-     * Message mentions.
-     */
-    mentions: Array<SimpleMention>;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-    /**
-     * Optional thread parent id.
-     */
-    thread_id?: string | null;
-};
-
-/**
- * Response returned after sending a message.
- */
-export type PostMessageResponse = {
-    /**
-     * Created message id.
-     */
-    id: string;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-/**
- * Request to mutate a reaction.
- */
-export type PostReactionRequest = {
-    /**
-     * Reaction action.
-     */
-    action: ReactionAction;
-    /**
-     * Reaction emoji.
-     */
-    emoji: string;
-    /**
-     * Message id to react to.
-     */
-    message_id: string;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-};
-
-/**
  * Request body for the AST soup endpoint.
  */
 export type PostSoupAstRequest = ApiEntityFilterAst & Params & {
@@ -7679,24 +9934,6 @@ export type PostSoupRequest = EntityFilters & Params & {
      * the view of specific emails to display
      */
     emailView?: string;
-};
-
-/**
- * Request to emit a typing event.
- */
-export type PostTypingRequest = {
-    /**
-     * Typing action.
-     */
-    action: TypingAction;
-    /**
-     * Optional optimistic-update nonce.
-     */
-    nonce?: string | null;
-    /**
-     * Optional thread id.
-     */
-    thread_id?: string | null;
 };
 
 export type PreSaveDocumentRequest = {
@@ -7724,6 +9961,11 @@ export type PreSaveDocumentResponseData = {
      */
     presignedUrls: Array<PresignedUrl>;
 };
+
+/**
+ * Whether a cell is empty.
+ */
+export type PresenceOperator = 'isEmpty' | 'isNotEmpty';
 
 export type PresignedUrl = {
     /**
@@ -7852,8 +10094,16 @@ export type PropertyDefinition = {
      */
     is_system: boolean;
     owner: PropertyOwner;
-    specific_entity_type?: null | EntityType;
+    specific_entity_type: null | EntityType;
     updated_at: string;
+};
+
+/**
+ * Property definition with its associated options (service representation).
+ */
+export type PropertyDefinitionWithOptions = {
+    definition: PropertyDefinition;
+    property_options: Array<PropertyOption>;
 };
 
 /**
@@ -7899,7 +10149,37 @@ export type PropertyInput = {
 };
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * A selectable option for select-type properties (service representation).
+ */
+export type PropertyOption = {
+    color: string | null;
+    created_at: string;
+    display_order: number;
+    id: string;
+    property_definition_id: string;
+    updated_at: string;
+    value: PropertyOptionValue;
+};
+
+/**
+ * The value of a property option - either a string or a number.
+ */
+export type PropertyOptionValue = {
+    type: 'string';
+    /**
+     * String value for SelectString properties
+     */
+    value: string;
+} | {
+    type: 'number';
+    /**
+     * Number value for SelectNumber properties
+     */
+    value: number;
+};
+
+/**
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner = {
     scope: 'user';
@@ -7907,6 +10187,9 @@ export type PropertyOwner = {
 } | {
     scope: 'team';
     team_id: string;
+} | {
+    database_id: string;
+    scope: 'database';
 } | {
     scope: 'system';
 };
@@ -7972,9 +10255,75 @@ export type PropertyValue = {
 };
 
 /**
- * Reaction mutation action.
+ * A versioned query definition.
  */
-export type ReactionAction = 'Add' | 'Remove';
+export type QueryDefinition = {
+    /**
+     * A read-only SELECT in the databases dialect.
+     */
+    query: string;
+    version: 1;
+};
+
+/**
+ * How one column of the table is asked.
+ */
+export type QuestionLayout = {
+    /**
+     * The column it writes; its title, type and options are the column's.
+     */
+    column: string;
+    /**
+     * What respondents read under the title.
+     */
+    helpText: string;
+    /**
+     * The question, under an id the client mints; answers name it.
+     */
+    id: string;
+    /**
+     * Whether a response must answer it.
+     */
+    required: boolean;
+    widget: null | Widget;
+};
+
+/**
+ * One option of a question's column.
+ */
+export type QuestionOption = {
+    /**
+     * Its colour, a hex string, if it has one.
+     */
+    color: string | null;
+    /**
+     * The option.
+     */
+    id: string;
+    /**
+     * Its label.
+     */
+    label: string;
+};
+
+/**
+ * One question's counts.
+ */
+export type QuestionTally = {
+    /**
+     * A count per option in the column's order, zeros included; for a
+     * checkbox, checked then unchecked.
+     */
+    buckets: Array<TallyBucket>;
+    /**
+     * The question.
+     */
+    question: string;
+    /**
+     * Rows with a value in its column.
+     */
+    responses: number;
+};
 
 /**
  * Reaction mutation for the authenticated user.
@@ -8002,127 +10351,13 @@ export type RecentlyDeletedResponseData = {
 };
 
 /**
- * A reminder belonging to a user.
- *
- * `user_id` is deliberately absent: a reminder is only ever read by its owner,
- * so the field would be redundant on the wire.
+ * Batched registration, also used to renew an unchanged descriptor's grant.
  */
-export type Reminder = {
+export type RegisterUploads = {
     /**
-     * Set once the owner marks the reminder as dealt with. Firing does not
-     * set it — a delivered reminder is waiting on its owner, not finished.
+     * At most 50 descriptors; no duplicate identities in a call.
      */
-    completedAt?: string | null;
-    /**
-     * When the reminder was created.
-     */
-    createdAt: string;
-    /**
-     * What to remind the user about.
-     */
-    description: string;
-    /**
-     * When false, the dispatcher skips this reminder.
-     */
-    enabled: boolean;
-    /**
-     * Id of the associated entity, when the reminder is attached to one.
-     */
-    entityId?: string | null;
-    /**
-     * Type of the associated entity, when the reminder is attached to one.
-     */
-    entityType?: null | 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
-    /**
-     * Reminder id.
-     */
-    id: string;
-    /**
-     * The next firing, derived from `schedule` on write.
-     */
-    nextRunAt: string;
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: ReminderSchedule;
-    /**
-     * When the reminder was last modified.
-     */
-    updatedAt: string;
-};
-
-/**
- * Filters for reminders.
- */
-export type ReminderFilters = {
-    /**
-     * Filter on whether the owner has marked the reminder done. `None` returns
-     * both.
-     */
-    completed?: boolean | null;
-    /**
-     * Restrict to reminders attached to these entities, each `"{type}:{id}"`.
-     */
-    entities?: Array<string>;
-    /**
-     * Filter on whether the reminder's next run has come due, i.e. it has
-     * fired and is awaiting its owner. `None` returns both.
-     *
-     * Evaluated server-side against the database clock rather than a
-     * timestamp supplied by the caller: a timestamp would land in the query
-     * cache key and change on every render.
-     */
-    fired?: boolean | null;
-    /**
-     * Reminder ids to filter by. Empty to include all of the caller's reminders.
-     */
-    ids?: Array<string>;
-    /**
-     * Opt this query into reminders at all. Reminders are off by default —
-     * see [`crate::ast::reminder::ReminderLiteral::Include`]. Asking for
-     * specific `ids` or `entities` also opts in.
-     */
-    include?: boolean;
-};
-
-/**
- * When a reminder fires.
- */
-export type ReminderSchedule = {
-    /**
-     * The instant to fire at.
-     */
-    remindAt: string;
-    type: 'once';
-} | {
-    /**
-     * Cron expression, either the conventional 5-field
-     * `min hour dom mon dow` or the 6-/7-field
-     * `sec min hour dom mon dow [year]`. A 5-field expression is stored
-     * normalized to 6 fields with a zero seconds field, so `0 9 * * *` and
-     * `0 0 9 * * *` are the same schedule and both read back as the latter.
-     */
-    cron: string;
-    /**
-     * The timezone the cron expression is evaluated in.
-     */
-    timezone: string;
-    type: 'recurring';
-};
-
-/**
- * The caller's reminders, soonest firing first.
- */
-export type RemindersList = {
-    /**
-     * Pass back as `cursor` to fetch the next page. Absent on the last page —
-     * its absence is the only end-of-list signal, since a page can be short.
-     */
-    nextCursor?: string | null;
-    /**
-     * The reminders.
-     */
-    reminders: Array<Reminder>;
+    descriptors: Array<UploadDescriptor>;
 };
 
 /**
@@ -8144,6 +10379,16 @@ export type RenameChannelLabelRequest = {
      */
     name: string;
     rule?: null | ChannelLabelRule;
+};
+
+/**
+ * Rename input.
+ */
+export type RenamePipeline = {
+    /**
+     * New display name.
+     */
+    name: string;
 };
 
 /**
@@ -8190,6 +10435,69 @@ export type ReplaceCrmStagesRequest = {
 export type RequestedHarnessScope = 'private' | 'team';
 
 /**
+ * A layout as an op asks for it: a board may leave its card title out.
+ */
+export type RequestedLayout = {
+    /**
+     * How columns show, in display order. A column left out shows
+     * after the listed ones, in the table's order.
+     */
+    columns: Array<ViewColumn>;
+    kind: 'table';
+} | {
+    /**
+     * The columns a card shows under its title, in order.
+     */
+    cardFields: Array<string>;
+    /**
+     * The single-select or single-person column whose values are the
+     * lanes.
+     */
+    groupBy: string;
+    /**
+     * Whether a lane with no cards is hidden.
+     */
+    hideEmptyLanes: boolean;
+    kind: 'board';
+    /**
+     * How lanes show, in display order.
+     */
+    lanes: Array<Lane>;
+    /**
+     * The column a card is titled by. Left out, a board keeps the
+     * title it has, and a new board takes the table's first column.
+     */
+    title?: string;
+};
+
+/**
+ * Whether a ledger entry is a saved response or a stop at a gate.
+ */
+export type ResponseStatus = 'submitted' | 'stopped';
+
+/**
+ * A form's response counts, for its editors.
+ */
+export type ResponseSummary = {
+    /**
+     * Rows of the form's table, whoever wrote them.
+     */
+    rows: number;
+    /**
+     * Respondents stopped at a gate.
+     */
+    stopped: number;
+    /**
+     * The stops, by gate.
+     */
+    stoppedBySection: Array<SectionCount>;
+    /**
+     * Responses saved.
+     */
+    submitted: number;
+};
+
+/**
  * Per-user status of an incoming-call ring, as reported by the
  * ring-status endpoint while a native client is ringing.
  */
@@ -8203,6 +10511,157 @@ export type RingStatusResponse = {
      * The ring status for the authenticated user.
      */
     status: RingStatus;
+};
+
+/**
+ * One row's cells in a [`RowChanges::PerRow`] update.
+ */
+export type RowChange = {
+    /**
+     * Its new cells.
+     */
+    cells: Array<CellWrite>;
+    /**
+     * The row.
+     */
+    row: string;
+};
+
+/**
+ * How a change touched a row.
+ */
+export type RowChangeKind = 'insert' | 'update' | 'delete';
+
+/**
+ * Which rows an update writes, and with what.
+ */
+export type RowChanges = {
+    /**
+     * The cells each of them gets.
+     */
+    cells: Array<CellWrite>;
+    kind: 'uniform';
+    /**
+     * The rows.
+     */
+    rows: Array<string>;
+} | {
+    kind: 'per_row';
+    /**
+     * The rows and their cells, in order.
+     */
+    rows: Array<RowChange>;
+};
+
+/**
+ * One change of a row, as its history shows it.
+ */
+export type RowHistoryEntry = {
+    /**
+     * The agent acting for them, if one was.
+     */
+    actingBot: string | null;
+    /**
+     * Who made it; `null` for an internal caller, or a removed user.
+     */
+    actor: string | null;
+    /**
+     * Those columns' values it wrote, by column id; a cell it emptied is
+     * left out.
+     */
+    after: {
+        [key: string]: CellValue;
+    };
+    /**
+     * When it committed.
+     */
+    at: string;
+    /**
+     * Those columns' values before it, by column id; an empty cell is
+     * left out.
+     */
+    before: {
+        [key: string]: CellValue;
+    };
+    /**
+     * The change's id in the journal.
+     */
+    change: number;
+    /**
+     * The columns it wrote; for a removal, those the row had values in.
+     */
+    columns: Array<string>;
+    /**
+     * How it touched the row.
+     */
+    kind: RowChangeKind;
+    /**
+     * The table version it produced.
+     */
+    version: number;
+};
+
+/**
+ * A row's history.
+ */
+export type RowHistoryResponse = {
+    /**
+     * Every committed change that touched the row, newest first: who made
+     * it, when, how, and the touched columns' values before and after.
+     */
+    changes: Array<RowHistoryEntry>;
+};
+
+/**
+ * Identifier of a row.
+ */
+export type RowId = string;
+
+/**
+ * A write to a table's rows.
+ */
+export type RowsChange = {
+    kind: 'insert';
+    /**
+     * One entry per new row: the cells it starts with. Columns left out
+     * start empty.
+     */
+    rows: Array<Array<CellWrite>>;
+} | {
+    /**
+     * Which rows get which cells.
+     */
+    changes: RowChanges;
+    kind: 'update';
+} | {
+    kind: 'delete';
+    /**
+     * The rows, each named once.
+     */
+    rows: Array<string>;
+};
+
+/**
+ * What happened to a table's rows.
+ */
+export type RowsResult = {
+    kind: 'inserted';
+    /**
+     * The new rows, in the order they were sent.
+     */
+    rows: Array<string>;
+} | {
+    /**
+     * How many rows the op updated.
+     */
+    affected: number;
+    kind: 'updated';
+} | {
+    /**
+     * How many rows the op deleted.
+     */
+    affected: number;
+    kind: 'deleted';
 };
 
 export type S3ObjectInfo = {
@@ -8261,6 +10720,92 @@ export type SaveDocumentResponseData = {
      * If the document is an editable file, we provide a presigned url to save the updated file to.
      */
     presignedUrl?: string | null;
+};
+
+/**
+ * Request body for saving a query.
+ */
+export type SaveQueryRequest = {
+    /**
+     * The database whose tables win name resolution. The caller must be
+     * able to see it.
+     */
+    databaseId?: string;
+    /**
+     * What the query asks: `{"version": 1, "query": "<SELECT>"}`.
+     */
+    definition: QueryDefinition;
+};
+
+/**
+ * A stored, immutable query. Editing a question saves a new one.
+ */
+export type SavedQuery = {
+    /**
+     * When it was saved.
+     */
+    createdAt: string;
+    /**
+     * Who saved it; `null` once that user is deleted.
+     */
+    createdBy: string | null;
+    /**
+     * The database whose tables win name resolution; `null` once that
+     * database is deleted, or when none was given.
+     */
+    databaseId: string | null;
+    /**
+     * What it asks.
+     */
+    definition: QueryDefinition;
+    /**
+     * Identifier.
+     */
+    id: string;
+};
+
+/**
+ * Response from searching CRM contacts.
+ */
+export type SearchContactsResponse = {
+    /**
+     * Matching contacts, most recently interacted first.
+     */
+    contacts: Array<CrmContactResponse>;
+};
+
+/**
+ * Search publication/receipt state. Acceptance is not completed publication;
+ * even completed publication still awaits consumer indexing and refresh.
+ */
+export type SearchState = {
+    status: 'not_needed';
+} | {
+    status: 'pending';
+} | {
+    /**
+     * Receipt from the search service.
+     */
+    receiptId: string;
+    status: 'submitted';
+} | {
+    status: 'completed';
+} | {
+    status: 'failed';
+};
+
+/**
+ * How many responses one gate stopped.
+ */
+export type SectionCount = {
+    /**
+     * How many it stopped.
+     */
+    count: number;
+    /**
+     * The gate.
+     */
+    section: string;
 };
 
 /**
@@ -8327,6 +10872,12 @@ export type SessionMentionedMetadata = {
      */
     mentioned: Array<MacroUserIdStr>;
     mentioned_by?: null | MacroUserIdStr;
+    /**
+     * The channel or document message the prompt was posted as, when it
+     * arrived from a thread rather than the session view. That message
+     * already notified the users it named when it was posted.
+     */
+    origin_message_id?: string | null;
 };
 
 /**
@@ -8483,6 +11034,12 @@ export type SetEmailSyncRequest = {
 };
 
 /**
+ * How a cell's options or references relate to a set of them. The first
+ * two fit a column holding one value, the last three one holding several.
+ */
+export type SetOperator = 'isAnyOf' | 'isNoneOf' | 'hasAny' | 'hasAll' | 'hasNone';
+
+/**
  * Type-safe enum for setting entity property values - provides compile-time validation.
  */
 export type SetPropertyValue = {
@@ -8517,6 +11074,11 @@ export type SetPropertyValue = {
     urls: Array<string>;
 };
 
+/**
+ * SHA-256 encoded as exactly 64 lowercase hexadecimal characters.
+ */
+export type Sha256Digest = string;
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -8533,6 +11095,16 @@ export type SharePermissionV2 = {
      */
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Sharing input.
+ */
+export type SharePipeline = {
+    /**
+     * Desired team grant.
+     */
+    sharing: PipelineSharing;
 };
 
 /**
@@ -8565,6 +11137,51 @@ export type SimpleMention = {
 };
 
 /**
+ * A cell an undo left alone, because someone changed it after the change
+ * being undone.
+ */
+export type SkippedCell = {
+    /**
+     * Who changed it since, from the journal; `null` when unknown.
+     */
+    by: string | null;
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * The row.
+     */
+    row: string;
+};
+
+/**
+ * At most fifty registered identities to verify and an optional immutable conversation seal.
+ */
+export type SlackCompleteRequest = CompleteUploads;
+
+/**
+ * Bounded full-metadata create payload. Domain validation applies effective limits again.
+ */
+export type SlackCreateRequest = CreateImport;
+
+/**
+ * At most fifty immutable upload descriptors, without client-supplied storage keys.
+ */
+export type SlackRegisterRequest = RegisterUploads;
+
+/**
+ * Slack time represented exactly as nonnegative Unix microseconds.
+ * JSON is a string with six fractional digits, never a floating-point number.
+ */
+export type SlackTimestamp = string;
+
+/**
+ * Slack member identity (U or W prefix), including USLACKBOT.
+ */
+export type SlackUserId = string;
+
+/**
  * A channel visible to the caller that matches a smart tag rule.
  */
 export type SmartTagChannelMatch = {
@@ -8590,6 +11207,25 @@ export type SmartTagPreview = {
      * Number of matching channels the caller participates in, including overflow.
      */
     totalCount: number;
+};
+
+/**
+ * A sort direction. Empty cells sort last either way.
+ */
+export type SortDirection = 'ascending' | 'descending';
+
+/**
+ * One sort key.
+ */
+export type SortKey = {
+    /**
+     * The column sorted on.
+     */
+    column: string;
+    /**
+     * Which way.
+     */
+    direction: SortDirection;
 };
 
 /**
@@ -8620,6 +11256,10 @@ export type SoupAgentSessionSoupPropertiesField = {
      * The agent session uuid
      */
     id: string;
+    /**
+     * Whether the session is archived and read-only.
+     */
+    isArchived: boolean;
     /**
      * The user-facing name of the session
      */
@@ -8867,7 +11507,29 @@ export type SoupCalendarEventSoupPropertiesField = {
 };
 
 /**
- * A participant in a call record, as displayed in Soup.
+ * A non-account guest of a call record, as displayed in Soup.
+ */
+export type SoupCallRecordGuest = {
+    /**
+     * Guest-provided display name.
+     */
+    displayName: string;
+    /**
+     * Opaque guest identity; matches the guest's transcript speaker id.
+     */
+    id: string;
+    /**
+     * When the guest joined the call.
+     */
+    joinedAt: string;
+    /**
+     * When the guest left (None if still in an active call).
+     */
+    leftAt?: string | null;
+};
+
+/**
+ * A Macro-account participant in a call record, as displayed in Soup.
  */
 export type SoupCallRecordParticipant = {
     /**
@@ -8879,7 +11541,7 @@ export type SoupCallRecordParticipant = {
      */
     leftAt?: string | null;
     /**
-     * The user id.
+     * The Macro user id.
      */
     userId: string;
 };
@@ -8906,7 +11568,7 @@ export type SoupCallRecordSoupPropertiesField = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -8928,11 +11590,15 @@ export type SoupCallRecordSoupPropertiesField = {
      */
     endedAt?: string | null;
     /**
+     * Non-account guests in the call.
+     */
+    guests: Array<SoupCallRecordGuest>;
+    /**
      * Whether the call is currently active.
      */
     isActive: boolean;
     /**
-     * Participants in the call.
+     * Macro-account participants in the call.
      */
     participants: Array<SoupCallRecordParticipant>;
     /**
@@ -9171,6 +11837,65 @@ export type SoupCrmCompanySoupPropertiesField = {
 };
 
 /**
+ * One original CRM contact record, selected from the viewer's accessible teams.
+ */
+export type SoupCrmContactSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Parent company ID.
+     */
+    companyId: string;
+    /**
+     * Parent company's display name.
+     */
+    companyName: string;
+    /**
+     * Record creation time.
+     */
+    createdAt: string;
+    /**
+     * Full email address.
+     */
+    email: string;
+    /**
+     * Earliest interaction for this team record.
+     */
+    firstInteraction: string;
+    /**
+     * Whether the contact or parent company is hidden.
+     */
+    hidden: boolean;
+    /**
+     * Original team-owned contact ID.
+     */
+    id: string;
+    /**
+     * Latest interaction for this team record.
+     */
+    lastInteraction: string;
+    /**
+     * Team-local display name, if known.
+     */
+    name?: string | null;
+    /**
+     * Team owning this record.
+     */
+    teamId: string;
+    /**
+     * Record update time.
+     */
+    updatedAt: string;
+    /**
+     * The viewer's latest visit to this record.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A CRM domain as displayed in Soup. Mirrors the crm crate's
  * [`CrmDomain`] with a stable wire shape that the FE can rely on.
  */
@@ -9191,6 +11916,50 @@ export type SoupCrmDomain = {
      * The id of the domain record.
      */
     id: string;
+};
+
+/**
+ * A row of a Macro database table in the Soup feed. Its cells are its
+ * entity properties; access is its database's.
+ */
+export type SoupDatabaseRowSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Who created the row, when they still exist.
+     */
+    createdBy?: string | null;
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * Row identifier.
+     */
+    id: string;
+    /**
+     * The database's owner, which owns every row in it.
+     */
+    ownerId: string;
+    /**
+     * Fractional index ordering the row within its table.
+     */
+    position: string;
+    /**
+     * The table the row belongs to.
+     */
+    tableId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -9427,6 +12196,41 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * An initiative (called a project in the frontend) in the Soup feed.
+ */
+export type SoupInitiativeSoupPropertiesField = {
+    /**
+     * Properties attached to the entity.
+     */
+    properties: Array<SoupProperty>;
+} & {
+    /**
+     * Creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Initiative identifier.
+     */
+    id: string;
+    /**
+     * Initiative display name.
+     */
+    name: string;
+    /**
+     * Initiative owner.
+     */
+    ownerId: string;
+    /**
+     * Last modification timestamp.
+     */
+    updatedAt: string;
+    /**
+     * Last time the requesting user viewed the initiative.
+     */
+    viewedAt?: string | null;
+};
+
+/**
  * A single item in the Soup feed.
  */
 export type SoupItem = {
@@ -9447,6 +12251,12 @@ export type SoupItem = {
      */
     data: SoupProjectSoupPropertiesField;
     tag: 'project';
+} | {
+    /**
+     * Initiative entity.
+     */
+    data: SoupInitiativeSoupPropertiesField;
+    tag: 'initiative';
 } | {
     /**
      * Email thread item.
@@ -9485,22 +12295,28 @@ export type SoupItem = {
     tag: 'crmCompany';
 } | {
     /**
+     * Team-owned CRM contact.
+     */
+    data: SoupCrmContactSoupPropertiesField;
+    tag: 'crmContact';
+} | {
+    /**
      * Foreign entity item.
      */
     data: SoupForeignEntity;
     tag: 'foreignEntity';
 } | {
     /**
-     * Reminder item.
-     */
-    data: SoupReminderSoupPropertiesField;
-    tag: 'reminder';
-} | {
-    /**
      * Agent session item.
      */
     data: SoupAgentSessionSoupPropertiesField;
     tag: 'agentSession';
+} | {
+    /**
+     * Database row item.
+     */
+    data: SoupDatabaseRowSoupPropertiesField;
+    tag: 'databaseRow';
 };
 
 /**
@@ -9693,105 +12509,6 @@ export type SoupProperty = {
 };
 
 /**
- * The entity a reminder is about, resolved server-side.
- *
- * A reminder has no block of its own — it opens, and is iconed as, whatever it
- * references. Which block that is depends on the referenced document's file
- * type, and the client's icon path is synchronous, so this is resolved here
- * rather than costing a fetch per row.
- */
-export type SoupReminderReference = {
-    /**
-     * The referenced entity's type.
-     */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
-    /**
-     * File type, when the reference is a document — `md`, `pdf`, and so on.
-     */
-    fileType?: string | null;
-    /**
-     * The referenced entity's id.
-     */
-    id: string;
-    /**
-     * Sub type, when the reference is a task or snippet document.
-     */
-    subType?: string | null;
-};
-
-/**
- * How often a reminder fires, flattened for the wire.
- *
- * The domain's [`ReminderSchedule`] is an internally-tagged enum carrying a
- * validated cron type; Soup only needs enough to render "once" vs "every
- * weekday at 9am", so the cron is exposed as a plain string.
- */
-export type SoupReminderSchedule = {
-    /**
-     * The instant to fire at.
-     */
-    remindAt: string;
-    type: 'once';
-} | {
-    /**
-     * Cron expression, normalized to the 6-field form.
-     */
-    cron: string;
-    /**
-     * The timezone the cron expression is evaluated in.
-     */
-    timezone: string;
-    type: 'recurring';
-};
-
-/**
- * A reminder as displayed in Soup.
- *
- * Reminders are user-owned rather than shared, so unlike most Soup items they
- * carry no access metadata — the repository only ever returns the caller's own.
- */
-export type SoupReminderSoupPropertiesField = {
-    /**
-     * Properties attached to the entity.
-     */
-    properties: Array<SoupProperty>;
-} & {
-    /**
-     * Set once a one-shot reminder has fired.
-     */
-    completedAt?: string | null;
-    /**
-     * When the reminder was created.
-     */
-    createdAt: string;
-    /**
-     * What to remind the user about. Doubles as the display name.
-     */
-    description: string;
-    /**
-     * When false, the dispatcher skips this reminder.
-     */
-    enabled: boolean;
-    /**
-     * The reminder id.
-     */
-    id: string;
-    /**
-     * The next firing. This is what Soup sorts reminders on.
-     */
-    nextRunAt: string;
-    referencedEntity?: null | SoupReminderReference;
-    /**
-     * When and how often the reminder fires.
-     */
-    schedule: SoupReminderSchedule;
-    /**
-     * When the reminder was last modified.
-     */
-    updatedAt: string;
-};
-
-/**
  * Thread metadata and preview replies for soup channel messages.
  */
 export type SoupThreadInfo = {
@@ -9852,6 +12569,61 @@ export type SoupThreadReply = {
 };
 
 /**
+ * Team's durable single-source binding, including confirmed unidentified archives.
+ */
+export type SourceBinding = {
+    kind: 'unbound';
+} | {
+    kind: 'confirmed_unknown';
+} | {
+    kind: 'known';
+    /**
+     * Bound source identity.
+     */
+    sourceId: SourceId;
+};
+
+/**
+ * Known Slack workspace identity (T prefix); an enterprise ID alone is insufficient.
+ */
+export type SourceId = string;
+
+/**
+ * Source identity supplied when creating a job. One binding per Macro team in v1.
+ */
+export type SourceIdentity = {
+    kind: 'known';
+    /**
+     * Workspace identifier in the archive.
+     */
+    sourceId: SourceId;
+} | {
+    kind: 'confirmed_unknown';
+};
+
+/**
+ * Starter result. A missing database means the user already started or removed it.
+ */
+export type StarterDatabase = {
+    /**
+     * Whether this request created the example.
+     */
+    created: boolean;
+    /**
+     * Accessible starter database, if still present.
+     */
+    databaseId: string | null;
+    /**
+     * Initial table, returned only on first creation.
+     */
+    tableId: string | null;
+    /**
+     * Initial board view, returned only on first creation.
+     */
+    viewId: string | null;
+};
+
+/**
  * The deterministic starter document ids for the current user.
  */
 export type StarterDocumentsResponse = {
@@ -9861,7 +12633,187 @@ export type StarterDocumentsResponse = {
     how_to_guide_id: string;
 };
 
+/**
+ * One storage row, with cells keyed by column placement.
+ */
+export type StorageRow = {
+    /**
+     * Populated cells.
+     */
+    cells: {
+        [key: string]: PropertyValue;
+    };
+    /**
+     * Row identity, independent of any referenced entity.
+     */
+    rowId: RowId;
+};
+
+/**
+ * A bounded page of rows at a table version.
+ */
+export type StorageRows = {
+    next?: null | RowId;
+    /**
+     * Rows in the requested view's order.
+     */
+    rows: Array<StorageRow>;
+    /**
+     * Table version when the read began.
+     */
+    version: TableVersion;
+};
+
+/**
+ * A query over one authorized storage table.
+ */
+export type StorageRowsQuery = {
+    after?: null | RowId;
+    /**
+     * The common database filter and sort semantics.
+     */
+    query?: ViewQuery;
+    /**
+     * Read these retained rows regardless of the active filter.
+     */
+    rowIds?: Array<RowId> | null;
+};
+
+/**
+ * A GitHub pull request as Macro stores it, read through one of the caller's records.
+ */
+export type StoredGithubPullRequest = {
+    /**
+     * Lines added across the pull request's changes.
+     */
+    additions?: number | null;
+    /**
+     * The users assigned to the pull request.
+     */
+    assignees: Array<GithubPullRequestUser>;
+    /**
+     * Stable numeric GitHub user id of the author.
+     */
+    authorGithubUserId?: string | null;
+    /**
+     * The author's GitHub login when the pull request was last synced.
+     */
+    authorLogin?: string | null;
+    base?: null | GitRefDto;
+    /**
+     * The latest check runs on the pull request's head commit.
+     */
+    checks: Array<GithubPullRequestCheckRun>;
+    /**
+     * Comments from the pull request's conversation, reviews, and review threads.
+     * Comment `authorId` intentionally retains the shared numeric GitHub comment contract;
+     * convert it to a decimal string before comparing it with `authorGithubUserId`.
+     */
+    comments: Array<GithubPullRequestComment>;
+    /**
+     * Lines deleted across the pull request's changes.
+     */
+    deletions?: number | null;
+    /**
+     * The pull request body, as GitHub markdown.
+     */
+    description?: string | null;
+    /**
+     * Whether the pull request is a draft.
+     */
+    draft: boolean;
+    /**
+     * The pull request's `owner/repo/pull/number` key.
+     */
+    githubKey: string;
+    /**
+     * When GitHub last updated the pull request.
+     */
+    githubUpdatedAt?: string | null;
+    head?: null | GitRefDto;
+    /**
+     * The caller's record for the pull request.
+     */
+    id: string;
+    /**
+     * The pull request's labels.
+     */
+    labels: Array<GithubPullRequestLabel>;
+    /**
+     * The pull request number within its repository.
+     */
+    number: number;
+    /**
+     * The repository owner the pull request was last synced under.
+     */
+    owner: string;
+    /**
+     * The repository name the pull request was last synced under.
+     */
+    repo: string;
+    /**
+     * Stable numeric GitHub user ids of the users asked to review.
+     */
+    requestedReviewerGithubUserIds: Array<string>;
+    reviewDecision?: null | GithubPullRequestReviewDecision;
+    /**
+     * Each reviewer's latest submitted review.
+     */
+    reviews: Array<GithubPullRequestReview>;
+    /**
+     * The normalized pull request status.
+     */
+    status?: null | 'open' | 'closed' | 'merged';
+    /**
+     * The pull request title.
+     */
+    title?: string | null;
+    /**
+     * The pull request's page on GitHub.
+     */
+    url: string;
+};
+
 export type String = string;
+
+/**
+ * A whole set of answers, sent at once.
+ */
+export type Submission = {
+    /**
+     * One answer per answered question; a question left out is unanswered.
+     */
+    answers: Array<Answer>;
+};
+
+/**
+ * What a submission came to.
+ */
+export type SubmissionOutcome = {
+    /**
+     * The form's booking step, unlocked by this accepted response.
+     */
+    booking?: UnlockedBooking;
+    outcome: 'submitted';
+    /**
+     * The ledger entry.
+     */
+    response: string;
+    /**
+     * The row holding the answers.
+     */
+    row: string;
+} | {
+    /**
+     * The gate's message.
+     */
+    message: string;
+    outcome: 'stopped';
+    /**
+     * The gate.
+     */
+    section: string;
+};
 
 export type SuccessResponse = {
     /**
@@ -9908,9 +12860,231 @@ export type SystemSkillSummary = {
 };
 
 /**
+ * One table (tab) of a database.
+ */
+export type Table = {
+    /**
+     * Owning database.
+     */
+    database_id: string;
+    /**
+     * Identifier.
+     */
+    id: string;
+    /**
+     * Display name; also the basis of the table's SQL name.
+     */
+    name: string;
+    /**
+     * Fractional index for tab ordering.
+     */
+    position: string;
+    /**
+     * Current version.
+     */
+    version: TableVersion;
+};
+
+/**
+ * A change to a table itself.
+ */
+export type TableChange = {
+    kind: 'create';
+    /**
+     * Its name, unique within the database ignoring case.
+     */
+    name: string;
+} | {
+    kind: 'rename';
+    /**
+     * Its new name, unique within the database ignoring case.
+     */
+    name: string;
+    /**
+     * The name the caller saw. Given, the rename is refused if the
+     * table goes by another one now, so a concurrent rename is not
+     * overwritten.
+     */
+    previousName?: string;
+} | {
+    kind: 'delete';
+} | {
+    kind: 'reorder_columns';
+    /**
+     * Its columns, in their new order.
+     */
+    order: Array<string>;
+} | {
+    kind: 'reorder_views';
+    /**
+     * Its views, in their new order.
+     */
+    order: Array<string>;
+};
+
+/**
+ * The [`TABLE_CHANGED_MESSAGE_TYPE`] payload: one table's new version.
+ */
+export type TableChanged = {
+    /**
+     * The database the table belongs to.
+     */
+    databaseId: string;
+    /**
+     * The table that changed.
+     */
+    tableId: string;
+    /**
+     * The table's version after the write.
+     */
+    version: TableVersion;
+};
+
+/**
+ * What changed in a table since a version, for a reader holding it at
+ * that version.
+ */
+export type TableChanges = {
+    /**
+     * The columns that changed; any of them means the table's shape moved.
+     */
+    columns: Array<TouchedColumn>;
+    /**
+     * Whether every version since is journaled; without it, read the table
+     * whole.
+     */
+    complete: boolean;
+    /**
+     * The rows that changed, each once, as they stand now: a row added
+     * and written is `insert`, one removed is `delete`, and one added and
+     * removed since is left out.
+     */
+    rows: Array<TouchedRow>;
+    /**
+     * Whether more rows changed than are listed; then read the table whole.
+     */
+    truncated: boolean;
+    /**
+     * The version the changes reach.
+     */
+    version: number;
+};
+
+/**
+ * One table with its columns and SQL name.
+ */
+export type TableDetail = {
+    /**
+     * Columns in display order.
+     */
+    columns: Array<ColumnDetail>;
+    /**
+     * The name SQL refers to the table by: its display name quoted and
+     * qualified by the database's (`FROM "Plans"."Table 1"`).
+     */
+    sql_name: string;
+    /**
+     * The table.
+     */
+    table: Table;
+    /**
+     * The table's views, in their order.
+     */
+    views: Array<DatabaseView>;
+};
+
+/**
+ * What happened to a table.
+ */
+export type TableResult = {
+    kind: 'created';
+} | {
+    kind: 'renamed';
+} | {
+    kind: 'deleted';
+} | {
+    kind: 'columns_reordered';
+} | {
+    kind: 'views_reordered';
+    /**
+     * Every view's key, in their new order.
+     */
+    positions: Array<ViewPosition>;
+};
+
+/**
+ * Monotonic per-table version, bumped once by every committed change to a
+ * table's schema or rows. Schema edits name the version they were made
+ * against, and change events carry the new one.
+ */
+export type TableVersion = number;
+
+/**
  * How multiple `tag_option_ids` combine when filtering.
  */
 export type TagFilterMode = 'any' | 'all';
+
+/**
+ * An id a request minted for something new that already names something,
+ * which refuses the request: a retried request whose first attempt
+ * committed, or an id minted twice.
+ */
+export type TakenId = {
+    /**
+     * A table's.
+     */
+    id: string;
+    kind: 'table';
+} | {
+    /**
+     * A column's.
+     */
+    id: string;
+    kind: 'column';
+} | {
+    /**
+     * An option's.
+     */
+    id: string;
+    kind: 'option';
+} | {
+    /**
+     * A view's.
+     */
+    id: string;
+    kind: 'view';
+};
+
+/**
+ * How many rows hold one value.
+ */
+export type TallyBucket = {
+    /**
+     * How many rows hold it.
+     */
+    count: number;
+    /**
+     * The value.
+     */
+    value: TallyValue;
+};
+
+/**
+ * A value a tally counts.
+ */
+export type TallyValue = {
+    kind: 'option';
+    /**
+     * The option.
+     */
+    option: string;
+} | {
+    /**
+     * Checked, or not.
+     */
+    checked: boolean;
+    kind: 'checkbox';
+};
 
 /**
  * Task-only filters nested under document filters.
@@ -9922,6 +13096,126 @@ export type TaskFilters = {
      */
     include_cbm_atm_nc?: boolean | null;
 };
+
+/**
+ * Disjoint busy/detail shapes prevent new event fields leaking by default.
+ */
+export type TeamCalendarContent = {
+    kind: 'busy';
+} | {
+    /**
+     * Detail projection.
+     */
+    details: TeamCalendarDetails;
+    kind: 'details';
+};
+
+/**
+ * Whether a member's calendar projection can establish availability.
+ */
+export type TeamCalendarCoverage = 'ready' | 'unavailable' | 'hidden';
+
+/**
+ * Safe details from a single authorized source.
+ */
+export type TeamCalendarDetails = {
+    /**
+     * Attendees; self flags are relative to the requesting viewer.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Source calendar name, shown only with details.
+     */
+    calendarName: string;
+    /**
+     * Join URL, if supplied by this source.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Body, if supplied by this source.
+     */
+    description?: string | null;
+    /**
+     * Location, if supplied by this source.
+     */
+    location?: string | null;
+    /**
+     * Organizer address from this source.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer name from this source.
+     */
+    organizerName?: string | null;
+    /**
+     * Display title.
+     */
+    title: string;
+};
+
+/**
+ * A read-only team calendar occurrence.
+ */
+export type TeamCalendarItem = TeamCalendarContent & {
+    /**
+     * Whether this occurrence blocks the sharer's personal availability.
+     * A subscribed calendar's block can be shared without occupying the sharer.
+     */
+    contributesToAvailability: boolean;
+    /**
+     * Stable opaque projection identity, never an event entity id.
+     */
+    id: string;
+    /**
+     * The person sharing access to the source.
+     */
+    ownerId: string;
+    /**
+     * Occurrence interval.
+     */
+    time: EventTime;
+};
+
+/**
+ * A current member of the requester's team.
+ */
+export type TeamCalendarMember = {
+    /**
+     * Coverage available for a trustworthy calculation.
+     */
+    coverage: TeamCalendarCoverage;
+    /**
+     * Current team-sharing policy.
+     */
+    sharing: TeamCalendarSharing;
+    /**
+     * Macro user identifier.
+     */
+    userId: string;
+};
+
+/**
+ * A bounded page of team calendar projections.
+ */
+export type TeamCalendarPage = {
+    /**
+     * Authorized read-only projections.
+     */
+    items: Array<TeamCalendarItem>;
+    /**
+     * Current membership and sharing policies.
+     */
+    members: Array<TeamCalendarMember>;
+    /**
+     * Opaque continuation token; null after the last source occurrence.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * What a user exposes through their team membership.
+ */
+export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
 
 /**
  * One teammate's out-of-office occurrence.
@@ -9964,19 +13258,13 @@ export type TeamOutOfOfficeResponse = {
  */
 export type TeamRole = 'member' | 'admin' | 'owner';
 
-export type Thread = {
-    createdAt?: string | null;
-    deletedAt?: string | null;
-    documentId: string;
-    metadata?: unknown;
-    owner: string;
-    resolved: boolean;
-    threadId: number;
-    updatedAt?: string | null;
-};
+/**
+ * How a text cell compares to a text.
+ */
+export type TextOperator = 'is' | 'isNot' | 'contains' | 'doesNotContain' | 'startsWith' | 'endsWith';
 
 /**
- * A thread's location within its document. Geometry remains annotation-owned.
+ * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor = {
     /**
@@ -9996,6 +13284,13 @@ export type ThreadAnchor = {
      * Highlight annotation UUID.
      */
     anchor_id: string;
+    /**
+     * The text the highlight covers, trimmed and bounded like a markdown
+     * snapshot. The highlight owns it and it can be edited there, so it is
+     * read from the highlight whenever the thread is, never stored on the
+     * thread. Absent when the highlight carries no text.
+     */
+    marked_text?: string | null;
     type: 'pdf_highlight';
 } | {
     /**
@@ -10003,6 +13298,39 @@ export type ThreadAnchor = {
      */
     anchor_id: string;
     type: 'pdf_placeable';
+} | {
+    /**
+     * A1 cell or range, such as B4 or B4:C9.
+     */
+    range: string;
+    /**
+     * Stable sheet identity within the workbook.
+     */
+    sheetId: string;
+    /**
+     * Sheet name when the discussion was created.
+     */
+    sheetName: string;
+    type: 'spreadsheet';
+} | {
+    /**
+     * Layer the pin follows; absent for a pin on the bare canvas.
+     */
+    nodeId?: string | null;
+    /**
+     * Page (canvas) the pin is on.
+     */
+    pageId: string;
+    type: 'fig';
+    /**
+     * Horizontal offset from the layer's origin, or the page's when
+     * the pin is on no layer, in design units.
+     */
+    x: number;
+    /**
+     * Vertical offset, measured like `x`.
+     */
+    y: number;
 };
 
 /**
@@ -10029,7 +13357,7 @@ export type ThreadOrigin = {
 };
 
 /**
- * Partial changes to the lifecycle and placement of a document discussion.
+ * Partial changes to discussion lifecycle or document anchor placement.
  */
 export type ThreadPatch = {
     /**
@@ -10044,10 +13372,6 @@ export type ThreadPatch = {
      * Resolve or reopen the discussion; absent preserves its state.
      */
     resolved?: boolean | null;
-};
-
-export type ThreadResponse = {
-    data: Array<CommentThread>;
 };
 
 /**
@@ -10079,6 +13403,60 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * A displayable fact returned together with a message page.
+ */
+export type TimelineActivity = {
+    /**
+     * Durable action tag. Unknown tags remain representable during rollouts.
+     */
+    action: string;
+    /**
+     * Principal who performed the action.
+     */
+    actor_id: string;
+    /**
+     * Stable activity identity, independent of message ids.
+     */
+    id: string;
+    /**
+     * Immutable chronological position.
+     */
+    occurred_at: string;
+    /**
+     * The action's stored payload.
+     */
+    payload?: unknown;
+};
+
+/**
+ * A column a table's changes since some version touched.
+ */
+export type TouchedColumn = {
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * How.
+     */
+    kind: ColumnChangeKind;
+};
+
+/**
+ * A row a table's changes since some version touched, and how it stands.
+ */
+export type TouchedRow = {
+    /**
+     * How it changed overall: added, written, or removed.
+     */
+    kind: RowChangeKind;
+    /**
+     * The row.
+     */
+    row: string;
 };
 
 /**
@@ -10140,6 +13518,16 @@ export type TranscriptSegmentRequest = {
      * (it stamps egress bootstrap, not first audio frame).
      */
     streamStartedAt?: string | null;
+};
+
+/**
+ * Trash/restore input.
+ */
+export type TrashPipeline = {
+    /**
+     * True to trash; false to restore.
+     */
+    trashed: boolean;
 };
 
 /**
@@ -10266,11 +13654,6 @@ export type TypedSuccessResponseGetDocumentResponseData = {
 };
 
 /**
- * Typing indicator action.
- */
-export type TypingAction = 'start' | 'stop';
-
-/**
  * Transient typing update.
  */
 export type TypingInput = {
@@ -10288,9 +13671,75 @@ export type TypingInput = {
     thread_id?: string | null;
 };
 
-export type UnthreadedPdfUuidRequest = {
-    attachmentType: 'highlight';
-    uuid: string;
+/**
+ * What undoing a change did.
+ */
+export type UndoChangeResponse = {
+    /**
+     * The outcome: reverted, partly reverted with the cells others changed
+     * since left alone, or refused with why and whose change stands in the
+     * way.
+     */
+    outcome: UndoOutcome;
+};
+
+/**
+ * What undoing a change did.
+ */
+export type UndoOutcome = {
+    /**
+     * The journal's changes the undo made, one per table version; undo
+     * one of them to redo.
+     */
+    changes: Array<CommittedChange>;
+    kind: 'reverted';
+} | {
+    /**
+     * The journal's changes the undo made.
+     */
+    changes: Array<CommittedChange>;
+    kind: 'partial';
+    /**
+     * The cells left alone, each with who changed it.
+     */
+    skipped: Array<SkippedCell>;
+} | {
+    /**
+     * Whose change stands in the way, when one does.
+     */
+    by: string | null;
+    kind: 'refused';
+    /**
+     * Why.
+     */
+    reason: UndoRefusal;
+};
+
+/**
+ * Why an undo was refused. Nothing was written.
+ */
+export type UndoRefusal = 'row_in_use' | 'option_in_use' | 'not_yours' | 'not_undoable' | 'row_edited_since' | 'column_written_since' | 'changed_since' | 'already_back';
+
+/**
+ * A booking step a passing response has unlocked, with its destination.
+ */
+export type UnlockedBooking = {
+    /**
+     * What respondents read before choosing a time.
+     */
+    description: string;
+    /**
+     * The booking section.
+     */
+    section: string;
+    /**
+     * The native booking event to open.
+     */
+    target: BookingTarget;
+    /**
+     * Its title.
+     */
+    title: string;
 };
 
 /**
@@ -10335,6 +13784,11 @@ export type UpdateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Whether the agent is a coding agent: a mention is answered with a magic
+     * chip into its live session (`true`) or a reply in the thread (`false`).
+     */
+    is_coding: boolean;
     /**
      * Which MCP servers sessions of this agent are handed.
      */
@@ -10387,12 +13841,44 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
+ * A change to a form's facts; what is left out stays. The description and
+ * confirmation message take edit, the rest owner. A form is renamed
+ * through the entity mutation router.
+ */
+export type UpdateForm = {
+    /**
+     * Who may respond from now on.
+     */
+    audience?: Audience;
+    /**
+     * When it stops taking responses, or `null` for never.
+     */
+    closesAt?: string | null;
+    /**
+     * Its new confirmation message.
+     */
+    confirmationMessage?: string;
+    /**
+     * Its new description.
+     */
+    description?: string;
+    /**
+     * Open or close it.
+     */
+    status?: FormStatus;
+    /**
+     * Whether respondents may read option tallies.
+     */
+    tallyVisible?: boolean;
+};
+
+/**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace. The description is edited in its document, not here.
+ * present is a full replace. The description is edited in its collab surface, not here.
  */
 export type UpdateInitiativeRequest = {
     /**
-     * Full replacement member list when present.
+     * Full replacement collaborator list when present. Only the owner may send this field.
      */
     memberIds?: Array<string> | null;
     /**
@@ -10402,38 +13888,29 @@ export type UpdateInitiativeRequest = {
     sharePermission?: null | UpdateSharePermissionRequestV2;
 };
 
-export type UpdateOperation = 'add' | 'remove' | 'replace';
-
 /**
- * Request body for modifying a reminder. Omitted fields are left unchanged;
- * the entity association is not modifiable.
- *
- * Every field is optional but **not** nullable. `Option` here means "absent",
- * and serde cannot tell an explicit `null` from an omitted key — so a body of
- * `{"enabled": null}` would deserialize to an empty patch and be rejected as
- * having no fields to update. `nullable = false` keeps the schema from
- * advertising a value the API has no meaning for; the deserializer still
- * tolerates `null` rather than erroring on it.
+ * Changes to a meeting's title or scheduled time; omitted values stay unchanged.
  */
-export type UpdateReminderRequest = {
+export type UpdateMeetingRequest = {
     /**
-     * Mark the reminder as dealt with, or live again. Distinct from
-     * `enabled`, which controls whether the dispatcher considers it.
+     * Remove timed scheduling, for example when the calendar event becomes all-day.
      */
-    completed?: boolean;
+    clearSchedule?: boolean;
     /**
-     * Replacement description.
+     * Replacement scheduled end; requires a matching start.
      */
-    description?: string;
+    scheduledEnd?: string | null;
     /**
-     * Whether the reminder should fire at all.
+     * Replacement scheduled start; requires a matching end.
      */
-    enabled?: boolean;
+    scheduledStart?: string | null;
     /**
-     * Replacement schedule.
+     * Replacement title, when supplied.
      */
-    schedule?: ReminderSchedule;
+    title?: string | null;
 };
+
+export type UpdateOperation = 'add' | 'remove' | 'replace';
 
 export type UpdateSharePermissionRequestV2 = {
     /**
@@ -10443,6 +13920,28 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Immutable expected object properties, registered before signing an upload.
+ */
+export type UploadDescriptor = {
+    /**
+     * Exact byte length including delimiters.
+     */
+    byteLength: number;
+    /**
+     * Exact NDJSON record count; null for the users JSON payload.
+     */
+    recordCount?: number | null;
+    /**
+     * SHA-256 of the exact uploaded bytes, not the ETag.
+     */
+    sha256: Sha256Digest;
+    /**
+     * Manifest identity within this job.
+     */
+    upload: UploadId;
 };
 
 /**
@@ -10462,6 +13961,12 @@ export type UploadFolderRequest = {
      */
     content: Array<FolderItem>;
     /**
+     * Relative paths of folders to create even when they hold no files.
+     *
+     * Uses the same shape as [FolderItem::relative_path], root folder included.
+     */
+    folders?: Array<string>;
+    /**
      * Optional parent project id to upload the folder into
      */
     parentId?: string | null;
@@ -10475,6 +13980,48 @@ export type UploadFolderRequest = {
      * The upload request id
      */
     uploadRequestId: string;
+};
+
+/**
+ * Signed upload permission returned just before PUT; never persisted as an identity.
+ */
+export type UploadGrant = {
+    /**
+     * Exact immutable descriptor being signed.
+     */
+    descriptor: UploadDescriptor;
+    /**
+     * Grant expiry; callers renew by re-registering the identical descriptor.
+     */
+    expiresAt: string;
+    /**
+     * Required signed upload headers (including checksum, content type and create-only
+     * condition). Browser-forbidden Content-Length is derived from the exact Blob bytes.
+     */
+    requiredHeaders: {
+        [key: string]: string;
+    };
+    /**
+     * Short-lived signed destination; must not be logged.
+     */
+    url: string;
+};
+
+/**
+ * Identity in a job's persisted manifest. No user-supplied object keys.
+ */
+export type UploadId = {
+    kind: 'users';
+} | {
+    kind: 'conversation_part';
+    /**
+     * Zero-based part index; sealed manifests must be contiguous.
+     */
+    partIndex: number;
+    /**
+     * Selected Slack conversation.
+     */
+    slackChannelId: ConversationId;
 };
 
 export type UpsertUserDocumentViewLocationRequest = {
@@ -10590,6 +14137,20 @@ export type Vec = Array<{
     ids?: Array<string> | null;
 }>;
 
+/**
+ * A table and its version.
+ */
+export type VersionedTable = {
+    /**
+     * The table.
+     */
+    table: string;
+    /**
+     * Its version.
+     */
+    version: TableVersion;
+};
+
 export type View = {
     /**
      * It is an explicit choice that the structure of the view configuration
@@ -10604,9 +14165,176 @@ export type View = {
     userId: string;
 };
 
+/**
+ * A change to one view.
+ */
+export type ViewChange = {
+    kind: 'create';
+    /**
+     * What it shows and how.
+     */
+    view: NewView;
+} | {
+    kind: 'update';
+    /**
+     * Its new layout. A board grouped by another column forgets where
+     * its cards were; a board left without a card title keeps the one
+     * it has, or takes the table's first column.
+     */
+    layout?: RequestedLayout;
+    /**
+     * Its new name.
+     */
+    name?: string;
+    /**
+     * Its new query.
+     */
+    query?: ViewQuery;
+} | {
+    kind: 'delete';
+} | {
+    /**
+     * The card that ends up just after it, if any. Given with `before`,
+     * it must be the card right after `before`; with neither, the card
+     * goes to the end of the lane.
+     */
+    after?: string | null;
+    /**
+     * The card that ends up just before it (it lands right after this
+     * one), if any.
+     */
+    before?: string | null;
+    kind: 'move_card';
+    /**
+     * The lane it goes to: an option of a select board's column, a
+     * person for a board grouped by people, or the lane of empty cells.
+     */
+    lane: LaneKey;
+    /**
+     * The card's row.
+     */
+    row: string;
+};
+
+/**
+ * How one column shows in a table layout.
+ */
+export type ViewColumn = {
+    /**
+     * The column.
+     */
+    column: string;
+    /**
+     * Its width in pixels; the default when unset.
+     */
+    width: number | null;
+};
+
+/**
+ * How a view draws its rows.
+ */
+export type ViewLayout = {
+    /**
+     * How columns show, in display order. A column left out shows
+     * after the listed ones, in the table's order.
+     */
+    columns: Array<ViewColumn>;
+    kind: 'table';
+} | {
+    /**
+     * The columns a card shows under its title, in order.
+     */
+    cardFields: Array<string>;
+    /**
+     * The single-select or single-person column whose values are the
+     * lanes; moving a card to another lane sets this column.
+     */
+    groupBy: string;
+    /**
+     * Whether a lane with no cards is hidden.
+     */
+    hideEmptyLanes: boolean;
+    kind: 'board';
+    /**
+     * How lanes show, in display order. A lane left out shows after the
+     * listed ones: the lane of empty cells first, then options in the
+     * column's order, or people by id.
+     */
+    lanes: Array<Lane>;
+    /**
+     * The column a card is titled by, of any type. Removing it titles
+     * the cards by the table's first remaining column.
+     */
+    title: string;
+};
+
 export type ViewPatch = {
     config?: unknown;
     name?: string | null;
+};
+
+/**
+ * A view's place among its table's views.
+ */
+export type ViewPosition = {
+    /**
+     * Its key.
+     */
+    position: string;
+    /**
+     * The view.
+     */
+    view: string;
+};
+
+/**
+ * Where a board's cards sit.
+ */
+export type ViewPositionsResponse = {
+    /**
+     * The places of the cards that have one: each card's lane and its key
+     * there. Cards without a place show after the placed ones of their
+     * lane, oldest first.
+     */
+    positions: Array<CardPosition>;
+};
+
+/**
+ * Which rows of the table a view shows, and in what order: a filter and a
+ * sort, nothing that joins, groups or reshapes rows.
+ */
+export type ViewQuery = {
+    filter: null | FilterGroup;
+    /**
+     * The sort keys, first key first. Rows the keys leave tied keep the
+     * table's own order; with no keys, the table's order is the view's.
+     */
+    sort?: Array<SortKey>;
+};
+
+/**
+ * What happened to a view.
+ */
+export type ViewResult = {
+    kind: 'created';
+    /**
+     * The view as stored.
+     */
+    view: DatabaseView;
+} | {
+    kind: 'updated';
+    /**
+     * The view as stored.
+     */
+    view: DatabaseView;
+} | {
+    kind: 'deleted';
+} | {
+    kind: 'card_moved';
+    /**
+     * The positions written, the moved card's last.
+     */
+    positions: Array<CardPosition>;
 };
 
 export type ViewsResponse = {
@@ -10705,11 +14433,11 @@ export type Webhook = {
  * Any entity event deliverable to a webhook endpoint.
  *
  * Serialized bodies carry an `event_type` tag naming the event (for example
- * `document.created` or `channel.message_posted`) and a `metadata` object
+ * `document.created` or `message.posted`) and a `metadata` object
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -10756,6 +14484,13 @@ export type WebhookValidationTestEvent = {
      */
     webhook_id: String;
 };
+
+/**
+ * How a question is asked. Each column kind takes a few, the first its
+ * default; kinds asked one way only (numbers, checkboxes, entity and row
+ * pickers) take none.
+ */
+export type Widget = 'short' | 'paragraph' | 'datetime' | 'date' | 'url' | 'file' | 'choice' | 'dropdown' | 'checkboxes';
 
 /**
  * Wrapper carrying just a call id. Used by the [`CallRecordPreview::DoesNotExist`]
@@ -10948,110 +14683,6 @@ export type CreateAnchorResponses = {
 
 export type CreateAnchorResponse = CreateAnchorResponses[keyof CreateAnchorResponses];
 
-export type DeleteCommentData = {
-    body: DeleteCommentRequest;
-    path: {
-        /**
-         * The comment id
-         */
-        comment_id: number;
-    };
-    query?: never;
-    url: '/annotations/comments/comment/{comment_id}';
-};
-
-export type DeleteCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteCommentError = DeleteCommentErrors[keyof DeleteCommentErrors];
-
-export type DeleteCommentResponses = {
-    200: DeleteCommentResponse;
-};
-
-export type DeleteCommentResponse2 = DeleteCommentResponses[keyof DeleteCommentResponses];
-
-export type EditCommentData = {
-    body: EditCommentRequest;
-    path: {
-        /**
-         * The comment id
-         */
-        comment_id: number;
-    };
-    query?: never;
-    url: '/annotations/comments/comment/{comment_id}';
-};
-
-export type EditCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type EditCommentError = EditCommentErrors[keyof EditCommentErrors];
-
-export type EditCommentResponses = {
-    200: EditCommentResponse;
-};
-
-export type EditCommentResponse2 = EditCommentResponses[keyof EditCommentResponses];
-
-export type GetDocumentCommentsData = {
-    body?: never;
-    path: {
-        /**
-         * Document ID
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/annotations/comments/document/{document_id}';
-};
-
-export type GetDocumentCommentsErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetDocumentCommentsError = GetDocumentCommentsErrors[keyof GetDocumentCommentsErrors];
-
-export type GetDocumentCommentsResponses = {
-    200: ThreadResponse;
-};
-
-export type GetDocumentCommentsResponse = GetDocumentCommentsResponses[keyof GetDocumentCommentsResponses];
-
-export type CreateCommentData = {
-    body: CreateCommentRequest;
-    path: {
-        /**
-         * The document id
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/annotations/comments/document/{document_id}';
-};
-
-export type CreateCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateCommentError = CreateCommentErrors[keyof CreateCommentErrors];
-
-export type CreateCommentResponses = {
-    200: CreateCommentResponse;
-};
-
-export type CreateCommentResponse2 = CreateCommentResponses[keyof CreateCommentResponses];
-
 export type GetSelfBotData = {
     body?: never;
     path?: never;
@@ -11073,6 +14704,32 @@ export type GetSelfBotResponses = {
 };
 
 export type GetSelfBotResponse = GetSelfBotResponses[keyof GetSelfBotResponses];
+
+export type GetBotOwnerProfilesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Bot ids. Repeat the key: `?ids=<uuid>&ids=<uuid>`.
+         */
+        ids?: Array<BotId>;
+    };
+    url: '/bots/profiles';
+};
+
+export type GetBotOwnerProfilesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetBotOwnerProfilesError = GetBotOwnerProfilesErrors[keyof GetBotOwnerProfilesErrors];
+
+export type GetBotOwnerProfilesResponses = {
+    200: Array<BotOwnerProfile>;
+};
+
+export type GetBotOwnerProfilesResponse = GetBotOwnerProfilesResponses[keyof GetBotOwnerProfilesResponses];
 
 export type ListBotChannelsData = {
     body?: never;
@@ -11217,6 +14874,36 @@ export type MentionPreviewsResponses = {
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
 
+export type ListTeamCalendarData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive instant.
+         */
+        start: string;
+        /**
+         * Exclusive instant.
+         */
+        end: string;
+        /**
+         * Continuation returned by the preceding page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum source occurrences, at most 2,000. Zero returns the roster only.
+         */
+        limit?: number | null;
+    };
+    url: '/calendar-events/team';
+};
+
+export type ListTeamCalendarResponses = {
+    200: TeamCalendarPage;
+};
+
+export type ListTeamCalendarResponse = ListTeamCalendarResponses[keyof ListTeamCalendarResponses];
+
 export type ListTeamOutOfOfficeData = {
     body?: never;
     path?: never;
@@ -11288,6 +14975,362 @@ export type GetActiveCallsResponses = {
 };
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
+
+export type MeetingLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingLookupErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLookupError = MeetingLookupErrors[keyof MeetingLookupErrors];
+
+export type MeetingLookupResponses = {
+    200: Meeting;
+};
+
+export type MeetingLookupResponse = MeetingLookupResponses[keyof MeetingLookupResponses];
+
+export type MeetingGuestJoinData = {
+    body: GuestJoinRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingGuestJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestJoinError = MeetingGuestJoinErrors[keyof MeetingGuestJoinErrors];
+
+export type MeetingGuestJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingGuestJoinResponse = MeetingGuestJoinResponses[keyof MeetingGuestJoinResponses];
+
+export type MeetingLeaveData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/leave';
+};
+
+export type MeetingLeaveErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLeaveError = MeetingLeaveErrors[keyof MeetingLeaveErrors];
+
+export type MeetingLeaveResponses = {
+    200: LeaveCallResponse;
+};
+
+export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
+
+export type MeetingGuestParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/participants';
+};
+
+export type MeetingGuestParticipantsErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestParticipantsError = MeetingGuestParticipantsErrors[keyof MeetingGuestParticipantsErrors];
+
+export type MeetingGuestParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingGuestParticipantsResponse = MeetingGuestParticipantsResponses[keyof MeetingGuestParticipantsResponses];
+
+export type MeetingListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingListErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingListError = MeetingListErrors[keyof MeetingListErrors];
+
+export type MeetingListResponses = {
+    200: MeetingsResponse;
+};
+
+export type MeetingListResponse = MeetingListResponses[keyof MeetingListResponses];
+
+export type MeetingCreateData = {
+    body: CreateMeetingRequest;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCreateError = MeetingCreateErrors[keyof MeetingCreateErrors];
+
+export type MeetingCreateResponses = {
+    200: Meeting;
+};
+
+export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
+
+export type MeetingListActiveData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/active';
+};
+
+export type MeetingListActiveErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingListActiveError = MeetingListActiveErrors[keyof MeetingListActiveErrors];
+
+export type MeetingListActiveResponses = {
+    200: ActiveMeetingsResponse;
+};
+
+export type MeetingListActiveResponse = MeetingListActiveResponses[keyof MeetingListActiveResponses];
+
+export type MeetingInvitePermissionsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInvitePermissionsErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInvitePermissionsError = MeetingInvitePermissionsErrors[keyof MeetingInvitePermissionsErrors];
+
+export type MeetingInvitePermissionsResponses = {
+    200: MeetingInvitePermissions;
+};
+
+export type MeetingInvitePermissionsResponse = MeetingInvitePermissionsResponses[keyof MeetingInvitePermissionsResponses];
+
+export type MeetingInviteData = {
+    body: InviteMeetingRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInviteErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingInviteError = MeetingInviteErrors[keyof MeetingInviteErrors];
+
+export type MeetingInviteResponses = {
+    204: void;
+};
+
+export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingInviteUsersData = {
+    body: InviteMeetingUsersRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}/users';
+};
+
+export type MeetingInviteUsersErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingInviteUsersError = MeetingInviteUsersErrors[keyof MeetingInviteUsersErrors];
+
+export type MeetingInviteUsersResponses = {
+    204: void;
+};
+
+export type MeetingInviteUsersResponse = MeetingInviteUsersResponses[keyof MeetingInviteUsersResponses];
+
+export type MeetingJoinData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}';
+};
+
+export type MeetingJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingJoinError = MeetingJoinErrors[keyof MeetingJoinErrors];
+
+export type MeetingJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingParticipantsData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}/participants';
+};
+
+export type MeetingParticipantsErrors = {
+    404: ErrorResponse;
+};
+
+export type MeetingParticipantsError = MeetingParticipantsErrors[keyof MeetingParticipantsErrors];
+
+export type MeetingParticipantsResponses = {
+    200: MeetingParticipants;
+};
+
+export type MeetingParticipantsResponse = MeetingParticipantsResponses[keyof MeetingParticipantsResponses];
+
+export type MeetingPrepareData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings/prepare';
+};
+
+export type MeetingPrepareErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingPrepareError = MeetingPrepareErrors[keyof MeetingPrepareErrors];
+
+export type MeetingPrepareResponses = {
+    200: MeetingPreparation;
+};
+
+export type MeetingPrepareResponse = MeetingPrepareResponses[keyof MeetingPrepareResponses];
+
+export type MeetingCancelPreparationData = {
+    body?: never;
+    path: {
+        preparation_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/prepare/{preparation_id}';
+};
+
+export type MeetingCancelPreparationErrors = {
+    401: ErrorResponse;
+};
+
+export type MeetingCancelPreparationError = MeetingCancelPreparationErrors[keyof MeetingCancelPreparationErrors];
+
+export type MeetingCancelPreparationResponses = {
+    204: void;
+};
+
+export type MeetingCancelPreparationResponse = MeetingCancelPreparationResponses[keyof MeetingCancelPreparationResponses];
+
+export type MeetingCancelData = {
+    body?: never;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingCancelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCancelError = MeetingCancelErrors[keyof MeetingCancelErrors];
+
+export type MeetingCancelResponses = {
+    204: void;
+};
+
+export type MeetingCancelResponse = MeetingCancelResponses[keyof MeetingCancelResponses];
+
+export type MeetingUpdateData = {
+    body: UpdateMeetingRequest;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingUpdateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingUpdateError = MeetingUpdateErrors[keyof MeetingUpdateErrors];
+
+export type MeetingUpdateResponses = {
+    200: Meeting;
+};
+
+export type MeetingUpdateResponse = MeetingUpdateResponses[keyof MeetingUpdateResponses];
 
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
@@ -11408,6 +15451,30 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type MeetingShareData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/link';
+};
+
+export type MeetingShareErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingShareError = MeetingShareErrors[keyof MeetingShareErrors];
+
+export type MeetingShareResponses = {
+    200: Meeting;
+};
+
+export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;
@@ -11611,12 +15678,12 @@ export type IngestTranscriptData = {
     body: TranscriptSegmentRequest;
     path: {
         /**
-         * Channel ID
+         * RTC room name; the transcription agent passes its LiveKit room verbatim
          */
-        channel_id: string;
+        room_name: string;
     };
     query?: never;
-    url: '/call/{channel_id}/transcript';
+    url: '/call/{room_name}/transcript';
 };
 
 export type IngestTranscriptErrors = {
@@ -12059,12 +16126,7 @@ export type GetChannelData = {
          */
         channel_id: string;
     };
-    query?: {
-        /**
-         * Recent message page size (1-100, default 50)
-         */
-        limit?: number;
-    };
+    query?: never;
     url: '/channels/{channel_id}';
 };
 
@@ -12255,334 +16317,6 @@ export type LeaveChannelResponses = {
     200: unknown;
 };
 
-export type PostMessageData = {
-    body: PostMessageRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/message';
-};
-
-export type PostMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostMessageError = PostMessageErrors[keyof PostMessageErrors];
-
-export type PostMessageResponses = {
-    200: PostMessageResponse;
-};
-
-export type PostMessageResponse2 = PostMessageResponses[keyof PostMessageResponses];
-
-export type DeleteMessageData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID
-         */
-        message_id: string;
-    };
-    query?: {
-        /**
-         * Optional optimistic-update nonce
-         */
-        nonce?: string;
-    };
-    url: '/channels/{channel_id}/message/{message_id}';
-};
-
-export type DeleteMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteMessageError = DeleteMessageErrors[keyof DeleteMessageErrors];
-
-export type DeleteMessageResponses = {
-    200: string;
-};
-
-export type DeleteMessageResponse = DeleteMessageResponses[keyof DeleteMessageResponses];
-
-export type PatchMessageData = {
-    body: PatchMessageRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/message/{message_id}';
-};
-
-export type PatchMessageErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PatchMessageError = PatchMessageErrors[keyof PatchMessageErrors];
-
-export type PatchMessageResponses = {
-    200: string;
-};
-
-export type PatchMessageResponse = PatchMessageResponses[keyof PatchMessageResponses];
-
-export type GetChannelMessagesData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: {
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-        /**
-         * Return a centered window around this message ID
-         */
-        load_around_message_id?: string;
-    };
-    url: '/channels/{channel_id}/messages';
-};
-
-export type GetChannelMessagesErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetChannelMessagesError = GetChannelMessagesErrors[keyof GetChannelMessagesErrors];
-
-export type GetChannelMessagesResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type GetChannelMessagesResponse = GetChannelMessagesResponses[keyof GetChannelMessagesResponses];
-
-export type PostChannelMessagesData = {
-    body: ChannelMessageFilters;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: {
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-        /**
-         * Return a centered window around this message ID
-         */
-        load_around_message_id?: string;
-    };
-    url: '/channels/{channel_id}/messages';
-};
-
-export type PostChannelMessagesErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostChannelMessagesError = PostChannelMessagesErrors[keyof PostChannelMessagesErrors];
-
-export type PostChannelMessagesResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type PostChannelMessagesResponse = PostChannelMessagesResponses[keyof PostChannelMessagesResponses];
-
-export type GetChannelMessagesCatchUpData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query: {
-        /**
-         * Exclusive RFC3339 lower bound. Messages at this instant are omitted.
-         */
-        after: string;
-        /**
-         * Page size (1-100, default 50)
-         */
-        limit?: number;
-        /**
-         * Base64 encoded cursor value for older messages
-         */
-        cursor?: string;
-        /**
-         * Base64 encoded cursor value for newer messages
-         */
-        previous_cursor?: string;
-    };
-    url: '/channels/{channel_id}/messages/catch-up';
-};
-
-export type GetChannelMessagesCatchUpErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetChannelMessagesCatchUpError = GetChannelMessagesCatchUpErrors[keyof GetChannelMessagesCatchUpErrors];
-
-export type GetChannelMessagesCatchUpResponses = {
-    200: ApiChannelMessagesPage;
-};
-
-export type GetChannelMessagesCatchUpResponse = GetChannelMessagesCatchUpResponses[keyof GetChannelMessagesCatchUpResponses];
-
-export type GetMessageWithContextData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID to get context around
-         */
-        message_id: string;
-    };
-    query?: {
-        /**
-         * Number of older messages to include
-         */
-        before?: number;
-        /**
-         * Number of newer messages to include
-         */
-        after?: number;
-    };
-    url: '/channels/{channel_id}/messages/{message_id}/context';
-};
-
-export type GetMessageWithContextErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetMessageWithContextError = GetMessageWithContextErrors[keyof GetMessageWithContextErrors];
-
-export type GetMessageWithContextResponses = {
-    200: GetMessageWithContextResponse;
-};
-
-export type GetMessageWithContextResponse2 = GetMessageWithContextResponses[keyof GetMessageWithContextResponses];
-
-export type GetThreadRepliesData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID (thread parent or reply id)
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/messages/{message_id}/replies';
-};
-
-export type GetThreadRepliesErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetThreadRepliesError = GetThreadRepliesErrors[keyof GetThreadRepliesErrors];
-
-export type GetThreadRepliesResponses = {
-    200: Array<ApiThreadReply>;
-};
-
-export type GetThreadRepliesResponse = GetThreadRepliesResponses[keyof GetThreadRepliesResponses];
-
-export type ResolveChannelMessageData = {
-    body?: never;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-        /**
-         * Message ID to resolve
-         */
-        message_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/messages/{message_id}/resolve';
-};
-
-export type ResolveChannelMessageErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ResolveChannelMessageError = ResolveChannelMessageErrors[keyof ResolveChannelMessageErrors];
-
-export type ResolveChannelMessageResponses = {
-    200: ApiResolvedChannelMessage;
-};
-
-export type ResolveChannelMessageResponse = ResolveChannelMessageResponses[keyof ResolveChannelMessageResponses];
-
 export type RemoveParticipantsData = {
     body: RemoveParticipantsRequest;
     path: {
@@ -12691,62 +16425,6 @@ export type SetChannelPictureResponses = {
 };
 
 export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
-
-export type PostReactionData = {
-    body: PostReactionRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/reaction';
-};
-
-export type PostReactionErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostReactionError = PostReactionErrors[keyof PostReactionErrors];
-
-export type PostReactionResponses = {
-    200: string;
-};
-
-export type PostReactionResponse = PostReactionResponses[keyof PostReactionResponses];
-
-export type PostTypingData = {
-    body: PostTypingRequest;
-    path: {
-        /**
-         * Channel ID
-         */
-        channel_id: string;
-    };
-    query?: never;
-    url: '/channels/{channel_id}/typing';
-};
-
-export type PostTypingErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type PostTypingError = PostTypingErrors[keyof PostTypingErrors];
-
-export type PostTypingResponses = {
-    200: string;
-};
-
-export type PostTypingResponse = PostTypingResponses[keyof PostTypingResponses];
 
 export type PostChannelBotWebhookData = {
     body: ChannelWebhookRequest;
@@ -12878,6 +16556,10 @@ export type EnsureCollabSurfaceErrors = {
      */
     404: ErrorResponse;
     /**
+     * The surface id is already in use
+     */
+    409: ErrorResponse;
+    /**
      * The surface id was deleted and cannot be reused
      */
     410: ErrorResponse;
@@ -12915,6 +16597,10 @@ export type CreateCollabSurfaceTokenErrors = {
     401: ErrorResponse;
     403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The surface is not initialized yet, or its id is in use
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -12956,118 +16642,6 @@ export type GetChannelsResponses = {
 };
 
 export type GetChannelsResponse = GetChannelsResponses[keyof GetChannelsResponses];
-
-export type DeleteCrmCommentData = {
-    body?: never;
-    path: {
-        /**
-         * The CRM comment to delete
-         */
-        comment_id: string;
-    };
-    query?: never;
-    url: '/crm/comment/{comment_id}';
-};
-
-export type DeleteCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteCrmCommentError = DeleteCrmCommentErrors[keyof DeleteCrmCommentErrors];
-
-export type DeleteCrmCommentResponses = {
-    200: DeleteCrmCommentResult;
-};
-
-export type DeleteCrmCommentResponse = DeleteCrmCommentResponses[keyof DeleteCrmCommentResponses];
-
-export type EditCrmCommentData = {
-    body: EditCrmCommentRequest;
-    path: {
-        /**
-         * The CRM comment to edit
-         */
-        comment_id: string;
-    };
-    query?: never;
-    url: '/crm/comment/{comment_id}';
-};
-
-export type EditCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type EditCrmCommentError = EditCrmCommentErrors[keyof EditCrmCommentErrors];
-
-export type EditCrmCommentResponses = {
-    200: CrmComment;
-};
-
-export type EditCrmCommentResponse = EditCrmCommentResponses[keyof EditCrmCommentResponses];
-
-export type ListCrmCommentsData = {
-    body?: never;
-    path: {
-        /**
-         * Which CRM entity kind the threads hang off
-         */
-        entity_type: CrmCommentEntityType;
-        /**
-         * The CRM company or contact id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/crm/comments/{entity_type}/{entity_id}';
-};
-
-export type ListCrmCommentsErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ListCrmCommentsError = ListCrmCommentsErrors[keyof ListCrmCommentsErrors];
-
-export type ListCrmCommentsResponses = {
-    200: Array<CrmCommentThread>;
-};
-
-export type ListCrmCommentsResponse = ListCrmCommentsResponses[keyof ListCrmCommentsResponses];
-
-export type CreateCrmCommentData = {
-    body: CreateCrmCommentRequest;
-    path: {
-        /**
-         * Which CRM entity kind the thread hangs off
-         */
-        entity_type: CrmCommentEntityType;
-        /**
-         * The CRM company or contact id
-         */
-        entity_id: string;
-    };
-    query?: never;
-    url: '/crm/comments/{entity_type}/{entity_id}';
-};
-
-export type CreateCrmCommentErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateCrmCommentError = CreateCrmCommentErrors[keyof CreateCrmCommentErrors];
-
-export type CreateCrmCommentResponses = {
-    200: CrmCommentThread;
-};
-
-export type CreateCrmCommentResponse = CreateCrmCommentResponses[keyof CreateCrmCommentResponses];
 
 export type CreateCrmCompanyData = {
     body: CreateCrmCompanyRequest;
@@ -13256,6 +16830,36 @@ export type SetCrmCompanyNameResponses = {
 
 export type SetCrmCompanyNameResponse = SetCrmCompanyNameResponses[keyof SetCrmCompanyNameResponses];
 
+export type SearchContactsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Text the contact's email or name must contain (case-insensitive).
+         * Empty lists the most recently interacted contacts.
+         */
+        query?: string;
+        /**
+         * Maximum contacts to return (1-500, default 20).
+         */
+        limit?: number | null;
+    };
+    url: '/crm/contacts';
+};
+
+export type SearchContactsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SearchContactsError = SearchContactsErrors[keyof SearchContactsErrors];
+
+export type SearchContactsResponses = {
+    200: SearchContactsResponse;
+};
+
+export type SearchContactsResponse2 = SearchContactsResponses[keyof SearchContactsResponses];
+
 export type GetContactByEmailData = {
     body?: never;
     path?: never;
@@ -13364,6 +16968,157 @@ export type SetCrmContactNameResponses = {
 
 export type SetCrmContactNameResponse = SetCrmContactNameResponses[keyof SetCrmContactNameResponses];
 
+export type ListCrmPipelinesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines';
+};
+
+export type ListCrmPipelinesResponses = {
+    200: Array<AccessiblePipeline>;
+};
+
+export type ListCrmPipelinesResponse = ListCrmPipelinesResponses[keyof ListCrmPipelinesResponses];
+
+export type CreateCrmPipelineData = {
+    body: CreatePipeline;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines';
+};
+
+export type CreateCrmPipelineResponses = {
+    200: AccessiblePipeline;
+};
+
+export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
+
+export type GetCrmPipelineData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}';
+};
+
+export type GetCrmPipelineResponses = {
+    200: AccessiblePipeline;
+};
+
+export type GetCrmPipelineResponse = GetCrmPipelineResponses[keyof GetCrmPipelineResponses];
+
+export type RenameCrmPipelineData = {
+    body: RenamePipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/name';
+};
+
+export type RenameCrmPipelineResponses = {
+    204: void;
+};
+
+export type RenameCrmPipelineResponse = RenameCrmPipelineResponses[keyof RenameCrmPipelineResponses];
+
+export type ApplyCrmPipelineOpsData = {
+    body: OpBatch;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/ops';
+};
+
+export type ApplyCrmPipelineOpsResponses = {
+    200: AppliedOps;
+};
+
+export type ApplyCrmPipelineOpsResponse = ApplyCrmPipelineOpsResponses[keyof ApplyCrmPipelineOpsResponses];
+
+export type GetCrmPipelineRowsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * Continue after this row identity.
+         */
+        after?: string | null;
+    };
+    url: '/crm/pipelines/{id}/rows';
+};
+
+export type GetCrmPipelineRowsResponses = {
+    200: StorageRows;
+};
+
+export type GetCrmPipelineRowsResponse = GetCrmPipelineRowsResponses[keyof GetCrmPipelineRowsResponses];
+
+export type QueryCrmPipelineRowsData = {
+    body: StorageRowsQuery;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/rows';
+};
+
+export type QueryCrmPipelineRowsResponses = {
+    200: StorageRows;
+};
+
+export type QueryCrmPipelineRowsResponse = QueryCrmPipelineRowsResponses[keyof QueryCrmPipelineRowsResponses];
+
+export type ShareCrmPipelineData = {
+    body: SharePipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/sharing';
+};
+
+export type ShareCrmPipelineResponses = {
+    204: void;
+};
+
+export type ShareCrmPipelineResponse = ShareCrmPipelineResponses[keyof ShareCrmPipelineResponses];
+
+export type GetCrmPipelineTableData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/table';
+};
+
+export type GetCrmPipelineTableResponses = {
+    200: TableDetail;
+};
+
+export type GetCrmPipelineTableResponse = GetCrmPipelineTableResponses[keyof GetCrmPipelineTableResponses];
+
+export type TrashCrmPipelineData = {
+    body: TrashPipeline;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/crm/pipelines/{id}/trash';
+};
+
+export type TrashCrmPipelineResponses = {
+    204: void;
+};
+
+export type TrashCrmPipelineResponse = TrashCrmPipelineResponses[keyof TrashCrmPipelineResponses];
+
 export type GetCrmTeamSettingsData = {
     body?: never;
     path?: never;
@@ -13448,6 +17203,580 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type ListDatabasesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases';
+};
+
+export type ListDatabasesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDatabasesError = ListDatabasesErrors[keyof ListDatabasesErrors];
+
+export type ListDatabasesResponses = {
+    200: Array<ListedDatabase>;
+};
+
+export type ListDatabasesResponse = ListDatabasesResponses[keyof ListDatabasesResponses];
+
+export type CreateDatabaseData = {
+    body: CreateDatabaseRequest;
+    path?: never;
+    query?: never;
+    url: '/databases';
+};
+
+export type CreateDatabaseErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateDatabaseError = CreateDatabaseErrors[keyof CreateDatabaseErrors];
+
+export type CreateDatabaseResponses = {
+    201: Database;
+};
+
+export type CreateDatabaseResponse = CreateDatabaseResponses[keyof CreateDatabaseResponses];
+
+export type SaveDatabaseQueryData = {
+    body: SaveQueryRequest;
+    path?: never;
+    query?: never;
+    url: '/databases/queries';
+};
+
+export type SaveDatabaseQueryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * The database is missing or not visible
+     */
+    404: ErrorResponse;
+    /**
+     * The query is too long
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SaveDatabaseQueryError = SaveDatabaseQueryErrors[keyof SaveDatabaseQueryErrors];
+
+export type SaveDatabaseQueryResponses = {
+    201: SavedQuery;
+};
+
+export type SaveDatabaseQueryResponse = SaveDatabaseQueryResponses[keyof SaveDatabaseQueryResponses];
+
+export type GetDatabaseQueryData = {
+    body?: never;
+    path: {
+        /**
+         * Saved query id
+         */
+        query_id: string;
+    };
+    query?: never;
+    url: '/databases/queries/{query_id}';
+};
+
+export type GetDatabaseQueryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Missing, or not readable by the caller
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseQueryError = GetDatabaseQueryErrors[keyof GetDatabaseQueryErrors];
+
+export type GetDatabaseQueryResponses = {
+    200: SavedQuery;
+};
+
+export type GetDatabaseQueryResponse = GetDatabaseQueryResponses[keyof GetDatabaseQueryResponses];
+
+export type EnsureStarterHandlerData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/databases/starter';
+};
+
+export type EnsureStarterHandlerErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Provisioning failed; safe to retry
+     */
+    500: unknown;
+};
+
+export type EnsureStarterHandlerResponses = {
+    200: StarterDatabase;
+};
+
+export type EnsureStarterHandlerResponse = EnsureStarterHandlerResponses[keyof EnsureStarterHandlerResponses];
+
+export type GetDatabaseData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}';
+};
+
+export type GetDatabaseErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseError = GetDatabaseErrors[keyof GetDatabaseErrors];
+
+export type GetDatabaseResponses = {
+    200: DatabaseDetail;
+};
+
+export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
+
+export type ShareDatabaseAwarenessData = {
+    body: Awareness;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/awareness';
+};
+
+export type ShareDatabaseAwarenessErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ShareDatabaseAwarenessError = ShareDatabaseAwarenessErrors[keyof ShareDatabaseAwarenessErrors];
+
+export type ShareDatabaseAwarenessResponses = {
+    /**
+     * Relayed to the database's other viewers
+     */
+    204: void;
+};
+
+export type ShareDatabaseAwarenessResponse = ShareDatabaseAwarenessResponses[keyof ShareDatabaseAwarenessResponses];
+
+export type UndoDatabaseChangeData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * The change's journal id
+         */
+        change: number;
+    };
+    query?: never;
+    url: '/databases/{id}/changes/{change}/undo';
+};
+
+export type UndoDatabaseChangeErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No edit access to the database
+     */
+    403: ErrorResponse;
+    /**
+     * No such change in this database
+     */
+    404: ErrorResponse;
+    /**
+     * The table kept moving under the undo
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UndoDatabaseChangeError = UndoDatabaseChangeErrors[keyof UndoDatabaseChangeErrors];
+
+export type UndoDatabaseChangeResponses = {
+    200: UndoChangeResponse;
+};
+
+export type UndoDatabaseChangeResponse = UndoDatabaseChangeResponses[keyof UndoDatabaseChangeResponses];
+
+export type ImportDatabaseTableData = {
+    body: ImportTable;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/import';
+};
+
+export type ImportDatabaseTableErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ImportDatabaseTableError = ImportDatabaseTableErrors[keyof ImportDatabaseTableErrors];
+
+export type ImportDatabaseTableResponses = {
+    200: Table;
+};
+
+export type ImportDatabaseTableResponse = ImportDatabaseTableResponses[keyof ImportDatabaseTableResponses];
+
+export type ApplyDatabaseOpsData = {
+    body: ApplyOpsRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/ops';
+};
+
+export type ApplyDatabaseOpsErrors = {
+    /**
+     * An op was refused; nothing was written
+     */
+    400: OpRefusalResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No edit access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * A table moved from its base version, or a schema change raced another
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ApplyDatabaseOpsError = ApplyDatabaseOpsErrors[keyof ApplyDatabaseOpsErrors];
+
+export type ApplyDatabaseOpsResponses = {
+    200: ApplyOpsResponse;
+};
+
+export type ApplyDatabaseOpsResponse = ApplyDatabaseOpsResponses[keyof ApplyDatabaseOpsResponses];
+
+export type GetDatabasePermissionsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type GetDatabasePermissionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabasePermissionsError = GetDatabasePermissionsErrors[keyof GetDatabasePermissionsErrors];
+
+export type GetDatabasePermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type GetDatabasePermissionsResponse = GetDatabasePermissionsResponses[keyof GetDatabasePermissionsResponses];
+
+export type UpdateDatabasePermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/permissions';
+};
+
+export type UpdateDatabasePermissionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateDatabasePermissionsError = UpdateDatabasePermissionsErrors[keyof UpdateDatabasePermissionsErrors];
+
+export type UpdateDatabasePermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type UpdateDatabasePermissionsResponse = UpdateDatabasePermissionsResponses[keyof UpdateDatabasePermissionsResponses];
+
+export type GetDatabaseTableChangesData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+    };
+    query: {
+        /**
+         * The table version the reader last read.
+         */
+        since: number;
+    };
+    url: '/databases/{id}/tables/{table_id}/changes';
+};
+
+export type GetDatabaseTableChangesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseTableChangesError = GetDatabaseTableChangesErrors[keyof GetDatabaseTableChangesErrors];
+
+export type GetDatabaseTableChangesResponses = {
+    200: TableChanges;
+};
+
+export type GetDatabaseTableChangesResponse = GetDatabaseTableChangesResponses[keyof GetDatabaseTableChangesResponses];
+
+export type ListDatabaseColumnCastsData = {
+    body?: never;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/casts';
+};
+
+export type ListDatabaseColumnCastsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListDatabaseColumnCastsError = ListDatabaseColumnCastsErrors[keyof ListDatabaseColumnCastsErrors];
+
+export type ListDatabaseColumnCastsResponses = {
+    200: Array<ColumnCast>;
+};
+
+export type ListDatabaseColumnCastsResponse = ListDatabaseColumnCastsResponses[keyof ListDatabaseColumnCastsResponses];
+
+export type ConvertDatabaseColumnData = {
+    body: ColumnConversionRequest;
+    path: {
+        id: string;
+        table_id: string;
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/conversion';
+};
+
+export type ConvertDatabaseColumnErrors = {
+    /**
+     * No value of the column converts to the type
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ConvertDatabaseColumnError = ConvertDatabaseColumnErrors[keyof ConvertDatabaseColumnErrors];
+
+export type ConvertDatabaseColumnResponses = {
+    200: ColumnConversion;
+};
+
+export type ConvertDatabaseColumnResponse = ConvertDatabaseColumnResponses[keyof ConvertDatabaseColumnResponses];
+
+export type InferDatabaseColumnTypeData = {
+    body: InferColumnTypeRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Column id
+         */
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type';
+};
+
+export type InferDatabaseColumnTypeErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type InferDatabaseColumnTypeError = InferDatabaseColumnTypeErrors[keyof InferDatabaseColumnTypeErrors];
+
+export type InferDatabaseColumnTypeResponses = {
+    200: InferColumnTypeOutcome;
+};
+
+export type InferDatabaseColumnTypeResponse = InferDatabaseColumnTypeResponses[keyof InferDatabaseColumnTypeResponses];
+
+export type GetDatabaseRowHistoryData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Row id
+         */
+        row_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/rows/{row_id}/history';
+};
+
+export type GetDatabaseRowHistoryErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseRowHistoryError = GetDatabaseRowHistoryErrors[keyof GetDatabaseRowHistoryErrors];
+
+export type GetDatabaseRowHistoryResponses = {
+    200: RowHistoryResponse;
+};
+
+export type GetDatabaseRowHistoryResponse = GetDatabaseRowHistoryResponses[keyof GetDatabaseRowHistoryResponses];
+
+export type GetDatabaseViewPositionsData = {
+    body?: never;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * View id
+         */
+        view_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/views/{view_id}/positions';
+};
+
+export type GetDatabaseViewPositionsErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetDatabaseViewPositionsError = GetDatabaseViewPositionsErrors[keyof GetDatabaseViewPositionsErrors];
+
+export type GetDatabaseViewPositionsResponses = {
+    200: ViewPositionsResponse;
+};
+
+export type GetDatabaseViewPositionsResponse = GetDatabaseViewPositionsResponses[keyof GetDatabaseViewPositionsResponses];
 
 export type TranscribeDictationData = {
     /**
@@ -13729,6 +18058,27 @@ export type CreateTaskHandlerResponses = {
 };
 
 export type CreateTaskHandlerResponse = CreateTaskHandlerResponses[keyof CreateTaskHandlerResponses];
+
+export type GetGithubPullRequestTasksData = {
+    body: GithubPullRequestTasksRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/github_prs/tasks';
+};
+
+export type GetGithubPullRequestTasksErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestTasksError = GetGithubPullRequestTasksErrors[keyof GetGithubPullRequestTasksErrors];
+
+export type GetGithubPullRequestTasksResponses = {
+    200: GithubPullRequestTasksResponse;
+};
+
+export type GetGithubPullRequestTasksResponse = GetGithubPullRequestTasksResponses[keyof GetGithubPullRequestTasksResponses];
 
 export type InitializeUserDocumentsData = {
     body?: never;
@@ -14551,7 +18901,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -14620,7 +18970,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
         /**
          * The id of the favorited entity.
          */
@@ -14700,6 +19050,383 @@ export type GetForeignEntityResponses = {
 
 export type GetForeignEntityResponse = GetForeignEntityResponses[keyof GetForeignEntityResponses];
 
+export type ListFormsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The database.
+         */
+        databaseId: string;
+    };
+    url: '/forms';
+};
+
+export type ListFormsErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type ListFormsError = ListFormsErrors[keyof ListFormsErrors];
+
+export type ListFormsResponses = {
+    200: Array<Form>;
+};
+
+export type ListFormsResponse = ListFormsResponses[keyof ListFormsResponses];
+
+export type CreateFormData = {
+    body: CreateForm;
+    path?: never;
+    query?: never;
+    url: '/forms';
+};
+
+export type CreateFormErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type CreateFormError = CreateFormErrors[keyof CreateFormErrors];
+
+export type CreateFormResponses = {
+    201: FormDetail;
+};
+
+export type CreateFormResponse = CreateFormResponses[keyof CreateFormResponses];
+
+export type ListAccessibleFormsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/forms/accessible';
+};
+
+export type ListAccessibleFormsErrors = {
+    401: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type ListAccessibleFormsError = ListAccessibleFormsErrors[keyof ListAccessibleFormsErrors];
+
+export type ListAccessibleFormsResponses = {
+    200: Array<ListedForm>;
+};
+
+export type ListAccessibleFormsResponse = ListAccessibleFormsResponses[keyof ListAccessibleFormsResponses];
+
+export type GetFormData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}';
+};
+
+export type GetFormErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type GetFormError = GetFormErrors[keyof GetFormErrors];
+
+export type GetFormResponses = {
+    200: FormDetail;
+};
+
+export type GetFormResponse = GetFormResponses[keyof GetFormResponses];
+
+export type UpdateFormData = {
+    body: UpdateForm;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}';
+};
+
+export type UpdateFormErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type UpdateFormError = UpdateFormErrors[keyof UpdateFormErrors];
+
+export type UpdateFormResponses = {
+    200: Form;
+};
+
+export type UpdateFormResponse = UpdateFormResponses[keyof UpdateFormResponses];
+
+export type CollaborateFormData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/collaboration';
+};
+
+export type CollaborateFormErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type CollaborateFormError = CollaborateFormErrors[keyof CollaborateFormErrors];
+
+export type CollaborateFormResponses = {
+    200: FormCollaboration;
+};
+
+export type CollaborateFormResponse = CollaborateFormResponses[keyof CollaborateFormResponses];
+
+export type PutFormLayoutData = {
+    body: FormLayout;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/layout';
+};
+
+export type PutFormLayoutErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type PutFormLayoutError = PutFormLayoutErrors[keyof PutFormLayoutErrors];
+
+export type PutFormLayoutResponses = {
+    200: FormCollaboration;
+};
+
+export type PutFormLayoutResponse = PutFormLayoutResponses[keyof PutFormLayoutResponses];
+
+export type GetFormPermissionsData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/permissions';
+};
+
+export type GetFormPermissionsErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type GetFormPermissionsError = GetFormPermissionsErrors[keyof GetFormPermissionsErrors];
+
+export type GetFormPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type GetFormPermissionsResponse = GetFormPermissionsResponses[keyof GetFormPermissionsResponses];
+
+export type UpdateFormPermissionsData = {
+    body: UpdateSharePermissionRequestV2;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/permissions';
+};
+
+export type UpdateFormPermissionsErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type UpdateFormPermissionsError = UpdateFormPermissionsErrors[keyof UpdateFormPermissionsErrors];
+
+export type UpdateFormPermissionsResponses = {
+    200: SharePermissionV2;
+};
+
+export type UpdateFormPermissionsResponse = UpdateFormPermissionsResponses[keyof UpdateFormPermissionsResponses];
+
+export type SubmitFormResponseData = {
+    body: Submission;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/responses';
+};
+
+export type SubmitFormResponseErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type SubmitFormResponseError = SubmitFormResponseErrors[keyof SubmitFormResponseErrors];
+
+export type SubmitFormResponseResponses = {
+    200: SubmissionOutcome;
+};
+
+export type SubmitFormResponseResponse = SubmitFormResponseResponses[keyof SubmitFormResponseResponses];
+
+export type GetMyFormResponseData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/responses/mine';
+};
+
+export type GetMyFormResponseErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type GetMyFormResponseError = GetMyFormResponseErrors[keyof GetMyFormResponseErrors];
+
+export type GetMyFormResponseResponses = {
+    200: MyResponse;
+};
+
+export type GetMyFormResponseResponse = GetMyFormResponseResponses[keyof GetMyFormResponseResponses];
+
+export type EditMyFormResponseData = {
+    body: Submission;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/responses/mine';
+};
+
+export type EditMyFormResponseErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type EditMyFormResponseError = EditMyFormResponseErrors[keyof EditMyFormResponseErrors];
+
+export type EditMyFormResponseResponses = {
+    200: SubmissionOutcome;
+};
+
+export type EditMyFormResponseResponse = EditMyFormResponseResponses[keyof EditMyFormResponseResponses];
+
+export type GetFormResponseSummaryData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/responses/summary';
+};
+
+export type GetFormResponseSummaryErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type GetFormResponseSummaryError = GetFormResponseSummaryErrors[keyof GetFormResponseSummaryErrors];
+
+export type GetFormResponseSummaryResponses = {
+    200: ResponseSummary;
+};
+
+export type GetFormResponseSummaryResponse = GetFormResponseSummaryResponses[keyof GetFormResponseSummaryResponses];
+
+export type GetFormTallyData = {
+    body?: never;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/tally';
+};
+
+export type GetFormTallyErrors = {
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+    409: FormErrorResponse;
+    500: FormErrorResponse;
+};
+
+export type GetFormTallyError = GetFormTallyErrors[keyof GetFormTallyErrors];
+
+export type GetFormTallyResponses = {
+    200: FormTally;
+};
+
+export type GetFormTallyResponse = GetFormTallyResponses[keyof GetFormTallyResponses];
+
 export type InstallSyncData = {
     body?: never;
     path?: never;
@@ -14713,6 +19440,112 @@ export type InstallSyncErrors = {
      */
     401: unknown;
 };
+
+export type GetGithubPullRequestFacetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/facets';
+};
+
+export type GetGithubPullRequestFacetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestFacetsError = GetGithubPullRequestFacetsErrors[keyof GetGithubPullRequestFacetsErrors];
+
+export type GetGithubPullRequestFacetsResponses = {
+    200: GithubPullRequestFacets;
+};
+
+export type GetGithubPullRequestFacetsResponse = GetGithubPullRequestFacetsResponses[keyof GetGithubPullRequestFacetsResponses];
+
+export type GetGithubPullRequestData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}';
+};
+
+export type GetGithubPullRequestErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestError = GetGithubPullRequestErrors[keyof GetGithubPullRequestErrors];
+
+export type GetGithubPullRequestResponses = {
+    200: StoredGithubPullRequest;
+};
+
+export type GetGithubPullRequestResponse = GetGithubPullRequestResponses[keyof GetGithubPullRequestResponses];
+
+export type GetGithubPullRequestChangesData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/github_pull_requests/{id}/changes';
+};
+
+export type GetGithubPullRequestChangesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesError = GetGithubPullRequestChangesErrors[keyof GetGithubPullRequestChangesErrors];
+
+export type GetGithubPullRequestChangesResponses = {
+    200: GithubPullRequestChangesResponse;
+};
+
+export type GetGithubPullRequestChangesResponse = GetGithubPullRequestChangesResponses[keyof GetGithubPullRequestChangesResponses];
+
+export type GetGithubPullRequestChangesPatchData = {
+    body?: never;
+    path: {
+        /**
+         * The caller's foreign entity record for the pull request
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * The changeset whose patch to read
+         */
+        changeset: string;
+    };
+    url: '/github_pull_requests/{id}/changes/patch';
+};
+
+export type GetGithubPullRequestChangesPatchErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestChangesPatchError = GetGithubPullRequestChangesPatchErrors[keyof GetGithubPullRequestChangesPatchErrors];
+
+export type GetGithubPullRequestChangesPatchResponses = {
+    200: GithubPullRequestChangesPatchResponse;
+};
+
+export type GetGithubPullRequestChangesPatchResponse = GetGithubPullRequestChangesPatchResponses[keyof GetGithubPullRequestChangesPatchResponses];
 
 export type CreateHarnessPairingData = {
     body: CreatePairingRequest;
@@ -15190,70 +20023,6 @@ export type UpdateInitiativeResponses = {
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
 
-export type AssignInitiativeTasksData = {
-    body: AssignTasksRequest;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks';
-};
-
-export type AssignInitiativeTasksErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
-
-export type AssignInitiativeTasksResponses = {
-    200: AssignTasksResponse;
-};
-
-export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
-
-export type UnassignInitiativeTaskData = {
-    body?: never;
-    path: {
-        /**
-         * Initiative identifier.
-         */
-        initiative_id: string;
-        /**
-         * Task identifier.
-         */
-        task_id: string;
-    };
-    query?: never;
-    url: '/initiatives/{initiative_id}/tasks/{task_id}';
-};
-
-export type UnassignInitiativeTaskErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
-
-export type UnassignInitiativeTaskResponses = {
-    200: GenericSuccessResponse;
-};
-
-export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
-
 export type GetInstructionsHandlerData = {
     body?: never;
     path?: never;
@@ -15626,6 +20395,27 @@ export type EntityMessagePatchThreadResponses = {
 };
 
 export type EntityMessagePatchThreadResponse = EntityMessagePatchThreadResponses[keyof EntityMessagePatchThreadResponses];
+
+export type MessageTimelineEntriesData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Serialized MessageTimelineQuery; absent selects the latest roots.
+         */
+        selection?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/timeline';
+};
+
+export type MessageTimelineEntriesResponses = {
+    200: MessageTimelinePage;
+};
+
+export type MessageTimelineEntriesResponse = MessageTimelineEntriesResponses[keyof MessageTimelineEntriesResponses];
 
 export type EntityMessageTypingData = {
     body: TypingInput;
@@ -16120,182 +20910,108 @@ export type RecentlyDeletedResponses = {
 
 export type RecentlyDeletedResponse = RecentlyDeletedResponses[keyof RecentlyDeletedResponses];
 
-export type ListRemindersData = {
+export type ListEmailRemindersData = {
     body?: never;
     path?: never;
     query?: {
         /**
-         * Restrict to reminders attached to an entity of these types.
+         * Selected inboxes; omission selects all accessible inboxes.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative'>;
+        inboxIds?: Array<string> | null;
         /**
-         * Restrict to reminders attached to these entity ids.
+         * Explicitly empty inbox selection.
          */
-        entityId?: Array<string>;
+        noInboxes?: boolean | null;
         /**
-         * Include reminders that have already fired.
+         * Email archive filter, independent of reminder completion.
          */
-        includeCompleted?: boolean;
+        done?: boolean | null;
         /**
-         * Page size. Defaults to 100; larger values are capped at 500. A value
-         * that is not a non-negative integer is rejected by the query extractor.
+         * Email read status.
          */
-        limit?: number;
+        read?: boolean | null;
         /**
-         * `nextCursor` from a previous page.
+         * Restrict to calendar mail.
          */
-        cursor?: string;
+        calendar?: boolean | null;
+        /**
+         * Repeated property-definition:select-option UUID pairs.
+         */
+        tags?: Array<string> | null;
+        /**
+         * Repeated attachment categories: pdf, image, document.
+         */
+        attachments?: Array<string> | null;
+        /**
+         * Continuation from the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum rows (1–100).
+         */
+        limit?: number | null;
     };
-    url: '/reminders';
+    url: '/reminders/email/collection';
 };
 
-export type ListRemindersErrors = {
+export type ListEmailRemindersErrors = {
     400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
     401: ErrorResponse;
     500: ErrorResponse;
 };
 
-export type ListRemindersError = ListRemindersErrors[keyof ListRemindersErrors];
+export type ListEmailRemindersError = ListEmailRemindersErrors[keyof ListEmailRemindersErrors];
 
-export type ListRemindersResponses = {
-    200: RemindersList;
+export type ListEmailRemindersResponses = {
+    200: EmailReminderPage;
 };
 
-export type ListRemindersResponse = ListRemindersResponses[keyof ListRemindersResponses];
+export type ListEmailRemindersResponse = ListEmailRemindersResponses[keyof ListEmailRemindersResponses];
 
-export type CreateReminderData = {
-    body: CreateReminderRequest;
-    path?: never;
+export type GetEmailFollowupData = {
+    body?: never;
+    path: {
+        thread_id: string;
+    };
     query?: never;
-    url: '/reminders';
+    url: '/reminders/email/{thread_id}';
 };
 
-export type CreateReminderErrors = {
-    400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    /**
-     * No access to the requested entity
-     */
+export type GetEmailFollowupErrors = {
     403: ErrorResponse;
-    /**
-     * The requested entity does not exist
-     */
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
     500: ErrorResponse;
 };
 
-export type CreateReminderError = CreateReminderErrors[keyof CreateReminderErrors];
+export type GetEmailFollowupError = GetEmailFollowupErrors[keyof GetEmailFollowupErrors];
 
-export type CreateReminderResponses = {
-    201: Reminder;
+export type GetEmailFollowupResponses = {
+    200: EmailFollowupResponse;
 };
 
-export type CreateReminderResponse = CreateReminderResponses[keyof CreateReminderResponses];
+export type GetEmailFollowupResponse = GetEmailFollowupResponses[keyof GetEmailFollowupResponses];
 
-export type DeleteReminderData = {
-    body?: never;
+export type SetEmailFollowupData = {
+    body: EmailFollowupCommand;
     path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
+        thread_id: string;
     };
     query?: never;
-    url: '/reminders/{id}';
+    url: '/reminders/email/{thread_id}';
 };
 
-export type DeleteReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteReminderError = DeleteReminderErrors[keyof DeleteReminderErrors];
-
-export type DeleteReminderResponses = {
-    /**
-     * Reminder deleted
-     */
-    204: void;
-};
-
-export type DeleteReminderResponse = DeleteReminderResponses[keyof DeleteReminderResponses];
-
-export type GetReminderData = {
-    body?: never;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type GetReminderErrors = {
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type GetReminderError = GetReminderErrors[keyof GetReminderErrors];
-
-export type GetReminderResponses = {
-    200: Reminder;
-};
-
-export type GetReminderResponse = GetReminderResponses[keyof GetReminderResponses];
-
-export type UpdateReminderData = {
-    body: UpdateReminderRequest;
-    path: {
-        /**
-         * The reminder id.
-         */
-        id: string;
-    };
-    query?: never;
-    url: '/reminders/{id}';
-};
-
-export type UpdateReminderErrors = {
+export type SetEmailFollowupErrors = {
     400: ErrorResponse;
-    /**
-     * Missing or invalid credentials
-     */
-    401: ErrorResponse;
-    404: ErrorResponse;
-    /**
-     * Malformed request body (plain text)
-     */
-    422: unknown;
+    403: ErrorResponse;
     500: ErrorResponse;
 };
 
-export type UpdateReminderError = UpdateReminderErrors[keyof UpdateReminderErrors];
+export type SetEmailFollowupError = SetEmailFollowupErrors[keyof SetEmailFollowupErrors];
 
-export type UpdateReminderResponses = {
-    200: Reminder;
+export type SetEmailFollowupResponses = {
+    200: EmailFollowup;
 };
 
-export type UpdateReminderResponse = UpdateReminderResponses[keyof UpdateReminderResponses];
+export type SetEmailFollowupResponse = SetEmailFollowupResponses[keyof SetEmailFollowupResponses];
 
 export type GetViewsHandlerData = {
     body?: never;
@@ -16400,6 +21116,187 @@ export type PatchViewHandlerError = PatchViewHandlerErrors[keyof PatchViewHandle
 export type PatchViewHandlerResponses = {
     200: unknown;
 };
+
+export type ListSlackImportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        before?: JobId;
+    };
+    url: '/slack/imports';
+};
+
+export type ListSlackImportsResponses = {
+    200: ImportPage;
+};
+
+export type ListSlackImportsResponse = ListSlackImportsResponses[keyof ListSlackImportsResponses];
+
+export type CreateSlackImportData = {
+    body: SlackCreateRequest;
+    path?: never;
+    query?: never;
+    url: '/slack/imports';
+};
+
+export type CreateSlackImportErrors = {
+    /**
+     * Authentication or team administrator access required
+     */
+    401: unknown;
+    /**
+     * Team administrator required
+     */
+    403: unknown;
+    /**
+     * Metadata limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled or temporarily unavailable
+     */
+    503: unknown;
+};
+
+export type CreateSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CreateSlackImportResponse = CreateSlackImportResponses[keyof CreateSlackImportResponses];
+
+export type GetSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}';
+};
+
+export type GetSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type GetSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type GetSlackImportResponse = GetSlackImportResponses[keyof GetSlackImportResponses];
+
+export type CancelSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/cancel';
+};
+
+export type CancelSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type CancelSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type CancelSlackImportResponse = CancelSlackImportResponses[keyof CancelSlackImportResponses];
+
+export type FinalizeSlackImportData = {
+    body?: never;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/finalize';
+};
+
+export type FinalizeSlackImportErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+};
+
+export type FinalizeSlackImportResponses = {
+    200: ImportProgress;
+};
+
+export type FinalizeSlackImportResponse = FinalizeSlackImportResponses[keyof FinalizeSlackImportResponses];
+
+export type RegisterSlackImportUploadsData = {
+    body: SlackRegisterRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads';
+};
+
+export type RegisterSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type RegisterSlackImportUploadsResponses = {
+    200: Array<UploadGrant>;
+};
+
+export type RegisterSlackImportUploadsResponse = RegisterSlackImportUploadsResponses[keyof RegisterSlackImportUploadsResponses];
+
+export type CompleteSlackImportUploadsData = {
+    body: SlackCompleteRequest;
+    path: {
+        job_id: JobId;
+    };
+    query?: never;
+    url: '/slack/imports/{job_id}/uploads/complete';
+};
+
+export type CompleteSlackImportUploadsErrors = {
+    /**
+     * Unknown or inaccessible job
+     */
+    404: unknown;
+    /**
+     * Immutable manifest conflict
+     */
+    409: unknown;
+    /**
+     * Body limit exceeded
+     */
+    413: unknown;
+    /**
+     * Object verification failed
+     */
+    422: unknown;
+    /**
+     * Slack imports disabled
+     */
+    503: unknown;
+};
+
+export type CompleteSlackImportUploadsResponses = {
+    200: ImportProgress;
+};
+
+export type CompleteSlackImportUploadsResponse = CompleteSlackImportUploadsResponses[keyof CompleteSlackImportUploadsResponses];
 
 export type BulkWakeupSyncServiceDocumentsData = {
     body: BulkWakeupRequest;

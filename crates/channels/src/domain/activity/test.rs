@@ -8,10 +8,9 @@ use uuid::Uuid;
 use macro_event_broker::Event;
 
 use super::*;
-use crate::domain::broker_events::{
-    ChannelCreatedMetadata, ChannelMessagePostedMetadata, ChannelParticipantAddedMetadata,
-};
+use crate::domain::broker_events::{ChannelCreatedMetadata, ChannelParticipantAddedMetadata};
 use crate::domain::models::ChannelType;
+use messages::domain::events::MessagePostedMetadata;
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
@@ -23,25 +22,74 @@ fn envelope(event: ChannelTopicEvent) -> Event<ChannelTopicEvent> {
 
 const CHANNEL_ID: Uuid = Uuid::from_u128(7);
 
+fn posted(parent: MessageParent, created_at: chrono::DateTime<Utc>) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent,
+        message_id: Uuid::from_u128(8),
+        thread_id: None,
+        root_id: Uuid::from_u128(8),
+        sender: Actor::new_from_user(user("macro|bot-like@example.com")),
+        triggered_by: Some("macro|teo@example.com".to_string()),
+        content: "hi".to_string(),
+        mentions: vec![],
+        attachments: vec![],
+        created_at,
+    }
+}
+
+#[test]
+fn rename_preserves_names_and_skips_noops() {
+    let metadata = crate::domain::broker_events::ChannelUpdatedMetadata {
+        channel_id: CHANNEL_ID,
+        actor: user("macro|actor@example.com"),
+        previous_name: Some("Before".into()),
+        channel_name: Some("After".into()),
+    };
+    let event = envelope(ChannelTopicEvent::Updated(metadata.clone()));
+    let Ingest::Insert(rows) = event.event.ingest(event.event_id) else {
+        panic!("expected rename");
+    };
+    assert_eq!(
+        rows[0].action,
+        Action::Renamed(::activity::domain::models::NameChange {
+            from: Some("Before".into()),
+            to: Some("After".into()),
+        })
+    );
+    let unchanged = envelope(ChannelTopicEvent::Updated(
+        crate::domain::broker_events::ChannelUpdatedMetadata {
+            channel_name: metadata.previous_name.clone(),
+            ..metadata
+        },
+    ));
+    assert_eq!(unchanged.event.ingest(unchanged.event_id), Ingest::Ignore);
+}
+
+#[test]
+fn picture_changes_are_attributed_and_replay_stable() {
+    let event = envelope(ChannelTopicEvent::PictureChanged(
+        crate::domain::broker_events::ChannelPictureChangedMetadata {
+            channel_id: CHANNEL_ID,
+            actor: user("macro|actor@example.com"),
+        },
+    ));
+    let first = event.event.ingest(event.event_id);
+    assert_eq!(first, event.event.ingest(event.event_id));
+    let Ingest::Insert(rows) = first else {
+        panic!("expected picture activity");
+    };
+    assert_eq!(rows[0].action, Action::PictureChanged);
+    assert_eq!(rows[0].actor.as_ref(), "macro|actor@example.com");
+    assert_eq!(rows[0].entity_id, CHANNEL_ID.to_string());
+}
+
 #[test]
 fn message_posted_maps_to_messaged_with_triggered_by_as_subject() {
     let created_at = Utc::now();
-    let event = envelope(ChannelTopicEvent::MessagePosted(
-        ChannelMessagePostedMetadata {
-            channel_id: CHANNEL_ID,
-            message_id: Uuid::from_u128(8),
-            thread_id: None,
-            sender: Actor::new_from_user(user("macro|bot-like@example.com")),
-            triggered_by: Some("macro|teo@example.com".to_string()),
-            channel_type: ChannelType::Public,
-            content: "hi".to_string(),
-            mentions: vec![],
-            attachments: vec![],
-            created_at,
-        },
-    ));
+    let event_id = Uuid::now_v7();
+    let event = MessageTopicEvent::Posted(posted(MessageParent::Channel(CHANNEL_ID), created_at));
 
-    let Ingest::Insert(activities) = event.event.ingest(event.event_id) else {
+    let Ingest::Insert(activities) = ingest_message_event(event_id, &event) else {
         panic!("expected activities");
     };
     assert_eq!(activities.len(), 1);
@@ -52,6 +100,18 @@ fn message_posted_maps_to_messaged_with_triggered_by_as_subject() {
     assert_eq!(activities[0].occurred_at, created_at);
     assert_eq!(activities[0].entity_id, CHANNEL_ID.to_string());
     assert_eq!(activities[0].entity_type, EntityType::Channel);
+}
+
+#[test]
+fn document_discussion_posts_record_no_activity() {
+    let event = MessageTopicEvent::Posted(posted(
+        MessageParent::parse("document", "doc-1").unwrap(),
+        Utc::now(),
+    ));
+    assert!(matches!(
+        ingest_message_event(Uuid::now_v7(), &event),
+        Ingest::Ignore
+    ));
 }
 
 #[test]

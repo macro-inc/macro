@@ -9,8 +9,9 @@ import {
   it,
   vi,
 } from 'vitest';
-import { createSplitLayout, type SplitId } from '../layoutManager';
+import type { SplitId } from '../layoutManager';
 import { createSplitFocusTracker } from '../splitFocusTracker';
+import { createRoutedSplitLayout } from './fixtures';
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -69,10 +70,10 @@ const FOCUS_DEBOUNCE_MS = 50;
  */
 function mountFreshLoad() {
   return createRoot((dispose) => {
-    const manager = createSplitLayout(createMockOrchestrator(), [
-      { type: 'component', id: 'inbox' },
-      { type: 'md', id: 'doc-1' },
-    ]);
+    const manager = createRoutedSplitLayout(
+      createMockOrchestrator(),
+      '/home/~/channels'
+    );
 
     const panelRefs = new Map<SplitId, HTMLDivElement>(
       manager.splits().map((split) => [split.id, createPanel()])

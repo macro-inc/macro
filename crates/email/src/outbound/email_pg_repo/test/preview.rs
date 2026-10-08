@@ -229,3 +229,37 @@ async fn test_contacts_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn returned_thread_without_message_timestamps_has_created_at(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread = Uuid::parse_str("20000003-0000-0000-0000-000000000003")?;
+    sqlx::query(
+        "UPDATE email_threads SET inbox_visible = true, reminder_returned_at = NOW() WHERE id = $1",
+    )
+    .bind(thread)
+    .execute(&pool)
+    .await?;
+    let rows = crate::outbound::email_pg_repo::preview_views::new_inbox::new_inbox_preview_cursor(
+        &pool,
+        &[Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?],
+        50,
+        &Query::new(None, SimpleSortMethod::UpdatedAt, ()),
+    )
+    .await?;
+    let returned = rows
+        .iter()
+        .find(|row| row.id == thread)
+        .expect("returned thread must remain readable");
+    let created: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT created_at FROM email_threads WHERE id = $1")
+            .bind(thread)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(returned.created_at, created);
+    Ok(())
+}

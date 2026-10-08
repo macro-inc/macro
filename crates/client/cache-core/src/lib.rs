@@ -2,15 +2,18 @@
 //!
 //! Design doc: `apps/web/docs/graphql-normalized-cache-plan.md`.
 
+pub mod calendar;
 pub mod codec;
 pub mod denormalize;
 pub mod deps;
 pub mod document;
 pub mod engine;
 pub mod entity_resolver;
+pub mod identity;
 pub mod link_patch;
 pub mod meta;
 pub mod normalize;
+pub mod page_retention;
 pub mod predicate;
 pub mod query_inspection;
 mod query_path;

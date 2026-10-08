@@ -437,6 +437,80 @@ async fn an_unrelated_client_error_is_still_a_plain_rejection() {
     );
 }
 
+/// The body Cursor answered with in production when the account behind the
+/// key had spent its background-agent budget.
+const USAGE_LIMIT_BODY: &str = r#"{"error":{"code":"usage_limit_exceeded","message":"You need to increase your hard limit. Background Agent requires at least $2 remaining until your hard limit. Manage it at https://www.cursor.com/dashboard?tab=settings."}}"#;
+
+/// An exhausted Cursor budget is the person's to fix, so it arrives typed -
+/// keyed on the code, with Cursor's body kept for the logs and a notice that
+/// says where to go.
+#[tokio::test]
+async fn an_exhausted_usage_limit_is_typed_with_a_notice() {
+    let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
+    let error = client_against(base_url)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in rejects every create");
+    let exceeded = error
+        .downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+        .expect("a usage limit is typed as one");
+    assert_eq!(exceeded.code, "usage_limit_exceeded");
+    assert_eq!(exceeded.detail, USAGE_LIMIT_BODY);
+    let notice = exceeded.notice();
+    assert_eq!(
+        notice.kind,
+        crate::domain::error::FailureNoticeKind::ProviderUsageLimit
+    );
+    assert_eq!(
+        notice.link.as_ref().map(|link| link.url.as_str()),
+        Some("https://www.cursor.com/dashboard?tab=settings")
+    );
+    let refusal = exceeded.refusal();
+    assert!(
+        !refusal.message.contains("usage_limit_exceeded") && !refusal.message.contains("$2"),
+        "cursor's own wording stays in the logs: {}",
+        refusal.message
+    );
+}
+
+/// A follow-up run on an existing agent hits the same wall when the budget
+/// runs out mid-conversation, and is classified the same way.
+#[tokio::test]
+async fn an_exhausted_usage_limit_on_a_follow_up_run_is_typed_too() {
+    let base_url = stand_in_server("400 Bad Request", USAGE_LIMIT_BODY);
+    let error = client_against(base_url)
+        .create_run(&agent(), "prompt", None)
+        .await
+        .expect_err("the stand-in rejects every run");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+            .is_some(),
+        "got {error:?}"
+    );
+}
+
+/// The message is the same wall in different words at another time; only the
+/// code is stable. A body with a different code and the same words is not a
+/// usage limit.
+#[tokio::test]
+async fn a_usage_limit_is_matched_on_the_code_not_the_message() {
+    let base_url = stand_in_server(
+        "400 Bad Request",
+        r#"{"error":{"code":"validation_error","message":"You need to increase your hard limit."}}"#,
+    );
+    let error = client_against(base_url)
+        .create_agent("prompt", Some(&repo()), true, &[], None)
+        .await
+        .expect_err("the stand-in rejects every create");
+    assert!(
+        error
+            .downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+            .is_none(),
+        "the wording alone does not classify"
+    );
+}
+
 fn agent() -> CursorAgentId {
     CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned())
 }

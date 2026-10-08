@@ -1,6 +1,45 @@
 use super::*;
 
 #[test]
+fn shared_send_preparation_respects_reply_defaults_and_explicit_override() {
+    let mut preparation = SignaturePreparation {
+        settings: Some(crate::domain::ports::LinkEmailSettings {
+            signature: Some("<p>Regards</p>".into()),
+            signature_on_replies_forwards: false,
+        }),
+        include_signature: None,
+    };
+    let mut html = Some("<p>Hello</p>".to_owned());
+    let mut text = Some("Hello".to_owned());
+    preparation.apply(true, &mut html, &mut text);
+    assert!(!has_signature(html.as_deref().unwrap()));
+    preparation.include_signature = Some(true);
+    preparation.apply(true, &mut html, &mut text);
+    preparation.apply(true, &mut html, &mut text);
+    assert_eq!(html.as_deref().unwrap().matches(SIGNATURE_CLASS).count(), 1);
+    assert_eq!(text.as_deref(), Some("Hello\n\nRegards"));
+    preparation.include_signature = Some(false);
+    preparation.apply(true, &mut html, &mut text);
+    assert!(!has_signature(html.as_deref().unwrap()));
+}
+
+#[test]
+fn signature_preparation_preserves_html_only_delivery() {
+    let preparation = SignaturePreparation {
+        settings: Some(crate::domain::ports::LinkEmailSettings {
+            signature: Some("<p>Regards</p>".into()),
+            signature_on_replies_forwards: false,
+        }),
+        include_signature: None,
+    };
+    let mut html = Some("<p>Hello</p>".to_owned());
+    let mut text = None;
+    preparation.apply(false, &mut html, &mut text);
+    assert!(has_signature(html.as_deref().unwrap()));
+    assert!(text.is_none());
+}
+
+#[test]
 fn appends_to_body_after_message_when_no_quote() {
     let out = inject_signature("<body><p>Hi there</p></body>", "<p>Regards</p>");
     assert!(out.contains("macro-email-signature"), "got: {out}");

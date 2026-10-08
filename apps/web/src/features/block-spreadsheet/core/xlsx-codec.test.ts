@@ -70,6 +70,32 @@ describe('Excel workbook files', () => {
       ExcelJS.ValueType.String
     );
   });
+  it('exports a lone date pill as a dated number instead of its label', async () => {
+    const sheet = simpleSheet();
+    const due = encodeCellMention({
+      type: 'date',
+      date: new Date(2026, 8, 28).toISOString(),
+      displayFormat: 'Tomorrow',
+    });
+    sheet.cells = {
+      A1: { value: `${due} ` },
+      A2: { value: `Due ${due}` },
+      A3: { value: due, format: 'number' },
+    };
+    sheet.values = calculator.calculate(sheet.cells);
+    const result = await encodeXlsx({ sheets: [sheet] });
+    expect(result.warnings.join(' ')).toContain('mention');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(result.bytes.slice().buffer);
+    const exported = workbook.worksheets[0];
+    expect(exported.getCell('A1').value).toEqual(
+      new Date(Date.UTC(2026, 8, 28))
+    );
+    expect(exported.getCell('A1').numFmt).toBe('m/d/yyyy');
+    expect(exported.getCell('A2').value).toBe('Due Tomorrow');
+    expect(exported.getCell('A3').value).toBe(46293);
+    expect(exported.getCell('A3').numFmt).toBe('#,##0.00');
+  });
   it('round trips real XLSX with multiple sheets, formula caches, values, styles and widths', async () => {
     const sheets: WorkbookFileSheet[] = [
       {
@@ -255,7 +281,8 @@ describe('Excel workbook files', () => {
       sheet.getCell('C2').value = 99;
       const imported = await decodeXlsx(await file(workbook));
       const cells = imported.sheets[0].cells;
-      expect(cells.A1.value).toBe(`=${formula}`);
+      // Excel's compatibility prefixes are restored on export.
+      expect(cells.A1.value).toBe('=SEQUENCE(3,2)');
       expect(cells.B1).toBeUndefined();
       expect(cells.A2).toBeUndefined();
       expect(cells.B2).toEqual({
@@ -269,36 +296,119 @@ describe('Excel workbook files', () => {
         'cached spill values are discarded'
       );
       const result = calculator.calculate(cells);
-      expect(result.A1).toEqual({ display: '1', number: 1 });
+      expect(result.A1).toEqual({
+        display: '1',
+        number: 1,
+        spill: { rows: 3, columns: 2 },
+      });
       expect(result.B2).toEqual({ display: '$4.00', number: 4 });
       expect(result.B3).toEqual({ display: '6', number: 6 });
       expect(result.C2.number).toBe(99);
     }
   );
 
-  it('rejects unsupported legacy array semantics, malformed ranges and conflicting spill contents', async () => {
-    for (const [formula, ref, childFormula] of [
-      ['SUM(B1:B3*C1:C3)', 'A1:A3', false],
-      ['TRANSPOSE(B1:D1)', 'A1:A2', false],
-      ['SEQUENCE(3)', 'A1:A1001', false],
-      ['SEQUENCE(3)', 'A2:A4', false],
-      ['SEQUENCE(3)', 'A1:A3', true],
-    ] as const) {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('Array');
-      const arrayFormula: RangeFormulaValue = {
-        formula,
-        result: 1,
-        shareType: 'array',
-        ref,
-      };
-      sheet.getCell('A1').value = arrayFormula;
-      if (childFormula)
-        sheet.getCell('A2').value = { formula: '2+2', result: 4 };
-      await expect(decodeXlsx(await file(workbook))).rejects.toThrow(
-        /array|exceeds the supported/i
-      );
+  it('imports legacy Ctrl+Shift+Enter arrays and recalculates them as fixed-size arrays', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Array');
+    for (let row = 1; row <= 3; row++) {
+      sheet.getCell(`B${row}`).value = row;
+      sheet.getCell(`C${row}`).value = row * 10;
     }
+    const total: RangeFormulaValue = {
+      formula: 'SUM(B1:B3*C1:C3)',
+      result: 140,
+      shareType: 'array',
+      ref: 'A1',
+    };
+    sheet.getCell('A1').value = total;
+    const transposed: RangeFormulaValue = {
+      formula: 'TRANSPOSE(B1:B3)',
+      result: 1,
+      shareType: 'array',
+      ref: 'E1:G1',
+    };
+    sheet.getCell('E1').value = transposed;
+    sheet.getCell('F1').value = 2;
+    sheet.getCell('G1').value = 3;
+    const imported = await decodeXlsx(await file(workbook));
+    const cells = imported.sheets[0].cells;
+    expect(cells.A1.value).toBe('=SUM(B1:B3*C1:C3)');
+    expect(cells.F1).toBeUndefined();
+    expect(imported.sheets[0].metadata?.arrayFormulas).toEqual({
+      A1: 'A1',
+      E1: 'E1:G1',
+    });
+    const [values] = Object.values(
+      calculator.calculateWorkbook([{ id: 'array', ...imported.sheets[0] }])
+    );
+    expect(values.A1.number).toBe(140);
+    expect(
+      [values.E1, values.F1, values.G1].map((cell) => cell.number)
+    ).toEqual([1, 2, 3]);
+    // Exported arrays stay fixed-size Ctrl+Shift+Enter formulas in Excel.
+    const exported = await encodeXlsx({
+      sheets: [{ ...imported.sheets[0], values }],
+    });
+    const xml = strFromU8(
+      unzipSync(exported.bytes)['xl/worksheets/sheet1.xml']
+    );
+    expect(xml).toContain('<f t="array" ref="E1:G1">TRANSPOSE(B1:B3)</f>');
+    expect(xml).toContain('<f t="array" ref="A1">SUM(B1:B3*C1:C3)</f>');
+    expect(
+      (await decodeXlsx(exported.bytes)).sheets[0].metadata?.arrayFormulas
+    ).toEqual({
+      A1: 'A1',
+      E1: 'E1:G1',
+    });
+  });
+
+  it('calculates legacy implicit intersections and 3-D references as Excel did', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const summary = workbook.addWorksheet('Summary');
+    const data = workbook.addWorksheet('Data');
+    ['1st Q', '2nd Q', '3rd Q'].forEach((name, index) => {
+      workbook.addWorksheet(name).getCell('D7').value = index + 1;
+    });
+    ['one', 'two', 'three', 'four', 'five', 'six'].forEach((text, index) => {
+      data.getCell(`B${index + 2}`).value = text;
+    });
+    summary.getCell('A3').value = { formula: 'Data!$B$2:$B$7', result: 'two' };
+    summary.getCell('B3').value = { formula: 'LEN(Data!B:B)', result: 3 };
+    summary.getCell('C3').value = {
+      formula: "SUM('1st Q:3rd Q'!D7)",
+      result: 6,
+    };
+    summary.getCell('D3').value = {
+      formula: 'COUNTA(Data!B2:B7)',
+      result: 6,
+    };
+    const imported = await decodeXlsx(await file(workbook));
+    const cells = imported.sheets[0].cells;
+    expect(cells.A3.value).toBe('=@Data!$B$2:$B$7');
+    expect(cells.B3.value).toBe('=LEN(@Data!B:B)');
+    expect(cells.C3.value).toBe("=SUM('1st Q'!D7,'2nd Q'!D7,'3rd Q'!D7)");
+    expect(cells.D3.value).toBe('=COUNTA(Data!B2:B7)');
+    const values = calculator.calculateWorkbook(
+      imported.sheets.map((sheet, index) => ({ id: String(index), ...sheet }))
+    );
+    expect(values[0].A3.display).toBe('two');
+    expect(values[0].B3.number).toBe(3);
+    expect(values[0].C3.number).toBe(6);
+    expect(values[0].D3.number).toBe(6);
+    const exported = await encodeXlsx({
+      sheets: imported.sheets.map((sheet, index) => ({
+        ...sheet,
+        values: values[String(index)],
+      })),
+    });
+    const xml = strFromU8(
+      unzipSync(exported.bytes)['xl/worksheets/sheet1.xml']
+    );
+    // Legacy formulas intersect implicitly, so Excel needs no @ or array flag.
+    expect(xml).toContain('<f>Data!$B$2:$B$7</f>');
+    expect(xml).toContain('<f>LEN(Data!B:B)</f>');
+    expect(xml).not.toContain('cm="1"');
+    expect((await decodeXlsx(exported.bytes)).sheets[0].cells).toEqual(cells);
   });
 
   it('preserves formula and numeric types under Excel text formatting without adding rich-text apostrophes', async () => {
@@ -313,13 +423,16 @@ describe('Excel workbook files', () => {
       hyperlink: 'https://macro.com',
     };
     sheet.getCell('A6').value = '=SUM(A1:A2)';
-    for (let row = 1; row <= 6; row++) sheet.getCell(`A${row}`).numFmt = '@';
+    sheet.getCell('A7').value = { formula: 'TEXT(A1,"0.0")', result: '12.0' };
+    for (let row = 1; row <= 7; row++) sheet.getCell(`A${row}`).numFmt = '@';
     const imported = await decodeXlsx(await file(workbook));
     const cells = imported.sheets[0].cells;
     expect(cells.A1).toMatchObject({ value: '12' });
     expect(cells.A2).toMatchObject({ value: '=A1*2' });
     expect(cells.A3).toMatchObject({ value: 'TRUE' });
-    for (const address of ['A1', 'A2', 'A3'])
+    // A formula with a text result is still a formula.
+    expect(cells.A7).toMatchObject({ value: '=TEXT(A1,"0.0")' });
+    for (const address of ['A1', 'A2', 'A3', 'A7'])
       expect(cells[address].format).toBeUndefined();
     expect(cells.A4).toMatchObject({ value: 'literal', format: 'text' });
     expect(cells.A5).toMatchObject({ value: '=literal', format: 'text' });
@@ -370,54 +483,101 @@ describe('Excel workbook files', () => {
     };
     workbook.definedNames.add('Original!$A$1', 'Named');
     const entries = unzipSync(await file(workbook));
-    entries['xl/charts/chart1.xml'] = strToU8('<chart/>');
     entries['xl/externalLinks/externalLink1.xml'] = strToU8('<externalLink/>');
     const imported = await decodeXlsx(zipSync(entries));
     const warning = imported.warnings.join('\n');
     for (const term of [
-      'Charts',
       'External workbook',
-      'validation',
       'Hidden sheets',
       'Merged ranges',
       'Frozen panes',
       'Hyperlinks',
       'Rich text',
-      'comments',
     ])
       expect(warning).toContain(term);
+    // Notes and data validation are imported, as are charts
+    // (xlsx-drawings.test.ts).
+    expect(warning).not.toMatch(/validation|comments|charts/i);
+    expect(imported.sheets[0].metadata).toMatchObject({
+      notes: { C4: 'review' },
+      validations: [{ range: 'D1', type: 'list', formulas: ['"a,b"'] }],
+    });
     expect(imported.sheets[0].cells.B1).toBeUndefined();
-    expect(imported.sheets[0].cells.A1.value).toBe("'merged");
-    expect(imported.sheets[0].cells.C2.value).toBe("'bold plain");
+    expect(imported.sheets[0].cells.A1.value).toBe('merged');
+    expect(imported.sheets[0].cells.C2.value).toBe('bold plain');
   });
 
-  it.each(['rows', 'columns', 'cell', 'sheets'] as const)(
+  it('shortens text longer than a Macro cell holds instead of rejecting the workbook', async () => {
+    const workbook = new ExcelJS.Workbook();
+    workbook.addWorksheet('Notes').getCell('A1').value = 'x'.repeat(12_000);
+    const imported = await decodeXlsx(await file(workbook));
+    expect(imported.sheets[0].cells.A1.value).toHaveLength(10_000);
+    expect(imported.warnings).toContain(
+      'Text longer than 10,000 characters was shortened to fit Macro cells.'
+    );
+  });
+
+  it.each(['rows', 'sheets'] as const)(
     'rejects %s overflow rather than partially importing',
     async (kind) => {
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet('Too large');
-      if (kind === 'rows') sheet.getCell('A1001').value = 'keep';
-      if (kind === 'columns') sheet.getCell('AA1').value = 'keep';
-      if (kind === 'cell') sheet.getCell('A1').value = 'x'.repeat(10001);
+      sheet.getCell('A1').value = 'keep';
+      if (kind === 'rows') sheet.getCell('A100001').value = 'keep';
       if (kind === 'sheets')
-        for (let i = 0; i < 10; i++) workbook.addWorksheet(`More ${i}`);
+        for (let i = 0; i < 300; i++) workbook.addWorksheet(`More ${i}`);
       await expect(decodeXlsx(await file(workbook))).rejects.toThrow(
-        /exceeds|up to 10/
+        /exceeds|beyond row|up to 300/
       );
     }
   );
 
-  it('rejects invalid ZIP, encryption, macros, corrupt data and forged expansion sizes', async () => {
+  it('skips cells past Excel’s last column with a warning, as Excel’s repair does', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Corrupt');
+    sheet.getCell('A1').value = 'outside';
+    sheet.getCell('A2').value = 'inside';
+    const entries = unzipSync(await file(workbook));
+    const path = 'xl/worksheets/sheet1.xml';
+    entries[path] = strToU8(
+      strFromU8(entries[path]).replace('r="A1"', 'r="XFE1"')
+    );
+    const imported = await decodeXlsx(zipSync(entries));
+    expect(imported.sheets[0].cells).toEqual({ A2: { value: 'inside' } });
+    expect(imported.warnings).toContain(
+      'Cells outside Excel’s grid limits were skipped.'
+    );
+  });
+
+  it('imports wide and long sheets that exceed the original 26 × 1,000 grid', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Monthly model');
+    sheet.getCell('BN1').value = 'Dec 2030';
+    sheet.getCell('BN2').value = { formula: 'SUM(A2:BM2)', result: 0 };
+    sheet.getCell('A5000').value = 7;
+    const imported = await decodeXlsx(await file(workbook));
+    const [result] = imported.sheets;
+    expect(result.cells.BN1.value).toBe("'Dec 2030");
+    expect(result.cells.BN2.value).toBe('=SUM(A2:BM2)');
+    expect(result.cells.A5000.value).toBe('7');
+    expect(result.columnCount).toBe(66);
+    expect(result.rowCount).toBe(5000);
+  });
+
+  it('rejects invalid ZIP, encryption, exported macros, corrupt data and forged expansion sizes', async () => {
     await expect(
       decodeXlsx(new Uint8Array(XLSX_MAX_BYTES + 1))
-    ).rejects.toThrow('5 MB');
+    ).rejects.toThrow('50 MB');
     await expect(decodeXlsx(strToU8('not a workbook'))).rejects.toThrow(
       'valid'
     );
     const original = (await encodeXlsx({ sheets: [simpleSheet()] })).bytes;
     const entries = unzipSync(original);
     entries['xl/vbaProject.bin'] = new Uint8Array([1]);
-    await expect(decodeXlsx(zipSync(entries))).rejects.toThrow('Macro-enabled');
+    // Imports drop macros (see xlsm-import.test.ts); exports may never carry them.
+    expect(() => inspectXlsxArchive(zipSync(entries))).toThrow(
+      'must not contain macros'
+    );
     const central = (bytes: Uint8Array) => {
       const view = new DataView(
         bytes.buffer,
@@ -443,7 +603,7 @@ describe('Excel workbook files', () => {
       XLSX_MAX_EXPANDED_BYTES + 1,
       true
     );
-    expect(() => inspectXlsxArchive(tooLarge)).toThrow('20 MB');
+    expect(() => inspectXlsxArchive(tooLarge)).toThrow('400 MB');
     const forged = original.slice();
     const forgedEntry = central(forged);
     forgedEntry.view.setUint32(forgedEntry.offset + 24, 1, true);
@@ -454,29 +614,40 @@ describe('Excel workbook files', () => {
     expect(() => inspectXlsxArchive(corrupt)).toThrow('valid');
   });
 
-  it('rejects oversized merge and column ranges before the parser expands them', async () => {
+  it('accepts Excel-sized merges and column ranges without expanding them, and rejects invalid ones', async () => {
     const original = (await encodeXlsx({ sheets: [simpleSheet()] })).bytes;
-    for (const markup of [
-      "<mergeCells><mergeCell ref='A1:A1001'/></mergeCells>",
-      "<cols><col min='1' max='1000000' width='10'/></cols>",
-    ]) {
+    const withMarkup = (markup: string) => {
       const entries = unzipSync(original);
       const path = 'xl/worksheets/sheet1.xml';
-      const text = new TextDecoder().decode(entries[path]);
       entries[path] = strToU8(
-        text.replace('</worksheet>', `${markup}</worksheet>`)
+        strFromU8(entries[path]).replace(
+          '</worksheet>',
+          `${markup}</worksheet>`
+        )
       );
-      await expect(decodeXlsx(zipSync(entries))).rejects.toThrow(
-        'exceeds the supported'
-      );
-    }
+      return zipSync(entries);
+    };
+    // Formatting whole sheets writes ranges up to XFD; only used columns load.
+    const wide = await decodeXlsx(
+      withMarkup("<cols><col min='1' max='16384' width='10'/></cols>")
+    );
+    expect(wide.sheets[0].columnCount).toBe(26);
+    expect(wide.sheets[0].columnWidths[0]).toBe(75);
+    const merged = await decodeXlsx(
+      withMarkup("<mergeCells><mergeCell ref='A1:A1001'/></mergeCells>")
+    );
+    expect(merged.sheets[0].metadata?.merges).toEqual(['A1:A1001']);
+    await expect(
+      decodeXlsx(
+        withMarkup("<cols><col min='1' max='16385' width='10'/></cols>")
+      )
+    ).rejects.toThrow('Invalid column');
   });
 
   it.each([
     '<cols><col min="1000000000" max="26"/></cols>',
     '<cols><col xmlns:x="urn:test" x:max="26" min="1" max="1000000000"/></cols>',
     '<cols><col min="1" max="&#49;000000000"/></cols>',
-    '<mergeCells><mergeCell xmlns:x="urn:test" x:ref="A1:A1" ref="A1:A1000000000"/></mergeCells>',
   ])(
     'rejects disguised allocation ranges before ExcelJS loads: %s',
     async (markup) => {
@@ -496,7 +667,7 @@ describe('Excel workbook files', () => {
         .mockRejectedValue(new Error('Unexpected ExcelJS load'));
       try {
         await expect(decodeXlsx(zipSync(entries))).rejects.toThrow(
-          /Invalid column|exceeds the supported/
+          /Invalid column|Invalid merged range/
         );
         expect(load).not.toHaveBeenCalled();
       } finally {
@@ -505,34 +676,61 @@ describe('Excel workbook files', () => {
     }
   );
 
+  it('ignores merged ranges past Excel’s grid without allocating them', async () => {
+    const entries = unzipSync(
+      (await encodeXlsx({ sheets: [simpleSheet()] })).bytes
+    );
+    const path = 'xl/worksheets/sheet1.xml';
+    entries[path] = strToU8(
+      strFromU8(entries[path]).replace(
+        '</worksheet>',
+        '<mergeCells><mergeCell xmlns:x="urn:test" x:ref="A1:A1" ref="A1:A1000000000"/></mergeCells></worksheet>'
+      )
+    );
+    const imported = await decodeXlsx(zipSync(entries));
+    expect(imported.sheets[0].metadata?.merges).toBeUndefined();
+    expect(imported.warnings).toContain('Invalid merged ranges were ignored.');
+  });
+
   it.each([
     'xl/worksheets/sheet1.xml.backup',
     'extra/xl/worksheets/sheet1.xml',
+  ])(
+    'ignores worksheet copies the workbook does not reference: %s',
+    async (alias) => {
+      const entries = unzipSync(
+        (await encodeXlsx({ sheets: [simpleSheet()] })).bytes
+      );
+      entries[alias] = strToU8(
+        strFromU8(entries['xl/worksheets/sheet1.xml']).replace(
+          '<v>42</v>',
+          '<v>99</v>'
+        )
+      );
+      const result = await decodeXlsx(zipSync(entries));
+      expect(result.sheets).toHaveLength(1);
+      expect(result.sheets[0].cells.A1.value).toBe('42');
+    }
+  );
+
+  it.each([
     'xl//worksheets/sheet1.xml',
     'xl/./worksheets/sheet1.xml',
     'xl/./workbook.xml',
     'xl//workbook.xml',
-  ])('rejects ZIP path aliases before ExcelJS loads: %s', async (alias) => {
+  ])('rejects ZIP path aliases: %s', async (alias) => {
     const entries = unzipSync(
       (await encodeXlsx({ sheets: [simpleSheet()] })).bytes
     );
     entries[alias] = alias.endsWith('/workbook.xml')
       ? entries['xl/workbook.xml']
       : entries['xl/worksheets/sheet1.xml'];
-    const load = vi
-      .spyOn(xlsxPrototype, 'load')
-      .mockRejectedValue(new Error('Unexpected ExcelJS load'));
-    try {
-      await expect(decodeXlsx(zipSync(entries))).rejects.toThrow(
-        /invalid worksheet path|valid, unencrypted/
-      );
-      expect(load).not.toHaveBeenCalled();
-    } finally {
-      load.mockRestore();
-    }
+    await expect(decodeXlsx(zipSync(entries))).rejects.toThrow(
+      'valid, unencrypted'
+    );
   });
 
-  it('removes whole-sheet validations and named ranges before the parser expands them', async () => {
+  it('reads whole-sheet validations and named ranges without expanding them', async () => {
     const entries = unzipSync(
       (await encodeXlsx({ sheets: [simpleSheet()] })).bytes
     );
@@ -549,31 +747,22 @@ describe('Excel workbook files', () => {
         '<definedNames><definedName name="WholeSheet">\'Sheet 1\'!$A$1:$XFD$1048576</definedName></definedNames></workbook>'
       )
     );
-    const xlsx = new ExcelJS.Workbook().xlsx;
-    const originalLoad = xlsx.load;
-    const load = vi.spyOn(xlsxPrototype, 'load').mockImplementation(function (
-      this: typeof xlsx,
-      buffer: Parameters<typeof xlsx.load>[0]
-    ) {
-      const sanitized = unzipSync(new Uint8Array(buffer));
-      // These guards throw before any potentially unbounded ExcelJS allocation.
-      expect(strFromU8(sanitized[path])).not.toContain('<dataValidations');
-      expect(strFromU8(sanitized['xl/workbook.xml'])).not.toContain(
-        '<definedNames'
-      );
-      return originalLoad.call(this, buffer);
-    });
-    try {
-      const result = await decodeXlsx(zipSync(entries));
-      expect(result.sheets[0].cells.A1.value).toBe('42');
-      expect(result.warnings.join(' ')).toContain('Data validation');
-      expect(result.sheets[0].metadata?.definedNames).toEqual([
-        { name: 'WholeSheet', formula: "'Sheet 1'!$A$1:$XFD$1048576" },
-      ]);
-      expect(load).toHaveBeenCalledOnce();
-    } finally {
-      load.mockRestore();
-    }
+    const started = performance.now();
+    const result = await decodeXlsx(zipSync(entries));
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(result.sheets[0].cells.A1.value).toBe('42');
+    expect(result.sheets[0].metadata?.validations).toEqual([
+      {
+        range: 'A1:XFD100000',
+        type: 'whole',
+        operator: 'between',
+        formulas: ['1'],
+        prompt: '😀 > & "',
+      },
+    ]);
+    expect(result.sheets[0].metadata?.definedNames).toEqual([
+      { name: 'WholeSheet', formula: "'Sheet 1'!$A$1:$XFD$1048576" },
+    ]);
   });
 
   it('normalizes sparse sheet IDs before ExcelJS allocates its worksheet array', async () => {
@@ -656,7 +845,7 @@ describe('Excel workbook files', () => {
     ).rejects.toThrow('names must be unique');
     await expect(
       encodeXlsx({
-        sheets: [{ ...simpleSheet(), cells: { AA1: { value: 'outside' } } }],
+        sheets: [{ ...simpleSheet(), cells: { XFE1: { value: 'outside' } } }],
       })
     ).rejects.toThrow('Unsupported cell');
   });

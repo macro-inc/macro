@@ -3,14 +3,33 @@ import { modelLabel } from './model-label';
 
 describe('modelLabel', () => {
   it('prefers the house name for models the app routes itself', () => {
-    expect(modelLabel('anthropic/claude-sonnet-5')).toBe('Sonnet 5');
+    expect(modelLabel('anthropic/claude-sonnet-5-5')).toBe('Sonnet 5.5');
     expect(modelLabel('openai/gpt-5.6-mini')).toBe('GPT-5.6 mini');
     // Runtimes that drop the provider segment still get the house name.
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
     expect(modelLabel('claude-haiku-4-5')).toBe('Haiku 4.5');
+    expect(modelLabel('fireworks/kimi-k3')).toBe('Kimi K3');
+    expect(modelLabel('kimi-k3')).toBe('Kimi K3');
+    expect(modelLabel('fireworks/deepseek-v4-pro-0813')).toBe(
+      'DeepSeek V4 Pro'
+    );
+    expect(modelLabel('fireworks/muse-glimmer-30b')).toBe('Muse Glimmer');
+    expect(modelLabel('fireworks/glm-5p3')).toBe('GLM 5.3');
+    expect(modelLabel('fireworks/glm-5p3-flash')).toBe('GLM 5.3 Flash');
+    expect(modelLabel('fireworks/qwen3p8-max')).toBe('Qwen 3.8 Max');
+    expect(modelLabel('fireworks/minimax-m3')).toBe('MiniMax M3');
+    expect(modelLabel('cerebras/gpt-oss-120b')).toBe('GPT OSS 120B');
+    expect(modelLabel('fireworks/nemotron-lightning-3p5-30b-a3b')).toBe(
+      'Nemotron Lightning 3.5 30B A3B'
+    );
+    expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
+    expect(modelLabel('gemini-3.8-flash')).toBe('Gemini 3.8 Flash');
   });
 
   it('reads an unknown slug as a name rather than showing it raw', () => {
     expect(modelLabel('anthropic/claude-sonnet-3.8')).toBe('Sonnet 3.8');
+    // Retired Claude ids a session row may still carry read as names too.
+    expect(modelLabel('anthropic/claude-sonnet-5')).toBe('Sonnet 5');
     expect(modelLabel('openai/gpt-5.5')).toBe('GPT-5.5');
     expect(modelLabel('openai/gpt-5-mini')).toBe('GPT-5 mini');
     expect(modelLabel('google/gemini-3.8-flash')).toBe('Gemini 3.8 Flash');

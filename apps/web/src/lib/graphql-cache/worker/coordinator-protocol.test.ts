@@ -1,14 +1,25 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import {
   CACHE_COORDINATOR_PROTOCOL_VERSION,
+  CACHE_STORAGE_VERSION,
+  cacheDatabaseIdentity,
   databaseOwnerLockName,
   isCachePush,
   isCacheRequest,
   isCacheResponse,
+  isStaleCacheDatabaseIdentity,
+  tabIdFromLivenessLockName,
+  tabLivenessLockName,
+  UNVERSIONED_STORAGE_VERSION,
+  validateCleanupToPageEnvelope,
   validateCoordinatorToEngineEnvelope,
   validateCoordinatorToTabEnvelope,
   validateEngineToCoordinatorEnvelope,
+  validatePageToCleanupEnvelope,
   validatePageToEngineEnvelope,
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
@@ -17,6 +28,53 @@ const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;
 
+it.each([undefined, 'DRAFT_ALREADY_SENT', 'INTERNAL', 42, null])(
+  'validates optional rollback and settlement domain code %j',
+  (errorCode) => {
+    const expected = errorCode === undefined || typeof errorCode === 'string';
+    expect(
+      isCacheRequest({
+        id: 1,
+        kind: 'rollback-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        error: 'rejected',
+        errorCode,
+      })
+    ).toBe(expected);
+    expect(
+      isCachePush({
+        kind: 'mutation-settled',
+        settlement: {
+          transactionId: '1',
+          status: 'permanently-failed',
+          error: 'rejected',
+          errorCode,
+        },
+      })
+    ).toBe(expected);
+  }
+);
+
+it.each([undefined, true, false, 'true', 1, null])(
+  'validates retry-budget classification %j',
+  (serverFailure) => {
+    expect(
+      isCacheRequest({
+        id: 1,
+        kind: 'defer-optimistic-write',
+        transactionId: '1',
+        leaseOwner: 'runner',
+        leaseGeneration: '1',
+        nextAttemptAtMs: 100,
+        error: 'failed',
+        serverFailure,
+      })
+    ).toBe(serverFailure === undefined || typeof serverFailure === 'boolean');
+  }
+);
+
 const enginePort = {
   postMessage() {},
   close() {},
@@ -24,6 +82,14 @@ const enginePort = {
 } as unknown as MessagePort;
 
 describe('coordinator runtime protocol', () => {
+  it('accepts a durable-generation read without caller parameters', () => {
+    const request = {
+      id: 1,
+      kind: 'current-storage-generation',
+    };
+    expect(isCacheRequest(request)).toBe(true);
+    expect(isCacheRequest({ ...request, unexpected: true })).toBe(false);
+  });
   it('validates the staged startup handshake and rejects the old ungated protocol', () => {
     const progress = {
       ...version,
@@ -67,6 +133,108 @@ describe('coordinator runtime protocol', () => {
       validateCoordinatorToEngineEnvelope({ ...grant, coordinatorVersion: 2 })
         .ok
     ).toBe(false);
+    // Protocol 5 and earlier granted storage right after assets loaded,
+    // before the lock.
+    expect(
+      validateCoordinatorToEngineEnvelope({ ...grant, coordinatorVersion: 5 })
+        .ok
+    ).toBe(false);
+  });
+
+  it('validates owner-lock retries, unavailability, and stale cleanup envelopes', () => {
+    const waiting = {
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 1,
+      phase: 'awaiting-owner-lock',
+      databaseAction: 'open-existing',
+      timeoutMs: 15_000,
+    };
+    expect(validateCoordinatorToTabEnvelope(waiting).ok).toBe(true);
+    for (const invalid of [
+      { ...waiting, timeoutMs: undefined },
+      { ...waiting, phase: 'owner-lock-blocked' },
+    ]) {
+      expect(validateCoordinatorToTabEnvelope(invalid).ok).toBe(false);
+    }
+    const acquired = {
+      ...version,
+      kind: 'owner-lock-acquired',
+      tabId: 'tab',
+      ownerEpoch: 1,
+    };
+    const busy = { ...acquired, kind: 'owner-lock-busy' };
+    const unavailable = { ...acquired, kind: 'owner-lock-unavailable' };
+    for (const valid of [acquired, busy, unavailable]) {
+      expect(validateEngineToCoordinatorEnvelope(valid).ok).toBe(true);
+    }
+    for (const invalid of [
+      { ...acquired, tabId: '' },
+      { ...acquired, ownerEpoch: 0 },
+      { ...acquired, extra: true },
+      { ...busy, attempt: 2 },
+      { ...unavailable, reason: 'extra' },
+    ]) {
+      expect(validateEngineToCoordinatorEnvelope(invalid).ok).toBe(false);
+    }
+
+    const cacheUnavailable = {
+      ...version,
+      kind: 'cache-unavailable',
+      reason: 'another app version holds the database',
+    };
+    const superseded = {
+      ...version,
+      kind: 'cache-superseded',
+      reason: 'a newer version of the app took over the local cache',
+    };
+    const removeStale = {
+      ...version,
+      kind: 'remove-stale-databases',
+      tabId: 'tab',
+      ownerEpoch: 2,
+    };
+    for (const valid of [cacheUnavailable, superseded, removeStale]) {
+      expect(validateCoordinatorToTabEnvelope(valid).ok).toBe(true);
+    }
+    for (const invalid of [
+      { ...cacheUnavailable, reason: '' },
+      { ...superseded, reason: '' },
+      { ...superseded, buildTime: 1 },
+      { ...removeStale, ownerEpoch: 0 },
+    ]) {
+      expect(validateCoordinatorToTabEnvelope(invalid).ok).toBe(false);
+    }
+
+    const cleanup = { ...version, kind: 'remove-stale-databases', scope: 's' };
+    expect(validatePageToCleanupEnvelope(cleanup).ok).toBe(true);
+    expect(validatePageToCleanupEnvelope({ ...cleanup, scope: '' }).ok).toBe(
+      false
+    );
+    const tally = {
+      ...version,
+      kind: 'stale-databases-removed',
+      removed: 1,
+      inUse: 0,
+      keptWithQueuedMutations: 2,
+      failed: false,
+    };
+    expect(validateCleanupToPageEnvelope(tally).ok).toBe(true);
+    for (const invalid of [
+      { ...tally, removed: -1 },
+      { ...tally, failed: 'no' },
+      { ...tally, extra: true },
+    ]) {
+      expect(validateCleanupToPageEnvelope(invalid).ok).toBe(false);
+    }
+    expect(
+      isCacheResponse({
+        id: 3,
+        ok: false,
+        error: 'owner lock is held elsewhere',
+        errorCode: 'owner-lock-unavailable',
+      })
+    ).toBe(true);
   });
 
   it('validates bounded reconciliation evidence without changing exact requests', () => {
@@ -93,6 +261,76 @@ describe('coordinator runtime protocol', () => {
     expect(valid([{ ...entry, key: 'not-a-normalized-key' }])).toBe(false);
     expect(valid([{ ...entry, sortTimestamp: 123 }])).toBe(false);
     expect(valid([{ ...entry, unexpected: true }])).toBe(false);
+  });
+
+  it('validates calendar range, commit, and uncertain-event requests', () => {
+    const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
+    const rangeRequest = (request: unknown) =>
+      isCacheRequest({ id: 1, kind: 'calendar-range', request });
+    expect(rangeRequest(range)).toBe(true);
+    expect(
+      rangeRequest({ ...range, eventKey: 'GraphqlCalendarEvent:e1' })
+    ).toBe(true);
+    expect(rangeRequest({ ...range, endMs: -1 })).toBe(false);
+    expect(rangeRequest({ ...range, startDay: 0.5 })).toBe(false);
+    expect(rangeRequest({ ...range, eventKey: 'e1' })).toBe(false);
+    expect(rangeRequest({ ...range, extra: true })).toBe(false);
+
+    const commitRequest = (commit: unknown) =>
+      isCacheRequest({ id: 1, kind: 'calendar-commit', commit });
+    expect(commitRequest({})).toBe(true);
+    expect(
+      commitRequest({
+        coverage: [{ kind: 'allDay', start: 0, end: 7 }],
+        replacedEvents: [
+          {
+            eventKey: 'GraphqlCalendarEvent:e1',
+            occurrenceKeys: ['GraphqlCalendarOccurrence:e1:k'],
+          },
+        ],
+        deletedEventKeys: ['GraphqlCalendarEvent:e2'],
+        deletedCalendarKeys: ['GraphqlCalendar:c1'],
+        removedLinkIds: ['l2'],
+        watermark: {
+          kind: 'advance',
+          since: [{ linkId: 'l1', seq: '1' }],
+          to: [{ linkId: 'l1', seq: '9' }],
+        },
+        freshness: 'fresh',
+        reset: false,
+      })
+    ).toBe(true);
+    for (const invalid of [
+      { coverage: [{ kind: 'week', start: 0, end: 1 }] },
+      { deletedEventKeys: ['e2'] },
+      { removedLinkIds: [''] },
+      { watermark: { kind: 'merge', links: [{ linkId: 'l1', seq: 1 }] } },
+      { watermark: { kind: 'merge', links: [{ linkId: 'l1', seq: '-1' }] } },
+      { watermark: { kind: 'replace', links: [] } },
+      { freshness: 'unknown' },
+      { reset: 'yes' },
+      { extra: true },
+    ]) {
+      expect(commitRequest(invalid)).toBe(false);
+    }
+
+    const enqueue = (uncertainCalendarEventKeys: unknown) =>
+      isCacheRequest({
+        id: 1,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: '00000000-0000-4000-8000-000000000001',
+        query: 'mutation M { m }',
+        data: {},
+        uncertainCalendarEventKeys,
+        createdAtMs: 0,
+        owner: 'runner',
+        nowMs: 0,
+        leaseExpiresAtMs: 1,
+      });
+    expect(enqueue(undefined)).toBe(true);
+    expect(enqueue(['GraphqlCalendarEvent:e1'])).toBe(true);
+    expect(enqueue(['e1'])).toBe(false);
+    expect(enqueue(Array(257).fill('GraphqlCalendarEvent:e1'))).toBe(false);
   });
 
   it('validates cache RPCs and rejects unknown fields or kinds', () => {
@@ -257,6 +495,7 @@ describe('coordinator runtime protocol', () => {
       scope: 'scope',
       tabId: 'tab',
       livenessLockName: 'graphql-cache-tab:scope:tab',
+      buildTime: 1_790_000_000_000,
     },
     {
       ...version,
@@ -468,6 +707,26 @@ describe('coordinator runtime protocol', () => {
     expect(
       validateEngineToCoordinatorEnvelope({
         ...version,
+        kind: 'activation-failed',
+        tabId: 'tab',
+        ownerEpoch: 1,
+        reason: 'OPFS sync handle open failed (NoModificationAllowedError)',
+        failureCode: 'storage-busy',
+      }).ok
+    ).toBe(true);
+    expect(
+      validateEngineToCoordinatorEnvelope({
+        ...version,
+        kind: 'activation-failed',
+        tabId: 'tab',
+        ownerEpoch: 1,
+        reason: 'open failed',
+        failureCode: 'busy',
+      }).ok
+    ).toBe(false);
+    expect(
+      validateEngineToCoordinatorEnvelope({
+        ...version,
         kind: 'engine-response',
         ownerEpoch: 1,
         routeId: 7,
@@ -484,6 +743,17 @@ describe('coordinator runtime protocol', () => {
   it('rejects missing versions, non-positive epochs, extra fields, and malformed nested payloads', () => {
     expect(
       validateTabToCoordinatorEnvelope({
+        kind: 'register-tab',
+        scope: 'scope',
+        tabId: 'tab',
+        livenessLockName: 'lock',
+        buildTime: 0,
+      }).ok
+    ).toBe(false);
+    // Every page reports its build, which decides database takeovers.
+    expect(
+      validateTabToCoordinatorEnvelope({
+        ...version,
         kind: 'register-tab',
         scope: 'scope',
         tabId: 'tab',
@@ -525,11 +795,93 @@ describe('coordinator runtime protocol', () => {
   });
 
   it('derives the exact UTF-8 canonical turso-opfs lock name', () => {
+    // The current versions moved past the unversioned name, so the lock
+    // names the versioned database that builds before them never held.
     expect(databaseOwnerLockName('scope')).toBe(
-      'macro:turso-opfs:v1:19:graphql-cache:scope'
+      'macro:turso-opfs:v1:29:graphql-cache:scope:s4.v3.t11'
     );
     expect(databaseOwnerLockName('é')).toBe(
-      'macro:turso-opfs:v1:16:graphql-cache:é'
+      'macro:turso-opfs:v1:26:graphql-cache:é:s4.v3.t11'
     );
+  });
+
+  it('mirrors the storage versions the Rust crates embed in database names', () => {
+    const repositoryRoot = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '../../../../../..'
+    );
+    const rustSource = (path: string): string =>
+      readFileSync(resolve(repositoryRoot, path), 'utf8');
+    const rustConstant = (path: string, name: string): number => {
+      const found = new RegExp(`pub const ${name}: u32 = (\\d+);`).exec(
+        rustSource(path)
+      );
+      if (!found?.[1]) throw new Error(`${name} not found in ${path}`);
+      return Number(found[1]);
+    };
+    const unversioned =
+      /pub const UNVERSIONED_STORAGE_VERSIONS: \(u32, u32, u32\) = \((\d+), (\d+), (\d+)\);/.exec(
+        rustSource('crates/client/cache-core/src/codec.rs')
+      );
+    if (!unversioned) throw new Error('UNVERSIONED_STORAGE_VERSIONS not found');
+    expect(UNVERSIONED_STORAGE_VERSION).toEqual({
+      schemaCompatibilityEpoch: Number(unversioned[1]),
+      formatVersion: Number(unversioned[2]),
+      storageSchemaVersion: Number(unversioned[3]),
+    });
+    expect(CACHE_STORAGE_VERSION).toEqual({
+      schemaCompatibilityEpoch: rustConstant(
+        'crates/client/cache-core/src/codec.rs',
+        'CACHE_SCHEMA_COMPATIBILITY_EPOCH'
+      ),
+      formatVersion: rustConstant(
+        'crates/client/cache-core/src/codec.rs',
+        'CACHE_FORMAT_VERSION'
+      ),
+      storageSchemaVersion: rustConstant(
+        'crates/client/cache-turso/src/storage.rs',
+        'STORAGE_SCHEMA_VERSION'
+      ),
+    });
+  });
+
+  it("recognizes only this scope's older databases as stale", () => {
+    const { schemaCompatibilityEpoch, formatVersion, storageSchemaVersion } =
+      CACHE_STORAGE_VERSION;
+    const own = cacheDatabaseIdentity('a');
+    const versioned = (storage: number): string =>
+      `graphql-cache:a:s${schemaCompatibilityEpoch}.v${formatVersion}.t${storage}`;
+    // The current versions moved past the unversioned name.
+    expect(own).toBe(versioned(storageSchemaVersion));
+    expect(isStaleCacheDatabaseIdentity('a', own)).toBe(false);
+    expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a')).toBe(true);
+    expect(isStaleCacheDatabaseIdentity('a', 'graphql-cache:a:s1.v2.t3')).toBe(
+      true
+    );
+    expect(
+      isStaleCacheDatabaseIdentity('a', versioned(storageSchemaVersion - 1))
+    ).toBe(true);
+    for (const other of [
+      // A newer build may come back after a rollback, so it keeps its file.
+      versioned(storageSchemaVersion + 1),
+      'graphql-cache:a:s99.v0.t0',
+      'graphql-cache:b:s1.v2.t3',
+      'graphql-cache:ab',
+      'graphql-cache:a-wal',
+      'graphql-cache:a:s1.v2',
+      'graphql-cache:a:s1.v2.t3.x',
+      'graphql-cache:quarantine:a',
+    ]) {
+      expect(isStaleCacheDatabaseIdentity('a', other)).toBe(false);
+    }
+    expect(
+      tabIdFromLivenessLockName('a', tabLivenessLockName('a', 'tab-1'))
+    ).toBe('tab-1');
+    expect(
+      tabIdFromLivenessLockName('a', tabLivenessLockName('ab', 'tab-1'))
+    ).toBeUndefined();
+    expect(
+      tabIdFromLivenessLockName('a', 'graphql-cache-tab:a:')
+    ).toBeUndefined();
   });
 });

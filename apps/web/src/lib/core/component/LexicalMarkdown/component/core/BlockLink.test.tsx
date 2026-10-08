@@ -1,8 +1,6 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
-import {
-  createSplitLayout,
-  type SplitManager,
-} from '@components/app/split-layout/layoutManager';
+import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
@@ -22,7 +20,10 @@ vi.mock('@components/app/split-layout/layout', () => ({
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
   resolveComponent: () => ({ element: undefined }),
 }));
-vi.mock('@core/block', () => ({ useMaybeBlockId: () => undefined }));
+vi.mock('@core/block', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/block')>()),
+  useMaybeBlockId: () => undefined,
+}));
 vi.mock('@core/constant/allBlocks', () => ({
   isBlockAlias: () => false,
   resolveBlockAlias: (type: string) => type,
@@ -48,10 +49,7 @@ function setup() {
   } as unknown as BlockOrchestrator;
   const manager = createRoot((dispose) => {
     onTestFinished(dispose);
-    return createSplitLayout(orchestrator, [
-      { type: 'component', id: 'channels' },
-      { type: 'component', id: 'inbox' },
-    ]);
+    return createRoutedSplitLayout(orchestrator, '/channels/~/home');
   });
   const [chat, inbox] = manager.splits();
   manager.activateSplit(inbox.id);

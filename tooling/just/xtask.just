@@ -5,11 +5,13 @@
 # run-local needs.
 xtask := "cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack --"
 
+# Short name for the fully local development stack.
+alias local := run_local
+
 # Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
 #   just run_local                      # default instance
 #   just run_local --instance agent-a   # isolated, concurrent instance
 #   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build
-#   just run_local --enable-onboarding  # opt into the existing onboarding v4 flag
 #   just run_local --no-snapshot        # re-run the full DB/kickstart/index init
 run_local *ARGS:
   {{ xtask }} run-local "$@"

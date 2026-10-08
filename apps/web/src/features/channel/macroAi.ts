@@ -14,14 +14,7 @@ import {
   MACRO_AGENT_NAME,
   MACRO_AGENT_PRINCIPAL_ID,
 } from '@core/constant/macroAgent';
-import {
-  MACRO_CODER_NAME,
-  MACRO_CODER_PRINCIPAL_ID,
-} from '@core/constant/macroCoder';
-import {
-  MACRO_NEW_NAME,
-  MACRO_NEW_PRINCIPAL_ID,
-} from '@core/constant/macroNew';
+import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { IUser } from '@core/user/types';
 
 // Re-export the shared Macro identity under the names used in this package.
@@ -36,50 +29,28 @@ export { isMacroCoderId } from '@core/constant/macroCoder';
 export { isMacroNewId } from '@core/constant/macroNew';
 
 /**
- * A synthetic [`IUser`] entry so Macro appears in the channel `@`-mention
+ * The single synthetic [`IUser`] entry for Macro in the channel `@`-mention
  * typeahead. The mention rides the existing user-mention machinery and is
  * re-tagged as a bot mention at send time (see `authoredMentions`). `email` is set
  * to the display name so the typeahead shows just "Macro". The id uses the
  * canonical `bot|<uuid>` principal form so persisted mention content matches
  * bot sender/participant ids.
+ *
+ * Which Macro answers is the rollout's business, not the mentioning user's:
+ * under chat-v3 `@macro` opens an agent session, otherwise it gets the classic
+ * in-channel reply. Only ever one entry, named "Macro" either way.
  */
-export function macroAiMentionUser(): IUser {
+export function macroMentionUser(agentSessions: boolean): IUser {
   return {
-    id: MACRO_AGENT_PRINCIPAL_ID,
+    id: agentSessions ? MACRO_NEW_PRINCIPAL_ID : MACRO_AGENT_PRINCIPAL_ID,
     name: MACRO_AGENT_NAME,
     email: MACRO_AGENT_NAME,
   };
 }
 
 /**
- * A synthetic [`IUser`] entry so Macro Coder appears in the channel
- * `@`-mention typeahead, exactly like [`macroAiMentionUser`]. Mentioning it
- * opens a sandboxed coding-agent session rather than a chat reply.
- */
-export function macroCoderMentionUser(): IUser {
-  return {
-    id: MACRO_CODER_PRINCIPAL_ID,
-    name: MACRO_CODER_NAME,
-    email: MACRO_CODER_NAME,
-  };
-}
-
-/**
- * A synthetic [`IUser`] entry so macro(new) appears in the channel
- * `@`-mention typeahead, exactly like [`macroAiMentionUser`]. Mentioning it
- * opens an agent session on the in-process runtime rather than a chat reply.
- */
-export function macroNewMentionUser(): IUser {
-  return {
-    id: MACRO_NEW_PRINCIPAL_ID,
-    name: MACRO_NEW_NAME,
-    email: MACRO_NEW_NAME,
-  };
-}
-
-/**
  * The Cursor bot as a synthetic mention user, exactly like
- * [`macroCoderMentionUser`]. Mentioning it opens an agent session served by
+ * [`macroMentionUser`]. Mentioning it opens an agent session served by
  * a Cursor cloud agent.
  */
 export function cursorMentionUser(): IUser {

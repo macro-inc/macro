@@ -132,7 +132,8 @@ class IntegrationCore {
     private readonly logs: RuntimeLog[],
     private readonly activationGates: Map<number, Promise<void>>,
     private readonly hostInitGates: Map<number, Promise<void>>,
-    private readonly enqueueGates: Map<string, Promise<void>>
+    private readonly enqueueGates: Map<string, Promise<void>>,
+    private readonly onOwnerLockAcquired?: () => Promise<void>
   ) {}
 
   addPort(): void {}
@@ -148,6 +149,8 @@ class IntegrationCore {
       query: 'query' in request ? request.query : undefined,
     });
     if (request.kind === 'init') {
+      // Like WASM: hold the owner lock and get the storage grant, then open.
+      if (request.id === 0) await this.onOwnerLockAcquired?.();
       const gate =
         request.id === 0
           ? this.activationGates.get(this.epoch)
@@ -208,13 +211,14 @@ class IntegrationDedicatedWorker {
   ) {
     installCacheEngineWorker({
       scope: this.scope,
-      createCore: () =>
+      createCore: (options) =>
         new IntegrationCore(
           epoch,
           logs,
           activationGates,
           hostInitGates,
-          enqueueGates
+          enqueueGates,
+          options.onOwnerLockAcquired
         ),
       ownerLockIsHeld: async () => true,
     });

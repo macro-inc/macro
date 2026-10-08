@@ -22,6 +22,9 @@ export type DraftFormAttachment =
       type: 'local';
       file: File;
       attachmentId?: string;
+      /** Restored after interruption: remove the uncertain record before re-uploading. */
+      uploadPending?: boolean;
+      uploaded?: boolean;
     }
   | {
       type: 'remote';
@@ -50,7 +53,6 @@ type EmailFormState = {
   replyType: ReplyType;
   withQuotedText: boolean;
   subject: string;
-  sendTime?: Date;
 };
 
 const EMPTY_FORM_STATE: EmailFormState = {
@@ -153,9 +155,6 @@ export function createEmailFormState(
       replyType,
       withQuotedText: draftContainsAppendedReply(),
       subject: initialSubject,
-      sendTime: draft?.scheduled_send_time
-        ? new Date(draft.scheduled_send_time)
-        : undefined,
     } satisfies EmailFormState;
   };
 
@@ -253,10 +252,6 @@ export function createEmailFormState(
     setRecipients('bcc', recalculated.bcc);
   };
 
-  const setSendTime = (date: Date | null) => {
-    setState('sendTime', date ?? undefined);
-  };
-
   const callDirty = () => {
     setEditRevision((revision) => revision + 1);
   };
@@ -285,11 +280,10 @@ export function createEmailFormState(
     selectedInboxId,
     setSelectedInbox,
     editRevision,
-    sendTime: () => state.sendTime,
-    setSendTime,
     reset: () => reset(getInitialState()),
     clear: () => reset({ ...EMPTY_FORM_STATE }),
     attachments: {
+      clear: () => setAttachments([]),
       list: attachments,
       add: (attachment: DraftFormAttachment) => {
         setAttachments((p) => [...p, attachment]);
@@ -301,11 +295,30 @@ export function createEmailFormState(
           )
         );
       },
+      markAttachmentUploaded: (file: File, attachmentId: string) => {
+        setAttachments((previous) =>
+          previous.map((attachment) =>
+            attachment.type === 'local' && attachment.file === file
+              ? {
+                  ...attachment,
+                  attachmentId,
+                  uploadPending: false,
+                  uploaded: true,
+                }
+              : attachment
+          )
+        );
+      },
       clearAttachmentId: (file: File) => {
         setAttachments((p) =>
           p.map((a) =>
             a.type === 'local' && a.file === file
-              ? { ...a, attachmentId: undefined }
+              ? {
+                  ...a,
+                  attachmentId: undefined,
+                  uploadPending: false,
+                  uploaded: false,
+                }
               : a
           )
         );

@@ -110,3 +110,20 @@ export const unsupportedEntityEvent: ActivityEventFieldsFragment = {
   entityId: 'team-1',
   action: { __typename: 'GraphqlActivityCreated' },
 };
+
+/** Someone answered a form (needs the regenerated GraphQL union). */
+export const formRespondedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-14',
+  entityType: 'FORM',
+  entityId: 'form-1',
+  action: { __typename: 'GraphqlActivityResponded' },
+};
+
+export const databaseCreatedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-13',
+  entityType: 'DATABASE',
+  entityId: 'database-1',
+  action: { __typename: 'GraphqlActivityCreated' },
+};

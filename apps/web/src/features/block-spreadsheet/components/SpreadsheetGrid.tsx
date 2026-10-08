@@ -1,5 +1,17 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import type { ConditionalAppearance } from '@macro-inc/spreadsheet/conditional-formatting';
+import {
+  literalNumber,
+  literalNumberDisplay,
+} from '@macro-inc/spreadsheet/number-display';
+import type {
+  DrawingPlacement,
+  SheetChart,
+  SheetDrawing,
+} from '@macro-inc/spreadsheet/sheet-drawings';
+import { sqrefBounds } from '@macro-inc/spreadsheet/sheet-rules';
+import CaretDown from '@phosphor/caret-down.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -16,7 +28,12 @@ import {
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { SPREADSHEET_CLIPBOARD_TYPE } from '../core/cell-copy';
-import type { FormulaTextSelection } from '../core/formula-reference';
+import type { ChartData } from '../core/chart-data';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+  ReferenceHighlight,
+} from '../core/formula-reference';
 import {
   type CellPosition,
   type CellSelection,
@@ -26,6 +43,7 @@ import {
   selectionBounds,
 } from '../core/grid-selection';
 import {
+  columnName,
   DEFAULT_COLUMN_WIDTH,
   MAX_COLUMN_WIDTH,
   MIN_COLUMN_WIDTH,
@@ -35,8 +53,16 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
-import { cellBorderColor, cellForeground } from './cell-colors';
+import { CellListMenu } from './CellListMenu';
+import { ConditionalIcon } from './ConditionalIcon';
+import {
+  cellBackground,
+  cellBorderColor,
+  cellForeground,
+  dataBarBackground,
+} from './cell-colors';
 import { FormulaInput } from './FormulaInput';
+import { type DrawingRect, SheetDrawingLayer } from './SheetDrawingLayer';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
   type HeaderAction,
@@ -48,10 +74,12 @@ export type GridValue = {
   number?: number;
   error?: string;
   warning?: string;
+  conditional?: ConditionalAppearance;
 };
 
 const ROW_HEIGHT = 21;
 const COLUMN_HEADER_HEIGHT = 24;
+const LIST_BUTTON_SIZE = 18;
 const ROW_HEADER_WIDTH = 46;
 const CELL_PADDING_X = 3;
 const CELL_PADDING_Y = 2;
@@ -59,8 +87,44 @@ const CELL_LINE_HEIGHT = 1.2;
 const MAX_ROW_HEIGHT = 160;
 const TOUCH_SLOP = 8;
 
-function fontPixels(cell?: SpreadsheetCell) {
-  return ((cell?.fontSize ?? 10) * 4) / 3;
+export function renderedSelectionCell(
+  root: ParentNode | undefined,
+  selection: CellSelection
+) {
+  if (!root) return;
+  const anchor = root.querySelector<HTMLElement>(
+    `[data-address="${cellAddress(selection.anchor)}"]`
+  );
+  if (anchor) return anchor;
+  const area = selectionBounds(selection);
+  return [...root.querySelectorAll<HTMLElement>('[data-address]')].find(
+    (element) => {
+      const position = parseCellAddress(element.dataset.address ?? '');
+      return (
+        position &&
+        position.row >= area.top &&
+        position.row <= area.bottom &&
+        position.column >= area.left &&
+        position.column <= area.right
+      );
+    }
+  );
+}
+
+function fontPixels(cell?: SpreadsheetCell, defaultSize = 10) {
+  return ((cell?.fontSize ?? defaultSize) * 4) / 3;
+}
+
+/** Index of the last offset at or before `position` (offsets ascend). */
+function offsetIndex(offsets: number[], position: number) {
+  let low = 0;
+  let high = offsets.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (offsets[middle] <= position) low = middle;
+    else high = middle - 1;
+  }
+  return low;
 }
 
 /** Bound measuring work as well as the maximum automatic row height. */
@@ -107,6 +171,9 @@ export function SpreadsheetGrid(props: {
   sheetId?: string;
   complete?: CompleteFormula;
   rowCount?: number;
+  columnCount?: number;
+  /** The imported workbook's font for cells without their own. */
+  defaultFont?: { name: string; size: number };
   columnWidths?: Record<number, number>;
   rowHeights?: Record<number, number>;
   hiddenRows?: number[];
@@ -125,12 +192,39 @@ export function SpreadsheetGrid(props: {
   ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
   values: Record<string, GridValue>;
+  /** Excel notes by address, marked in their cells. */
+  notes?: Record<string, string>;
+  /** The active cell's data validation input message. */
+  inputMessage?: { title?: string; message: string };
+  /** The active cell's list of allowed values, offered in a dropdown. */
+  listItems?: string[];
+  onPickListItem?: (item: string) => void;
+  /** Ranges (Excel sqrefs) whose cells show a dropdown arrow. */
+  dropdownRanges?: string[];
+  /** Images and charts over the sheet. */
+  drawings?: SheetDrawing[];
+  image?: (key: string) => string | undefined;
+  chartData?: (chart: SheetChart) => ChartData;
+  /** The text a cell shows, for shapes linked to it. */
+  cellText?: (reference: string) => string | undefined;
+  onDeleteDrawing?: (id: string) => void;
+  /** Move or size a drawing: its new anchors, at 100% zoom. */
+  onPlaceDrawing?: (id: string, placement: DrawingPlacement) => void;
+  onEditDrawing?: (id: string) => void;
+  /** Scroll to a drawing, select it and focus it, once per nonce. */
+  revealDrawing?: { id: string; nonce: number };
+  /** The first calculation is running; formulas without results shimmer. */
+  pendingFormulas?: boolean;
   remoteCursors: SpreadsheetCursor[];
   selection: CellSelection;
   editing: boolean;
   formulaEditing?: boolean;
   editorSelection?: FormulaTextSelection;
   referenceSelection?: CellSelection;
+  /** The colored ranges of the references in the formula being edited. */
+  referenceHighlights?: ReferenceHighlight[];
+  /** Colored spans of the formula draft's reference text. */
+  draftReferences?: FormulaReferenceSpan[];
   pickingReference?: boolean;
   onTextSelection?: (start: number, end: number) => void;
   onReferenceStart?: (position: CellPosition) => boolean;
@@ -148,6 +242,8 @@ export function SpreadsheetGrid(props: {
   onKeyDown: (event: KeyboardEvent) => void;
   onCopy: (cut?: boolean) => string;
   onPaste: (text: string, metadata?: string) => void;
+  /** Whether a clipboard shortcut fired outside the grid is meant for it. */
+  ownsClipboard?: (event: ClipboardEvent) => boolean;
   onClear: () => void;
   onGridReady: (element: HTMLDivElement) => void;
 }) {
@@ -155,15 +251,36 @@ export function SpreadsheetGrid(props: {
   const [scrollElement, setScrollElement] = createSignal<HTMLDivElement>();
   const viewport = createElementSize(scrollElement);
   const [scrollTop, setScrollTop] = createSignal(0);
+  const [scrollLeft, setScrollLeft] = createSignal(0);
   const [touchMode, setTouchMode] = createSignal(isTouchDevice());
   const scale = () => Math.max(0.5, Math.min(2, (props.zoom ?? 100) / 100));
   const headerHeight = () => COLUMN_HEADER_HEIGHT * scale();
   const headerWidth = () => ROW_HEADER_WIDTH * scale();
   const rowCount = () => props.rowCount ?? GRID_ROWS;
-  const allColumns = Array.from({ length: GRID_COLUMNS }, (_, index) => index);
-  const columns = () =>
-    allColumns.filter((column) => !props.hiddenColumns?.includes(column));
+  const columnCount = () => props.columnCount ?? GRID_COLUMNS;
+  const hiddenColumns = createMemo(() => new Set(props.hiddenColumns));
+  const hiddenRows = createMemo(() => new Set(props.hiddenRows));
+  const defaultFontSize = () => props.defaultFont?.size ?? 10;
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
+  // The cell whose list is open; moving the selection closes it.
+  const [listOpenAt, setListOpenAt] = createSignal<string>();
+  const listButtonShown = () =>
+    !props.readonly &&
+    !props.editing &&
+    !props.formulaEditing &&
+    !!props.listItems?.length;
+  const dropdownBounds = createMemo(() =>
+    (props.dropdownRanges ?? []).flatMap(sqrefBounds)
+  );
+  const hasDropdown = (row: number, column: number) =>
+    dropdownBounds().some(
+      (bounds) =>
+        row >= bounds.top &&
+        row <= bounds.bottom &&
+        column >= bounds.left &&
+        column <= bounds.right
+    );
+  const [selectedDrawing, setSelectedDrawing] = createSignal<string>();
   const [resizing, setResizing] = createSignal<{
     column: number;
     width: number;
@@ -211,9 +328,12 @@ export function SpreadsheetGrid(props: {
     if (props.showFormulas && formula) return cell.value;
     // Newly filled formulas have no cached result yet. Keep them blank until
     // calculation finishes instead of briefly flashing the formula expression.
+    // Literal numbers are formatted as calculation will show them.
     return (
       props.values[address]?.display ??
-      (formula ? '' : cellPlainText(cell?.value ?? ''))
+      (formula
+        ? ''
+        : (literalNumberDisplay(cell) ?? cellPlainText(cell?.value ?? '')))
     );
   };
   const rootStyle = getComputedStyle(document.documentElement);
@@ -222,10 +342,14 @@ export function SpreadsheetGrid(props: {
     serif: rootStyle.getPropertyValue('--font-serif') || 'serif',
     mono: rootStyle.getPropertyValue('--font-mono') || 'monospace',
   };
-  const fontFamily = (cell?: SpreadsheetCell) =>
-    cell?.fontName
-      ? `${JSON.stringify(cell.fontName)}, ${fontFamilies[cell.fontFamily ?? 'sans']}`
+  const fontFamily = (cell?: SpreadsheetCell) => {
+    const name =
+      cell?.fontName ??
+      (cell?.fontFamily ? undefined : props.defaultFont?.name);
+    return name
+      ? `${JSON.stringify(name)}, ${fontFamilies[cell?.fontFamily ?? 'sans']}`
       : fontFamilies[cell?.fontFamily ?? 'sans'];
+  };
   // No cell measurement runs on pointer movement: only document, calculation,
   // column width, and zoom changes invalidate row geometry.
   const context =
@@ -233,14 +357,31 @@ export function SpreadsheetGrid(props: {
       ? null
       : document.createElement('canvas').getContext('2d');
   const rowHeights = createMemo(() => {
-    const heights = Array.from({ length: rowCount() }, (_, row) =>
-      resizingRow()?.row === row
-        ? resizingRow()!.height
-        : Math.max(ROW_HEIGHT, ((props.rowHeights?.[row] ?? 0) * 4) / 3)
-    );
     // Gridlines stay one CSS pixel wide when the workbook is zoomed.
     const borderInset = 1 / scale();
-    for (const [address, cell] of Object.entries(props.cells)) {
+    const verticalInset = CELL_PADDING_Y * 2 + borderInset;
+    const baseHeight = Math.max(
+      ROW_HEIGHT,
+      Math.ceil(
+        fontPixels(undefined, defaultFontSize()) * CELL_LINE_HEIGHT +
+          verticalInset
+      )
+    );
+    const heights = new Array<number>(rowCount()).fill(baseHeight);
+    for (const [row, height] of Object.entries(props.rowHeights ?? {}))
+      if (Number(row) < heights.length)
+        heights[Number(row)] = Math.max(ROW_HEIGHT, (height * 4) / 3);
+    const resized = resizingRow();
+    if (resized && resized.row < heights.length)
+      heights[resized.row] = resized.height;
+    for (const address in props.cells) {
+      const cell = props.cells[address];
+      // Only wrapped text and larger fonts can grow a row.
+      if (
+        !cell.wrap &&
+        (cell.fontSize === undefined || cell.fontSize <= defaultFontSize())
+      )
+        continue;
       const position = parseCellAddress(address);
       if (!position || position.row >= heights.length) continue;
       if (
@@ -248,9 +389,8 @@ export function SpreadsheetGrid(props: {
         resizingRow()?.row === position.row
       )
         continue;
-      const pixels = fontPixels(cell);
+      const pixels = fontPixels(cell, defaultFontSize());
       const lineHeight = pixels * CELL_LINE_HEIGHT;
-      const verticalInset = CELL_PADDING_Y * 2 + borderInset;
       let lines = 1;
       if (cell.wrap) {
         if (context)
@@ -268,9 +408,11 @@ export function SpreadsheetGrid(props: {
         Math.min(MAX_ROW_HEIGHT, Math.ceil(lines * lineHeight + verticalInset))
       );
     }
-    return heights.map((height, row) =>
-      props.hiddenRows?.includes(row) ? 0 : height * scale()
-    );
+    const hidden = hiddenRows();
+    const zoom = scale();
+    for (let row = 0; row < heights.length; row++)
+      heights[row] = hidden.has(row) ? 0 : heights[row] * zoom;
+    return heights;
   });
   const rowOffsets = createMemo(() => {
     const offsets = [headerHeight()];
@@ -283,9 +425,15 @@ export function SpreadsheetGrid(props: {
     const top = scrollTop() - 160;
     const bottom = scrollTop() + (viewport.height ?? 600) + 160;
     const visible: number[] = [];
-    for (let row = 0; row < rowCount(); row++) {
-      if (offsets[row + 1] >= top && offsets[row] <= bottom) visible.push(row);
-    }
+    for (
+      let row = Math.min(
+        rowCount() - 1,
+        offsetIndex(offsets, Math.max(0, top))
+      );
+      row < rowCount() && offsets[row] <= bottom;
+      row++
+    )
+      if (offsets[row + 1] >= top) visible.push(row);
     return visible;
   });
   const visibleRows = createMemo(() =>
@@ -296,7 +444,7 @@ export function SpreadsheetGrid(props: {
         props.selection.focus.row,
       ]),
     ]
-      .filter((row) => !props.hiddenRows?.includes(row))
+      .filter((row) => !hiddenRows().has(row))
       .sort((a, b) => a - b)
   );
   const bounds = createMemo(() =>
@@ -315,15 +463,37 @@ export function SpreadsheetGrid(props: {
   const activeCell = createSelector(() => cellAddress(props.selection.anchor));
   const columnOffsets = createMemo(() => {
     const offsets = [headerWidth()];
-    for (const column of allColumns)
+    const hidden = hiddenColumns();
+    for (let column = 0; column < columnCount(); column++)
       offsets.push(
         offsets[column] +
-          (props.hiddenColumns?.includes(column)
-            ? 0
-            : Number.parseFloat(width(column)))
+          (hidden.has(column) ? 0 : columnWidth(column) * scale())
       );
     return offsets;
   });
+  // Only columns in view (plus the selection) are rendered, like rows.
+  const visibleColumns = createMemo(() => {
+    const offsets = columnOffsets();
+    const left = scrollLeft() - 200;
+    const right = scrollLeft() + (viewport.width ?? 1200) + 200;
+    const visible = new Set<number>();
+    for (
+      let column = Math.min(
+        columnCount() - 1,
+        offsetIndex(offsets, Math.max(0, left))
+      );
+      column < columnCount() && offsets[column] <= right;
+      column++
+    )
+      if (offsets[column + 1] >= left) visible.add(column);
+    visible.add(Math.min(columnCount() - 1, props.selection.anchor.column));
+    visible.add(Math.min(columnCount() - 1, props.selection.focus.column));
+    const hidden = hiddenColumns();
+    return [...visible]
+      .filter((column) => !hidden.has(column))
+      .sort((a, b) => a - b);
+  });
+  const totalWidth = () => columnOffsets()[columnCount()];
   const rangeStyle = (area = bounds()) => {
     const offsets = columnOffsets();
     return {
@@ -333,6 +503,112 @@ export function SpreadsheetGrid(props: {
       height: `${rowOffsets()[area.bottom + 1] - rowOffsets()[area.top]}px`,
     };
   };
+  /** A drawing's box in the grid, when it is near the visible area. */
+  /** A drawing's box in the grid's content, wherever it is. */
+  const drawingRect = (drawing: SheetDrawing): DrawingRect | undefined => {
+    const columns = columnOffsets();
+    const rows = rowOffsets();
+    const at = (index: number, offsets: number[]) =>
+      offsets[Math.min(index, offsets.length - 1)];
+    const left = at(drawing.from.column, columns) + drawing.from.x * scale();
+    const top = at(drawing.from.row, rows) + drawing.from.y * scale();
+    const right = drawing.to
+      ? at(drawing.to.column, columns) + drawing.to.x * scale()
+      : left + (drawing.width ?? 0) * scale();
+    const bottom = drawing.to
+      ? at(drawing.to.row, rows) + drawing.to.y * scale()
+      : top + (drawing.height ?? 0) * scale();
+    if (right - left < 2 || bottom - top < 2) return;
+    return { left, top, width: right - left, height: bottom - top };
+  };
+  /** A drawing's box when it is near the visible area. */
+  const placeDrawing = (drawing: SheetDrawing): DrawingRect | undefined => {
+    const rect = drawingRect(drawing);
+    const margin = 400;
+    if (
+      !rect ||
+      rect.top + rect.height < scrollTop() - margin ||
+      rect.top > scrollTop() + (viewport.height ?? 600) + margin ||
+      rect.left + rect.width < scrollLeft() - margin ||
+      rect.left > scrollLeft() + (viewport.width ?? 1200) + margin
+    )
+      return;
+    return rect;
+  };
+  /**
+   * The anchors of a box in the grid's content: corners in cells for a
+   * drawing that stretches with them, otherwise a corner and a size.
+   */
+  const placementOf = (
+    drawing: SheetDrawing,
+    rect: DrawingRect
+  ): DrawingPlacement => {
+    const point = (x: number, y: number) => {
+      const columns = columnOffsets();
+      const rows = rowOffsets();
+      const column = Math.min(columnCount() - 1, offsetIndex(columns, x));
+      const row = Math.min(rowCount() - 1, offsetIndex(rows, y));
+      return {
+        row,
+        column,
+        x: Math.max(0, Math.round((x - columns[column]) / scale())),
+        y: Math.max(0, Math.round((y - rows[row]) / scale())),
+      };
+    };
+    const from = point(rect.left, rect.top);
+    return drawing.to
+      ? { from, to: point(rect.left + rect.width, rect.top + rect.height) }
+      : {
+          from,
+          width: Math.round(rect.width / scale()),
+          height: Math.round(rect.height / scale()),
+        };
+  };
+  /** Drawings in reading order: down the sheet, then across. */
+  const drawingOrder = () =>
+    [...(props.drawings ?? [])].sort(
+      (a, b) => a.from.row - b.from.row || a.from.column - b.from.column
+    );
+  function revealDrawing(id: string) {
+    const drawing = props.drawings?.find((value) => value.id === id);
+    const rect = drawing && drawingRect(drawing);
+    if (!rect) return;
+    // Bring it into view below the headers, then focus it once drawn.
+    const width = viewport.width ?? 0;
+    const height = viewport.height ?? 0;
+    if (
+      rect.left < grid.scrollLeft + headerWidth() ||
+      rect.left + Math.min(rect.width, width) > grid.scrollLeft + width
+    )
+      grid.scrollLeft = Math.max(0, rect.left - headerWidth() - 16);
+    if (
+      rect.top < grid.scrollTop + headerHeight() ||
+      rect.top + Math.min(rect.height, height) > grid.scrollTop + height
+    )
+      grid.scrollTop = Math.max(0, rect.top - headerHeight() - 16);
+    setScrollTop(grid.scrollTop);
+    setScrollLeft(grid.scrollLeft);
+    setSelectedDrawing(id);
+    // After a menu that opened this returns focus, and once it is drawn.
+    let tries = 0;
+    const focus = () => {
+      const element = grid.querySelector<HTMLElement>(
+        `[data-drawing="${CSS.escape(id)}"]`
+      );
+      if (element) element.focus({ preventScroll: true });
+      else if (tries++ < 20) setTimeout(focus, 16);
+    };
+    setTimeout(focus);
+  }
+  createEffect(
+    on(
+      () => props.revealDrawing,
+      (request) => {
+        if (request) revealDrawing(request.id);
+      },
+      { defer: true }
+    )
+  );
   const activeStyle = () => ({
     left: `${columnOffsets()[props.selection.anchor.column]}px`,
     top: `${rowOffsets()[props.selection.anchor.row]}px`,
@@ -474,11 +750,15 @@ export function SpreadsheetGrid(props: {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     if (!context) return;
-    let measured = MIN_COLUMN_WIDTH;
-    for (let row = 0; row < rowCount(); row++) {
-      const address = cellAddress({ row, column });
+    let measured = Math.max(MIN_COLUMN_WIDTH, 24);
+    const addresses = new Set<string>();
+    for (const source of [props.cells, props.values])
+      for (const address in source)
+        if (parseCellAddress(address)?.column === column)
+          addresses.add(address);
+    for (const address of addresses) {
       const cell = props.cells[address];
-      context.font = `${cell?.italic ? 'italic ' : ''}${cell?.bold ? 600 : 400} ${fontPixels(cell)}px ${fontFamily(cell)}`;
+      context.font = `${cell?.italic ? 'italic ' : ''}${cell?.bold ? 600 : 400} ${fontPixels(cell, defaultFontSize())}px ${fontFamily(cell)}`;
       const text = display(address);
       for (const line of text.split('\n'))
         measured = Math.max(
@@ -507,7 +787,7 @@ export function SpreadsheetGrid(props: {
     if (axis === 'row')
       props.onSelectRange(
         { row: anchor, column: 0 },
-        { row: index, column: GRID_COLUMNS - 1 }
+        { row: index, column: columnCount() - 1 }
       );
     else
       props.onSelectRange(
@@ -530,15 +810,15 @@ export function SpreadsheetGrid(props: {
 
   function positionAtPoint(x: number, y: number): CellPosition {
     const rect = grid.getBoundingClientRect();
-    const column = columnOffsets().findIndex(
-      (offset) => offset > x - rect.left + grid.scrollLeft
+    const column = offsetIndex(
+      columnOffsets(),
+      x - rect.left + grid.scrollLeft
     );
-    const row = rowOffsets().findIndex(
-      (offset) => offset > y - rect.top + grid.scrollTop
-    );
+    const row = offsetIndex(rowOffsets(), y - rect.top + grid.scrollTop);
+    // Offsets start at the first cell after the headers.
     return {
-      row: Math.max(0, row < 0 ? rowCount() - 1 : row - 1),
-      column: Math.max(0, column < 0 ? GRID_COLUMNS - 1 : column - 1),
+      row: Math.min(rowCount() - 1, row),
+      column: Math.min(columnCount() - 1, column),
     };
   }
 
@@ -702,17 +982,97 @@ export function SpreadsheetGrid(props: {
     }
   }
 
+  function copyCells(event: ClipboardEvent) {
+    event.preventDefault();
+    event.clipboardData?.setData('text/plain', props.onCopy());
+    if (props.onCopyMetadata)
+      event.clipboardData?.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata()
+      );
+  }
+  function cutCells(event: ClipboardEvent) {
+    if (!event.clipboardData) return;
+    event.preventDefault();
+    // A viewer can copy with the cut shortcut, but no cells move. Mark its
+    // metadata as a copy so formulas still translate on a later paste.
+    const cut = !props.readonly;
+    event.clipboardData.setData('text/plain', props.onCopy(cut));
+    if (props.onCopyMetadata)
+      event.clipboardData.setData(
+        SPREADSHEET_CLIPBOARD_TYPE,
+        props.onCopyMetadata(cut)
+      );
+    if (cut) props.onClear();
+  }
+  function pasteCells(event: ClipboardEvent) {
+    event.preventDefault();
+    if (!props.readonly && event.clipboardData?.types.includes('text/plain'))
+      props.onPaste(
+        event.clipboardData.getData('text/plain'),
+        event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) || undefined
+      );
+  }
+  // Focus often rests on the toolbar, sheet tabs, split chrome, or the body
+  // while the sheet is the active block; the shortcut still targets cells.
+  function claimsClipboard(event: ClipboardEvent) {
+    const target = event.target;
+    if (
+      event.defaultPrevented ||
+      props.editing ||
+      !(target instanceof Element) ||
+      grid.contains(target) ||
+      isInput(target) ||
+      target.closest('[role="dialog"], [role="menu"], [role="listbox"]')
+    )
+      return false;
+    // Leave a text selection outside the grid to the browser's own copy.
+    const selection = document.getSelection();
+    if (
+      !event.type.endsWith('paste') &&
+      selection &&
+      !selection.isCollapsed &&
+      !grid.contains(selection.anchorNode)
+    )
+      return false;
+    return props.ownsClipboard?.(event) ?? false;
+  }
+  const onDocumentClipboard = (event: ClipboardEvent) => {
+    if (!claimsClipboard(event)) return;
+    if (event.type === 'copy') copyCells(event);
+    else if (event.type === 'cut') cutCells(event);
+    else if (event.type === 'paste') pasteCells(event);
+    // WebKit only dispatches the clipboard event from a non-editable focus
+    // when its before* event is cancelled.
+    else event.preventDefault();
+  };
+  const clipboardEvents = [
+    'beforecopy',
+    'beforecut',
+    'beforepaste',
+    'copy',
+    'cut',
+    'paste',
+  ] as const;
+
   onMount(() => {
     props.onGridReady(grid);
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointermove', movePointer, { passive: false });
     window.addEventListener('pointercancel', cancelPointer);
     window.addEventListener('blur', cancelPointer);
+    for (const type of clipboardEvents)
+      document.addEventListener(type, onDocumentClipboard as EventListener);
     onCleanup(() => {
       window.removeEventListener('pointerup', endPointer);
       window.removeEventListener('pointermove', movePointer);
       window.removeEventListener('pointercancel', cancelPointer);
       window.removeEventListener('blur', cancelPointer);
+      for (const type of clipboardEvents)
+        document.removeEventListener(
+          type,
+          onDocumentClipboard as EventListener
+        );
       stopTouchGesture();
     });
   });
@@ -728,7 +1088,7 @@ export function SpreadsheetGrid(props: {
       preserve &&
       (axis === 'row'
         ? area.left === 0 &&
-          area.right === GRID_COLUMNS - 1 &&
+          area.right === columnCount() - 1 &&
           index >= area.top &&
           index <= area.bottom
         : area.top === 0 &&
@@ -740,7 +1100,7 @@ export function SpreadsheetGrid(props: {
     props.onSelectRange(
       axis === 'row' ? { row: index, column: 0 } : { row: 0, column: index },
       axis === 'row'
-        ? { row: index, column: GRID_COLUMNS - 1 }
+        ? { row: index, column: columnCount() - 1 }
         : { row: rowCount() - 1, column: index }
     );
   }
@@ -780,11 +1140,7 @@ export function SpreadsheetGrid(props: {
     props.onSelectRange(cellMenuSelection.anchor, cellMenuSelection.focus);
     if (action === 'comment') {
       if (props.comments?.canComment())
-        props.comments.add(
-          grid.querySelector<HTMLElement>(
-            `[data-address="${cellAddress(cellMenuSelection.anchor)}"]`
-          ) ?? undefined
-        );
+        props.comments.add(renderedSelectionCell(grid, cellMenuSelection));
     } else if (action === 'copy' || !props.readonly)
       props.onCellAction?.(action);
   }
@@ -814,7 +1170,7 @@ export function SpreadsheetGrid(props: {
           data-keyboard-input
           aria-label="Spreadsheet"
           aria-rowcount={rowCount() + 1}
-          aria-colcount={GRID_COLUMNS + 1}
+          aria-colcount={columnCount() + 1}
           aria-multiselectable="true"
           aria-readonly={props.readonly}
           aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
@@ -826,6 +1182,7 @@ export function SpreadsheetGrid(props: {
           }}
           onScroll={(event) => {
             setScrollTop(event.currentTarget.scrollTop);
+            setScrollLeft(event.currentTarget.scrollLeft);
             if (touchGesture?.kind === 'tap') touchGesture.moved = true;
           }}
           onMouseDown={(event) => {
@@ -870,9 +1227,36 @@ export function SpreadsheetGrid(props: {
               openCellMenu(rect.left + Math.min(rect.width, 24), rect.bottom);
               return;
             }
-            const previous = props.selection.focus;
-            props.onKeyDown(event);
+            // Excel's shortcut to select drawings; Tab then moves among them.
             if (
+              event.altKey &&
+              (event.ctrlKey || event.metaKey) &&
+              event.code === 'Digit5'
+            ) {
+              event.preventDefault();
+              const first = drawingOrder()[0];
+              if (first) revealDrawing(first.id);
+              return;
+            }
+            if (
+              event.altKey &&
+              event.key === 'ArrowDown' &&
+              !props.readonly &&
+              props.listItems?.length
+            ) {
+              event.preventDefault();
+              setListOpenAt(cellAddress(props.selection.anchor));
+              return;
+            }
+            const previous = props.selection.focus;
+            const selectsAll =
+              (event.metaKey || event.ctrlKey) &&
+              event.key.toLowerCase() === 'a';
+            props.onKeyDown(event);
+            // Select all ends at the last cell; revealing it would scroll away
+            // from the cells the user is looking at.
+            if (
+              !selectsAll &&
               !props.editing &&
               (previous.row !== props.selection.focus.row ||
                 previous.column !== props.selection.focus.column)
@@ -880,47 +1264,21 @@ export function SpreadsheetGrid(props: {
               revealSelection();
           }}
           onCopy={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            event.clipboardData?.setData('text/plain', props.onCopy());
-            if (props.onCopyMetadata)
-              event.clipboardData?.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata()
-              );
+            if (!isInput(event.target)) copyCells(event);
           }}
           onCut={(event) => {
-            if (isInput(event.target)) return;
-            if (!event.clipboardData) return;
-            event.preventDefault();
-            // A viewer can copy with the cut shortcut, but no cells move. Mark its
-            // metadata as a copy so formulas still translate on a later paste.
-            const cut = !props.readonly;
-            event.clipboardData.setData('text/plain', props.onCopy(cut));
-            if (props.onCopyMetadata)
-              event.clipboardData.setData(
-                SPREADSHEET_CLIPBOARD_TYPE,
-                props.onCopyMetadata(cut)
-              );
-            if (cut) props.onClear();
+            if (!isInput(event.target)) cutCells(event);
           }}
           onPaste={(event) => {
-            if (isInput(event.target)) return;
-            event.preventDefault();
-            if (
-              !props.readonly &&
-              event.clipboardData?.types.includes('text/plain')
-            )
-              props.onPaste(
-                event.clipboardData.getData('text/plain'),
-                event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) ||
-                  undefined
-              );
+            if (!isInput(event.target)) pasteCells(event);
           }}
         >
           <div
-            class="relative w-max min-w-full"
-            style={{ height: `${rowOffsets()[rowCount()]}px` }}
+            class="relative min-w-full"
+            style={{
+              height: `${rowOffsets()[rowCount()]}px`,
+              width: `${totalWidth()}px`,
+            }}
           >
             <div
               role="row"
@@ -928,6 +1286,7 @@ export function SpreadsheetGrid(props: {
               class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
               style={{
                 height: `${headerHeight()}px`,
+                width: `${totalWidth()}px`,
                 'font-size': `${11 * scale()}px`,
               }}
             >
@@ -944,7 +1303,7 @@ export function SpreadsheetGrid(props: {
                   onClick={() => {
                     props.onSelectRange(
                       { row: 0, column: 0 },
-                      { row: rowCount() - 1, column: GRID_COLUMNS - 1 }
+                      { row: rowCount() - 1, column: columnCount() - 1 }
                     );
                     focusGrid();
                   }}
@@ -952,13 +1311,16 @@ export function SpreadsheetGrid(props: {
                   ▦
                 </button>
               </div>
-              <For each={columns()}>
+              <For each={visibleColumns()}>
                 {(column) => (
                   <div
                     role="columnheader"
                     aria-colindex={column + 2}
-                    style={{ width: width(column) }}
-                    class="relative shrink-0 border-b border-r border-edge-muted"
+                    style={{
+                      width: width(column),
+                      left: `${columnOffsets()[column]}px`,
+                    }}
+                    class="absolute top-0 bottom-0 border-b border-r border-edge-muted"
                     classList={{
                       'bg-accent-bg text-accent':
                         column >= bounds().left && column <= bounds().right,
@@ -981,7 +1343,7 @@ export function SpreadsheetGrid(props: {
                       <button
                         type="button"
                         tabIndex={-1}
-                        aria-label={`Select column ${String.fromCharCode(65 + column)}`}
+                        aria-label={`Select column ${columnName(column)}`}
                         class="size-full hover:bg-hover"
                         onPointerDown={(event) =>
                           startHeader(event, 'column', column)
@@ -997,13 +1359,13 @@ export function SpreadsheetGrid(props: {
                             );
                         }}
                       >
-                        {String.fromCharCode(65 + column)}
+                        {columnName(column)}
                       </button>
                     </SpreadsheetHeaderMenu>
                     <Show when={!props.readonly && props.onResizeColumn}>
                       <div
                         role="separator"
-                        aria-label={`Resize column ${String.fromCharCode(65 + column)}`}
+                        aria-label={`Resize column ${columnName(column)}`}
                         aria-orientation="vertical"
                         aria-valuenow={
                           props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH
@@ -1074,10 +1436,11 @@ export function SpreadsheetGrid(props: {
                 <div
                   role="row"
                   aria-rowindex={row + 2}
-                  class="absolute left-0 flex w-max min-w-full"
+                  class="absolute left-0 flex"
                   style={{
                     top: `${rowOffsets()[row]}px`,
                     height: `${rowHeights()[row]}px`,
+                    width: `${totalWidth()}px`,
                   }}
                 >
                   <div
@@ -1190,7 +1553,7 @@ export function SpreadsheetGrid(props: {
                       />
                     </Show>
                   </div>
-                  <For each={columns()}>
+                  <For each={visibleColumns()}>
                     {(column) => {
                       const address = cellAddress({ row, column });
                       const position = { row, column };
@@ -1198,6 +1561,9 @@ export function SpreadsheetGrid(props: {
                       const selected = () => selectedCell(position);
                       const value = () => props.values[address];
                       const cell = () => props.cells[address];
+                      // Conditional formatting draws over the cell's style.
+                      const look = () => value()?.conditional;
+                      const fill = () => look()?.fillColor ?? cell()?.fillColor;
                       const border = (
                         edge: 'Top' | 'Right' | 'Bottom' | 'Left'
                       ) => {
@@ -1217,13 +1583,34 @@ export function SpreadsheetGrid(props: {
                               : style === 'dotted'
                                 ? 'dotted'
                                 : 'solid';
-                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
+                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], fill())}`;
                       };
+                      // A fill covers the gridlines around its cell, as in
+                      // Excel; the right and bottom lines are drawn here.
+                      const gridline = (edge: 'Right' | 'Bottom') => {
+                        const next = cellAddress(
+                          edge === 'Right'
+                            ? { row, column: column + 1 }
+                            : { row: row + 1, column }
+                        );
+                        return props.showGridlines === false ||
+                          fill() ||
+                          props.values[next]?.conditional?.fillColor ||
+                          props.cells[next]?.fillColor
+                          ? '1px solid transparent'
+                          : undefined;
+                      };
+                      // Before calculation reports it, a literal number
+                      // still aligns as one.
+                      const numeric = () =>
+                        value()
+                          ? value()!.number !== undefined
+                          : literalNumber(cell()) !== undefined;
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
                         return align && align !== 'auto'
                           ? align
-                          : value()?.number !== undefined &&
+                          : numeric() &&
                               !(
                                 props.showFormulas &&
                                 cell()?.value.startsWith('=')
@@ -1231,13 +1618,19 @@ export function SpreadsheetGrid(props: {
                             ? 'right'
                             : 'left';
                       };
+                      const pending = () =>
+                        !!props.pendingFormulas &&
+                        !value() &&
+                        !props.showFormulas &&
+                        !!cell()?.value.startsWith('=') &&
+                        cell()?.format !== 'text';
                       const decorated = () =>
                         !!props.mentions &&
                         !(
                           cell()?.value.startsWith('=') &&
                           cell()?.format !== 'text'
                         ) &&
-                        /<m-(?:user|document)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
+                        /<m-(?:user|document|date)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
                           cell()?.value ?? ''
                         );
                       return (
@@ -1249,9 +1642,16 @@ export function SpreadsheetGrid(props: {
                           aria-selected={selected()}
                           data-address={address}
                           aria-description={
-                            props.comments?.hasComment(address)
-                              ? 'Has comments'
-                              : undefined
+                            [
+                              props.comments?.hasComment(address)
+                                ? 'Has comments'
+                                : '',
+                              props.notes?.[address]
+                                ? `Note: ${props.notes[address]}`
+                                : '',
+                            ]
+                              .filter(Boolean)
+                              .join('. ') || undefined
                           }
                           onMouseEnter={(event) => {
                             if (
@@ -1276,32 +1676,34 @@ export function SpreadsheetGrid(props: {
                           }
                           style={{
                             width: width(column),
+                            left: `${columnOffsets()[column]}px`,
                             'scroll-margin-top': `${headerHeight()}px`,
                             'scroll-margin-left': `${headerWidth()}px`,
                             'border-top': border('Top'),
                             'border-right':
-                              border('Right') ??
-                              (props.showGridlines === false
-                                ? '1px solid transparent'
-                                : undefined),
+                              border('Right') ?? gridline('Right'),
                             'border-bottom':
-                              border('Bottom') ??
-                              (props.showGridlines === false
-                                ? '1px solid transparent'
-                                : undefined),
+                              border('Bottom') ?? gridline('Bottom'),
                             'border-left': border('Left'),
-                            'background-color': cell()?.fillColor || undefined,
+                            'background-color': cellBackground(fill()),
                             color: cellForeground(
-                              cell()?.textColor,
-                              cell()?.fillColor
+                              look()?.textColor ?? cell()?.textColor,
+                              fill()
                             ),
                             'font-family': fontFamily(cell()),
-                            'font-size': `${fontPixels(cell()) * scale()}px`,
-                            'font-style': cell()?.italic ? 'italic' : undefined,
+                            'font-size': `${fontPixels(cell(), defaultFontSize()) * scale()}px`,
+                            'font-style':
+                              (look()?.italic ?? cell()?.italic)
+                                ? 'italic'
+                                : undefined,
                             'text-decoration-line':
                               [
-                                cell()?.underline ? 'underline' : '',
-                                cell()?.strikethrough ? 'line-through' : '',
+                                (look()?.underline ?? cell()?.underline)
+                                  ? 'underline'
+                                  : '',
+                                (look()?.strikethrough ?? cell()?.strikethrough)
+                                  ? 'line-through'
+                                  : '',
                               ]
                                 .filter(Boolean)
                                 .join(' ') || undefined,
@@ -1316,10 +1718,10 @@ export function SpreadsheetGrid(props: {
                               'var(--spreadsheet-cell-padding-y)',
                             'line-height': CELL_LINE_HEIGHT,
                           }}
-                          class="relative flex flex-col shrink-0 border-b border-r border-edge-muted bg-surface text-ink select-none"
+                          class="absolute top-0 bottom-0 flex flex-col border-b border-r border-edge-muted bg-panel text-ink select-none"
                           classList={{
-                            'font-semibold': cell()?.bold,
-                            'tabular-nums': value()?.number !== undefined,
+                            'font-semibold': look()?.bold ?? cell()?.bold,
+                            'tabular-nums': numeric(),
                             'text-failure': !!value()?.error,
                           }}
                           onPointerDown={(event) => {
@@ -1329,6 +1731,7 @@ export function SpreadsheetGrid(props: {
                               isInput(event.target)
                             )
                               return;
+                            setSelectedDrawing(undefined);
                             setTouchMode(event.pointerType === 'touch');
                             if (event.pointerType === 'touch') {
                               if (event.isPrimary === false) {
@@ -1378,11 +1781,34 @@ export function SpreadsheetGrid(props: {
                               props.onEdit();
                           }}
                         >
+                          <Show when={look()?.dataBar}>
+                            {(bar) => (
+                              <span
+                                aria-hidden="true"
+                                data-data-bar
+                                class="pointer-events-none absolute inset-y-0.5"
+                                style={{
+                                  left: `${Math.min(bar().axis, bar().value) * 100}%`,
+                                  width: `${Math.abs(bar().value - bar().axis) * 100}%`,
+                                  background: dataBarBackground(bar()),
+                                }}
+                              />
+                            )}
+                          </Show>
+                          <Show when={look()?.icon}>
+                            {(icon) => (
+                              <ConditionalIcon
+                                name={icon().name}
+                                color={icon().color}
+                              />
+                            )}
+                          </Show>
                           <Show
                             when={active() && props.editing}
                             fallback={
                               <div
-                                class="w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
+                                class="relative w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
+                                classList={{ 'pl-5': !!look()?.icon }}
                                 style={{
                                   'white-space': cell()?.wrap
                                     ? 'pre-wrap'
@@ -1392,11 +1818,31 @@ export function SpreadsheetGrid(props: {
                                     : undefined,
                                 }}
                               >
-                                {decorated()
-                                  ? props.mentions!.renderText(
-                                      cell()!.value.replace(/^'/, '')
-                                    )
-                                  : display(address)}
+                                <Show
+                                  when={!pending()}
+                                  fallback={
+                                    // Results are usually figures, so default to the right.
+                                    <div
+                                      class="skeleton-shimmer h-2 w-1/2 max-w-16 rounded-full bg-skeleton"
+                                      classList={{
+                                        'ml-auto':
+                                          cell()?.horizontalAlign !== 'left',
+                                        'mr-auto':
+                                          cell()?.horizontalAlign === 'left' ||
+                                          cell()?.horizontalAlign === 'center',
+                                      }}
+                                      aria-hidden="true"
+                                    />
+                                  }
+                                >
+                                  {look()?.showValue === false
+                                    ? ''
+                                    : decorated()
+                                      ? props.mentions!.renderText(
+                                          cell()!.value.replace(/^'/, '')
+                                        )
+                                      : display(address)}
+                                </Show>
                               </div>
                             }
                           >
@@ -1407,12 +1853,13 @@ export function SpreadsheetGrid(props: {
                               complete={props.complete}
                               readonly={props.readonly}
                               selectionRequest={props.editorSelection}
+                              references={props.draftReferences}
                               pickingReference={
                                 props.pickingReference ||
                                 (isTouchDevice() && !!props.referenceSelection)
                               }
                               onSelectionChange={props.onTextSelection}
-                              class="absolute inset-0 size-full resize-none overflow-hidden bg-surface px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
+                              class="absolute inset-0 size-full resize-none overflow-hidden bg-panel px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
                               value={props.draft}
                               onInput={props.onDraft}
                               onKeyDown={editKeyDown}
@@ -1420,6 +1867,53 @@ export function SpreadsheetGrid(props: {
                                 if (props.editing) props.onCommit();
                               }}
                             />
+                          </Show>
+                          <Show when={props.notes?.[address]}>
+                            <span
+                              aria-hidden="true"
+                              data-note-marker
+                              class="pointer-events-none absolute right-0 top-0 size-0 border-t-[6px] border-l-[6px] border-t-failure border-l-transparent"
+                            />
+                          </Show>
+                          <Show
+                            when={
+                              hasDropdown(row, column) &&
+                              !(active() && listButtonShown()) &&
+                              !(active() && props.editing)
+                            }
+                          >
+                            <Show
+                              when={!props.readonly}
+                              fallback={
+                                <span
+                                  aria-hidden="true"
+                                  data-dropdown-marker
+                                  class="pointer-events-none absolute right-0.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-ink-muted"
+                                >
+                                  <CaretDown class="size-3" />
+                                </span>
+                              }
+                            >
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                data-dropdown-marker
+                                aria-label={`Choose a value for ${address}`}
+                                class="absolute right-0.5 top-1/2 z-[2] flex size-4 -translate-y-1/2 items-center justify-center rounded-sm bg-transparent p-0 text-ink-muted hover:bg-hover hover:text-ink touch:size-6"
+                                onPointerDown={(event) => {
+                                  if (event.button !== 0) return;
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  props.onCommit();
+                                  props.onSelect(position);
+                                  focusGrid();
+                                  queueMicrotask(() => setListOpenAt(address));
+                                }}
+                                onDblClick={(event) => event.stopPropagation()}
+                              >
+                                <CaretDown class="size-3" />
+                              </button>
+                            </Show>
                           </Show>
                           <Show when={props.comments?.hasComment(address)}>
                             <button
@@ -1497,6 +1991,47 @@ export function SpreadsheetGrid(props: {
                 </>
               )}
             </For>
+            <Show when={props.drawings?.length && props.chartData}>
+              <SheetDrawingLayer
+                drawings={props.drawings ?? []}
+                place={placeDrawing}
+                bounds={{
+                  left: columnOffsets()[0],
+                  top: rowOffsets()[0],
+                }}
+                scale={scale()}
+                image={(key) => props.image?.(key)}
+                chartData={(chart) => props.chartData!(chart)}
+                cellText={(reference) => props.cellText?.(reference)}
+                font={props.defaultFont?.name}
+                selected={selectedDrawing()}
+                readonly={props.readonly || !props.onPlaceDrawing}
+                onSelect={setSelectedDrawing}
+                onDelete={(id) => {
+                  setSelectedDrawing(undefined);
+                  props.onDeleteDrawing?.(id);
+                }}
+                onPlace={(id, rect) => {
+                  const drawing = props.drawings?.find(
+                    (value) => value.id === id
+                  );
+                  if (drawing)
+                    props.onPlaceDrawing?.(id, placementOf(drawing, rect));
+                }}
+                onEdit={(id) => props.onEditDrawing?.(id)}
+                onCycle={(id, backwards) => {
+                  const order = drawingOrder();
+                  const index = order.findIndex((value) => value.id === id);
+                  const next =
+                    order[
+                      (index + (backwards ? -1 : 1) + order.length) %
+                        order.length
+                    ];
+                  if (next) revealDrawing(next.id);
+                }}
+                onReturnFocus={focusGrid}
+              />
+            </Show>
             <div
               aria-hidden="true"
               data-selection-range
@@ -1509,6 +2044,91 @@ export function SpreadsheetGrid(props: {
               class="pointer-events-none absolute z-[2] border-2 border-accent"
               style={activeStyle()}
             />
+            <Show when={listButtonShown() && props.listItems}>
+              {(items) => {
+                const address = () => cellAddress(props.selection.anchor);
+                const size = () =>
+                  Math.min(
+                    rowHeights()[props.selection.anchor.row],
+                    LIST_BUTTON_SIZE * scale()
+                  );
+                return (
+                  <CellListMenu
+                    address={address()}
+                    items={items()}
+                    open={listOpenAt() === address()}
+                    onOpenChange={(open) =>
+                      setListOpenAt(open ? address() : undefined)
+                    }
+                    style={{
+                      left: `${columnOffsets()[props.selection.anchor.column + 1] + 1}px`,
+                      top: `${rowOffsets()[props.selection.anchor.row + 1] - size()}px`,
+                      width: `${size()}px`,
+                      height: `${size()}px`,
+                    }}
+                    onPick={(item) => props.onPickListItem?.(item)}
+                    onRestoreFocus={focusGrid}
+                  />
+                );
+              }}
+            </Show>
+            <Show
+              when={
+                !props.editing &&
+                !props.pickingReference &&
+                listOpenAt() !== cellAddress(props.selection.anchor) &&
+                (props.inputMessage ||
+                  props.notes?.[cellAddress(props.selection.anchor)])
+              }
+            >
+              <div
+                data-cell-note
+                class="pointer-events-none absolute z-[5] max-w-64 whitespace-pre-wrap break-words rounded-md border border-edge-muted bg-surface px-2 py-1.5 text-xs leading-4 text-ink shadow-md"
+                style={{
+                  left: `${columnOffsets()[props.selection.anchor.column] + 8}px`,
+                  top: `${rowOffsets()[props.selection.anchor.row + 1] + 4}px`,
+                }}
+              >
+                <Show when={props.inputMessage}>
+                  {(message) => (
+                    <p>
+                      <Show when={message().title}>
+                        <strong class="block font-semibold">
+                          {message().title}
+                        </strong>
+                      </Show>
+                      {message().message}
+                    </p>
+                  )}
+                </Show>
+                <Show when={props.notes?.[cellAddress(props.selection.anchor)]}>
+                  {(note) => (
+                    <p
+                      classList={{
+                        'mt-1.5 border-t border-edge-muted pt-1.5':
+                          !!props.inputMessage,
+                      }}
+                    >
+                      {note()}
+                    </p>
+                  )}
+                </Show>
+              </div>
+            </Show>
+            <For each={props.referenceHighlights}>
+              {(highlight) => (
+                <div
+                  aria-hidden="true"
+                  data-formula-highlight
+                  class="pointer-events-none absolute z-[3] border-2"
+                  style={{
+                    ...rangeStyle(highlight.bounds),
+                    'border-color': highlight.color,
+                    background: `color-mix(in srgb, ${highlight.color} 10%, transparent)`,
+                  }}
+                />
+              )}
+            </For>
             <Show when={props.referenceSelection}>
               {(range) => (
                 <div

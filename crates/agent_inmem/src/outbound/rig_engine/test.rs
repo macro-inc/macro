@@ -1,29 +1,134 @@
 use super::*;
 use crate::domain::engine::AgentIdentity;
+use agent_session::domain::model::AgentSessionId;
+use ai_toolset::{
+    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
+};
+use async_trait::async_trait;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::sync::Mutex;
 
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-fn has_ask_user(supports_user_input: bool) -> bool {
-    let tools = tools_for(AiHost::AgentSession);
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
-    tools_for_turn(base_tools, supports_user_input)
-        .request_schemas()
-        .expect("tool schemas should be valid")
-        .iter()
-        .any(|schema| schema.name == "AskUser")
+#[test]
+fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
+    let tools = NativeTools::new();
+    let supported = tools.for_turn(true);
+    let unsupported = tools.for_turn(false);
+
+    assert!(supported.tools.contains_key("AskUser"));
+    assert!(!unsupported.tools.contains_key("AskUser"));
+    assert!(Arc::ptr_eq(&supported, &tools.for_turn(true)));
+    assert!(Arc::ptr_eq(&unsupported, &tools.for_turn(false)));
+    assert_eq!(
+        supported
+            .tools
+            .keys()
+            .filter(|name| name.as_str() != "AskUser")
+            .collect::<Vec<_>>(),
+        unsupported.tools.keys().collect::<Vec<_>>()
+    );
+    for tools in [supported, unsupported] {
+        for name in ["SendEmail", "CreateCalendarEvent"] {
+            assert!(tools.user_tools.contains_key(name));
+        }
+    }
 }
 
-#[test]
-fn ask_user_is_only_advertised_when_the_client_supports_it() {
-    assert!(has_ask_user(true));
-    assert!(!has_ask_user(false));
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "ReadTurnContext", description = "Read this call's context.")]
+struct ReadTurnContext {}
+
+impl ToolAnnotated for ReadTurnContext {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read context");
+}
+
+#[async_trait]
+impl AsyncTool<String> for ReadTurnContext {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        context: ServiceContext<String>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        Ok(serde_json::json!({
+            "context": context.0,
+            "user": request.user_id.to_string(),
+        }))
+    }
+}
+
+struct RecordingGate {
+    refused: AgentSessionId,
+    calls: Mutex<Vec<AgentSessionId>>,
+}
+
+impl NativeToolGate for RecordingGate {
+    fn check<'a>(
+        &'a self,
+        session: AgentSessionId,
+        _tool: &'a str,
+        _arguments: &'a serde_json::Value,
+    ) -> std::pin::Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async move {
+            self.calls.lock().unwrap().push(session);
+            if session == self.refused {
+                NativeToolVerdict::Refuse("not approved".to_owned())
+            } else {
+                NativeToolVerdict::Run
+            }
+        })
+    }
+}
+
+#[tokio::test]
+async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gate() {
+    let definitions: Arc<dyn AiToolSet<String> + Send + Sync> =
+        Arc::new(AsyncToolCollection::<String>::new().add_tool::<ReadTurnContext, String>());
+    let allowed = AgentSessionId::new();
+    let refused = AgentSessionId::new();
+    let gate = Arc::new(RecordingGate {
+        refused,
+        calls: Mutex::new(Vec::new()),
+    });
+    for (session, user, label) in [
+        (allowed, "macro|first@example.com", "first turn"),
+        (refused, "macro|second@example.com", "refused turn"),
+        (allowed, "macro|third@example.com", "third turn"),
+    ] {
+        let tools = GatedToolSet {
+            tools: Arc::clone(&definitions),
+            gate: gate.clone(),
+            session,
+            awaiting: Arc::default(),
+        };
+        let result = tools
+            .dispatch_tool_call(
+                label.to_owned(),
+                RequestContext::new(MacroUserIdStr::try_from(user.to_owned()).unwrap()),
+                "ReadTurnContext",
+                &serde_json::json!({}),
+            )
+            .await
+            .unwrap();
+        if session == refused {
+            assert_eq!(result.unwrap_err().description, "not approved");
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                serde_json::json!({"context": label, "user": user})
+            );
+        }
+    }
+    assert_eq!(*gate.calls.lock().unwrap(), vec![allowed, refused, allowed]);
 }
 
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None);
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), None).to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
@@ -43,10 +148,11 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
 #[test]
 fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
     let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, Some(&identity), None, None);
+    let prompt = system_prompt(&TOOLS, Some(&identity), None, None).to_string();
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
@@ -62,7 +168,7 @@ fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
 /// as an instruction.
 #[test]
 fn memory_follows_instructions_rather_than_preceding_them() {
-    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, Some("be terse"), Some("prefers Rust")).to_string();
 
     let instructions = prompt
         .find("<session_instructions>")
@@ -73,11 +179,45 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     assert!(instructions < memory);
 }
 
+/// Two sessions of one agent differ only after the static Macro prompt, so
+/// the part before it is cached once for all of them.
+#[test]
+fn sessions_of_an_agent_share_everything_before_their_instructions() {
+    let identity = AgentIdentity {
+        bot: bot_id::BotId::TEST_A,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    };
+    let first = system_prompt(
+        &TOOLS,
+        Some(&identity),
+        Some("task A"),
+        Some("prefers Rust"),
+    );
+    let second = system_prompt(&TOOLS, Some(&identity), Some("task B"), None);
+
+    let shared = format!(
+        "{}\n{}\n{TOOLS}",
+        prompt::agent_identity::render("Grunk", "grunk"),
+        prompt::agent_session::PROMPT
+    );
+    assert_eq!(first.shared(), Some(shared.as_str()));
+    assert_eq!(second.shared(), Some(shared.as_str()));
+    assert_eq!(
+        first.rest(),
+        "\n<session_instructions>\ntask A\n</session_instructions>\n<user_memory>\nprefers Rust\n</user_memory>"
+    );
+    assert_eq!(
+        second.rest(),
+        "\n<session_instructions>\ntask B\n</session_instructions>"
+    );
+}
+
 /// Absent instructions add no section at all, rather than an empty one the
 /// model would have to interpret.
 #[test]
 fn no_instructions_means_no_section() {
-    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust"));
+    let prompt = system_prompt(&TOOLS, None, None, Some("prefers Rust")).to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -87,7 +227,7 @@ fn no_instructions_means_no_section() {
 /// not become a blank delimited section.
 #[test]
 fn empty_instructions_add_no_section() {
-    let prompt = system_prompt(&TOOLS, None, Some(""), None);
+    let prompt = system_prompt(&TOOLS, None, Some(""), None).to_string();
 
     assert!(!prompt.contains("session_instructions"));
 }

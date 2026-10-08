@@ -143,6 +143,8 @@ impl From<UserEmailLinkSettings> for GraphqlEmailLinkSettings {
 /// Enriched email link accessible to the authenticated user.
 #[derive(SimpleObject)]
 pub struct GraphqlEmailLink {
+    /// Whether drafts from this account's own sender are classified as Signal.
+    draft_is_signal: bool,
     /// Stable email link identifier.
     id: ID,
     /// Macro user that owns the inbox.
@@ -163,6 +165,12 @@ pub struct GraphqlEmailLink {
     settings: GraphqlEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
     is_primary: bool,
+    /// Whether the recorded Google grant lacks the calendar capability.
+    needs_calendar_permission: bool,
+    /// Whether the owner turned the inbox's calendar off.
+    calendar_disabled: bool,
+    /// Whether a calendar account has been provisioned for the inbox.
+    has_calendar_data: bool,
     /// Link creation timestamp in RFC 3339 format.
     created_at: String,
     /// Link last-updated timestamp in RFC 3339 format.
@@ -172,6 +180,7 @@ pub struct GraphqlEmailLink {
 impl From<UserEmailLink> for GraphqlEmailLink {
     fn from(link: UserEmailLink) -> Self {
         Self {
+            draft_is_signal: link.draft_is_signal,
             id: ID(link.id.to_string()),
             macro_id: link.macro_id.to_string(),
             email_address: link.email_address.0.as_ref().to_owned(),
@@ -182,6 +191,9 @@ impl From<UserEmailLink> for GraphqlEmailLink {
             needs_reauth: link.needs_reauth,
             settings: link.settings.into(),
             is_primary: link.is_primary,
+            needs_calendar_permission: link.needs_calendar_permission,
+            calendar_disabled: link.calendar_disabled,
+            has_calendar_data: link.has_calendar_data,
             created_at: link.created_at.to_rfc3339(),
             updated_at: link.updated_at.to_rfc3339(),
         }

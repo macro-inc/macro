@@ -21,6 +21,8 @@ type SendContent = {
   content: string;
   mentions: SimpleMention[];
   attachments?: NewAttachment[];
+  /** An entity owner may need to authorize the resolved DM/channel before sending. */
+  beforeSend?: (channelId: string) => Promise<void>;
 };
 
 type NavigationOptions = {
@@ -52,10 +54,12 @@ export function useSendMessageToPeople() {
     content: string,
     mentions: SimpleMention[],
     attachments: NewAttachment[],
-    navigate?: NavigationOptions
+    navigate?: NavigationOptions,
+    beforeSend?: (channelId: string) => Promise<void>
   ) {
     const senderId = userId();
     if (!senderId) return;
+    await beforeSend?.(channelId);
     const messageResponse = await sendMessage
       .mutateAsync({
         parent: { type: 'channel', id: channelId },
@@ -113,7 +117,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 
@@ -123,7 +128,8 @@ export function useSendMessageToPeople() {
       args.content,
       args.mentions,
       args.attachments ?? [],
-      args.navigate
+      args.navigate,
+      args.beforeSend
     );
   }
 

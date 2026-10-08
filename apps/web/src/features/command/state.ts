@@ -7,6 +7,19 @@ import type { CategoryFilter } from './types';
 /** timestamp threshold for resetting state after menu close */
 const STATE_RESET_THRESHOLD_MS = 2_000;
 
+/**
+ * A suggestion shown above the results for the place the menu was opened
+ * from, e.g. a design's own actions menu. Cleared when the menu closes.
+ */
+export interface CommandMenuHint {
+  message: string;
+  /** The key that runs it, as shown (`⌘P`). */
+  shortcut: string;
+  /** Whether a key press in the menu is that key. */
+  matches: (e: KeyboardEvent) => boolean;
+  run: () => void;
+}
+
 interface ICommandState {
   /** visibility */
   isOpen: Accessor<boolean>;
@@ -51,6 +64,10 @@ interface ICommandState {
   isEntityActionMode: Accessor<boolean>;
   openForEntityAction: (entities: EntityData[]) => void;
 
+  /** a suggestion for where the menu was opened */
+  hint: Accessor<CommandMenuHint | undefined>;
+  setHint: Setter<CommandMenuHint | undefined>;
+
   /** lifecycle */
   maybeResetState: () => void;
   forceReset: () => void;
@@ -78,6 +95,8 @@ function createCommandState(): ICommandState {
   const commandScopePlaceholders = new Map<string, string>();
   const [commandScopePlaceholder, setCommandScopePlaceholder] =
     createSignal<string>();
+
+  const [hint, setHint] = createSignal<CommandMenuHint>();
 
   function registerCommandScopePlaceholder(
     scopeId: string,
@@ -156,6 +175,10 @@ function createCommandState(): ICommandState {
 
   function onMenuClose() {
     setLastClosedTime(Date.now());
+    setHint(undefined);
+    // Opening clears the query too late for a menu that mounts reading it, and
+    // the previous search's results would briefly reappear.
+    clearQuery();
     clearCommandScopeCommands();
     clearEntityActionEntities();
   }
@@ -198,6 +221,9 @@ function createCommandState(): ICommandState {
     clearEntityActionEntities,
     isEntityActionMode,
     openForEntityAction,
+
+    hint,
+    setHint,
 
     maybeResetState,
     forceReset,

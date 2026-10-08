@@ -1,3 +1,4 @@
+import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
@@ -15,12 +16,16 @@ import type {
   CachedQueryVariantWire,
   CacheRevision,
   CacheRevisionResult,
+  CalendarCommitArgs,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
+  HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadRecordsByKeysResult,
@@ -31,6 +36,7 @@ import type {
   WriteResult,
 } from '../protocol';
 import { workerCacheTelemetry } from '../telemetry-relay';
+import type { StaleDatabaseRemovalOutcome } from './stale-databases';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
 export interface CacheStorageResetRequiredError extends Error {
@@ -63,12 +69,14 @@ export interface CacheOpenResult {
   outcome: CacheOpenOutcome;
 }
 
-export type CacheEngineHydrationResult = WriteResult & {
-  data: unknown | null;
-};
+export type CacheEngineHydrationResult = WriteResult &
+  HydrationSearchChanges & {
+    data: unknown | null;
+  };
 
 export interface CacheEngine {
   currentRevision(): Promise<CacheRevision>;
+  currentStorageGeneration(): Promise<string>;
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
@@ -90,6 +98,11 @@ export interface CacheEngine {
   entityFilter(
     request: EntityFilterCacheArgs
   ): Promise<EntityFilterCacheResult>;
+  calendarRange(
+    request: CalendarRangeCacheArgs
+  ): Promise<CalendarRangeCacheResult>;
+  /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
+  calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
   writeQuery(
     context: {
       originOpId?: string;
@@ -111,6 +124,7 @@ export interface CacheEngine {
     data: unknown,
     identity: string | undefined
   ): Promise<CacheEngineHydrationResult>;
+  inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,
     uuid: string,
@@ -120,10 +134,13 @@ export interface CacheEngine {
     data: unknown,
     linkPatches: OptimisticLinkPatchWire[] | undefined,
     revalidations: QueryRevalidationWire[] | undefined,
+    identityBindings: IdentityBindingWire[] | undefined,
     createdAtMs: number,
     leaseOwner: string,
     nowMs: number,
-    leaseExpiresAtMs: number
+    leaseExpiresAtMs: number,
+    clientMetadata?: Record<string, unknown>,
+    uncertainCalendarEventKeys?: string[]
   ): Promise<EnqueueOptimisticMutationResult>;
   inspectQueryVariants(
     query: string,
@@ -146,7 +163,8 @@ export interface CacheEngine {
     leaseOwner: string,
     leaseGeneration: string,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure: boolean
   ): Promise<DeferOptimisticWriteResult>;
   commitOptimisticWrite(
     transactionId: string,
@@ -175,22 +193,45 @@ export interface CacheEngine {
 export interface CacheWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
   openCache(scope: string, hotCapacity?: number): Promise<CacheEngine>;
-  /** Additive open API with a coarse, payload-free recovery outcome. */
+  /**
+   * Additive open API with a coarse, payload-free recovery outcome. When
+   * given, `onOwnerLockAcquired` runs after the owner lock is held and before
+   * any OPFS access; opening continues once its promise resolves. With
+   * `ifAvailable`, a held owner lock rejects at once, touching nothing, with an
+   * error whose `cacheOwnerLockUnavailable` property is `true`. Files another
+   * context keeps open through a bounded wait reject with an error whose
+   * `cacheStorageBusy` property is `true`; a plain open has then changed
+   * neither file.
+   */
   openCacheWithOutcome?(
     scope: string,
-    hotCapacity?: number
+    hotCapacity?: number,
+    onOwnerLockAcquired?: () => Promise<void>,
+    ifAvailable?: boolean
   ): Promise<CacheOpenResult>;
   /** Atomically wipes before Turso open while retaining one OPFS owner lock. */
   openCacheForRecovery(
     scope: string,
     hotCapacity?: number
   ): Promise<CacheEngine>;
-  /** Additive recovery-open API with its coarse wipe outcome. */
+  /** Additive recovery-open API with its coarse wipe outcome; see above for
+   * `onOwnerLockAcquired` and `ifAvailable`, which precede the recovery wipe. */
   openCacheForRecoveryWithOutcome?(
     scope: string,
-    hotCapacity?: number
+    hotCapacity?: number,
+    onOwnerLockAcquired?: () => Promise<void>,
+    ifAvailable?: boolean
   ): Promise<CacheOpenResult>;
   destroyCache(scope: string): Promise<void>;
+  /** Physical database this build opens for `scope`; absent before databases
+   * were named by storage version. */
+  cacheDatabaseIdentity?(scope: string): string;
+  /** Deletes one stale database of `scope` if unused and without queued
+   * mutations; see `staleCacheDatabaseIdentities`. */
+  removeStaleCacheDatabase?(
+    scope: string,
+    identity: string
+  ): Promise<StaleDatabaseRemovalOutcome>;
   /** Optional while older cached WASM artifacts are still in circulation. */
   setSlowQueryCallback?(
     callback: (
@@ -199,6 +240,8 @@ export interface CacheWasmModule {
       success: boolean
     ) => void
   ): void;
+  /** Installs the schema shipped with this frontend before opening storage. */
+  configureCacheSchema(schemaSdl: string): void;
   schemaHash(): string;
   /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
   cacheBuildInfo?(): unknown;
@@ -286,6 +329,10 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
         if (!(exports.memory instanceof WebAssembly.Memory)) {
           throw new Error('cache WASM did not export its linear memory');
         }
+        const { default: schemaSdl } = await import(
+          '../../../../../../static_assets/schema.graphql?raw'
+        );
+        mod.configureCacheSchema(schemaSdl);
         wasmMemory = exports.memory;
         mod.setSlowQueryCallback?.((queryFingerprint, durationMs, success) => {
           telemetry.record({

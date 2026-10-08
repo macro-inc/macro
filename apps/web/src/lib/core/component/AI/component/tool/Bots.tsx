@@ -16,13 +16,13 @@ import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer } from './ToolRenderer';
 
-type Detail = {
+export type Detail = {
   label: string;
   value?: string | null;
   secret?: boolean;
 };
 
-function DetailPanel(props: { details: Detail[]; summary?: string }) {
+export function DetailPanel(props: { details: Detail[]; summary?: string }) {
   const details = () => props.details.filter((detail) => detail.value != null);
 
   return (
@@ -49,13 +49,13 @@ function DetailPanel(props: { details: Detail[]; summary?: string }) {
   );
 }
 
-function ownerLabel(owner: BotOwnerSummary): string {
+export function ownerLabel(owner: BotOwnerSummary): string {
   return owner.type === 'team'
     ? `Team · ${owner.team_id}`
     : `User · ${owner.user_id}`;
 }
 
-function botDetails(bot: BotSummary): Detail[] {
+export function botDetails(bot: BotSummary): Detail[] {
   return [
     { label: 'Bot ID', value: bot.botId, secret: true },
     { label: 'Handle', value: `@${bot.handle}` },

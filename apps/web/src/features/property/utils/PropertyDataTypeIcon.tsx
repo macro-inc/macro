@@ -1,3 +1,4 @@
+import ContactIcon from '@phosphor/address-book.svg';
 import CompanyIcon from '@phosphor/building.svg';
 import CalculatorIcon from '@phosphor/calculator.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -32,6 +33,7 @@ const EntityDataTypeIcon: Component<{
       .with('CHAT', () => ChatIcon)
       .with('CHANNEL', () => HashIcon)
       .with('COMPANY', () => CompanyIcon)
+      .with('CONTACT', () => ContactIcon)
       .with('THREAD', () => ThreadIcon)
       .with('TASK', () => TaskIcon)
       .otherwise(() => SimpleTagIcon);

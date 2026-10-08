@@ -45,6 +45,7 @@ pub mod stack;
 pub mod stage;
 pub mod status;
 pub mod summary;
+pub mod tls;
 pub mod validate;
 
 #[cfg(test)]
@@ -267,6 +268,34 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         })
         .flatten();
 
+    // The preview SSH tunnel, also before env resolution: its hostname is what
+    // the SharePreview script dials. A `tcp://` origin rather than the usual
+    // `http://` — the far side is an SSH transport, not a web server — so the
+    // agent reaches it through `cloudflared access ssh` as a ProxyCommand.
+    // Without it a preview is still shareable, just only by an agent running on
+    // this machine or in the compose network.
+    let preview_ssh_tunnel = (share_app && !stage.is_dry_run())
+        .then(|| {
+            match cf_tunnel::open_tcp(&instance, "preview-ssh", instance.port(Port::PreviewSsh)) {
+                Ok(tunnel) => {
+                    stage.note(&format!("preview ssh tunnel: {}", tunnel.hostname()));
+                    Some(tunnel)
+                }
+                Err(error) => {
+                    stage.note(&format!(
+                        "WARNING: no preview ssh tunnel ({error:#}); agents off this machine \
+                         cannot share a live preview"
+                    ));
+                    None
+                }
+            }
+        })
+        .flatten();
+    // Borrowed by `prepare` below, so the guard itself has to outlive it.
+    let preview_ssh_tunnel_host = preview_ssh_tunnel
+        .as_ref()
+        .map(|tunnel| tunnel.hostname().to_owned());
+
     // The app tunnel does not feed the env, but it degrades the same way: a
     // failure warns and the stack comes up localhost-only.
     let app_tunnel = (share_app && !stage.is_dry_run())
@@ -298,7 +327,10 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         share_app,
         false,
         false,
-        egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
+        local_env::Tunnels {
+            egress: egress_tunnel.as_ref().map(|tunnel| tunnel.url.as_str()),
+            preview_ssh: preview_ssh_tunnel_host.as_deref(),
+        },
     )?;
 
     // Build + stage the shareable bundle in the background (pure host-side
@@ -391,7 +423,6 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
             &instance,
             mode,
             args.traces.enabled() && summary::port_open(4318),
-            args.enable_onboarding,
         )?
     };
 
@@ -411,7 +442,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         mode,
         &instance,
         &env,
-        &frontend::url(&instance),
+        &frontend::https_url(&instance)?,
         &mailpit_url,
         shared_app_url.as_deref(),
     );
@@ -541,7 +572,7 @@ fn run_rebuild(
         recreate_aux_service_containers(stage, instance, env)?;
     }
     if !changed.is_empty() {
-        reload_services(stage, instance, &changed)?;
+        reload_services(stage, instance, env, &changed)?;
     }
     Ok(())
 }
@@ -646,7 +677,7 @@ fn prepare(
     static_frontend: bool,
     pull_app_images: bool,
     infra_only: bool,
-    egress_public_url: Option<&str>,
+    tunnels: local_env::Tunnels<'_>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
@@ -654,7 +685,7 @@ fn prepare(
         args.env.no_doppler,
         args.env.env_file.as_deref(),
         static_frontend,
-        egress_public_url,
+        tunnels,
         args.traces.enabled(),
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
@@ -1075,37 +1106,42 @@ fn disconnect_tracing_network(instance: &Instance) {
     }
 }
 
-/// Restart the given services' containers so they re-exec their freshly built
-/// binaries (bind-mounted at `/app/out`). Uses plain `docker restart -t 0` by
-/// container name — no `docker compose` config parse, no graceful-stop grace,
-/// and only the changed containers — so a reload after a small change is ~1s
-/// rather than bouncing all twelve. Restarting only the changed subset also
-/// avoids the `depends_on` race a full restart hits (a service coming back
-/// before a peer it depends on).
+/// Recreate the given services' containers so they re-exec their freshly built
+/// binaries (bind-mounted at `/app/out`) under the current env file. No
+/// graceful-stop grace, and only the changed containers, so a reload after a
+/// small change bounces one or two services rather than all twelve. Touching
+/// only the changed subset also avoids the `depends_on` race a full restart
+/// hits (a service coming back before a peer it depends on).
 fn reload_services(
     stage: &Stage,
     instance: &Instance,
+    env: &env_layer::ResolvedEnv,
     services: &[&inventory::RustService],
 ) -> Result<()> {
     if stage.is_dry_run() {
         return Ok(());
     }
-    let mut cmd = Command::new("docker");
-    cmd.arg("restart").arg("-t").arg("0");
+    // Recreate rather than `docker restart`: a restart keeps the env the
+    // container was created with, so a build that needs a newly required var
+    // would crash-loop even though the regenerated env file carries it.
+    let mut up = compose_cmd(instance, env);
+    up.args([
+        "up",
+        "-d",
+        "--force-recreate",
+        "--no-deps",
+        "--timeout",
+        "0",
+    ]);
     for svc in services {
-        // Compose names containers `<project>-<service>-1`.
-        cmd.arg(format!(
-            "{}-{}-1",
-            instance.project_name(),
-            svc.compose_name
-        ));
+        up.arg(svc.compose_name);
     }
     let names = services
         .iter()
         .map(|s| s.compose_name)
         .collect::<Vec<_>>()
         .join(", ");
-    stage.run(&format!("Reloading {names}"), &mut cmd)
+    stage.run(&format!("Reloading {names}"), &mut up)
 }
 
 /// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
@@ -1194,8 +1230,14 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
 }
 
 fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
+    let ca = proxy::curl_ca_args(url);
+    let ca_flags = ca
+        .iter()
+        .map(|arg| format!("'{arg}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);

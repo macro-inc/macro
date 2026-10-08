@@ -1,6 +1,7 @@
 import { openPipedreamConnectUI } from '@core/pipedream/connect-ui';
 import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
 import {
   cognitionApiServiceClient,
   PIPEDREAM_DISABLED,
@@ -73,19 +74,15 @@ export function usePipedreamConnectedSlugs(options?: {
   const slugs = createMemo<ReadonlySet<string>>(
     () =>
       new Set(
-        (query.isSuccess ? query.data : NO_CONNECTIONS).map(
+        (queryReadyGate(query) ? query.data : NO_CONNECTIONS).map(
           (connection) => connection.app_slug
         )
       )
   );
-  const ready = () => !query.isPlaceholderData && !query.isPending;
+  const ready = () => !query.isPlaceholderData && queryReadyGate(query);
   return { slugs, ready };
 }
 
-/**
- * Browse or search the Pipedream app catalog, paged by cursor. Entries come
- * from Pipedream's app directory, ranked most-popular-first.
- */
 // Serve the previous search's results (or nothing) instead of suspending:
 // first load must not block the settings page on the directory, and
 // keystrokes must not blank the list while refetching.
@@ -117,6 +114,10 @@ function pipedreamCatalogQueryOptions(search: string) {
   });
 }
 
+/**
+ * Browse or search the Pipedream app catalog, paged by cursor. Entries come
+ * from Pipedream's app directory, ranked most-popular-first.
+ */
 export function usePipedreamCatalogQuery(search: () => string) {
   return useInfiniteQuery(() => pipedreamCatalogQueryOptions(search().trim()));
 }

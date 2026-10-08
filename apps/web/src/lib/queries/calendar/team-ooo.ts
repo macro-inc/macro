@@ -2,16 +2,12 @@ import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
-import {
-  keepPreviousData,
-  queryOptions,
-  useQuery,
-} from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
+import { useCalendarTeamIdentityQuery } from './team';
 
 const TEAM_OOO_PAGE_SIZE = 2000;
-const TEAM_OOO_STALE_TIME = 60_000;
 
 export interface TeamOutOfOfficeQueryInput {
   userId: string | undefined;
@@ -42,11 +38,13 @@ export async function fetchTeamOutOfOffice(
 function teamOutOfOfficeQueryOptions(
   userId: string | undefined,
   range: CalendarOccurrenceQueryRange | undefined,
+  teamId: string | undefined,
   enabled: boolean,
   refetchOnWindowFocus: boolean
 ) {
   return queryOptions({
-    queryKey: calendarKeys.teamOutOfOffice(userId ?? '', range).queryKey,
+    queryKey: calendarKeys.teamOutOfOffice(userId ?? '', range, teamId)
+      .queryKey,
     queryFn: ({ signal }) => {
       if (!range) {
         throw new Error('Team out-of-office range is unavailable');
@@ -54,9 +52,12 @@ function teamOutOfOfficeQueryOptions(
 
       return fetchTeamOutOfOffice(range, signal);
     },
-    enabled: Boolean(userId) && range !== undefined && enabled,
-    staleTime: TEAM_OOO_STALE_TIME,
-    placeholderData: keepPreviousData,
+    enabled:
+      Boolean(userId) && Boolean(teamId) && range !== undefined && enabled,
+    staleTime: 0,
+    gcTime: 0,
+    refetchInterval: 30_000,
+    refetchOnReconnect: 'always',
     refetchOnWindowFocus,
   });
 }
@@ -65,13 +66,23 @@ export function useTeamOutOfOfficeQuery(
   input: Accessor<TeamOutOfOfficeQueryInput>,
   options?: Accessor<TeamOutOfOfficeQueryOptions>
 ) {
+  const identity = useCalendarTeamIdentityQuery(
+    () => input().userId,
+    () => options?.().enabled !== false
+  );
   return useQuery(() => {
     const { userId, range } = input();
     const opts = options?.();
+    const team =
+      identity.isSuccess && !identity.isPaused ? identity.data : undefined;
+    const teamId = team?.members.some((member) => member.user_id === userId)
+      ? team.team.id
+      : undefined;
 
     return teamOutOfOfficeQueryOptions(
       userId,
       range,
+      teamId,
       opts?.enabled !== false,
       opts?.refetchOnWindowFocus ?? true
     );

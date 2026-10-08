@@ -57,6 +57,7 @@ function agent(
     default_model: 'model',
     harness,
     instructions: '',
+    is_coding: harness !== 'in-memory',
     mcp: { scope: 'owner_connections' },
   };
 }
@@ -196,15 +197,28 @@ describe('availableBotMentionUsers', () => {
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
   });
 
-  it('includes channel-selected agents on a document surface only', () => {
-    const selected = agent('doc-only', 'Doc only', 'selected');
+  it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
+    'includes channel-selected agents on a %s discussion surface',
+    (surface) => {
+      const selected = agent('doc-only', 'Doc only', 'selected');
+      expect(
+        availableBotMentionUsers([], [selected], true, 'channel').map(
+          (u) => u.id
+        )
+      ).toEqual([]);
+      expect(
+        availableBotMentionUsers([], [selected], true, surface).map((u) => u.id)
+      ).toEqual(['bot|doc-only']);
+    }
+  );
+
+  it('offers owned and team agents in calls regardless of channel scope', () => {
+    const owned = agent('owned-agent', 'Owned agent', 'selected');
+    const team = agent('team-agent', 'Team agent', 'all');
     expect(
-      availableBotMentionUsers([], [selected], true, 'channel').map((u) => u.id)
-    ).toEqual([]);
-    expect(
-      availableBotMentionUsers([], [selected], true, 'document').map(
-        (u) => u.id
+      availableBotMentionUsers([], [owned, team], true, 'call').map(
+        (user) => user.id
       )
-    ).toEqual(['bot|doc-only']);
+    ).toEqual(['bot|owned-agent', 'bot|team-agent']);
   });
 });

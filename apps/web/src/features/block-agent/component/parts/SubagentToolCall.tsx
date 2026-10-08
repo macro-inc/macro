@@ -14,7 +14,11 @@ import type {
 import { Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { thoughtIsStreaming } from '../../state/thought-streaming';
 import { FoldedOutput, Thought, ToolCard } from '../../ui';
-import type { ToolCallCommon, ToolCallContext } from './shared';
+import {
+  type ToolCallCommon,
+  type ToolCallContext,
+  toolUsedAfter,
+} from './shared';
 import { TextPart } from './TextPart';
 import { ToolCallPart } from './ToolCallPart';
 
@@ -40,10 +44,11 @@ function resultSummary(result: SubagentResult): string | undefined {
 function ChildPart(props: {
   part: MessagePart;
   index: number;
-  childCount: number;
-  context?: ToolCallContext;
+  /** The subagent's parts this one sits among. */
+  siblings: readonly MessagePart[];
+  context: ToolCallContext;
 }) {
-  const inFlight = () => props.context?.inFlight ?? false;
+  const inFlight = () => props.context.inFlight;
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
@@ -56,7 +61,7 @@ function ChildPart(props: {
             active={thoughtIsStreaming(
               inFlight(),
               props.index,
-              props.childCount
+              props.siblings.length
             )}
           />
         )}
@@ -65,13 +70,12 @@ function ChildPart(props: {
         {(part) => (
           <ToolCallPart
             part={part()}
-            context={
-              props.context && {
-                ...props.context,
-                // A child's slot is its own; the parent's index is not it.
-                partIndex: props.index,
-              }
-            }
+            context={{
+              ...props.context,
+              // A child's slot is its own; the parent's index is not it.
+              partIndex: props.index,
+              followedBy: toolUsedAfter(props.siblings, props.index),
+            }}
           />
         )}
       </Match>
@@ -82,16 +86,15 @@ function ChildPart(props: {
 export function SubagentToolCall(props: {
   detail: SubagentDetail;
   common: ToolCallCommon;
-  context?: ToolCallContext;
+  context: ToolCallContext;
 }): JSX.Element {
   const working = () =>
     props.common.status === 'pending' || props.common.status === 'running';
   // Children only shimmer while both the subagent and the turn are live.
-  const childContext = () =>
-    props.context && {
-      ...props.context,
-      inFlight: working() && props.context.inFlight,
-    };
+  const childContext = () => ({
+    ...props.context,
+    inFlight: working() && props.context.inFlight,
+  });
   const subtitle = () =>
     [
       props.detail.agentType ?? 'subagent',
@@ -131,15 +134,22 @@ export function SubagentToolCall(props: {
             )}
           </Show>
           <Show when={props.detail.children.length > 0}>
-            <div class="flex flex-col gap-1 border-l-2 border-edge-muted pl-2">
+            <div
+              role="region"
+              aria-label="Agent activity"
+              tabIndex={0}
+              class="flex max-h-40 flex-col overflow-y-auto overscroll-contain border-l-2 border-edge-muted pl-2"
+            >
               <Index each={props.detail.children}>
                 {(child, index) => (
-                  <ChildPart
-                    part={child()}
-                    index={index}
-                    childCount={props.detail.children.length}
-                    context={childContext()}
-                  />
+                  <div class="min-h-8 shrink-0">
+                    <ChildPart
+                      part={child()}
+                      index={index}
+                      siblings={props.detail.children}
+                      context={childContext()}
+                    />
+                  </div>
                 )}
               </Index>
             </div>

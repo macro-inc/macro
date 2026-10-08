@@ -133,6 +133,12 @@ export const CACHE_OWNER_EVENTS = [
   'abrupt-loss',
   'replacement',
   'multiple-owner-detected',
+  'owner-lock-unavailable',
+  'storage-busy',
+  'takeover-granted',
+  'superseded',
+  'stale-databases-removed',
+  'stale-database-kept',
 ] as const;
 export type CacheOwnerEvent = (typeof CACHE_OWNER_EVENTS)[number];
 
@@ -499,9 +505,10 @@ export function operationCategoryForRequest(
       'read-records-by-keys',
       'search',
       'entity-filter',
+      'calendar-range',
       () => 'read' as const
     )
-    .with('write', 'hydrate', () => 'write' as const)
+    .with('write', 'hydrate', 'calendar-commit', () => 'write' as const)
     .with(
       'enqueue-optimistic-mutation',
       'claim-next-mutation',
@@ -516,7 +523,13 @@ export function operationCategoryForRequest(
       () => 'inspection' as const
     )
     .with('invalidate', 'delete-records', () => 'invalidation' as const)
-    .with('teardown', 'clear', () => 'lifecycle' as const)
+    .with(
+      'teardown',
+      'clear',
+      'current-storage-generation',
+      'inspect-mutations',
+      () => 'lifecycle' as const
+    )
     .exhaustive();
 }
 
@@ -526,6 +539,7 @@ export function isStorageTransactionRequest(
   return [
     'write',
     'hydrate',
+    'calendar-commit',
     'enqueue-optimistic-mutation',
     'claim-next-mutation',
     'defer-optimistic-write',

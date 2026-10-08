@@ -1,18 +1,43 @@
 import { useUserContext } from '@core/context/user';
+import { match, P } from 'ts-pattern';
 import type { EntityData } from '../types/entity';
+
+const OWNER_PRINCIPAL_ROW = [
+  'agent_session',
+  'routine',
+  'calendar_event',
+  'chat',
+  'database',
+  'document',
+  'form',
+  'email',
+  'initiative',
+  'project',
+] as const;
+
+const UNSHARED_ROW = [
+  'call',
+  'channel',
+  'channel_message',
+  'channel_thread',
+  'crm_company',
+  'crm_contact',
+] as const;
+
+export function isSharedWithViewer(
+  entity: EntityData,
+  viewerId: string | undefined
+): boolean {
+  return match(entity)
+    .with({ type: P.union(...OWNER_PRINCIPAL_ROW) }, (row) => {
+      return Boolean(row.ownerId) && row.ownerId !== viewerId;
+    })
+    .with({ type: 'foreign' }, (row) => row.storedForId !== viewerId)
+    .with({ type: P.union(...UNSHARED_ROW) }, () => false)
+    .exhaustive();
+}
 
 export function useIsShared(entity: EntityData) {
   const { userId } = useUserContext();
-  return () => {
-    if (entity.type === 'channel') return false;
-    if (entity.type === 'call') return false;
-    if (entity.type === 'foreign') return entity.storedForId !== userId();
-    if (entity.type === 'crm_company') return false;
-    // A reminder is private to whoever set it, and the API only ever returns
-    // the caller's own, so it carries no ownerId at all — without this the
-    // undefined would never match and every reminder would read as shared.
-    if (entity.type === 'reminder') return false;
-    if (entity.ownerId === userId()) return false;
-    return true;
-  };
+  return () => isSharedWithViewer(entity, userId());
 }

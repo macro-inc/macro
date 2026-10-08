@@ -112,7 +112,7 @@ where
 }
 
 /// Normalize a GitHub PR link, rejecting credentials and removing queries and fragments.
-fn canonical_url(input: &str) -> Result<String> {
+pub(crate) fn canonical_url(input: &str) -> Result<String> {
     let invalid = || AgentSessionError::InvalidPullRequestUrl;
     let (_, owner, repo, number) = lazy_regex::regex_captures!(
         r"\A(?i:https://github\.com)(?::443)?/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)/pull/([0-9]+)/*(?:[?#][^\r\n]*)?\z",

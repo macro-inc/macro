@@ -5,6 +5,8 @@ use email::domain::models::{AttachmentDraft, AttachmentForwarded, MessageAttachm
 
 use super::*;
 
+mod archive;
+
 struct QueryRoot;
 
 #[Object]
@@ -23,6 +25,11 @@ enum CapturedMutation {
     Unread {
         user_id: String,
         thread_id: Uuid,
+    },
+    Archive {
+        user_id: String,
+        thread_id: Uuid,
+        archived: bool,
     },
     Label {
         user_id: String,
@@ -52,15 +59,34 @@ struct CapturingEmailMutationService {
     delete_reports_missing: std::sync::atomic::AtomicBool,
     attachment_load_fails: bool,
     thread_load_fails: bool,
+    thread_load_missing: bool,
     attachments: Vec<MessageAttachment>,
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
     reject_unread: bool,
+    reject_archive: bool,
 }
 
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
 
 impl EmailMutationService for CapturingEmailMutationService {
+    async fn set_email_thread_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        archived: bool,
+    ) -> Result<(), EmailErr> {
+        self.calls.lock().unwrap().push(CapturedMutation::Archive {
+            user_id: user_id.to_string(),
+            thread_id,
+            archived,
+        });
+        if self.reject_archive {
+            return Err(EmailErr::ThreadNotFound);
+        }
+        Ok(())
+    }
+
     async fn mark_email_thread_seen(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -195,11 +221,13 @@ impl EmailMutationService for CapturingEmailMutationService {
             .load(std::sync::atomic::Ordering::SeqCst)
         {
             return Ok(DeletedUserDraft {
+                thread_id: None,
                 deleted: false,
                 thread_deleted: false,
             });
         }
         Ok(DeletedUserDraft {
+            thread_id: None,
             deleted: true,
             thread_deleted: true,
         })
@@ -227,6 +255,7 @@ struct TestEmailThreadOutput;
 fn deterministic_draft_rejections_do_not_allow_retries() {
     for error in [
         EmailErr::MessageAlreadySent(Uuid::nil()),
+        EmailErr::MessageDeliveryConflict(Uuid::nil()),
         EmailErr::MessageNotFound(Uuid::nil()),
         EmailErr::ThreadNotFound,
         EmailErr::InboxNotFound,
@@ -236,6 +265,16 @@ fn deterministic_draft_rejections_do_not_allow_retries() {
         let mapped = draft_mutation_error(&error);
         assert_eq!(mapped.extensions.as_ref().unwrap().get("retryable"), None);
     }
+}
+
+#[test]
+fn scheduled_draft_conflict_is_a_deterministic_invalid_save() {
+    let mapped = draft_mutation_error(&EmailErr::MessageDeliveryConflict(Uuid::nil()));
+    assert_eq!(
+        mapped.extensions.as_ref().unwrap().get("code"),
+        Some(&async_graphql::Value::from("INVALID")),
+    );
+    assert_eq!(mapped.extensions.as_ref().unwrap().get("retryable"), None);
 }
 
 #[derive(SimpleObject)]
@@ -254,11 +293,12 @@ impl EmailThreadMutationOutput for TestEmailThreadOutput {
     ) -> Pin<Box<dyn Future<Output = async_graphql::Result<Option<Self::Thread>>> + Send + 'ctx>>
     {
         Box::pin(async move {
-            if ctx
-                .data::<Arc<CapturingEmailMutationService>>()?
-                .thread_load_fails
-            {
+            let service = ctx.data::<Arc<CapturingEmailMutationService>>()?;
+            if service.thread_load_fails {
                 return Err(async_graphql::Error::new("thread loading failed"));
+            }
+            if service.thread_load_missing {
+                return Ok(None);
             }
             Ok(Some(TestEmailThread {
                 id: ID(thread_id.to_string()),
@@ -591,13 +631,13 @@ async fn save_email_draft_does_not_return_a_message_when_attachment_loading_fail
             .as_ref()
             .unwrap()
             .get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
+        None
     );
     assert!(response.data.into_json().unwrap().is_null());
 }
 
 #[tokio::test]
-async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
+async fn save_email_draft_reports_internal_error_when_the_post_save_thread_reload_fails() {
     let service = Arc::new(CapturingEmailMutationService {
         thread_load_fails: true,
         ..Default::default()
@@ -616,10 +656,7 @@ async fn save_email_draft_can_retry_when_the_post_save_thread_reload_fails() {
         extensions.get("code"),
         Some(&async_graphql::Value::from("INTERNAL"))
     );
-    assert_eq!(
-        extensions.get("retryable"),
-        Some(&async_graphql::Value::Boolean(true))
-    );
+    assert_eq!(extensions.get("retryable"), None);
     assert!(response.data.into_json().unwrap().is_null());
 }
 

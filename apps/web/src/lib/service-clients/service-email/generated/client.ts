@@ -25,6 +25,7 @@ import type {
   GetBackfillJobResponse,
   GetScheduledMessagesParams,
   GetScheduledResponse,
+  GetThreadCalendarInvitations200,
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
@@ -871,9 +872,19 @@ export type upsertScheduledMessageResponse200 = {
   status: 200;
 };
 
+export type upsertScheduledMessageResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
 export type upsertScheduledMessageResponse401 = {
   data: ErrorResponse;
   status: 401;
+};
+
+export type upsertScheduledMessageResponse403 = {
+  data: ErrorResponse;
+  status: 403;
 };
 
 export type upsertScheduledMessageResponse404 = {
@@ -891,7 +902,9 @@ export type upsertScheduledMessageResponseSuccess =
     headers: Headers;
   };
 export type upsertScheduledMessageResponseError = (
+  | upsertScheduledMessageResponse400
   | upsertScheduledMessageResponse401
+  | upsertScheduledMessageResponse403
   | upsertScheduledMessageResponse404
   | upsertScheduledMessageResponse500
 ) & {
@@ -931,7 +944,7 @@ export const upsertScheduledMessage = async (
 };
 
 /**
- * @summary Remove the scheduled send from a draft.
+ * @summary Remove the scheduled send from a draft, including immediate-send undo.
  */
 export type deleteScheduledDraftResponse204 = {
   data: void;
@@ -946,6 +959,11 @@ export type deleteScheduledDraftResponse400 = {
 export type deleteScheduledDraftResponse401 = {
   data: ErrorResponse;
   status: 401;
+};
+
+export type deleteScheduledDraftResponse403 = {
+  data: ErrorResponse;
+  status: 403;
 };
 
 export type deleteScheduledDraftResponse404 = {
@@ -965,6 +983,7 @@ export type deleteScheduledDraftResponseSuccess =
 export type deleteScheduledDraftResponseError = (
   | deleteScheduledDraftResponse400
   | deleteScheduledDraftResponse401
+  | deleteScheduledDraftResponse403
   | deleteScheduledDraftResponse404
   | deleteScheduledDraftResponse500
 ) & {
@@ -2968,6 +2987,61 @@ export const getThread = async (
     status: res.status,
     headers: res.headers,
   } as getThreadResponse;
+};
+
+export type getThreadCalendarInvitationsResponse200 = {
+  data: GetThreadCalendarInvitations200;
+  status: 200;
+};
+
+export type getThreadCalendarInvitationsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getThreadCalendarInvitationsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getThreadCalendarInvitationsResponseSuccess =
+  getThreadCalendarInvitationsResponse200 & {
+    headers: Headers;
+  };
+export type getThreadCalendarInvitationsResponseError = (
+  | getThreadCalendarInvitationsResponse401
+  | getThreadCalendarInvitationsResponse403
+) & {
+  headers: Headers;
+};
+
+export type getThreadCalendarInvitationsResponse =
+  | getThreadCalendarInvitationsResponseSuccess
+  | getThreadCalendarInvitationsResponseError;
+
+export const getGetThreadCalendarInvitationsUrl = (threadId: string) => {
+  return `/email/threads/${threadId}/calendar-invitations`;
+};
+
+export const getThreadCalendarInvitations = async (
+  threadId: string,
+  options?: RequestInit
+): Promise<getThreadCalendarInvitationsResponse> => {
+  const res = await fetch(getGetThreadCalendarInvitationsUrl(threadId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadCalendarInvitationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadCalendarInvitationsResponse;
 };
 
 /**

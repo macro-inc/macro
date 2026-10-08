@@ -1,9 +1,9 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
-import { SplitRouter } from '@app/split-router';
+import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createMemo, Show, Suspense } from 'solid-js';
+import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -22,7 +22,7 @@ export function DriveLoading() {
   );
 }
 
-export function DriveWorkspace() {
+export function DriveWorkspace(props: { tour?: JSX.Element }) {
   const { state, sidebar, actions } = useDriveView();
 
   const breadcrumbs = createMemo(() =>
@@ -63,10 +63,11 @@ export function DriveWorkspace() {
             </ViewShell.Aside>
             <ViewShell.Main>
               <Show
-                when={navigation.active()}
+                when={navigation.active() || navigation.activeCallId()}
                 fallback={
                   <>
                     <DriveHeader />
+                    {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
                         <DriveFileDropzone onDrop={actions.dropFiles}>
@@ -77,7 +78,9 @@ export function DriveWorkspace() {
                   </>
                 }
               >
-                <SplitRouter.Outlet />
+                <Suspense fallback={<DriveLoading />}>
+                  <SplitRouter.Outlet />
+                </Suspense>
               </Show>
             </ViewShell.Main>
           </ViewShell.Root>

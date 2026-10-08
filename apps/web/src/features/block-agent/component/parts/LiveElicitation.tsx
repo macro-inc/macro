@@ -317,6 +317,14 @@ export function parseDraftedTool(
   request: UserToolRequest,
   toolCall: string
 ): DraftedTool | undefined {
+  // Old sessions may still contain a booking review. Keep its internal IDs out
+  // of the generic form and let the user dismiss it to resume the conversation.
+  if (
+    request.tool === 'CreateBookingLink' ||
+    request.tool === 'EditBookingLink'
+  ) {
+    return { name: request.tool, data: request.draft };
+  }
   const call = deserializeToolCall({
     id: toolCall,
     name: request.tool,
@@ -354,6 +362,27 @@ export function UserToolComposer(props: {
   const locked = () => !props.review.canAnswer();
   return (
     <Switch fallback={props.fallback}>
+      <Match
+        when={
+          props.tool.name === 'CreateBookingLink' ||
+          props.tool.name === 'EditBookingLink'
+        }
+      >
+        <div class="flex flex-col items-start gap-2 text-sm text-ink-muted">
+          <p>
+            Booking links are now confirmed in conversation. Dismiss this older
+            request and ask the agent to summarize the details.
+          </p>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={locked()}
+            onClick={() => void props.review.respond({ action: 'decline' })}
+          >
+            Dismiss request
+          </Button>
+        </div>
+      </Match>
       <Match when={props.tool.name === 'CreateCalendarEvent'}>
         <CalendarDraftComposer
           initialData={props.tool.data as CreateCalendarEvent}
@@ -371,7 +400,7 @@ export function UserToolComposer(props: {
           <Show when={props.cancel}>
             <div class="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="xs"
                 disabled={locked()}
                 onClick={() => void props.review.respond({ action: 'decline' })}

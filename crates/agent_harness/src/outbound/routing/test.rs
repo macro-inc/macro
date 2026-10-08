@@ -127,6 +127,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never looks sessions up by egress token")
     }
 
+    async fn find(&self, _id: AgentSessionId) -> SessionResult<Option<AgentSession>> {
+        unimplemented!("the router never probes for a missing session")
+    }
+
     async fn preview(
         &self,
         _viewer: &MacroUserIdStr<'static>,
@@ -158,6 +162,7 @@ impl AgentSessionRepo for FixedBotSessions {
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
+            is_archived: false,
             sandbox_size: SandboxSize::Default,
             instructions: None,
             mcp_servers: Default::default(),
@@ -212,6 +217,21 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("this adapter does not rotate credentials")
     }
 
+    async fn set_turn_prompter(
+        &self,
+        _id: AgentSessionId,
+        _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn turn_prompter(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Option<agent_session::domain::model::TurnPrompter>> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
     async fn set_repo_url(
         &self,
         _id: AgentSessionId,
@@ -226,6 +246,10 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn set_name(&self, _id: AgentSessionId, _name: &str) -> SessionResult<()> {
         unimplemented!("naming sessions is the session actor's job")
+    }
+
+    async fn set_archived(&self, _id: AgentSessionId, _is_archived: bool) -> SessionResult<()> {
+        unimplemented!("archiving sessions is the harness service's job")
     }
 
     async fn set_name_if_default(&self, _id: AgentSessionId, _name: &str) -> SessionResult<bool> {
@@ -249,6 +273,21 @@ impl AgentSessionRepo for FixedBotSessions {
         _size: SandboxSize,
     ) -> SessionResult<()> {
         unimplemented!("resizing is the harness service's job")
+    }
+
+    async fn list_queued_actions(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<Vec<agent_session::domain::model::StoredQueuedAction>> {
+        unimplemented!("the router never reads the queue")
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        _id: AgentSessionId,
+        _entries: &[agent_session::domain::model::StoredQueuedAction],
+    ) -> SessionResult<()> {
+        unimplemented!("the router never writes the queue")
     }
 }
 

@@ -1,12 +1,22 @@
-import type { CrmCompanyEntity } from '@entity';
-import type { CacheChangeOptions } from '@graphql-cache/host/types';
+import type {
+  CrmCompanyEntity,
+  CrmContactEntity,
+  InitiativeEntity,
+} from '@entity';
+import type {
+  CacheChangeListener,
+  CacheChangeOptions,
+} from '@graphql-cache/host/types';
 import type {
   SearchCacheArgs,
   SearchCachePage,
   SearchDocumentWire,
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
+import type { HydrationSearchChanges } from '@graphql-cache/protocol';
+import type { CachedGraphqlChannel } from '@queries/channel/graphql';
 import type { HistoryItem } from '@queries/history/types';
+import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import { render } from '@solidjs/testing-library';
 import {
   QueryClient,
@@ -29,17 +39,26 @@ import {
   BUCKET_COMBINATIONS,
   type Bucket,
   type QuickAccessContextValue,
+  type QuickAccessListOptions,
 } from './types';
 
 const mocks = vi.hoisted(() => ({
   search: vi.fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>(),
   history: [] as HistoryItem[],
-  changed: undefined as (() => void) | undefined,
+  channels: vi.fn(() => []),
+  cachedChannels: (): CachedGraphqlChannel[] => [],
+  projectedChannels: [] as CachedGraphqlChannel[],
+  changed: undefined as
+    | ((changes?: HydrationSearchChanges) => void)
+    | undefined,
   unsubscribe: vi.fn(),
   channelRefetch: vi.fn(),
   onCacheChanged: vi.fn(),
   readRecordsByKeys: vi.fn(),
   companies: [] as CrmCompanyEntity[],
+  crmContacts: [] as CrmContactEntity[],
+  initiatives: [] as InitiativeEntity[],
+  databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
@@ -51,6 +70,8 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: {},
+  enableDatabases: {},
+  enableForms: {},
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -60,7 +81,10 @@ vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name: string }) => item.name,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: () => [], isLoading: () => false }),
+  useChannelsContext: () => ({
+    channels: () => mocks.channels(),
+    isLoading: () => false,
+  }),
   useDmActivityByUserId: () => () => new Map(),
 }));
 vi.mock('@core/user', () => ({
@@ -70,14 +94,24 @@ vi.mock('@core/user', () => ({
 vi.mock('@queries/channel/channels', () => ({
   useCachedGraphqlChannelsQuery: () =>
     mocks.queries.channels?.() ?? {
-      data: [],
+      get data() {
+        return mocks.cachedChannels();
+      },
       isSuccess: true,
       isLoading: false,
       refetch: mocks.channelRefetch,
     },
 }));
 vi.mock('@queries/channel/graphql', () => ({
-  materializeCachedGraphqlChannels: async () => [],
+  materializeCachedGraphqlChannels: async (
+    _host: unknown,
+    documents: SearchDocumentWire[]
+  ) =>
+    mocks.projectedChannels.filter((channel) =>
+      documents.some(
+        (document) => document.recordKey === `GraphqlSoupChannel:${channel.id}`
+      )
+    ),
 }));
 vi.mock('@queries/history/history', () => ({
   useHistoryQuery: () =>
@@ -106,10 +140,24 @@ vi.mock('@queries/history/graphql', () => ({
 vi.mock('@queries/soup/quick-access-agent-sessions', () => ({
   useQuickAccessAgentSessionsQuery: () => ({ query: {}, sessions: () => [] }),
 }));
-vi.mock('@queries/soup/quick-access-crm-companies', () => ({
+vi.mock('@queries/soup/quick-access-initiatives', () => ({
+  useQuickAccessInitiativesQuery: () => ({
+    query: { refetch: vi.fn() },
+    initiatives: () => mocks.initiatives,
+  }),
+}));
+vi.mock('@app/features/crm/crm-search', async () => ({
+  ...(await import('@app/features/crm/queries/graphql')),
   useQuickAccessCrmCompaniesQuery: () => ({
     query: {},
     companies: () => mocks.companies,
+  }),
+}));
+vi.mock('@app/features/crm/record-adapter', async () => ({
+  ...(await import('@app/features/crm/queries/graphql')),
+  useQuickAccessCrmContactsQuery: () => ({
+    query: { refetch: vi.fn() },
+    contacts: () => mocks.crmContacts,
   }),
 }));
 vi.mock('@queries/soup/quick-access-skills', () => ({
@@ -124,6 +172,12 @@ vi.mock('@queries/soup/recently-viewed', () => ({
 }));
 vi.mock('@queries/storage/instructions-md', () => ({
   useInstructionsMdIdQuery: () => ({ data: undefined }),
+}));
+vi.mock('@queries/storage/databases', () => ({
+  useDatabasesQuery: () => ({ data: mocks.databases, isSuccess: true }),
+}));
+vi.mock('@queries/storage/forms', () => ({
+  useFormsQuery: () => ({ data: [], isSuccess: true }),
 }));
 vi.mock('@service-storage/util/filename', () => ({
   formatDocumentName: (name: string) => name,
@@ -170,7 +224,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   mocks.history = [];
+  mocks.channels.mockReset().mockReturnValue([]);
+  mocks.cachedChannels = () => [];
+  mocks.projectedChannels = [];
   mocks.companies = [];
+  mocks.crmContacts = [];
+  mocks.initiatives = [];
+  mocks.databases = [];
   mocks.crmEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
@@ -181,10 +241,17 @@ beforeEach(() => {
     ],
   });
   mocks.search.mockReset().mockResolvedValue(page(0, 0));
+  const listeners = new Set<CacheChangeListener>();
+  mocks.changed = (changes) => {
+    for (const callback of listeners) callback(INITIAL_CACHE_REVISION, changes);
+  };
   mocks.onCacheChanged.mockImplementation(
-    (callback: () => void, _options: CacheChangeOptions) => {
-      mocks.changed = callback;
-      return mocks.unsubscribe;
+    (callback: CacheChangeListener, _options: CacheChangeOptions) => {
+      listeners.add(callback);
+      return () => {
+        listeners.delete(callback);
+        mocks.unsubscribe();
+      };
     }
   );
 });
@@ -222,6 +289,33 @@ const restCompany: CrmCompanyEntity = {
   hidden: false,
   domains: [{ id: 'domain-1', companyId: 'company-1', domain: 'acme.example' }],
 };
+
+function cachedChannel(
+  id: string,
+  overrides: Partial<CachedGraphqlChannel> = {}
+): CachedGraphqlChannel {
+  return {
+    id,
+    name: id,
+    ownerId: 'owner',
+    channelType: 'public',
+    participantIds: [],
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function channelHit(channel: CachedGraphqlChannel): SearchDocumentWire {
+  return {
+    profile: 'quick-access-v1',
+    recordKey: `GraphqlSoupChannel:${channel.id}`,
+    bucket: channel.channelType === 'direct_message' ? 'dm' : 'channel',
+    searchText: channel.name,
+    timestampMs: Date.parse(channel.updatedAt),
+    sourceHash: channel.id,
+  };
+}
 
 const retainedHistory: HistoryItem[] = [
   {
@@ -265,12 +359,17 @@ const retainedListText = {
   'recently-viewed': `older-note@${Date.parse('2026-08-03T00:00:00.000Z')},newer-note@${Date.parse('2026-08-02T00:00:00.000Z')}`,
 };
 
-function renderRetainedList(client: QueryClient) {
+function renderRetainedList(
+  client: QueryClient,
+  options?: QuickAccessListOptions
+) {
   const Shell = () => {
-    const list = useQuickAccess().useList();
+    const quickAccess = useQuickAccess();
+    const list = options ? quickAccess.useList(options) : quickAccess.useList();
     const node = document.createElement('main');
     node.dataset.testid = 'retained-shell';
     createRenderEffect(() => {
+      node.dataset.loading = String(list.isLoading());
       node.textContent = list
         .items()
         .map((item) => `${item.id}@${item.sortTimestamp}`)
@@ -293,6 +392,308 @@ function renderRetainedList(client: QueryClient) {
 }
 
 describe('Quick Access source integration', () => {
+  it('keeps cached document order and fuzzy matches stable across typing and backspacing', async () => {
+    const names = [
+      'Seamus snip',
+      'seamus todo',
+      'seamus@macro.com taskium',
+      'Some early afternoon music',
+    ];
+    mocks.history = names.map((name, index) => ({
+      id: `mention-${index}`,
+      name,
+      type: 'document',
+      fileType: 'md',
+      ownerId: 'owner',
+    }));
+    const results: SearchCachePage = {
+      documents: names.map((name, index) => ({
+        profile: 'quick-access-v1',
+        recordKey: `GraphqlSoupDocument:mention-${index}`,
+        bucket: 'note',
+        searchText: name.toLowerCase(),
+        timestampMs: 1,
+        sourceHash: 'hash',
+      })),
+      nextCursor: null,
+    };
+    mocks.search.mockResolvedValue(results);
+    const [query, setQuery] = createSignal('seam');
+    const snapshots: string[][] = [];
+    const list = setup((source) => {
+      const list = source.useList({ buckets: ['note'], searchTerm: query });
+      createRenderEffect(() => {
+        snapshots.push(list.items().map((item) => item.id));
+      });
+      return list;
+    });
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    const expected = mocks.history.map((item) => item.id);
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+    snapshots.length = 0;
+
+    for (const term of ['seamu', 'seam', 'seamu']) {
+      const pending = Promise.withResolvers<SearchCachePage>();
+      mocks.search.mockReturnValueOnce(pending.promise);
+      setQuery(term);
+      expect(list.isLoading()).toBe(true);
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+      pending.resolve(results);
+      await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+      expect(list.items().map((item) => item.id)).toEqual(expected);
+    }
+    expect(snapshots.length).toBeGreaterThan(0);
+    expect(snapshots.every((ids) => ids.join() === expected.join())).toBe(true);
+  });
+
+  it('lets initially empty cached channels populate during hydration and replays the last change', async () => {
+    const first = retainedQueryData.channels;
+    const latest = [{ ...first[0], name: 'Updated channel' }];
+    let finishFirst!: (data: typeof first) => void;
+    let finishLatest!: (data: typeof first) => void;
+    const fetch = vi
+      .fn<() => Promise<typeof first>>()
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishFirst = resolve;
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<typeof first>((resolve) => {
+          finishLatest = resolve;
+        })
+      );
+    let query: UseQueryResult<unknown[]> | undefined;
+    mocks.queries.channels = () =>
+      (query = useQuery(() => ({
+        queryKey: ['channel-burst'],
+        queryFn: fetch,
+        retry: false,
+      })));
+    const client = new QueryClient();
+    const rendered = renderRetainedList(client);
+    try {
+      await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+      vi.useFakeTimers();
+      mocks.changed?.();
+      for (let i = 0; i < 8; i++) {
+        mocks.changed?.();
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'false'
+      );
+      finishFirst(first);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(rendered.getByTestId('retained-shell').textContent).toBe(
+        retainedListText.channels
+      );
+      expect(fetch).toHaveBeenCalledTimes(3);
+      finishLatest(latest);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(query?.data).toEqual(latest);
+      expect(fetch).toHaveBeenCalledTimes(3);
+      expect(rendered.getByTestId('retained-shell').dataset.loading).toBe(
+        'false'
+      );
+    } finally {
+      rendered.unmount();
+      client.clear();
+    }
+  });
+
+  it.each(['history', 'channels'] as const)(
+    'reports loading while the %s fallback is initially pending',
+    async (source) => {
+      let finish!: (data: unknown[]) => void;
+      mocks.queries[source] = () =>
+        useQuery(() => ({
+          queryKey: ['initial-loading', source],
+          queryFn: () =>
+            new Promise<unknown[]>((resolve) => {
+              finish = resolve;
+            }),
+          retry: false,
+        }));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client);
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('true'));
+        finish(retainedQueryData[source]);
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe(retainedListText[source]);
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+
+  it.each(['history', 'channels'] as const)(
+    'keeps settled empty search results idle during a background %s refetch',
+    async (source) => {
+      let finishRefresh!: (data: unknown[]) => void;
+      const fetch = vi
+        .fn<() => Promise<unknown[]>>()
+        .mockResolvedValueOnce([])
+        .mockReturnValueOnce(
+          new Promise<unknown[]>((resolve) => {
+            finishRefresh = resolve;
+          })
+        );
+      let query: UseQueryResult<unknown[]> | undefined;
+      mocks.queries[source] = () =>
+        (query = useQuery(() => ({
+          queryKey: ['empty-background-refresh', source],
+          queryFn: fetch,
+          retry: false,
+        })));
+      const client = new QueryClient();
+      const rendered = renderRetainedList(client, {
+        buckets: ['note'],
+        searchTerm: () => 'no matching entities',
+      });
+      try {
+        const shell = rendered.getByTestId('retained-shell');
+        await vi.waitFor(() => expect(query?.isSuccess).toBe(true));
+        await vi.waitFor(() => expect(shell.dataset.loading).toBe('false'));
+        expect(shell.textContent).toBe('');
+        const refresh = query!.refetch();
+        await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
+        finishRefresh([]);
+        await refresh;
+        expect(shell.dataset.loading).toBe('false');
+        expect(shell.textContent).toBe('');
+      } finally {
+        rendered.unmount();
+        client.clear();
+      }
+    }
+  );
+  it('uses only GraphQL channels when the cache is enabled', async () => {
+    const channel = cachedChannel('cached-channel');
+    mocks.cachedChannels = () => [channel];
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(channel)],
+      nextCursor: null,
+    });
+    const lists = setup((source) => [
+      source.useList('channel'),
+      source.useList({ buckets: ['channel'] }),
+    ]);
+    await vi.waitFor(() =>
+      expect(lists.every((list) => !list.isLoading())).toBe(true)
+    );
+    for (const list of lists) {
+      expect(list.items().map((item) => item.id)).toEqual(['cached-channel']);
+    }
+    expect(mocks.channels).not.toHaveBeenCalled();
+  });
+
+  it('loads channels beyond the recent query through cache search', async () => {
+    const channels = Array.from({ length: 75 }, (_, i) =>
+      cachedChannel(`channel-${i}`)
+    );
+    mocks.cachedChannels = () => channels.slice(0, 50);
+    mocks.projectedChannels = channels;
+    mocks.search.mockResolvedValue({
+      documents: channels.map(channelHit),
+      nextCursor: null,
+    });
+    const list = setup((source) => source.useList({ buckets: ['channel'] }));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toHaveLength(75);
+    expect(new Set(list.items().map((item) => item.id)).size).toBe(75);
+    expect(list.items().some((item) => item.id === 'channel-74')).toBe(true);
+    expect(mocks.channels).not.toHaveBeenCalled();
+  });
+
+  it('sorts projected and known browse rows together using viewed recency', async () => {
+    const projectedChannel = cachedChannel('older-channel', {
+      viewedAt: '2026-08-01T00:00:00.000Z',
+      updatedAt: '2026-08-04T00:00:00.000Z',
+    });
+    mocks.projectedChannels = [projectedChannel];
+    mocks.history = [
+      {
+        id: 'recent-note',
+        type: 'document',
+        name: 'Recent note',
+        fileType: 'md',
+        ownerId: 'owner',
+        viewedAt: '2026-08-03T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(projectedChannel)],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['note', 'channel'] })
+    );
+    expect(list.items().map((item) => item.id)).toEqual(['recent-note']);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => [item.id, item.sortTimestamp])).toEqual([
+      ['recent-note', Date.parse('2026-08-03T00:00:00.000Z')],
+      ['older-channel', Date.parse('2026-08-01T00:00:00.000Z')],
+    ]);
+  });
+
+  it('keeps equal-recency browse rows in a stable order during hydration', async () => {
+    mocks.cachedChannels = () => [
+      cachedChannel('channel-b'),
+      cachedChannel('channel-a'),
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(cachedChannel('channel-b'))],
+      nextCursor: null,
+    });
+    const list = setup((source) => source.useList({ buckets: ['channel'] }));
+    const expected = ['channel-a', 'channel-b'];
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+    mocks.search.mockResolvedValue({
+      documents: [channelHit(cachedChannel('channel-a'))],
+      nextCursor: null,
+    });
+    mocks.changed?.();
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(expected);
+  });
+
+  it('keeps equal-recency pages in cache record order across entity types', async () => {
+    const channel = cachedChannel('z-channel', {
+      updatedAt: cachedCompany.updatedAt,
+    });
+    mocks.projectedChannels = [channel];
+    mocks.search
+      .mockResolvedValueOnce({
+        documents: [channelHit(channel)],
+        nextCursor: {
+          recordKey: `GraphqlSoupChannel:${channel.id}`,
+          timestampMs: Date.parse(channel.updatedAt),
+        },
+      })
+      .mockResolvedValueOnce({ documents: [companyHit], nextCursor: null });
+    const list = setup((source) =>
+      source.useList({ buckets: ['channel', 'crm_company'] })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['z-channel']);
+    await list.loadMore();
+    expect(list.items().map((item) => item.id)).toEqual([
+      'z-channel',
+      'company-1',
+    ]);
+  });
+
   it.each(
     (['history', 'channels', 'recently-viewed'] as const).flatMap((source) =>
       (['resolve', 'reject'] as const).map((settlement) => ({
@@ -388,6 +789,7 @@ describe('Quick Access source integration', () => {
         expect(shell.textContent).toBe(expected);
         const refresh = query!.refetch();
         await vi.waitFor(() => expect(query?.isRefetching).toBe(true));
+        expect(shell.dataset.loading).toBe('false');
         expect(shell.textContent).toBe(expected);
         rejectRefresh(new Error('cache refresh failed'));
         await refresh;
@@ -641,6 +1043,123 @@ describe('Quick Access source integration', () => {
     }
   );
 
+  it('omits descriptions injected into local history without hiding notes, tasks or folders', async () => {
+    mocks.history = [
+      {
+        id: 'description',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+        subType: { type: 'initiative_description' },
+      },
+      {
+        id: 'note',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+      },
+      {
+        id: 'task',
+        type: 'document',
+        name: 'Same title',
+        ownerId: 'owner',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      },
+      { id: 'folder', type: 'project', name: 'Same title', ownerId: 'owner' },
+    ];
+    const list = setup((source) =>
+      source.useList({ buckets: ['note', 'task', 'project'] })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(
+      list
+        .items()
+        .map((item) => item.id)
+        .sort()
+    ).toEqual(['folder', 'note', 'task']);
+  });
+
+  it('lists task projects with document search hits without searching the cache for them', async () => {
+    mocks.initiatives = [
+      {
+        type: 'initiative',
+        id: 'initiative-1',
+        name: 'Roadmap',
+        ownerId: 'owner',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [
+        {
+          profile: 'quick-access-v1',
+          recordKey: 'GraphqlSoupDocument:note-1',
+          bucket: 'note',
+          searchText: 'Roadmap notes',
+          timestampMs: 1,
+          sourceHash: 'hash',
+        },
+      ],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({
+        buckets: BUCKET_COMBINATIONS.documents,
+        searchTerm: () => 'roadmap',
+      })
+    );
+    await vi.waitFor(() =>
+      expect(list.items().map((item) => item.id)).toEqual(
+        expect.arrayContaining(['note-1', 'initiative-1'])
+      )
+    );
+    expect(
+      list.items().find((item) => item.id === 'initiative-1')
+    ).toMatchObject({ bucket: 'initiative', data: { type: 'initiative' } });
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        buckets: expect.not.arrayContaining(['initiative']),
+      })
+    );
+  });
+
+  it('ignores email hydration and refreshes only the affected open list and source', async () => {
+    const lists = setup((source) => ({
+      notes: source.useList({ buckets: ['note'] }),
+      channels: source.useList({ buckets: ['channel', 'dm'] }),
+    }));
+    await vi.waitFor(() =>
+      expect(lists.notes.isLoading() || lists.channels.isLoading()).toBe(false)
+    );
+    mocks.search.mockClear();
+    vi.useFakeTimers();
+    for (let i = 0; i < 13; i++)
+      mocks.changed?.({ searchChangedBuckets: ['email'] });
+    mocks.changed?.({ searchChangedBuckets: [] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).not.toHaveBeenCalled();
+    expect(mocks.readRecordsByKeys).not.toHaveBeenCalled();
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+    mocks.search.mockResolvedValue(page(0, 1));
+    mocks.changed?.({ searchChangedBuckets: ['note'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(mocks.search.mock.calls[0][0].buckets).toEqual(['note']);
+    expect(lists.notes.items()).toHaveLength(1);
+    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+
+    mocks.search.mockClear();
+    mocks.changed?.({ searchChangedBuckets: ['channel'] });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    expect(mocks.search).toHaveBeenCalledOnce();
+    expect(mocks.search.mock.calls[0][0].buckets).toEqual(['channel', 'dm']);
+  });
+
   it('updates an open list on opted-in hydration notifications without changing its query', async () => {
     const list = setup((source) => source.useList({ buckets: ['note'] }));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
@@ -653,7 +1172,7 @@ describe('Quick Access source integration', () => {
     await vi.waitFor(() => expect(list.items()).toHaveLength(1));
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
     dispose?.();
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+    expect(mocks.unsubscribe).toHaveBeenCalledTimes(2);
   });
 
   it('keeps hidden lists stable and refreshes their latest state once on visibility', async () => {
@@ -737,5 +1256,86 @@ describe('Quick Access source integration', () => {
     expect(list.totalCount()).toBe(81);
     expect(list.hasMore()).toBe(false);
     expect(mocks.search).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('CRM contacts', () => {
+  const contact: CrmContactEntity = {
+    type: 'crm_contact',
+    id: 'contact-1',
+    name: 'Wile E. Coyote',
+    ownerId: '',
+    companyId: 'company-1',
+    email: 'wile@acme.example',
+    hidden: false,
+    createdAt: '2026-08-01T00:00:00.000Z',
+    updatedAt: '2026-08-03T00:00:00.000Z',
+  };
+
+  it('lists CRM contacts in their own bucket, apart from people', () => {
+    mocks.crmContacts = [contact];
+    const [contacts, people] = setup((source) => [
+      source.useList('crm_contact'),
+      source.useList('person'),
+    ]);
+    expect(contacts.items()).toEqual([
+      expect.objectContaining({
+        id: 'contact-1',
+        bucket: 'crm_contact',
+        searchText: 'Wile E. Coyote | wile@acme.example',
+        data: contact,
+      }),
+    ]);
+    expect(people.items()).toEqual([]);
+  });
+
+  it('searches contacts locally and in the normalized cache, by name or email', async () => {
+    mocks.crmContacts = [contact];
+    const list = setup((source) =>
+      source.useList({ buckets: ['crm_contact'], searchTerm: () => 'wile@' })
+    );
+    expect(list.items().map((item) => item.id)).toEqual(['contact-1']);
+    await vi.waitFor(() =>
+      expect(mocks.search).toHaveBeenCalledWith(
+        expect.objectContaining({ buckets: ['crm_contact'], query: 'wile@' })
+      )
+    );
+  });
+
+  it('leaves contacts out while the CRM is disabled', () => {
+    mocks.crmEnabled = () => false;
+    mocks.crmContacts = [contact];
+    const list = setup((source) => source.useList('crm_contact'));
+    expect(list.items()).toEqual([]);
+  });
+});
+
+describe('database command discovery', () => {
+  it('merges Book Organizer into command search without any Soup history or cache hits', async () => {
+    mocks.databases = [
+      {
+        database: {
+          id: 'book-organizer',
+          name: 'Book Organizer',
+          owner_id: 'me',
+          created_at: '2026-09-01T00:00:00Z',
+          trashed_at: null,
+        },
+        grant: 'owner',
+        tables: [],
+      },
+    ];
+    const list = setup((source) =>
+      source.useList({
+        buckets: ['note', 'document', 'database'],
+        searchTerm: () => 'Book Organizer',
+      })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(list.items()[0]).toMatchObject({
+      bucket: 'database',
+      data: { type: 'database', name: 'Book Organizer' },
+    });
+    expect(mocks.history).toEqual([]);
   });
 });

@@ -31,7 +31,7 @@ vi.mock(
     useOpenEventComposer: () => sources.openEvent,
   })
 );
-vi.mock('@app/features/companies/CreateCompanyModal', () => ({
+vi.mock('@app/features/crm/crm-create', () => ({
   openCreateCompanyModal: sources.openCompany,
 }));
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
@@ -55,7 +55,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(view: MobileNavViewId = 'inbox') {
+function setup(view: MobileNavViewId = 'home') {
   const [calendar, setCalendar] = createSignal(false);
   const [blocks, setBlocks] = createSignal<CreatableBlock[]>([]);
   sources.view.mockReturnValue(view);
@@ -98,14 +98,60 @@ describe('mobile create availability', () => {
     await vi.waitFor(() => expect(createTask).toHaveBeenCalledOnce());
   });
 
-  it('uses the same calendar gate for the page action and falls back to New', () => {
-    const { setCalendar } = setup('calendar');
+  it('uses a Calendar New menu when enabled and keeps the default fallback', async () => {
+    const { setCalendar, setBlocks } = setup('calendar');
     fireEvent.click(screen.getByRole('button', { name: 'New' }));
     expect(sources.openMenu).toHaveBeenCalledWith(true);
     expect(sources.openEvent).not.toHaveBeenCalled();
 
     setCalendar(true);
-    fireEvent.click(screen.getByRole('button', { name: 'New event' }));
-    expect(sources.openEvent).toHaveBeenCalledOnce();
+    const call = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Call',
+        description: 'New call',
+        blockName: 'call',
+        keyDownHandler: call,
+      },
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    const menu = await screen.findByRole('dialog', { name: 'Create new' });
+    expect(
+      Array.from(menu.querySelectorAll('button')).map(
+        (button) => button.textContent
+      )
+    ).toEqual(['Event', 'Call', 'New']);
+    fireEvent.click(screen.getByRole('button', { name: 'Event' }));
+    await vi.waitFor(() => expect(sources.openEvent).toHaveBeenCalledOnce());
+  });
+
+  it('omits unavailable Calendar Call and Reminder actions', async () => {
+    const { setCalendar } = setup('calendar');
+    setCalendar(true);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    const menu = await screen.findByRole('dialog', { name: 'Create new' });
+    expect(menu.querySelectorAll('button')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Event' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Call' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reminder' })).toBeNull();
+  });
+
+  it('uses the gated Call action in the Calendar New menu', async () => {
+    const { setCalendar, setBlocks } = setup('calendar');
+    setCalendar(true);
+    const call = vi.fn(() => true);
+    setBlocks([
+      {
+        label: 'Call',
+        description: 'New call',
+        blockName: 'call',
+        keyDownHandler: call,
+      },
+    ]);
+    for (const [label, action] of [['Call', call]] as const) {
+      fireEvent.click(screen.getByRole('button', { name: 'New' }));
+      fireEvent.click(await screen.findByRole('button', { name: label }));
+      await vi.waitFor(() => expect(action).toHaveBeenCalledOnce());
+    }
   });
 });

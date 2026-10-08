@@ -1,19 +1,81 @@
 # Navigation and App Structure
 
+The native macOS app reserves 40 px above the app layout for the inset overlay
+title bar's traffic-light controls. Drag this top strip to move the window, or
+double-click it to toggle zoom. The loading shell uses the same inset; browser,
+Windows, Linux, and mobile layouts do not add this space.
+
+Native desktop content keeps its rounded split frame even with only one split,
+and the app icon rail has no right divider. On macOS, the sidebar icon beside the
+traffic lights toggles navigation for the active split; it replaces the controls
+inside the workspace. The top-right split icon opens another Home split, even
+when Home is already open, and is disabled when there is no room for a new split.
+Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+
+## Returning from another page
+
+A browser back/forward-cache restore reconnects the GraphQL cache worker and
+live subscriptions in place; it must not reload the app or discard in-memory
+editor state. For lifecycle verification, navigate to another document and Back,
+confirm `pageshow.persisted` is true (otherwise this was a fresh load), then check
+that cached reads, live updates, and the existing editor still work. Runnable
+queued mutations should resume promptly, without waiting for the old poll or
+local retry timer; durable leases and server-retry deadlines still apply.
+Switching tabs or navigating an in-app route is not a back/forward-cache restore.
+
+## Android system navigation and sharing
+
+In the Android app, Back first hides the keyboard, then dismisses the active
+menu/drawer, then returns through mobile pane history. Root Back backgrounds the
+app. Check that a canceled predictive Back gesture leaves the current screen and
+draft untouched. After changing orientation or window size, focused inputs and
+sheet actions should stay above the keyboard without an extra blank keyboard-sized
+gap. Font-size and display-size changes should retain the active draft and update
+safe areas. Also change display size with the keyboard hidden: bottom composers
+must remain visible before the keyboard is opened again. Editors expose labeled
+multiline textboxes for TalkBack.
+
+With the keyboard closed, the Android dock sits above the measured system
+navigation inset with the usual 12px gutter. Check both gesture and three-button
+navigation, including after rotation and display-size changes. Opening the
+keyboard leaves only the usual gutter above it. iOS retains its existing 28px
+bottom padding with the keyboard closed and 12px with it open.
+
+Sharing text, links, images, or documents from another Android app opens Share to
+Macro after login. A second incoming share waits behind the current one. Back or
+outside dismissal asks **Discard this share?**; **Keep editing** preserves the
+message and attachments. Failed uploads show **Retry** and block Send until they
+succeed. Send stays disabled while posting and after success, including when
+native queue cleanup fails; retrying cleanup must not post the message again.
+Test rapid repeated taps with delayed cleanup and retry after a failed send.
+On Android and iOS, if a send finishes after its sheet is canceled, cleanup must
+leave any newer share pending with its attachments intact.
+**Cancel** explicitly discards the current share. Send
+is a real channel/DM mutation: do not use it in verification without authorization.
+Android attachment controls open the system picker. File downloads open Android's
+Save dialog; image share actions open its share chooser. Canceling either should
+return to the existing editor without changing its draft. Large exports show
+preparation progress and **Cancel**; a canceled save must not report success.
+
+The native share sheet is shared with iOS. When testing iOS email attachments,
+paste an image and select one from Photos: plugins without a native checksum
+must hash the staged image bytes, retain the real attachment size, and upload
+successfully rather than hashing the empty JavaScript placeholder.
+
 ## Direct URLs (all under the frontend origin)
 
 | Route | Surface |
 | --- | --- |
-| `/app` | Redirects to inbox |
+| `/app` | Redirects to Home |
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
-| `/app/inbox/<block-type>/<uuid>` | Home with a heterogeneous item opened inline; target metadata is stored in `sN.inbox-preview.*` query values |
+| `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
+| `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
 | `/app/mail/<uuid>` | Email with a thread opened inline; a targeted message uses `sN.email-detail.messageId` |
 | `/app/channels` | Channels list |
-| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channel-detail.*` |
+| `/app/channels/<uuid>` | Channels with a conversation opened inline; message/thread targets use `sN.channels.messageId` and `sN.channels.threadId`, in the same namespace as the Channels tab |
 | `/app/drive` | Files (Drive defaults to My Files) |
 | `/app/drive/<recent-or-shared>` | A Drive tab (`/app/drive/tab/<...>` remains a compatibility alias) |
 | `/app/drive/folder/<uuid>` | A Drive folder; breadcrumbs resolve from current accessible folder data |
@@ -22,22 +84,74 @@
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
+| `/app/tasks/projects` | Projects collection inside Tasks (requires the Projects flag) |
+| `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
+| `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
+| `/app/component/new-project` | Alias for the project composer; existing links remain valid |
+| `/app/component/initiative-view~<uuid>~overview` | Compatibility link that opens the project in Tasks |
 | `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
 | `/app/coders/<uuid>` | Code session with the Agents sidebar |
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team) |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/home` | Assistant (AI-first landing) |
-| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event uses `sN.calendar.eventId` |
+| `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/<document-type>/<uuid>` | Legacy document URL (including `md`, `pdf`, `canvas`, `spreadsheet`, and the other Drive document types); redirects to `/app/drive/<document-type>/<uuid>` |
+| `/app/database/<uuid>` | A database with table and board views; stays at this URL rather than moving into Drive (requires the Databases flag) |
 | `/app/documents`, `/app/files` | Legacy Files views; redirect to `/app/drive` |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/automation/<uuid>` | Cron routine editor; event routines show a backend-managed notice |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/routines` | Routines list in the Agents workspace |
+| `/app/routines/new` | Opens the routine creation modal |
+| `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
+| `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
+| `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
+
+Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
+pages outside the app (`/app/login`, `/app/welcome`, `/app/signup`,
+`/app/onboarding`, `/app/setup`, the invite pages, `/app/meet/...` and
+`/app/task-slug/...`) render without the split layout and take one part only.
+`/app/login/~/home` and URLs nothing matches, such as `/app/garbage`, are
+replaced with `/app`, which goes to Home or to login. An unknown split among app
+splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
+navigates to a page outside the app replaces every split; Back restores them.
+
+Search-result locations use pane-local namespaces: `channels` (message/thread),
+`email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
+context), `agent-detail` (turn/author), and `call-detail` (transcript segment).
+A `seek` value identifies each click so selecting the same hit again scrolls again.
+Markdown and PDF targets also name their document so navigation to another file in
+the same workspace cannot apply the previous file's target.
+Channel-message @mentions and AI-generated channel mentions also preserve their
+message/thread target when opening a channel or reusing its existing pane.
+Returning to Home's list clears the prior target, so reopening an item without
+a specific location does not replay the previous search hit.
+
+Email snooze notifications and copied links target the original email
+conversation. The **Reminders** collection is a tab inside Email; standalone
+reminder routes and the former Home reminder detail route are removed.
+
+When an event opens inline from Home, changing the Calendar period stays under
+`/app/home/calendar/`, updates the period segment, and re-focuses that event.
+Back/Forward restores the period and its event locator from `sN.calendar.*`.
+
+Home uses the shared channel and file details for channel conversations and
+supported documents, with a **Home** breadcrumb that returns to the list. A
+channel message or thread target stays in its conversation. Document comment
+targets, spreadsheets, unknown items, and other unsupported block types retain
+the legacy inline preview so their navigation still works. The URL shape stays
+`/app/home/<block-type>/<uuid>` in either rendering mode.
+
+Desktop Home names a document comment event only when it is the latest
+outstanding notification and is at least as recent as the activity that placed
+the row there. Newer own activity, or an event without a supported comment
+description, shows the document/task title and opens the entity without a
+comment target. Older notifications retain their unread state and remain
+available to notification actions.
 
 On touch devices, documents (including tasks) open in legacy blocks rather than
 inline Drive details. Canonical `/app/drive/.../<document-type>/<uuid>` links also
@@ -45,19 +159,45 @@ fall back to legacy document routes. This uses touch detection, not the native-a
 check: in DevTools, enable touch emulation rather than only narrowing the viewport.
 Legacy document URLs upgrade to Drive only when desktop detail rendering is enabled.
 
-Splits: the app is a tiling window manager. Public variable-length routes use
+The outer navigation rail uses 20px icons in 40px buttons with 4px gaps.
+Command and create-menu headers have 20px horizontal and 12px vertical padding.
+
+Splits: the app is a tiling window manager. Active light-theme panes are white;
+inactive desktop panes are slightly darker than the active pane across themes,
+while retaining the theme hue. Public variable-length routes use
 `~` as the boundary between panes
 (`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`; route identity
 and breadcrumb nesting remain in the path. Home, Email, Tasks, and Channels
-store the selected tab under `sN.inbox.tab`, `sN.mail.tab`, `sN.tasks.tab`,
+store the selected tab under `sN.home.tab`, `sN.mail.tab`, `sN.tasks.tab`,
 and `sN.channels.tab`, respectively. Channels also stores the phone list
 selection as `sN.channels.mobileTab`. Omitted tab keys mean each view's default;
 changing tabs updates the URL, and browser Back/Forward restores the selection
 independently in each pane. Inline detail links preserve these keys. Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
+
+Projects are enabled by default in development; production uses the PostHog
+`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
+When disabled, project navigation,
+creation, assignment, chips, and Cmd+K results are hidden; direct project links
+return to Tasks after flags resolve. Existing Files folders stay available.
+
+Projects open as native detail views within Tasks, preserving its sidebar and
+shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
+filters, groups, and scroll position. Opening a task from a project extends the
+trail so the project remains a return destination. The standard side-panel
+toggle shows project properties. Their URLs preserve the selected section on reload;
+discussion links append `~<message-uuid>` to the project's `overview` route.
+Existing `activity` routes open Overview, preserving a target message when present.
+Cmd+K includes a Projects category, authorized project search results, and
+`New project`. Selecting a project opens its overview; Shift-selection opens a
+new split. The global Create menu also offers `Project` (C, then P), including
+the full mobile Create sheet. Project opens the same popover host as task creation: a dialog
+on desktop and a bottom drawer on touch. It keeps focus in the project-name
+input, and `Continue editing in split` transfers the current draft. Existing
+folders remain available in Files search.
 
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
 at the shared 256px width; manual resizing and narrow layouts can change the
@@ -67,6 +207,12 @@ headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
 only opens or closes its children. Selecting a Drive folder or tab closes an
 inline detail into that destination; it does not navigate back to Drive's root.
+Drive's **New** menu (sidebar, or the header in narrow layouts) is headed
+**Create in &lt;folder&gt;** and creates everything in the open folder; on a tab or
+the Drive root it reads **Create in Drive**. **Folder** opens a **New folder**
+dialog with `Untitled folder` preselected; creating keeps Drive where it is, adds
+the folder to the open folder's list, and shows a toast with **Open**. Other
+items open after creation. **Database** is offered only outside folders.
 Home, Email, Tasks, Channels, and Drive keep their workspace provider mounted
 while typed child routes own the accepted inline detail. Tasks and Email replace
 the list with detail, capturing its focus and scroll state before disposal. Their child
@@ -74,10 +220,11 @@ selection participates in browser Back/Forward independently per pane. Explicit
 return controls navigate to the workspace's list root. Multiple panes navigate
 their child routes and history independently; returning to a list does not
 activate another pane. Opening a resource already displayed in another pane
-still activates its owner through router claim arbitration; the compatibility
-preview guard can instead reject a conflicting embedded preview. On touch, or
-when the new-app-view flag cannot render the detail, Home, Email, Tasks, and
-Channels detail URLs fall back to the existing full-block surface. Legacy email
+activates its owner through router claim arbitration, preserves the owner's route,
+and applies compatible search targets to that pane. The compatibility preview
+guard can instead reject a conflicting embedded preview. On touch, Home, Email,
+Tasks, and Channels detail URLs fall back to the existing full-block surface.
+Legacy email
 and channel message targets are normalized into per-pane search by ingress
 middleware, including external/history navigation; explicit namespaced values win.
 Unavailable documents retain their error/retry UI rather than navigating away.
@@ -112,7 +259,10 @@ workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
 closes it temporarily. Opening or closing the narrow overlay never changes the
 saved wide-layout preference. Widening restores that preference, including in
 Home and Chat: navigation returns unless explicitly hidden at desktop width.
-Shrinking again starts with the overlay closed.
+Shrinking again starts with the overlay closed. Chat is the exception while no
+conversation is selected: its navigation stays docked with no **Hide
+navigation** control, and narrow Chat opens the overlay on its own (see
+[Chat navigation rail](channels.md#chat-navigation-rail)).
 The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
@@ -152,23 +302,32 @@ stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 
-- Top: buttons `Search` and `Create`. Clicking sidebar `Search` opens a menu
+The outer sidebar is an icon rail; labels appear in tooltips.
+
+Open **More → Customize sidebar** to show, hide, or reorder available apps.
+On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
+handle also moves it. Touch devices offer move buttons. Home stays first and
+cannot be hidden. Verify that hovering within a destination row keeps the drag
+preview stable, dropping saves the order, and reopening retains it. In short
+desktop windows, the app list scrolls while More and the footer remain reachable.
+Touch devices retain the flag-gated Reviews tab in Tasks.
+
+- Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
   with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
   (`/`). Choose the first to open commands, or the second to open and focus
   global search. Hold Shift while selecting `Search everything` to open it in a
   new split, including when Search is already active. This left-click menu shares
-  its surface and item styling with the sidebar right-click menus, in both the
-  compact rail and expanded sidebar.
-- Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
-- Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
-  `Go to Calendar`, `Go to Agents`, `Go to Customers`.
-- Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
-- Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
-  `Settings (Ctrl ;)`, `Log out`.
+  its surface and item styling with the sidebar right-click menus.
+- Nav: `Home`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
+  `Agents`, `Customers`. Calendar and Customers appear only when
+  their features are enabled.
+- Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
+  photo as a badge in its corner. It opens Settings directly in the active
+  split (Shift-click for a new split); there is no account menu. Log out lives
+  at the bottom of the Settings sidebar, and the command menu is `Ctrl K`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
-chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
-button. Its tooltips
+Start a new AI chat from the Agents workspace; the rail has no separate
+new-chat-in-a-new-split button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
@@ -182,7 +341,13 @@ the list. Check that reading that item keeps the dot lit if another loaded row
 is unread, and that completing the last one clears it. Query bounds and
 pagination are unchanged.
 
-The Agents sidebar mixes chat and coding sessions in one newest-first list.
+The Agents sidebar opens with a **Work** / **Code** switch (radio group
+"Agents mode") under its title; Work is the default and the choice is remembered
+per user across reloads. Work lists chat sessions and legacy chats; Code lists
+coding sessions only, newest first. Each mode's empty state is its own ("No
+conversations yet." / "No coding conversations yet."). Opening a session of the
+other kind from outside Agents (a link, Home, Ask AI) switches the mode to match;
+switching modes while a session is open returns to that mode's New conversation.
 New agent sessions use one dot in the left slot for activity and notifications:
 pulsing accent for starting/working, amber for waiting for input, and solid accent
 for an unread dormant session. Read dormant sessions leave that slot empty.
@@ -197,10 +362,13 @@ the selected background. Legacy chat rows keep their chat icon.
 Use **Search conversations** beside the Conversations heading to filter by title.
 Results stay packed at the top with compact spacing, even with only a few matches;
 clearing the search restores the list.
-Its **New conversation** button opens the unified composer with one **Agent**
-selector on the right. Choosing a coding agent reveals the repository drawer;
-there is no Chat/Code switch. New sessions use the selected agent's default model
-and the URL for its kind. Opening an existing row restores its own kind and URL.
+Its **New conversation** button opens the composer for the current mode with one
+**Agent** selector on the right. In Work the selector lists Macro's models and
+chat agents, and the composer stays on one line. In Code it lists coding agents
+only, the composer opens expanded with the repository drawer below it, and the
+greeting reads "What should we build?". New sessions use the selected agent's
+default model and the URL for its kind. Home's composer is unchanged and still
+offers both kinds. Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
 
@@ -213,7 +381,7 @@ logical split has no sidebar close button; mobile chrome is unchanged.
 A lone non-list content split still shows a header X labeled **Return to list**,
 which returns that split to the most recent list in its history, preserving
 that list’s state. If there is no prior list, it replaces the current entry with
-inbox. Excluded background panels do not count toward close eligibility.
+Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -251,8 +419,7 @@ uploading or moving anything.
 
 ## Favorites
 
-Use an entity's command/context menu to add or remove it from Favorites; drag rows
-within the expanded sidebar's Favorites section to reorder them. Documents, chats,
+Use an entity's command/context menu to add or remove it from Favorites. Documents, chats,
 projects, email threads, channels, calls, CRM companies, and CRM contacts support
 toggling. Individual channel messages are not favoritable.
 
@@ -264,6 +431,33 @@ in order. A newer queued reorder replaces an older queued reorder. Server-reject
 changes roll back rather than becoming committed local favorites.
 
 ## Create menu
+
+On desktop, the rail **Create** button, **C**, and the command menu’s **Create**
+entry open the detailed launcher at standard dialog width. Selecting **Create**
+closes the command menu and hands focus to the launcher; individual creation
+commands remain searchable in the command menu. The left list starts with up to three **Recents** from
+actual launcher usage, followed by the remaining choices grouped by category.
+Recent items do not repeat in their categories. With no history, the list starts
+with categories. Hover or keyboard navigation updates the right detail panel;
+click a row or press Enter to start that creation flow. The detail panel is
+top-aligned, shares the list background, and is separated by a vertical divider.
+
+The **Search mode** toggle (or **/**) switches between direct entity shortcuts
+shown beside each choice and the standard create search input. The preference
+persists across opens. Search filters both Recents and categories. Up/Down moves
+through the displayed order and scrolls the selected row into view; Left/Right
+edits the search input. Enter creates the selected item, Shift+Enter opens it in a
+new split where supported, and Escape closes the launcher. Typing in search mode
+never runs an entity shortcut. Switching modes preserves selection and dimensions.
+
+The detailed layout replaces the old desktop launcher, including the onboarding
+Create lesson. The PostHog flag `enable-carousel-create-menu` opts into the
+carousel instead; when off, unknown, or loading, the detailed layout is used.
+For local testing, set `VITE_ENABLE_CAROUSEL_CREATE_MENU=true` (or `false` to force
+the detailed layout). The carousel shares creation actions, recents ordering,
+search mode, and shortcuts; Left/Right also navigates its cards outside search.
+The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
+without creating data. Mobile continues to use its create sheet.
 
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
@@ -292,7 +486,7 @@ Settings opens its own glass sheet with a grouped main page. Select a settings
 section, use **Back to settings** to return, or **Close settings** in the top
 right to dismiss without changing the underlying app view.
 Opening Settings again starts at the grouped main page. In-app actions that
-request a specific section, including Getting Started actions, open that section
+request a specific section open that section
 directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
@@ -337,7 +531,7 @@ rounded selection highlights. Calendar visibility and Show weekends are checkbox
 rows; period, week start, time format, and month choices show trailing checkmarks.
 
 All popover splits open as bottom drawers on touch devices and dialogs
-on desktop, including task, calendar event, skill, and agent session composers.
+on desktop, including task, project, calendar event, skill, and agent session composers.
 
 Hovering an `@user` mention or a profile picture on desktop opens the user card:
 the person's name and email above Copy email, Copy name, Open contact (CRM teams
@@ -346,9 +540,12 @@ or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
-Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
-Document navigates straight into a new doc; Task and Channel open dialogs.
+`Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
+Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
+Document navigates straight into a new doc; Task, Project, and Channel open dialogs.
+When calls are enabled, `C C` (Create → Call) opens `/app/meet/new`. The call is
+created only after `Start call`; Escape closes the Create menu.
+Project opens the native project composer; Folder remains the Files folder action.
 
 Mobile glass presses animate the enclosing surface over 300ms. Round buttons
 retain roughly 20% growth; wide pills and grouped controls extend their glass
@@ -362,50 +559,211 @@ Release, cancellation, or dragging outside
 restores the surface. Disabled controls stay still; reduced motion keeps only
 the static highlight.
 
-## Routines (automations)
+## Routines
 
-Create → Automation creates a cron-scheduled routine. Cron routines support
-editing instructions and schedule, Rename, Pause/Resume, Duplicate, Run Now,
-and History links to run chats. Edits autosave; Run Now also works while paused.
-If a background refresh fails, cached cron routines stay listed and their editor
-and queued autosave remain available. An initial load failure without cached data
-shows **Unable to load automation** instead. Cached event routines remain
-backend-managed even after a refresh failure.
+Open **Agents → Routines** for your routines. Opening a routine updates the URL
+to `/app/routines/<uuid>` while keeping the Agents workspace. Reloading a detail
+URL restores that routine; browser Back and Forward restore the list or detail.
+Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
+Saved split layouts and document/channel/spreadsheet mentions using the old
+block name also open routines; newly copied links use `/app/routines/<uuid>`.
+On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
+`/app/routines` opens the routines list directly. Routines use
+full-width entity rows with **Created by**, **Status**, **Runs with**, and **Enabled**
+columns. The search field sits below the top bar, as in Projects; search by name,
+creator, or model/agent, or press **Cmd/Ctrl+F** to focus it. **Create Routine** sits
+to the right of search. Click a row to open its settings in the same pane. Toggle
+the **Enabled** checkbox property directly in the list to pause or resume it.
+Open the routine and use its **Run History** tab to see past runs.
 
-Event-triggered routines are backend-managed through the scheduled-action API.
-They do not appear in the frontend's cron-only automation lists. Opening an
-API-created event routine at `/app/automation/<uuid>` shows **Backend-managed
-routine**, not a cron editor. This surface offers no event editing, duplication,
-or run/history controls; manage those through the API. It never replaces an
-event trigger with a cron schedule. There is no event-filter composer yet.
+**Create → Routine** (U) and **Create Routine** open the same popover host as task
+and project creation. Enter a name and instructions, then choose a model or agent
+with the first property chip below the prompt. **Add trigger** follows it; each
+saved trigger becomes a chip, with another **Add trigger** always at the end.
+**Start enabled** controls whether the saved routine starts listening immediately. **Create routine** opens
+its details inside the Agents pane, retaining the sidebar. Creation has no history
+tab or templates. Unsaved drafts are retained for three minutes.
+
+**Add trigger → Scheduled** offers Hourly, Daily, Weekly, Monthly, and Custom
+(cron) in a single anchored panel. Choose the frequency and type a time, or type
+**every weekday at 9am** or **every Monday at 3:30pm**. **Run once** offers Macro’s
+natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar with
+time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
+**Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
+the composer without moving it. Recurring schedules retain their time zones;
+one-off times use the browser’s local time.
+
+The event menu groups Macro activity triggers by surface:
+
+- **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
+- **Documents:** **Document created** and **Document deleted**. Tasks are separate.
+- **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
+- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+
+For messages, mentions, deletion, and task changes, choose specific accessible
+channels/documents/tasks or any accessible item in the same panel. Creation
+triggers cover newly created accessible items; email covers the owner's inbox.
+Mentions match only @ mentions of the routine owner. **Any property changed**
+also includes status and priority; overlapping selectors start only one run for
+the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
+or delegated changes do not retrigger routines. Saved legacy selectors remain
+editable but are no longer offered in the new-trigger menu.
+
+When `enable-routine-conditions` is on, every activity trigger panel has an
+**Only run if** box for an optional yes/no question about each event, such as
+**Is this email an invoice or a receipt?** Before a run starts, the event's
+content (the email, channel message, document, or task, read as the routine
+owner) is checked against it, and events answered no are skipped. The chip
+shows the question after **· if**. Saving a condition fails with "trigger
+conditions are not enabled" while the scheduled-action service has no
+`TYPESAFE_API_KEY`.
+
+A routine can combine up to sixteen trigger groups: each schedule is a group,
+and up to thirty-two activity filters share one event group;
+matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
+to remove it. The routine's top bar uses the task breadcrumb layout:
+**Routines → routine name**, followed by the three-dot menu for duplication and
+deletion. Tabs immediately beside that menu switch between **Overview** and
+**Run History**. Overview follows the project home layout: an editable title,
+a model property chip, and a plain prompt editor. A trigger card sits below the
+model: trigger chips at the top left, **Run now** at the top right, and the
+**Enabled** / **Disabled** status with **Next run** along the bottom.
+The **Run options** dropdown contains
+**Enable routine** / **Disable routine** and **Copy prompt**, which copies the
+current instructions, including unsaved edits. **Run History** uses full-width
+Soup rows for past agent sessions, with each run's
+outcome, duration, and time. Runs a trigger's condition skipped show
+**Condition not met** (hover for how likely the answer was yes) or **Condition
+couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
+**N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
+Shift opens it in another split. **Back to routines** returns to the list in the
+same pane.
+
+**Disable routine** pauses immediately, including with invalid
+unsaved edits. Resuming waits for valid settings to save. Settings autosave in
+order without changing activation. **Run Now** waits for the latest valid edit
+to save; it also works while paused. A failed save keeps the draft and offers
+**Retry save**. If another editor changed the configuration, **Reload latest**
+loads those settings before further edits. While running, configuration is locked; the routine can be paused
+but cannot resume until the run ends. Completed one-offs remain visible with
+their history and do not repeat.
+
+Routines are private to their owner. Other users cannot list or open the routine
+or its history, even if they belong to the same team. Run conversations keep
+their own permissions.
+
+**Run History** shows outcome, duration, and firing time. History loads fifty
+rows at a time; **Load more runs** reveals older records. Accessible run rows
+open the agent session created by that run. Selecting a model uses the same
+Macro agent-session runtime as the new AI chat composer, with that model;
+selecting an agent uses its runtime and default model or selected override.
+Historical runs that created legacy chats still open those chats. Unavailable conversations
+remain non-clickable. Macro event routines also support editing, history, and
+activation.
+
+MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
+**ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
+`bot.botId` from **ListAgents** as `agentId`, or `target.type: "model"` with a runtime
+model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
+`"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
+comes from the authenticated caller, never a model-supplied user ID.
 
 ## Command menu (Ctrl+K)
 
 Opens a dialog with a focused `Search...` textbox and bubble-style category radios
-(All / Command / Agents / Files / Tasks / Channels / People). Type a name, press Enter to open
+(All / Command / Agents / Files / Tasks / Projects / Channels / People). Type a name, press Enter to open
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
+In `Change theme`, Up/Down previews the highlighted palette across the open app,
+including channels and spreadsheets. Moving between rows preserves the original
+palette for cancellation without briefly restoring it between previews. Esc
+restores that palette (including unsaved edits); Enter commits the highlighted
+theme. Browser and notification icons change only when a theme is committed.
+
 With the local GraphQL cache enabled, Cmd+K and document/channel `@` mentions
 search cached entities without waiting for a server search. Background hydration
-updates an already-open menu. For an empty search, scroll toward the end (or use
+updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
+hydration must not reread History or the cached channel list; a newly hydrated note
+refreshes History and matching menus, and a channel/DM refreshes channel consumers.
+Ordinary query responses use the same bucket scoping. A project-search response
+that only caches another viewer Soup page must not refresh History, channel lists,
+or unrelated active query pages. Renames, ownership/recency changes, and moves
+between buckets must still appear without retyping in every affected view.
+Older cache runtimes without bucket metadata, mutations, and identity resets
+refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. A missing item may still be uncached, but should appear after hydration without retyping. Cmd+K's
+another pagination attempt. Missing items may still be uncached, but should appear
+after hydration without retyping, including channels outside the first cached
+page. Cmd+K's
 local search excludes unsupported email hits before limiting entity results;
-email mentions keep their separate search-service path.
+email mentions keep their separate search-service path. Text search loads only
+its requested cache buckets, so a document-only category must not read the email
+catalog. Switching categories still discovers previously unopened buckets;
+renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-Pending or failed Quick Access history, recently-viewed, and cached-channel lookups
-must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation stays
-mounted and usable while the optional source loads or fails. A failed background
+With CRM enabled, normal `@` menus include CRM contacts under **People** in
+documents, channels, discussions, and composers. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and collapses duplicate full email addresses case-insensitively.
+The most recently active visible team record represents each email. An eligible
+Macro user with the same email takes precedence and keeps normal user-mention
+notifications. External contacts insert a link to their original CRM record;
+they do not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only.
+
+Cmd+K **People** and a typed **All** query also find CRM contacts, using the same
+accessible-team search, hidden-record exclusions, and full-email collapsing as
+mentions. Cached contacts appear at once; the server search starts about 250 ms
+after typing stops and pages 100 contacts at a time, so contacts beyond the first
+500 cached records are found too. An empty query keeps People and All on their
+usual recency lists without contacts. A contact whose email belongs to a Macro user
+appears as that person instead, even when only the CRM name matched: their existing
+direct message when you have one, otherwise the person, and selecting them opens a
+direct message. Other contacts show their email and open the contact page; Enter and
+click open in place, Shift+Enter in a new split. A server match that arrives after
+typing takes the default selection from the Search for… row. Global Search does not
+list CRM contacts; Search for… from People still opens the Channels search. Verify
+a contact outside the cached rows, an email-only query, rapid query changes (rows
+from an earlier query must disappear unless they still match), scrolling or Down
+past the last row to load more, and that Files/Tasks/Channels/Agents never show
+contacts.
+
+Cmd+K merges cached and locally available items before applying recency order.
+An empty query prefers when an item was last viewed, falling back to its update
+time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
+relevance/recency ranking and DM boost with GraphQL enabled. Verify that refreshing
+the cache or reopening the menu with unchanged data does not reorder the results.
+
+Pending or failed Quick Access history, recently-viewed, skills, and cached-channel
+lookups must not hide the app shell. Verify a cold lookup with Cmd/Ctrl+K: navigation
+stays mounted and usable while the optional source loads or fails. Also hold the
+skills discovery request (`/items/soup`, skill subtype) during startup: even a
+paused or disabled discovery query must not suspend navigation or Home. Releasing
+the request should populate skills without remounting the shell. The menu shows no
+loading text: while entity rows are still loading, an empty list stays blank and
+commands remain usable; a settled empty category shows **No results found**.
+Background history or channel refetches alone must not blank a settled empty
+category back to its loading state,
+including when the active category does not use that source. Cache-update bursts
+must let in-flight history, channel, and menu-search reads publish their results,
+then catch up with one coalesced refresh. Verify with cache reads slower than the
+250 ms update throttle, starting from an empty cache: entities appear without
+waiting for background updates to stop. Changing the query/category or closing
+the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
-Placeholder results also remain usable while replacement data loads. A normal cache-worker
-handoff between tabs preserves backfill cursors and watermarks; only a replacement
-that creates or resets stored cache data discards them. Per-lane full-refresh and
-Shared Mail restart rules still apply.
+Placeholder results also remain usable while replacement data loads. A normal
+cache-worker handoff between tabs preserves backfill cursors and watermarks.
+Hydration checkpoints belong to the stored cache generation: resetting or
+recreating the database starts a full scan even when an old checkpoint survives
+or the page missed the reset notification. Verify that clearing only the cache
+database and reloading recovers older channels as well as recent ones. A reset
+during hydration must also restart the scan. Per-lane full-refresh and Shared Mail
+restart rules still apply.
 
 ## Keyboard model (from the in-app guide; verified partially)
 
@@ -413,21 +771,23 @@ Shared Mail restart rules still apply.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
 - `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
-- `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
-  available through its sidebar link or the `Go to Assistant` command.
+- `#` — move email to Trash, with an Undo toast. Works on the selected or focused
+  rows in a mail list and on the thread open in an email detail or block. Email
+  only; other entity types keep Delete/Backspace and do not answer `#`.
+- `g` then `h` — Home; `g` then `i` remains an alias.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents and Settings → Harness render while their requests are pending.
+Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
-Settings → Harness, above Cursor, with the
-Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Settings → Agents → Runtimes, above Cursor, with the
+Anthropic logo. Settings → Agents → Agents selects an agent's runtime but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
 Approve on Claude's page, copy the complete `code#state`, then use **Finish
@@ -519,12 +879,10 @@ failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
 
-The New reminder dialog uses the same compact panel and fixed action footer.
-Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
-repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
-scheduling behavior. Creating a reminder dismisses the composer before saving,
-with success or failure reported by toast.
+Email snoozing uses a command menu with quick or typed times, **If no reply** /
+**Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
+retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.

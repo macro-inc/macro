@@ -65,17 +65,20 @@
 	"workspaces": {
 		"packages": [
 			"apps/web",
+			"apps/marketing",
 			"packages/observability",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
+			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/stripe-payment-bot",
 			"services/lexical-service",
-			"packages/spreadsheet"
+			"packages/spreadsheet",
+			"vendor/ironcalc/pkg"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

@@ -1,3 +1,4 @@
+import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
  * imperative writers (websocket handlers). Implementations:
@@ -13,6 +14,10 @@ import type {
   CachedQueryVariantWire,
   CacheReadPriority,
   CacheRevision,
+  CalendarCommitArgs,
+  CalendarCommitCacheResult,
+  CalendarRangeCacheArgs,
+  CalendarRangeCacheResult,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -20,6 +25,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationSearchChanges,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -72,9 +78,18 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
   /** Caller-supplied RFC UUID used for explicit safe coalescing. */
   uuid: string;
+  /** Opaque durable client correlation; never included in GraphQL variables. */
+  clientMetadata?: Record<string, unknown>;
+  identityBindings?: IdentityBindingWire[];
   linkPatches?: OptimisticLinkPatchWire[];
   /** Revalidations for relevant cached fields that could not be patched. */
   revalidations?: QueryRevalidationWire[];
+  /**
+   * `GraphqlCalendarEvent` keys whose occurrence set this mutation cannot
+   * predict (for example a recurrence edit); calendar ranges report them
+   * until the mutation settles.
+   */
+  uncertainCalendarEventKeys?: string[];
 }
 
 /** Lease request used for the claim attempted immediately after enqueue. */
@@ -83,6 +98,12 @@ export interface InitialMutationClaimArgs {
   nowMs: number;
   leaseExpiresAtMs: number;
 }
+
+export type CacheChangeListener = (
+  revision: CacheRevision,
+  /** Undefined for ordinary writes/resets and older runtimes: refresh conservatively. */
+  searchChanges?: HydrationSearchChanges
+) => void;
 
 export type CacheChangeOptions = {
   /** Also observe background hydration without re-executing foreground queries. */
@@ -102,6 +123,9 @@ export interface CacheHost {
 
   /** Returns the current revision of the active cache-engine generation. */
   currentRevision(): Promise<CacheRevision>;
+  /** Durable database identity, preserved across engine restarts and replaced
+   * whenever the stored cache is cleared or recreated. */
+  currentStorageGeneration(): Promise<string>;
   readQuery(args: CacheReadArgs): Promise<ReadResult>;
   /** Projects a bounded explicit set of normalized entity keys. */
   readRecordsByKeys(
@@ -111,6 +135,12 @@ export interface CacheHost {
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
+  /** Answers a calendar viewport from the local range index. */
+  calendarRange(
+    args: CalendarRangeCacheArgs
+  ): Promise<CalendarRangeCacheResult>;
+  /** Atomically applies calendar coverage, deletions, and sync state. */
+  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked
@@ -130,6 +160,8 @@ export interface CacheHost {
   ): Promise<CachedQueryVariantWire[]>;
   /** Enumerates and materializes cached query field variants. */
   inspectQuery(args: InspectQueryArgs): Promise<CachedQueryInstanceWire[]>;
+  /** Read-only queue snapshots; their lease values do not authorize settlement. */
+  inspectMutations?(): Promise<MutationInspection[]>;
   /** Claims the oldest runnable mutation; later entries are never skipped. */
   claimNextMutation(
     owner: string,
@@ -141,7 +173,8 @@ export interface CacheHost {
     transactionId: string,
     claim: MutationClaim,
     nextAttemptAtMs: number,
-    error: string
+    error: string,
+    serverFailure?: boolean
   ): Promise<DeferOptimisticWriteResult>;
   /** Atomically commits a claimed mutation's real network response. */
   commitOptimisticWrite(
@@ -153,7 +186,8 @@ export interface CacheHost {
   rollbackOptimisticWrite(
     transactionId: string,
     claim: MutationClaim,
-    error: string
+    error: string,
+    errorCode?: string
   ): Promise<RollbackOptimisticWriteResult>;
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
@@ -173,12 +207,13 @@ export interface CacheHost {
 
   /** Subscribes whenever the effective normalized-cache view changes. */
   onCacheChanged(
-    cb: (revision: CacheRevision) => void,
+    cb: CacheChangeListener,
     options?: CacheChangeOptions
   ): () => void;
 
-  /** Invalidates in-memory revisions/dependencies on every engine replacement.
-   * Durable checkpoints survive replacements that preserve stored records. */
+  /** Reports engine replacements and live storage resets. Durable checkpoints
+   * must also validate currentStorageGeneration on startup: notifications are
+   * not replayed and may precede a subscriber. */
   onCacheGenerationChanged(
     cb: (change: CacheGenerationChange) => void
   ): () => void;

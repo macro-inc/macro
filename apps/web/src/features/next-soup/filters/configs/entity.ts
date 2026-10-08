@@ -1,3 +1,9 @@
+export {
+  crmCompanyActiveFilter,
+  crmCompanyFilter,
+  crmCompanyHiddenFilter,
+} from '../../../crm/collection-filters';
+
 import { getEntityProjectId } from '@entity';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
@@ -5,16 +11,8 @@ import {
   calendarEventFilter as calendarEventPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
-  crmCompanyActiveFilter as crmCompanyActivePredicate,
-  crmCompanyHiddenFilter as crmCompanyHiddenPredicate,
-  crmCompanyFilter as crmCompanyPredicate,
-  doneRemindersFilter as doneRemindersPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
-  firedRemindersFilter as firedRemindersPredicate,
-  notDoneRemindersFilter as notDoneRemindersPredicate,
   projectFilter as projectPredicate,
-  remindersFilter as remindersPredicate,
-  scheduledRemindersFilter as scheduledRemindersPredicate,
   searchSupportedFilter as searchSupportedPredicate,
   taskFilter as taskPredicate,
 } from '../predicates';
@@ -80,89 +78,6 @@ export const calendarFilter = config({
   id: 'calendar',
   predicate: calendarEventPredicate,
   query: defineQueryFilters({}, { skipTargets: ['calf'] }),
-});
-
-export const crmCompanyFilter = config({
-  id: 'crm-company',
-  predicate: crmCompanyPredicate,
-  query: defineQueryFilters({}, { skipTargets: ['ccf'] }),
-});
-
-// Reminders are opt-in server-side, so unlike the other entity filters these
-// queries name `includeReminders` rather than just skipping their own target —
-// there is no `remf` entry in ID_FIELD_NAMES to skip.
-export const remindersFilter = config({
-  id: 'reminders',
-  predicate: remindersPredicate,
-  query: defineQueryFilters({ include: { includeReminders: true } }),
-});
-
-// `reminderCompleted: false` is load-bearing beyond the filtering: it is what
-// `soupQueryExcludesDone` matches on (as `"comp":false`) to drop a reminder
-// from these views the moment it is marked done, rather than on the next
-// refetch. `reminderFired` is resolved server-side against the database clock
-// — a client timestamp would land in the query key and change every render.
-export const firedRemindersFilter = config({
-  id: 'reminders-fired',
-  predicate: firedRemindersPredicate,
-  query: defineQueryFilters({
-    include: {
-      includeReminders: true,
-      reminderCompleted: false,
-      reminderFired: true,
-    },
-  }),
-});
-
-export const scheduledRemindersFilter = config({
-  id: 'reminders-scheduled',
-  predicate: scheduledRemindersPredicate,
-  query: defineQueryFilters({
-    include: {
-      includeReminders: true,
-      reminderCompleted: false,
-      reminderFired: false,
-    },
-  }),
-});
-
-// Everything not done — fired and scheduled together — for a single inbox
-// tab. Unlike Active/Scheduled it does not split on `reminderFired`, so both
-// ends share one `comp:false` query; the page limit is generous enough for an
-// inbox, and `soupQueryExcludesDone` still drops a reminder the moment it is
-// marked done.
-export const notDoneRemindersFilter = config({
-  id: 'reminders-not-done',
-  predicate: notDoneRemindersPredicate,
-  query: defineQueryFilters({
-    include: { includeReminders: true, reminderCompleted: false },
-  }),
-});
-
-export const doneRemindersFilter = config({
-  id: 'reminders-done',
-  predicate: doneRemindersPredicate,
-  query: defineQueryFilters({
-    include: { includeReminders: true, reminderCompleted: true },
-  }),
-});
-
-export const crmCompanyActiveFilter = config({
-  id: 'crm-company-active',
-  predicate: crmCompanyActivePredicate,
-  query: defineQueryFilters(
-    { include: { crmCompanyHidden: false } },
-    { skipTargets: ['ccf'] }
-  ),
-});
-
-export const crmCompanyHiddenFilter = config({
-  id: 'crm-company-hidden',
-  predicate: crmCompanyHiddenPredicate,
-  query: defineQueryFilters(
-    { include: { crmCompanyHidden: true } },
-    { skipTargets: ['ccf'] }
-  ),
 });
 
 export const searchSupportedFilter = config({

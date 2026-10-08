@@ -23,18 +23,28 @@ use pipedream_mcp::domain::service::PipedreamToolSet;
 use std::pin::Pin;
 use std::sync::Arc;
 
-/// Mangled MCP tool names start with this prefix on both stacks.
-const MANGLED_PREFIX: &str = "mcp__";
+#[cfg(test)]
+mod test;
 
-/// A connector identified in both stacks: the Pipedream app slug and the
+/// Mangled MCP tool names start with this prefix on both stacks.
+pub const MANGLED_PREFIX: &str = "mcp__";
+
+/// A connector identified in both stacks: the Pipedream app slugs and the
 /// native server URL that back the same product (e.g. `linear` /
 /// `https://mcp.linear.app/mcp`).
 #[derive(Clone, Copy, Debug)]
 pub struct ConnectorRef<'a> {
-    /// Pipedream app name slug, e.g. `linear`.
-    pub pipedream_app_slug: &'a str,
+    /// Pipedream app name slugs in preference order, e.g. `slack`, `slack_v2`.
+    pub pipedream_app_slugs: &'a [&'a str],
     /// The native stack's MCP server URL for the same product.
     pub native_server_url: &'a str,
+}
+
+impl ConnectorRef<'_> {
+    /// Whether this connector recognizes the Pipedream app slug.
+    pub fn matches_pipedream_slug(&self, slug: &str) -> bool {
+        self.pipedream_app_slugs.contains(&slug)
+    }
 }
 
 /// The MCP tools loaded for a user — from exactly one stack, per the
@@ -225,15 +235,26 @@ where
         if !pipedream.is_empty() {
             // The user is on the Pipedream stack: native connectors are
             // ignored even if this particular app isn't connected there.
-            let matching: Vec<_> = pipedream
-                .into_iter()
-                .filter(|c| c.app_slug == connector.pipedream_app_slug)
-                .collect();
-            if matching.is_empty() {
+            // Prefer one alias by slug order: two Slack sessions would
+            // duplicate tool names when both `slack` and `slack_v2` are connected.
+            let matching = pipedream
+                .iter()
+                .filter(|c| connector.matches_pipedream_slug(&c.app_slug))
+                .min_by_key(|c| {
+                    connector
+                        .pipedream_app_slugs
+                        .iter()
+                        .position(|slug| *slug == c.app_slug)
+                });
+            let Some(matching) = matching else {
                 return Ok(None);
-            }
+            };
             return Ok(Some(UserMcpTools::Pipedream(
-                PipedreamToolSet::new(&matching, self.pipedream_connection.clone()).await,
+                PipedreamToolSet::new(
+                    std::slice::from_ref(matching),
+                    self.pipedream_connection.clone(),
+                )
+                .await,
             )));
         }
 
@@ -263,7 +284,7 @@ where
         if !pipedream.is_empty() {
             return Ok(pipedream
                 .iter()
-                .any(|c| c.app_slug == connector.pipedream_app_slug));
+                .any(|c| connector.matches_pipedream_slug(&c.app_slug)));
         }
 
         let native = self

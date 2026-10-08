@@ -11,6 +11,7 @@ import {
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
 import { tableCellResizerPlugin } from '@core/component/LexicalMarkdown/plugins/tables/tableCellResizerPlugin';
 import { tablePlugin } from '@core/component/LexicalMarkdown/plugins/tables/tablePlugin';
+import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { IUser } from '@core/user/types';
 import ImageIcon from '@phosphor/image.svg';
@@ -24,6 +25,7 @@ export type MessageEditorOptions = {
   floatingFormatMenu?: boolean;
   disableMentionTracking?: boolean;
   namespace: string;
+  resolveAppLink?: MentionLinkResolver;
   enableMentions?: boolean;
   onMentionCreate?: (mention: ItemMention) => void;
   onMentionRemove?: (mention: ItemMention) => void;
@@ -34,6 +36,8 @@ export type MessageEditorOptions = {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  /** Slash actions a surface adds beyond the shared set, e.g. a channel's `/poll`. */
+  additionalActions?: Action[];
   /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
   onAttachFromDisk?: (files: File[]) => void;
   scrollContainer?: Accessor<HTMLElement | undefined>;
@@ -43,6 +47,8 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
   const editor = buildConfig(options.type ?? 'chat').namespace(
     options.namespace
   );
+  if (options.resolveAppLink)
+    editor.withAppLinkResolver(options.resolveAppLink);
 
   if (options.enableMentions !== false) {
     editor.withMentions({
@@ -97,6 +103,9 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
     };
     editor.withActions({ additionalActions: [attachFromDiskAction] });
   }
+
+  if (options.additionalActions?.length)
+    editor.withActions({ additionalActions: options.additionalActions });
 
   editor
     .use(

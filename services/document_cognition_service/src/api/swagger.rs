@@ -94,6 +94,7 @@ use utoipa::OpenApi;
             import_api::get_state_handler,
             import_api::run_import_handler,
             import_api::retry_gather_handler,
+            import_api::discover_handler,
             import_api::dismiss_run_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,

@@ -6,10 +6,17 @@ import { Button, type ButtonProps } from './Button';
 
 export type SendButtonProps = Omit<ButtonProps, 'size' | 'variant'> & {
   appearance?: 'default' | 'composer';
+  /**
+   * Empty composer with a queue waiting: the same send control, ringed so it
+   * reads as flushing that queue rather than sending a new message.
+   */
+  intent?: 'send' | 'flush';
   /** Show a spinner instead of the arrow (e.g. while a send mutation is in-flight). */
   pending?: boolean;
-  /** Fade the button to fully transparent — used to hide on mobile when the input is empty. */
+  /** Drop the button from the layout — used to hide on mobile when the input is empty. */
   hidden?: boolean;
+  /** Visible desktop action text; touch surfaces retain the compact icon. */
+  actionLabel?: string;
 };
 
 export function SendButton(props: SendButtonProps) {
@@ -21,6 +28,8 @@ export function SendButton(props: SendButtonProps) {
     'children',
     'aria-label',
     'tooltip',
+    'actionLabel',
+    'intent',
   ]);
   const resolved = children(() => local.children);
 
@@ -28,20 +37,37 @@ export function SendButton(props: SendButtonProps) {
     <Button
       depth={4}
       variant="strong"
+      glass={false}
       size={local.appearance === 'composer' ? 'icon-composer' : 'icon-sm'}
       draggable={false}
-      aria-label={local['aria-label'] ?? 'Send'}
-      tooltip={local.tooltip ?? 'Send'}
+      aria-label={
+        local['aria-label'] ??
+        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
+      }
+      tooltip={
+        local.tooltip ??
+        (local.intent === 'flush' ? 'Flush queued messages' : 'Send')
+      }
+      data-intent={local.intent === 'flush' ? 'flush' : undefined}
       class={cn(
-        'rounded-full touch:size-7.5',
+        'border-0 bg-ink text-surface-4 touch:size-7.5',
+        'not-touch:not-disabled:hover:text-surface-4',
+        local.intent === 'flush' && 'ring-2 ring-accent/60',
         local.appearance === 'composer'
-          ? 'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden'
+          ? cn(
+              'not-touch:not-disabled:bg-composer-action not-touch:not-disabled:text-composer-action-ink not-touch:not-disabled:hover:text-composer-action-ink not-touch:light-mode:shadow-none not-touch:light-mode:backdrop-filter-none not-touch:light-mode:after:hidden',
+              local.actionLabel &&
+                'not-touch:w-auto! not-touch:aspect-auto! not-touch:px-3 not-touch:gap-1.5'
+            )
           : 'size-7',
         '[&_svg]:stroke-[4px]',
         'transition-transform ease-in-out duration-150',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted! data-disabled:bg-ink-muted/5',
         'active:not-disabled:scale-95',
-        local.hidden && 'opacity-0!',
+        // Out of the flow, not just invisible: a transparent send button
+        // holds its slot and strands whatever sits before it (the dictation
+        // button) well short of the composer's edge.
+        local.hidden && 'hidden',
         local.class
       )}
       {...rest}
@@ -50,7 +76,16 @@ export function SendButton(props: SendButtonProps) {
         when={!local.pending}
         fallback={<SpinnerIcon class="animate-spin" />}
       >
-        {resolved() ?? <ArrowUp />}
+        {resolved() ?? (
+          <>
+            <ArrowUp />
+            <Show when={local.actionLabel}>
+              <span class="hidden whitespace-nowrap text-sm font-medium not-touch:inline">
+                {local.actionLabel}
+              </span>
+            </Show>
+          </>
+        )}
       </Show>
     </Button>
   );

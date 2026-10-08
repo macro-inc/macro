@@ -65,6 +65,8 @@ export function DriveList() {
 
   const timestamp = (entity: EntityData) => {
     const { location, sort } = state.value();
+    if (entity.type === 'database' || entity.type === 'form')
+      return entity.createdAt;
 
     if (location.kind === 'tab' && location.tab === 'recent')
       return entity.touchedAt;
@@ -263,6 +265,17 @@ export function DriveList() {
           tabIndex={0}
           class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
+          <Show when={source.databaseError()}>
+            <div
+              role="alert"
+              class="flex shrink-0 items-center gap-2 border-b border-edge-muted p-3 text-xs text-ink-muted"
+            >
+              Databases couldn’t be loaded.
+              <Button variant="outline" onClick={() => void refresh()}>
+                Try again
+              </Button>
+            </div>
+          </Show>
           <ListLayoutProvider ref={grid}>
             <Switch>
               <Match when={!forceEmptyState() && showError()}>
@@ -299,6 +312,14 @@ export function DriveList() {
                       class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
                     >
                       <span>{emptyMessage()}</span>
+                      <Show when={source.error()}>
+                        <Button
+                          variant="outline"
+                          onClick={() => void refresh()}
+                        >
+                          Try again
+                        </Button>
+                      </Show>
                       <Show when={hasFilters()}>
                         <Button variant="outline" onClick={state.clearFilters}>
                           Clear filters

@@ -2,12 +2,15 @@
 
 #[allow(unused_imports)]
 use super::*;
+
+mod call_session;
 use crate::domain::models::{
     AdminParticipantRole, AdminTeamRole, AnyEntityPermission, BotAccessScope, BotId,
     BotReceiptScope, CallChannelInfo, CommentAccessLevel, EditAccessLevel, EntityAccessAuth,
     MemberParticipantRole, MemberTeamRole, OwnerParticipantRole, ParticipantRole, UserTeamInfo,
     ViewAccessLevel, ViewOnly,
 };
+use crate::domain::ports::{AccessibleForms, ScheduledActionGrants};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::OwnerAccessLevel;
 use std::sync::{
@@ -29,9 +32,23 @@ struct MockRepo {
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
     initiative_access: Arc<Mutex<Option<AccessLevel>>>,
-    agent_session_document: Arc<Mutex<Option<String>>>,
+    scheduled_action_access: Arc<Mutex<Option<AccessLevel>>>,
+    accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
+    agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
+    pipeline_access: Arc<Mutex<Option<AccessLevel>>>,
+    pipeline_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
+    database_access: Arc<Mutex<Option<AccessLevel>>>,
+    database_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
+    database_row_access: Arc<Mutex<Option<AccessLevel>>>,
+    database_row_access_calls: Arc<AtomicUsize>,
+    form_access: Arc<Mutex<Option<AccessLevel>>>,
+    form_access_callers: Arc<Mutex<Vec<Option<String>>>>,
+    form_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    form_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    team_entity_requests: Arc<Mutex<Vec<(String, EntityType)>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
     team_channel_role: Arc<Mutex<ChannelRoleResult>>,
     team_channel_role_calls: Arc<AtomicUsize>,
@@ -49,8 +66,11 @@ struct MockRepo {
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    database_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    database_row_database: Arc<Mutex<Option<Uuid>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
+    call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
 }
 
@@ -67,9 +87,23 @@ impl MockRepo {
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
             initiative_access: Arc::new(Mutex::new(None)),
-            agent_session_document: Arc::default(),
+            scheduled_action_access: Arc::new(Mutex::new(None)),
+            accessible_scheduled_action_ids: Arc::new(Mutex::new(Vec::new())),
+            agent_session_parent: Arc::default(),
+            pipeline_access: Arc::default(),
+            pipeline_access_list: Arc::default(),
+            database_access: Arc::new(Mutex::new(None)),
+            database_access_list: Arc::new(Mutex::new(Vec::new())),
+            database_row_access: Arc::new(Mutex::new(None)),
+            database_row_access_calls: Arc::default(),
+            form_access: Arc::default(),
+            form_access_callers: Arc::default(),
+            form_users: Arc::default(),
+            form_access_list: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
+            team_agent_session_access: Arc::default(),
+            team_entity_requests: Arc::default(),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
             team_channel_role: Arc::new(Mutex::new(ChannelRoleResult::NotFound)),
             team_channel_role_calls: Arc::new(AtomicUsize::new(0)),
@@ -87,8 +121,11 @@ impl MockRepo {
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
             agent_session_users: Arc::new(Mutex::new(Vec::new())),
+            database_users: Arc::new(Mutex::new(vec![])),
+            database_row_database: Arc::default(),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
+            call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
         }
     }
@@ -131,6 +168,46 @@ impl MockRepo {
 
     fn with_agent_session_access(mut self, level: AccessLevel) -> Self {
         self.agent_session_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_database_access(mut self, level: AccessLevel) -> Self {
+        self.database_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_database_access_list(mut self, levels: Vec<(Uuid, AccessLevel)>) -> Self {
+        self.database_access_list = Arc::new(Mutex::new(levels));
+        self
+    }
+
+    fn with_form_access(mut self, level: AccessLevel) -> Self {
+        self.form_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_form_access_list(mut self, levels: Vec<(Uuid, AccessLevel)>) -> Self {
+        self.form_access_list = Arc::new(Mutex::new(levels));
+        self
+    }
+
+    fn with_form_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.form_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_database_row_access(mut self, level: AccessLevel) -> Self {
+        self.database_row_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_scheduled_action_access(mut self, level: AccessLevel) -> Self {
+        self.scheduled_action_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_accessible_scheduled_action_ids(mut self, ids: Vec<Uuid>) -> Self {
+        self.accessible_scheduled_action_ids = Arc::new(Mutex::new(ids));
         self
     }
 
@@ -196,6 +273,16 @@ impl MockRepo {
         self
     }
 
+    fn with_database_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.database_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_database_row_database(mut self, database_id: Uuid) -> Self {
+        self.database_row_database = Arc::new(Mutex::new(Some(database_id)));
+        self
+    }
+
     fn with_chat_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
         self.chat_users = Arc::new(Mutex::new(users));
         self
@@ -223,8 +310,11 @@ impl MockRepo {
 }
 
 impl AccessRepository for MockRepo {
-    async fn get_agent_session_document(&self, _: &str) -> Result<Option<String>, AccessError> {
-        Ok(self.agent_session_document.lock().await.clone())
+    async fn get_agent_session_parent(
+        &self,
+        _: &str,
+    ) -> Result<Option<AgentSessionParent>, AccessError> {
+        Ok(self.agent_session_parent.lock().await.clone())
     }
 
     async fn get_document_access(
@@ -326,6 +416,93 @@ impl AccessRepository for MockRepo {
         Ok(*self.initiative_access.lock().await)
     }
 
+    async fn get_pipeline_access(
+        &self,
+        _id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.pipeline_access.lock().await)
+    }
+    async fn list_pipeline_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.pipeline_access_list.lock().await.clone())
+    }
+
+    async fn get_database_access(
+        &self,
+        _database_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.database_access.lock().await)
+    }
+
+    async fn list_database_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.database_access_list.lock().await.clone())
+    }
+
+    async fn get_form_access(
+        &self,
+        _form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.form_access_callers
+            .lock()
+            .await
+            .push(user_id.map(|user_id| user_id.as_ref().to_string()));
+        Ok(*self.form_access.lock().await)
+    }
+
+    async fn list_form_access(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        Ok(self.form_access_list.lock().await.clone())
+    }
+
+    async fn get_database_row_access(
+        &self,
+        _row_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.database_row_access_calls
+            .fetch_add(1, Ordering::SeqCst);
+        Ok(*self.database_row_access.lock().await)
+    }
+
+    async fn get_database_rows_access(
+        &self,
+        row_ids: &[Uuid],
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<HashMap<Uuid, AccessLevel>, AccessError> {
+        self.database_row_access_calls
+            .fetch_add(1, Ordering::SeqCst);
+        let level = *self.database_row_access.lock().await;
+        Ok(row_ids
+            .iter()
+            .filter_map(|id| level.map(|level| (*id, level)))
+            .collect())
+    }
+
+    async fn get_scheduled_action_access(
+        &self,
+        _scheduled_action_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.scheduled_action_access.lock().await)
+    }
+
+    async fn accessible_scheduled_action_ids(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<Uuid>, AccessError> {
+        Ok(self.accessible_scheduled_action_ids.lock().await.clone())
+    }
+
     async fn get_reminder_access(
         &self,
         _reminder_id: &str,
@@ -338,10 +515,17 @@ impl AccessRepository for MockRepo {
         &self,
         _bot_id: BotId,
         _team_id: Uuid,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         self.team_entity_access_calls.fetch_add(1, Ordering::SeqCst);
+        self.team_entity_requests
+            .lock()
+            .await
+            .push((entity_id.into(), entity_type));
+        if entity_type == EntityType::AgentSession {
+            return Ok(*self.team_agent_session_access.lock().await);
+        }
         Ok(*self.team_entity_access.lock().await)
     }
 
@@ -429,9 +613,21 @@ impl AccessRepository for MockRepo {
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
+            EntityType::Call => panic!("standalone calls must use direct grants"),
             EntityType::Initiative => Ok(vec![]),
+            EntityType::Database => Ok(self.database_users.lock().await.clone()),
+            EntityType::Form => Ok(self.form_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
+    }
+
+    async fn get_direct_entity_users(
+        &self,
+        _entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        assert_eq!(entity_type, EntityType::Call);
+        Ok(self.call_users.lock().await.clone())
     }
 
     async fn get_channel_users(
@@ -446,6 +642,10 @@ impl AccessRepository for MockRepo {
         _call_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
         Ok(self.call_channel.lock().await.clone())
+    }
+
+    async fn get_database_row_database(&self, _row_id: &Uuid) -> Result<Option<Uuid>, AccessError> {
+        Ok(*self.database_row_database.lock().await)
     }
 
     async fn get_call_channel_by_channel_id(
@@ -695,6 +895,59 @@ async fn test_unsupported_entity_type_returns_none() {
 // --- get_entity_permission tests ---
 
 #[tokio::test]
+async fn team_admin_receipt_checks_current_role_and_exact_team() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    let user = test_user_id();
+    let team = Uuid::now_v7();
+    let team_id = team.to_string();
+    for role in [TeamRole::Owner, TeamRole::Admin, TeamRole::Member] {
+        *repo.user_team.lock().await = Some(UserTeamInfo {
+            team_id: team,
+            role,
+        });
+        let receipt = service
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team_id,
+                EntityType::Team,
+            )
+            .await;
+        assert_eq!(receipt.is_ok(), role != TeamRole::Member);
+        assert!(
+            service
+                .generate_entity_access_receipt::<AdminTeamRole>(
+                    &user.0,
+                    None,
+                    &Uuid::now_v7().to_string(),
+                    EntityType::Team,
+                )
+                .await
+                .is_err()
+        );
+    }
+    *repo.user_team.lock().await = None;
+    assert!(
+        service
+            .generate_entity_access_receipt::<AdminTeamRole>(
+                &user.0,
+                None,
+                &team_id,
+                EntityType::Team,
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .get_entity_permission(None, &team_id, EntityType::Team, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn test_get_entity_permission_document_returns_access_level() {
     let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
     let service = EntityAccessServiceImpl::new(repo);
@@ -765,6 +1018,178 @@ async fn test_get_entity_permission_agent_session_no_access_returns_unauthorized
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_database_returns_access_level() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Database,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner
+        }
+    ));
+}
+
+#[tokio::test]
+async fn accessible_databases_are_the_repository_listing() {
+    let shared = Uuid::parse_str("0198a805-3e22-75b2-97eb-d9c6b91accb0").unwrap();
+    let owned = Uuid::parse_str("0198a805-3e22-75b2-97eb-d9c6b91accb1").unwrap();
+    let repo = MockRepo::new().with_database_access_list(vec![
+        (shared, AccessLevel::View),
+        (owned, AccessLevel::Owner),
+    ]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    assert_eq!(
+        service.accessible_databases(&test_user_id()).await.unwrap(),
+        vec![(shared, AccessLevel::View), (owned, AccessLevel::Owner)]
+    );
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_database_no_access_returns_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Database,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_database_row_resolves_through_its_database() {
+    let repo = MockRepo::new().with_database_row_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb1",
+            EntityType::DatabaseRow,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+#[tokio::test]
+async fn test_get_access_level_database_row_uses_the_row_query_not_the_database_query() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb1",
+            EntityType::DatabaseRow,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(result, None);
+}
+
+#[tokio::test]
+async fn test_get_access_level_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_access_level(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+        )
+        .await;
+
+    assert_eq!(result.unwrap(), Some(AccessLevel::Edit));
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_returns_scripted_level() {
+    let repo = MockRepo::new().with_scheduled_action_access(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+}
+
+#[tokio::test]
+async fn test_get_entity_permission_scheduled_action_without_grant_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "11111111-1111-1111-1111-111111111111",
+            EntityType::ScheduledAction,
+            None,
+        )
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn test_accessible_scheduled_action_ids_passes_through() {
+    let id = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5a01);
+    let repo = MockRepo::new().with_accessible_scheduled_action_ids(vec![id]);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let ids = service
+        .accessible_scheduled_action_ids(&user_id)
+        .await
+        .unwrap();
+
+    assert_eq!(ids, vec![id]);
 }
 
 #[tokio::test]
@@ -1252,6 +1677,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         EntityType::EmailThread,
         EntityType::Call,
         EntityType::Initiative,
+        EntityType::DatabaseRow,
     ] {
         let receipt = service
             .generate_bot_entity_access_receipt::<ViewAccessLevel>(
@@ -1275,7 +1701,7 @@ async fn team_scoped_bot_dispatches_all_item_types() {
         ));
     }
 
-    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 6);
+    assert_eq!(repo.team_entity_access_calls.load(Ordering::SeqCst), 7);
 }
 
 #[tokio::test]
@@ -2087,6 +2513,86 @@ async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
     assert!(result.is_empty());
 }
 
+/// A row has no grants of its own: whoever can reach its database hears
+/// about it, and a row that no longer exists has no one to tell.
+#[tokio::test]
+async fn test_get_users_by_entity_database_row_reaches_its_databases_users() {
+    let users = vec![
+        user_id("macro|owner@databases.test"),
+        user_id("macro|viewer@databases.test"),
+    ];
+    let service = EntityAccessServiceImpl::new(
+        MockRepo::new()
+            .with_database_row_database(Uuid::from_u128(0xdb000000_0000_0000_0000_000000000001))
+            .with_database_users(users.clone()),
+    );
+    assert_eq!(
+        service
+            .get_users_by_entity(
+                "70000000-0000-0000-0000-000000000001",
+                EntityType::DatabaseRow
+            )
+            .await
+            .unwrap(),
+        users
+    );
+
+    let gone = EntityAccessServiceImpl::new(MockRepo::new().with_database_users(users));
+    assert_eq!(
+        gone.get_users_by_entity(
+            "70000000-0000-0000-0000-000000000001",
+            EntityType::DatabaseRow
+        )
+        .await
+        .unwrap(),
+        Vec::<MacroUserIdStr<'static>>::new()
+    );
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_users() {
+    let users = vec![
+        user_id("macro|dana@test.com"),
+        user_id("macro|erin@test.com"),
+    ];
+    let repo = MockRepo::new().with_database_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].to_string(), "macro|dana@test.com");
+    assert_eq!(result[1].to_string(), "macro|erin@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_rejects_invalid_uuid() {
+    let repo = MockRepo::new().with_database_users(vec![user_id("macro|dana@test.com")]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("not-a-uuid", EntityType::Database)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
+}
+
 #[tokio::test]
 async fn test_get_users_by_entity_channel_returns_users() {
     let repo = MockRepo::new();
@@ -2161,7 +2667,7 @@ async fn test_get_users_by_entity_project_with_many_users() {
 #[tokio::test]
 async fn document_session_access_tracks_current_document_permission() {
     let repo = MockRepo::new();
-    *repo.agent_session_document.lock().await = Some("doc".into());
+    *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Document("doc".into()));
     let service = EntityAccessServiceImpl::new(repo.clone());
     for (permission, expected) in [
         (Some(AccessLevel::View), Some(AccessLevel::View)),
@@ -2185,5 +2691,274 @@ async fn document_session_access_tracks_current_document_permission() {
             .await
             .unwrap(),
         Some(AccessLevel::Owner)
+    );
+}
+
+#[tokio::test]
+async fn standalone_call_recipients_use_explicit_entity_grants() {
+    let repo = MockRepo::new();
+    let granted = MacroUserIdStr::parse_from_str("macro|participant@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: None,
+        share_permission_id: "share".into(),
+    });
+    *repo.call_users.lock().await = vec![granted.clone()];
+    *repo.channel_users.lock().await = vec![
+        MacroUserIdStr::parse_from_str("macro|unrelated@example.com")
+            .unwrap()
+            .into_owned(),
+    ];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![granted]);
+}
+
+#[tokio::test]
+async fn channel_call_recipients_still_use_channel_membership() {
+    let repo = MockRepo::new();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: Some(Uuid::now_v7()),
+        share_permission_id: "share".into(),
+    });
+    *repo.channel_users.lock().await = vec![member.clone()];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![member]);
+}
+
+#[tokio::test]
+async fn database_row_receipts_share_the_access_lookup() {
+    let repo = MockRepo::new().with_database_row_access(AccessLevel::Edit);
+    let calls = repo.database_row_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+    let row_ids = vec![
+        "0198a805-3e22-75b2-97eb-d9c6b91accb1".to_string(),
+        "0198a805-3e22-75b2-97eb-d9c6b91accb2".to_string(),
+        "invalid".to_string(),
+    ];
+    let receipts = service
+        .generate_database_row_view_access_receipts(&user_id, &row_ids)
+        .await;
+    assert_eq!(receipts.len(), 3);
+    for row_id in &row_ids[..2] {
+        let receipt = receipts[row_id].as_ref().unwrap();
+        assert_eq!(receipt.entity().entity_id, *row_id);
+        assert_eq!(receipt.entity().entity_type, EntityType::DatabaseRow);
+        assert!(matches!(
+            receipt.entity_permission(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Edit
+            }
+        ));
+    }
+    assert!(matches!(
+        receipts["invalid"],
+        Err(AccessError::BadRequest(_))
+    ));
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn database_row_receipts_deny_rows_without_a_grant() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+    let receipts = service
+        .generate_database_row_view_access_receipts(
+            &user_id,
+            &["0198a805-3e22-75b2-97eb-d9c6b91accb1".to_string()],
+        )
+        .await;
+    assert!(matches!(
+        receipts["0198a805-3e22-75b2-97eb-d9c6b91accb1"],
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+const FORM_ID: &str = "0199b1f2-3e22-75b2-97eb-d9c6b91accb0";
+
+#[tokio::test]
+async fn a_form_permission_is_the_repository_form_access() {
+    let repo = MockRepo::new().with_form_access(AccessLevel::Edit);
+    let callers = repo.form_access_callers.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(Some(&user_id), FORM_ID, EntityType::Form, None)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(
+        *callers.lock().await,
+        vec![Some(user_id.as_ref().to_string())]
+    );
+}
+
+#[tokio::test]
+async fn a_form_without_access_is_unauthorized() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(Some(&user_id), FORM_ID, EntityType::Form, None)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn public_form_access_asks_the_repository_without_a_user() {
+    let repo = MockRepo::new().with_form_access(AccessLevel::View);
+    let callers = repo.form_access_callers.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    assert_eq!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::View)
+            .await
+            .unwrap(),
+        AccessLevel::View
+    );
+    assert!(matches!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::Edit)
+            .await,
+        Err(AccessError::Unauthorized)
+    ));
+    assert_eq!(*callers.lock().await, vec![None, None]);
+}
+
+#[tokio::test]
+async fn a_members_form_has_no_public_access() {
+    let service = EntityAccessServiceImpl::new(MockRepo::new());
+
+    assert!(matches!(
+        service
+            .check_public_access(FORM_ID, EntityType::Form, AccessLevel::View)
+            .await,
+        Err(AccessError::Unauthorized)
+    ));
+}
+
+#[tokio::test]
+async fn a_form_audience_is_its_entity_access_users() {
+    let respondent = MacroUserIdStr::try_from_email("respondent@example.com")
+        .unwrap()
+        .into_owned();
+    let service =
+        EntityAccessServiceImpl::new(MockRepo::new().with_form_users(vec![respondent.clone()]));
+
+    assert_eq!(
+        service
+            .get_users_by_entity(FORM_ID, EntityType::Form)
+            .await
+            .unwrap(),
+        vec![respondent]
+    );
+}
+
+#[tokio::test]
+async fn a_team_bot_reaches_a_form_through_the_team_access_pool() {
+    let repo = MockRepo::new().with_team_entity_access(AccessLevel::Edit);
+    let requests = repo.team_entity_requests.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<EditAccessLevel>(
+            BotId::new_from_uuid(Uuid::from_u128(1)),
+            BotAccessScope::Team {
+                team_id: Uuid::from_u128(2),
+            },
+            FORM_ID,
+            EntityType::Form,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    );
+    assert_eq!(
+        *requests.lock().await,
+        vec![(FORM_ID.to_string(), EntityType::Form)]
+    );
+}
+
+#[tokio::test]
+async fn accessible_forms_are_the_repository_listing() {
+    let shared = Uuid::parse_str("0199b1f2-3e22-75b2-97eb-d9c6b91accb1").unwrap();
+    let owned = Uuid::parse_str("0199b1f2-3e22-75b2-97eb-d9c6b91accb2").unwrap();
+    let repo = MockRepo::new().with_form_access_list(vec![
+        (shared, AccessLevel::View),
+        (owned, AccessLevel::Owner),
+    ]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    assert_eq!(
+        service.accessible_forms(&test_user_id()).await.unwrap(),
+        vec![(shared, AccessLevel::View), (owned, AccessLevel::Owner)]
+    );
+}
+
+#[tokio::test]
+async fn pipeline_receipts_use_their_own_grants() {
+    let repo = MockRepo::new().with_database_access(AccessLevel::Owner);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    let user = MacroUserIdStr::try_from_email("pipeline@macro.com").unwrap();
+    let id = Uuid::now_v7().to_string();
+    assert!(
+        service
+            .generate_entity_access_receipt::<ViewAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
+    );
+    *repo.pipeline_access.lock().await = Some(AccessLevel::Edit);
+    assert!(
+        service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_ok()
+    );
+    assert!(
+        service
+            .generate_entity_access_receipt::<OwnerAccessLevel>(
+                &user,
+                None,
+                &id,
+                EntityType::CrmPipeline
+            )
+            .await
+            .is_err()
     );
 }

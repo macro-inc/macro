@@ -1,8 +1,8 @@
 use super::PgAccessRepository;
 use crate::domain::{
     models::{
-        AccessError, AccessLevel, BotId, ChannelRoleResult, CrmEntityAccess, EntityType,
-        ParticipantRole, TeamRole,
+        AccessError, AccessLevel, AgentSessionParent, BotId, ChannelRoleResult, CrmEntityAccess,
+        EntityType, ParticipantRole, TeamRole,
     },
     ports::AccessRepository,
 };
@@ -18,6 +18,9 @@ const TEAM_ADMIN: &str = "macro|admin@team.com";
 const TEAM_OWNER: &str = "macro|owner@team.com";
 const USER_WITHOUT_TEAM: &str = "macro|noteam@team.com";
 const TEAM_BETA_OWNER: &str = "macro|multi@team.com";
+
+mod agent_session_parent;
+mod channel_call_chat;
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).unwrap()
@@ -1261,5 +1264,24 @@ async fn calendar_event_channel_share_grants_current_participants_view(
         .await?;
     assert_eq!(access(shared, member).await, None);
     assert_eq!(access(shared, owner).await, Some(AccessLevel::Owner));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn direct_recipients_exclude_inherited_grants(pool: PgPool) -> anyhow::Result<()> {
+    let entity_id = Uuid::now_v7();
+    for (source, kind) in [
+        ("macro|direct@example.com".to_string(), "user"),
+        (Uuid::now_v7().to_string(), "team"),
+        (Uuid::now_v7().to_string(), "channel"),
+    ] {
+        sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'call', $2, $3::text::entity_access_source_type, 'view')", entity_id, source, kind).execute(&pool).await?;
+    }
+    let repo = PgAccessRepository::new(pool);
+    let users = repo
+        .get_direct_entity_users(&entity_id, EntityType::Call)
+        .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].as_ref(), "macro|direct@example.com");
     Ok(())
 }

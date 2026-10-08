@@ -1,3 +1,4 @@
+export type { AiFilterOutcome } from './AiFilterInput';
 export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,
@@ -15,9 +16,13 @@ export {
   type ListGroupDropdownProps,
   ListSortDropdown,
   type ListSortDropdownProps,
+  type ViewLayout,
+  ViewLayoutDropdown,
+  type ViewLayoutDropdownProps,
 } from './ListDropdowns';
 export { MobileFilterDrawer } from './MobileFilterDrawer';
 export { SearchBar, type SearchBarProps } from './SearchBar';
+export { VIEW_SHELL_TOUR } from './tour';
 export {
   type UseViewControlHotkeysOptions,
   useViewControlHotkeys,
@@ -40,6 +45,7 @@ export {
 } from './ViewBreadcrumbs';
 export {
   useViewShell,
+  ViewNavigationControls,
   ViewShell,
   type ViewShellLayout,
   type ViewShellRootProps,

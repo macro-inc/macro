@@ -1,0 +1,39 @@
+[package]
+name = "calendar_scheduling"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:anyhow"]
+postgres = ["dep:sqlx"]
+inbound = ["dep:axum", "dep:macro_authorization"]
+calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id"]
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset", optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+email_validator = { path = "../email_validator" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+rootcause = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+calendar_events = { path = "../calendar_events", optional = true }
+teams = { path = "../teams", default-features = false, features = ["ports"], optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+
+[dev-dependencies]
+model_user = { path = "../model_user" }
+reqwest = { workspace = true }
+tokio = { workspace = true }

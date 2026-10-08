@@ -44,9 +44,9 @@ use item_filters::{
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        github_pull_request::GithubPullRequestLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
-        reminder::ReminderLiteral,
     },
 };
 use macro_authorization::{
@@ -1187,6 +1187,9 @@ where
 /// Wire-format entity filter AST accepted by soup AST endpoints.
 #[derive(Debug, Default, Serialize, Deserialize, Clone, ToSchema)]
 pub struct ApiEntityFilterAst {
+    /// Restrict to the authenticated viewer's favorites before pagination when true.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub favorites_only: Option<bool>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[schema(value_type = serde_json::Value)]
@@ -1222,6 +1225,10 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "fef")]
     #[schema(value_type = serde_json::Value)]
     pub foreign_entity_filter: LiteralTree<ForeignEntityLiteral>,
+    /// the filters that should be applied to GitHub pull request records, on top of `fef`
+    #[serde(default, rename = "ghprf")]
+    #[schema(value_type = serde_json::Value)]
+    pub github_pull_request_filter: LiteralTree<GithubPullRequestLiteral>,
     /// the filters that should be applied to the call entity
     #[serde(default, rename = "callf")]
     #[schema(value_type = serde_json::Value)]
@@ -1231,14 +1238,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "ccf")]
     #[schema(value_type = serde_json::Value)]
     pub crm_company_filter: LiteralTree<CrmCompanyLiteral>,
-    /// Filters applied to reminders (wire key `remf`). Unlike every other
-    /// filter here, empty/omitted returns **no** reminders: they are opt-in,
-    /// so the caller must send `inc`, an id, or an entity to get any.
-    #[serde(default, rename = "remf")]
+    /// Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`).
+    #[serde(default, rename = "crmf")]
     #[schema(value_type = serde_json::Value)]
-    pub reminder_filter: LiteralTree<ReminderLiteral>,
-    /// Filters applied to agent sessions (wire key `asf`). Like reminders,
-    /// empty/omitted returns **no** agent sessions: they are opt-in, so the
+    pub crm_contact_filter: LiteralTree<item_filters::ast::crm_contact::CrmContactLiteral>,
+    /// Filters applied to agent sessions (wire key `asf`). An empty or
+    /// omitted filter returns **no** agent sessions: they are opt-in, so the
     /// caller must send `inc`, an id, or an owner to get any.
     #[serde(default, rename = "asf")]
     #[schema(value_type = serde_json::Value)]
@@ -1333,6 +1338,7 @@ impl ApiEntityFilterAst {
     #[tracing::instrument(err, skip(self))]
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1341,9 +1347,10 @@ impl ApiEntityFilterAst {
             channel_filter,
             channel_thread_filter,
             foreign_entity_filter,
+            github_pull_request_filter,
             call_filter,
             crm_company_filter,
-            reminder_filter,
+            crm_contact_filter,
             agent_session_filter,
             properties_filter,
             email_crm_domains,
@@ -1399,6 +1406,7 @@ impl ApiEntityFilterAst {
         };
 
         Ok(EntityFilterAst {
+            favorites_only,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1411,10 +1419,13 @@ impl ApiEntityFilterAst {
             channel_thread_filter,
             call_filter,
             crm_company_filter,
+            crm_contact_filter,
             foreign_entity_filter,
-            reminder_filter,
+            github_pull_request_filter,
             agent_session_filter,
             properties_filter,
+            initiative_filter: None,
+            database_row_filter: None,
         })
     }
 }

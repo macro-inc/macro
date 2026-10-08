@@ -28,7 +28,17 @@ export interface BaseListEntityProps<E extends EntityData = EntityData> {
   checked?: boolean;
   highlighted?: boolean;
   hovered?: boolean;
+  /** Caller-owned quick actions, revealed on pointer hover or keyboard focus. */
+  actions?: JSX.Element;
+  /** Persistent status/action immediately before the timestamp. */
+  leadingAction?: JSX.Element;
+  /** Caller-owned marker between the icon and the title, e.g. a priority. */
+  titleLeading?: JSX.Element;
+  /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
+  meta?: JSX.Element;
   hideContentHits?: boolean;
+  /** Resolved app display name for a linked GitHub PR author, when available. */
+  authorDisplayName?: string;
   /** Opt-in by the data-owning view; keep nonessential setup off initial render. */
   deferInteractions?: boolean;
   /** Hide the multi-select checkbox (e.g. read-only embeds outside soup). */
@@ -56,7 +66,14 @@ const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
   entity: WithNotification<EntityData>;
+  /** Persistent schedule metadata, including on touch and notification rows. */
+  scheduleStatus?: JSX.Element;
+  actions?: JSX.Element;
+  leadingAction?: JSX.Element;
+  titleLeading?: JSX.Element;
+  meta?: JSX.Element;
   checked?: boolean;
+  authorDisplayName?: string;
   hideCheckbox?: boolean;
   onChecked?: (checked: boolean, shiftKey: boolean) => void;
   unread: boolean;
@@ -72,6 +89,8 @@ export interface LayoutProps {
     entity: ProjectEntity,
     e: PointerEvent | MouseEvent
   ) => void;
+  /** Show a task's Project with its other properties (Projects enabled). */
+  showProject?: boolean;
 }
 
 export type NarrowLayoutVariant = 'standard' | 'condensed' | 'single-line';
@@ -170,6 +189,6 @@ export function RowIndicator(props: {
 
 export function InboxDivider() {
   return (
-    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-muted" />
+    <div class="col-span-3 ml-(--soup-inbox-left-of-content) min-w-full min-h-px max-h-px bg-edge-divider" />
   );
 }

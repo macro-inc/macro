@@ -68,6 +68,7 @@ impl From<EmailErr> for SendMessageError {
         match &err {
             EmailErr::MessageNotFound(_) => SendMessageError::NotFound(err.to_string()),
             EmailErr::MessageAlreadySent(_)
+            | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft
             | EmailErr::Base64DecodeError(_)
             | EmailErr::Utf8Error(_) => SendMessageError::Validation(err.to_string()),

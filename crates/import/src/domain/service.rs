@@ -1,10 +1,11 @@
 //! The import orchestrator: staging (with team-wide dedup), gather jobs,
 //! and import jobs.
 //!
-//! Gather jobs are short agent sessions over the user's connector MCP server
-//! whose toolset includes an in-process `CreateImportEntity` locked to
-//! `(user, source, initiator)` — the model stages candidates by calling the
-//! tool, so there is no structured output to parse. Import jobs copy
+//! Slack discovery uses the typed workspace source port to stage public
+//! channels and enrich their membership. Manual discovery never uses an agent
+//! or auto-imports; onboarding may fall back to an agent session. Other gather
+//! jobs use connector tools with `CreateImportEntity` locked to
+//! `(user, source, initiator)`. Import jobs copy
 //! accepted rows in: Linear tasks and Slack channels are composed
 //! deterministically from staged metadata; Notion pages are fetched
 //! directly through the connector's fetch tool (no model in the content
@@ -13,8 +14,9 @@
 
 use super::models::*;
 use super::ports::{
-    EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties, ImportedDocumentProperty,
-    ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedDocumentProperties,
+    ImportedDocumentProperty, ImportedDocumentPropertyValue, ImportedTaskProperties, Result,
+    SlackSourceError, SlackWorkspaceSource,
 };
 use crate::inbound::toolset::{
     ImportToolContext, ToolPolicy, gather_toolset, notion_import_toolset,
@@ -32,7 +34,13 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
+mod admission;
 mod prompts;
+mod slack;
+mod slack_discovery;
+
+pub use slack_discovery::NoSlackSource;
+use slack_discovery::SlackBatch;
 
 #[cfg(test)]
 mod test;
@@ -65,12 +73,22 @@ const NOTION_PAGE_IMPORT_TIMEOUT: Duration = Duration::from_secs(120);
 /// enough to stay polite to Notion's MCP.
 const NOTION_IMPORT_CONCURRENCY: usize = 4;
 
-/// How many channels the deterministic Slack gather stages, mirroring the
-/// "8-15 strong candidates" the agent prompt asks for.
-const SLACK_GATHER_MAX_CHANNELS: usize = 15;
-/// How many channel-search pages the deterministic Slack gather follows
-/// before staging what it has.
-const SLACK_GATHER_MAX_PAGES: usize = 5;
+/// Discovery policy: bounded onboarding suggestions or a user-driven listing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GatherMode {
+    /// Suggest the strongest active channels for onboarding.
+    Onboarding,
+    /// Stage all visible public channels for explicit selection.
+    Manual,
+}
+
+fn gather_timeout(source: ImportSource, mode: GatherMode) -> Duration {
+    match (source, mode) {
+        (ImportSource::Slack, GatherMode::Onboarding) => Duration::from_secs(180),
+        (ImportSource::Slack, GatherMode::Manual) => Duration::from_secs(360),
+        _ => GATHER_TIMEOUT,
+    }
+}
 
 /// How often a running import batch touches its rows' `updated_at`. The
 /// heartbeat covers every row the batch owns — queued AND in-flight — so a
@@ -94,7 +112,7 @@ fn notion_import_failure_reason(outcome: &anyhow::Result<()>) -> String {
     outcome
         .as_ref()
         .err()
-        .map(ToString::to_string)
+        .map(admission::failure_reason)
         .unwrap_or_else(|| "the import job did not finish this item".to_string())
 }
 
@@ -161,6 +179,14 @@ pub trait ImportService: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         source: ImportSource,
         auto_import: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// User-triggered, non-auto-import gather that stages everything visible.
+    /// Only Slack is supported in this slice. Returns whether a run started.
+    fn start_discovery(
+        &self,
+        user: MacroUserIdStr<'static>,
+        source: ImportSource,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Restart a failed (or dismissed) gather run. Returns whether a run
@@ -300,21 +326,25 @@ pub trait NotionPageImporter: Send + Sync + 'static {
 
 /// Concrete orchestrator wiring the repo, the user's MCP servers, the
 /// entity creator, and usage recording together.
-pub struct ImportServiceImpl<R, S, C> {
+pub struct ImportServiceImpl<R, S, C, W = NoSlackSource> {
     repo: R,
+    slack_source: Arc<W>,
     mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    admission: Arc<dyn ai_billing::AiAdmissionService>,
     notifier: Option<ImportNotify>,
 }
 
-impl<R: Clone, S, C> Clone for ImportServiceImpl<R, S, C> {
+impl<R: Clone, S, C, W: SlackWorkspaceSource> Clone for ImportServiceImpl<R, S, C, W> {
     fn clone(&self) -> Self {
         Self {
             repo: self.repo.clone(),
+            slack_source: self.slack_source.clone(),
             mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
+            admission: self.admission.clone(),
             notifier: self.notifier.clone(),
         }
     }
@@ -330,10 +360,30 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
     ) -> Self {
         Self {
             repo,
+            slack_source: Arc::new(NoSlackSource),
             mcp_tools,
             creator,
             recorder,
+            admission: Arc::new(ai_billing::DisabledAiAdmissionService),
             notifier: None,
+        }
+    }
+}
+
+impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W> {
+    /// Attach a live Slack workspace reader, preserving the service configuration.
+    pub fn with_slack_source<W2: SlackWorkspaceSource>(
+        self,
+        source: Arc<W2>,
+    ) -> ImportServiceImpl<R, S, C, W2> {
+        ImportServiceImpl {
+            repo: self.repo,
+            mcp_tools: self.mcp_tools,
+            creator: self.creator,
+            recorder: self.recorder,
+            admission: self.admission,
+            notifier: self.notifier,
+            slack_source: source,
         }
     }
 
@@ -350,21 +400,23 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
     }
 }
 
-impl<R, S, C> ImportServiceImpl<R, S, C>
+impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
     /// Spawn the gather session for one source; finishes the run row either
     /// way and nudges the client.
-    fn spawn_gather(&self, user: MacroUserIdStr<'static>, source: ImportSource) {
+    fn spawn_gather(&self, user: MacroUserIdStr<'static>, source: ImportSource, mode: GatherMode) {
         let service = self.clone();
         tokio::spawn(async move {
-            let outcome =
-                tokio::time::timeout(GATHER_TIMEOUT, service.run_gather_session(&user, source))
-                    .await
-                    .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out")));
+            let outcome = tokio::time::timeout(
+                gather_timeout(source, mode),
+                service.run_gather_session(&user, source, mode),
+            )
+            .await
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("gather session timed out")));
             let gather_succeeded = outcome.is_ok();
 
             let finished = match outcome {
@@ -378,7 +430,12 @@ where
                     tracing::warn!(source = source.as_ref(), error = ?e, "gather session failed");
                     service
                         .repo
-                        .finish_run(&user, source, RunStatus::Failed, Some(&e.to_string()))
+                        .finish_run(
+                            &user,
+                            source,
+                            RunStatus::Failed,
+                            Some(&admission::failure_reason(&e)),
+                        )
                         .await
                 }
             };
@@ -443,29 +500,43 @@ where
         }
     }
 
-    /// Run one gather session: connector MCP tools plus the locked
-    /// `CreateImportEntity`. Staged rows land as the session runs; the final
-    /// text is ignored.
+    /// Run typed Slack discovery or an agent gather with locked staging tools.
+    /// Candidates land incrementally; any final agent text is ignored.
     #[tracing::instrument(skip(self, user), err)]
     async fn run_gather_session(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
+        mode: GatherMode,
     ) -> anyhow::Result<()> {
-        let mcp_tools = self.connector_tools(user, source).await?;
+        // Recheck queued AI work before loading tools. Slack stays deterministic
+        // until its onboarding fallback actually needs an agent.
+        self.admit_gather(user, source).await?;
+        self.gather_with_tools(user, source, mode).await
+    }
 
-        // Slack discovery is a listing problem, not a language problem:
-        // enumerate channels through the connector directly and stage the
-        // strongest. The agent session only runs as a fallback, when the
-        // connector's tool surface changed under us.
+    async fn gather_with_tools(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        mode: GatherMode,
+    ) -> anyhow::Result<()> {
+        // Typed Slack discovery runs before loading agent tools. Only
+        // onboarding may fall back to an agent when workspace reads fail.
         if source == ImportSource::Slack {
-            match self.gather_slack_direct(user, &mcp_tools).await {
+            match slack_discovery::gather_slack(self, user, mode).await {
                 Ok(_) => return Ok(()),
+                Err(SlackSourceError::ToolsUnavailable(_)) if mode == GatherMode::Manual => {
+                    anyhow::bail!("Your Slack connection does not expose channel tools");
+                }
+                Err(e) if mode == GatherMode::Manual => return Err(e.into()),
                 Err(e) => {
                     tracing::warn!(error = ?e, "direct slack gather failed; trying the agent");
                 }
             }
         }
+
+        let mcp_tools = self.connector_tools(user, source).await?;
 
         // Staging is idempotent (the ledger dedups already-staged rows), so
         // rerunning the whole session on the fallback model is safe even
@@ -475,6 +546,7 @@ where
             .await
         {
             Ok(()) => Ok(()),
+            Err(e) if e.is::<ai_billing::AiAdmissionError>() => Err(e),
             Err(e) => {
                 tracing::warn!(model = GATHER_MODEL, error = ?e, "gather session failed; retrying on the fallback model");
                 self.gather_agent_session(user, source, GATHER_FALLBACK_MODEL, mcp_tools)
@@ -485,12 +557,12 @@ where
 
     /// One agent gather session on a specific model.
     #[tracing::instrument(skip(self, user, mcp_tools), err)]
-    async fn gather_agent_session(
+    async fn gather_agent_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         model: &str,
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
     ) -> anyhow::Result<()> {
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -517,10 +589,10 @@ where
     /// handle — routing page content through a model means re-emitting the
     /// whole page as output tokens, which is an order of magnitude slower.
     #[tracing::instrument(skip(self, user, mcp_tools, row), fields(id = %row.id), err)]
-    async fn import_notion_page_direct(
+    async fn import_notion_page_direct<M: ToolSet<()>>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
+        mcp_tools: &M,
         row: &ImportEntity,
     ) -> anyhow::Result<()> {
         let fetch_tool = notion_fetch_tool_name(mcp_tools)
@@ -572,124 +644,14 @@ where
         Ok(())
     }
 
-    /// Call one connector tool and surface both dispatch and tool errors as
-    /// plain errors.
-    async fn connector_tool_call(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
-        tool_name: &str,
-        arguments: &serde_json::Value,
-    ) -> anyhow::Result<serde_json::Value> {
-        ToolSet::<()>::try_tool_call(
-            mcp_tools,
-            (),
-            RequestContext::new(user.clone()),
-            tool_name,
-            arguments,
-        )
-        .await
-        .map_err(|e| anyhow::anyhow!("{tool_name} dispatch failed: {e}"))?
-        .map_err(|e| anyhow::anyhow!("{tool_name} failed: {}", e.description))
-    }
-
-    /// Stage the user's Slack channels WITHOUT a model: call the connector's
-    /// channel-search tool directly (an empty query lists every channel the
-    /// connected user can see), follow pagination, and stage the strongest
-    /// candidates. The agent-driven gather routinely finished "successfully"
-    /// having staged nothing; a direct call either produces channels or a
-    /// real error. Staged rows carry no participants — inviting teammates
-    /// stays best-effort and must never block discovery.
-    #[tracing::instrument(skip(self, user, mcp_tools), err)]
-    async fn gather_slack_direct(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        mcp_tools: &UserMcpTools,
-    ) -> anyhow::Result<usize> {
-        let search_tool = slack_channel_search_tool_name(mcp_tools)
-            .ok_or_else(|| anyhow::anyhow!("connector exposes no channel-search tool"))?;
-
-        let mut channels: Vec<SlackChannelCandidate> = Vec::new();
-        let mut cursor: Option<String> = None;
-        for page in 0..SLACK_GATHER_MAX_PAGES {
-            let mut arguments = serde_json::json!({ "query": "" });
-            if let Some(cursor) = &cursor {
-                arguments["cursor"] = serde_json::Value::String(cursor.clone());
-            }
-            let result = match self
-                .connector_tool_call(user, mcp_tools, &search_tool, &arguments)
-                .await
-            {
-                Ok(result) => Ok(result),
-                // Some servers reject an explicit empty query; try the first
-                // page again without one before giving up on the direct path.
-                Err(empty_query_error) if page == 0 => self
-                    .connector_tool_call(user, mcp_tools, &search_tool, &serde_json::json!({}))
-                    .await
-                    .map_err(|no_query_error| {
-                        anyhow::anyhow!(
-                            "channel search failed with an empty query ({empty_query_error}) \
-                             and without one ({no_query_error})"
-                        )
-                    }),
-                Err(e) => {
-                    // Later pages are best-effort: keep what earlier pages
-                    // already produced.
-                    tracing::warn!(page, error = ?e, "channel search page failed");
-                    break;
-                }
-            }?;
-
-            let parsed = parse_slack_channel_page(result);
-            channels.extend(parsed.channels);
-            cursor = parsed.next_cursor;
-            if cursor.is_none() {
-                break;
-            }
-        }
-        anyhow::ensure!(!channels.is_empty(), "channel search returned no channels");
-
-        let enumerated = channels.len();
-        let mut staged = 0usize;
-        for channel in select_slack_candidates(channels, SLACK_GATHER_MAX_CHANNELS) {
-            let foreign_id = channel.id.clone().unwrap_or_else(|| channel.name.clone());
-            let metadata = serde_json::json!({
-                "name": channel.name,
-                "channel_id": channel.id,
-                "purpose": channel.purpose,
-                "participants": [],
-            });
-            match self
-                .stage(
-                    user,
-                    Initiator::Onboarding,
-                    ImportSource::Slack,
-                    &foreign_id,
-                    metadata,
-                )
-                .await
-            {
-                Ok(StageOutcome::Staged(_)) => staged += 1,
-                // Already imported (by the user or a teammate), declined, or
-                // mid-import — the ledger already covers it.
-                Ok(_) => {}
-                Err(e) => {
-                    tracing::warn!(channel = %channel.name, error = ?e, "failed to stage slack channel");
-                }
-            }
-        }
-        tracing::info!(enumerated, staged, "direct slack gather finished");
-        Ok(staged)
-    }
-
     /// Fallback: run a single-page Haiku session over the shared connector
     /// tools. Rows the agent fails to finalize are handled by the caller.
     #[tracing::instrument(skip(self, user, mcp_tools, rows), fields(pages = rows.len()), err)]
-    async fn run_notion_import_session(
+    async fn run_notion_import_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         rows: &[ImportEntity],
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
     ) -> anyhow::Result<()> {
         let native = notion_import_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -731,17 +693,20 @@ where
     }
 
     /// Run one bounded agent session to completion, discarding the text.
-    #[allow(clippy::too_many_arguments)]
-    async fn drive_session(
+    #[expect(clippy::too_many_arguments, reason = "bounded session configuration")]
+    async fn drive_session<M: ToolSet<ImportToolContext<Self>> + 'static>(
         &self,
         user: &MacroUserIdStr<'static>,
         model: impl ToString,
         max_turns: usize,
-        toolset: NativePlusMcp<ImportToolContext<Self>>,
+        toolset: NativePlusMcp<ImportToolContext<Self>, M>,
         context: ImportToolContext<Self>,
         system_prompt: &str,
         user_prompt: &str,
     ) -> anyhow::Result<()> {
+        // Covers Slack/Notion fallbacks and pages waiting behind the batch's
+        // concurrency limit. Never gate their preceding deterministic work.
+        self.admit_ai(user).await?;
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Import, user.clone());
         let agent_loop = AgentLoop::new(self.recorder.clone())
             .with_model(model)
@@ -766,9 +731,13 @@ where
         Ok(())
     }
 
-    /// Copy one accepted Linear/Slack row in, deterministically from its
-    /// staged metadata.
-    async fn import_deterministic(&self, user: &MacroUserIdStr<'static>, row: &ImportEntity) {
+    /// Copy one accepted Linear/Slack row from staged metadata, refreshing Slack membership live.
+    async fn import_deterministic(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        row: &ImportEntity,
+        slack_batch: &mut SlackBatch<W::Session>,
+    ) {
         let created: anyhow::Result<(String, Option<Uuid>)> = match row.source {
             ImportSource::Linear => {
                 match serde_json::from_value::<LinearIssueMeta>(row.metadata.clone()) {
@@ -784,29 +753,26 @@ where
                 }
             }
             ImportSource::Slack => {
-                match serde_json::from_value::<SlackChannelMeta>(row.metadata.clone()) {
-                    Ok(meta) => {
-                        // Channels always associate with the user's team when
-                        // they have one — that is what makes team dedup work.
-                        match self.repo.user_team_id(user).await {
-                            Ok(team_id) => {
-                                // Teammates who were in the Slack channel join
-                                // the Macro one (matched by email downstream).
-                                let emails: Vec<String> = meta
-                                    .participants
-                                    .iter()
-                                    .filter_map(|p| p.email.clone())
-                                    .collect();
-                                self.creator
-                                    .create_channel(user, &meta.name, team_id, &emails)
-                                    .await
-                                    .map(|id| (id, team_id))
-                            }
-                            Err(e) => Err(anyhow::anyhow!("team lookup failed: {e}")),
-                        }
-                    }
-                    Err(e) => Err(anyhow::anyhow!("invalid slack metadata: {e}")),
+                async {
+                    let team_id = self
+                        .repo
+                        .user_team_id(user)
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("Slack import requires a team"))?;
+                    let meta = serde_json::from_value(row.metadata.clone())?;
+                    let emails = slack_batch.resolve_emails(self, user, team_id, &meta).await;
+                    let id = slack::ensure_channel(
+                        &self.repo,
+                        self.creator.as_ref(),
+                        user,
+                        row,
+                        team_id,
+                        &emails,
+                    )
+                    .await?;
+                    Ok((id.to_string(), Some(team_id)))
                 }
+                .await
             }
             // Notion rows go through the agent session, never here.
             ImportSource::Notion => return,
@@ -862,15 +828,18 @@ where
 
     /// Run the canonical single-page Notion pipeline for a row that is
     /// already `importing`.
-    async fn process_notion_page(
+    async fn process_notion_page<M>(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: Arc<UserMcpTools>,
+        mcp_tools: Arc<M>,
         row: &ImportEntity,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<()>
+    where
+        M: ToolSet<()> + ToolSet<ImportToolContext<Self>> + 'static,
+    {
         let outcome = tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
             match self
-                .import_notion_page_direct(user, &mcp_tools, row)
+                .import_notion_page_direct(user, &*mcp_tools, row)
                 .await
             {
                 Ok(()) => Ok(()),
@@ -933,8 +902,11 @@ where
                 }
             }));
 
+            let mut slack_batch = SlackBatch::default();
             for row in &direct_rows {
-                service.import_deterministic(&user, row).await;
+                service
+                    .import_deterministic(&user, row, &mut slack_batch)
+                    .await;
             }
 
             if !notion_rows.is_empty() {
@@ -981,9 +953,9 @@ where
     }
 }
 
-impl<R, S, C> ImportService for ImportServiceImpl<R, S, C>
+impl<R, S, C, W: SlackWorkspaceSource> ImportService for ImportServiceImpl<R, S, C, W>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1049,11 +1021,39 @@ where
         source: ImportSource,
         auto_import: bool,
     ) -> Result<bool> {
-        // Wins only when no run row exists — gathers run once per
-        // connection; explicit retry is the only re-entry.
+        if !self.prepare_gather(&user, source, &[]).await? {
+            return Ok(false);
+        }
+        // The CAS still decides the winner if another request raced admission.
         let won = self.repo.start_run(&user, source, &[], auto_import).await?;
         if won {
-            self.spawn_gather(user.clone(), source);
+            self.spawn_gather(user.clone(), source, GatherMode::Onboarding);
+            self.notify(&user).await;
+        }
+        Ok(won)
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn start_discovery(
+        &self,
+        user: MacroUserIdStr<'static>,
+        source: ImportSource,
+    ) -> Result<bool> {
+        if source != ImportSource::Slack {
+            return Err(ImportError::UnsupportedDiscovery(source));
+        }
+        let from = [
+            RunStatus::Ready,
+            RunStatus::Completed,
+            RunStatus::Failed,
+            RunStatus::Dismissed,
+        ];
+        if !self.prepare_gather(&user, source, &from).await? {
+            return Ok(false);
+        }
+        let won = self.repo.start_manual_run(&user, source, &from).await?;
+        if won {
+            self.spawn_gather(user.clone(), source, GatherMode::Manual);
             self.notify(&user).await;
         }
         Ok(won)
@@ -1065,6 +1065,12 @@ where
         user: MacroUserIdStr<'static>,
         source: ImportSource,
     ) -> Result<bool> {
+        if !self
+            .prepare_gather(&user, source, &[RunStatus::Failed, RunStatus::Dismissed])
+            .await?
+        {
+            return Ok(false);
+        }
         let won = self
             .repo
             .start_run(
@@ -1075,7 +1081,7 @@ where
             )
             .await?;
         if won {
-            self.spawn_gather(user.clone(), source);
+            self.spawn_gather(user.clone(), source, GatherMode::Onboarding);
             self.notify(&user).await;
         }
         Ok(won)
@@ -1112,6 +1118,9 @@ where
             }
         }
 
+        // Claim deterministic work without quota checks. Even Notion tries a
+        // direct fetch first; only its AI fallback needs admission, and any
+        // refusal releases the row through the usual failure bookkeeping.
         let rows = self.repo.mark_importing(&user, &import_ids).await?;
         let importing = rows.len() as u64;
         self.notify(&user).await;
@@ -1159,20 +1168,21 @@ where
     }
 }
 
-impl<R, S, C> ImportStager for ImportServiceImpl<R, S, C>
+impl<R, S, C, W: SlackWorkspaceSource> ImportServiceImpl<R, S, C, W>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user, metadata), err)]
-    async fn stage(
+    async fn stage_inner(
         &self,
         user: &MacroUserIdStr<'static>,
         initiator: Initiator,
         source: ImportSource,
         foreign_id: &str,
         metadata: serde_json::Value,
+        notify: bool,
     ) -> Result<StageOutcome> {
         let foreign_id = source
             .normalize_foreign_id(foreign_id)
@@ -1213,7 +1223,9 @@ where
             .await?
         {
             Some(row) => {
-                self.notify(user).await;
+                if notify {
+                    self.notify(user).await;
+                }
                 Ok(StageOutcome::Staged(row))
             }
             // Raced into a non-staged status between the check and the
@@ -1236,6 +1248,25 @@ where
                 }
             }
         }
+    }
+}
+
+impl<R, S, C, W: SlackWorkspaceSource> ImportStager for ImportServiceImpl<R, S, C, W>
+where
+    R: ImportRepo + CanonicalImportRepo + Clone,
+    S: ConnectorSelect,
+    C: EntityCreator,
+{
+    async fn stage(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        initiator: Initiator,
+        source: ImportSource,
+        foreign_id: &str,
+        metadata: serde_json::Value,
+    ) -> Result<StageOutcome> {
+        self.stage_inner(user, initiator, source, foreign_id, metadata, true)
+            .await
     }
 
     #[tracing::instrument(skip(self, user, metadata), err)]
@@ -1302,9 +1333,9 @@ where
     }
 }
 
-impl<R, S, C> NotionPageImporter for ImportServiceImpl<R, S, C>
+impl<R, S, C, W: SlackWorkspaceSource> NotionPageImporter for ImportServiceImpl<R, S, C, W>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1399,6 +1430,11 @@ where
             .process_notion_page(user, mcp_tools, &importing_row)
             .await;
         self.notify(user).await;
+        if let Err(error) = &pipeline_result
+            && let Some(error) = error.downcast_ref::<ai_billing::AiAdmissionError>()
+        {
+            return Err(ImportError::Admission(*error));
+        }
 
         let row = self
             .repo
@@ -1432,9 +1468,9 @@ where
     }
 }
 
-impl<R, S, C> ImportFinalizer for ImportServiceImpl<R, S, C>
+impl<R, S, C, W: SlackWorkspaceSource> ImportFinalizer for ImportServiceImpl<R, S, C, W>
 where
-    R: ImportRepo + Clone,
+    R: ImportRepo + CanonicalImportRepo + Clone,
     S: ConnectorSelect,
     C: EntityCreator,
 {
@@ -1501,7 +1537,7 @@ where
 
 /// The mangled name of the connector's Notion fetch tool. Notion exposes this
 /// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
-fn notion_fetch_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
+fn notion_fetch_tool_name(mcp_tools: &impl ToolSet<()>) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
@@ -1513,185 +1549,6 @@ fn is_notion_fetch_tool_name(name: &str) -> bool {
         name.rsplit_once("__").map(|(_, tool)| tool),
         Some("notion-fetch" | "fetch")
     )
-}
-
-/// The mangled name of the connector's channel-search tool. Slack's hosted
-/// MCP has shipped several tool-name spellings, so this matches the shape —
-/// a search/list over channels — rather than one literal name.
-fn slack_channel_search_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
-    ToolSet::<()>::request_schemas(mcp_tools)?
-        .into_iter()
-        .map(|schema| schema.name)
-        .find(|name| is_slack_channel_search_tool_name(name))
-}
-
-fn is_slack_channel_search_tool_name(name: &str) -> bool {
-    let Some((_, tool)) = name.rsplit_once("__") else {
-        return false;
-    };
-    let tool = tool.to_ascii_lowercase().replace('-', "_");
-    let channel_noun = tool.contains("channel") || tool.contains("conversation");
-    let listing_verb = tool.contains("search") || tool.contains("list");
-    let other_surface = [
-        "member", "history", "message", "canvas", "create", "user", "emoji", "file",
-    ]
-    .iter()
-    .any(|word| tool.contains(word));
-    channel_noun && listing_verb && !other_surface
-}
-
-/// One channel parsed out of a Slack channel-search result.
-#[derive(Debug, Clone, PartialEq)]
-struct SlackChannelCandidate {
-    id: Option<String>,
-    name: String,
-    purpose: Option<String>,
-    member_count: Option<u64>,
-    archived: bool,
-}
-
-/// One page of channel-search results.
-#[derive(Debug, Default, PartialEq)]
-struct SlackChannelPage {
-    channels: Vec<SlackChannelCandidate>,
-    next_cursor: Option<String>,
-}
-
-/// Split a channel-search result into channels plus a pagination cursor.
-/// Handles structured MCP output, JSON re-encoded as text, a bare array of
-/// channels, and the channel list hiding under common wrapper keys.
-fn parse_slack_channel_page(result: serde_json::Value) -> SlackChannelPage {
-    match result {
-        serde_json::Value::String(text) => match serde_json::from_str::<serde_json::Value>(&text) {
-            Ok(structured @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) => {
-                parse_slack_channel_page(structured)
-            }
-            _ => SlackChannelPage::default(),
-        },
-        serde_json::Value::Array(items) => SlackChannelPage {
-            channels: items.iter().filter_map(parse_slack_channel).collect(),
-            next_cursor: None,
-        },
-        serde_json::Value::Object(map) => {
-            let next_cursor = slack_next_cursor(&map);
-            for key in ["channels", "results", "items", "matches", "data"] {
-                if let Some(value) = map.get(key) {
-                    let inner = parse_slack_channel_page(value.clone());
-                    if !inner.channels.is_empty() {
-                        return SlackChannelPage {
-                            channels: inner.channels,
-                            next_cursor: inner.next_cursor.or(next_cursor),
-                        };
-                    }
-                }
-            }
-            // A single channel object at the top level.
-            let channels = parse_slack_channel(&serde_json::Value::Object(map))
-                .into_iter()
-                .collect();
-            SlackChannelPage {
-                channels,
-                next_cursor,
-            }
-        }
-        _ => SlackChannelPage::default(),
-    }
-}
-
-fn slack_next_cursor(map: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
-    map.get("next_cursor")
-        .or_else(|| map.get("nextCursor"))
-        .or_else(|| map.get("cursor"))
-        .or_else(|| {
-            map.get("response_metadata")
-                .and_then(|value| value.as_object())
-                .and_then(|metadata| metadata.get("next_cursor"))
-        })
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|cursor| !cursor.is_empty())
-        .map(str::to_string)
-}
-
-fn parse_slack_channel(value: &serde_json::Value) -> Option<SlackChannelCandidate> {
-    let map = value.as_object()?;
-    // DMs and group DMs are not importable channels.
-    if ["is_im", "is_mpim"]
-        .iter()
-        .any(|key| map.get(*key).and_then(serde_json::Value::as_bool) == Some(true))
-    {
-        return None;
-    }
-    let name = map
-        .get("name")
-        .or_else(|| map.get("channel_name"))
-        .and_then(|value| value.as_str())
-        .map(|name| name.trim().trim_start_matches('#'))
-        .filter(|name| !name.is_empty())?
-        .to_string();
-    let id = map
-        .get("id")
-        .or_else(|| map.get("channel_id"))
-        .and_then(|value| value.as_str())
-        .map(str::trim)
-        .filter(|id| !id.is_empty())
-        .map(str::to_string);
-    let purpose = slack_channel_text(map, "purpose")
-        .or_else(|| slack_channel_text(map, "topic"))
-        .or_else(|| slack_channel_text(map, "description"));
-    let member_count = map
-        .get("member_count")
-        .or_else(|| map.get("num_members"))
-        .and_then(serde_json::Value::as_u64);
-    let archived = map.get("is_archived").and_then(serde_json::Value::as_bool) == Some(true);
-    Some(SlackChannelCandidate {
-        id,
-        name,
-        purpose,
-        member_count,
-        archived,
-    })
-}
-
-/// Slack renders purpose/topic either as a plain string or as the classic
-/// API's `{ "value": "…" }` wrapper.
-fn slack_channel_text(
-    map: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Option<String> {
-    let value = map.get(key)?;
-    value
-        .as_str()
-        .or_else(|| value.get("value").and_then(|nested| nested.as_str()))
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_string)
-}
-
-/// Rank enumerated channels and keep the strongest `cap`: drop archived
-/// channels, dedupe by id (falling back to the name), prefer larger channels
-/// (member count is the best activity proxy a listing offers), and keep the
-/// listing order among ties.
-fn select_slack_candidates(
-    channels: Vec<SlackChannelCandidate>,
-    cap: usize,
-) -> Vec<SlackChannelCandidate> {
-    let mut seen = HashSet::new();
-    let mut candidates: Vec<SlackChannelCandidate> = channels
-        .into_iter()
-        .filter(|channel| !channel.archived)
-        .filter(|channel| {
-            seen.insert(
-                channel
-                    .id
-                    .clone()
-                    .unwrap_or_else(|| format!("#{}", channel.name.to_ascii_lowercase())),
-            )
-        })
-        .collect();
-    candidates.sort_by_key(|channel| std::cmp::Reverse(channel.member_count.unwrap_or(0)));
-    candidates.truncate(cap);
-    candidates
 }
 
 /// Split a Notion fetch result into its title, Markdown body, and properties.
@@ -2706,14 +2563,14 @@ impl Drop for AbortOnDrop {
 
 /// A toolset combining an in-process collection with the user's connector
 /// MCP tools: native tools win by name, everything else routes to MCP.
-struct NativePlusMcp<Context> {
+struct NativePlusMcp<Context, M> {
     native: ai_toolset::AsyncToolCollection<Context>,
     native_names: HashSet<String>,
-    mcp: Arc<UserMcpTools>,
+    mcp: Arc<M>,
 }
 
-impl<Context: Send + Sync + 'static> NativePlusMcp<Context> {
-    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<UserMcpTools>) -> Self {
+impl<Context: Send + Sync + 'static, M> NativePlusMcp<Context, M> {
+    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<M>) -> Self {
         let native_names = native
             .request_schemas()
             .unwrap_or_default()
@@ -2728,9 +2585,10 @@ impl<Context: Send + Sync + 'static> NativePlusMcp<Context> {
     }
 }
 
-impl<Context> ToolSet<Context> for NativePlusMcp<Context>
+impl<Context, M> ToolSet<Context> for NativePlusMcp<Context, M>
 where
     Context: Clone + Send + Sync + 'static,
+    M: ToolSet<Context>,
 {
     fn dispatch_tool_call<'a>(
         &'a self,

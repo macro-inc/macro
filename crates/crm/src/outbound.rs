@@ -1,9 +1,15 @@
 /// Apollo.io-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod apollo_resolver;
+/// Postgres store linking archived call records to CRM records
+#[cfg(feature = "call_link")]
+pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
+/// Postgres implementation of the message store's CRM parent reader
+#[cfg(feature = "lookup")]
+pub mod lookup;
 /// Resolver stub for binaries that don't populate the CRM
 #[cfg(feature = "outbound")]
 pub mod no_op_resolver;
@@ -16,3 +22,7 @@ pub mod stage_definitions;
 /// Unfurl-backed implementation of the company metadata resolver
 #[cfg(feature = "outbound")]
 pub mod unfurl_resolver;
+
+/// Atomic pipeline storage over the databases domain writer.
+#[cfg(feature = "outbound")]
+pub mod pipelines;

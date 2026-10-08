@@ -1,7 +1,7 @@
 use super::*;
 use crate::PROTOCOL_VERSION;
 use crate::domain::model::{
-    DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
+    DEFAULT_AGENT_SESSION_NAME, LeaseView, Message, ReplicaAddress, SessionBot,
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
@@ -22,6 +22,8 @@ use macro_uuid::Uuid;
 use std::sync::{Arc, Mutex};
 use tokio::sync::Notify;
 use tracing::instrument::WithSubscriber as _;
+
+mod first_output;
 
 struct Fixture {
     service: AgentSessionServiceImpl<
@@ -94,59 +96,64 @@ impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
 }
 
 #[tokio::test]
-async fn previews_resolve_document_and_link_access_through_the_view_port() {
-    let fx = fixture();
-    let mut document_session = test_agent_session(AgentSessionId::new());
-    document_session.thread_parent =
-        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
-    let mut channel_session = test_agent_session(AgentSessionId::new());
-    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
-        Uuid::from_u128(9),
-    ));
-    fx.repo.insert_session(document_session.clone());
-    fx.repo.insert_session(channel_session.clone());
-    let collaborator =
-        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
-    let ids = vec![document_session.id, channel_session.id, fx.session];
+async fn previews_resolve_discussion_and_link_access_through_the_view_port() {
+    for parent in [
+        messages::domain::models::MessageParent::parse("document", "doc-1").unwrap(),
+        messages::domain::models::MessageParent::Initiative(Uuid::from_u128(902)),
+    ] {
+        let fx = fixture();
+        let mut discussion_session = test_agent_session(AgentSessionId::new());
+        discussion_session.thread_parent = Some(parent);
+        let mut channel_session = test_agent_session(AgentSessionId::new());
+        channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+            Uuid::from_u128(9),
+        ));
+        fx.repo.insert_session(discussion_session.clone());
+        fx.repo.insert_session(channel_session.clone());
+        let collaborator =
+            macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com")
+                .unwrap();
+        let ids = vec![discussion_session.id, channel_session.id, fx.session];
 
-    // Without a view port, only materialized grants count.
-    let mut previews = fx
-        .service
-        .preview_sessions(&collaborator, ids.clone())
-        .await
-        .unwrap();
-    previews.sort_by_key(|preview| preview.id().as_uuid());
-    assert!(
-        previews
-            .iter()
-            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
-    );
-
-    // The view port can resolve document inheritance or link sharing.
-    let service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
-    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
-    let access: Vec<_> = previews
-        .iter()
-        .filter_map(|preview| match preview {
-            AgentSessionPreview::Access(data) => Some(data.id),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(access, vec![document_session.id]);
-    let channel_service = fx
-        .service
-        .clone()
-        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
-    assert!(matches!(
-        channel_service
-            .preview_sessions(&collaborator, vec![channel_session.id])
+        // Without a view port, only materialized grants count.
+        let mut previews = fx
+            .service
+            .preview_sessions(&collaborator, ids.clone())
             .await
-            .unwrap().as_slice(),
-        [AgentSessionPreview::Access(data)] if data.id == channel_session.id
-    ));
+            .unwrap();
+        previews.sort_by_key(|preview| preview.id().as_uuid());
+        assert!(
+            previews
+                .iter()
+                .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+        );
+
+        // The view port can resolve discussion inheritance or link sharing.
+        let service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(discussion_session.id)));
+        let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+        let access: Vec<_> = previews
+            .iter()
+            .filter_map(|preview| match preview {
+                AgentSessionPreview::Access(data) => Some(data.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(access, vec![discussion_session.id]);
+        let channel_service = fx
+            .service
+            .clone()
+            .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+        assert!(matches!(
+            channel_service
+                .preview_sessions(&collaborator, vec![channel_session.id])
+                .await
+                .unwrap().as_slice(),
+            [AgentSessionPreview::Access(data)] if data.id == channel_session.id
+        ));
+    }
 }
 
 #[tokio::test]
@@ -359,6 +366,63 @@ async fn manual_rename_trims_persists_and_publishes() {
 }
 
 #[tokio::test]
+async fn archive_is_persisted_published_and_blocks_rename() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::default();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+
+    service
+        .set_archived(&owner_access(session), true)
+        .await
+        .expect("archive session");
+
+    assert!(repo.get(session).await.expect("get session").is_archived);
+    assert_eq!(realtime.updated(), vec![session]);
+    assert!(matches!(
+        service
+            .rename_session(&owner_access(session), "New Name")
+            .await,
+        Err(AgentSessionError::Archived(id)) if id == session
+    ));
+    assert!(matches!(
+        service
+            .send_action(
+                session,
+                None,
+                AgentAction::prompt("still there?"),
+                AgentActionId::mint(),
+            )
+            .await,
+        Err(AgentSessionError::Archived(id)) if id == session
+    ));
+    assert!(
+        !repo
+            .set_name_if_default(session, "Generated Name")
+            .await
+            .expect("skip generated rename for archived session")
+    );
+
+    service
+        .set_archived(&owner_access(session), false)
+        .await
+        .expect("unarchive session");
+    service
+        .rename_session(&owner_access(session), "New Name")
+        .await
+        .expect("rename unarchived session");
+}
+
+#[tokio::test]
 async fn manual_rename_rejects_blank_and_overlong_names() {
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_session();
@@ -506,6 +570,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
+        self.repo.find(id).await
+    }
+
     async fn preview(
         &self,
         viewer: &MacroUserIdStr<'static>,
@@ -557,6 +625,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_egress_token_hash(id, hash).await
     }
 
+    async fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &crate::domain::model::TurnPrompter,
+    ) -> Result<()> {
+        self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Option<crate::domain::model::TurnPrompter>> {
+        self.repo.turn_prompter(id).await
+    }
+
     async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
         self.repo.set_repo_url(id, repo_url).await
     }
@@ -567,6 +650,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         self.repo.set_name(id, name).await
+    }
+
+    async fn set_archived(&self, id: AgentSessionId, is_archived: bool) -> Result<()> {
+        self.repo.set_archived(id, is_archived).await
     }
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
@@ -592,6 +679,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
     async fn delete(&self, id: AgentSessionId) -> Result<()> {
         self.repo.delete(id).await
     }
+
+    async fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<Vec<crate::domain::model::StoredQueuedAction>> {
+        self.repo.list_queued_actions(id).await
+    }
+
+    async fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[crate::domain::model::StoredQueuedAction],
+    ) -> Result<()> {
+        self.repo.replace_queued_actions(id, entries).await
+    }
 }
 
 /// Pure delegation: the lease semantics under test live in the shared
@@ -609,8 +711,12 @@ impl SessionOwnership for BlockingPromptLogs {
         self.repo.heartbeat(replica, address).await
     }
 
-    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
-        self.repo.manager_of(session).await
+    async fn lease_view(&self, session: AgentSessionId, replica: ReplicaId) -> Result<LeaseView> {
+        self.repo.lease_view(session, replica).await
+    }
+
+    async fn begin_draining(&self, replica: ReplicaId) -> Result<()> {
+        self.repo.begin_draining(replica).await
     }
 }
 
@@ -909,6 +1015,61 @@ async fn a_second_replica_cannot_attach_a_session_with_a_live_manager() {
         .await;
 
     assert!(matches!(result, Err(AgentSessionError::ManagedElsewhere(id)) if id == fx.session));
+}
+
+/// What a rolling deploy does to routing, from the service's side. The task
+/// being replaced keeps heartbeating for its whole drain window, so nothing
+/// about liveness stops work reaching it; the drain it publishes is what
+/// does. Both halves: the replica leaving reports itself as no place to send
+/// work, and the peer stops seeing it as the manager and takes the session
+/// over instead of waiting out a heartbeat that is still arriving.
+#[tokio::test]
+async fn a_draining_replica_stops_managing_its_sessions() {
+    let fx = fixture();
+    fx.service
+        .attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the first replica attaches");
+    let peer = AgentSessionServiceImpl::new(
+        fx.repo.clone(),
+        FoldedMessageService::new(fx.repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    assert!(matches!(
+        fx.service.management(fx.session).await.expect("management"),
+        SessionManagement::Ours
+    ));
+    assert!(matches!(
+        peer.management(fx.session).await.expect("management"),
+        SessionManagement::Peer(manager) if manager.replica == fx.service.replica_id()
+    ));
+
+    fx.service
+        .begin_draining()
+        .await
+        .expect("the drain is published");
+
+    assert!(
+        matches!(
+            fx.service.management(fx.session).await.expect("management"),
+            SessionManagement::Draining
+        ),
+        "a replica on its way out sends work nowhere, its own sessions included"
+    );
+    assert!(
+        matches!(
+            peer.management(fx.session).await.expect("management"),
+            SessionManagement::Unmanaged
+        ),
+        "the holder is leaving, so the session is the staying replica's to take"
+    );
+    peer.attach_session(fx.session, RuntimeAttachment::solo(PendingTransport))
+        .await
+        .expect("the peer takes over from a draining holder");
 }
 
 /// A command sent while the handshake never completes cannot hang its caller
@@ -1227,6 +1388,51 @@ async fn marking_disconnected_persists_and_publishes_the_event() {
         }]
     ));
     assert_eq!(realtime.published().len(), 1);
+}
+
+/// A frame recorded out of band - a held tool call - reaches the session's
+/// viewers straight away, not on some later flush nobody will make.
+#[tokio::test]
+async fn a_recorded_frame_is_stored_and_published_at_once() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let notice = agent_runtime_protocol::domain::tool_approval::ToolApprovalNotice {
+        approval_id: "a1".to_owned(),
+        server_slug: "macro".to_owned(),
+        server_name: "Macro".to_owned(),
+        tool_name: "WebSearch".to_owned(),
+        arguments: serde_json::json!({}),
+        requested_by: None,
+        status: agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Pending,
+        resolved_by: None,
+        remembered: false,
+    };
+
+    service
+        .record_frame(session, notice.to_server_message())
+        .await
+        .expect("the frame is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert_eq!(stored.len(), 1);
+    assert_eq!(
+        realtime.published().len(),
+        1,
+        "viewers hear it without a flush"
+    );
 }
 
 #[tokio::test(start_paused = true)]

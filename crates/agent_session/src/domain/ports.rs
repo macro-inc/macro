@@ -12,7 +12,8 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model_owner::Owner;
+use model_owner::{Owner, OwnerType};
+use shared_entity_registry::OwnedPurgeOutcome;
 use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
@@ -95,6 +96,65 @@ pub trait BotDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
+/// A persona selected for a session started from Macro, by whoever runs it.
+#[derive(Debug, Clone)]
+pub enum SelectedPersona {
+    /// This deployment provisions the runtime.
+    Managed(SelectedManagedPersona),
+    /// The persona's operator runs the runtime, which opens its own sessions.
+    External {
+        /// Bot identity used by the session.
+        bot_id: BotId,
+    },
+}
+
+/// A session asked for from the composer, for a bot whose runtime is its
+/// operator's. The runtime creates it, the way it does for a mention.
+///
+/// No prompt: the caller delivers its own through the control endpoint once
+/// the session exists, exactly as it does for a managed one, so a prompt the
+/// user typed never rides the trigger topic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestedExternalSession {
+    /// The id the runtime is told to create the session under.
+    pub session_id: AgentSessionId,
+    /// The bot the session runs for.
+    pub bot_id: BotId,
+    /// Who asked; owns the session that the runtime creates.
+    pub owner: MacroUserIdStr<'static>,
+    /// The model they chose over the persona's default, when they did. It
+    /// reaches the runtime the way the persona's own does: recorded on the
+    /// session, then selected when the session binds on its first prompt.
+    pub model: Option<String>,
+    /// Remote repository selected for this external coding session.
+    pub repo_url: Option<String>,
+}
+
+/// Validate the base branch supported by external repository provisioning.
+/// External runtimes currently create every new worktree from origin/main.
+pub fn external_repository(
+    repo_url: Option<String>,
+    branch: Option<&str>,
+) -> super::error::Result<Option<String>> {
+    if branch.is_some_and(|branch| !matches!(branch, "main" | "origin/main")) {
+        return Err(super::error::AgentSessionError::InvalidRepositorySelection(
+            "external coding sessions start from origin/main",
+        ));
+    }
+    Ok(repo_url.filter(|url| !url.trim().is_empty()))
+}
+
+/// Hands a composer request to the bot's own runtime and waits for the
+/// session it creates.
+pub trait ExternalSessionRequester: Send + Sync + 'static {
+    /// Ask the runtime and return the session once it exists. Fails with
+    /// [`AgentSessionError::RuntimeUnavailable`] when no runtime answers.
+    fn request(
+        &self,
+        request: RequestedExternalSession,
+    ) -> impl Future<Output = Result<AgentSession>> + Send;
+}
+
 /// Why a user cannot select a bot as a managed session persona.
 #[derive(Debug)]
 pub enum ManagedPersonaError {
@@ -102,16 +162,20 @@ pub enum ManagedPersonaError {
     Unknown,
     /// The bot has no agent runtime.
     NotAgent,
-    /// The bot is served by an external runtime.
-    External,
-    /// The owner does not own or belong to the persona's owner, or is not
-    /// a user at all.
+    /// A first-party system bot this deployment does not run. It has no
+    /// operator to ask and no owner to authorize against, so it is nobody's
+    /// to start - a misconfiguration rather than a policy answer.
+    UnmanagedSystemBot,
+    /// The owner does not own or belong to the persona's owner.
     Forbidden,
+    /// The owner is not a user, so no persona rule applies.
+    OwnerNotUser(OwnerType),
     /// Looking up the persona or its owner failed.
     Lookup(AgentSessionError),
 }
 
-/// Resolve and authorize a managed persona for the session's owner.
+/// Resolve and authorize a persona for the session's owner, whoever runs its
+/// runtime.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
 /// owner, team personas are available to team members, selected-channel
@@ -119,12 +183,21 @@ pub enum ManagedPersonaError {
 /// and managed system bots (the deployment's own coders) are available to
 /// everyone, exactly as they are when mentioned in a channel. Every rule is
 /// about a person, so an owner that is not a user selects nothing.
-pub async fn managed_persona_for_owner<Bots: BotDirectory>(
+///
+/// A persona whose runtime its operator runs is authorized by those same
+/// rules and only then told apart, so the caller can hand the request to
+/// that runtime instead of opening the session here.
+pub async fn persona_for_owner<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
     owner: &Owner,
-) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
-    let user = owner.as_user().ok_or(ManagedPersonaError::Forbidden)?;
+) -> std::result::Result<SelectedPersona, ManagedPersonaError> {
+    let user = session_owner_user(owner).map_err(|error| match error {
+        AgentSessionError::OwnerNotUser(owner_type) => {
+            ManagedPersonaError::OwnerNotUser(owner_type)
+        }
+        other => ManagedPersonaError::Lookup(other),
+    })?;
     let facts = bots
         .bot_facts(bot_id)
         .await
@@ -133,14 +206,14 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     if !facts.has_agent {
         return Err(ManagedPersonaError::NotAgent);
     }
-    if !facts.is_managed {
-        return Err(ManagedPersonaError::External);
-    }
     if facts.is_system {
-        return Ok(SelectedManagedPersona {
+        if !facts.is_managed {
+            return Err(ManagedPersonaError::UnmanagedSystemBot);
+        }
+        return Ok(SelectedPersona::Managed(SelectedManagedPersona {
             bot_id,
             profile: None,
-        });
+        }));
     }
     let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
@@ -164,11 +237,14 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
     if !authorized {
         return Err(ManagedPersonaError::Forbidden);
     }
+    if !facts.is_managed {
+        return Ok(SelectedPersona::External { bot_id });
+    }
     let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
-    Ok(SelectedManagedPersona {
+    Ok(SelectedPersona::Managed(SelectedManagedPersona {
         bot_id,
         profile: Some(profile),
-    })
+    }))
 }
 
 /// The mention that triggered a session, when one did.
@@ -183,6 +259,8 @@ pub async fn managed_persona_for_owner<Bots: BotDirectory>(
 /// where the bot can already post.
 #[derive(Debug, Clone)]
 pub struct SessionThread {
+    /// Update a reserved bot response for a task assignment.
+    pub reuse_origin_message: bool,
     /// Channel or document the mentioning message was posted in.
     pub parent: messages::domain::models::MessageParent,
     /// Thread the session belongs to.
@@ -196,6 +274,10 @@ pub struct SessionThread {
 /// Everything needed to open a session served by an external runtime.
 #[derive(Debug, Clone)]
 pub struct OpenExternalAgentSession {
+    /// The id to create the session under, when the caller was told one: a
+    /// runtime answering a composer request creates the session the
+    /// requester is already waiting on. Minted here otherwise.
+    pub id: Option<AgentSessionId>,
     /// The bot the session runs for.
     pub bot_id: BotId,
     /// Persisted agent settings resolved by the authenticated entry point.
@@ -251,6 +333,13 @@ pub struct OpenManagedSession {
 /// its own schedule, while a managed session's sandbox is provisioned here.
 /// That difference is why only one of them takes a workspace.
 pub trait SessionOpener: Send + Sync + 'static {
+    /// Prepare an unprompted hidden in-memory session for an authenticated user.
+    fn warm_session(
+        &self,
+        owner: Owner,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// Open a session and return the persisted row.
     fn open_external_session(
         &self,
@@ -295,6 +384,10 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// The agent session with this id, or `None` when there is none.
+    fn find(&self, id: AgentSessionId)
+    -> impl Future<Output = Result<Option<AgentSession>>> + Send;
+
     /// The sessions among `ids` that exist, each with what a chip shows and
     /// whether a materialized grant lets `viewer` see it: their own grant,
     /// one through a channel they are still in, or one through their teams -
@@ -314,6 +407,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         id: AgentSessionId,
         hash: &str,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record who prompted the turn `id` is about to run.
+    fn set_turn_prompter(
+        &self,
+        id: AgentSessionId,
+        prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Who prompted the turn `id` is running or last ran; `None` before its
+    /// first dispatch.
+    fn turn_prompter(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<TurnPrompter>>> + Send;
 
     /// The session a sandbox's egress token stands for, if any still does.
     ///
@@ -397,7 +504,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Persist the user-facing session name. Idempotent.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist an automatically generated name only while the default remains.
+    /// Archive or unarchive a session. Idempotent.
+    fn set_archived(
+        &self,
+        id: AgentSessionId,
+        is_archived: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist an automatically generated name only while the default remains
+    /// and the session is not archived.
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
@@ -428,6 +543,19 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Delete an agent session by id.
     fn delete(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// The session's waiting actions, oldest first. Missing row is empty.
+    fn list_queued_actions(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<StoredQueuedAction>>> + Send;
+
+    /// Replace the session's waiting actions. An empty slice deletes the row.
+    fn replace_queued_actions(
+        &self,
+        id: AgentSessionId,
+        entries: &[StoredQueuedAction],
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// The durable record of which provider-side agent an externally-served
@@ -508,13 +636,24 @@ pub trait SessionOwnership: Send + Sync + 'static {
         address: Option<&ReplicaAddress>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The live manager of a session, if a replica with a fresh heartbeat
-    /// holds its lease. `None` covers both an unclaimed session and one whose
-    /// holder has gone stale - either way the session is claimable.
-    fn manager_of(
+    /// What the lease says about a session, from `replica`'s viewpoint: who
+    /// holds it (when a replica with a fresh heartbeat does - an absent
+    /// holder covers both an unclaimed session and one whose holder has gone
+    /// stale, either way claimable) and whether `replica` is itself draining.
+    fn lease_view(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Option<SessionManager>>> + Send;
+        replica: ReplicaId,
+    ) -> impl Future<Output = Result<LeaseView>> + Send;
+
+    /// Publish that `replica` is shutting down, so nothing new is routed to
+    /// it while it drains.
+    ///
+    /// A deploy's old task keeps heartbeating for its whole drain window, so
+    /// liveness alone cannot tell a replica that is serving from one that is
+    /// leaving; this is the replica saying which it is. Idempotent: the first
+    /// drain wins, and a replica never un-drains.
+    fn begin_draining(&self, replica: ReplicaId) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[cfg_attr(feature = "test-utils", mockall::automock)]
@@ -730,7 +869,7 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// Tell viewers to refetch changed session metadata.
+    /// Tell viewers to refetch changed session metadata and the durable log.
     fn publish_updated(
         &self,
         _session: AgentSessionId,
@@ -1017,6 +1156,15 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// The session is going away: release its live resources and delete it.
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
+    /// Release and delete one session while `expected_owner` still owns it.
+    /// Internal owner removal only. A missing session is already purged; one
+    /// under another owner is untouched.
+    fn purge_owned_session(
+        &self,
+        id: AgentSessionId,
+        expected_owner: &Owner,
+    ) -> impl Future<Output = Result<OwnedPurgeOutcome>> + Send;
+
     /// A control operation the live connection has to be told about. Returns
     /// the action id the caller correlates against the fold stream, and
     /// whether the action went out or waits in the session's queue.
@@ -1056,6 +1204,17 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
     /// on [`Self::edit_queued_control`].
     fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Run a queued action next. Moves it to the front of the queue and, when
+    /// a turn is in flight, cancels that turn so this entry dispatches ahead
+    /// of anything queued before it. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched. `actor` as on [`Self::edit_queued_control`].
+    fn steer_queued_control(
         &self,
         id: AgentSessionId,
         action_id: AgentActionId,

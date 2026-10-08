@@ -1,3 +1,4 @@
+import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   ChatWithAgentButton,
   ChatWithAgentIcon,
@@ -7,10 +8,10 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { createSearchParams } from '@app/lib/split-router';
 import { URL_PARAMS } from '@block-channel/constants';
-import { convertTargetMessage } from '@block-channel/utils/target-message';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
+import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -18,21 +19,21 @@ import { ChannelCallButton } from '@channel/Call/ChannelCallButton';
 import { ChannelCallTab } from '@channel/Call/ChannelCallTab';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
-import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
 import { ChannelCallsTab } from '@channel/Calls/ChannelCallsTab';
+import type { MessageTimelineStateSnapshot } from '@channel/Channel/Channel';
 import {
-  type ChannelHandle,
-  type ChannelProps,
-  type MessageTimelineStateSnapshot,
-  Channel as NewChannel,
-} from '@channel/Channel/Channel';
+  ChannelMessages,
+  ChannelSurface,
+  type ChannelSurfaceApi,
+  type ChannelTargetRequest,
+} from '@channel/Channel/ChannelSurface';
 import {
   ChannelTabProvider,
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
-  CHANNEL_TABS,
   type ChannelTabId,
   DEFAULT_CHANNEL_TAB,
 } from '@channel/Channel/channel-tabs';
@@ -40,13 +41,21 @@ import {
   URL_PARAMS as CHANNEL_URL_PARAMS,
   isJoinCallRequested,
   isOpenCallTabRequested,
+  toChannelTargetRequest,
 } from '@channel/Channel/link';
+import {
+  canUseInlineCallTab,
+  normalizeChannelTab,
+  useChannelTabItems,
+} from '@channel/Channel/use-channel-tab-items';
+import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
+import { SplitLayoutContext } from '@components/app/split-layout/context';
 import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
@@ -62,7 +71,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
-import { awaitCondition, createMethodRegistration } from '@core/orchestrator';
+import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { buildEntityData } from '@entity';
@@ -71,25 +80,22 @@ import RenameIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
-import {
-  fetchResolvedChannelMessage,
-  findThreadIdInMessageTimeline,
-  findTopLevelMessageInMessageTimeline,
-} from '@queries/messages/timeline';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { useSearchParams } from '@solidjs/router';
 import { cn } from '@ui';
 import {
   createComputed,
+  createEffect,
   createSignal,
   Match,
+  on,
   onCleanup,
   Show,
   Suspense,
   Switch,
+  useContext,
 } from 'solid-js';
-import { CHANNEL_TAB_ICONS, ChannelTopLeft } from './Top';
-import { useChannelBotManagement } from './useChannelBotManagement';
+import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
 
@@ -105,30 +111,6 @@ export type BlockChannelProps = ChannelTargetMessageParams;
 type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
   messages?: MessageTimelineStateSnapshot;
-};
-
-type ChannelPropsTargetMessage = Pick<
-  ChannelProps,
-  'targetMessageId' | 'targetMessageReplyId'
->;
-
-function CallTabLabel() {
-  return (
-    <span class="flex items-center gap-1.5">
-      <span class="size-1.5 rounded-full bg-success animate-pulse" />
-      Call
-    </span>
-  );
-}
-
-const canUseInlineCallTab = () => {
-  return !isNativeIosCallKitEnabled();
-};
-
-// Native iOS CallKit owns the call surface, so the embedded Call tab should
-// never become the active channel tab on that platform.
-const normalizeChannelTab = (tab: ChannelTabId) => {
-  return tab === 'call' && !canUseInlineCallTab() ? DEFAULT_CHANNEL_TAB : tab;
 };
 
 const initialChannelTab = (options: {
@@ -165,30 +147,7 @@ function NewTop(props: { channelId: string }) {
           (participant.role === 'admin' || participant.role === 'owner')
       ),
   });
-  // Show the Call tab whenever we're actually in the call, mid-join, or
-  // the tab is being displayed (e.g. via the auto-join flow that flips
-  // `activeTab` to `call` before the join request resolves).
-  const showCallTab = () =>
-    ENABLE_CALLS &&
-    canUseInlineCallTab() &&
-    (call.isInThisChannel() ||
-      call.isJoining() ||
-      activeTab() === 'call' ||
-      !!activeCallQuery.data);
-  const availableTabs = () => {
-    let filtered = [...CHANNEL_TABS];
-    if (channelType() === ChannelType.direct_message)
-      filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS)
-      filtered = filtered.filter((tab) => tab.value !== 'calls');
-    if (!showCallTab())
-      filtered = filtered.filter((tab) => tab.value !== 'call');
-    return filtered;
-  };
-  const tabs = () =>
-    availableTabs().map((tab) =>
-      tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
-    );
+  const tabs = useChannelTabItems(props.channelId);
 
   const channelEntity = () => {
     const ch = channel();
@@ -228,7 +187,7 @@ function NewTop(props: { channelId: string }) {
     options: tabs().map((tab) => ({
       value: tab.value,
       label: tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value],
+      icon: CHANNEL_TAB_ICONS[tab.value as ChannelTabId],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),
@@ -299,6 +258,18 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <SplitHeaderRight>
+        {/* On mobile the split header is pointer-events-none; only islands
+            (glass pills) take taps. `empty:hidden` drops the pill when the
+            button is not offered (DMs, non-participants). */}
+        <HeaderIsland class="px-1">
+          <ChannelInviteButton
+            channelId={props.channelId}
+            channelName={channelName() ?? 'New Channel'}
+            channelType={channelType()}
+          />
+        </HeaderIsland>
+      </SplitHeaderRight>
       {/* Desktop only: on mobile the action lives in the title drawer above. */}
       <Show when={!isMobile() && askMacroEntity()}>
         {(entity) => (
@@ -341,6 +312,8 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   // BlockContainer. The adapter requires a split panel, so unlike
   // BlockContainer it needs no fallback DOM scope of its own.
   const splitPanel = useSplitPanelOrThrow();
+  // The layout context exists during construction; its global signal is set later.
+  const splitLayout = useContext(SplitLayoutContext);
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   useBlockEntityCommands();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
@@ -348,8 +321,14 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   const channelId = useBlockId();
   const blockHandle = blockHandleSignal.get;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [routeSearch] = createSearchParams(channelsSearch);
 
   const initialTargetMessageParams = (): ChannelTargetMessageParams => {
+    if (routeSearch.messageId)
+      return {
+        [URL_PARAMS.message]: routeSearch.messageId,
+        [URL_PARAMS.thread]: routeSearch.threadId || undefined,
+      };
     const hasPropsTarget =
       props[URL_PARAMS.message] !== undefined ||
       props[URL_PARAMS.thread] !== undefined;
@@ -359,7 +338,7 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
         [URL_PARAMS.thread]: props[URL_PARAMS.thread],
       };
     }
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return {};
     return {
       [URL_PARAMS.message]: searchParams[URL_PARAMS.message] as
@@ -387,12 +366,13 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   ] as ChannelEntryStateSnapshot | undefined;
 
   const hasInitialTargetRequest = () => {
+    if (routeSearch.messageId) return true;
     const hasPropsTarget =
       props[URL_PARAMS.message] !== undefined ||
       props[URL_PARAMS.thread] !== undefined;
     if (hasPropsTarget) return true;
 
-    const isSingleSplit = globalSplitManager()?.splits().length === 1;
+    const isSingleSplit = splitLayout?.manager.splits().length === 1;
     if (!isSingleSplit) return false;
 
     return (
@@ -419,19 +399,40 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   );
   const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
 
-  // Set when `<NewChannel>` mounts (Messages tab only); used for goToMessage.
-  // A signal so goToLocationFromParams can await it via the orchestrator's
-  // availability primitive when the tab hasn't mounted yet.
-  const [messagesHandle, setMessagesHandle] = createSignal<ChannelHandle>();
-  let lastMessagesStateSnapshot = persistedChannelState?.messages;
+  // Navigation flows into the surface as state; the messages part navigates
+  // whenever a fresh request lands, whether or not it was mounted at the time.
+  const [targetRequest, setTargetRequest] = createSignal<
+    ChannelTargetRequest | undefined
+  >(toChannelTargetRequest(initialTargetMessageParams()));
+  let routeOwnsTarget = Boolean(routeSearch.messageId);
+  let surfaceApi: ChannelSurfaceApi | undefined;
 
   const setActiveTab = (tab: ChannelTabId) => {
-    tab = normalizeChannelTab(tab);
-    if (tab !== 'messages') {
-      setMessagesHandle(undefined);
-    }
-    setActiveTabInternal(tab);
+    setActiveTabInternal(normalizeChannelTab(tab));
   };
+
+  createEffect(
+    on(
+      () => [routeSearch.messageId, routeSearch.threadId, routeSearch.seek],
+      () => {
+        if (!routeSearch.messageId) {
+          if (routeOwnsTarget) {
+            routeOwnsTarget = false;
+            setTargetRequest(undefined);
+          }
+          return;
+        }
+        routeOwnsTarget = true;
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+        setTargetRequest({
+          kind: 'message',
+          messageId: routeSearch.messageId,
+          threadId: routeSearch.threadId || undefined,
+        });
+      },
+      { defer: true }
+    )
+  );
 
   const botManagement = useChannelBotManagement({
     channelId,
@@ -471,80 +472,22 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     );
   });
 
-  // A mention/link to a thread reply may carry only the message id (the reply)
-  // without its thread id. Left as-is `convertTargetMessage` would treat that
-  // reply as a top-level message, which never loads, so the target is never
-  // highlighted. When only a message id is present, resolve it: a thread reply
-  // targets its parent thread with the reply id, a top-level message stays as
-  // itself. An explicit thread id is already unambiguous, so trust it.
-  const resolveTargetMessage = async (
-    params: ChannelTargetMessageParams
-  ): Promise<ChannelPropsTargetMessage> => {
-    const messageId = params[URL_PARAMS.message] as string | undefined;
-    const threadId = params[URL_PARAMS.thread] as string | undefined;
-    if (threadId || !messageId) return convertTargetMessage(params);
-
-    // Cache-first: an already-open channel has the clicked message warm, so a
-    // plain send (the common inbox-row click) or a reply in a loaded thread
-    // preview resolves synchronously with no roundtrip. Only a genuinely
-    // unknown id — an old mention/link opening a cold channel — pays a resolve.
-    if (
-      findTopLevelMessageInMessageTimeline(
-        { type: 'channel', id: channelId },
-        messageId
-      )
-    ) {
-      return { targetMessageId: messageId, targetMessageReplyId: undefined };
-    }
-    const cachedThreadId = findThreadIdInMessageTimeline(
-      { type: 'channel', id: channelId },
-      messageId
-    );
-    if (cachedThreadId) {
-      return {
-        targetMessageId: cachedThreadId,
-        targetMessageReplyId: messageId,
-      };
-    }
-
-    const resolved = await fetchResolvedChannelMessage(
-      { type: 'channel', id: channelId },
-      messageId
-    ).catch(() => undefined);
-    if (resolved?.kind === 'thread_reply') {
-      return {
-        targetMessageId: resolved.thread_id,
-        targetMessageReplyId: messageId,
-      };
-    }
-    return { targetMessageId: messageId, targetMessageReplyId: undefined };
-  };
-
-  // The Messages tab may not have mounted yet (e.g. right after the split
-  // opens). Wait for its handle via the orchestrator's availability primitive.
-  const awaitMessagesHandle = async () => {
-    await awaitCondition(() => messagesHandle() !== undefined, 10_000).catch(
-      () => {}
-    );
-    return messagesHandle();
-  };
-
   // Register on the block always — `goToLocationFromParams` used to live only
   // inside `onChannelReady` (Messages tab), so open-call from Attachments/etc. was a no-op.
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: ChannelTargetMessageParams) => {
+      // Store any message target first: a request that also opens the call tab
+      // leaves it waiting for whenever the user returns to Messages.
+      const target = toChannelTargetRequest(params);
+      if (target) {
+        routeOwnsTarget = false;
+        setActiveTab(DEFAULT_CHANNEL_TAB);
+        setTargetRequest(target);
+      }
+
       if (isOpenCallTabRequested(params[CHANNEL_URL_PARAMS.openCallTab])) {
         setActiveTab(getCallJoinTab());
         return;
-      }
-
-      const { targetMessageId, targetMessageReplyId } =
-        await resolveTargetMessage(params);
-
-      if (targetMessageId) {
-        setActiveTab(DEFAULT_CHANNEL_TAB);
-        const handle = await awaitMessagesHandle();
-        handle?.goToMessage(targetMessageId, targetMessageReplyId);
       }
 
       if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
@@ -553,29 +496,18 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       }
     },
     goToLatest: async () => {
+      routeOwnsTarget = false;
       setActiveTab(DEFAULT_CHANNEL_TAB);
-      const handle = await awaitMessagesHandle();
-      handle?.goToLatest();
+      setTargetRequest({ kind: 'latest' });
     },
   });
 
-  const onChannelReady = (handle: ChannelHandle) => {
-    setMessagesHandle(() => handle);
-  };
-
   const disposeChannelStateCaptor = splitPanel.handle.registerEntryStateCaptor(
     CHANNEL_STATE_ENTRY_KEY,
-    (): ChannelEntryStateSnapshot => {
-      const handle = messagesHandle();
-      const messages = handle
-        ? handle.getMessagesStateSnapshot()
-        : lastMessagesStateSnapshot;
-      lastMessagesStateSnapshot = messages;
-      return {
-        activeTab: activeTab(),
-        messages,
-      };
-    }
+    (): ChannelEntryStateSnapshot => ({
+      activeTab: activeTab(),
+      messages: surfaceApi?.getMessagesStateSnapshot(),
+    })
   );
   onCleanup(disposeChannelStateCaptor);
 
@@ -585,7 +517,14 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
       : undefined;
 
   return (
-    <>
+    <ChannelSurface
+      channelId={channelId}
+      targetRequest={targetRequest()}
+      initialMessagesState={initialMessagesStateSnapshot()}
+      ref={(api) => {
+        surfaceApi = api;
+      }}
+    >
       <CallEventSync />
       <ChannelTabProvider activeTab={activeTab} setActiveTab={setActiveTab}>
         <ChannelCallAutoJoin
@@ -603,41 +542,39 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
               'touch:pt-(--mobile-content-inset-top)'
           )}
         >
-          <Switch>
-            <Match when={activeTab() === 'messages'}>
-              <NewChannel
-                channelId={channelId}
-                onHandleReady={onChannelReady}
-                autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                initialMessagesStateSnapshot={initialMessagesStateSnapshot()}
-                {...convertTargetMessage(initialTargetMessageParams())}
-              />
-            </Match>
-            <Match when={activeTab() === 'attachments'}>
-              <ChannelAttachmentsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
-              <ChannelCallsTab channelId={channelId} />
-            </Match>
-            <Match when={activeTab() === 'participants'}>
-              <ChannelParticipantsTab
-                channelId={channelId}
-                botManagementEnabled={botManagement.enabled()}
-                onCreateBot={botManagement.openCreateBot}
-                inviteBotFocusRequest={botManagement.inviteFocusRequest()}
-                onOpenBot={botManagement.openBot}
-              />
-            </Match>
-            <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
-              <ChannelCallTab
-                channelId={channelId}
-                pendingJoin={pendingJoinCall}
-              />
-            </Match>
-          </Switch>
+          <div class="flex min-h-0 flex-1 flex-col" data-channel-tab-content>
+            <Switch>
+              <Match when={activeTab() === 'messages'}>
+                <ChannelMessages
+                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                />
+              </Match>
+              <Match when={activeTab() === 'attachments'}>
+                <ChannelAttachmentsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'calls' && ENABLE_CALLS}>
+                <ChannelCallsTab channelId={channelId} />
+              </Match>
+              <Match when={activeTab() === 'participants'}>
+                <ChannelParticipantsTab
+                  channelId={channelId}
+                  botManagementEnabled={botManagement.enabled()}
+                  onCreateBot={botManagement.openCreateBot}
+                  inviteBotFocusRequest={botManagement.inviteFocusRequest()}
+                  onOpenBot={botManagement.openBot}
+                />
+              </Match>
+              <Match when={activeTab() === 'call' && canUseInlineCallTab()}>
+                <ChannelCallTab
+                  channelId={channelId}
+                  pendingJoin={pendingJoinCall}
+                />
+              </Match>
+            </Switch>
+          </div>
           <NewTop channelId={channelId} />
         </div>
       </ChannelTabProvider>
-    </>
+    </ChannelSurface>
   );
 }

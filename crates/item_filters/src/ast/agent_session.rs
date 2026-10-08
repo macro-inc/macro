@@ -10,7 +10,7 @@ use crate::{AgentSessionFilters, ast::ExpandErr};
 pub enum AgentSessionLiteral {
     /// Opt this query into agent sessions at all.
     ///
-    /// Like reminders, agent sessions are **off by default** — a query that
+    /// Agent sessions are **off by default** — a query that
     /// says nothing about them gets none, so adding them to Soup did not
     /// change what pre-existing Soup views return. Asking for specific ids
     /// or owners also counts as opting in.

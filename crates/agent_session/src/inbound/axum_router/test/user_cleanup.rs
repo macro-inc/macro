@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::error::Result as SessionResult;
 use crate::domain::ports::{AcceptedControl, QueuedControl};
+use shared_entity_registry::OwnedPurgeOutcome;
 
 #[derive(Default)]
 struct Recipient(Mutex<Vec<MacroUserIdStr<'static>>>);
@@ -11,6 +12,13 @@ impl AgentSessionNotificationRecipient for Recipient {
         Ok(())
     }
     async fn session_deleted(&self, _: AgentSessionId) -> SessionResult<()> {
+        unreachable!()
+    }
+    async fn purge_owned_session(
+        &self,
+        _: AgentSessionId,
+        _: &Owner,
+    ) -> SessionResult<OwnedPurgeOutcome> {
         unreachable!()
     }
     async fn control_event(
@@ -33,6 +41,14 @@ impl AgentSessionNotificationRecipient for Recipient {
         unreachable!()
     }
     async fn remove_queued_control(
+        &self,
+        _: AgentSessionId,
+        _: AgentActionId,
+        _: Option<MacroUserIdStr<'static>>,
+    ) -> SessionResult<()> {
+        unreachable!()
+    }
+    async fn steer_queued_control(
         &self,
         _: AgentSessionId,
         _: AgentActionId,

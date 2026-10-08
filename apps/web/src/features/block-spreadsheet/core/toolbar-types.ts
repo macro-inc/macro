@@ -1,3 +1,4 @@
+import type { ChartTypeId } from './chart-builder';
 import type { SpreadsheetCell } from './spreadsheet-document';
 
 export type SpreadsheetCommand =
@@ -23,6 +24,8 @@ export type SpreadsheetCommand =
   | 'sort-asc'
   | 'sort-desc'
   | 'trim-whitespace'
+  | 'dropdown'
+  | 'goal-seek'
   | 'border-all'
   | 'border-outer'
   | 'border-none'
@@ -47,6 +50,11 @@ export type SpreadsheetToolbarProps = {
   onZoom: (percent: number) => void;
   onRestoreFocus?: () => void;
   onCommand: (command: SpreadsheetCommand) => void;
+  /** Insert a chart of the selected cells, or of their table. */
+  onInsertChart?: (type: ChartTypeId) => void;
+  onInsertImage?: () => void;
+  /** Select the sheet's first image or chart, when it has one. */
+  onSelectDrawings?: () => void;
 };
 
 export const SPREADSHEET_ZOOM_LEVELS = [50, 75, 90, 100, 125, 150, 200];

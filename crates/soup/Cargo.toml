@@ -40,7 +40,7 @@ outbound = [
   "ports",
   "properties/outbound",
 ]
-ports = ["crm/ports", "dep:tokio", "frecency/ports", "reminders/ports"]
+ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 
 [dependencies]
@@ -63,11 +63,13 @@ doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email = { path = "../email", features = ["ports"] }
 entity_access = { path = "../entity_access", default-features = false }
+favorites = { path = "../favorites", features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ] }
 frecency = { path = "../frecency" }
+github_pull_requests = { path = "../github_pull_requests", default-features = false, features = ["ports"] }
 indexmap = { workspace = true }
 item_filters = { path = "../item_filters" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
@@ -83,7 +85,6 @@ non_empty = { path = "../non_empty" }
 properties = { path = "../properties", default-features = false, optional = true }
 readonly_pool = { path = "../readonly_pool", optional = true }
 recursion = { workspace = true }
-reminders = { path = "../reminders", default-features = false }
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

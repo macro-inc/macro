@@ -1,5 +1,4 @@
 import {
-  type CommentId,
   isDraftThreadId,
   type Root,
   type ThreadId,
@@ -8,14 +7,8 @@ import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
-  noopCommentOperations,
   Thread,
 } from '@core/comments/Thread';
-import {
-  enableUnifiedDocumentDiscussions,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
 import {
@@ -29,31 +22,7 @@ import {
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { CommentThreadDrawer } from './CommentThreadDrawer';
 import { createCommentLayout } from './commentLayout';
-import {
-  useCreateComment,
-  useDeleteComment,
-  useUpdateComment,
-} from './commentOperations';
 import { useCreateMessageComment } from './messageCommentOperations';
-
-function useCommentOperations(): Pick<
-  CommentsContextType,
-  'commentOperations' | 'messageOperations'
-> {
-  if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
-    return {
-      commentOperations: noopCommentOperations,
-      messageOperations: { createComment: useCreateMessageComment() },
-    };
-  }
-  return {
-    commentOperations: {
-      createComment: useCreateComment(),
-      deleteComment: useDeleteComment(),
-      updateComment: useUpdateComment(),
-    },
-  };
-}
 
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
@@ -61,26 +30,7 @@ const useCommentsContext = (
   const { documentId, kind, permissions, state } = useMarkdownDocument();
   const documentKind = kind();
   const { comments: commentState, setCommentState } = state;
-  const ownedCommentIds = createMemo(() => {
-    const userId = useUserId()();
-    if (!userId) {
-      console.error('User ID not found, cannot get owned comment placeables');
-      return [];
-    }
-    const owned = Object.values(commentState.comments)
-      .filter((c) => !!c)
-      .filter((c) => c.owner === userId)
-      .map((c) => c.id);
-    return owned;
-  });
-  const ownedCommentSelector = createSelector(
-    ownedCommentIds,
-    (id: CommentId, owned) => (owned ?? []).includes(id)
-  );
-
-  const operations = useCommentOperations();
-
-  const getCommentById = (id: CommentId) => commentState.comments[id];
+  const createComment = useCreateMessageComment();
 
   const commentsContext: CommentsContextType = {
     setActiveThread: (threadId) =>
@@ -88,13 +38,12 @@ const useCommentsContext = (
     setThreadHeight,
     canComment: permissions.canComment,
     isDocumentOwner: permissions.isOwner,
-    getCommentById,
     documentId: documentId(),
     documentType: documentKind === 'document' ? 'md' : documentKind,
-    ownedComment: ownedCommentSelector,
-    ...operations,
-    inComment: true,
+    messageOperations: { createComment },
     highlightedCommentId: () => commentState.highlightedCommentId,
+    clearHighlightedComment: () =>
+      setCommentState('highlightedCommentId', null),
   };
   return commentsContext;
 };

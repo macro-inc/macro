@@ -13,8 +13,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/property/editor/state/propertyEditor', () => ({
   openPropertyEditor: mocks.open,
 }));
-vi.mock('@companies/crm/deal-stages', () => ({
-  useDealStages: () => ({
+vi.mock('@app/features/crm/stage-adapter', () => ({
+  createAppDealStages: () => ({
     isLoading: () => mocks.loading,
     stageProperty: mocks.stageProperty,
   }),

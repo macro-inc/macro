@@ -8,6 +8,7 @@ import {
 import {
   createContext,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
   useContext,
@@ -17,6 +18,11 @@ import { ViewBreadcrumbs } from './ViewBreadcrumbs';
 
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
+  Tooltip: (props: { class?: string; children?: JSX.Element }) => (
+    <div data-testid="breadcrumb-tooltip" class={props.class}>
+      {props.children}
+    </div>
+  ),
 }));
 
 afterEach(cleanup);
@@ -76,4 +82,30 @@ describe('breadcrumb outlet transitions', () => {
       expect(location()).toBeTruthy();
     }
   );
+});
+
+describe('breadcrumb tooltip sizing', () => {
+  it('keeps a return crumb from collapsing over the next item', () => {
+    render(() => (
+      <ViewBreadcrumbs.Root value="pr:1" onChange={() => {}}>
+        <ViewBreadcrumbs.Item value="reviews" order={0} metadata={{}}>
+          <ViewBreadcrumbs.ReturnButton tooltip="Involving me">
+            Involving me
+          </ViewBreadcrumbs.ReturnButton>
+        </ViewBreadcrumbs.Item>
+        <ViewBreadcrumbs.Item value="pr:1" order={1} metadata={{}}>
+          <ViewBreadcrumbs.Button isActive tooltip="feat(agents): MCP">
+            feat(agents): MCP
+          </ViewBreadcrumbs.Button>
+        </ViewBreadcrumbs.Item>
+        <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
+      </ViewBreadcrumbs.Root>
+    ));
+
+    const [returnCrumb, titleCrumb] =
+      screen.getAllByTestId('breadcrumb-tooltip');
+    expect(returnCrumb?.className).toContain('shrink-0');
+    expect(titleCrumb?.className).toContain('shrink');
+    expect(titleCrumb?.className).not.toContain('shrink-0');
+  });
 });

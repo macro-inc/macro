@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
 import { ChatInput } from '@core/component/AI/component/input/ChatInput';
@@ -15,6 +17,7 @@ import {
   storeChatStateImmediate,
   storeSoupInputModel,
 } from '@core/component/AI/util/storage';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -22,7 +25,8 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createEffect } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
+import { MobileAgentComposer } from '../agents-view/mobile-agent-composer';
 
 function SoupChatInputInner() {
   const splitPanelContext = useSplitPanelOrThrow();
@@ -33,11 +37,13 @@ function SoupChatInputInner() {
     input.attachments,
     getAttachmentFromMention
   );
-  const editor = buildChatEditor().withMentions({
-    ...attachmentMentionCallbacks,
-    block: 'chat',
-    showOpenTabs: true,
-  });
+  const editor = buildChatEditor()
+    .withAppLinkResolver(useMacroMentionLinkResolver())
+    .withMentions({
+      ...attachmentMentionCallbacks,
+      block: 'chat',
+      showOpenTabs: true,
+    });
 
   // Persist the model the user picks in the new-chat composer so it survives
   // reload/navigation, matching how the existing-chat draft model is restored.
@@ -134,6 +140,17 @@ function SoupChatInputInner() {
 }
 
 export function SoupChatInput() {
+  const agents = useFeatureFlag(enableChatV3Agents);
+  return (
+    <Show when={!agents().loading}>
+      <Show when={agents().enabled} fallback={<LegacySoupChatInput />}>
+        <MobileAgentComposer />
+      </Show>
+    </Show>
+  );
+}
+
+function LegacySoupChatInput() {
   // Seed the selector from the persisted soup draft model so the user's last
   // choice in the new-chat composer is restored. ChatInputProvider falls back
   // to DEFAULT_MODEL when this is undefined.

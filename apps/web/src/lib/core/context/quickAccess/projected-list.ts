@@ -25,6 +25,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'channel',
   'dm',
   'crm_company',
+  'crm_contact',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -37,6 +38,7 @@ type Request = {
   pages: number;
   cursor?: SearchCursor;
   busy: boolean;
+  refreshPending: boolean;
 };
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
@@ -50,6 +52,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   /** Visible fallback rows; duplicates do not grow the combined menu. */
   existingItems?: Accessor<readonly T[]>;
+  /** Keep already-materialized matches visible while a new query is pending. */
+  filterPreviousItems?: (items: T[], query: string) => T[];
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
 }) {
   const buckets = () => {
@@ -68,12 +72,25 @@ export function createProjectedList<T extends { id: string }>(options: {
     current = undefined;
   });
 
+  const finishRequest = (request: Request) => {
+    if (current !== request) return;
+    request.busy = false;
+    if (request.refreshPending) {
+      // Publish the completed window before replaying changes received during
+      // search/materialization (or a load-more operation).
+      void fetchPages(request, request.pages, false);
+    } else {
+      setLoading('idle');
+    }
+  };
+
   const fetchPages = async (
     request: Request,
     pageCount: number,
     append: boolean
   ) => {
     request.busy = true;
+    request.refreshPending = false;
     setLoading(append ? 'more' : 'initial');
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
@@ -129,10 +146,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       setHasMore(request.cursor !== undefined);
       console.warn('Quick Access cache search failed', error);
     } finally {
-      if (current === request) {
-        request.busy = false;
-        setLoading('idle');
-      }
+      finishRequest(request);
     }
   };
 
@@ -142,26 +156,43 @@ export function createProjectedList<T extends { id: string }>(options: {
     const activeBuckets = buckets();
     const enabled = options.enabled?.() !== false && activeBuckets.length > 0;
     const previous = current;
-    current = undefined;
-    setHasMore(false);
-    if (!enabled) {
-      setItems([]);
-      setLoading('idle');
-      return;
-    }
-    const sameSearch =
+    if (
+      enabled &&
       previous?.query === query &&
       previous.buckets.length === activeBuckets.length &&
+      previous.buckets.every((bucket, index) => bucket === activeBuckets[index])
+    ) {
+      // A cache revision is not a new search. Replacing an in-flight request
+      // here starves results when hydration is faster than cache reads.
+      if (previous.busy) previous.refreshPending = true;
+      else void fetchPages(previous, previous.pages, false);
+      return;
+    }
+
+    // Genuine query/bucket changes, disabling, and disposal still fence off
+    // obsolete responses and their queued refreshes.
+    current = undefined;
+    setHasMore(false);
+    const sameBuckets =
+      previous?.buckets.length === activeBuckets.length &&
       previous.buckets.every(
         (bucket, index) => bucket === activeBuckets[index]
       );
-    if (!sameSearch) setItems([]);
+    setItems(
+      enabled && sameBuckets
+        ? (options.filterPreviousItems?.(untrack(items), query) ?? [])
+        : []
+    );
+    if (!enabled) {
+      setLoading('idle');
+      return;
+    }
     const request: Request = {
       buckets: activeBuckets,
       query,
-      pages: sameSearch ? previous.pages : 1,
-      cursor: sameSearch ? previous.cursor : undefined,
+      pages: 1,
       busy: false,
+      refreshPending: false,
     };
     current = request;
     void fetchPages(request, request.pages, false);

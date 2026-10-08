@@ -1,5 +1,7 @@
 //! Rendering for the macrod control panel. Pure: reads [`App`], draws frames.
 
+#[cfg(unix)]
+mod herdr_pane;
 mod layout;
 mod modals;
 mod pages;
@@ -12,6 +14,10 @@ use ratatui::layout::{Constraint, Direction, Layout};
 
 use super::app::{App, Mode};
 
+#[cfg(unix)]
+pub(crate) use herdr_pane::render_herdr_pane;
+#[cfg(all(unix, test))]
+pub(crate) use herdr_pane::wrap as wrap_for_test;
 pub(crate) use quickstart::render_quickstart;
 
 pub(crate) fn render(frame: &mut Frame, app: &App) {

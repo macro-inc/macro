@@ -16,18 +16,20 @@ const emptyWriteResult = (): WriteResult => ({
 });
 
 /**
- * CacheHost used when the platform cannot run the shared cache engine.
- * It never stores data. Its disabled marker makes the exchange bypass
- * optimistic persistence and forward mutations directly.
+ * CacheHost used when the platform cannot run the shared cache engine, or
+ * after a page stops using it. It never stores data. Its disabled marker
+ * makes the exchange bypass optimistic persistence and forward mutations
+ * directly.
  */
-export function createNoopCacheHost(reason: string): CacheHost {
-  console.warn(`[graphql-cache] disabled: ${reason}`);
-
+export function createNoopCacheHost(): CacheHost {
   return {
     clientId: 'noop',
     disabled: true,
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
+    },
+    async currentStorageGeneration() {
+      throw new Error('normalized GraphQL cache is unavailable');
     },
     async readQuery(): Promise<ReadResult> {
       return { kind: 'miss' };
@@ -39,6 +41,12 @@ export function createNoopCacheHost(reason: string): CacheHost {
       return { documents: [], nextCursor: null };
     },
     async entityFilter() {
+      return { kind: 'unsupported' };
+    },
+    async calendarRange() {
+      return { kind: 'unsupported' };
+    },
+    async calendarCommit() {
       return { kind: 'unsupported' };
     },
     async writeQuery(): Promise<WriteResult> {

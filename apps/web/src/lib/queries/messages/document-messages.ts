@@ -15,7 +15,9 @@ import {
   usePatchThreadMutation,
   useSendMessageMutation,
 } from './mutations';
+import { fetchMessageThread } from './thread-replies';
 import { useMessageTimelineQuery } from './timeline';
+import { timelineMessages } from './timeline-entries';
 
 /** Positioning annotations needs every root, but never fetches every root's replies. */
 export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
@@ -31,9 +33,7 @@ export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
   });
   return {
     get data() {
-      return query.isSuccess
-        ? query.data.pages.flatMap((page) => page.items)
-        : [];
+      return query.isSuccess ? query.data.pages.flatMap(timelineMessages) : [];
     },
     get isSuccess() {
       return query.isSuccess;
@@ -61,7 +61,7 @@ export async function fetchDocumentThreads(
       cursor: cursor ?? undefined,
     });
     for (const root of page.items) {
-      threads.push(await entityMessagesClient.thread(parent, root.id));
+      threads.push(await fetchMessageThread(parent, root.id));
     }
     cursor = page.next_cursor;
   } while (cursor);
@@ -99,7 +99,6 @@ export function useMessageActions(parent: Accessor<MessageParent>) {
   };
 }
 
-/** Resolve copied links, falling back to the root when the linked reply was deleted. */
 // Cached callbacks outlive the hook; only plain request values enter here.
 function messageLinkQueryOptions(
   parent: MessageParent,
@@ -115,12 +114,15 @@ function messageLinkQueryOptions(
   });
 }
 
+/** Resolve copied links, falling back to the root when the linked reply was deleted. */
 export function useMessageLink(
   parent: Accessor<MessageParent>,
   target: Accessor<string | null | undefined>
 ) {
   const legacy = useQuery(() => messageLinkQueryOptions(parent(), target()));
   return {
+    error: () => legacy.error,
+    refetch: legacy.refetch,
     messageId: () => {
       const id = target();
       if (!id) return null;

@@ -4,6 +4,7 @@ import {
   MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
   Model,
+  PAID_MODELS,
 } from '@core/component/AI/constant';
 import type { TModel } from '@core/component/AI/types';
 import { isMobile } from '@core/mobile/isMobile';
@@ -30,16 +31,19 @@ type ModelSelectorProps = {
   compact?: boolean;
 };
 
-const ALL_AVAILABLE: ModelOption[] = (Object.values(Model) as TModel[]).map(
-  (id) => ({ id, available: true })
-);
+const ALL_AVAILABLE: ModelOption[] = PAID_MODELS.map((id) => ({
+  id,
+  available: true,
+}));
 
 const MODEL_DESCRIPTION: Record<TModel, string> = {
-  [Model.sonnet5]: 'Everyday writing, coding, and questions',
-  [Model.opus5]: 'Complex tasks and deeper analysis',
+  [Model.sonnet55]: 'Everyday writing, coding, and questions',
+  [Model.opus55]: 'Complex tasks and deeper analysis',
   [Model.haiku45]: 'Quick answers and lighter tasks',
+  [Model.gpt6Astra]: 'Frontier reasoning for the hardest problems',
   [Model.gpt56]: 'Reasoning, writing, and problem solving',
   [Model.gpt56Mini]: 'Fast help with everyday tasks',
+  [Model.gemini38Flash]: 'Fast answers over data and documents',
 };
 
 export function ModelSelector(props: ModelSelectorProps) {
@@ -65,9 +69,9 @@ export function ModelSelector(props: ModelSelectorProps) {
             variant="ghost"
             size={props.compact ? 'icon-sm' : 'sm'}
             class={cn(
-              'rounded-lg text-sm text-ink-subtle',
+              'text-sm text-ink-subtle',
               !props.compact && 'gap-1.5',
-              'not-touch:h-[33.75px] not-touch:rounded-full not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
+              'not-touch:h-[33.75px] not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
               props.compact && 'not-touch:p-[3.75px]'
             )}
             label={props.compact ? MODEL_PRETTYNAME[model()] : undefined}

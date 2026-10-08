@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -16,13 +17,31 @@ const mocks = vi.hoisted(() => ({
   storeModel: vi.fn(),
   sendBackground: vi.fn(),
   background: false,
+  agentsEnabled: false,
+  agentsLoading: (): boolean => false,
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({
+    enabled: mocks.agentsEnabled,
+    loading: mocks.agentsLoading(),
+  }),
+}));
+vi.mock('../agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => <div data-testid="agent-composer" />,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({ withMentions: () => ({}) }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => ({}),
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
   ChatInput: (props: {
@@ -94,10 +113,34 @@ import { SoupChatInput } from './SoupChatInput';
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.background = false;
+  mocks.agentsEnabled = false;
+  mocks.agentsLoading = () => false;
 });
 afterEach(cleanup);
 
 describe('SoupChatInput', () => {
+  it.each([true, false])(
+    'waits for flags before mounting the composer (agents enabled: %s)',
+    (enabled) => {
+      const [loading, setLoading] = createSignal(true);
+      mocks.agentsLoading = loading;
+      render(() => <SoupChatInput />);
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+      expect(screen.queryByTestId('agent-composer')).toBeNull();
+      expect(mocks.createChat).not.toHaveBeenCalled();
+      mocks.agentsEnabled = enabled;
+      setLoading(false);
+      expect(!!screen.queryByTestId('agent-composer')).toBe(enabled);
+      expect(!!screen.queryByRole('button', { name: 'Send' })).toBe(!enabled);
+    }
+  );
+  it('uses the new composer when agents are enabled', () => {
+    mocks.agentsEnabled = true;
+    render(() => <SoupChatInput />);
+    expect(screen.getByTestId('agent-composer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(mocks.createChat).not.toHaveBeenCalled();
+  });
   it('renders the compact chat input inline without page actions', () => {
     const { container } = render(() => <SoupChatInput />);
     const send = screen.getByRole('button', { name: 'Send' });

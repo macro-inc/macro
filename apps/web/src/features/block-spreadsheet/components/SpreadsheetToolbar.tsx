@@ -17,12 +17,20 @@ import X from '@phosphor/x.svg';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import { Show } from 'solid-js';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
-import type { FormulaTextSelection } from '../core/formula-reference';
+import type {
+  FormulaReferenceSpan,
+  FormulaTextSelection,
+} from '../core/formula-reference';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
 import { createTouchPress } from '../primitives/create-touch-press';
 import { FormulaInput } from './FormulaInput';
-import { DataFormatMenu, PasteMenu, ViewMenu } from './SpreadsheetActionMenus';
+import {
+  DataFormatMenu,
+  InsertMenu,
+  PasteMenu,
+  ViewMenu,
+} from './SpreadsheetActionMenus';
 import {
   AlignmentMenu,
   BorderMenu,
@@ -39,7 +47,7 @@ function ToolbarButton(props: ButtonProps) {
     <Button
       {...props}
       size="icon-sm"
-      class="h-7 w-7 min-h-7 min-w-7 rounded-[3px] p-1 font-normal touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
+      class="h-7 w-7 min-h-7 min-w-7 p-1 font-normal touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
     />
   );
 }
@@ -255,6 +263,7 @@ export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
         <Divider />
         <FunctionMenu {...props} />
         <DataFormatMenu {...props} />
+        <InsertMenu {...props} />
         <ToolbarButton
           size="icon-sm"
           label="Find and replace"
@@ -295,6 +304,7 @@ export function FormulaBar(props: {
   editing?: boolean;
   complete: CompleteFormula;
   selectionRequest?: FormulaTextSelection;
+  references?: FormulaReferenceSpan[];
   pickingReference?: boolean;
   onSelectionChange?: (start: number, end: number) => void;
   onNavigate: (address: string) => void;
@@ -351,6 +361,7 @@ export function FormulaBar(props: {
         label="Formula bar"
         complete={props.complete}
         selectionRequest={props.selectionRequest}
+        references={props.references}
         pickingReference={props.pickingReference}
         onSelectionChange={props.onSelectionChange}
         placeholder={

@@ -21,6 +21,7 @@ import {
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui';
 import {
+  children,
   createEffect,
   createMemo,
   createSignal,
@@ -67,6 +68,8 @@ export {
 
 interface ListEntityProps extends BaseListEntityProps {
   showUnrollNotifications?: boolean;
+  /** Collection-owned schedule metadata for the original entity row. */
+  scheduleStatus?: JSX.Element;
 }
 
 export function MaybeEntityRow(props: {
@@ -93,6 +96,11 @@ export function MaybeEntityRow(props: {
 export function ListEntity(props: ListEntityProps) {
   // Legacy Soup callers do not pass row behavior explicitly yet.
   const soupView = useMaybeSoupView();
+  const rowActions = children(() => props.actions);
+  const leadingAction = children(() => props.leadingAction);
+  const titleLeading = children(() => props.titleLeading);
+  const meta = children(() => props.meta);
+  const scheduleStatus = children(() => props.scheduleStatus);
 
   const unread = () => unreadFilterFn(props.entity);
   const isShared = useIsShared(props.entity);
@@ -148,6 +156,12 @@ export function ListEntity(props: ListEntityProps) {
 
   const layoutProps = (): LayoutProps => ({
     entity: props.entity,
+    actions: !isTouchDevice() ? rowActions() : undefined,
+    leadingAction: !isTouchDevice() ? leadingAction() : undefined,
+    titleLeading: titleLeading(),
+    meta: meta(),
+    scheduleStatus: scheduleStatus(),
+    authorDisplayName: props.authorDisplayName,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -218,6 +232,8 @@ export function ListEntity(props: ListEntityProps) {
             props.highlighted && !props.checked && !isTouchDevice(),
           'hover:bg-list-hover':
             !props.highlighted && !props.checked && !isTouchDevice(),
+          'focus-within:bg-list-hover':
+            !!rowActions() && !props.highlighted && !props.checked,
         }
       )}
       onMouseMove={props.onMouseMove}
@@ -244,6 +260,7 @@ export function ListEntity(props: ListEntityProps) {
         <Match when={isTouchDevice() && mobileStacks().length > 0}>
           <Entity.Notification.MobileStackRows
             stacks={mobileStacks()}
+            scheduleStatus={scheduleStatus()}
             entity={props.entity}
             entityRowConfig={props.entityRowConfig}
           />

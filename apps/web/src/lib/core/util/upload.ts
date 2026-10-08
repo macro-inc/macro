@@ -8,10 +8,10 @@
  */
 
 import { analytics } from '@app/lib/analytics';
+import { groupPickedFolderFiles } from '@core/client/folderUploadPaths';
 import {
   DirectoryFileCountExceededError,
   DirectoryFileSizeExceededError,
-  type FileDetail,
   handleFoldersInput,
   zipFiles,
 } from '@core/client/zipWorkerClient';
@@ -21,6 +21,7 @@ import {
   blockAcceptsFileExtension,
 } from '@core/constant/allBlocks';
 import { heicConversionService } from '@core/heic/service';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import {
   createStaticUploadFile,
   createUploadFile,
@@ -358,7 +359,7 @@ async function uploadToDSS(
   file: UploadFile,
   options: DssUploadFileOptions
 ): Promise<DssUploadSuccessResult> {
-  if (isNativeStagedUpload(file)) {
+  if (isNativeStagedUpload(file) && !file.sha256) {
     throw new UploadError(
       file,
       'dss',
@@ -411,6 +412,8 @@ export async function uploadFile(
   dssOptions: DssUploadFileOptions = {}
 ): Promise<MaybeUploadResult> {
   const uploadSource = createUploadFile(file);
+  // Reloading into a newer app build would cut the upload off.
+  const releaseReloadHold = holdAutomaticReload();
   try {
     validateFileSize(uploadSource);
 
@@ -448,6 +451,8 @@ export async function uploadFile(
           : new UploadError(uploadSource, 'dss', new Error(String(error))),
       name,
     };
+  } finally {
+    releaseReloadHold();
   }
 }
 
@@ -646,20 +651,7 @@ export async function handleFolderSelect(
   files: File[],
   onFilesReady: (files: UploadFileEntry[]) => void | Promise<void>
 ): Promise<void> {
-  const groups = new Map<string, { files: File[]; details: FileDetail[] }>();
-  for (const file of files) {
-    const rel = file.webkitRelativePath || file.name;
-    const parts = rel.split('/');
-    const top = parts.shift() || file.name;
-    const path = parts.join('/');
-    const group = groups.get(top) || {
-      files: [],
-      details: [],
-    };
-    group.files.push(file);
-    group.details.push({ path: path || file.name });
-    groups.set(top, group);
-  }
+  const groups = groupPickedFolderFiles(files);
 
   const zipEntryPromises = Array.from(groups.entries()).map(
     ([folderName, group]) =>

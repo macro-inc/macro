@@ -105,6 +105,12 @@ const GROUP_BY_BY_NAME: Record<
   project: { type: 'project' },
 };
 
+// Cached query meta outlives the widget; the gate closes over the plain query
+// snapshot only, never the component scope.
+function queryItemFilter(source: Query): SoupApiItemFilter {
+  return (item) => soupItemMatchesQuery(item, source);
+}
+
 /**
  * One row: a real `ListEntity`, rendered flush the way SoupView / the unified
  * list do. The row's own `Entity.Root` supplies its height, the rounded inset
@@ -119,13 +125,6 @@ const GROUP_BY_BY_NAME: Record<
  * dispatches per `entity.type` and works for every type here already,
  * `email` included.
  */
-
-// Cached query meta outlives the widget; the gate closes over the plain query
-// snapshot only, never the component scope.
-function queryItemFilter(source: Query): SoupApiItemFilter {
-  return (item) => soupItemMatchesQuery(item, source);
-}
-
 function Row(props: { entity: EntityData }) {
   const notificationSource = useGlobalNotificationSource();
   return (

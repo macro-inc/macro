@@ -1,0 +1,402 @@
+import {
+  SearchBar,
+  useViewShell,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
+import {
+  createSearchParams,
+  SplitRouter,
+  useNavigate,
+  useParams,
+} from '@app/lib/split-router';
+import { reviewsPrRoute, reviewsSplitRoute } from '@app/routes/routes';
+import {
+  prLinksTarget,
+  usePrLinksQuery,
+} from '@block-pr/queries/pr-links-query';
+import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { SplitPanel } from '@components/app/split-panel';
+import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  type GithubPullRequestEntity,
+  ListEntityMetadataQueryProvider,
+} from '@entity';
+import { GithubLabelPill } from '@entity/components/GithubLabelPill';
+import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
+import {
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
+import {
+  activeReviewsFilterCount,
+  ReviewsControls,
+  ReviewsFilterDrawer,
+} from './components/ReviewsControls';
+import { ReviewsList } from './components/ReviewsList';
+import { ReviewsSidebar } from './components/ReviewsSidebar';
+import { ReviewsStatusTabs } from './components/ReviewsStatusTabs';
+import {
+  reviewsStatusTab,
+  reviewsStatusTabSelection,
+  showReviewsStatusTabs,
+} from './core/reviews-status';
+import { createReviewsListController } from './primitives/create-reviews-list-controller';
+import { useReviewsFacetsQuery } from './queries/use-reviews-facets-query';
+import { useReviewsQuery } from './queries/use-reviews-query';
+import {
+  applyReviewLinks,
+  effectiveReviewsFilters,
+  hasLinkFilters,
+  searchReviews,
+} from './reviews-filter';
+import { reviewsHostedContent } from './reviews-hosted-content';
+import { reviewsTabSearch, reviewsTabSearchCodec } from './reviews-tab-search';
+import {
+  DEFAULT_REVIEWS_FILTERS,
+  REVIEWS_SCOPES,
+  type ReviewsFilterId,
+  type ReviewsFilterSelection,
+  type ReviewsScope,
+  type ReviewsSortId,
+  type ReviewsStatusTabId,
+  scopeMatchesViewerGithubId,
+} from './reviews-types';
+import { ReviewsListTopBar } from './views/ReviewsListTopBar';
+
+const REVIEW_SCOPE_TITLES: Record<ReviewsScope, string> = {
+  all: 'Pull requests',
+  authored: 'Authored by me',
+  assigned: 'Assigned to me',
+  involving: 'Involves me',
+  review_requests: 'Review requests',
+};
+const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
+  (scope) => ({ value: scope, label: REVIEW_SCOPE_TITLES[scope] })
+);
+function ReviewsListScopeHeading(props: { title: string }) {
+  const shell = useViewShell();
+  return (
+    <Show when={shell.breakpoints.narrow?.() || shell.aside.isCollapsed()}>
+      <div class="flex h-8 min-w-0 items-center">
+        <h2 class="truncate text-xl font-semibold text-ink">{props.title}</h2>
+      </div>
+    </Show>
+  );
+}
+
+function ReviewsRoot() {
+  const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
+  createRenderEffect(() =>
+    panel.handle.updateMeta?.({ splitPanelLayout: 'composable' })
+  );
+  const navigate = useNavigate();
+  const params = useParams<{ foreignEntityId?: string }>();
+  const [tabSearch] = createSearchParams(reviewsTabSearch);
+  const scope = (): ReviewsScope => tabSearch.tab;
+  const scopeTitle = () => REVIEW_SCOPE_TITLES[scope()];
+  const [search, setSearch] = createSignal('');
+  const [sort, setSort] = createSignal<ReviewsSortId>('recently_updated');
+  const [filters, setFilters] = createSignal<ReviewsFilterSelection>(
+    DEFAULT_REVIEWS_FILTERS
+  );
+  const listVisible = () => !params.foreignEntityId;
+  const githubLink = useGithubLinkStatusQuery({ enabled: listVisible });
+  const viewer = useUserContext();
+  const authorLogin = () =>
+    githubLink.isPending ? undefined : githubLink.data?.username;
+  const authorId = () =>
+    githubLink.isPending ? undefined : githubLink.data?.userId;
+  const activeFilters = () =>
+    effectiveReviewsFilters(filters(), Boolean(authorId()));
+  const listEnabled = () =>
+    listVisible() &&
+    (!scopeMatchesViewerGithubId(scope()) || Boolean(authorId()));
+  const source = useReviewsQuery(
+    sort,
+    () => ({
+      scope: scope(),
+      filters: activeFilters(),
+      viewerGithubUserId: authorId(),
+    }),
+    listEnabled
+  );
+  const facets = useReviewsFacetsQuery();
+  const changeFilter = (
+    group: ReviewsFilterId,
+    id: string,
+    selected: boolean
+  ) =>
+    setFilters((current) => {
+      const ids = current[group];
+      if (selected === ids.includes(id)) return current;
+      return {
+        ...current,
+        [group]: selected ? [...ids, id] : ids.filter((value) => value !== id),
+      };
+    });
+  const clearFilters = () => setFilters(DEFAULT_REVIEWS_FILTERS);
+  const statusTab = () => reviewsStatusTab(filters().status);
+  const selectStatusTab = (status: ReviewsStatusTabId) =>
+    setFilters((current) => ({
+      ...current,
+      status: reviewsStatusTabSelection(status),
+    }));
+  const clearSearch = () => setSearch('');
+  const searchForTab = (tab: ReviewsScope) => ({
+    [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
+  });
+  const openList = () =>
+    navigate(
+      { route: reviewsSplitRoute, params: {} },
+      { search: searchForTab(scope()) }
+    );
+  const selectScope = (next: ReviewsScope) =>
+    navigate(
+      { route: reviewsSplitRoute, params: {} },
+      { search: searchForTab(next) }
+    );
+  const openReview = (foreignEntityId: string, newSplit: boolean) => {
+    if (newSplit) {
+      const tabSearchParams = reviewsTabSearchCodec.serialize({ tab: scope() });
+      const content = reviewsHostedContent(
+        { type: 'pr', id: foreignEntityId },
+        tabSearchParams
+          ? { [reviewsTabSearch.namespace]: tabSearchParams }
+          : undefined
+      );
+      if (content)
+        layout.openWithSplit(content, {
+          preferNewSplit: true,
+          // List and detail share the Reviews shell component identity.
+          allowDuplicate: true,
+        });
+      return;
+    }
+    navigate(
+      { route: reviewsPrRoute, params: { foreignEntityId } },
+      { search: searchForTab(scope()) }
+    );
+  };
+  // Links load for every fetched row, not just the searched ones, so the
+  // per-page cache entries stay stable while the search changes.
+  const links = usePrLinksQuery(() =>
+    source.reviews().map((review) => prLinksTarget(review.metadata))
+  );
+  const linksFor = (review: GithubPullRequestEntity) =>
+    links.linksFor(prLinksTarget(review.metadata).url);
+  const reviews = createMemo(() =>
+    applyReviewLinks(
+      searchReviews(source.reviews(), search()),
+      linksFor,
+      activeFilters(),
+      sort()
+    )
+  );
+  // Link filters cannot match rows before their links arrive, so an empty
+  // result waits for them instead of claiming nothing matches.
+  // A failed link batch can hide every row under a link filter, so the list
+  // then reports it with a retry instead of an empty result.
+  const linkFilterFailed = () =>
+    hasLinkFilters(activeFilters()) && links.isError();
+  const listSource = {
+    ...source,
+    isLoading: () =>
+      source.isLoading() ||
+      (hasLinkFilters(activeFilters()) &&
+        links.isLoading() &&
+        reviews().length === 0),
+    error: () =>
+      source.error() ??
+      (linkFilterFailed() && reviews().length === 0
+        ? new Error('Pull request links couldn’t be loaded')
+        : undefined),
+    retry: () => {
+      if (links.isError()) void links.retry();
+      return source.retry();
+    },
+  };
+  const openLink = (content: SplitContent, newSplit: boolean) =>
+    layout.openWithSplit(content, { preferNewSplit: newSplit });
+  const listController = createReviewsListController(reviews, openReview);
+  const selectLabels = (labels: string[]) => {
+    setFilters((current) => ({ ...current, label: labels }));
+    if (!listVisible()) openList();
+  };
+  const controls = () => ({
+    sort: sort(),
+    onSortChange: setSort,
+    repositories: facets.repositories(),
+    authors: facets.authors(),
+    assignees: facets.assignees(),
+    labels: facets.labels().map((label) => ({
+      id: label.name,
+      label: label.name,
+      content: () => <GithubLabelPill name={label.name} color={label.color} />,
+    })),
+    hasGithubIdentity: Boolean(authorId()),
+    selected: activeFilters(),
+    onFilterChange: changeFilter,
+    onClearFilters: clearFilters,
+  });
+  const list = () => (
+    <>
+      <ReviewsListTopBar />
+      <ViewShell.Header>
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <div class="flex min-w-0 flex-col gap-3">
+              <ReviewsListScopeHeading title={scopeTitle()} />
+              <div class="flex min-w-0 items-center justify-between gap-3">
+                <SearchBar
+                  label="Search reviews"
+                  value={search()}
+                  onValueChange={setSearch}
+                  placeholder="Search reviews"
+                  class="max-w-md flex-1"
+                />
+                <ReviewsControls {...controls()} />
+              </div>
+            </div>
+          }
+        >
+          <div class="flex min-w-0 flex-col gap-3">
+            <div class="h-10 min-w-0 flex-1">
+              <PillTabs
+                scrollable
+                leading={<ReviewsFilterDrawer {...controls()} />}
+                items={REVIEW_SCOPE_TABS}
+                value={scope()}
+                onChange={selectScope}
+              />
+            </div>
+            <SearchBar
+              label="Search reviews"
+              value={search()}
+              onValueChange={setSearch}
+              placeholder="Search reviews"
+            />
+          </div>
+        </Show>
+        <Show when={showReviewsStatusTabs(filters().status)}>
+          <div class="mt-3 min-w-0 overflow-x-auto">
+            <ReviewsStatusTabs value={statusTab()} onChange={selectStatusTab} />
+          </div>
+        </Show>
+      </ViewShell.Header>
+      <ViewShell.Content>
+        <ReviewsList
+          list={listController}
+          source={listSource}
+          links={{
+            linksFor,
+            companyName: links.companyName,
+            onOpen: openLink,
+          }}
+          scope={scope()}
+          authorLogin={authorLogin()}
+          authorId={authorId()}
+          viewerName={viewer.userInfo()?.name ?? undefined}
+          githubIdentityLoading={githubLink.isPending}
+          githubAccountStatus={
+            githubLink.isError
+              ? 'error'
+              : githubLink.isPending
+                ? undefined
+                : githubLink.data?.status
+          }
+          search={search()}
+          hasFilters={
+            activeReviewsFilterCount(activeFilters()) >
+            (statusTab() === 'open' ? 1 : 0)
+          }
+          onClearFilters={clearFilters}
+          onClearSearch={clearSearch}
+          onOpen={openReview}
+        />
+      </ViewShell.Content>
+    </>
+  );
+
+  onMount(() => panel.handle.setDisplayName('Reviews'));
+  return (
+    <ViewBreadcrumbs.Root
+      value={
+        params.foreignEntityId ? `pr:${params.foreignEntityId}` : 'reviews-view'
+      }
+      onChange={(next) => {
+        if (next === 'reviews-view') openList();
+      }}
+    >
+      <ViewBreadcrumbs.Item
+        value="reviews-view"
+        order={0}
+        metadata={{ type: 'reviews' }}
+      >
+        {(item) => (
+          <ViewBreadcrumbs.ReturnButton
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={scopeTitle()}
+          >
+            {scopeTitle()}
+          </ViewBreadcrumbs.ReturnButton>
+        )}
+      </ViewBreadcrumbs.Item>
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <ViewShell.Root
+            asidePreferenceKey="reviews"
+            resizable
+            aside={{ preserveDuringResize: false }}
+            main={{ preferredWidth: 640 }}
+          >
+            <ViewShell.Aside>
+              <ReviewsSidebar
+                scope={scope()}
+                onScopeChange={selectScope}
+                labels={facets.labels()}
+                activeLabels={filters().label}
+                onActiveLabelsChange={selectLabels}
+                onOpenReview={openReview}
+                activeForeignEntityId={params.foreignEntityId}
+              />
+            </ViewShell.Aside>
+            <ViewShell.Main>
+              <Suspense
+                fallback={
+                  <div
+                    role="status"
+                    class="grid size-full place-items-center text-ink-muted"
+                  >
+                    Loading reviews…
+                  </div>
+                }
+              >
+                <SplitRouter.Outlet fallback={list} />
+              </Suspense>
+            </ViewShell.Main>
+          </ViewShell.Root>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
+    </ViewBreadcrumbs.Root>
+  );
+}
+
+export function ReviewsView() {
+  return (
+    <ListEntityMetadataQueryProvider>
+      <ReviewsRoot />
+    </ListEntityMetadataQueryProvider>
+  );
+}

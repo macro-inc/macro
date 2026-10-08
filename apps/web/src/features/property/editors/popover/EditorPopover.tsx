@@ -1,14 +1,16 @@
 import { useIsInsideHoverCard } from '@core/component/HoverCard';
 import { cn, Dropdown } from '@ui';
-import { type JSX, onCleanup, onMount } from 'solid-js';
-import { useProperty } from '../../core/context';
+import { type JSX, onCleanup, onMount, useContext } from 'solid-js';
+import { PropertyRootContext } from '../../core/context';
 
 type EditorPopoverProps = {
   children: JSX.Element;
   class?: string;
+  /** Mount inside the nearest portal scope when hosted in a modal. */
+  portalScope?: 'local';
   /**
    * Called on ESC or outside-interaction. Default: <Property.Root>'s closeEditor.
-   * Override to save-on-close.
+   * Override to save-on-close, or to host the popover outside a Property.Root.
    */
   onClose?: () => void;
   /**
@@ -22,18 +24,18 @@ type EditorPopoverProps = {
 
 /**
  * Floating shell for popover-style editors (date / select / entity). The
- * surrounding <Property.Root> hosts a Kobalte DropdownMenu — this component
+ * surrounding <Property.Root> (or any <Dropdown>) hosts a Kobalte DropdownMenu — this component
  * just renders the Content. Kobalte handles ESC, click-outside, focus
  * trap, and focus return. `onClose` is invoked on dismissal so consumers can
  * save-on-close.
  */
 export function EditorPopover(props: EditorPopoverProps) {
-  const ctx = useProperty();
+  const ctx = useContext(PropertyRootContext);
   const isInsideHoverCard = useIsInsideHoverCard();
 
   const close = () => {
     if (props.onClose) props.onClose();
-    else ctx.closeEditor();
+    else ctx?.closeEditor();
   };
 
   const handleEscapeKeyDown = (event: KeyboardEvent) => {
@@ -88,10 +90,10 @@ export function EditorPopover(props: EditorPopoverProps) {
   };
 
   return (
-    // Keep the default body portal. The editor uses a virtual anchor rectangle,
-    // so mounting inside a local portal-scope gives Floating UI the wrong
-    // clipping and offset context.
+    // Virtual anchors normally use the body portal. Modal hosts opt into
+    // their own portal scope to keep focus and outside interactions local.
     <Dropdown.Content
+      portalScope={props.portalScope}
       class={cn(
         'max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-sm',
         isInsideHoverCard && 'z-nested-action-menu!',

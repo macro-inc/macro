@@ -13,25 +13,22 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
-  useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import {
   useBlockDocumentDownloadName,
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
+import IconShared from '@icon/share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
-import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 
-export function TopBar() {
+export function TopBar(props: { onShare: () => void }) {
   const blockId = useBlockId();
   const fileName = useBlockDocumentName();
   const downloadName = useBlockDocumentDownloadName();
   const getBlob = useGetFileBlob();
-
-  const shareCtx = useShareDialogContext();
 
   const downloadDocument = createCallback(async () => {
     try {
@@ -61,8 +58,8 @@ export function TopBar() {
       group: 'sharing',
       label: 'Share',
       icon: IconShared,
-      action: () => shareCtx.open(),
-      buttonComponent: () => <ShareTrigger />,
+      action: props.onShare,
+      buttonComponent: () => <ShareTrigger onClick={props.onShare} />,
       focusTarget: getShareDrawerRecipientInput,
     },
   ];

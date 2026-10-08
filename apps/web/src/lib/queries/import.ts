@@ -14,23 +14,24 @@ import {
   type ImportSource,
   type ImportState,
   importClient,
+  type SlackChannelMeta,
 } from '@service-cognition/import';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  queryOptions,
+  type UseMutationResult,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 
 export type {
   ImportEntity,
   ImportEntityStatus,
-  ImportInitiator,
   ImportRun,
   ImportRunStatus,
   ImportSource,
   ImportState,
-  LinearIssueMeta,
-  NotionDocMeta,
-  RunImportOutcome,
   SlackChannelMeta,
-  SlackParticipant,
 } from '@service-cognition/import';
 
 const KEYS = {
@@ -90,20 +91,6 @@ function invalidateImportState() {
 }
 
 /**
- * Imperatively fetch the import aggregate through the shared cache — for
- * non-component polling loops (the setup finish hold). Keeps every read on
- * the TanStack path so concurrent `useImportQuery` subscribers see the same
- * data.
- */
-export function fetchImportState(): Promise<ImportState> {
-  return queryClient.fetchQuery({
-    queryKey: KEYS.state,
-    queryFn: fetchImportStateFromServer,
-    staleTime: 0,
-  });
-}
-
-/**
  * Accept and/or decline staged rows. The server flips accepted rows to
  * `importing` and returns immediately; completion arrives via
  * `import_updated` pushes and polling.
@@ -121,27 +108,23 @@ export function useRunImportMutation() {
   }));
 }
 
-/** Restart a failed gather run. */
-export function useRetryGatherMutation() {
+/** Discover candidates for manual selection. */
+export function useDiscoverMutation(): UseMutationResult<
+  void,
+  Error,
+  ImportSource
+> {
   return useMutation(() => ({
-    mutationFn: async (source: ImportSource) =>
-      throwOnErr(() => importClient.retryGather(source)),
+    mutationFn: (source: ImportSource) =>
+      throwOnErr(() => importClient.discover(source)),
     onSuccess: () => void invalidateImportState(),
   }));
 }
 
-/** Dismiss one source's import section. */
-export function useDismissRunMutation() {
-  return useMutation(() => ({
-    mutationFn: async (source: ImportSource) =>
-      throwOnErr(() => importClient.dismissRun(source)),
-    onSuccess: () => void invalidateImportState(),
-  }));
-}
-
-/** A human label for a ledger row, from its per-source metadata. */
-export function entityLabel(entity: ImportEntity): string {
-  const field = entity.source === 'slack' ? 'name' : 'title';
-  const value = entity.metadata[field];
-  return typeof value === 'string' && value.length > 0 ? value : '(unnamed)';
+/** Slack channel metadata, only for Slack ledger rows. */
+export function slackChannelMeta(
+  entity: ImportEntity
+): SlackChannelMeta | null {
+  if (entity.source !== 'slack') return null;
+  return entity.metadata as SlackChannelMeta;
 }

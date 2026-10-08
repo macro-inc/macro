@@ -3,13 +3,13 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        Agent, AgentChannelScope, AgentMcpServers, AuthenticatedBot, Bot, BotChannel,
-        BotChannelListCaller, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        CreateChannelScopedBotResponse, HarnessId, HarnessOwner, PatchBotRequest,
-        UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
+        BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
+        BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
+        MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService},
+    ports::{BotError, BotRepo, BotService, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -23,16 +23,50 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 /// Bot service implementation.
+///
+/// `C` answers whether a Pipedream app slug is real. [`UncheckedMcpApps`]
+/// accepts every slug; hosts that configure agents from a conversation pass
+/// a directory-backed catalog instead.
 #[derive(Debug, Clone)]
-pub struct BotServiceImpl<R, B> {
+pub struct BotServiceImpl<R, B, C = UncheckedMcpApps> {
     repo: R,
     event_broker: B,
+    mcp_apps: C,
 }
 
-impl<R, B> BotServiceImpl<R, B> {
-    /// Create a bot service.
+/// Accepts every MCP app slug without asking Pipedream.
+///
+/// For hosts that have no app directory. A host that applies an agent's
+/// choice of apps must pass a directory-backed catalog, which refuses a slug
+/// it cannot confirm.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UncheckedMcpApps;
+
+impl McpAppCatalog for UncheckedMcpApps {
+    async fn is_connectable_app(&self, _slug: &str) -> Result<bool, BotError> {
+        Ok(true)
+    }
+}
+
+impl<R, B, C> BotServiceImpl<R, B, C> {
+    /// Swap the MCP app directory this service consults.
+    pub fn with_mcp_apps<D>(self, mcp_apps: D) -> BotServiceImpl<R, B, D> {
+        BotServiceImpl {
+            repo: self.repo,
+            event_broker: self.event_broker,
+            mcp_apps,
+        }
+    }
+}
+
+impl<R, B> BotServiceImpl<R, B, UncheckedMcpApps> {
+    /// Create a bot service that does not check MCP app slugs against Pipedream.
     pub fn new(repo: R, event_broker: B) -> Self {
-        Self { repo, event_broker }
+        Self {
+            repo,
+            event_broker,
+            mcp_apps: UncheckedMcpApps,
+        }
     }
 }
 
@@ -218,7 +252,7 @@ struct ValidatedBotToken {
     token_id: Uuid,
 }
 
-impl<R, B> BotServiceImpl<R, B>
+impl<R, B, C> BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker,
@@ -395,6 +429,64 @@ where
         }
     }
 
+    /// Replace a manageable agent's configuration with `req`, `current` being
+    /// the bot [`Self::ensure_manageable`] returned for it.
+    async fn replace_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        current: &Bot,
+        req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        validate_update_agent_request(&req)?;
+        if req.channel_scope == AgentChannelScope::Selected
+            && !self
+                .repo
+                .user_has_channels(caller.clone(), &req.channel_ids)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::Unauthorized);
+        }
+
+        let owner = self
+            .owner_for_agent_update(caller.clone(), current, req.team_id)
+            .await?;
+        self.ensure_harness_usable(
+            caller.clone(),
+            &owner,
+            req.harness_id,
+            req.auto_accept_permissions,
+        )
+        .await?;
+        let requested_name = req.name.clone();
+        let requested_handle = req.handle.clone();
+        let requested_description = req.description.clone();
+        let requested_avatar_url = req.avatar_url.clone();
+        let agent = self
+            .repo
+            .update_agent(current.id, owner, req)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+
+        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
+            bot_id: agent.bot.id,
+            owner: agent
+                .bot
+                .owner
+                .clone()
+                .expect("owned agent bot must have an owner"),
+            actor_user_id: caller,
+            name: Some(requested_name),
+            handle: Some(requested_handle),
+            description: requested_description,
+            avatar_url: requested_avatar_url,
+            updated_at: agent.bot.updated_at,
+        }));
+
+        Ok(agent)
+    }
+
     async fn authenticate_candidate(
         &self,
         candidate: Option<BotTokenCandidate>,
@@ -420,10 +512,11 @@ where
     }
 }
 
-impl<R, B> BotService for BotServiceImpl<R, B>
+impl<R, B, C> BotService for BotServiceImpl<R, B, C>
 where
     R: BotRepo,
     B: MacroEventBroker + Clone,
+    C: McpAppCatalog,
 {
     async fn create_agent(
         &self,
@@ -431,6 +524,7 @@ where
         req: CreateAgentRequest,
     ) -> Result<Agent, BotError> {
         validate_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, &[]).await?;
         if req.channel_scope == AgentChannelScope::Selected
             && !self
                 .repo
@@ -485,55 +579,34 @@ where
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         let current = self.ensure_manageable(caller.clone(), bot_id).await?;
-
-        validate_update_agent_request(&req)?;
-        if req.channel_scope == AgentChannelScope::Selected
-            && !self
-                .repo
-                .user_has_channels(caller.clone(), &req.channel_ids)
-                .await
-                .map_err(|err| BotError::Repo(err.into()))?
-        {
-            return Err(BotError::Unauthorized);
-        }
-
-        let owner = self
-            .owner_for_agent_update(caller.clone(), &current, req.team_id)
-            .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
-        let requested_name = req.name.clone();
-        let requested_handle = req.handle.clone();
-        let requested_description = req.description.clone();
-        let requested_avatar_url = req.avatar_url.clone();
-        let agent = self
+        let existing = self
             .repo
-            .update_agent(bot_id, owner, req)
+            .get_agent(bot_id)
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_update_agent_request(&req)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
+        self.replace_agent(caller, &current, req).await
+    }
 
-        self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
-            bot_id: agent.bot.id,
-            owner: agent
-                .bot
-                .owner
-                .clone()
-                .expect("owned agent bot must have an owner"),
-            actor_user_id: caller,
-            name: Some(requested_name),
-            handle: Some(requested_handle),
-            description: requested_description,
-            avatar_url: requested_avatar_url,
-            updated_at: agent.bot.updated_at,
-        }));
-
-        Ok(agent)
+    async fn patch_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        bot_id: BotId,
+        req: PatchAgentRequest,
+    ) -> Result<Agent, BotError> {
+        let current = self.ensure_manageable(caller.clone(), bot_id).await?;
+        let agent = self
+            .repo
+            .get_agent(bot_id)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+            .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        let update = req.apply_to(&agent);
+        validate_update_agent_request(&update)?;
+        reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
+        self.replace_agent(caller, &current, update).await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
@@ -630,6 +703,29 @@ where
         bot_id: BotId,
     ) -> Result<Bot, BotError> {
         self.ensure_manageable(caller, bot_id).await
+    }
+
+    async fn get_owner_profiles(&self, ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        if ids.len() > MAX_BOT_OWNER_PROFILE_IDS {
+            return Err(BotError::BadRequest(format!(
+                "at most {MAX_BOT_OWNER_PROFILE_IDS} bot profile ids may be requested"
+            )));
+        }
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let found = self
+            .repo
+            .get_owner_profiles(ids)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(ids
+            .iter()
+            .filter(|id| seen.insert(**id))
+            .filter_map(|id| found.get(id).cloned())
+            .collect())
     }
 
     async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
@@ -885,6 +981,31 @@ where
             .map_err(|err| BotError::Repo(err.into()))?;
         Ok(self.authenticate_candidate(candidate).await?.bot)
     }
+}
+
+/// Refuse a selected MCP app Pipedream does not list.
+///
+/// Slugs already stored on the agent are left alone, so editing instructions
+/// does not depend on the directory staying reachable. A newly named slug
+/// that the directory rejects is a bad request; a directory that cannot be
+/// asked fails the write rather than storing the slug unverified.
+async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
+    catalog: &C,
+    mcp: &AgentMcpServers,
+    already: &[AgentMcpServer],
+) -> Result<(), BotError> {
+    for server in mcp.servers() {
+        if already.iter().any(|kept| kept.app_slug == server.app_slug) {
+            continue;
+        }
+        if !catalog.is_connectable_app(&server.app_slug).await? {
+            return Err(BotError::BadRequest(format!(
+                "MCP server slug {:?} is not a Pipedream app",
+                server.app_slug
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// A persona cannot override its harness operator's permission policy.

@@ -114,6 +114,8 @@ impl From<CalendarAttendeeInputBody> for CalendarAttendeeInput {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCalendarEventRequest {
+    /// Stable retry identity, scoped to the authenticated organizer.
+    pub idempotency_key: Option<Uuid>,
     /// Exact calendar to create the event on; takes precedence over the
     /// inbox default.
     pub calendar_id: Option<Uuid>,
@@ -257,6 +259,8 @@ pub enum CalendarRsvpScopeParam {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RsvpCalendarEventRequest {
+    /// The owned connected address whose attendance is changed. Validated by the domain.
+    pub responding_email: Option<String>,
     /// Calendar whose copy of the event is answered, for an event synced
     /// from more than one calendar. Omit to answer on the canonical copy.
     pub calendar_id: Option<Uuid>,
@@ -419,6 +423,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let draft = CalendarEventDraft {
+        idempotency_key: request.idempotency_key,
         title: request.title,
         description: request.description,
         location: request.location,
@@ -664,6 +669,7 @@ where
             request.calendar_id,
             request.response,
             scope,
+            request.responding_email,
         )
         .await?;
     Ok(Json(event))

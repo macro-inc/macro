@@ -5,6 +5,7 @@ import CheckIcon from '@phosphor/check.svg';
 import {
   type ComponentProps,
   createSignal,
+  type JSX,
   onCleanup,
   Show,
   splitProps,
@@ -68,7 +69,9 @@ export type DropdownItemIndicatorProps = ComponentProps<
 >;
 export type DropdownCheckboxItemProps = ComponentProps<
   typeof KobalteDropdownMenu.CheckboxItem
->;
+> & {
+  indicator?: JSX.Element;
+};
 export type DropdownSubTriggerProps = ComponentProps<
   typeof KobalteDropdownMenu.SubTrigger
 >;
@@ -227,16 +230,17 @@ function DropdownContent(props: DropdownContentProps) {
           class={cn(
             // Paint the same surface as context menus, including custom
             // contents (calendar month lists) without a Dropdown.Group.
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
+          hideBorder
           {...rest}
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
+          <div class="flex flex-col divide-y divide-edge-divider size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -269,15 +273,16 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
+            'menu-surface rounded-xl size-auto z-action-menu menu-open-animation text-sm',
             local.class
           )}
           depth={local.depth ?? 2}
           as={Surface}
+          hideBorder
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
+          <div class="flex flex-col divide-y divide-edge-divider size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>
@@ -317,17 +322,19 @@ const CHECKBOX_ITEM_BOX_CLASS = cn(
 );
 
 function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const [local, rest] = splitProps(props, ['class', 'children', 'indicator']);
   return (
     <KobalteDropdownMenu.CheckboxItem
       class={cn(ROW_CLASS, local.class)}
       {...rest}
     >
-      <div class={CHECKBOX_ITEM_BOX_CLASS}>
-        <KobalteDropdownMenu.ItemIndicator>
-          <CheckIcon class="size-2.5" />
-        </KobalteDropdownMenu.ItemIndicator>
-      </div>
+      {local.indicator ?? (
+        <div class={CHECKBOX_ITEM_BOX_CLASS}>
+          <KobalteDropdownMenu.ItemIndicator>
+            <CheckIcon class="size-2.5" />
+          </KobalteDropdownMenu.ItemIndicator>
+        </div>
+      )}
       {local.children}
     </KobalteDropdownMenu.CheckboxItem>
   );
@@ -393,6 +400,10 @@ export const Dropdown = Object.assign(
     Separator:
       KobalteDropdownMenu.Separator /* passthrough — styled via class at use sites */,
     ItemIndicator: DropdownItemIndicator,
+    ItemLabel:
+      KobalteDropdownMenu.ItemLabel /* passthrough — names the item for assistive tech */,
+    ItemDescription:
+      KobalteDropdownMenu.ItemDescription /* passthrough — describes the item for assistive tech */,
     CheckboxItem: DropdownCheckboxItem,
     SubContent: DropdownSubContent,
     SubTrigger: DropdownSubTrigger,

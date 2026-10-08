@@ -1,6 +1,16 @@
+import {
+  type Client,
+  createClient,
+  fetchExchange,
+  gql,
+  stringifyDocument,
+} from '@urql/core';
+import { filter, map, pipe } from 'wonka';
+import { normalizedCacheExchange } from '../../exchange/normalized-cache-exchange';
 import type { CacheHost } from '../../host/types';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import { clearRegisteredCaches, registerCacheHost } from '../../lifecycle';
+import type { MutationSettlement } from '../../protocol';
 
 const result = document.querySelector<HTMLElement>('#result');
 if (!result) throw new Error('missing Cache result node');
@@ -33,6 +43,17 @@ let owner: CacheHost | undefined;
 let standby: CacheHost | undefined;
 let unregisterOwner: (() => void) | undefined;
 let hostConstructionCount = 0;
+const restoredGenerations: string[] = [];
+const affectedOperations: number[][] = [];
+let cacheChanges = 0;
+let pageRestores = 0;
+let watchingNavigation = false;
+let mutationRunner: Client | undefined;
+let mutationReplays = 0;
+const settledMutations: string[] = [];
+addEventListener('pageshow', (event: PageTransitionEvent) => {
+  if (event.persisted) pageRestores += 1;
+});
 
 const query = (
   operationName: string
@@ -121,6 +142,211 @@ const api = {
   },
   async startSingle(): Promise<void> {
     await startOwner();
+  },
+  async watchNavigation(): Promise<void> {
+    const host = requireOwner();
+    if (!watchingNavigation) {
+      watchingNavigation = true;
+      host.onCacheGenerationChanged(({ storage }) =>
+        restoredGenerations.push(storage)
+      );
+      host.onOpsAffected((keys) => affectedOperations.push(keys));
+      host.onCacheChanged(() => (cacheChanges += 1));
+    }
+    await host.readQuery({
+      opKey: 4242,
+      query: query('CacheLifecycleQuery'),
+      operationName: 'CacheLifecycleQuery',
+      variables: variables(1),
+    });
+  },
+  async queueMutationForRestore(): Promise<string> {
+    const host = requireOwner();
+    const mutation = gql`
+      mutation CacheLifecycleMutation($input: SetEntityPropertyInput!) {
+        setEntityProperty(input: $input) { id displayName }
+      }
+    `;
+    const response = {
+      setEntityProperty: { id: 'restored-property', displayName: 'Restored' },
+    };
+    if (!mutationRunner) {
+      const firstClaim = Promise.withResolvers<void>();
+      host.onMutationSettled(({ transactionId }) =>
+        settledMutations.push(transactionId)
+      );
+      mutationRunner = createClient({
+        url: 'http://cache-lifecycle.test/graphql',
+        exchanges: [
+          normalizedCacheExchange({
+            ...host,
+            async claimNextMutation(...args) {
+              const claimed = await host.claimNextMutation(...args);
+              firstClaim.resolve();
+              return claimed;
+            },
+          }),
+          () => (operations) =>
+            pipe(
+              operations,
+              filter((operation) => operation.kind === 'mutation'),
+              map((operation) => {
+                mutationReplays += 1;
+                return {
+                  operation,
+                  data: response,
+                  stale: false,
+                  hasNext: false,
+                };
+              })
+            ),
+        ],
+      });
+      // Let the initial empty-queue poll finish before inserting runnable work.
+      await firstClaim.promise;
+    }
+    const nowMs = Date.now();
+    const owner = 'browser-test-seed';
+    const queued = await host.enqueueOptimisticMutation(
+      {
+        uuid: crypto.randomUUID(),
+        query: stringifyDocument(mutation),
+        variables: {
+          input: {
+            entityType: 'DOCUMENT',
+            entityId: 'restored-document',
+            propertyDefinitionId: 'restored-definition',
+            value: { string: 'restored' },
+          },
+        },
+        data: response,
+      },
+      { owner, nowMs, leaseExpiresAtMs: nowMs + 300_000 }
+    );
+    if (queued.initialClaim.kind !== 'claimed') {
+      throw new Error('expected to claim the browser-test mutation');
+    }
+    await host.deferOptimisticWrite(
+      queued.transactionId,
+      { owner, generation: queued.initialClaim.mutation.leaseGeneration },
+      nowMs,
+      'runnable on restore'
+    );
+    return queued.transactionId;
+  },
+  async seedRetryBudget(): Promise<string[]> {
+    const host = requireOwner();
+    const nowMs = Date.now();
+    const owner = 'retry-budget-seed';
+    const mutation = `mutation RetryBudget($input: SetEntityPropertyInput!) {
+      setEntityProperty(input: $input) { id displayName }
+    }`;
+    const enqueue = (id: string) =>
+      host.enqueueOptimisticMutation(
+        {
+          uuid: crypto.randomUUID(),
+          query: mutation,
+          variables: {
+            input: {
+              entityType: 'DOCUMENT',
+              entityId: id,
+              propertyDefinitionId: 'definition',
+              value: { string: id },
+            },
+          },
+          data: { setEntityProperty: { id, displayName: id } },
+        },
+        { owner, nowMs, leaseExpiresAtMs: nowMs + 300_000 }
+      );
+    const first = await enqueue('failing-property');
+    const second = await enqueue('following-property');
+    if (first.initialClaim.kind !== 'claimed')
+      throw new Error('missing first claim');
+    let claim = first.initialClaim.mutation;
+    for (let failure = 0; failure < 9; failure += 1) {
+      await host.deferOptimisticWrite(
+        first.transactionId,
+        { owner, generation: claim.leaseGeneration },
+        nowMs,
+        'server failure',
+        true
+      );
+      if (failure < 8) {
+        const next = await host.claimNextMutation(
+          owner,
+          nowMs,
+          nowMs + 300_000
+        );
+        if (!next) throw new Error('missing retry claim');
+        claim = next;
+      }
+    }
+    // Transport failure after nine server failures must preserve the budget.
+    const network = await host.claimNextMutation(owner, nowMs, nowMs + 300_000);
+    if (!network || network.serverFailureCount !== 9)
+      throw new Error('budget not persisted');
+    await host.deferOptimisticWrite(
+      first.transactionId,
+      { owner, generation: network.leaseGeneration },
+      nowMs,
+      'offline',
+      false
+    );
+    return [first.transactionId, second.transactionId];
+  },
+  async exhaustRetryBudget(): Promise<{
+    attempts: number;
+    settlements: MutationSettlement[];
+  }> {
+    const host = requireOwner();
+    const complete = Promise.withResolvers<void>();
+    const settlements: MutationSettlement[] = [];
+    let attempts = 0;
+    const unsubscribe = host.onMutationSettled((settlement) => {
+      settlements.push(settlement);
+      if (settlements.length === 2) complete.resolve();
+    });
+    mutationRunner = createClient({
+      url: 'http://cache-lifecycle.test/graphql',
+      fetch: async () => {
+        attempts += 1;
+        // Even a valid data payload over HTTP 5xx must exhaust the budget.
+        return new Response(
+          JSON.stringify({
+            data: {
+              setEntityProperty: {
+                id: attempts === 1 ? 'failing-property' : 'following-property',
+                displayName: 'Synced',
+              },
+            },
+          }),
+          {
+            status: attempts === 1 ? 503 : 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        );
+      },
+      exchanges: [
+        normalizedCacheExchange(host, {
+          shouldRetryMutation: (error) => (error.response?.status ?? 0) >= 500,
+        }),
+        fetchExchange,
+      ],
+    });
+    await complete.promise;
+    unsubscribe();
+    return { attempts, settlements };
+  },
+  navigationState() {
+    return {
+      clientId: requireOwner().clientId,
+      restoredGenerations: [...restoredGenerations],
+      affectedOperations: [...affectedOperations],
+      cacheChanges,
+      pageRestores,
+      mutationReplays,
+      settledMutations: [...settledMutations],
+    };
   },
   async startLogoutHost(): Promise<void> {
     await startOwner(true);

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT record FROM scheduling_booking WHERE status IN ('processing', 'failed') AND recovery_at <= now() ORDER BY recovery_at, id FOR UPDATE SKIP LOCKED LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "record",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6dbba2c9a4027b48de6e8bb6d3e7e37fa7638e8c303791123f1766966c4fe4b2"
+}

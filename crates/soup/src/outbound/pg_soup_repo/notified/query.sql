@@ -44,12 +44,12 @@ WHERE CASE nc.entity_type
     WHEN 'document' THEN {document_gate}
     WHEN 'chat' THEN {chat_gate}
     WHEN 'project' THEN {project_gate}
+    WHEN 'initiative' THEN {initiative_gate}
     WHEN 'channel' THEN {channel_gate}
     WHEN 'channel_message' THEN {channel_thread_gate}
     WHEN 'email_thread' THEN {email_gate}
     WHEN 'calendar_event' THEN {calendar_event_gate}
     WHEN 'foreign_entity' THEN {foreign_entity_gate}
-    WHEN 'reminder' THEN {reminder_gate}
     WHEN 'agent_session' THEN {agent_session_gate}
     ELSE FALSE
 END

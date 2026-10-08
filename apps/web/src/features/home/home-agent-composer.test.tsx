@@ -43,7 +43,11 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('../agents-view/queries/agent-roster-source', () => ({
-  createAgentRosterSource: () => ({ roster: () => [], loading: () => false }),
+  createAgentRosterSource: () => ({
+    roster: () => [],
+    loading: () => false,
+    availabilityLoading: () => false,
+  }),
 }));
 vi.mock('./queries/home-agent-prompt', () => ({
   buildHomeAgentPrompt: mocks.buildPrompt,
@@ -66,6 +70,7 @@ vi.mock('../agents-view/views/NewChatPage', () => ({
 }));
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   const [pendingDraft, setPendingDraft] = createSignal<string | null>(null);
   mocks.pendingDraft = pendingDraft;
@@ -84,7 +89,11 @@ it('forwards the shared composer selection into the common session flow', () => 
   };
   mocks.onStart?.(start);
   // The viewer rides along so the first prompt is attributed as the log will.
-  expect(mocks.start).toHaveBeenCalledWith({ ...start, userId: 'viewer-1' });
+  expect(mocks.start).toHaveBeenCalledWith({
+    ...start,
+    userId: 'viewer-1',
+    submitSurface: 'home',
+  });
   expect(mocks.replace).toHaveBeenCalledWith({
     next: { type: 'component', id: 'agents-session~agents~pending-session' },
   });
@@ -120,3 +129,53 @@ it('does not replace a newer typed draft when suggested context resolves late', 
     'My new task'
   );
 });
+
+it('restores Home text after visiting an agent session and returning', () => {
+  const first = render(() => <HomeAgentComposer />);
+  fireEvent.input(screen.getByRole('textbox'), {
+    target: { value: 'Unsent Home prompt' },
+  });
+  first.unmount();
+  render(() => <HomeAgentComposer />);
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
+    'Unsent Home prompt'
+  );
+});
+
+it('keeps a cleared Home draft empty on the next visit', () => {
+  const first = render(() => <HomeAgentComposer />);
+  fireEvent.input(screen.getByRole('textbox'), {
+    target: { value: 'Clear me' },
+  });
+  fireEvent.input(screen.getByRole('textbox'), { target: { value: '' } });
+  first.unmount();
+  render(() => <HomeAgentComposer />);
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
+});
+
+it('ignores suggested context that finishes after leaving Home', async () => {
+  let resolve!: (value: string) => void;
+  mocks.buildPrompt.mockReturnValue(
+    new Promise<string>((done) => {
+      resolve = done;
+    })
+  );
+  const first = render(() => <HomeAgentComposer />);
+  mocks.setPendingDraft('Suggested task');
+  first.unmount();
+  const second = render(() => <HomeAgentComposer />);
+  fireEvent.input(screen.getByRole('textbox'), {
+    target: { value: 'Newer Home draft' },
+  });
+  second.unmount();
+  resolve('Old suggestion');
+  await Promise.resolve();
+  render(() => <HomeAgentComposer />);
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
+    'Newer Home draft'
+  );
+});
+
+vi.mock('@queries/agent-session/warm', () => ({
+  useWarmAgentSessionQuery: vi.fn(),
+}));

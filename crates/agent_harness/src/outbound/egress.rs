@@ -1,7 +1,8 @@
 //! Handing a sandbox its one secret, and telling opencode where to spend it.
 //!
-//! Two adapter concerns the domain has no business with: minting a token, and
-//! listing the owner's Pipedream-connected apps, which needs their rows.
+//! Three adapter concerns the domain has no business with: minting a token,
+//! listing the owner's Pipedream-connected apps, and listing the owner's own
+//! custom MCP servers - the last two need their rows.
 //!
 //! Both the minting and the hashing are `agent_egress`'s, not a second
 //! implementation of either. The two ends of this token are written in
@@ -9,8 +10,11 @@
 //! each end reads at runtime as "every request from every sandbox is
 //! unauthenticated".
 
-use agent_egress::domain::model::{McpServerSlug, SessionToken};
+use agent_egress::domain::model::{
+    CustomMcpServerKey, CustomMcpServerListing, McpServerSlug, SessionToken,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::domain::ports::McpServerStore;
 use pipedream_mcp::domain::ports::ConnectionStore;
 use std::sync::Arc;
 
@@ -23,22 +27,37 @@ use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 mod test;
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections> {
+pub struct EgressProvisioner<Connections, Servers> {
     connections: Arc<Connections>,
+    custom_servers: Arc<Servers>,
     base_url: String,
+    external_base_url: Option<String>,
 }
 
-impl<Connections> EgressProvisioner<Connections>
+impl<Connections, Servers> EgressProvisioner<Connections, Servers>
 where
     Connections: ConnectionStore,
+    Servers: McpServerStore,
 {
-    /// Build the provisioner over the Pipedream connection store and the
-    /// egress proxy's public address.
-    pub fn new(connections: Arc<Connections>, base_url: impl Into<String>) -> Self {
+    /// Build the provisioner over the Pipedream connection store, the custom
+    /// MCP server store, and the egress proxy's public address.
+    pub fn new(
+        connections: Arc<Connections>,
+        custom_servers: Arc<Servers>,
+        base_url: impl Into<String>,
+    ) -> Self {
         Self {
             connections,
+            custom_servers,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
+            external_base_url: None,
         }
+    }
+
+    /// Override only the address advertised to external runtimes, such as host macrod in a local stack.
+    pub fn with_external_base_url(mut self, url: Option<String>) -> Self {
+        self.external_base_url = url.map(|url| url.trim_end_matches('/').to_owned());
+        self
     }
 
     /// The slugs to advertise for one session, verbatim.
@@ -109,12 +128,70 @@ where
         );
         Ok(slugs)
     }
+
+    /// The owner's custom MCP servers to advertise for one session.
+    ///
+    /// Only under [`AgentMcpServers::OwnerConnections`]: a session that runs
+    /// with the owner's connections gets the owner's own servers too, by the
+    /// same reasoning. A [`AgentMcpServers::Selected`] list is an agent
+    /// author's deliberate choice of apps, and the owner's private servers
+    /// are not something an author can select, so none are added behind it.
+    ///
+    /// A server the owner turned off is left out, as with apps. One that is
+    /// on but whose connection has lapsed is still listed: the proxy answers
+    /// its calls with a tool result naming the fix, which the model can act
+    /// on, where an absent tool could only be silently missing.
+    async fn advertised_custom(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        selection: &AgentMcpServers,
+    ) -> Result<Vec<CustomMcpServerListing>> {
+        let AgentMcpServers::OwnerConnections = selection else {
+            return Ok(Vec::new());
+        };
+        let listings: Vec<CustomMcpServerListing> = self
+            .custom_servers
+            .list(owner)
+            .await
+            .map_err(|error| {
+                HarnessError::Egress(rootcause::report!(
+                    "could not list custom MCP servers: {error:?}"
+                ))
+            })?
+            .into_iter()
+            .filter(|record| record.enabled)
+            .map(|record| CustomMcpServerListing {
+                key: CustomMcpServerKey::for_url(&record.url),
+                name: record.server_name,
+            })
+            .collect();
+        tracing::debug!(
+            custom_servers = listings.len(),
+            "advertising custom MCP servers"
+        );
+        Ok(listings)
+    }
 }
 
-impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
+impl<Connections, Servers> SandboxEgressProvisioner for EgressProvisioner<Connections, Servers>
 where
     Connections: ConnectionStore,
+    Servers: McpServerStore,
 {
+    fn external_mcp_servers(
+        &self,
+        egress: &SandboxEgress,
+    ) -> Vec<agent_client_protocol::schema::v1::McpServer> {
+        let mut external = egress.clone();
+        if let Some(url) = &self.external_base_url {
+            external.base_url = url.clone();
+        }
+        vec![
+            external.internal_mcp_server(),
+            external.preview_mcp_server(),
+        ]
+    }
+
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
     async fn provision(
         &self,
@@ -130,6 +207,7 @@ where
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
                 mcp_servers: self.advertised(owner, selection).await?,
+                custom_servers: self.advertised_custom(owner, selection).await?,
             },
         })
     }
@@ -145,6 +223,7 @@ where
             base_url: self.base_url.clone(),
             session_token,
             mcp_servers: self.advertised(owner, selection).await?,
+            custom_servers: self.advertised_custom(owner, selection).await?,
         })
     }
 }

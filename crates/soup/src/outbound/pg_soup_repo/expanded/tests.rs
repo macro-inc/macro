@@ -5907,10 +5907,14 @@ fn mock_empty_ast() -> EntityFilterAst {
         channel_thread_filter: None,
         call_filter: None,
         crm_company_filter: None,
+        crm_contact_filter: None,
         foreign_entity_filter: None,
-        reminder_filter: None,
+        github_pull_request_filter: None,
         agent_session_filter: None,
+        initiative_filter: None,
+        database_row_filter: None,
         properties_filter: None,
+        favorites_only: None,
     }
 }
 
@@ -6902,5 +6906,161 @@ async fn test_optimized_notification_filter_matches_unoptimized_equivalent(
 
     assert_eq!(optimized_ids, unoptimized_ids);
 
+    Ok(())
+}
+
+const DOC_A: &str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const DOC_B: &str = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const DOC_D: &str = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+
+/// The fixture's attachments hang off messages that do not exist. Give doc A's
+/// attachment a message from the user to vendor@acme.com and doc B's a message
+/// from other@globex.com, and point doc D's Companies property at `company`.
+async fn seed_crm_document_associations(db: &PgPool, company: Uuid) -> anyhow::Result<()> {
+    let mut tx = db.begin().await?;
+    sqlx::query("SET LOCAL session_replication_role = 'replica'")
+        .execute(&mut *tx)
+        .await?;
+    let link = Uuid::now_v7();
+    let (me, vendor, other) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    for (id, address) in [
+        (me, "user-1@test.com"),
+        (vendor, "Vendor@Acme.com"),
+        (other, "other@globex.com"),
+    ] {
+        sqlx::query("INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)")
+            .bind(id)
+            .bind(link)
+            .bind(address)
+            .execute(&mut *tx)
+            .await?;
+    }
+    let to_acme = Uuid::parse_str("ea000001-0000-0000-0000-000000000099")?;
+    let from_globex = Uuid::now_v7();
+    for (message, sender) in [(to_acme, me), (from_globex, other)] {
+        sqlx::query(
+            "INSERT INTO email_messages (id, thread_id, link_id, from_contact_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(message)
+        .bind(Uuid::now_v7())
+        .bind(link)
+        .bind(sender)
+        .execute(&mut *tx)
+        .await?;
+    }
+    sqlx::query(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+    )
+    .bind(to_acme)
+    .bind(vendor)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE email_attachments SET message_id = $1 WHERE id = 'ea000001-0000-0000-0000-000000000002'",
+    )
+    .bind(from_globex)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'DOCUMENT', $3, $4)"#,
+    )
+    .bind(Uuid::now_v7())
+    .bind(DOC_D)
+    .bind(SystemPropertyKey::COMPANIES_UUID)
+    .bind(serde_json::json!({
+        "type": "EntityReference",
+        "value": [{ "entity_type": "COMPANY", "entity_id": company.to_string() }]
+    }))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn matching_document_ids(db: &PgPool, filter: Expr<DocumentLiteral>) -> HashSet<String> {
+    let (items, ..) = run_and_count(
+        db,
+        EntityFilterAst {
+            document_filter: Some(Arc::new(filter)),
+            ..mock_empty_ast()
+        },
+    )
+    .await
+    .unwrap();
+    items
+        .into_iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => Some(doc.id.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn ids(values: &[&str]) -> HashSet<String> {
+    values.iter().map(ToString::to_string).collect()
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn crm_document_literals_match_attachments_and_associations(
+    db: PgPool,
+) -> anyhow::Result<()> {
+    use item_filters::ast::{
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
+    };
+    use macro_user_id::email::EmailStr;
+
+    let company = Uuid::now_v7();
+    seed_crm_document_associations(&db, company).await?;
+    let participant =
+        |email: Email| Expr::Literal(DocumentLiteral::EmailAttachmentParticipant(email));
+    let associated = Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+        property_definition_id: SystemPropertyKey::COMPANIES_UUID,
+        entity_type: None,
+        value: PropertyMatchValue::EntityRef(EntityRefId::new(company.to_string())?),
+    }));
+
+    // Recipients count as participants, and domains match case-insensitively.
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Domain("ACME.com".to_string()))).await,
+        ids(&[DOC_A])
+    );
+    // So do senders, by exact address.
+    let globex = EmailStr::parse_from_str("other@globex.com")?.into_owned();
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Complete(globex))).await,
+        ids(&[DOC_B])
+    );
+    assert_eq!(
+        matching_document_ids(&db, participant(Email::Partial("vendor@".to_string()))).await,
+        ids(&[DOC_A])
+    );
+    // A company's files: attachments with its people OR documents associated with it.
+    assert_eq!(
+        matching_document_ids(
+            &db,
+            Expr::or(
+                participant(Email::Domain("acme.com".to_string())),
+                associated.clone()
+            )
+        )
+        .await,
+        ids(&[DOC_A, DOC_D])
+    );
+    // Negation keeps every other document.
+    let not_acme = matching_document_ids(
+        &db,
+        Expr::is_not(participant(Email::Domain("acme.com".to_string()))),
+    )
+    .await;
+    assert!(!not_acme.contains(DOC_A));
+    assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
     Ok(())
 }

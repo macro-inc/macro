@@ -1,0 +1,105 @@
+/**
+ * @vitest-environment jsdom
+ */
+
+import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
+import { HoverCard } from './HoverCard';
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => false,
+}));
+
+async function renderOpenCard(
+  keepOpenOnTriggerPress?: boolean,
+  closeOnScroll?: boolean,
+  passThroughPointerEvents?: boolean
+) {
+  const onOpenChange = vi.fn();
+  render(() => (
+    <>
+      <HoverCard
+        open
+        onOpenChange={onOpenChange}
+        keepOpenOnTriggerPress={keepOpenOnTriggerPress}
+        closeOnScroll={closeOnScroll}
+        passThroughPointerEvents={passThroughPointerEvents}
+        trigger={<span>Standup</span>}
+        content={<div>Card</div>}
+      />
+      <button type="button">Elsewhere</button>
+    </>
+  ));
+  await screen.findByText('Card');
+  // Kobalte attaches its outside pointer-down listener a tick after mount.
+  await new Promise((resolve) => setTimeout(resolve));
+  return onOpenChange;
+}
+
+describe('HoverCard', () => {
+  it('dismisses when its trigger is pressed', async () => {
+    const onOpenChange = await renderOpenCard();
+
+    fireEvent.pointerDown(screen.getByText('Standup'));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('stays open when its trigger is pressed if asked to', async () => {
+    const onOpenChange = await renderOpenCard(true);
+
+    fireEvent.pointerDown(screen.getByText('Standup'));
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('still dismisses when pressed elsewhere if asked to keep open', async () => {
+    const onOpenChange = await renderOpenCard(true);
+
+    fireEvent.pointerDown(screen.getByText('Elsewhere'));
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('dismisses on outside scrolling by default', async () => {
+    const onOpenChange = await renderOpenCard();
+
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps stationary previews open through trigger presses and scrolling', async () => {
+    const onOpenChange = await renderOpenCard(true, false);
+
+    fireEvent.pointerDown(screen.getByText('Standup'));
+    fireEvent.scroll(window);
+
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    fireEvent.pointerDown(screen.getByText('Elsewhere'));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('takes the pointer by default', async () => {
+    await renderOpenCard();
+
+    const content = screen.getByText('Card').parentElement;
+    expect(content?.className).not.toContain('pointer-events-none');
+    expect(
+      content?.closest<HTMLElement>('[data-popper-positioner]')?.style
+        .pointerEvents
+    ).toBe('');
+  });
+
+  it('lets the pointer through the card and its positioner when asked', async () => {
+    await renderOpenCard(undefined, undefined, true);
+
+    const content = screen.getByText('Card').parentElement;
+    expect(content?.className).toContain('pointer-events-none!');
+    expect(
+      content?.closest<HTMLElement>('[data-popper-positioner]')?.style
+        .pointerEvents
+    ).toBe('none');
+  });
+});

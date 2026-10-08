@@ -1,0 +1,67 @@
+import { createRoot } from 'solid-js';
+import { describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  refreshedKeys: undefined as (() => readonly unknown[]) | undefined,
+}));
+
+vi.mock('../data/prDiscussionSource', () => ({
+  createPrDiscussionSource: () => ({}),
+}));
+vi.mock('@app/components/view-shell', () => ({ ViewShell: {} }));
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: vi.fn(),
+}));
+vi.mock('@components/app/side-panel', () => ({ SidePanel: {} }));
+vi.mock('@components/app/split-panel', () => ({ SplitPanel: {} }));
+vi.mock(
+  '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
+  () => ({
+    StaticMarkdown: () => null,
+    StaticMarkdownContext: {},
+  })
+);
+vi.mock('@entity/components/GithubLabelPill', () => ({
+  GithubLabelPills: () => null,
+}));
+vi.mock('@notifications', () => ({
+  DebouncedNotificationReadMarker: () => null,
+}));
+vi.mock('@queries/storage/github-pull-requests', () => ({
+  useRefreshGithubPullRequest: (
+    _reference: unknown,
+    refreshedKeys: () => readonly unknown[]
+  ) => {
+    mocks.refreshedKeys = refreshedKeys;
+  },
+}));
+vi.mock('../data/queries', () => ({
+  usePrForeignEntityQuery: () => ({ isPending: true }),
+  prForeignEntityQueryKey: (id: string) => ['pr-foreign-entity', id],
+}));
+vi.mock('@app/features/changes/changes', () => ({
+  ChangesSplit: () => null,
+  ChangesToggle: () => null,
+}));
+vi.mock('../component/PrChanges', () => ({ PrChangesProvider: () => null }));
+vi.mock('../component/PrTimeline', () => ({ PrTimeline: () => null }));
+vi.mock('../component/sidepanel/PrSidePanelSections', () => ({
+  PrSidePanelSections: () => null,
+}));
+
+import { githubPullRequestChangesKeys } from '@queries/storage/keys';
+import { usePrDetail } from './PrDetail';
+
+describe('PR refresh wiring', () => {
+  it('passes the PR details and changes summary keys to the refresh', () => {
+    const id = '019a5faa-d2cd-7c55-8e8a-23aac4f0bc88';
+    createRoot((dispose) => {
+      usePrDetail(() => id);
+      expect(mocks.refreshedKeys?.()).toEqual([
+        ['pr-foreign-entity', id],
+        githubPullRequestChangesKeys.summary(id).queryKey,
+      ]);
+      dispose();
+    });
+  });
+});

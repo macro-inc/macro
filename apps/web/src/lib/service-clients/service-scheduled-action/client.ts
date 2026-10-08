@@ -6,11 +6,16 @@ import {
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import {
+  type AI_USAGE_LIMIT_ERROR,
+  aiUsageErrorResponseHandler,
+} from '../ai-usage-limit';
 import type {
   ActionExecutionRecord,
   CreateScheduledAction,
   InProgressExecution,
   ScheduledAction,
+  SetScheduledActionEnabled,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -34,8 +39,11 @@ function scheduledActionFetch<T extends ObjectLike = never>(
 }
 
 export const scheduledActionClient = {
-  // Include backend-managed routines so direct routes can identify them.
-  // Cron-only entity lists filter these out before rendering.
+  getRoutine: (id: string) =>
+    scheduledActionFetch<ScheduledAction>(`/scheduled-actions/${id}`, {
+      method: 'GET',
+    }),
+  // Include every trigger type in the routine list.
   listSchedules: async () =>
     scheduledActionFetch<ScheduledAction[]>(
       '/scheduled-actions?include_events=true',
@@ -62,6 +70,17 @@ export const scheduledActionClient = {
       }
     ),
 
+  setEnabled: async (args: { scheduleId: string; enabled: boolean }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/enabled`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          enabled: args.enabled,
+        } satisfies SetScheduledActionEnabled),
+      }
+    ),
+
   deleteSchedule: async (args: { scheduleId: string }) => {
     const result = await scheduledActionFetch<{}>(
       `/scheduled-actions/${args.scheduleId}`,
@@ -71,9 +90,9 @@ export const scheduledActionClient = {
   },
 
   runNow: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<InProgressExecution>(
-      `/scheduled-actions/${args.scheduleId}/execute`,
-      { method: 'POST' }
+    fetchWithToken<InProgressExecution, typeof AI_USAGE_LIMIT_ERROR>(
+      `${scheduledActionHost}/scheduled-actions/${args.scheduleId}/execute`,
+      { method: 'POST', errorResponseHandler: aiUsageErrorResponseHandler }
     ),
 
   listHistory: async (args: { scheduleId: string }) =>

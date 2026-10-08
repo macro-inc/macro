@@ -6,12 +6,16 @@
  */
 import type { ThreadAnchorOneOf } from './threadAnchorOneOf';
 import type { ThreadAnchorOneOfFour } from './threadAnchorOneOfFour';
-import type { ThreadAnchorOneOfSix } from './threadAnchorOneOfSix';
+import type { ThreadAnchorOneOfNine } from './threadAnchorOneOfNine';
+import type { ThreadAnchorOneOfOneone } from './threadAnchorOneOfOneone';
+import type { ThreadAnchorOneOfSeven } from './threadAnchorOneOfSeven';
 
 /**
- * A thread's location within its document. Geometry remains annotation-owned.
+ * A thread's location within its document. PDF geometry remains annotation-owned.
  */
 export type ThreadAnchor =
   | ThreadAnchorOneOf
   | ThreadAnchorOneOfFour
-  | ThreadAnchorOneOfSix;
+  | ThreadAnchorOneOfSeven
+  | ThreadAnchorOneOfNine
+  | ThreadAnchorOneOfOneone;

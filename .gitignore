@@ -23,10 +23,11 @@ run-local.fish
 **/.cache
 **/.vite
 **/build
-# `**/build` is for JS build output. This is a Rust source module that happens
-# to be named `build`, and the rule was silently dropping new files added to it
-# (a new `test.rs` there is ignored, and `git status` stays clean about it).
+# `**/build` is for JS build output. These are Rust source modules that happen
+# to be named `build`, and the rule was silently dropping new files added to
+# them (a new `test.rs` there is ignored, and `git status` stays clean about it).
 !/tooling/xtask/crates/xtask_local/src/local/build/
+!/crates/ai_engine/src/build/
 **/*.tsbuildinfo
 **/*.log
 **/result
@@ -36,6 +37,7 @@ run-local.fish
 # Per-instance generated local-stack artifacts (compose override, env, kickstart, Caddyfile).
 infra/local/generated/
 **/target/
+/target
 **/ai_tools/schemas/
 .pi/outputs/
 .commandcode/
@@ -52,3 +54,6 @@ infra/local/generated/
 
 # Owner-bound subscription OAuth credentials for the internal Claude demo.
 /.claude-cloud/
+
+# Marketing site prerender bundle (dist/ is covered by **/dist).
+/apps/marketing/dist-prerender/

@@ -1,124 +1,129 @@
-import { SplitRouter as SplitRouterComponents } from './solid';
-import type { SplitRouter as SplitRouterContract } from './types';
-
-export type SplitRouter<TSplitId> = SplitRouterContract<TSplitId>;
-
-export const SplitRouter = SplitRouterComponents;
-
 export {
-  type CreateSearchParamsOptions,
-  createSearchParams,
-  type SetSearchParams,
-  type SetSearchParamsOptions,
-} from './create-search-params';
+  type BrowserHistoryOptions,
+  createBrowserHistory,
+} from './history/browser';
+export { createMemoryHistory, type MemoryHistory } from './history/memory';
 export {
-  createMemorySplitRouterLocation,
-  type MemorySplitRouterLocation,
-} from './integrations/memory';
+  createSolidRouterHistory,
+  type SolidRouterHistoryOptions,
+  useSolidRouterHistory,
+} from './history/solid-router';
+export type {
+  ExternalChange,
+  HistoryAdapter,
+  InterceptHandler,
+} from './history/types';
+export { createMemoryPaneStore } from './panes/memory-store';
+export type {
+  OpenIntent,
+  OpenTarget,
+  PaneStore,
+  Placement,
+} from './panes/types';
+export type { ClaimHolder } from './router/claims';
+export { createSplitRouter } from './router/create-router';
+export { PANE_LEVEL } from './router/leave-guards';
+export type {
+  SplitRouterMiddleware,
+  SplitRouterMiddlewareContext,
+  SplitRouterMiddlewareResult,
+} from './router/middleware';
+export type { PendingNavigation } from './router/runner';
+export type {
+  ClaimOwner,
+  LeaveGuard,
+  LeaveGuardContext,
+  NavigationCause,
+  NavigationResult,
+  RouteMatchInfo,
+  SplitCloseAction,
+  SplitNavigateOptions,
+  SplitPanePolicy,
+  SplitRouterOptions,
+} from './router/types';
 export {
-  createSolidRouterLocation,
-  type SolidRouterLocationOptions,
-} from './integrations/solid-router';
-export { runSplitRouterMiddleware } from './middleware';
-export type { RoutePattern } from './path';
-export { createSplitRouter } from './router';
+  formatLocation,
+  formatPanePath,
+  parseLocation,
+  splitPanePaths,
+} from './routes/codec';
+export { defineRoute, defineRoutes } from './routes/define';
 export {
+  canonicalRoute,
   createRoutesManifest,
-  decodeRoute,
-  defineRoute,
-  defineRoutes,
-  encodeRoute,
-  filterRouteSearch,
-  getExternalSearchKeys,
-  getRouteClaim,
-  getRouteId,
-  getRouteSearchNamespaces,
-  type RouteParamsCodec,
-  resolveRouteBranch,
-  rootRouteMatch,
-  routeParams,
-  type SplitRouteNode,
+  decodePane,
   type SplitRoutesManifest,
-  validateSplitRoutes,
-} from './routes';
+} from './routes/manifest';
+export { decodeSegment } from './routes/path';
+export {
+  claimOf,
+  externalSearchKeys,
+  filterRouteSearch,
+  routeParams,
+} from './routes/queries';
+export { replacePaneSearchParams } from './routes/search';
 export {
   createSearchParamsCodec,
   type SearchParamsCodec,
   type SearchParamsCodecOptions,
-  type SearchParamsDeserializer,
-  type SearchParamsSchema,
-  type SearchParamsSerializer,
-} from './search-params-codec';
-export {
-  Outlet,
-  Root,
-  Scope,
-  type SplitRouterOutletProps,
-  type SplitRouterRootProps,
-  type SplitRouterScopeProps,
-  useCanGo,
-  useNavigate,
-  useParams,
-  useRouteParams,
-  useSplitHistory,
-  useSplitRouter,
-} from './solid';
+  takeLast,
+} from './routes/search-params';
 export type {
-  BrowserHistoryIntent,
   DefinedSplitRoute,
   DefinedSplitRoutes,
+  Entry,
+  ExternalLocation,
   InferSplitRouteBranchParams,
   InferSplitRouteNavigationParams,
   InferSplitRouteParams,
+  InferSplitRouteState,
+  InferSplitRouteStateInput,
+  PaneArrival,
+  PaneId,
+  PreloadIntent,
   SerializedSearchParams,
   SplitLocation,
-  SplitNavigate,
-  SplitNavigateOptions,
-  SplitNavigateTo,
-  SplitNonRouteNavigateTo,
-  SplitParentNavigationTarget,
+  SplitNavigationTarget,
+  SplitReference,
   SplitRouteClaim,
   SplitRouteDefinition,
+  SplitRouteInfo,
   SplitRouteMatch,
   SplitRouteNavigationTarget,
   SplitRouteParams,
-  SplitRouteRawParams,
-  SplitRouterEntry,
-  SplitRouterExternalLocation,
-  SplitRouterExternalLocationValue,
-  SplitRouterHistorySnapshot,
-  SplitRouterLayout,
-  SplitRouterLayoutEntry,
-  SplitRouterLayoutSnapshot,
-  SplitRouterMiddleware,
-  SplitRouterMiddlewareConfig,
-  SplitRouterMiddlewareContext,
-  SplitRouterMiddlewareRedirect,
-  SplitRouterMiddlewareRequest,
-  SplitRouterMiddlewareResult,
-  SplitRouterMiddlewareRun,
-  SplitRouterNavigationCause,
-  SplitRouterOptions,
-  SplitRouterSettledChange,
   SplitRouteState,
   SplitRoutes,
   SplitRouteUnion,
   SplitSearchState,
   SplitSearchUpdate,
-  SplitSearchUpdateOptions,
-  UnmatchedSplitPathContext,
-  UnmatchedSplitPathHandler,
-} from './types';
+  WriteMode,
+} from './routes/types';
+export { useOptionalSplitRouter, useSplitRouter } from './solid/context';
 export {
-  type DecodedSplitRouterLocation,
-  decodeRouteLayout,
-  decodeSplitRouterLocation,
-  encodeRouteLayout,
-  externalLocationToString,
-  formatRoutePathname,
-  parseExternalLocation,
-  parseRoutePathname,
-  SPLIT_PATH_SEPARATOR,
-  serializeSplitRouterLocation,
-} from './url';
-export { isSafeName, takeLast } from './utils';
+  type CreateSearchParamsOptions,
+  createSearchParams,
+  type SetSearchParams,
+} from './solid/create-search-params';
+export {
+  type SplitNavigate,
+  type SplitRouteNavigateOptions,
+  useArrival,
+  useCanGo,
+  useEntryProps,
+  useMatches,
+  useNavigate,
+  useOwnsSearchNamespace,
+  usePane,
+  usePaneHistory,
+  useParams,
+  usePendingNavigation,
+  useRouteParams,
+  useRouteState,
+} from './solid/hooks';
+export type { OutletProps } from './solid/outlet';
+export type { RouteProps } from './solid/route';
+export type { RouterProps } from './solid/router';
+export { SplitRouter } from './solid/split-router';
+export { useBeforeLeave } from './solid/use-before-leave';
+export { useClaim } from './solid/use-claim';
+export { isRecord, isSafeName } from './utils';

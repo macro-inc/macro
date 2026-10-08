@@ -13,7 +13,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@phosphor/share.svg';
+import IconShared from '@icon/share.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
@@ -198,12 +198,16 @@ export default function SpreadsheetDemo() {
             onFocus={(event) => event.currentTarget.select()}
           />
           <div class="mt-5 flex justify-end gap-2">
-            <Button size="sm" onClick={() => setRenameDraft(undefined)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRenameDraft(undefined)}
+            >
               Cancel
             </Button>
             <Button
               size="sm"
-              variant="accent"
+              variant="strong"
               type="submit"
               disabled={!renameDraft()?.trim() || !canRename()}
             >
@@ -214,6 +218,7 @@ export default function SpreadsheetDemo() {
       </Dialog>
       <div class="min-h-0 min-w-0 flex-1">
         <SpreadsheetEditor
+          autoFocus={!panel.isInlinePreview}
           mentions={spreadsheetMentions}
           store={store}
           name={name()}

@@ -61,12 +61,6 @@ import SparkleIcon from '@phosphor-icons/core/bold/sparkle-bold.svg?component-so
 import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import CheckSquareIcon from '@phosphor-icons/core/regular/check-square.svg?component-solid';
 import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
-import {
-  cancelAiEdit,
-  hasActiveAiEdit,
-  requestAiEdit,
-  toastAiEditResult,
-} from '@service-ai-editing/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Toolbar } from '@ui';
 import {
@@ -89,6 +83,11 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import {
+  cancelAiEdit,
+  hasActiveAiEdit,
+  requestAiEditWithToast,
+} from '../queries/ai-edit';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
@@ -316,7 +315,6 @@ export function MarkdownPopup(props: {
       fallback={
         <Button
           size="icon-sm"
-          class="rounded-full"
           variant="strong"
           tooltip="Send"
           disabled={!aiEditInput().trim()}
@@ -328,7 +326,6 @@ export function MarkdownPopup(props: {
     >
       <Button
         size="icon-sm"
-        class="rounded-full"
         depth={3}
         variant="ghost"
         tooltip="Stop AI edit"
@@ -353,17 +350,18 @@ export function MarkdownPopup(props: {
     setAiEditRunning(true);
     // Fast mode: one model edits the whole document directly, no supervisor.
     // Apply ops locally so the edit lands in this client's undo stack.
-    requestAiEdit({
-      documentId: blockId,
-      prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
-      mode: 'fast',
-      onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
-    })
-      .then(toastAiEditResult)
-      .finally(() => {
+    void requestAiEditWithToast(
+      {
+        documentId: blockId,
+        prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+        mode: 'fast',
+        onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
+      },
+      () => {
         setAiEditLocation(null);
         setAiEditRunning(false);
-      });
+      }
+    );
     setAiEditInput('');
     setAiEditDrawerOpen(false);
     setPopupVisible(false);
@@ -674,7 +672,6 @@ export function MarkdownPopup(props: {
           <Show when={activePrompt() === 'link'}>
             <Button
               size="icon-sm"
-              class="rounded-full"
               variant="strong"
               tooltip="Insert link"
               disabled={!linkInput().trim()}

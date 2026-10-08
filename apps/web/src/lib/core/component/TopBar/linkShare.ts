@@ -5,20 +5,25 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 
 export const NO_LINK_SHARE = 'NONE' as const;
 
-const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
-  'document',
-  'chat',
-  'call',
-  'project',
-  'agent_session',
-]);
+export type ShareItemType = ItemType | 'initiative' | 'crm_pipeline';
 
-export function isTeamShareSupportedForItem(itemType: ItemType): boolean {
+const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ShareItemType> =
+  new Set<ShareItemType>([
+    'document',
+    'chat',
+    'call',
+    'project',
+    'agent_session',
+    'initiative',
+    'crm_pipeline',
+  ]);
+
+export function isTeamShareSupportedForItem(itemType: ShareItemType): boolean {
   return TEAM_SHAREABLE_ITEM_TYPES.has(itemType);
 }
 
 /** Human noun for share-modal copy such as "Share this chat with the owner's team." */
-export function getShareItemNoun(itemType: ItemType): string {
+export function getShareItemNoun(itemType: ShareItemType): string {
   switch (itemType) {
     case 'email':
       return 'email thread';
@@ -26,6 +31,10 @@ export function getShareItemNoun(itemType: ItemType): string {
       return 'agent session';
     case 'project':
       return 'folder';
+    case 'initiative':
+      return 'project';
+    case 'crm_pipeline':
+      return 'pipeline';
     default:
       return itemType;
   }
@@ -108,7 +117,11 @@ export const CALL_TEAM_SHARE_SCOPE_OPTIONS = (
   label: TEAM_SHARE_COPY[scope],
 }));
 
-export function teamShareScopeOptionsForItem(itemType: ItemType) {
+export function teamShareScopeOptionsForItem(itemType: ShareItemType) {
+  if (itemType === 'crm_pipeline')
+    return TEAM_SHARE_SCOPE_OPTIONS.filter(
+      (option) => option.value === 'NONE' || option.value === 'edit'
+    );
   return itemType === 'call'
     ? CALL_TEAM_SHARE_SCOPE_OPTIONS
     : TEAM_SHARE_SCOPE_OPTIONS;
@@ -178,7 +191,8 @@ export function getTeamShareScopeCopy(scope: TeamShareScope): string {
 
 export function getShareStatus(
   linkShare: LinkShare | null | undefined,
-  hasExplicitShares: boolean
+  hasExplicitShares: boolean,
+  teamShareAccessLevel?: AccessLevel | null
 ): ShareStatus {
   if (linkShare === 'PUBLIC') {
     return {
@@ -192,6 +206,10 @@ export function getShareStatus(
       label: 'Team',
       tooltip: LINK_SHARE_SCOPE_COPY.TEAM.description,
     };
+  }
+
+  if (getTeamShareScope(teamShareAccessLevel) !== 'NONE') {
+    return { label: 'Team', tooltip: "Shared directly with the owner's team." };
   }
 
   if (hasExplicitShares) {

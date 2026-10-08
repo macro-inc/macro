@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sync_status,last_sync_error,last_synced_at FROM calendar_accounts WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sync_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_sync_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_synced_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "8650d517d70e42d44b79ff07108b88215261a0d602d592bdc80cd73334dc3551"
+}

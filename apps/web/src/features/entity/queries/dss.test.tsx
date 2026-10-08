@@ -68,10 +68,8 @@ vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { deleteReminder: mocks.deleteReminder } },
 }));
 
-import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import { scheduledActionKeys } from '@app/features/routines/queries/keys';
 import { callKeys } from '@queries/call/keys';
-import { notificationKeys } from '@queries/notification/keys';
-import { reminderKeys } from '@queries/reminders/keys';
 import {
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
   GRAPHQL_SOUP_DELETE_RETENTION_MS,
@@ -326,7 +324,7 @@ describe('bulk delete GraphQL optimism', () => {
     }
   );
 
-  it('reconciles successful call/reminder/automation deletes despite sibling failures', async () => {
+  it('reconciles successful call/routine deletes despite sibling failures', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     const invalidate = vi
       .spyOn(client, 'invalidateQueries')
@@ -339,7 +337,6 @@ describe('bulk delete GraphQL optimism', () => {
     client.setQueryData(scheduledActionKeys.list.queryKey, schedules);
     mocks.deleteItem.mockRejectedValue(new Error('document delete failed'));
     mocks.deleteCall.mockResolvedValue(ok(undefined));
-    mocks.deleteReminder.mockResolvedValue(ok(undefined));
     mocks.deleteSchedule.mockImplementation(
       async ({ scheduleId }: { scheduleId: string }) =>
         scheduleId === 'deleted-auto'
@@ -351,16 +348,11 @@ describe('bulk delete GraphQL optimism', () => {
       mutation.mutateAsync([
         entity('failed-document'),
         entity('deleted-call', 'call'),
-        entity('deleted-reminder', 'reminder'),
-        entity('deleted-auto', 'automation'),
-        entity('failed-auto', 'automation'),
+        entity('deleted-auto', 'routine'),
+        entity('failed-auto', 'routine'),
       ])
     ).rejects.toBeInstanceOf(BulkDeleteFailure);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: callKeys._def });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: reminderKeys._def });
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: notificationKeys._def,
-    });
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: scheduledActionKeys.list.queryKey,
     });
@@ -369,7 +361,7 @@ describe('bulk delete GraphQL optimism', () => {
       schedules[2],
     ]);
     expect(mocks.failure).toHaveBeenCalledWith(
-      'Deleted 3 of 5 items; 2 failed'
+      'Deleted 2 of 4 items; 2 failed'
     );
   });
 
@@ -381,14 +373,12 @@ describe('bulk delete GraphQL optimism', () => {
     const schedules = [{ id: 'failed-auto' }];
     client.setQueryData(scheduledActionKeys.list.queryKey, schedules);
     mocks.deleteCall.mockRejectedValue(new Error('failed call'));
-    mocks.deleteReminder.mockRejectedValue(new Error('failed reminder'));
     mocks.deleteSchedule.mockRejectedValue(new Error('failed schedule'));
     const { mutation } = mount();
     await expect(
       mutation.mutateAsync([
         entity('failed-call', 'call'),
-        entity('failed-reminder', 'reminder'),
-        entity('failed-auto', 'automation'),
+        entity('failed-auto', 'routine'),
       ])
     ).rejects.toThrow('failed call');
     expect(invalidate).not.toHaveBeenCalled();

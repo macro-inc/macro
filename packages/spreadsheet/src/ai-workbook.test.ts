@@ -247,7 +247,7 @@ describe('spreadsheet AI reads and calculation', () => {
       readSpreadsheetForAi(
         doc,
         'v',
-        { action: 'read', ranges: ['AA1'] },
+        { action: 'read', ranges: ['XFE1'] },
         calculator
       )
     ).toThrow('Invalid cell address');
@@ -406,6 +406,151 @@ describe('spreadsheet AI atomic editing', () => {
     ).toThrow('referenced');
   });
 
+  it('adds, reads, replaces and clears in-cell dropdowns', () => {
+    const doc = document();
+    const lists = addSpreadsheetSheet(doc, 'Lists');
+    writeSpreadsheetCells(
+      doc,
+      { A1: { value: 'Ada' }, A2: { value: 'Grace' } },
+      lists
+    );
+    const edit = (
+      operations: Parameters<typeof prepareSpreadsheetEdit>[1]['operations']
+    ) => {
+      const result = prepareSpreadsheetEdit(
+        doc,
+        { action: 'edit', expectedRevision: 'v', operations },
+        calculator
+      );
+      doc.import(result.update);
+      return result;
+    };
+    const added = edit([
+      {
+        type: 'set_dropdown',
+        sheetId: 'sheet1',
+        range: 'b2:b10',
+        items: ['Open', 'In progress', 'Done', 'Open'],
+      },
+      {
+        type: 'set_dropdown',
+        sheetId: 'sheet1',
+        range: 'C2:C10',
+        source: 'Lists!A1:A2',
+        rejectInvalid: false,
+      },
+    ]);
+    expect(added.changes.map((change) => change.summary)).toEqual([
+      'Added a dropdown to B2:B10 in “Sheet1”.',
+      'Added a dropdown to C2:C10 in “Sheet1”.',
+    ]);
+    expect(readSpreadsheetWorkbook(doc)[0].metadata?.validations).toEqual([
+      {
+        range: 'B2:B10',
+        type: 'list',
+        formulas: ['"Open,In progress,Done"'],
+        allowBlank: true,
+        showError: true,
+        errorStyle: 'stop',
+      },
+      {
+        range: 'C2:C10',
+        type: 'list',
+        formulas: ["'Lists'!$A$1:$A$2"],
+        allowBlank: true,
+      },
+    ]);
+    const read = () =>
+      readSpreadsheetForAi(
+        doc,
+        'v',
+        { action: 'read', ranges: ['B5:C5', 'D1'] },
+        calculator
+      );
+    expect(read().ranges[0].validations).toEqual([
+      {
+        range: 'B2:B10',
+        type: 'list',
+        items: ['Open', 'In progress', 'Done'],
+        dropdown: true,
+        rejectInvalid: true,
+      },
+      {
+        range: 'C2:C10',
+        type: 'list',
+        source: "'Lists'!$A$1:$A$2",
+        dropdown: true,
+        rejectInvalid: false,
+      },
+    ]);
+    expect(read().ranges[1].validations).toBeUndefined();
+    // A new rule replaces the rules it overlaps, keeping the rest of them.
+    edit([
+      { type: 'set_dropdown', sheetId: 'sheet1', range: 'B4:C4', items: ['X'] },
+      { type: 'clear_validation', sheetId: 'sheet1', range: 'B10:C10' },
+    ]);
+    expect(
+      readSpreadsheetWorkbook(doc)[0].metadata?.validations?.map((rule) => [
+        rule.range,
+        rule.formulas?.[0],
+      ])
+    ).toEqual([
+      ['B2:B3 B5:B9', '"Open,In progress,Done"'],
+      ['C2:C3 C5:C9', "'Lists'!$A$1:$A$2"],
+      ['B4:C4', '"X"'],
+    ]);
+    // The list's source sheet keeps its name while the rule reads it.
+    expect(() =>
+      edit([{ type: 'rename_sheet', sheetId: 'Lists', name: 'Choices' }])
+    ).toThrow('data validation');
+    edit([{ type: 'clear_validation', sheetId: 'sheet1', range: 'A1:Z100' }]);
+    expect(
+      readSpreadsheetWorkbook(doc)[0].metadata?.validations
+    ).toBeUndefined();
+    edit([{ type: 'rename_sheet', sheetId: 'Lists', name: 'Choices' }]);
+  });
+
+  it('rejects dropdowns without one valid source of choices', () => {
+    const doc = document();
+    const edit = (
+      operation: Partial<
+        Extract<
+          Parameters<typeof prepareSpreadsheetEdit>[1]['operations'][number],
+          { type: 'set_dropdown' }
+        >
+      >
+    ) =>
+      prepareSpreadsheetEdit(
+        doc,
+        {
+          action: 'edit',
+          expectedRevision: 'v',
+          operations: [
+            {
+              type: 'set_dropdown',
+              sheetId: 'sheet1',
+              range: 'A1:A5',
+              ...operation,
+            },
+          ],
+        },
+        calculator
+      );
+    expect(() => edit({})).toThrow('exactly one');
+    expect(() => edit({ items: ['a'], source: 'B1:B2' })).toThrow(
+      'exactly one'
+    );
+    expect(() => edit({ items: ['a,b'] })).toThrow('commas');
+    expect(() => edit({ items: ['  '] })).toThrow('non-empty');
+    expect(() => edit({ items: ['x'.repeat(300)] })).toThrow('253 characters');
+    expect(() => edit({ source: 'SUM(B1:B2)' })).toThrow('Invalid dropdown');
+    expect(() => edit({ source: 'Missing!B1:B2' })).toThrow('does not exist');
+    expect(() => edit({ range: 'A1:A999', items: ['a'] })).toThrow(
+      'Append rows'
+    );
+    expect(readSpreadsheetWorkbook(doc)[0].metadata).toBeUndefined();
+  });
+
   it('rejects oversized batches and invalid cells/styles/row counts without silently clamping', () => {
     const doc = document();
     const edit = (
@@ -446,7 +591,7 @@ describe('spreadsheet AI atomic editing', () => {
       ])
     ).toThrow('formatting');
     expect(() =>
-      edit([{ type: 'append_rows', sheetId: 'sheet1', count: 900 }])
+      edit([{ type: 'append_rows', sheetId: 'sheet1', count: 99_900 }])
     ).toThrow('exceeding');
     expect(() =>
       edit([

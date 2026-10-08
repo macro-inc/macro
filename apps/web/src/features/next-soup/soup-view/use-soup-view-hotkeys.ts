@@ -3,8 +3,8 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
+  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
-  markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -158,6 +158,13 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     description: 'Open',
     hide: true,
     keyDownHandler: (event) => {
+      // Native row controls own Enter. The document hotkey runs during capture,
+      // before the reminder button's propagation guards can handle the event.
+      if (
+        event?.target instanceof Element &&
+        event.target.closest('button[data-reminder-action]')
+      )
+        return false;
       const focusedRow = soup.focus.row();
       if (!focusedRow) return false;
 
@@ -197,7 +204,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         location,
@@ -316,7 +323,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
-      markReminderSeenOnOpen(entity, notificationSource);
+      markCalendarNotificationSeenOnOpen(entity, notificationSource);
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle,
         openInNewSplit: true,

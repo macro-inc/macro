@@ -1,0 +1,881 @@
+use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
+use crate::domain::fold::fold;
+use crate::domain::log::{AgentSessionLog, Message};
+use crate::domain::model::{
+    AgentRequestId, Author, Control, ControlOutcome, FailureLink, FailureNotice, FailureNoticeKind,
+    FoldedMessage, MessagePart, PermissionOutcome, StopReason, ToolDetail, ToolName, ToolStatus,
+    ToolUseId, TurnId,
+};
+use agent_client_protocol::RawJsonRpcMessage;
+use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
+use serde_json::json;
+
+/// Fold a log while capturing anything it logs at `WARN`.
+fn fold_capturing_warnings(
+    log: impl IntoIterator<Item = AgentSessionLog>,
+) -> (Vec<FoldedMessage>, Vec<CapturedFields>) {
+    capturing_warnings(|| fold(log))
+}
+
+/// The full fixture: one prompt, prose, a permission-gated terminal command,
+/// a patched-in edit, closing prose, and a clean stop.
+#[test]
+fn folds_a_complete_turn() {
+    let (messages, warnings) = fold_capturing_warnings(parse_log(TURN));
+
+    assert_eq!(warnings, vec![], "clean log folds without warnings");
+    assert_eq!(messages.len(), 2, "one user message, one agent message");
+
+    let user = &messages[0];
+    assert_eq!(user.id, TurnId(0));
+    assert!(
+        matches!(&user.author, Author::User { user_id: Some(id) } if id.to_string().contains("eric"))
+    );
+    assert_eq!(
+        *user.parts,
+        vec![MessagePart::Text {
+            text: "list the examples and write a file".to_owned()
+        }]
+    );
+    assert_eq!(user.stop, None, "user messages carry no stop reason");
+
+    let agent = &messages[1];
+    assert_eq!(agent.id, TurnId(0));
+    assert_eq!(agent.author, Author::Agent);
+    assert_eq!(agent.stop, Some(StopReason::EndTurn));
+
+    // Streamed chunks coalesce; parts arrive in log order.
+    let parts = agent.parts.as_slice();
+    assert_eq!(
+        parts.len(),
+        5,
+        "text, tool, permission, tool, text: {parts:#?}"
+    );
+
+    let MessagePart::Text { text: opening } = &parts[0] else {
+        panic!("first part is prose: {:?}", parts[0]);
+    };
+    assert_eq!(opening, "Sure, one moment.", "chunks join into one part");
+
+    let MessagePart::ToolUse {
+        id: run_id,
+        name: run_name,
+        status: run_status,
+        detail: run_detail,
+        ..
+    } = &parts[1]
+    else {
+        panic!("second part is the terminal call: {:?}", parts[1]);
+    };
+    assert_eq!(
+        run_name.display(),
+        "Bash",
+        "harness tool name outranks ACP title"
+    );
+    assert_eq!(*run_status, ToolStatus::Completed);
+    let ToolDetail::Terminal {
+        command,
+        output,
+        exit_code,
+    } = run_detail
+    else {
+        panic!("execute folds to a terminal: {run_detail:?}");
+    };
+    assert_eq!(command.as_deref(), Some("ls examples"));
+    assert_eq!(*exit_code, Some(0));
+    let output = output.as_ref().expect("output was captured");
+    assert!(
+        output.as_str().contains("\u{1b}[01;34m"),
+        "ANSI escapes survive the fold: {:?}",
+        output.as_str()
+    );
+    assert!(
+        output.as_str().ends_with("events.rs"),
+        "later updates replace earlier output snapshots"
+    );
+
+    let MessagePart::Permission {
+        request_id,
+        tool_call,
+        options,
+        outcome,
+    } = &parts[2]
+    else {
+        panic!("third part is the permission prompt: {:?}", parts[2]);
+    };
+    assert_eq!(
+        *request_id,
+        AgentRequestId::Str("perm-1".to_owned()),
+        "the agent's id is exposed for an answer to echo"
+    );
+    assert_eq!(tool_call, run_id);
+    assert_eq!(options.len(), 2);
+    assert_eq!(
+        *outcome,
+        PermissionOutcome::Selected {
+            option_id: "allow".to_owned()
+        }
+    );
+
+    let MessagePart::ToolUse {
+        name,
+        status,
+        detail,
+        ..
+    } = &parts[3]
+    else {
+        panic!("fourth part is the edit: {:?}", parts[3]);
+    };
+    assert_eq!(name.display(), "Write");
+    assert_eq!(*status, ToolStatus::Completed);
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("edit folds to diffs: {detail:?}");
+    };
+    // The opening frame carried nothing; the diff arrived by patch.
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].path, std::path::PathBuf::from("/repo/new.rs"));
+    assert_eq!(diffs[0].old_text, None);
+    assert_eq!(diffs[0].new_text, "fn main() {}");
+
+    assert_eq!(
+        parts[4],
+        MessagePart::Text {
+            text: "Done.".to_owned()
+        }
+    );
+}
+
+/// Cutting the log mid-turn - a live session, or one that died - still yields
+/// everything folded so far, with the in-flight states left visible.
+#[test]
+fn folds_an_interrupted_turn() {
+    // Drop the final two frames: the closing prose and the prompt response.
+    let mut log = parse_log(TURN);
+    log.truncate(log.len() - 2);
+    let (messages, warnings) = fold_capturing_warnings(log);
+
+    assert_eq!(warnings, vec![]);
+    assert_eq!(messages.len(), 2);
+
+    let agent = &messages[1];
+    assert_eq!(agent.stop, None, "no response, no stop reason");
+
+    // Cut earlier, before the first tool call resolves: the call stays
+    // pending and the permission stays unanswered. Both are renderable
+    // states, not errors.
+    let mut log = parse_log(TURN);
+    log.truncate(9);
+    let (messages, warnings) = fold_capturing_warnings(log);
+
+    assert_eq!(warnings, vec![]);
+    let agent = &messages[1];
+    let parts = agent.parts.as_slice();
+
+    let MessagePart::ToolUse { status, .. } = &parts[1] else {
+        panic!("tool call is present: {:?}", parts[1]);
+    };
+    assert_eq!(*status, ToolStatus::Pending, "no update ever arrived");
+
+    let MessagePart::Permission { outcome, .. } = &parts[2] else {
+        panic!("permission is present: {:?}", parts[2]);
+    };
+    assert_eq!(
+        *outcome,
+        PermissionOutcome::Pending,
+        "still awaiting an answer"
+    );
+}
+
+#[test]
+fn folds_session_controls_as_typed_parts() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"m","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"c","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"/compact"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"c","result":{"stopReason":"end_turn"}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::SetModel {
+                model: "opus".to_owned()
+            },
+            // The set-model request never got a response in this log.
+            outcome: ControlOutcome::Pending,
+        }]
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::Compact,
+            outcome: ControlOutcome::Accepted,
+        }]
+    );
+    assert_eq!(
+        messages[2].parts.as_slice(),
+        &[MessagePart::Control {
+            control: Control::Stop,
+            outcome: ControlOutcome::Accepted,
+        }]
+    );
+    assert_eq!(messages[0].id, TurnId(0));
+    assert_eq!(messages[1].id, TurnId(1));
+    assert_eq!(messages[2].id, TurnId(2));
+}
+
+/// A stop pressed before the agent's first chunk - a window over ten seconds
+/// wide, since a session's first prompt spends that creating the Cursor agent.
+///
+/// The turn has no agent message to stamp, so the close has to mint one. Left
+/// unstamped, the newest turn message is the user's prompt, which every reader
+/// takes to mean the agent is still working: the composer keeps its stop
+/// affordance, and each further click stacks another Stopped line onto a
+/// session that can never settle.
+#[test]
+fn a_stop_before_the_agent_speaks_still_settles_the_turn() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, stop control, minted reply");
+    let reply = &messages[2];
+    assert!(matches!(reply.author, Author::Agent));
+    assert_eq!(
+        reply.id,
+        TurnId(0),
+        "the reply belongs to the prompt's turn"
+    );
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Text {
+            text: String::new()
+        }],
+        "nothing was said, so there is nothing to render but the stop"
+    );
+}
+
+/// The same stop once the agent has managed a single thought: the message
+/// already exists, so nothing is minted and the thought is kept.
+#[test]
+fn a_stop_after_the_agent_speaks_stamps_the_message_it_has() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"do a big job"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"cancelled"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 3, "prompt, reply, stop control");
+    let reply = &messages[1];
+    assert_eq!(reply.stop, Some(StopReason::Cancelled));
+    assert_eq!(
+        reply.parts.as_slice(),
+        &[MessagePart::Thought {
+            text: "hmm".to_owned()
+        }]
+    );
+}
+
+#[test]
+fn a_rejected_control_reports_the_runtime_error() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
+    ));
+
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].request_id.as_ref().map(ToString::to_string),
+        Some("01920000-0000-7000-8000-0000000000a1".to_owned()),
+        "a control-plane id is surfaced for correlation"
+    );
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(
+        *outcome,
+        ControlOutcome::Rejected {
+            message: "Invalid params: model not found: claude-fable-5".to_owned()
+        }
+    );
+}
+
+#[test]
+fn an_accepted_control_resolves_and_the_same_frame_moves_the_metadata() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
+    ));
+
+    let messages = fold(log);
+    let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
+        panic!("one control part: {:?}", messages[0].parts);
+    };
+    assert_eq!(*outcome, ControlOutcome::Accepted);
+}
+
+/// Every ACP tool kind this fold has a bespoke rendering for, plus a call
+/// with no kind at all - which ACP defaults to `other`, same as a kind this
+/// fold does not model.
+#[test]
+fn folds_every_official_tool_kind() {
+    fn tool_call(id: &str, kind_and_fields: &str) -> String {
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s","update":{{"sessionUpdate":"tool_call","toolCallId":"{id}","title":"{id}","status":"completed",{kind_and_fields}}}}}}}}}"#
+        )
+    }
+
+    let log = parse_log(&[
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#.to_owned(),
+        tool_call(
+            "del",
+            r#""kind":"delete","locations":[{"path":"/repo/dead.rs"}]"#,
+        ),
+        tool_call(
+            "mv",
+            r#""kind":"move","locations":[{"path":"/repo/from.rs"},{"path":"/repo/to.rs"}]"#,
+        ),
+        tool_call(
+            "search",
+            r#""kind":"search","locations":[{"path":"/repo/a.rs"}],"content":[{"type":"content","content":{"type":"text","text":"1 match"}}]"#,
+        ),
+        tool_call(
+            "fetch",
+            r#""kind":"fetch","content":[{"type":"content","content":{"type":"text","text":"page body"}}]"#,
+        ),
+        tool_call(
+            "think",
+            r#""kind":"think","content":[{"type":"content","content":{"type":"text","text":"reasoning aloud"}}]"#,
+        ),
+        tool_call(
+            "mystery",
+            r#""content":[{"type":"content","content":{"type":"text","text":"how should this work?"}}],"rawInput":{"foo":"bar"}"#,
+        ),
+    ].join("\n"));
+
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(
+        warnings,
+        vec![],
+        "every official kind folds without a warning"
+    );
+
+    let agent = &messages[1];
+    assert_eq!(
+        agent.parts.len(),
+        6,
+        "one part per tool call: {:#?}",
+        agent.parts
+    );
+    insta::assert_debug_snapshot!(agent.parts);
+}
+
+/// An unmodeled call keeps the exchange itself: its arguments, and the
+/// result the harness put in `rawOutput` with MCP's envelope removed, beside
+/// whatever text its content blocks carried.
+#[test]
+fn an_unmodeled_call_keeps_its_request_and_response() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"claudeCode":{"toolName":"mcp__deepwiki__ask_question"}},"sessionUpdate":"tool_call","toolCallId":"q","title":"mcp__deepwiki__ask_question","kind":"other","status":"in_progress","rawInput":{"repoName":"sst/opencode","question":"how are tools rendered?"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"q","status":"completed","rawOutput":{"content":[{"type":"text","text":"{\"answer\":\"in basic-tool-v2.tsx\"}"}],"isError":false},"content":[{"type":"content","content":{"type":"text","text":"{\"answer\":\"in basic-tool-v2.tsx\"}"}}]}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(warnings, vec![]);
+    let [part] = &messages[1].parts[..] else {
+        panic!("one part: {:#?}", messages[1].parts);
+    };
+    assert_eq!(
+        *part,
+        MessagePart::ToolUse {
+            id: ToolUseId("q".to_owned()),
+            name: ToolName::Mcp {
+                server: "deepwiki".to_owned(),
+                tool: "ask_question".to_owned(),
+            },
+            status: ToolStatus::Completed,
+            detail: ToolDetail::Other {
+                kind: "other".to_owned(),
+                output: Some(r#"{"answer":"in basic-tool-v2.tsx"}"#.to_owned()),
+                input: Some(
+                    json!({"repoName": "sst/opencode", "question": "how are tools rendered?"})
+                ),
+                result: Some(json!({"answer": "in basic-tool-v2.tsx"})),
+                error: None,
+            },
+        }
+    );
+}
+
+/// Cursor announces an MCP call as its `mcp` dispatcher with nothing else,
+/// sends the arguments - which say which tool - on an update, and the result
+/// on the last. The part is named once the arguments arrive, shows the
+/// tool's own arguments rather than the dispatcher's, and ends with what the
+/// tool returned.
+#[test]
+fn a_cursor_mcp_call_is_named_and_unwrapped_as_its_frames_arrive() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"i","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"i","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor-acp","version":"0"}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"m","title":"mcp","kind":"other","status":"in_progress"}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"m","title":"mcp","kind":"other","status":"in_progress","rawInput":{"name":"macro-ReadContent","toolCallId":"m","providerIdentifier":"macro","toolName":"ReadContent","serverIdentifier":"macro","args":{"documentId":"4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"}}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"m","title":"mcp","kind":"other","status":"completed","rawInput":{"name":"macro-ReadContent","toolCallId":"m","providerIdentifier":"macro","toolName":"ReadContent","serverIdentifier":"macro","args":{"documentId":"4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"}},"rawOutput":{"result":{"success":{"content":[{"text":{"text":"{\"content\":{\"text\":\"Q3 plan\"},\"comments\":[]}"}}],"structuredContent":{"content":{"text":"Q3 plan"},"comments":[]}}}}}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(warnings, vec![]);
+    let agent = messages
+        .iter()
+        .find(|message| message.author == Author::Agent)
+        .expect("the agent answered");
+    let [part] = &agent.parts[..] else {
+        panic!("one part: {:#?}", agent.parts);
+    };
+    assert_eq!(
+        *part,
+        MessagePart::ToolUse {
+            id: ToolUseId("m".to_owned()),
+            name: ToolName::Mcp {
+                server: "macro".to_owned(),
+                tool: "ReadContent".to_owned(),
+            },
+            status: ToolStatus::Completed,
+            detail: ToolDetail::Other {
+                kind: "other".to_owned(),
+                output: None,
+                input: Some(json!({"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"})),
+                result: Some(json!({"content": {"text": "Q3 plan"}, "comments": []})),
+                error: None,
+            },
+        }
+    );
+}
+
+/// An edit call that never reports a diff content block — Claude Code's
+/// `Write` — synthesizes a whole-file diff from `rawInput`'s
+/// `{filePath, content}`, on the opening frame or a later patch.
+#[test]
+fn synthesizes_a_write_diff_from_raw_input() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        // Opened with the raw input already present, no diff content ever.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"w","title":"write","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/readme.md","content":"hello\n"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"w","status":"completed"}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the write: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("write folds to an edit: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].path, std::path::PathBuf::from("/repo/readme.md"));
+    assert_eq!(
+        diffs[0].old_text, None,
+        "prior contents are not on the wire"
+    );
+    assert_eq!(diffs[0].new_text, "hello\n");
+}
+
+/// A reported diff block wins over the synthesized raw-input diff.
+#[test]
+fn reported_diffs_beat_the_synthesized_write_diff() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"e","title":"edit","kind":"edit","status":"in_progress","rawInput":{"filePath":"/repo/a.rs","content":"whole file"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"e","status":"completed","content":[{"type":"diff","path":"/repo/a.rs","oldText":"old","newText":"new"}]}}}}"#,
+    ));
+
+    let messages = fold(log);
+    let MessagePart::ToolUse { detail, .. } = &messages[1].parts[0] else {
+        panic!("first part is the edit: {:?}", messages[1].parts);
+    };
+    let ToolDetail::Edit { diffs } = detail else {
+        panic!("edit folds to diffs: {detail:?}");
+    };
+    assert_eq!(diffs.len(), 1);
+    assert_eq!(diffs[0].old_text.as_deref(), Some("old"));
+    assert_eq!(diffs[0].new_text, "new");
+}
+
+/// A patch for a tool call that was never opened is logged, not fatal.
+#[test]
+fn reports_a_patch_before_open() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"hi"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"ghost","status":"completed"}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hello"}}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log);
+
+    assert_eq!(warnings.len(), 1, "one warning for the unopened patch");
+    let error = warnings[0]
+        .get("error")
+        .expect("the warning names the error");
+    assert!(
+        error.contains("PatchBeforeOpen") && error.contains("ghost"),
+        "warning identifies the unopened tool call: {error}"
+    );
+
+    // The fold carried on around it.
+    assert_eq!(messages.len(), 2);
+    assert_eq!(
+        *messages[1].parts,
+        vec![MessagePart::Text {
+            text: "hello".to_owned()
+        }]
+    );
+}
+
+/// An empty log folds to nothing.
+#[test]
+fn folds_nothing() {
+    let (messages, warnings) = fold_capturing_warnings(Vec::new());
+    assert_eq!(messages, vec![]);
+    assert_eq!(warnings, vec![]);
+}
+
+#[test]
+fn an_empty_agent_chunk_does_not_create_a_message() {
+    let log = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":""}}}}}"#,
+    );
+
+    assert_eq!(fold(log), vec![]);
+}
+
+/// How many `session/update` notifications a log carries - the frames that
+/// stream the agent's own content, and so the sign that a recording has
+/// something for the fold to find.
+fn agent_updates(log: &[AgentSessionLog]) -> usize {
+    log.iter()
+        .filter(|entry| match &entry.content {
+            Message::ToServer(ToServerMessage::Acp(acp)) => matches!(
+                &acp.0,
+                RawJsonRpcMessage::Notification(notification)
+                    if &*notification.method == "session/update"
+            ),
+            _ => false,
+        })
+        .count()
+}
+
+/// Replays every locally recorded session, when any exist.
+///
+/// The recordings live outside the repository (`~/.agent_runtime_sessions`),
+/// so this is a no-op wherever they are absent - CI included. Locally it is
+/// the drift alarm: a recording that folds with a warning means the harness
+/// is emitting something this fold does not yet understand.
+#[test]
+fn replays_local_recordings() {
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
+    let dir = std::path::Path::new(&home).join(".agent_runtime_sessions");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path
+            .extension()
+            .is_none_or(|extension| extension != "jsonl")
+        {
+            continue;
+        }
+        let jsonl = std::fs::read_to_string(&path).expect("recording is readable");
+        let log = parse_log(&jsonl);
+        let streamed = agent_updates(&log);
+        let (messages, warnings) = fold_capturing_warnings(log);
+
+        assert_eq!(
+            warnings,
+            vec![],
+            "recording {} folds with a warning",
+            path.display()
+        );
+        for message in &messages {
+            assert!(
+                !message.parts.is_empty(),
+                "recording {} folded an empty message",
+                path.display()
+            );
+        }
+
+        // Folding to nothing is the failure the other assertions cannot see:
+        // they are all "for each message", so zero messages passes them all.
+        // A recording that streamed agent content and derived none of it is
+        // the shape of a fold that has stopped understanding the protocol -
+        // which is exactly what a `session/load` recording used to do.
+        if streamed > 0 {
+            assert!(
+                !messages.is_empty(),
+                "recording {} streams {streamed} agent updates but folds to no messages",
+                path.display()
+            );
+        }
+    }
+}
+
+/// The exchange the local database recorded after a switch to a provider
+/// whose credentials were broken: the prompt is answered with a JSON-RPC
+/// error and nothing else ever arrives.
+const FAILED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"hi"}]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"message":"Internal error: Bad Request: bad request: Authorization header is badly formatted"}}}"#,
+);
+
+/// A turn whose prompt errors is over, and says why.
+///
+/// The bug this pins: the turn used to be left with no stop reason at all,
+/// which every reader takes to mean "still running" — so one failed prompt
+/// wedged the composer against a turn that had already died, and the error
+/// itself was dropped on the floor.
+#[test]
+fn a_prompt_answered_with_an_error_ends_its_turn() {
+    let messages = fold(parse_log(FAILED_PROMPT));
+
+    assert_eq!(messages.len(), 2, "the prompt, and the turn that failed");
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(agent.author, Author::Agent);
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Internal error: Bad Request: bad request: Authorization header is badly \
+                      formatted"
+                .to_owned(),
+            notice: None,
+        }),
+        "the runtime's own words, carried verbatim"
+    );
+}
+
+/// A runtime that classified the failure as the person's to act on says so
+/// in the error's `data`, and the fold carries that through as the notice a
+/// reader shows instead of the runtime's message.
+#[test]
+fn a_prompt_error_carrying_a_notice_fails_its_turn_with_the_notice() {
+    let (prompt, _) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let error = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"#,
+        r#""message":"Cursor has no budget left.","#,
+        r#""data":{"kind":"provider_usage_limit","title":"Cursor usage limit reached","#,
+        r#""body":"Raise the limit, then send your message again.","#,
+        r#""link":{"label":"Manage Cursor usage","url":"https://www.cursor.com/dashboard?tab=settings"}}}}}"#,
+    );
+
+    let messages = fold(parse_log(&format!("{prompt}\n{error}")));
+
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "Cursor has no budget left.".to_owned(),
+            notice: Some(FailureNotice {
+                kind: FailureNoticeKind::ProviderUsageLimit,
+                title: "Cursor usage limit reached".to_owned(),
+                body: "Raise the limit, then send your message again.".to_owned(),
+                link: Some(FailureLink {
+                    label: "Manage Cursor usage".to_owned(),
+                    url: "https://www.cursor.com/dashboard?tab=settings".to_owned(),
+                }),
+            }),
+        })
+    );
+}
+
+/// Error `data` that is not a notice - another runtime's debugging payload -
+/// leaves the failure opaque rather than half-parsed.
+#[test]
+fn a_prompt_error_with_unrelated_data_fails_its_turn_without_a_notice() {
+    let (prompt, _) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let error = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"#,
+        r#""message":"boom","data":{"details":"stack trace here"}}}}"#,
+    );
+
+    let messages = fold(parse_log(&format!("{prompt}\n{error}")));
+
+    let agent = messages.last().expect("an agent message");
+    assert_eq!(
+        agent.stop,
+        Some(StopReason::Failed {
+            message: "boom".to_owned(),
+            notice: None,
+        })
+    );
+}
+
+/// The failure lands on whatever the agent had already said, rather than
+/// opening a second message beside it.
+#[test]
+fn a_turn_that_had_started_talking_fails_in_place() {
+    let chunk = concat!(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","#,
+        r#""params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"working"}}}}}"#,
+    );
+    let (prompt, error) = FAILED_PROMPT
+        .split_once('\n')
+        .expect("the fixture has two frames");
+    let log = format!("{prompt}\n{chunk}\n{error}");
+
+    let messages = fold(parse_log(&log));
+
+    assert_eq!(messages.len(), 2, "no extra message for the failure");
+    let agent = messages.last().expect("an agent message");
+    assert!(matches!(agent.stop, Some(StopReason::Failed { .. })));
+    assert_eq!(
+        agent.parts.first(),
+        Some(&MessagePart::Text {
+            text: "working".to_owned()
+        }),
+        "what the agent managed to say is kept"
+    );
+}
+
+const LINKED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":["#,
+    r#"{"type":"text","text":"what is wrong "},"#,
+    r#"{"type":"text","text":"in this screenshot?"},"#,
+    r#"{"type":"resource_link","uri":"https://static.example/file/11111111-1111-4111-8111-111111111111","name":"screenshot.png","mimeType":"image/png","size":2048},"#,
+    r#"{"type":"resource_link","uri":"https://static.example/file/22222222-2222-4222-8222-222222222222","name":"notes.txt"}"#,
+    r#"]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+);
+
+/// A prompt's attached files fold to attachment parts after its text, so
+/// the transcript shows what the user sent alongside what they said.
+#[test]
+fn a_prompt_with_attached_files_folds_them_as_parts() {
+    let (messages, warnings) = fold_capturing_warnings(parse_log(LINKED_PROMPT));
+    assert_eq!(warnings, vec![]);
+
+    let user = &messages[0];
+    assert!(matches!(user.author, Author::User { .. }));
+    assert_eq!(
+        user.parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "what is wrong in this screenshot?".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/11111111-1111-4111-8111-111111111111".to_owned(),
+                name: "screenshot.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: Some(2048),
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/22222222-2222-4222-8222-222222222222".to_owned(),
+                name: "notes.txt".to_owned(),
+                mime_type: None,
+                size: None,
+            },
+        ]
+    );
+}
+
+/// Files alone are a message too - "look at this" needs no words.
+#[test]
+fn a_prompt_of_only_attached_files_still_derives_a_user_message() {
+    let log = parse_log(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"resource_link","uri":"https://static.example/file/1","name":"a.png","mimeType":"image/png"}]}}}"#,
+    );
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Attachment {
+            uri: "https://static.example/file/1".to_owned(),
+            name: "a.png".to_owned(),
+            mime_type: Some("image/png".to_owned()),
+            size: None,
+        }]
+    );
+}
+
+/// A replayed session's user chunks carry the same links, and fold to the
+/// same shape as a live prompt: text first, files after.
+#[test]
+fn replayed_user_chunks_keep_attached_files() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":1}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":0,"result":{}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s","cwd":"/","mcpServers":[]}}}"#,
+        "\n",
+        // The file arrives before the words: the text still leads.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"resource_link","uri":"https://static.example/file/1","name":"a.png","mimeType":"image/png"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"what is "}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"this?"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"a cat"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"result":{}}}"#,
+    ));
+    let messages = fold(log);
+    assert_eq!(messages.len(), 2, "the replayed prompt and its answer");
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "what is this?".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/1".to_owned(),
+                name: "a.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: None,
+            },
+        ]
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "a cat".to_owned()
+        }]
+    );
+}

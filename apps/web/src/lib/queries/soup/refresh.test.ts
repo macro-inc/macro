@@ -16,9 +16,6 @@ vi.mock('./normalized-cache/normalizer', () => ({
   getSoupNormalizer: () => ({ getDependentQueriesByIds: dependencies }),
   soupNormKey: (id: string) => `soup:${id}`,
 }));
-vi.mock('./graphql/active-queries', () => ({
-  refreshActiveGraphqlSoupQueries: vi.fn(async () => {}),
-}));
 
 import { refreshAgentSessionLists } from '../agent-session/list-sync';
 import { soupKeys } from './keys';
@@ -40,70 +37,69 @@ afterEach(() => {
   client.clear();
 });
 
-function mountInitialList() {
-  const responses: Array<(state: string) => void> = [];
-  const queryFn = vi.fn(
-    () => new Promise<string>((resolve) => responses.push(resolve))
-  );
-  const observer = new QueryObserver(client, { queryKey: key, queryFn });
+function mountList(
+  queryKey: QueryKey,
+  queryFn: () => Promise<string>,
+  initialData?: string
+) {
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn,
+    ...(initialData === undefined ? {} : { initialData, staleTime: Infinity }),
+  });
   unsubscribers.push(observer.subscribe(() => {}));
-  return { queryFn, responses };
 }
 
-it('supersedes an initial REST snapshot before the session has normalized dependencies', async () => {
-  const { queryFn, responses } = mountInitialList();
-  expect(queryFn).toHaveBeenCalledTimes(1);
-  expect(client.getQueryData(key)).toBeUndefined();
+it('leaves loading and loaded lists alone for a session no list holds', async () => {
+  const loading = vi.fn(() => new Promise<string>(() => {}));
+  const loaded = vi.fn(async () => 'refetched');
+  mountList(key, loading);
+  mountList([...soupKeys.items._def, { documents: true }], loaded, 'loaded');
 
-  const refresh = refreshSoupEntities(['session']);
-  await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
-  responses[1]('idle');
-  await refresh;
-  responses[0]('running');
-  await Promise.resolve();
-  expect(client.getQueryData(key)).toBe('idle');
-});
+  await refreshSoupEntities(['session']);
 
-it('awaits REST and repeats when another update arrives during revalidation', async () => {
-  const { queryFn, responses } = mountInitialList();
-  const first = refreshAgentSessionLists('session');
-  await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
-  const second = refreshAgentSessionLists('session');
-  responses[1]('running');
-  await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(3));
-  responses[2]('blocked');
-  await Promise.all([first, second]);
-  responses[0]('idle');
-  await Promise.resolve();
-  expect(client.getQueryData(key)).toBe('blocked');
+  expect(loading).toHaveBeenCalledOnce();
+  expect(loaded).not.toHaveBeenCalled();
 });
 
 it('leaves unrelated loaded REST lists alone for a known session', async () => {
   dependencies.mockReturnValue([key]);
   const otherKey = [...soupKeys.items._def, { documents: true }];
   const unrelated = vi.fn(async () => 'unrelated');
-  const observer = new QueryObserver(client, {
-    queryKey: otherKey,
-    queryFn: unrelated,
-    initialData: 'already loaded',
-    staleTime: Infinity,
-  });
-  unsubscribers.push(observer.subscribe(() => {}));
+  mountList(otherKey, unrelated, 'already loaded');
+  mountList(key, async () => 'updated', 'old');
+
   await refreshSoupEntities(['session']);
+
   expect(unrelated).not.toHaveBeenCalled();
   expect(client.getQueryData(otherKey)).toBe('already loaded');
+  expect(client.getQueryData(key)).toBe('updated');
+});
+
+it('awaits REST and repeats when another update arrives during revalidation', async () => {
+  dependencies.mockReturnValue([key]);
+  const responses: Array<(state: string) => void> = [];
+  const queryFn = vi.fn(
+    () => new Promise<string>((resolve) => responses.push(resolve))
+  );
+  mountList(key, queryFn, 'idle');
+
+  const first = refreshAgentSessionLists('session');
+  await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+  const second = refreshAgentSessionLists('session');
+  responses[0]('running');
+  await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+  responses[1]('blocked');
+  await Promise.all([first, second]);
+
+  expect(client.getQueryData(key)).toBe('blocked');
 });
 
 it('retries a real query failure so persisted metadata can replace the cached row', async () => {
+  dependencies.mockReturnValue([key]);
   const queryFn = vi.fn(async () => 'updated branch');
   queryFn.mockRejectedValueOnce(new Error('temporary outage'));
-  const observer = new QueryObserver(client, {
-    queryKey: key,
-    queryFn,
-    initialData: 'old branch',
-    staleTime: Infinity,
-  });
-  unsubscribers.push(observer.subscribe(() => {}));
+  mountList(key, queryFn, 'old branch');
 
   await refreshAgentSessionLists('session');
 

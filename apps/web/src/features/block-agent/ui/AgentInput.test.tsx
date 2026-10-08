@@ -6,17 +6,32 @@ import {
   createEditor,
   type LexicalEditor,
 } from 'lexical';
+
 /**
  * @vitest-environment jsdom
  */
 
+import { preloadAgentFold } from '@core/agent-fold/client';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_INPUT_TEXT_AREA_ID, AgentInput } from './AgentInput';
 
+vi.mock('@core/agent-fold/client', () => ({
+  preloadAgentFold: vi.fn(async () => {}),
+}));
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: vi.fn(() => false),
+}));
+
 const editor = vi.hoisted(() => ({
   lexical: undefined as LexicalEditor | undefined,
+  text: '',
   clear: vi.fn(),
+  setMarkdown: vi.fn((value: string) => {
+    editor.text = value;
+  }),
   enter: undefined as (() => boolean) | undefined,
   change: undefined as ((markdown: string) => void) | undefined,
 }));
@@ -29,6 +44,7 @@ vi.mock(
       const builder = {
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
+        withAppLinkResolver: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
         withLinks: () => builder,
@@ -49,6 +65,8 @@ vi.mock(
         controls: {
           clear: editor.clear,
           focus: vi.fn(),
+          getMarkdown: () => editor.text,
+          setMarkdown: editor.setMarkdown,
         },
         lexical: editor.lexical,
       };
@@ -58,8 +76,10 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { disabled?: boolean }) => (
-    <div data-testid="agent-input-editor" data-disabled={props.disabled} />
+  MarkdownShell: (props: { disabled?: boolean; initialValue?: string }) => (
+    <div data-testid="agent-input-editor" data-disabled={props.disabled}>
+      {props.initialValue}
+    </div>
   ),
 }));
 
@@ -92,14 +112,8 @@ vi.mock('@phosphor/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 
-vi.mock(
-  '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid',
-  () => ({
-    default: () => <span data-testid="enter-icon" />,
-  })
-);
-
 beforeEach(() => {
+  vi.mocked(preloadAgentFold).mockClear();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -108,9 +122,69 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+  editor.text = '';
   editor.clear.mockClear();
+  editor.setMarkdown.mockClear();
   editor.enter = undefined;
   editor.change = undefined;
+  vi.mocked(isTouchDevice).mockReturnValue(false);
+});
+
+it('preloads on document-chat composer focus without submitting its context', () => {
+  const send = vi.fn();
+  render(() => <AgentInput initialInput="Document context" onSend={send} />);
+  expect(preloadAgentFold).not.toHaveBeenCalled();
+  fireEvent.focusIn(screen.getByTestId('agent-input-editor'));
+  expect(preloadAgentFold).toHaveBeenCalledOnce();
+  expect(send).not.toHaveBeenCalled();
+  expect(editor.clear).not.toHaveBeenCalled();
+});
+
+it('seeds context without sending it and submits it only on Send', () => {
+  const onSend = vi.fn();
+  render(() => <AgentInput initialInput="Document context" onSend={onSend} />);
+  expect(screen.getByTestId('agent-input-editor').textContent).toBe(
+    'Document context'
+  );
+  expect(onSend).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(onSend).toHaveBeenCalledWith('Document context', []);
+});
+
+describe('on a touch device', () => {
+  beforeEach(() => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+  });
+
+  it('leaves Enter to the virtual keyboard and sends only from the button', () => {
+    const onSend = vi.fn();
+    render(() => <AgentInput onSend={onSend} />);
+
+    editor.change?.('first line');
+    // Not captured, so the editor inserts a newline instead of sending.
+    expect(editor.enter?.()).toBe(false);
+    expect(onSend).not.toHaveBeenCalled();
+    expect(editor.clear).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(onSend).toHaveBeenCalledWith('first line', []);
+    expect(editor.clear).toHaveBeenCalledOnce();
+  });
+
+  it('does not advance the queue from Enter either', () => {
+    const onStop = vi.fn();
+    render(() => (
+      <AgentInput busy hasQueuedMessages onSend={vi.fn()} onStop={onStop} />
+    ));
+
+    expect(editor.enter?.()).toBe(false);
+    expect(onStop).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Flush queued messages' })
+    );
+    expect(onStop).toHaveBeenCalledOnce();
+  });
 });
 
 describe('queued message advancement', () => {
@@ -133,7 +207,7 @@ describe('queued message advancement', () => {
       screen.getByTestId('agent-input-editor').getAttribute('data-disabled')
     ).toBe('true');
     const stop = screen.getByRole('button', {
-      name: 'Stop',
+      name: 'Flush queued messages',
     }) as HTMLButtonElement;
     expect(stop.disabled).toBe(true);
     fireEvent.click(stop);
@@ -146,7 +220,7 @@ describe('queued message advancement', () => {
     expect(onSendNext).not.toHaveBeenCalled();
   });
 
-  it('shows a pressable Enter action that advances the next queued message', () => {
+  it('shows a ringed send action that flushes the next queued message', () => {
     const onStop = vi.fn();
 
     render(() => (
@@ -154,9 +228,11 @@ describe('queued message advancement', () => {
     ));
 
     const sendNext = screen.getByRole('button', {
-      name: 'Send next queued message',
+      name: 'Flush queued messages',
     });
-    expect(screen.getByTestId('enter-icon')).toBeTruthy();
+    expect(sendNext.hasAttribute('disabled')).toBe(false);
+    expect(sendNext.getAttribute('data-intent')).toBe('flush');
+    expect(screen.getByTestId('send-icon')).toBeTruthy();
 
     fireEvent.click(sendNext);
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -203,13 +279,12 @@ describe('queued message advancement', () => {
       />
     ));
 
-    // Attached files are a draft, so this is the typed-text case: Enter sends
-    // them, and the control is Stop rather than the send-next Enter action,
-    // which would have stopped the agent and left the files behind.
+    // Attached files are a draft: both tapping Send and Enter send them.
     expect(
-      screen.queryByRole('button', { name: 'Send next queued message' })
+      screen.queryByRole('button', { name: 'Flush queued messages' })
     ).toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
 
     editor.enter?.();
     expect(onSend).toHaveBeenCalledWith('', [uploaded]);

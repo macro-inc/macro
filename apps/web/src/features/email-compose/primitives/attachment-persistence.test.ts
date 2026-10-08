@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UploadEmailAttachments } from '../context/compose-capabilities';
 import { createAttachmentPersistence } from './attachment-persistence';
@@ -8,7 +8,8 @@ const disposers: (() => void)[] = [];
 afterEach(() => disposers.splice(0).forEach((dispose) => dispose()));
 
 function setup(
-  uploadAttachments: (input: UploadEmailAttachments) => Promise<void>
+  uploadAttachments: (input: UploadEmailAttachments) => Promise<void>,
+  confirmRemoval = false
 ) {
   return createRoot((dispose) => {
     disposers.push(dispose);
@@ -18,16 +19,19 @@ function setup(
     });
     const services = {
       uploadAttachments: vi.fn(uploadAttachments),
+      addForwardedAttachments: vi.fn(async () => {}),
       removeAttachment: vi.fn(async () => {}),
       removeForwardedAttachment: vi.fn(async () => {}),
     };
+    const [draftId, setDraftId] = createSignal('draft');
     const persistence = createAttachmentPersistence({
       services,
+      confirmRemoval,
       attachments: form.attachments,
-      draftId: () => 'draft',
+      draftId,
       inboxId: () => 'secondary-inbox',
     });
-    return { form, services, persistence };
+    return { form, services, persistence, setDraftId };
   });
 }
 
@@ -110,4 +114,57 @@ describe('draft attachment persistence', () => {
     });
     await Promise.resolve();
   });
+
+  it('re-uploads files after detach and ignores late callbacks from the obsolete upload', async () => {
+    const pending = Promise.withResolvers<void>();
+    const file = new File(['content'], 'notes.txt');
+    let oldInput: UploadEmailAttachments | undefined;
+    const state = setup(async (input) => {
+      input.onAttachmentAdded?.(file, 'replacement-attachment');
+    });
+    state.services.uploadAttachments.mockImplementationOnce(async (input) => {
+      oldInput = input;
+      input.onAttachmentAdded?.(file, 'old-attachment');
+      await pending.promise;
+    });
+    state.form.attachments.add({ type: 'local', file });
+    const oldUpload = state.persistence.upload('draft');
+    state.persistence.detach();
+    state.setDraftId('replacement');
+    expect(state.form.attachments.list()[0].attachmentId).toBeUndefined();
+    const newUpload = state.persistence.upload('replacement');
+    oldInput?.onAttachmentAdded?.(file, 'late-old-id');
+    oldInput?.onAttachmentUploadFailed?.(file);
+    expect(state.form.attachments.list()[0].attachmentId).toBe(
+      'replacement-attachment'
+    );
+    pending.resolve();
+    await Promise.all([oldUpload, newUpload]);
+    expect(state.services.uploadAttachments).toHaveBeenCalledTimes(2);
+    expect(state.form.attachments.list()[0].attachmentId).toBe(
+      'replacement-attachment'
+    );
+  });
+});
+
+it('keeps durable server attachments visible until removal succeeds, retaining them after failure', async () => {
+  const state = setup(async () => {}, true);
+  const attachment = {
+    type: 'local' as const,
+    file: new File(['keep'], 'keep.txt'),
+    attachmentId: 'server-file',
+    uploaded: true,
+  };
+  state.form.attachments.add(attachment);
+  const pending = Promise.withResolvers<void>();
+  state.services.removeAttachment.mockReturnValueOnce(pending.promise);
+  const removal = state.persistence.remove(attachment);
+  expect(state.persistence.removing()).toBe(true);
+  expect(state.form.attachments.list()).toEqual([attachment]);
+  pending.reject(new Error('Offline'));
+  await expect(removal).rejects.toThrow('Offline');
+  expect(state.form.attachments.list()).toEqual([attachment]);
+  expect(state.persistence.removing()).toBe(false);
+  await state.persistence.remove(attachment);
+  expect(state.form.attachments.list()).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import { useActivityContext } from '@app/features/activity/context/activity-context';
 import type { FeedEntry } from '@app/features/activity/core/collapse-runs';
 import type {
   ActivityAction,
@@ -23,16 +24,21 @@ type Activity = NamedTool<
 function decodeToolEntityType(raw: string): ActivityEntityType {
   return match(raw)
     .with('document', () => 'document' as const)
+    .with('initiative', () => 'initiative' as const)
     .with('project', () => 'project' as const)
     .with('chat', () => 'chat' as const)
     .with('email_thread', () => 'email-thread' as const)
     .with('channel', () => 'channel' as const)
     .with('user', () => 'user' as const)
+    .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
     .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
 }
 
 function activityAction(action: Activity['action']): ActivityAction {
   return match(action)
+    .with({ type: 'taskAdded' }, () => ({ kind: 'task-added' as const }))
+    .with({ type: 'taskRemoved' }, () => ({ kind: 'task-removed' as const }))
     .with({ type: 'created' }, () => ({
       kind: 'created' as const,
     }))
@@ -68,6 +74,7 @@ function activityAction(action: Activity['action']): ActivityAction {
     .with({ type: 'callStarted' }, () => ({
       kind: 'call-started' as const,
     }))
+    .with({ type: 'responded' }, () => ({ kind: 'responded' as const }))
     .with({ type: 'unknown' }, ({ tag }) => ({
       kind: 'unknown' as const,
       tag,
@@ -99,17 +106,18 @@ const handler = createToolRenderer({
     const [isExpanded, setIsExpanded] = createSignal(
       ctx.renderContext.grouped !== true
     );
+    const activityContext = useActivityContext();
     const activities = () => ctx.response?.data.activities ?? [];
     const entries = createMemo<FeedEntry[]>(() =>
-      activities().map((activity, index) => ({
-        kind: 'single',
-        event: activityEvent(activity, index),
-      }))
+      activities()
+        .map((activity, index) => activityEvent(activity, index))
+        .filter((event) => activityContext.entityTypeShown(event.entityType))
+        .map((event) => ({ kind: 'single', event }))
     );
-    const hasResults = () => activities().length > 0;
+    const hasResults = () => entries().length > 0;
     const statusText = () => {
       if (!ctx.response) return undefined;
-      const count = activities().length;
+      const count = entries().length;
       if (count === 0) return 'No Results';
       if (ctx.response.data.truncated) return `${count}+ activities`;
       if (count === 1) return '1 activity';

@@ -10,6 +10,8 @@ mod agent_catalog;
 mod api;
 mod app;
 mod config_form;
+#[cfg(unix)]
+mod herdr_pane;
 mod input;
 mod logging;
 mod platform;
@@ -18,5 +20,7 @@ mod quickstart;
 mod runner;
 mod ui;
 
+#[cfg(unix)]
+pub use herdr_pane::run_herdr_pane;
 pub use logging::LogBuffer;
 pub use runner::run;

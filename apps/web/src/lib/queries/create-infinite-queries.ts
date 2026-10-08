@@ -32,6 +32,7 @@ type InfiniteQueryResult<TData, TSelect> = {
   data: Accessor<TSelect | undefined>;
   hasNextPage: Accessor<boolean>;
   isFetchingNextPage: Accessor<boolean>;
+  error: Accessor<Error | null>;
   fetchNextPage: () => Promise<
     InfiniteQueryObserverResult<
       InfiniteData<TData | null, string | null>,
@@ -135,6 +136,7 @@ export function createInfiniteQueries<TData, TSelect = TData[]>(
         data,
         hasNextPage: () => query.hasNextPage ?? false,
         isFetchingNextPage: () => query.isFetchingNextPage,
+        error: () => query.error,
         fetchNextPage: () => query.fetchNextPage(),
         refetch: () => query.refetch(),
       };

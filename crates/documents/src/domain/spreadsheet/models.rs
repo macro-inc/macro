@@ -189,11 +189,13 @@ pub struct SpreadsheetStyle {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetCellInput {
-    /// A1 address, from A1 through Z1000.
+    /// A1 address, from A1 through XFD100000.
     pub address: String,
     /// Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
     /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
     /// or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+    /// A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
+    /// Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
     /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
     pub value: String,
 }
@@ -223,9 +225,9 @@ pub struct SpreadsheetOverride {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetColumnWidth {
-    /// Column letter A through Z.
+    /// Column letter A through XFD.
     pub column: String,
-    /// Width in pixels, 64 through 640.
+    /// Width in pixels, 8 through 640.
     pub width: u16,
 }
 
@@ -298,7 +300,7 @@ pub enum SpreadsheetOperation {
         /// Stable sheet ID or exact name.
         sheet_id: String,
     },
-    /// Append rows, up to the 1,000-row sheet limit.
+    /// Append rows, up to the 100,000-row sheet limit.
     AppendRows {
         /// Stable sheet ID or exact name.
         sheet_id: String,
@@ -311,6 +313,30 @@ pub enum SpreadsheetOperation {
         sheet_id: String,
         /// Column widths to set.
         columns: Vec<SpreadsheetColumnWidth>,
+    },
+    /// Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.
+    /// Give exactly one of items or source. Cell values are unchanged; set them separately.
+    SetDropdown {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle, for example C2:C200.
+        range: String,
+        /// Typed choices, without commas, at most 253 characters in total.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        items: Option<Vec<String>>,
+        /// Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+        /// Defaults to true: reject typed entries that are not a choice. False only suggests the choices.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reject_invalid: Option<bool>,
+    },
+    /// Remove dropdowns and any other data validation from a rectangle.
+    ClearValidation {
+        /// Stable sheet ID or exact name.
+        sheet_id: String,
+        /// A1 rectangle.
+        range: String,
     },
 }
 
@@ -439,8 +465,39 @@ pub struct SpreadsheetReadRange {
     pub range: String,
     /// Cells with their sources and current results.
     pub cells: Vec<SpreadsheetReadCell>,
+    /// Dropdowns and other data validation rules overlapping this range.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<SpreadsheetReadValidation>,
     /// True when a narrower follow-up read is needed to see every cell.
     pub truncated: bool,
+}
+
+/// A data validation rule; list rules are dropdowns.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SpreadsheetReadValidation {
+    /// Cells the rule covers, as space-separated A1 ranges.
+    pub range: String,
+    /// Rule kind: list, whole, decimal, date, time, textLength, custom, or any.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// A dropdown's typed choices.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<String>>,
+    /// A dropdown's source range.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Comparison for number, date, time and text-length rules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator: Option<String>,
+    /// Rule formulas, without the leading =.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formulas: Option<Vec<String>>,
+    /// Whether a list rule shows its dropdown arrow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dropdown: Option<bool>,
+    /// Whether entries that break the rule are rejected.
+    pub reject_invalid: bool,
 }
 
 /// One hypothetical formula result.

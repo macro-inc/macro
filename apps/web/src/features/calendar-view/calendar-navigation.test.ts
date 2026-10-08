@@ -1,3 +1,4 @@
+import { paneRoute } from '@app/routes/app-route';
 import type {
   SplitHandle,
   SplitManager,
@@ -22,15 +23,13 @@ describe('Calendar view navigation', () => {
         focusRequestId: expect.any(Number),
       },
       entryMetadata: {
-        route: {
-          matches: [
-            {
-              id: 'view-calendar',
-              params: { period: 'dayGridMonth' },
-            },
-          ],
+        route: paneRoute({
+          id: 'view-calendar',
+          params: { period: 'dayGridMonth' },
+        }),
+        search: {
+          calendar: { eventId: ['event-1'], occurrenceKey: ['instance-1'] },
         },
-        search: { calendar: { eventId: ['event-1'] } },
       },
     });
   });

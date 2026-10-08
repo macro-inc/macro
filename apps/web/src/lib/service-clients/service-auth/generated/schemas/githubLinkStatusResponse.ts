@@ -6,6 +6,10 @@
  */
 
 export interface GithubLinkStatusResponse {
+  /** Stable ID of the authenticated user's linked GitHub account. */
+  github_user_id: string;
+  /** Login of the authenticated user's linked GitHub account. */
+  github_username: string;
   /** Whether the user must reauthenticate their GitHub link. */
   reauthentication_required: boolean;
 }

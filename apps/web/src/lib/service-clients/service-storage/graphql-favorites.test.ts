@@ -16,6 +16,8 @@ import {
   executeGraphqlSetFavoriteMutation,
   graphqlReorderFavoritesResult,
   graphqlSetFavoriteResult,
+  mapGraphqlFavorite,
+  toGraphqlFavoriteEntityType,
 } from './graphql-favorites';
 
 const mutationMock = vi.fn();
@@ -65,6 +67,59 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
+  it('preserves the database entity identity across REST and GraphQL', () => {
+    expect(toGraphqlFavoriteEntityType('database')).toBe('DATABASE');
+    expect(
+      mapGraphqlFavorite({
+        __typename: 'GraphqlFavorite',
+        id: 'database:database-1',
+        entityType: 'DATABASE',
+        entityId: 'database-1',
+        sortOrder: 2,
+        createdAt: '2026-09-21T00:00:00.000Z',
+        fileType: null,
+        documentSubType: null,
+        channelType: null,
+        channelId: null,
+      })
+    ).toMatchObject({
+      id: 'database:database-1',
+      entityType: 'database',
+      entityId: 'database-1',
+    });
+  });
+
+  it.each([
+    { entityType: 'email_thread', typename: 'GraphqlSoupEmailThread' },
+    { entityType: 'initiative', typename: 'GraphqlSoupInitiative' },
+  ] as const)(
+    'updates the normalized $entityType favorite field without changing a Soup query',
+    async ({ entityType, typename }) => {
+      await executeGraphqlSetFavoriteMutation(
+        client,
+        { entityType, entityId: 'entity-1' },
+        false,
+        0
+      );
+      expect(
+        mutationMock.mock.calls[0][2].normalizedCacheOptimistic
+          .optimisticResponse.setFavorite.result.effects
+      ).toEqual([
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename: typename,
+            id: 'entity-1',
+            isFavorited: false,
+          },
+        },
+      ]);
+      expect(
+        mutationMock.mock.calls[0][2].normalizedCacheOptimistic.revalidations
+      ).toEqual(revalidations);
+    }
+  );
+
   it.each([
     { favorite: true, patchKind: 'prependUnique' },
     { favorite: false, patchKind: 'remove' },
@@ -81,7 +136,19 @@ describe('favorites GraphQL mutations', () => {
             optimisticResponse: {
               setFavorite: {
                 __typename: 'SetFavoritePayload',
-                result: { __typename: 'GraphqlMutationSuccess' },
+                result: {
+                  __typename: 'GraphqlMutationSuccess',
+                  effects: [
+                    {
+                      __typename: 'SoupUpdated',
+                      item: {
+                        __typename: 'GraphqlSoupDocument',
+                        id: 'document-1',
+                        isFavorited: favorite,
+                      },
+                    },
+                  ],
+                },
                 favorite: favorite
                   ? expect.objectContaining({
                       __typename: 'GraphqlFavorite',

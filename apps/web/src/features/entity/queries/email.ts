@@ -1,15 +1,12 @@
 /** Email queries adapted to the entity data model. */
-
 import { throwOnErr } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
 import { emailClient } from '@service-email/client';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
 import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/solid-query';
 
-import { type Accessor, createMemo } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
-import { createApiTokenQuery, withCachedApiTokenRetry } from './auth';
 import { queryKeys } from './key';
 
 type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
@@ -18,29 +15,18 @@ type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
 };
 
 const fetchPaginatedEmails = async ({
-  apiToken,
   view,
   ...params
-}: FetchPaginatedEmailsParams & { apiToken: string }) => {
-  const Authorization = `Bearer ${apiToken}`;
-  const init: SafeFetchInit = {
-    headers: { Authorization },
-  };
-
-  // Throw the result error itself so a 401 keeps its UNAUTHORIZED code and the
-  // token retry helper can recognize it.
-  return throwOnErr(() =>
-    emailClient.getPreviews(
-      {
-        view,
-        limit: params.limit,
-        sort_method: params.sort_method,
-        cursor: params.cursor,
-      },
-      init
-    )
+}: FetchPaginatedEmailsParams) =>
+  // The email client already authenticates with the current session.
+  throwOnErr(() =>
+    emailClient.getPreviews({
+      view,
+      limit: params.limit,
+      sort_method: params.sort_method,
+      cursor: params.cursor,
+    })
   );
-};
 
 type EmailPreviewPage = Awaited<ReturnType<typeof fetchPaginatedEmails>>;
 
@@ -81,10 +67,7 @@ function emailsInfiniteQueryOptions(
 ) {
   return infiniteQueryOptions({
     queryKey: queryKeys.email({ infinite: true, ...params }),
-    queryFn: ({ pageParam }) =>
-      withCachedApiTokenRetry((apiToken) =>
-        fetchPaginatedEmails({ apiToken, ...pageParam })
-      ),
+    queryFn: ({ pageParam }) => fetchPaginatedEmails(pageParam),
     initialPageParam: params,
     getNextPageParam: ({ next_cursor: cursor }) =>
       cursor ? { ...params, cursor } : undefined,
@@ -115,14 +98,10 @@ export function createEmailsInfiniteQuery(
     };
   };
 
-  const authQuery = createApiTokenQuery();
-  const enabled = createMemo(
-    () => authQuery.isSuccess && !options?.disabled?.()
-  );
   return useInfiniteQuery(() =>
     emailsInfiniteQueryOptions(
       params(),
-      enabled(),
+      !options?.disabled?.(),
       options?.refetchInterval?.()
     )
   );

@@ -9,7 +9,7 @@ import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HomeEntityIcon } from '../../inbox-view/components/HomeEntityIcon';
+import { HomeEntityIcon } from '../../home/components/HomeEntityIcon';
 import { EntityIcon } from '../extractors/entity-icon';
 import type {
   ChannelEntity,
@@ -75,6 +75,7 @@ function pullRequest(
       deletions: 1,
       comments: [],
       checks: [],
+      labels: [],
     },
   };
 }
@@ -175,7 +176,7 @@ describe('Entity.Icon', () => {
 
   it.each([
     [false, false, EnvelopeIcon, 'text-email'],
-    [true, false, EnvelopeOpenIcon, 'text-default'],
+    [true, false, EnvelopeOpenIcon, 'text-ink-extra-muted'],
     [false, true, CalendarIcon, 'text-calendar'],
     [true, true, CalendarIcon, 'text-calendar'],
   ] as const)(

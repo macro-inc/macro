@@ -8,6 +8,9 @@ use models_properties::EntityType;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Gets the entity's owner and whether it's deleted.
 /// Errors if the entity doesn't exist or the entity type is unsupported.
 pub async fn get_owner_and_deleted(
@@ -21,8 +24,10 @@ pub async fn get_owner_and_deleted(
         // owning channel (see `access_entity_type`), so the caller skips this
         // path for them entirely.
         EntityType::CallRecord
+        | EntityType::Initiative
         | EntityType::Channel
         | EntityType::Company
+        | EntityType::Contact
         | EntityType::User
         | EntityType::Thread => {
             anyhow::bail!("unsupported entity type")
@@ -61,6 +66,23 @@ pub async fn get_owner_and_deleted(
         .map(|r| (r.user_id, r.deleted_at.is_some()))
         .fetch_one(pool)
         .await?,
+        // A row has no owner or trash state of its own: both are its
+        // database's.
+        EntityType::DatabaseRow => {
+            sqlx::query!(
+                r#"
+            SELECT d.user_id AS owner_id, d.trashed_at
+            FROM database_rows r
+            JOIN database_tables t ON t.id = r.table_id
+            JOIN database_entities d ON d.database_id = t.database_id
+            WHERE r.id = $1
+            "#,
+                Uuid::parse_str(entity_id)?,
+            )
+            .map(|r| (r.owner_id, r.trashed_at.is_some()))
+            .fetch_one(pool)
+            .await?
+        }
     };
 
     Ok(result)

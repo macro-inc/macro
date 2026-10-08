@@ -5,12 +5,21 @@ import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
+  NOISE_EMAIL_FILTER_BACKFILL_LANE,
+  NOISE_EMAIL_SOUP_BACKFILL_LANE,
   runSoupBackfill,
   runSoupBackfills,
+  SHARED_EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+  SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+  type SoupBackfillCheckpoint,
   type SoupBackfillParams,
   useSoupBackfills,
 } from './backfill';
+
+type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
 const featureFlagMocks = vi.hoisted(() => ({
   useFeatureFlag: vi.fn(),
@@ -33,6 +42,7 @@ const cacheGenerationCallbacks = new Set<
   (change: CacheGenerationChange) => void
 >();
 const mockCacheHost = {
+  currentStorageGeneration: vi.fn<() => Promise<string>>(),
   onCacheGenerationChanged: vi.fn(
     (callback: (change: CacheGenerationChange) => void) => {
       cacheGenerationCallbacks.add(callback);
@@ -80,6 +90,31 @@ const lane = (
   },
 });
 
+function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
+  const checkpoint: SoupBackfillCheckpoint = {
+    userId: 'user-1',
+    storageGeneration: 'storage-1',
+    nextCursor: 'saved-cursor',
+    pagesFetched: 12,
+    completed: false,
+    scanStartedAt: '2026-09-01T00:00:00.000Z',
+    updatedSince: null,
+    completedAt: null,
+    ...overrides,
+  };
+  localStorage.setItem(
+    'graphql-soup-backfill:v17:user-1:core-entities',
+    JSON.stringify(checkpoint)
+  );
+}
+
+const recencyTree = (signal: boolean, gte: string) => ({
+  and: {
+    left: { literal: { importance: signal } },
+    right: { literal: { updatedAt: { gte } } },
+  },
+});
+
 function BackfillRunner(props: { userId: string }) {
   useSoupBackfills(props.userId);
   return null;
@@ -93,6 +128,9 @@ describe('runSoupBackfills', () => {
       .mockReturnValue(() => ({ enabled: true, payload: undefined }));
     cacheGenerationCallbacks.clear();
     mockCacheHost.onCacheGenerationChanged.mockClear();
+    mockCacheHost.currentStorageGeneration
+      .mockReset()
+      .mockResolvedValue('storage-1');
     graphqlMocks.getGraphqlSoupCacheHost
       .mockReset()
       .mockReturnValue(mockCacheHost);
@@ -109,6 +147,162 @@ describe('runSoupBackfills', () => {
     vi.restoreAllMocks();
   });
 
+  it.each([
+    { savedGeneration: 'storage-1', resumes: true },
+    { savedGeneration: 'replaced-storage', resumes: false },
+    { savedGeneration: null, resumes: false },
+    { savedGeneration: undefined, resumes: false },
+  ])(
+    'resumes only checkpoints from the current storage: $savedGeneration',
+    async ({ savedGeneration, resumes }) => {
+      seedCheckpoint({ storageGeneration: savedGeneration });
+      const fetchPage = vi.fn(async (_input: unknown) => ({
+        nextCursor: null,
+      }));
+      // A new host can use intact storage without receiving its open event.
+      const reopenedHost = {
+        currentStorageGeneration: async () => 'storage-1',
+      };
+      await Effect.runPromise(
+        runSoupBackfill(
+          'user-1',
+          reopenedHost,
+          lane('core-entities', fetchPage)
+        )
+      );
+      expect(fetchPage).toHaveBeenCalledOnce();
+      expect(fetchPage.mock.calls[0]?.[0]).toMatchObject(
+        resumes
+          ? { continuation: { cursor: 'saved-cursor' } }
+          : { initial: { limit: 1 } }
+      );
+      expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+        storageGeneration: 'storage-1',
+        pagesFetched: resumes ? 13 : 1,
+        completed: true,
+      });
+    }
+  );
+
+  it('waits for initial cache storage readiness before admitting a saved cursor', async () => {
+    seedCheckpoint();
+    let resolveGeneration!: (generation: string) => void;
+    const ready = new Promise<string>((resolve) => {
+      resolveGeneration = resolve;
+    });
+    mockCacheHost.currentStorageGeneration.mockReturnValue(ready);
+    const fetchPage = vi.fn(async (_input: unknown) => ({ nextCursor: null }));
+    const running = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', fetchPage))
+    );
+    await vi.waitFor(() =>
+      expect(mockCacheHost.currentStorageGeneration).toHaveBeenCalledOnce()
+    );
+    expect(fetchPage).not.toHaveBeenCalled();
+    expect(loadSoupBackfillCheckpoint('user-1').nextCursor).toBe(
+      'saved-cursor'
+    );
+
+    resolveGeneration('recreated-storage');
+    await running;
+    expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+      initial: { limit: 1 },
+    });
+    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+      storageGeneration: 'recreated-storage',
+      pagesFetched: 1,
+      completed: true,
+    });
+  });
+
+  it('drops completed watermarks when storage changed before the runner subscribed', async () => {
+    const watermark = '2026-09-01T00:00:00.000Z';
+    seedCheckpoint({
+      storageGeneration: 'replaced-storage',
+      nextCursor: null,
+      completed: true,
+      scanStartedAt: null,
+      updatedSince: watermark,
+      completedAt: watermark,
+    });
+    const fetchPage = vi.fn(async (_input: unknown) => ({ nextCursor: null }));
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', fetchPage))
+    );
+    expect(fetchPage.mock.calls[0]?.[0]).toEqual({
+      initial: { limit: 1, expand: true, sortMethod: 'VIEWED_UPDATED' },
+    });
+    expect(loadSoupBackfillCheckpoint('user-1').pagesFetched).toBe(1);
+  });
+
+  it('restarts after storage changes during hydration without a generation event', async () => {
+    seedCheckpoint();
+    const fetchPage = vi.fn(async (_input: unknown) => {
+      if (fetchPage.mock.calls.length === 1) {
+        mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
+        return { nextCursor: 'obsolete-page-cursor' };
+      }
+      return { nextCursor: null };
+    });
+    const createFetchPage = vi.fn(async () => fetchPage);
+    const onCheckpoint = vi.fn();
+    await Effect.runPromise(
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        { ...lane('core-entities', fetchPage), createFetchPage },
+        onCheckpoint
+      )
+    );
+    expect(fetchPage.mock.calls.map(([input]) => input)).toEqual([
+      { continuation: { cursor: 'saved-cursor', expand: true } },
+      { initial: { limit: 1, expand: true, sortMethod: 'VIEWED_UPDATED' } },
+    ]);
+    expect(createFetchPage).toHaveBeenCalledTimes(2);
+    expect(onCheckpoint).toHaveBeenCalledOnce();
+    expect(onCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storageGeneration: 'storage-2',
+        pagesFetched: 1,
+      })
+    );
+    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+      storageGeneration: 'storage-2',
+      nextCursor: null,
+      completed: true,
+      pagesFetched: 1,
+    });
+  });
+
+  it('restarts before the next page when storage changes between pages', async () => {
+    const fetchPage = vi.fn(async (_input: unknown) => ({
+      nextCursor: fetchPage.mock.calls.length === 1 ? 'saved-page' : null,
+    }));
+    await Effect.runPromise(
+      runSoupBackfill(
+        'user-1',
+        mockCacheHost,
+        { ...lane('core-entities', fetchPage), pageDelayMs: 0 },
+        (checkpoint) => {
+          if (checkpoint.nextCursor === 'saved-page') {
+            mockCacheHost.currentStorageGeneration.mockResolvedValue(
+              'storage-2'
+            );
+          }
+        }
+      )
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    for (const [input] of fetchPage.mock.calls) {
+      expect(input).toMatchObject({ initial: { limit: 1 } });
+    }
+    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+      storageGeneration: 'storage-2',
+      completed: true,
+      pagesFetched: 1,
+    });
+  });
+
   it('refreshes all Mail metadata instead of using message timestamps for archive/read changes', async () => {
     const fetchPage = vi.fn(
       async (
@@ -119,10 +313,152 @@ describe('runSoupBackfills', () => {
       ...lane('email-filter-metadata', fetchPage),
       refreshAll: true,
     };
-    await Effect.runPromise(runSoupBackfill('user-1', params));
-    await Effect.runPromise(runSoupBackfill('user-1', params));
+    await Effect.runPromise(runSoupBackfill('user-1', mockCacheHost, params));
+    await Effect.runPromise(runSoupBackfill('user-1', mockCacheHost, params));
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+  });
+
+  it('runs signal email lanes before their noise counterparts', () => {
+    expect(
+      DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
+    ).toEqual([
+      'core-entities',
+      'email-signal-filter-metadata',
+      'email-noise-filter-metadata',
+      'shared-email-filter-metadata',
+      'email-signal-thread-pages',
+      'email-noise-thread-pages',
+      'auxiliary-entities',
+    ]);
+  });
+
+  it.each([
+    {
+      checkpointId: 'email-signal-filter-metadata',
+      params: SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
+      tree: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-noise-filter-metadata',
+      params: NOISE_EMAIL_FILTER_BACKFILL_LANE,
+      tree: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-signal-thread-pages',
+      params: SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+      tree: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+    },
+    {
+      checkpointId: 'email-noise-thread-pages',
+      params: NOISE_EMAIL_SOUP_BACKFILL_LANE,
+      tree: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+    },
+  ])(
+    'bounds $checkpointId by latest message recency and resumes without new filters',
+    async ({ params, tree }) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime('2026-10-06T12:00:00.000Z');
+      const fetchPage = vi.fn(async (_input: FetchInput) => {
+        vi.setSystemTime('2026-10-07T12:00:00.000Z');
+        return {
+          nextCursor: fetchPage.mock.calls.length === 1 ? 'page-2' : null,
+        };
+      });
+      await Effect.runPromise(
+        runSoupBackfill('user-1', mockCacheHost, {
+          ...params,
+          fetchPage,
+          pageDelayMs: 0,
+        })
+      );
+      expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+        initial: {
+          sortMethod: 'UPDATED_AT',
+          emailView: 'ALL',
+          filters: { emailFilter: { tree } },
+        },
+      });
+      expect(fetchPage.mock.calls[1]?.[0]).toEqual({
+        continuation: { cursor: 'page-2', expand: true, emailView: 'ALL' },
+      });
+    }
+  );
+
+  it('bounds Shared mail to either recency window in one scan', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime('2026-10-06T12:00:00.000Z');
+    const fetchPage = vi.fn(async (_input: FetchInput) => ({
+      nextCursor: null,
+    }));
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...SHARED_EMAIL_FILTER_BACKFILL_LANE,
+        createFetchPage: async () => fetchPage,
+      })
+    );
+    expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: { literal: { shared: 'ONLY' } },
+                right: {
+                  or: {
+                    left: recencyTree(true, '2026-07-08T12:00:00.000Z'),
+                    right: recencyTree(false, '2026-09-06T12:00:00.000Z'),
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('recomputes the recency cutoff for the catch-up pass and keeps its watermark', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime('2026-10-06T12:00:00.000Z');
+    const fetchPage = vi.fn(async (_input: FetchInput) => {
+      vi.setSystemTime('2026-10-07T12:00:00.000Z');
+      return { nextCursor: null };
+    });
+    await Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, {
+        ...SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+        fetchPage,
+      })
+    );
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls[1]?.[0]).toMatchObject({
+      initial: {
+        filters: {
+          emailFilter: {
+            tree: {
+              and: {
+                left: recencyTree(true, '2026-07-09T12:00:00.000Z'),
+                right: {
+                  or: {
+                    left: {
+                      literal: {
+                        updatedAt: { gte: '2026-10-06T12:00:00.000Z' },
+                      },
+                    },
+                    right: {
+                      literal: {
+                        viewedAt: { gte: '2026-10-06T12:00:00.000Z' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   });
 
   it('runs each lane to completion before starting the next lane', async () => {
@@ -143,7 +479,7 @@ describe('runSoupBackfills', () => {
     });
 
     const running = Effect.runPromise(
-      runSoupBackfills('user-1', [
+      runSoupBackfills('user-1', mockCacheHost, [
         lane('first-lane', firstFetch),
         lane('second-lane', secondFetch),
       ])
@@ -179,7 +515,7 @@ describe('runSoupBackfills', () => {
     );
 
     await Effect.runPromise(
-      runSoupBackfill('user-1', {
+      runSoupBackfill('user-1', mockCacheHost, {
         ...lane('email-thread-pages', fetchPage),
         catchUpAfterInitialPass: true,
       })
@@ -261,7 +597,9 @@ describe('runSoupBackfills', () => {
       catchUpAfterInitialPass: true,
     };
 
-    const fiber = Effect.runFork(runSoupBackfill('user-1', params));
+    const fiber = Effect.runFork(
+      runSoupBackfill('user-1', mockCacheHost, params)
+    );
     await catchUpStarted;
 
     expect(
@@ -277,7 +615,7 @@ describe('runSoupBackfills', () => {
 
     await Effect.runPromise(Fiber.interrupt(fiber));
     holdCatchUp = false;
-    await Effect.runPromise(runSoupBackfill('user-1', params));
+    await Effect.runPromise(runSoupBackfill('user-1', mockCacheHost, params));
 
     expect(fetchPage).toHaveBeenCalledTimes(3);
     expect(fetchPage.mock.calls[2]?.[0]).toMatchObject({
@@ -322,7 +660,11 @@ describe('runSoupBackfills', () => {
 
     await expect(
       Effect.runPromise(
-        runSoupBackfill('user-1', lane('projection-v2', fetchPage))
+        runSoupBackfill(
+          'user-1',
+          mockCacheHost,
+          lane('projection-v2', fetchPage)
+        )
       )
     ).rejects.toMatchObject({ cause: projectionFailure });
 
@@ -336,6 +678,26 @@ describe('runSoupBackfills', () => {
     );
   });
 
+  it('retries cache readiness failures before fetching a lane', async () => {
+    vi.useFakeTimers();
+    mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
+      new Error('cache temporarily unavailable')
+    );
+    const fetchPage = vi.fn(async () => ({ nextCursor: null }));
+    const running = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', fetchPage),
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    await running;
+    expect(fetchPage).toHaveBeenCalledOnce();
+    expect(loadSoupBackfillCheckpoint('user-1')).toMatchObject({
+      storageGeneration: 'storage-1',
+      completed: true,
+    });
+  });
+
   it('continues to later lanes after a lane exhausts its retries', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -345,7 +707,7 @@ describe('runSoupBackfills', () => {
     const laterFetch = vi.fn(async () => ({ nextCursor: null }));
 
     const running = Effect.runPromise(
-      runSoupBackfills('user-1', [
+      runSoupBackfills('user-1', mockCacheHost, [
         lane('failed-lane', failedFetch),
         lane('later-lane', laterFetch),
       ])
@@ -394,6 +756,22 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
+  it('does not hydrate through a disabled cache host', async () => {
+    vi.useFakeTimers();
+    graphqlMocks.getGraphqlSoupCacheHost.mockReturnValue({
+      ...mockCacheHost,
+      disabled: true,
+    });
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(mockCacheHost.currentStorageGeneration).not.toHaveBeenCalled();
+      expect(graphqlMocks.hydrateGraphqlSoup).not.toHaveBeenCalled();
+    } finally {
+      rendered.unmount();
+    }
+  });
+
   it('starts when only the cache host becomes available', async () => {
     vi.useFakeTimers();
     let cacheHost: typeof mockCacheHost | undefined;
@@ -412,35 +790,39 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it.each([13, 14])('does not reuse v%i backfill checkpoints', (version) => {
-    localStorage.setItem(
-      `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
-      JSON.stringify({
-        userId: 'user-1',
-        nextCursor: 'old-page',
-        pagesFetched: 3,
+  it.each([13, 14, 15, 16])(
+    'does not reuse v%i backfill checkpoints',
+    (version) => {
+      localStorage.setItem(
+        `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
+        JSON.stringify({
+          userId: 'user-1',
+          nextCursor: 'old-page',
+          pagesFetched: 3,
+          completed: false,
+          scanStartedAt: '2026-09-01T00:00:00.000Z',
+          updatedSince: null,
+          completedAt: null,
+        })
+      );
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
+      ).toMatchObject({
+        nextCursor: null,
+        pagesFetched: 0,
         completed: false,
-        scanStartedAt: '2026-09-01T00:00:00.000Z',
-        updatedSince: null,
-        completedAt: null,
-      })
-    );
-    expect(
-      loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
-    ).toMatchObject({
-      nextCursor: null,
-      pagesFetched: 0,
-      completed: false,
-    });
-  });
+      });
+    }
+  );
 
   it.each(['preserved', 'reset'] as const)(
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v15:user-1:core-entities',
+        'graphql-soup-backfill:v17:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
+          storageGeneration: 'storage-1',
           nextCursor: 'stale-cursor',
           pagesFetched: 12,
           completed: false,
@@ -475,6 +857,9 @@ describe('runSoupBackfills', () => {
         continuation: { cursor: 'stale-cursor' },
       });
 
+      if (storage === 'reset') {
+        mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
+      }
       for (const callback of cacheGenerationCallbacks) callback({ storage });
 
       await vi.waitFor(() =>
@@ -503,14 +888,15 @@ describe('runSoupBackfills', () => {
   );
 
   it.each(['preserved', 'reset'] as const)(
-    'keeps completed watermarks and other lanes only for %s storage',
+    'resumes completed lane watermarks only for %s storage',
     async (storage) => {
       const watermark = '2026-09-01T00:00:00.000Z';
       for (const checkpointId of ['core-entities', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v15:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v17:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
+            storageGeneration: 'storage-1',
             nextCursor: null,
             pagesFetched: 12,
             completed: true,
@@ -530,6 +916,9 @@ describe('runSoupBackfills', () => {
         );
         const firstInput = graphqlMocks.hydrateGraphqlSoup.mock.calls[0][1];
         expect(JSON.stringify(firstInput)).toContain(watermark);
+        if (storage === 'reset') {
+          mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
+        }
         for (const callback of cacheGenerationCallbacks) callback({ storage });
         await vi.waitFor(() =>
           expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
@@ -537,23 +926,46 @@ describe('runSoupBackfills', () => {
         const nextInput = graphqlMocks.hydrateGraphqlSoup.mock.calls[1][1];
         if (storage === 'preserved') {
           expect(nextInput).toEqual(firstInput);
-          expect(
-            loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
-          ).toMatchObject({
-            completed: true,
-            pagesFetched: 12,
-            updatedSince: watermark,
-          });
         } else {
           expect(JSON.stringify(nextInput)).not.toContain(watermark);
-          expect(
-            loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
-          ).toMatchObject({
-            completed: false,
-            pagesFetched: 0,
-            updatedSince: null,
+        }
+        // Notifications restart the active runner. Other lane checkpoints keep
+        // their generation and are validated when that lane starts.
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+        ).toMatchObject({
+          storageGeneration: 'storage-1',
+          completed: true,
+          pagesFetched: 12,
+          updatedSince: watermark,
+        });
+        const fetchEmailPage = vi.fn(async (_input: unknown) => ({
+          nextCursor: null,
+        }));
+        await Effect.runPromise(
+          runSoupBackfill(
+            'user-1',
+            mockCacheHost,
+            lane('email-thread-pages', fetchEmailPage)
+          )
+        );
+        const emailInput = JSON.stringify(fetchEmailPage.mock.calls[0][0]);
+        if (storage === 'preserved') {
+          expect(emailInput).toContain(watermark);
+        } else {
+          expect(emailInput).not.toContain(watermark);
+          expect(fetchEmailPage.mock.calls[0][0]).toMatchObject({
+            initial: { limit: 1 },
           });
         }
+        expect(
+          loadSoupBackfillCheckpoint('user-1', 'email-thread-pages')
+        ).toMatchObject({
+          storageGeneration:
+            storage === 'preserved' ? 'storage-1' : 'storage-2',
+          pagesFetched: storage === 'preserved' ? 13 : 1,
+          completed: true,
+        });
       } finally {
         rendered.unmount();
       }

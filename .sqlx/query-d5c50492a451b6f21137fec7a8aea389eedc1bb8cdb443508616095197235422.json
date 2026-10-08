@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.user_id AS \"user_id!\"\n            FROM call_record_participants p\n            WHERE p.call_record_id = $1\n            UNION\n            SELECT m.user_id\n            FROM call_records cr\n            JOIN call_meetings m ON m.id = cr.meeting_id\n            WHERE cr.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d5c50492a451b6f21137fec7a8aea389eedc1bb8cdb443508616095197235422"
+}

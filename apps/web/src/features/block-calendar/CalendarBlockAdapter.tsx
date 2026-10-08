@@ -21,7 +21,7 @@ import type { CalendarBlockProps } from './types';
 function CalendarBlockDisabledRedirect() {
   const panel = useSplitPanelOrThrow();
   onMount(() => {
-    panel.handle.replace({ next: { type: 'component', id: 'inbox' } });
+    panel.handle.replace({ next: { type: 'component', id: 'home' } });
   });
   return null;
 }
@@ -85,11 +85,7 @@ function CalendarBlockAdapter(props: CalendarBlockProps) {
   // occurrences land anyway.
   const focusTarget = createMemo(() => {
     const request = targetRequest();
-    if (
-      !request ||
-      occurrencesQuery.isLoading ||
-      occurrencesQuery.isPlaceholderData
-    ) {
+    if (!request || !occurrencesQuery.isSuccess) {
       return undefined;
     }
     return resolveCalendarTarget(occurrencesQuery.data?.items ?? [], request);

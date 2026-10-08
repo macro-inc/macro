@@ -6,6 +6,7 @@
  */
 import type {
   AddServerRequest,
+  AiAdmissionErrorBody,
   BrowsePipedreamMcpCatalogParams,
   CallToolRequest,
   CallToolResponse,
@@ -496,6 +497,11 @@ export type createChatResponse401 = {
   status: 401;
 };
 
+export type createChatResponse403 = {
+  data: string;
+  status: 403;
+};
+
 export type createChatResponse500 = {
   data: string;
   status: 500;
@@ -506,6 +512,7 @@ export type createChatResponseSuccess = createChatResponse200 & {
 };
 export type createChatResponseError = (
   | createChatResponse401
+  | createChatResponse403
   | createChatResponse500
 ) & {
   headers: Headers;
@@ -1263,6 +1270,61 @@ export const runImportHandler = async (
 };
 
 /**
+ * @summary Discover candidates for user selection without auto-importing them.
+ */
+export type discoverHandlerResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type discoverHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type discoverHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type discoverHandlerResponseSuccess = discoverHandlerResponse204 & {
+  headers: Headers;
+};
+export type discoverHandlerResponseError = (
+  | discoverHandlerResponse400
+  | discoverHandlerResponse500
+) & {
+  headers: Headers;
+};
+
+export type discoverHandlerResponse =
+  | discoverHandlerResponseSuccess
+  | discoverHandlerResponseError;
+
+export const getDiscoverHandlerUrl = (source: string) => {
+  return `/import/runs/${source}/discover`;
+};
+
+export const discoverHandler = async (
+  source: string,
+  options?: RequestInit
+): Promise<discoverHandlerResponse> => {
+  const res = await fetch(getDiscoverHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: discoverHandlerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as discoverHandlerResponse;
+};
+
+/**
  * @summary Dismiss one source's import section.
  */
 export type dismissRunHandlerResponse204 = {
@@ -1330,9 +1392,19 @@ export type retryGatherHandlerResponse400 = {
   status: 400;
 };
 
+export type retryGatherHandlerResponse402 = {
+  data: AiAdmissionErrorBody;
+  status: 402;
+};
+
 export type retryGatherHandlerResponse500 = {
   data: void;
   status: 500;
+};
+
+export type retryGatherHandlerResponse503 = {
+  data: AiAdmissionErrorBody;
+  status: 503;
 };
 
 export type retryGatherHandlerResponseSuccess =
@@ -1341,7 +1413,9 @@ export type retryGatherHandlerResponseSuccess =
   };
 export type retryGatherHandlerResponseError = (
   | retryGatherHandlerResponse400
+  | retryGatherHandlerResponse402
   | retryGatherHandlerResponse500
+  | retryGatherHandlerResponse503
 ) & {
   headers: Headers;
 };
@@ -2422,13 +2496,18 @@ export type sendChatMessageResponse401 = {
 };
 
 export type sendChatMessageResponse402 = {
-  data: void;
+  data: ChatMessageError;
   status: 402;
 };
 
 export type sendChatMessageResponse403 = {
-  data: void;
+  data: ChatMessageError;
   status: 403;
+};
+
+export type sendChatMessageResponse503 = {
+  data: ChatMessageError;
+  status: 503;
 };
 
 export type sendChatMessageResponseSuccess = sendChatMessageResponse200 & {
@@ -2439,6 +2518,7 @@ export type sendChatMessageResponseError = (
   | sendChatMessageResponse401
   | sendChatMessageResponse402
   | sendChatMessageResponse403
+  | sendChatMessageResponse503
 ) & {
   headers: Headers;
 };
@@ -2540,13 +2620,23 @@ export type structuredCompletionResponse401 = {
 };
 
 export type structuredCompletionResponse402 = {
-  data: void;
+  data: StructuredCompletionError;
   status: 402;
+};
+
+export type structuredCompletionResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
 };
 
 export type structuredCompletionResponse500 = {
   data: StructuredCompletionError;
   status: 500;
+};
+
+export type structuredCompletionResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
 };
 
 export type structuredCompletionResponseSuccess =
@@ -2557,7 +2647,9 @@ export type structuredCompletionResponseError = (
   | structuredCompletionResponse400
   | structuredCompletionResponse401
   | structuredCompletionResponse402
+  | structuredCompletionResponse403
   | structuredCompletionResponse500
+  | structuredCompletionResponse503
 ) & {
   headers: Headers;
 };

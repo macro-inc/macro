@@ -68,6 +68,8 @@ export type SoupAstItemsQueryArgs = {
 export type SoupApiItemFilter = (item: SoupApiItem) => boolean;
 
 interface SoupItemsQueryOptions {
+  networkPaused?: boolean;
+  keepPreviousData?: boolean;
   enabled?: boolean;
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
@@ -351,7 +353,7 @@ const useRestSoupAstItemsQuery = (
   return useInfiniteQuery(() =>
     restSoupAstItemsQueryOptions(
       args(),
-      options?.().enabled,
+      options?.().enabled !== false && !options?.().networkPaused,
       options?.().staleTime,
       options?.().meta,
       instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined,
@@ -367,6 +369,8 @@ export type SoupAstItemsQueryTransport = 'rest' | 'graphql';
 export type SoupAstItemsQuery = {
   readonly data: SoupAstItemsData | undefined;
   readonly error: Error | null;
+  /** Includes paused initial requests, whose data resource is not readable yet. */
+  readonly isPending: boolean;
   readonly isLoading: boolean;
   readonly isFetching: boolean;
   readonly isPlaceholderData: boolean;
@@ -407,6 +411,8 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy === undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
       projection: options?.().graphqlProjection,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
@@ -421,6 +427,8 @@ export function useSoupAstItemsQuery(
     () => ({
       enabled:
         graphqlRequested() && queryEnabled() && args().groupBy !== undefined,
+      networkPaused: options?.().networkPaused,
+      keepPreviousData: options?.().keepPreviousData,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })
   );
@@ -440,7 +448,10 @@ export function useSoupAstItemsQuery(
 
   onCleanup(
     registerActiveGraphqlSoupQuery({
-      isEnabled: () => usesGraphql() && activeGraphqlQuery().isEnabled(),
+      isEnabled: () =>
+        usesGraphql() &&
+        activeGraphqlQuery().isEnabled() &&
+        !options?.().networkPaused,
       refresh: async () => {
         activeGraphqlQuery().resetToInitialPage();
         options?.().onBeforeGraphqlRefresh?.();
@@ -472,6 +483,14 @@ export function useSoupAstItemsQuery(
       return usesGraphql()
         ? (activeGraphqlQuery().error() ?? null)
         : (restQuery.error ?? null);
+    },
+    get isPending() {
+      if (!usesGraphql()) return restQuery.isPending;
+      const query = activeGraphqlQuery();
+      return (
+        query.isLoading() ||
+        (query.isEnabled() && query.data() === undefined && !query.error())
+      );
     },
     get isLoading() {
       return usesGraphql()

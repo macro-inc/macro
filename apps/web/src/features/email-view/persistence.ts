@@ -12,6 +12,8 @@ import {
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
+import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
+import { normalizeInboxSelection } from './inbox-selection';
 import type { EmailViewState } from './types';
 
 const EMAIL_ENTRY_STATE_KEY = 'email.view';
@@ -20,15 +22,13 @@ const emailLocalStateStorage = createUserScopedStorage(
   'macro:email:view-state:v1'
 );
 
-const emailTabSchema = z
-  .enum(['important', 'noise', 'sent', 'calendar', 'drafts', 'shared', 'all'])
-  .catch('important');
+const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  tab: emailTabSchema.default('important'),
+  tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   search: z.string().default(''),
   facets: emailFacetsSchema.default({}),
 });
@@ -43,7 +43,11 @@ const emailEntryStateSchema = emailEntryStateSchemaWithDefaults.catch(
 
 // The legacy mail view stores the raw `string[] | undefined` under its key;
 // anything else restores as "every inbox".
-const inboxIdsEntrySchema = z.array(z.string()).optional().catch(undefined);
+const inboxIdsEntrySchema = z
+  .array(z.string())
+  .optional()
+  .catch(undefined)
+  .transform(normalizeInboxSelection);
 
 const emailListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -101,7 +105,7 @@ function createEmailEntryStorage(options: {
 // text remains deliberately scoped to one visit.
 const emailLocalStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  tab: emailTabSchema.default('important'),
+  tab: emailTabSchema.default(DEFAULT_EMAIL_TAB),
   inboxIds: inboxIdsEntrySchema,
   facets: emailFacetsSchema.default({}),
 });
@@ -118,7 +122,7 @@ function selectLocalState(state: EmailViewState): EmailLocalState {
   return {
     version: 1,
     tab: state.tab,
-    ...(state.inboxIds === undefined ? {} : { inboxIds: [...state.inboxIds] }),
+    inboxIds: normalizeInboxSelection(state.inboxIds),
     facets: normalizeFacetSelection(state.facets),
   };
 }

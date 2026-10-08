@@ -6,11 +6,16 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createEffect, createSignal } from 'solid-js';
+import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
+import { createEffect, onCleanup } from 'solid-js';
 import '../agents-view/agents-view.css';
 import { modeForKind } from '../agents-view/core/agent-kind';
 import { kindForBot } from '../agents-view/core/roster';
 import { agentsRouteId } from '../agents-view/core/route';
+import {
+  createPersistedComposerDraft,
+  HOME_CONVERSATION_DRAFT_KEY,
+} from '../agents-view/primitives/composer-draft';
 import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
 import {
   NewChatPage,
@@ -25,9 +30,16 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
   const roster = createAgentRosterSource();
   const settings = useSettingsState();
   const userId = useUserId();
-  const [draft, setDraft] = createSignal('');
+  useWarmAgentSessionQuery(userId);
+  const { draft, setDraft } = createPersistedComposerDraft(
+    HOME_CONVERSATION_DRAFT_KEY
+  );
   let focus: (() => void) | undefined;
   let draftVersion = 0;
+  onCleanup(() => {
+    // A suggestion started on a previous visit must not overwrite saved text.
+    draftVersion++;
+  });
   const applySuggestion = async (content: string) => {
     const version = ++draftVersion;
     try {
@@ -67,7 +79,11 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
     },
   });
   const start = (conversation: StartConversation) => {
-    const id = startPendingSession({ ...conversation, userId: userId() });
+    const id = startPendingSession({
+      ...conversation,
+      userId: userId(),
+      submitSurface: 'home',
+    });
     panel.handle.replace({
       next: {
         type: 'component',
@@ -83,6 +99,7 @@ export function HomeAgentComposer(props: { autoFocus?: boolean }) {
       <NewChatPage
         roster={roster.roster()}
         rosterLoading={roster.loading()}
+        availabilityLoading={roster.availabilityLoading()}
         draft={draft()}
         onDraftChange={(value) => {
           draftVersion++;

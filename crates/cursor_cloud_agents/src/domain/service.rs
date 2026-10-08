@@ -39,7 +39,7 @@
 mod test;
 
 use crate::domain::artifact::{ArtifactListing, CollectedArtifact, inline_text, mime_type};
-use crate::domain::error::SessionError;
+use crate::domain::error::{PromptRefusal, SessionError};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
@@ -155,13 +155,58 @@ const STREAM_RECONNECT_DELAYS: [std::time::Duration; 5] = [
 ];
 
 /// Reconnects before a run gives up on its stream and polls instead. Counted
-/// since the last reconnect that delivered content, so a long run that drops
-/// repeatedly but recovers each time is never rationed.
+/// since the last reconnect that delivered content and then stayed up (see
+/// [`STREAM_HEALTHY_RESUME`]), so a long run that drops repeatedly but
+/// recovers each time is never rationed.
 const STREAM_RECONNECT_ATTEMPTS: usize = 5;
+
+/// How long a resumed connection has to stay up, once it has delivered,
+/// before it counts as the transport working again and refills the budget.
+///
+/// Every resume in one day's incidents (prod, 2026-09-26, eight runs)
+/// delivered its whole backlog in a burst and failed within the second, from
+/// the very id it had just advanced to. Refilling on delivery alone made
+/// each of those a fresh first attempt: the budget never ran down, the
+/// attempt counter in every log line read `1`, and nothing could say "this
+/// transport has been failing for an hour". A connection that outlives this
+/// after delivering is one the provider is genuinely streaming on.
+const STREAM_HEALTHY_RESUME: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Connects that stall before their headers, on a run whose stream never
+/// opened, before the turn stops trying and polls the record instead.
+///
+/// Once a stream has opened, stalls are not counted against anything: the
+/// run's record is checked on each, so a finished run ends its turn within
+/// a stall of finishing, and a run still going is still worth the stream.
+/// Before it has ever opened there is nothing to resume, and a connect that
+/// stalls three times running is a stream that is not going to open.
+const STALLED_CONNECTS_BEFORE_POLLING: u32 = 3;
 
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
+
+/// How soon after the mirror's last live frame a prompt is taken to have been
+/// sent while that frame was still on its way.
+///
+/// The client opens a prompt's turn when it sends the prompt; the request
+/// reaches this service a pipe hop later, in milliseconds. Mirror frames sent
+/// in between land inside that turn, and nothing here can tell which, so such
+/// a prompt asks for a reload that puts the mirrored run back in its place.
+/// Generous on purpose: a false positive costs one reload.
+const MIRROR_PROMPT_OVERLAP: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// How long a prompt waits for the turn gate while a background mirror is
+/// following a run started elsewhere, before giving up.
+///
+/// The same budget as [`BUSY_ATTEMPTS`], because it is the same wait seen
+/// from one step earlier: the mirror follows exactly the run that Cursor
+/// would answer `agent_busy` for. Observed live (prod, 2026-09-27): a mirror
+/// following a run Cursor never ended held the gate for hours, the prompt
+/// behind it never started, and everything queued after it never sent. The
+/// wait has to end somewhere the person can see.
+const GATE_WAIT_BUDGET: std::time::Duration =
+    std::time::Duration::from_secs(BUSY_ATTEMPTS as u64 * POLL_INTERVAL.as_secs());
 
 /// How long a turn that saw no new artifacts waits before listing once more.
 ///
@@ -181,20 +226,35 @@ const ARTIFACT_LISTING_RETRY_DELAY: std::time::Duration = std::time::Duration::f
 /// file, loudly, rather than the process losing its memory.
 const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 
+/// Whether a captured frame reaches the client as it is journaled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Emit {
+    /// Published as captured: the frames of this session's own turn.
+    Live,
+    /// Journaled only, for a load to show.
+    Silent,
+    /// A run started on cursor.com, mirrored into an idle session: published
+    /// as captured, exactly like a turn, unless a prompt is waiting behind
+    /// the mirror. That prompt's turn is already open on the client, and the
+    /// run's frames would render inside it, so they are withheld instead and
+    /// the sweep asks for a reload.
+    Mirror,
+}
+
 #[derive(Clone, Copy)]
 struct IngestMode {
-    emit: bool,
+    emit: Emit,
     strict: bool,
     attempt: usize,
 }
 impl IngestMode {
     const LIVE: Self = Self {
-        emit: true,
+        emit: Emit::Live,
         strict: false,
         attempt: 0,
     };
     const HYDRATE: Self = Self {
-        emit: false,
+        emit: Emit::Silent,
         strict: true,
         attempt: 0,
     };
@@ -259,30 +319,41 @@ fn captured_content(
         .collect()
 }
 
-/// Restate a repository rejection as something the person who prompted can
-/// act on, leaving every other failure exactly as it arrived.
+/// Restate a rejection the person who prompted can act on - a repository
+/// Cursor cannot reach, a Cursor account out of budget - in their terms,
+/// leaving every other failure exactly as it arrived.
 ///
 /// The result is a [`SessionError::Rejected`], so it takes the same path a
 /// [`PromptRejected`](crate::domain::error::PromptRejected) already takes:
-/// the prompt is journalled as aborted and the message travels to the client
+/// the prompt is journalled as aborted and the refusal travels to the client
 /// as the `session/prompt` error. Cursor's own body stays in the tracing event —
 /// it names codes and ids that mean nothing to a reader of the chip.
-fn explain_repository_rejection(error: SessionError) -> SessionError {
+fn explain_rejection(error: SessionError) -> SessionError {
     let SessionError::Cursor(report) = &error else {
         return error;
     };
-    let Some(unavailable) =
+    if let Some(unavailable) =
         report.downcast_current_context::<crate::domain::error::RepositoryUnavailable>()
-    else {
-        return error;
-    };
-    tracing::warn!(
-        repo = %unavailable.repo,
-        reason = %unavailable.reason,
-        detail = %unavailable.detail,
-        "cursor rejected the prompt: it could not use the session's repository"
-    );
-    SessionError::Rejected(unavailable.user_message())
+    {
+        tracing::warn!(
+            repo = %unavailable.repo,
+            reason = %unavailable.reason,
+            detail = %unavailable.detail,
+            "cursor rejected the prompt: it could not use the session's repository"
+        );
+        return SessionError::Rejected(PromptRefusal::plain(unavailable.user_message()));
+    }
+    if let Some(exceeded) =
+        report.downcast_current_context::<crate::domain::error::UsageLimitExceeded>()
+    {
+        tracing::warn!(
+            code = %exceeded.code,
+            detail = %exceeded.detail,
+            "cursor rejected the prompt: the account's usage limit is exhausted"
+        );
+        return SessionError::Rejected(exceeded.refusal());
+    }
+    error
 }
 
 /// Whether a failed create is a definite refusal — the prompt never ran, so
@@ -290,6 +361,8 @@ fn explain_repository_rejection(error: SessionError) -> SessionError {
 fn is_prompt_rejection(error: &SessionError) -> bool {
     match error {
         SessionError::Rejected(_) => true,
+        #[cfg(feature = "postgres")]
+        SessionError::Admission(_) => true,
         SessionError::Cursor(report) => report
             .downcast_current_context::<crate::domain::error::PromptRejected>()
             .is_some(),
@@ -381,6 +454,18 @@ struct SessionState {
     /// Pause background capture while the host loads, without refusing prompts
     /// it already dispatched before observing the recovery requirement.
     reload_pending: bool,
+    /// Prompts parked behind a mirror's hold on the turn gate. Each one's
+    /// turn is already open on the client, so the mirror stops publishing
+    /// once one arrives.
+    prompts_waiting: usize,
+    /// Something journaled since the last load projected updates the client
+    /// was never sent. Until a load shows them, the mirror cannot deliver a
+    /// run by streaming it: the client would be missing whatever came
+    /// before, so the sweep captures silently and asks for a reload instead.
+    unshown: bool,
+    /// When the mirror last published a frame live; see
+    /// [`MIRROR_PROMPT_OVERLAP`].
+    mirror_published_at: Option<tokio::time::Instant>,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -393,6 +478,17 @@ struct SessionState {
     /// whenever Cursor happens to end the stream. Replaced per turn, so a
     /// cancel can never carry into the next one.
     cancel: tokio_util::sync::CancellationToken,
+    /// Fired by cancel; awaited by the background mirror of a run started
+    /// elsewhere ([`CursorSessionService::sync_foreign_runs`]).
+    ///
+    /// Separate from `cancel`, which belongs to the turn: a mirror holds the
+    /// turn gate while a prompt may already be waiting behind it with its own
+    /// token installed, and a stop has to reach both. Replaced per mirror
+    /// sweep, so a stop can never carry into the next one. A stop is the only
+    /// thing that fires it — a prompt arriving behind the mirror waits for
+    /// it instead, because giving up on a run started from cursor.com would
+    /// leave that conversation's run marked abandoned and cancel it.
+    mirror_cancel: tokio_util::sync::CancellationToken,
     /// The model this session's next run will use.
     ///
     /// `None` means "whatever this user's own Cursor settings resolve to" —
@@ -411,6 +507,33 @@ struct SessionState {
     journal_loaded: bool,
     fresh: bool,
     capture_failed: bool,
+}
+
+/// Counts a prompt as parked behind the mirror for as long as it is held.
+struct WaitingPrompt<'session>(&'session Session);
+
+impl<'session> WaitingPrompt<'session> {
+    /// The client opened this prompt's turn when it sent the prompt, before
+    /// it got here, so whatever the mirror streamed in between may already
+    /// sit inside that turn. Nothing can tell those frames apart, so the
+    /// mirror's run is left for a reload to put in its place.
+    fn new(session: &'session Session) -> Self {
+        let mut state = session.state.lock().expect("session state poisoned");
+        state.prompts_waiting += 1;
+        state.unshown = true;
+        drop(state);
+        Self(session)
+    }
+}
+
+impl Drop for WaitingPrompt<'_> {
+    fn drop(&mut self) {
+        self.0
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .prompts_waiting -= 1;
+    }
 }
 
 /// A session shared between a streaming turn and a concurrent cancel.
@@ -568,10 +691,15 @@ where
         &self,
         session_id: &SessionId,
     ) -> Result<Option<String>, SessionError> {
-        Ok(self
-            .effective_model(session_id)
-            .await?
-            .map(|model| model.id))
+        Ok(self.session_model(session_id).await?.map(|model| model.id))
+    }
+
+    /// The concrete model variant the session's next run will use.
+    pub async fn session_model(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<ModelChoice>, SessionError> {
+        self.effective_model(session_id).await
     }
 
     /// Choose the model a session's next run will use.
@@ -601,6 +729,72 @@ where
                 ))
             })?;
         session.state.lock().expect("session state poisoned").model = Some(model.default_choice());
+        Ok(())
+    }
+
+    /// Choose the reasoning effort for the session's next run.
+    ///
+    /// Cursor accepts only combinations returned by `GET /v1/models`, so the
+    /// selected effort is resolved to a variant that preserves every other
+    /// parameter of the current choice.
+    pub async fn set_reasoning_effort(
+        &self,
+        session_id: &SessionId,
+        effort: &str,
+    ) -> Result<(), SessionError> {
+        use crate::domain::model_options::REASONING_PARAMETER_IDS;
+
+        let session = self.session(session_id)?;
+        let current = self.effective_model(session_id).await?.ok_or_else(|| {
+            SessionError::Cursor(rootcause::report!(
+                "choose a concrete cursor model before setting reasoning effort"
+            ))
+        })?;
+        let models = self.models().await?;
+        let model = models
+            .iter()
+            .find(|model| model.id == current.id)
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "current cursor model is no longer offered"
+                ))
+            })?;
+        let parameter_id = current
+            .params
+            .iter()
+            .find(|param| REASONING_PARAMETER_IDS.contains(&param.id.as_str()))
+            .map(|param| param.id.as_str())
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no reasoning effort parameter",
+                    current.id
+                ))
+            })?;
+        let choice = model
+            .variants
+            .iter()
+            .find(|variant| {
+                variant
+                    .params
+                    .iter()
+                    .any(|param| param.id == parameter_id && param.value == effort)
+                    && super::model_options::model_params_match_except(
+                        &variant.params,
+                        &current.params,
+                        parameter_id,
+                    )
+            })
+            .map(|variant| ModelChoice {
+                id: model.id.clone(),
+                params: variant.params.clone(),
+            })
+            .ok_or_else(|| {
+                SessionError::Cursor(rootcause::report!(
+                    "cursor model {} has no compatible reasoning effort {effort}",
+                    current.id
+                ))
+            })?;
+        session.state.lock().expect("session state poisoned").model = Some(choice);
         Ok(())
     }
 
@@ -746,6 +940,7 @@ where
             cursor.run.id = tracing::field::Empty,
             agent.turn.stop_reason = tracing::field::Empty,
             agent.turn.outcome = tracing::field::Empty,
+            agent.turn.gate_wait_ms = tracing::field::Empty,
         ),
         err,
     )]
@@ -780,21 +975,86 @@ where
         // this turn's never interleave — but never behind another turn: ACP
         // makes a concurrent prompt the client's error, not a queue. The
         // holder is told apart by active_run, which only turns set.
-        let _turn = match session.turn_gate.try_lock() {
-            Ok(guard) => guard,
-            Err(_) => {
-                if session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .active_run
-                    .is_some()
-                {
-                    return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        let gate = session.turn_gate.try_lock().ok();
+        if gate.is_none()
+            && session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .active_run
+                .is_some()
+        {
+            return Err(SessionError::TurnAlreadyActive(session_id.clone()));
+        }
+        // This pending prompt owns cancellation before any wait it can be
+        // parked in — the gate, the model lookup, historical recovery. A stop
+        // has to land while the prompt is waiting behind a mirror, and the
+        // mirror can hold the gate for as long as the run it follows lives;
+        // installing the token after the gate would have that stop fire an
+        // old token and then be erased by the reset here. Only after the
+        // active-turn check, which must never clobber a live turn's token.
+        let cancel = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.cancelled = false;
+            state.cancel = tokio_util::sync::CancellationToken::new();
+            state.cancel.clone()
+        };
+        let _turn = match gate {
+            Some(guard) => guard,
+            None => {
+                // The wait is on the turn span, not only in a log line: it
+                // is the one place a turn's time goes that no Cursor call
+                // accounts for, and a trace of a slow turn has to show it.
+                let waiting_since = std::time::Instant::now();
+                let _waiting = WaitingPrompt::new(&session);
+                let span = tracing::Span::current();
+                tracing::info!(
+                    "waiting for the turn gate behind a mirror of a run started elsewhere"
+                );
+                tokio::select! {
+                    biased;
+                    () = cancel.cancelled() => {
+                        // Nothing to journal: the prompt never reached the
+                        // gate, so it never became part of this session's
+                        // record. The client's own transcript has it.
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "stopped while waiting for the turn gate");
+                        return Ok(StopReason::Cancelled);
+                    }
+                    guard = session.turn_gate.lock() => {
+                        let waited_ms = waiting_since.elapsed().as_millis() as u64;
+                        span.record("agent.turn.gate_wait_ms", waited_ms);
+                        tracing::info!(waited_ms, "acquired the turn gate");
+                        guard
+                    }
+                    () = tokio::time::sleep(GATE_WAIT_BUDGET) => {
+                        span.record("agent.turn.gate_wait_ms", GATE_WAIT_BUDGET.as_millis() as u64);
+                        tracing::warn!(
+                            waited_secs = GATE_WAIT_BUDGET.as_secs(),
+                            "gave up waiting for the turn gate; a mirror is still following a run started elsewhere"
+                        );
+                        return Err(SessionError::Rejected(PromptRefusal::plain(
+                            "Cursor is still busy with a run started outside Macro, and Macro \
+                             stopped waiting for it. Send another message once that run has \
+                             finished, or stop the session to interrupt it.",
+                        )));
+                    }
                 }
-                session.turn_gate.lock().await
             }
         };
+        // A mirror that finished streaming just before this prompt arrived
+        // may have streamed its last frames into this prompt's turn.
+        let overlapped = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .mirror_published_at
+            .is_some_and(|at| at.elapsed() < MIRROR_PROMPT_OVERLAP);
+        if overlapped {
+            tracing::info!("prompt arrived as a mirrored run finished streaming; reloading");
+            self.require_reload(session_id, &session).await?;
+        }
 
         if !session
             .state
@@ -806,14 +1066,6 @@ where
                 "Cursor session must load successfully before prompting"
             )));
         }
-        // This pending prompt owns cancellation before any model lookup or
-        // historical recovery can wait. Recovery cannot clear a received stop.
-        let cancel = {
-            let mut state = session.state.lock().expect("session state poisoned");
-            state.cancelled = false;
-            state.cancel = tokio_util::sync::CancellationToken::new();
-            state.cancel.clone()
-        };
         // A failed model lookup proves no prompt was executed. Do it before
         // reserving the durable intent, so load does not see false ambiguity.
         let model = self.effective_model(session_id).await?;
@@ -825,7 +1077,7 @@ where
             .agent
             .clone();
         if let Some(agent) = &prior_agent {
-            self.backfill_foreign_runs(session_id, &session, agent, None)
+            self.backfill_foreign_runs(session_id, &session, agent, None, &cancel, Emit::Silent)
                 .await?;
         }
         // Preserve original content before the provider creates remote work.
@@ -834,7 +1086,7 @@ where
             &session,
             None,
             JournalInput::Prompt(blocks.clone()),
-            false,
+            Emit::Silent,
         )
         .await?;
 
@@ -853,7 +1105,7 @@ where
                 &session,
                 None,
                 JournalInput::PromptAborted(prompt_sequence),
-                false,
+                Emit::Silent,
             )
             .await?;
             return Ok(StopReason::Cancelled);
@@ -925,15 +1177,19 @@ where
                     // request there, which no later correction undoes.
                     Err(error) => {
                         tracing::warn!(error = ?error, "could not choose a repository for this session");
-                        Err(SessionError::Rejected(
-                            "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection."
-                                .to_owned(),
-                        ))
+                        let error = SessionError::from(error);
+                        match error {
+                            #[cfg(feature = "postgres")]
+                            SessionError::Admission(_) => Err(error),
+                            _ => Err(SessionError::Rejected(PromptRefusal::plain(
+                                "Couldn't prepare repository access for this session. Please retry; if this persists, check your GitHub connection.",
+                            ))),
+                        }
                     }
                 }
             }
         };
-        let (agent, run) = match created.map_err(explain_repository_rejection) {
+        let (agent, run) = match created.map_err(explain_rejection) {
             Ok(created) => created,
             Err(error) => {
                 if is_prompt_rejection(&error) {
@@ -942,18 +1198,23 @@ where
                         &session,
                         None,
                         JournalInput::PromptAborted(prompt_sequence),
-                        false,
+                        Emit::Silent,
                     )
                     .await?;
                     if cancel.is_cancelled() {
                         return Ok(StopReason::Cancelled);
+                    }
+                    // Quota-refused prompts must not be silently bundled into a later run.
+                    #[cfg(feature = "postgres")]
+                    if matches!(error, SessionError::Admission(_)) {
+                        return Err(error);
                     }
                     // Only a create's refusal is carried: a follow-up run
                     // refused on an existing agent is already in a conversation
                     // the agent can see.
                     if creating_agent {
                         let reason = match &error {
-                            SessionError::Rejected(message) => Some(message.clone()),
+                            SessionError::Rejected(refusal) => Some(refusal.message.clone()),
                             _ => None,
                         };
                         session
@@ -975,7 +1236,7 @@ where
             &session,
             Some(&run),
             JournalInput::PromptAccepted(prompt_sequence),
-            false,
+            Emit::Silent,
         )
         .await?;
         {
@@ -985,8 +1246,15 @@ where
         }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
-        self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))
-            .await?;
+        self.backfill_foreign_runs(
+            session_id,
+            &session,
+            &agent,
+            Some(&run),
+            &cancel,
+            Emit::Silent,
+        )
+        .await?;
         // The turn span is the only place all three identities meet, and it
         // is what makes a Macro session joinable to the cursor.com run that
         // served it.
@@ -1029,7 +1297,7 @@ where
         // up on a run still going, not a prompt refused before it ran.
         let interrupted = match &outcome {
             Err(SessionError::Cursor(error)) => Some(error.to_string()),
-            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            Err(SessionError::Rejected(refusal)) => Some(refusal.message.clone()),
             _ => None,
         };
         if let Some(interrupted) = interrupted {
@@ -1038,7 +1306,7 @@ where
                 &session,
                 Some(&run),
                 JournalInput::Interrupted(interrupted),
-                true,
+                Emit::Live,
             )
             .await?;
         }
@@ -1048,7 +1316,7 @@ where
                 &session,
                 Some(&run),
                 JournalInput::Interrupted("user cancelled the turn".into()),
-                true,
+                Emit::Live,
             )
             .await?;
         }
@@ -1114,6 +1382,11 @@ where
             // the turn. The POST below is the notification that asks for that
             // frame.
             state.cancel.cancel();
+            // And the background mirror, if one is following a run started
+            // elsewhere: that run is cancelled below like any other, and a
+            // mirror left waiting for a `result` Cursor never sends would
+            // hold the turn gate — and every prompt behind it — for good.
+            state.mirror_cancel.cancel();
             (state.agent.clone(), state.active_run.clone())
         };
         // No agent yet: the session's first prompt is still creating one, so
@@ -1278,7 +1551,7 @@ where
             agent.acp.session_id = ?session_id,
             cursor.agent.id = %agent,
             cursor.run.id = %run,
-            cursor.ingest.emit = mode.emit,
+            cursor.ingest.emit = ?mode.emit,
             cursor.ingest.strict = mode.strict,
             cursor.ingest.attempt = mode.attempt,
             cursor.stream.reconnects = tracing::field::Empty,
@@ -1327,7 +1600,7 @@ where
                 session,
                 Some(run),
                 JournalInput::Reconciled,
-                false,
+                Emit::Silent,
             )
             .await?;
             return match status {
@@ -1356,6 +1629,19 @@ where
         // The run's latest `status` frame, kept to recognize the sticky copy
         // Cursor re-sends at the top of every reconnect.
         let mut last_status: Option<crate::domain::journal::NativeRecord> = None;
+        // Connects in a row that stalled before their headers; a connection
+        // that opens resets it.
+        let mut stalled_connects: u32 = 0;
+        // Whether the record was found terminal behind a stalled stream and
+        // the one connect allowed to drain that stream has been spent.
+        let mut drained_after_terminal = false;
+        // When the transport last broke, and when a record last arrived on
+        // any connection: together they say how long the transcript has
+        // been behind, which is the figure a person watching a frozen chip
+        // needs from the logs.
+        let started_at = tokio::time::Instant::now();
+        let mut interrupted_at: Option<tokio::time::Instant> = None;
+        let mut last_record_at: Option<tokio::time::Instant> = None;
         loop {
             // The connected stream borrows the position it resumed from, so
             // the position this iteration sends is its own owned copy.
@@ -1365,6 +1651,68 @@ where
                 .raw_stream(agent, run, resuming.as_deref())
                 .await
             {
+                // The stream said nothing, but the record still answers: a
+                // run that finished behind a wedged stream must not wait on
+                // another stall to end its turn. Hydration takes the strict
+                // arm below; it has no record to fall back on.
+                Err(StreamConnectError::Stalled(detail)) if !strict => {
+                    stalled_connects += 1;
+                    let raw = self
+                        .fetch_run_record(session_id, agent, run, cancel)
+                        .await?;
+                    let outcome = Self::run_outcome(&raw)?;
+                    if outcome.is_terminal()
+                        && !std::mem::replace(&mut drained_after_terminal, true)
+                    {
+                        // Observed: what a stalled stream held back arrives
+                        // the instant the run ends, so the stream gets one
+                        // more connect to deliver it - and its terminal
+                        // frame - itself. The record is deliberately not
+                        // captured yet: its final text would reach the
+                        // transcript now and then again from the stream.
+                        tracing::info!(
+                            cursor.run.id = %run,
+                            cursor.stream.stalled_connects = stalled_connects,
+                            cursor.stream.last_event_id = last_event_id,
+                            "Cursor run ended behind a stalled stream; connecting once more to drain it"
+                        );
+                    } else {
+                        self.capture(
+                            session_id,
+                            session,
+                            Some(run),
+                            JournalInput::Poll(raw),
+                            emit,
+                        )
+                        .await?;
+                        if outcome.is_terminal() {
+                            // A second stall past the run's end: the
+                            // record's account stands.
+                            terminal = Some(outcome.status);
+                            tracing::warn!(
+                                cursor.run.id = %run,
+                                cursor.stream.stalled_connects = stalled_connects,
+                                cursor.stream.last_event_id = last_event_id,
+                                "Cursor stream still stalled after the run ended; keeping the record's account"
+                            );
+                            break;
+                        }
+                    }
+                    if cancel.is_cancelled() {
+                        break;
+                    }
+                    Some(Interruption {
+                        reason: format!("{detail} (stalled connect {stalled_connects})"),
+                        recoverable: ever_connected
+                            || stalled_connects < STALLED_CONNECTS_BEFORE_POLLING,
+                        quiet: true,
+                    })
+                }
+                Err(StreamConnectError::Stalled(detail)) => Some(Interruption {
+                    reason: detail,
+                    recoverable: false,
+                    quiet: false,
+                }),
                 Err(StreamConnectError::InvalidResumePosition(detail))
                     if blind_reconnect_available && resuming.is_some() =>
                 {
@@ -1395,6 +1743,9 @@ where
                 Ok(connected) => {
                     let resumed = resuming.is_some();
                     ever_connected = true;
+                    stalled_connects = 0;
+                    let opened_at = tokio::time::Instant::now();
+                    let mut first_record_at: Option<tokio::time::Instant> = None;
                     let retention_seconds = connected.retention_seconds;
                     let records = connected.records;
                     pin_mut!(records);
@@ -1414,6 +1765,9 @@ where
                         {
                             Ok(Some(Ok(record))) => {
                                 silence = std::time::Duration::ZERO;
+                                let now = tokio::time::Instant::now();
+                                first_record_at.get_or_insert(now);
+                                last_record_at = Some(now);
                                 record
                             }
                             Ok(Some(Err(error))) => {
@@ -1542,18 +1896,33 @@ where
                         }
                     };
                     if resumed {
+                        let connection = opened_at.elapsed();
+                        // A resume that delivered and then stayed up is a
+                        // working stream again, so the next drop gets the
+                        // full budget rather than whatever a much earlier one
+                        // left over. One that delivered its backlog and died
+                        // at once is the same failure continuing, and spends.
+                        let healthy = received_content > 0
+                            && (interruption.is_none() || connection >= STREAM_HEALTHY_RESUME);
                         tracing::info!(
                             cursor.run.id = %run,
                             cursor.stream.attempt = reconnects,
                             cursor.stream.last_event_id = last_event_id,
                             cursor.stream.retention_seconds = retention_seconds,
                             cursor.stream.resumed_records = received,
+                            cursor.stream.resumed_content = received_content,
+                            cursor.stream.waited_ms = interrupted_at.map(|at| {
+                                first_record_at
+                                    .unwrap_or_else(tokio::time::Instant::now)
+                                    .saturating_duration_since(at)
+                                    .as_millis() as u64
+                            }),
+                            cursor.stream.connection_ms = connection.as_millis() as u64,
+                            cursor.stream.healthy = healthy,
+                            cursor.stream.fast_failed = interruption.is_some() && !healthy,
                             "Cursor stream resumed"
                         );
-                        // A resume that delivered is a working stream again,
-                        // so the next drop gets the full budget rather than
-                        // whatever a much earlier one left over.
-                        if received_content > 0 {
+                        if healthy {
                             reconnects = 0;
                         }
                     }
@@ -1569,7 +1938,15 @@ where
                 break;
             };
             fell_back_to_poll = true;
-            if !ever_connected {
+            interrupted_at = Some(tokio::time::Instant::now());
+            // How long the transcript has been behind: since the last record
+            // on any connection, or since this attempt began if none came.
+            let silent_ms = last_record_at.unwrap_or(started_at).elapsed().as_millis() as u64;
+            // A connect that stalled is tried again a bounded number of
+            // times before this gives up on the stream, because a stall is
+            // the one connect failure the client did not already retry.
+            let retrying_a_stall = quiet && recoverable;
+            if !ever_connected && !retrying_a_stall {
                 // Nothing to resume: the stream never opened, and the client
                 // has already retried an unavailable one on its own.
                 self.capture(
@@ -1583,6 +1960,8 @@ where
                 tracing::warn!(
                     cursor.run.id = %run,
                     cursor.stream.reason = %reason,
+                    cursor.stream.stalled_connects = stalled_connects,
+                    cursor.stream.silent_ms = silent_ms,
                     "Cursor stream never connected; polling the run record instead"
                 );
                 break;
@@ -1613,6 +1992,8 @@ where
                     cursor.stream.last_event_id = last_event_id,
                     cursor.stream.attempt = attempt,
                     cursor.stream.reason = %reason,
+                    cursor.stream.silent_ms = silent_ms,
+                    cursor.stream.stalled_connects = stalled_connects,
                     "Cursor stream is not resumable; polling the run record instead"
                 );
                 break;
@@ -1622,6 +2003,9 @@ where
                 cursor.stream.last_event_id = last_event_id,
                 cursor.stream.attempt = attempt,
                 cursor.stream.reason = %reason,
+                cursor.stream.quiet = quiet,
+                cursor.stream.silent_ms = silent_ms,
+                cursor.stream.stalled_connects = stalled_connects,
                 "Cursor stream interrupted; reconnecting"
             );
             let delay = STREAM_RECONNECT_DELAYS
@@ -1691,13 +2075,12 @@ where
                 attempts = POLL_ATTEMPTS,
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
-            return Err(SessionError::Rejected(
+            return Err(SessionError::Rejected(PromptRefusal::plain(
                 "Cursor has been working on this for over two hours and Macro stopped \
                  waiting. Send another message to continue: if Cursor has finished by \
                  then, that message picks up what it did, and if not, the run is \
-                 cancelled and the conversation starts fresh from there."
-                    .into(),
-            ));
+                 cancelled and the conversation starts fresh from there.",
+            )));
         };
         if strict
             && !session
@@ -1741,18 +2124,6 @@ where
     ///
     /// `debug` because the loop runs as often as [`POLL_DELAYS`] says; the turn span
     /// above carries the outcome, this carries the liveness.
-    #[tracing::instrument(
-        name = "cursor.run.poll",
-        level = "debug",
-        skip_all,
-        fields(
-            agent.acp.session_id = ?session_id,
-            cursor.agent.id = %agent,
-            cursor.run.id = %run,
-            cursor.run.status = tracing::field::Empty,
-        ),
-        err,
-    )]
     async fn poll_once(
         &self,
         session_id: &SessionId,
@@ -1760,25 +2131,11 @@ where
         agent: &CursorAgentId,
         run: &CursorRunId,
         cancel: &tokio_util::sync::CancellationToken,
-        emit: bool,
+        emit: Emit,
     ) -> Result<crate::domain::model::RunOutcome, SessionError> {
-        let mut raw = None;
-        for attempt in 0..=POLL_ERROR_TOLERANCE {
-            match self.cursor.raw_result(agent, run).await {
-                Ok(value) => {
-                    raw = Some(value);
-                    break;
-                }
-                Err(error) if attempt == POLL_ERROR_TOLERANCE => return Err(error.into()),
-                Err(error) => {
-                    tracing::warn!(error = ?error, "Cursor poll failed; retrying");
-                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
-                        return Err(SessionError::Cursor(error));
-                    }
-                }
-            }
-        }
-        let raw = raw.expect("poll returned or failed");
+        let raw = self
+            .fetch_run_record(session_id, agent, run, cancel)
+            .await?;
         self.capture(
             session_id,
             session,
@@ -1787,8 +2144,50 @@ where
             emit,
         )
         .await?;
+        Self::run_outcome(&raw)
+    }
+
+    /// The run's record as Cursor holds it, retried through transient
+    /// failures. Not captured: [`Self::poll_once`] does that, and the one
+    /// caller that reads the record without capturing it — a stalled stream
+    /// checking whether its run has ended — says why there.
+    #[tracing::instrument(
+        name = "cursor.run.poll",
+        level = "debug",
+        skip_all,
+        fields(
+            agent.acp.session_id = ?session_id,
+            cursor.agent.id = %agent,
+            cursor.run.id = %run,
+        ),
+        err,
+    )]
+    async fn fetch_run_record(
+        &self,
+        session_id: &SessionId,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<String, SessionError> {
+        for _tolerated in 0..POLL_ERROR_TOLERANCE {
+            match self.cursor.raw_result(agent, run).await {
+                Ok(value) => return Ok(value),
+                Err(error) => {
+                    tracing::warn!(error = ?error, "Cursor poll failed; retrying");
+                    if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
+                        return Err(SessionError::Cursor(error));
+                    }
+                }
+            }
+        }
+        // The last try past the tolerance is the one whose failure is final.
+        self.cursor.raw_result(agent, run).await.map_err(Into::into)
+    }
+
+    /// The outcome a run record states.
+    fn run_outcome(raw: &str) -> Result<crate::domain::model::RunOutcome, SessionError> {
         let value: serde_json::Value =
-            serde_json::from_str(&raw).map_err(|e| rootcause::report!(e).into_dynamic())?;
+            serde_json::from_str(raw).map_err(|e| rootcause::report!(e).into_dynamic())?;
         Ok(crate::domain::model::RunOutcome {
             status: serde_json::from_value(value["status"].clone())
                 .map_err(|e| rootcause::report!(e).into_dynamic())?,
@@ -1914,12 +2313,28 @@ where
     }
 
     /// Catch up foreign runs through the same journal path as local prompts.
+    ///
+    /// `cancel` is the stop that ends a run still going: the turn's own token
+    /// when a prompt is catching up before it runs, the mirror's when the
+    /// host's sweep is. A run already finished is read to its end regardless
+    /// — the stream loop consults the token only where it waits — so a stop
+    /// never costs the recovery of history that is there to be had, only the
+    /// following of a run that has not ended. That run is left as a turn
+    /// leaves one it gave up on: interrupted, to be mirrored in once it does
+    /// end, and never blocking the prompt behind it again.
+    ///
+    /// `emit` is [`Emit::Mirror`] for the host's sweep, which publishes the
+    /// runs as they happen and checkpoints them like a turn, and
+    /// [`Emit::Silent`] for a prompt catching up, whose own turn is already
+    /// open on the client; silent recovery is shown by a reload.
     async fn backfill_foreign_runs(
         &self,
         session_id: &SessionId,
         session: &Session,
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
+        cancel: &tokio_util::sync::CancellationToken,
+        emit: Emit,
     ) -> Result<bool, SessionError> {
         self.ensure_journal(session_id, session).await?;
         let last = session
@@ -1969,6 +2384,10 @@ where
             .filter(|r| !r.status.is_terminal() && abandoned.contains(&r.id))
             .map(|r| r.id.clone())
             .collect();
+        let listing_status: std::collections::HashMap<_, _> = listings
+            .iter()
+            .map(|r| (r.id.clone(), r.status.clone()))
+            .collect();
         let mut runs = Vec::new();
         // A pending run omitted by the provider listing still has to recover.
         for run in &pending {
@@ -1985,21 +2404,47 @@ where
         }
         runs.retain(|run| !unfinished.contains(run));
         let mirrored = !runs.is_empty();
+        let mut delivered = None;
         for run in &runs {
             if !reconciled.contains(run) {
-                // A cancelled prior prompt must not cancel its recovery.
-                self.ingest_run(
-                    session_id,
-                    session,
-                    agent,
-                    run,
-                    &tokio_util::sync::CancellationToken::new(),
-                    IngestMode {
-                        emit: false,
-                        ..IngestMode::LIVE
-                    },
-                )
-                .await?;
+                // Before the ingestion, not after: a run still going is
+                // followed to its end, however long that is, holding the
+                // turn gate the whole way. The first sign of one must not be
+                // a stream warning an hour in - it is this line, with the
+                // run's status as Cursor lists it right now.
+                let status = listing_status.get(run);
+                let still_running = status.is_some_and(|status| !status.is_terminal());
+                let started = std::time::Instant::now();
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.status = ?status,
+                    cursor.run.still_running = still_running,
+                    cursor.run.listed = status.is_some(),
+                    "recovering a run started elsewhere"
+                );
+                let outcome = self
+                    .ingest_run(
+                        session_id,
+                        session,
+                        agent,
+                        run,
+                        cancel,
+                        IngestMode {
+                            emit,
+                            ..IngestMode::LIVE
+                        },
+                    )
+                    .await;
+                tracing::info!(
+                    %agent,
+                    %run,
+                    cursor.run.still_running = still_running,
+                    elapsed_ms = started.elapsed().as_millis() as u64,
+                    outcome = ?outcome.as_ref().map_err(ToString::to_string),
+                    "finished recovering a run started elsewhere"
+                );
+                outcome?;
             }
             let complete = session
                 .state
@@ -2009,34 +2454,85 @@ where
                 .iter()
                 .any(|e| e.run.as_ref() == Some(run) && e.input == JournalInput::Reconciled);
             if !complete {
+                // A stop ended the following, not a failure: what was
+                // captured is still shown, and the prompt behind this (if
+                // any) answers Cancelled rather than failing.
+                if cancel.is_cancelled() {
+                    tracing::info!(%agent, %run, "stopped following a run started elsewhere");
+                    break;
+                }
                 return Err(rootcause::report!("Cursor run {run} remains unreconciled").into());
             }
+            delivered = Some(run);
         }
         if mirrored {
-            let notify = {
-                let mut state = session.state.lock().expect("session state poisoned");
-                if let Err(error) =
-                    history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+            // Everything the client has not seen went out live, so the runs
+            // are delivered the way a turn's is: checkpointed, no reload.
+            let unshown = session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .unshown;
+            if emit == Emit::Mirror && !unshown {
+                if let Some(run) = delivered {
+                    self.notifier
+                        .checkpoint(session_id, run)
+                        .await
+                        .map_err(SessionError::Cursor)?;
+                    session
+                        .state
+                        .lock()
+                        .expect("session state poisoned")
+                        .last_run = Some(run.clone());
+                }
+                // A prompt that parked while the checkpoint was on its way
+                // may hold the run's last frames in its turn.
+                if !session
+                    .state
+                    .lock()
+                    .expect("session state poisoned")
+                    .unshown
                 {
-                    tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
                     return Ok(mirrored);
                 }
-                !std::mem::replace(&mut state.reload_pending, true)
-            };
-            if notify {
-                self.notifier
-                    .require_reload(session_id)
-                    .await
-                    .inspect_err(|_| {
-                        session
-                            .state
-                            .lock()
-                            .expect("session state poisoned")
-                            .reload_pending = false;
-                    })?;
             }
+            self.require_reload(session_id, session).await?;
         }
         Ok(mirrored)
+    }
+
+    /// Ask the host to reload, once, so a load shows what was captured.
+    ///
+    /// Declined while the journal cannot yet replace the visible history:
+    /// a load then would show less than the client already has.
+    async fn require_reload(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+    ) -> Result<(), SessionError> {
+        let notify = {
+            let mut state = session.state.lock().expect("session state poisoned");
+            if let Err(error) =
+                history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+            {
+                tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
+                return Ok(());
+            }
+            !std::mem::replace(&mut state.reload_pending, true)
+        };
+        if notify {
+            self.notifier
+                .require_reload(session_id)
+                .await
+                .inspect_err(|_| {
+                    session
+                        .state
+                        .lock()
+                        .expect("session state poisoned")
+                        .reload_pending = false;
+                })?;
+        }
+        Ok(())
     }
 
     /// Re-host the walkthrough files this run produced and say so in the
@@ -2168,7 +2664,7 @@ where
             session,
             Some(run),
             JournalInput::ArtifactsCollected(collected),
-            true,
+            Emit::Live,
         )
         .await
     }
@@ -2231,8 +2727,14 @@ where
             state.fresh
         };
         if fresh {
-            self.capture(id, session, None, JournalInput::HistoryComplete, false)
-                .await?;
+            self.capture(
+                id,
+                session,
+                None,
+                JournalInput::HistoryComplete,
+                Emit::Silent,
+            )
+            .await?;
             session.state.lock().expect("session state poisoned").fresh = false;
         }
         Ok(())
@@ -2246,7 +2748,7 @@ where
         session: &Session,
         run: Option<&CursorRunId>,
         input: JournalInput,
-        emit: bool,
+        emit: Emit,
     ) -> Result<(), SessionError> {
         let (expected, duplicate) = {
             let state = session.state.lock().expect("session state poisoned");
@@ -2317,6 +2819,29 @@ where
                 .map(|(repository, branch)| (repository.clone(), branch.clone()))
                 .collect();
             (updates, completion, pull_request, working_branches)
+        };
+        let emit = {
+            let emit_mode = emit;
+            let mut state = session.state.lock().expect("session state poisoned");
+            let emit = match emit {
+                Emit::Live => true,
+                Emit::Silent => false,
+                // Once anything is held back, the rest of the run is too:
+                // later frames make no sense to a client missing earlier ones.
+                Emit::Mirror => state.prompts_waiting == 0 && !state.unshown,
+            };
+            if emit && emit_mode == Emit::Mirror {
+                state.mirror_published_at = Some(tokio::time::Instant::now());
+            }
+            // A prompt's own blocks are on the client already: it sent them.
+            let visible = !updates.is_empty()
+                || completion.is_some()
+                || pull_request.is_some()
+                || !working_branches.is_empty();
+            if !emit && visible && !matches!(input, JournalInput::Prompt(_)) {
+                state.unshown = true;
+            }
+            emit
         };
         if emit {
             for (repository, branch) in working_branches {
@@ -2428,7 +2953,13 @@ where
             };
             let blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
             if let Err(error) = self
-                .capture(id, session, None, JournalInput::Prompt(blocks), false)
+                .capture(
+                    id,
+                    session,
+                    None,
+                    JournalInput::Prompt(blocks),
+                    Emit::Silent,
+                )
                 .await
             {
                 tracing::warn!(%error, %run, "could not journal a recovered Cursor prompt");
@@ -2448,7 +2979,7 @@ where
                     session,
                     Some(&run),
                     JournalInput::PromptAccepted(sequence),
-                    false,
+                    Emit::Silent,
                 )
                 .await
             {
@@ -2524,8 +3055,14 @@ where
                     .await?;
                 }
             }
-            self.capture(id, &session, None, JournalInput::HistoryComplete, false)
-                .await?;
+            self.capture(
+                id,
+                &session,
+                None,
+                JournalInput::HistoryComplete,
+                Emit::Silent,
+            )
+            .await?;
         }
         // Before projecting, not after: a prompt recovered here closes the gap
         // rather than merely surviving it, and lands in the transcript this
@@ -2609,8 +3146,27 @@ where
             let Some(agent) = agent else {
                 continue;
             };
+            // Fresh per sweep: a stop that landed between sweeps has nothing
+            // left to end, and must not end the next one.
+            let cancel = {
+                let mut state = session.state.lock().expect("session state poisoned");
+                state.mirror_cancel = tokio_util::sync::CancellationToken::new();
+                state.mirror_cancel.clone()
+            };
+            // Streaming a run is only whole if the client has everything
+            // before it; otherwise capture silently and let a load show it.
+            let emit = if session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .unshown
+            {
+                Emit::Silent
+            } else {
+                Emit::Mirror
+            };
             if let Err(error) = self
-                .backfill_foreign_runs(&session_id, &session, &agent, None)
+                .backfill_foreign_runs(&session_id, &session, &agent, None, &cancel, emit)
                 .await
             {
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
@@ -2652,6 +3208,8 @@ impl ReplayGuard {
         let mut state = self.session.state.lock().expect("session state poisoned");
         state.ready_for_sync = true;
         state.reload_pending = false;
+        state.unshown = false;
+        state.mirror_published_at = None;
     }
 }
 

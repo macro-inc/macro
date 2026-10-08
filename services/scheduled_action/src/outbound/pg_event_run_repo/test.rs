@@ -304,7 +304,7 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     .execute(&pool)
     .await
     .unwrap();
-    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; 8]}])).await;
+    let too_many_events = action(&pool, json!([{"events": vec!["document.updated"; crate::domain::event_trigger::MAX_EVENTS_PER_FILTER + 1]}])).await;
     let first_valid = action(&pool, valid.clone()).await;
     let second_valid = action(&pool, valid.clone()).await;
     // Another entirely invalid page after valid candidates have been admitted.
@@ -874,4 +874,203 @@ async fn delayed_bookkeeping_can_finish_before_reconciliation(pool: PgPool) {
     let finished = state(&pool, started.run.pending.key()).await;
     assert_eq!(finished.1, Some(json!({"type": "failed"})));
     assert!(finished.2.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mixed_routine_admits_events_without_consuming_its_schedule(pool: PgPool) {
+    let (repo, id, event) = setup(&pool).await;
+    let filters = json!([{"events":["document.updated"]}]);
+    let config = json!({"type":"multiple", "triggers":[
+        {"type":"cron", "schedule":"0 0 9 * * *", "timezone":"UTC"},
+        {"type":"events", "filters":filters}
+    ]});
+    let next = Utc::now() + chrono::Duration::hours(3);
+    sqlx::query!("UPDATE scheduled_action SET trigger_type = 'multiple', trigger_config = $2, next_run_at = $3 WHERE id = $1", id, config, next).execute(&pool).await.unwrap();
+    let candidates = repo
+        .candidate_actions(&event, None, page(10))
+        .await
+        .unwrap();
+    assert_eq!(candidates.configurations.len(), 1);
+    admit(&repo, id, &event).await;
+    assert!(repo.current_configuration(id).await.unwrap().is_some());
+    // Reconciliation must retain queued events for a mixed trigger too.
+    repo.reconcile(Utc::now(), page(10)).await.unwrap();
+    assert_eq!(repo.pending_runs(page(10)).await.unwrap().len(), 1);
+    let actual = sqlx::query_scalar!("SELECT next_run_at FROM scheduled_action WHERE id = $1", id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(actual.unwrap().timestamp_micros(), next.timestamp_micros());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn property_changes_match_general_selectors_without_duplicate_runs(pool: PgPool) {
+    let entity_id = generate_uuid_v7();
+    let general = action(
+        &pool,
+        json!([{"events":["task.property_changed"], "ids":[entity_id]}]),
+    )
+    .await;
+    let both = action(
+        &pool,
+        json!([{"events":["task.status_changed", "task.property_changed"]}]),
+    )
+    .await;
+    let other_task = action(
+        &pool,
+        json!([{"events":["task.property_changed"], "ids":[generate_uuid_v7()]}]),
+    )
+    .await;
+    let priority = action(&pool, json!([{"events":["task.priority_changed"]}])).await;
+    let repo = PgEventRunRepo::new(pool);
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id":generate_uuid_v7(), "event_name":"task.status_changed", "entity_id":entity_id
+    }))
+    .unwrap();
+    let candidates = repo
+        .candidate_actions(&event, None, page(100))
+        .await
+        .unwrap();
+    let mut ids: Vec<_> = candidates
+        .configurations
+        .into_iter()
+        .map(|c| c.action_id)
+        .collect();
+    ids.sort();
+    let mut expected = vec![general, both];
+    expected.sort();
+    assert_eq!(ids, expected);
+    for action_id in expected {
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::Admitted
+        );
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::AlreadyPresent
+        );
+    }
+    for action_id in [other_task, priority] {
+        assert_eq!(
+            repo.admit(action_id, ConfigurationRevision::INITIAL, &event)
+                .await
+                .unwrap(),
+            AdmissionResult::Ineligible
+        );
+    }
+    assert_eq!(repo.pending_runs(page(100)).await.unwrap().len(), 2);
+}
+
+fn skipped_record(action_id: Uuid) -> ActionExecutionRecord {
+    ActionExecutionRecord::skipped(
+        action_id,
+        Utc::now(),
+        crate::domain::models::ConditionResult::NotMet { probability: 0.25 },
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn skipping_finishes_pending_run_and_links_its_history(pool: PgPool) {
+    let (repo, id, event) = setup(&pool).await;
+    admit(&repo, id, &event).await;
+    let pending = repo.pending_runs(page(1)).await.unwrap().remove(0);
+
+    repo.skip_pending(
+        pending.key(),
+        ConfigurationRevision::INITIAL,
+        CancellationReason::ConditionNotMet,
+        skipped_record(id),
+    )
+    .await
+    .unwrap();
+
+    let (state, outcome, record_id) = state(&pool, pending.key()).await;
+    assert_eq!(state, "finished");
+    assert_eq!(
+        outcome,
+        Some(json!({"type": "cancelled", "reason": "condition_not_met"}))
+    );
+    let record = sqlx::query!(
+        "SELECT action_id, resource_id, is_success, result FROM action_execution_record WHERE id = $1",
+        record_id.expect("skipped runs link their history"),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(record.action_id, id);
+    assert_eq!(record.resource_id, None);
+    assert!(record.is_success);
+    assert_eq!(
+        record.result["condition"],
+        json!({"status": "not_met", "probability": 0.25})
+    );
+    assert!(repo.pending_runs(page(1)).await.unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn skipping_leaves_started_or_superseded_runs_without_history(pool: PgPool) {
+    let (repo, id, event) = setup(&pool).await;
+    admit(&repo, id, &event).await;
+    let pending = repo.pending_runs(page(1)).await.unwrap().remove(0);
+    let key = pending.key();
+
+    repo.skip_pending(
+        key,
+        ConfigurationRevision::INITIAL.next().unwrap(),
+        CancellationReason::ConditionNotMet,
+        skipped_record(id),
+    )
+    .await
+    .unwrap();
+    assert_eq!(state(&pool, key).await.0, "pending");
+
+    claim(&repo, pending).await.unwrap();
+    repo.skip_pending(
+        key,
+        ConfigurationRevision::INITIAL,
+        CancellationReason::ConditionNotMet,
+        skipped_record(id),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(state(&pool, key).await.0, "started");
+    let records = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM action_execution_record WHERE action_id = $1",
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(records, Some(0));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn conditions_do_not_change_candidate_matching(pool: PgPool) {
+    let id = action(
+        &pool,
+        json!([{"events": ["document.updated"], "condition": "Is this urgent?"}]),
+    )
+    .await;
+    let repo = PgEventRunRepo::new(pool.clone());
+    let event = new_event(generate_uuid_v7());
+
+    let page = repo
+        .candidate_actions(&event, None, page(10))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        page.configurations
+            .iter()
+            .map(|configuration| configuration.action_id)
+            .collect::<Vec<_>>(),
+        [id]
+    );
+    assert!(page.configurations[0].filters.has_conditions());
+    admit(&repo, id, &event).await;
 }

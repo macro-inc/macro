@@ -1,4 +1,4 @@
-import { HomeListEntity } from '@app/features/inbox-view/components/HomeListEntity';
+import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import {
   cleanup,
   fireEvent,
@@ -8,9 +8,10 @@ import {
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AgentsMode } from '../core/mode';
 import {
   type AgentConversationEntity,
-  groupConversations,
+  partitionArchived,
 } from '../core/recent-conversations';
 import { AgentsSidebar } from './AgentsSidebar';
 
@@ -32,7 +33,17 @@ vi.mock('@entity', () => ({
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
 }));
 vi.mock('@entity/utils/filter', () => ({ unreadFilterFn: unreadFilter }));
-vi.mock('@app/features/inbox-view/components/HomeEntityIcon', () => ({
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({ mutedEntities: () => [] }),
+}));
+vi.mock('@core/component/ContextMenu', () => ({
+  MenuItem: (props: { text: string; onClick?: () => void }) => (
+    <button role="menuitem" onClick={props.onClick}>
+      {props.text}
+    </button>
+  ),
+}));
+vi.mock('@app/features/home/components/HomeEntityIcon', () => ({
   HomeEntityIcon: () => null,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -66,6 +77,7 @@ vi.mock('@app/features/soup', () => ({
   SoupEntityContextMenu: (props: {
     children: JSX.Element;
     entity: { id: string };
+    extraItems?: JSX.Element;
   }) => {
     const [open, setOpen] = createSignal(false);
     return (
@@ -83,6 +95,7 @@ vi.mock('@app/features/soup', () => ({
             <div role="menuitem">Favorite</div>
             <div role="menuitem">Copy Link</div>
             <div role="menuitem">Delete</div>
+            {props.extraItems}
           </div>
         )}
       </div>
@@ -99,28 +112,42 @@ vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
 }));
 
 describe('mixed Agents sidebar', () => {
-  it('keeps Chat and Code together, marks each kind, and preserves split navigation', () => {
+  it('lists only the conversations of the chosen mode and switches between Work and Code', async () => {
     const conversations: AgentConversationEntity[] = [
       {
         type: 'agent_session',
         id: 'code',
         name: 'Fix build',
         ownerId: 'me',
+        isArchived: false,
         botId: 'cursor',
         status: 'acp_ready',
       },
       { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+      {
+        type: 'agent_session',
+        id: 'archived-code',
+        name: 'Old spike',
+        ownerId: 'me',
+        isArchived: true,
+        botId: 'cursor',
+        status: 'disconnected',
+      },
     ];
+    const [mode, setMode] = createSignal<AgentsMode>('chat');
+    const changeMode = vi.fn(setMode);
     const open = vi.fn();
     const create = vi.fn();
     const openPage = vi.fn();
     render(() => (
       <AgentsSidebar
+        mode={mode()}
+        onModeChange={changeMode}
         activePage="new"
         onOpenPage={openPage}
-        groups={groupConversations(conversations)}
+        {...partitionArchived(conversations)}
         modeForConversation={(conversation) =>
-          conversation.id === 'code' ? 'code' : 'chat'
+          conversation.type === 'chat' ? 'chat' : 'code'
         }
         activeConversationId="chat"
         search=""
@@ -135,47 +162,98 @@ describe('mixed Agents sidebar', () => {
         onLoadMore={vi.fn()}
       />
     ));
-    for (const label of ['Agents', 'Connections']) {
+    for (const label of ['Agents', 'Routines', 'Connections']) {
       fireEvent.click(screen.getByRole('button', { name: label }));
       expect(openPage).toHaveBeenLastCalledWith(label.toLowerCase());
     }
-    expect(screen.queryByRole('button', { name: 'Routines' })).toBeNull();
-    expect(screen.queryByRole('tablist')).toBeNull();
-    const code = screen.getByRole('button', { name: /Fix build/ });
+
+    const work = screen.getByRole('radio', {
+      name: 'Work',
+    }) as HTMLInputElement;
+    expect(work.checked).toBe(true);
     const chat = screen.getByRole('button', { name: /Plan launch/ });
-    expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
     expect(chat.getAttribute('data-kind')).toBe('chat');
     expect(chat.getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('button', { name: /Fix build/ })).toBeNull();
+    expect(screen.queryByText('Archived')).toBeNull();
+    fireEvent.click(chat);
+    expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Code' }));
+    expect(changeMode).toHaveBeenCalledWith('code');
+    const code = await screen.findByRole('button', { name: /Fix build/ });
+    expect(code.closest('[data-kind]')?.getAttribute('data-kind')).toBe('code');
+    expect(screen.queryByRole('button', { name: /Plan launch/ })).toBeNull();
+    expect(screen.getByText('Archived')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Old spike/ })).toBeTruthy();
     fireEvent.click(code, { shiftKey: true });
-    expect(open).toHaveBeenCalledWith(
+    expect(open).toHaveBeenLastCalledWith(
       conversations[0],
       expect.objectContaining({ shiftKey: true })
     );
-    fireEvent.click(chat);
-    expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('keeps paging while the chosen mode has too few conversations to scroll', () => {
+    const loadMore = vi.fn();
+    render(() => (
+      <AgentsSidebar
+        mode="code"
+        onModeChange={vi.fn()}
+        activePage="new"
+        onOpenPage={vi.fn()}
+        conversations={[
+          { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+        ]}
+        archived={[]}
+        modeForConversation={() => 'chat'}
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={loadMore}
+      />
+    ));
+    expect(loadMore).toHaveBeenCalledOnce();
+    expect(screen.getByText('No coding conversations yet.')).toBeTruthy();
   });
 
   it('opens rename and delete on a session or chat right-click', async () => {
     render(() => (
       <AgentsSidebar
+        mode="chat"
+        onModeChange={vi.fn()}
         activePage="new"
         onOpenPage={vi.fn()}
-        groups={groupConversations([
+        {...partitionArchived([
           {
             type: 'agent_session',
             id: 'code',
             name: 'Fix build',
             ownerId: 'me',
+            isArchived: false,
             botId: 'cursor',
             status: 'acp_ready',
           },
+          {
+            type: 'agent_session',
+            id: 'archived',
+            name: 'Old session',
+            ownerId: 'me',
+            isArchived: true,
+            botId: 'cursor',
+            status: 'disconnected',
+          },
           { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
         ])}
-        modeForConversation={(conversation) =>
-          conversation.id === 'code' ? 'code' : 'chat'
-        }
+        modeForConversation={() => 'chat'}
         activeConversationId={undefined}
         search=""
         loading={false}
@@ -203,6 +281,17 @@ describe('mixed Agents sidebar', () => {
     expect(
       sessionMenu.getByRole('menuitem', { name: 'Copy Link' })
     ).toBeTruthy();
+    expect(sessionMenu.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
+
+    expect(screen.getByText('Archived')).toBeTruthy();
+    const archived = screen.getByRole('button', { name: /Old session/ });
+    fireEvent.contextMenu(archived);
+    const archivedMenu = within(
+      archived.closest('[data-entity-context-menu]') as HTMLElement
+    );
+    expect(
+      archivedMenu.getByRole('menuitem', { name: 'Unarchive' })
+    ).toBeTruthy();
 
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     fireEvent.contextMenu(chat);
@@ -220,6 +309,7 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     id: 'coding-session',
     name: 'Fix build',
     ownerId: 'me',
+    isArchived: false,
     botId: 'cursor',
     harness: 'cursor',
     status: 'acp_ready',
@@ -240,9 +330,12 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
         />
       ) : (
         <AgentsSidebar
+          mode="code"
+          onModeChange={vi.fn()}
           activePage="new"
           onOpenPage={vi.fn()}
-          groups={groupConversations([entity()])}
+          conversations={[entity()]}
+          archived={[]}
           modeForConversation={() => 'code'}
           activeConversationId={undefined}
           search=""

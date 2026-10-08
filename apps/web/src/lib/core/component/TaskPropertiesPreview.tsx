@@ -27,6 +27,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { DocumentPreviewIconSkeleton } from './DocumentPreviewSkeleton';
 
 const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -189,15 +190,18 @@ function TaskPropertiesPreviewContent(
       when={!props.isLoading && previewProperties().length > 0}
       fallback={
         <Show when={props.mode === 'status'}>
-          <CircleIcon
-            class="size-4 text-ink-muted"
-            role="img"
-            aria-label={
-              props.isLoading
-                ? 'Loading task status'
-                : 'Task status unavailable'
+          <Show
+            when={props.isLoading}
+            fallback={
+              <CircleIcon
+                class="size-4 text-ink-muted"
+                role="img"
+                aria-label="Task status unavailable"
+              />
             }
-          />
+          >
+            <DocumentPreviewIconSkeleton label="Loading task status" />
+          </Show>
         </Show>
       }
     >

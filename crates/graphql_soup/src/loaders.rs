@@ -26,11 +26,13 @@ use item_filters::{
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
         crm_company::CrmCompanyLiteral,
+        crm_contact::CrmContactLiteral,
+        database_row::DatabaseRowLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
-        reminder::ReminderLiteral,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -281,7 +283,7 @@ pub struct SoupItemDataLoader {
 
 impl SoupItemDataLoader {
     /// Construct a type-erased DataLoader from a concrete loader implementation.
-    fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
+    pub fn new<S, I>(loader: SoupItemLoader<S, I>) -> Self
     where
         S: SoupService,
         I: SoupInboxReader,
@@ -307,6 +309,13 @@ impl SoupItemDataLoader {
         (self.load_one)(OwnedSoupItemLoaderKey { user_id, entity }).await
     }
 }
+
+/// Primary-backed Soup reader for single agent-session lookups. A session is
+/// opened the moment it is created, and its log is read by subscribing first
+/// and querying second; both need every committed row, which a replica
+/// lagging by seconds does not have. Lists keep the replica-backed reader.
+#[derive(Clone)]
+pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 
 /// Build the realtime Soup DataLoader from the existing Soup and email services.
 pub fn soup_item_loader<S, E>(soup_service: S, email_service: Arc<E>) -> SoupItemDataLoader
@@ -336,15 +345,17 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
     let mut documents = Vec::new();
     let mut chats = Vec::new();
     let mut projects = Vec::new();
+    let mut initiatives = Vec::new();
     let mut email_threads = Vec::new();
     let mut channels = Vec::new();
     let mut channel_threads = Vec::new();
     let mut calls = Vec::new();
     let mut crm_companies = Vec::new();
+    let mut crm_contacts = Vec::new();
     let mut foreign_entities = Vec::new();
     let mut calendar_events = Vec::new();
-    let mut reminders = Vec::new();
     let mut agent_sessions = Vec::new();
+    let mut database_rows = Vec::new();
 
     for entity in entities {
         let id = Uuid::parse_str(entity.entity_id.as_ref()).map_err(|error| {
@@ -359,6 +370,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             EntityType::Document => documents.push(DocumentLiteral::Id(id)),
             EntityType::Chat => chats.push(ChatLiteral::ChatId(id)),
             EntityType::Project => projects.push(ProjectLiteral::ProjectIdSelf(id)),
+            EntityType::Initiative => initiatives.push(InitiativeLiteral::Id(id)),
             EntityType::EmailThread => email_threads.push(EmailLiteral::ThreadId(id)),
             EntityType::Channel => channels.push(ChannelLiteral::ChannelId(id)),
             EntityType::ChannelMessage => {
@@ -366,17 +378,20 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             }
             EntityType::Call => calls.push(CallLiteral::CallId(id)),
             EntityType::CrmCompany => crm_companies.push(CrmCompanyLiteral::Id(id)),
+            EntityType::CrmContact => crm_contacts.push(CrmContactLiteral::Id(id)),
             EntityType::ForeignEntity => foreign_entities.push(ForeignEntityLiteral::Id(id)),
             EntityType::CalendarEvent => calendar_events.push(CalendarEventLiteral::Id(id)),
-            EntityType::Reminder => reminders.push(ReminderLiteral::Id(id)),
             EntityType::AgentSession => agent_sessions.push(AgentSessionLiteral::Id(id)),
+            EntityType::DatabaseRow => database_rows.push(DatabaseRowLiteral::Id(id)),
             EntityType::User
             | EntityType::Team
             | EntityType::StaticFile
-            | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ScheduledAction
-            | EntityType::Initiative => {
+            | EntityType::Reminder
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::Form => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type
@@ -388,6 +403,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
 
     let nil = Uuid::nil();
     Ok(EntityFilterAst {
+        favorites_only: None,
         calendar_event_filter: Some(literal_tree(calendar_events, CalendarEventLiteral::Id(nil))),
         document_filter: Some(literal_tree(documents, DocumentLiteral::Id(nil))),
         project_filter: Some(literal_tree(projects, ProjectLiteral::ProjectIdSelf(nil))),
@@ -408,12 +424,16 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
         )),
         call_filter: Some(literal_tree(calls, CallLiteral::CallId(nil))),
         crm_company_filter: Some(literal_tree(crm_companies, CrmCompanyLiteral::Id(nil))),
+        crm_contact_filter: (!crm_contacts.is_empty())
+            .then(|| literal_tree(crm_contacts, CrmContactLiteral::Id(nil))),
         foreign_entity_filter: Some(literal_tree(
             foreign_entities,
             ForeignEntityLiteral::Id(nil),
         )),
-        reminder_filter: Some(literal_tree(reminders, ReminderLiteral::Id(nil))),
+        github_pull_request_filter: None,
         agent_session_filter: Some(literal_tree(agent_sessions, AgentSessionLiteral::Id(nil))),
+        initiative_filter: Some(literal_tree(initiatives, InitiativeLiteral::Id(nil))),
+        database_row_filter: Some(literal_tree(database_rows, DatabaseRowLiteral::Id(nil))),
         properties_filter: None,
     })
 }

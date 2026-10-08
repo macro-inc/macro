@@ -16,6 +16,7 @@ mod test;
 
 /// Resolve edge and child aliases from the actual selection, not arbitrary payload fields.
 pub(super) fn selected_snapshot(
+    schema: &cache_core::meta::Schema,
     object: &serde_json::Map<String, serde_json::Value>,
     fields: &[&FieldNode],
 ) -> Option<serde_json::Value> {
@@ -28,6 +29,7 @@ pub(super) fn selected_snapshot(
             Some(values) => {
                 let mut child_fields = Vec::new();
                 collect_applicable_fields(
+                    schema,
                     &field.selection_set,
                     "GraphqlNotification",
                     &mut child_fields,
@@ -113,6 +115,7 @@ fn snapshot_facts(
         "GraphqlSoupProject" => "PROJECT",
         "GraphqlSoupChat" => "CHAT",
         "GraphqlSoupChannel" => "CHANNEL",
+        "GraphqlSoupDatabaseRow" => "DATABASE_ROW",
         _ => return Err(()),
     };
     let mut states = std::collections::BTreeMap::new();
@@ -189,6 +192,7 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
         "CHANNEL" => "GraphqlSoupChannel",
+        "DATABASE_ROW" => "GraphqlSoupDatabaseRow",
         _ => return None,
     };
     uuid::Uuid::parse_str(id).ok()?;
@@ -278,7 +282,7 @@ async fn retain_complete_parents<S: Storage>(
                     if document.record_key == *record_key
                         && (document.profile == *profile
                             || (*profile == vocabulary::profile_v4()
-                                && document.profile == vocabulary::profile_v5()))
+                                && document.profile == vocabulary::profile_v6()))
                         && document.partition == *partition
             )
         })
@@ -290,6 +294,7 @@ async fn retain_complete_parents<S: Storage>(
 /// stored in an optimistic layer: replay edits only this notification's
 /// contribution, even after another layer fails.
 pub async fn notification_projection_updates<S: Storage>(
+    schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
     operation_name: Option<&str>,
@@ -301,7 +306,7 @@ pub async fn notification_projection_updates<S: Storage>(
     let operation = document
         .operation(operation_name)
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = normalize(operation, variables, data)
+    let updates = normalize(schema, operation, variables, data)
         .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
     let updates = updates
         .into_iter()

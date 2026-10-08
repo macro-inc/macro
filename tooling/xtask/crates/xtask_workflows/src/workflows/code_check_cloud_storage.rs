@@ -5,10 +5,14 @@
 //! moved to Namespace profiles, and compiled objects moved off the S3/local
 //! volume backends onto Namespace's official remote sccache (so there are no
 //! AWS credentials anywhere).
+//!
+//! Critical path: `path-check` (no Rust compile on a warm binary cache) →
+//! `test`. `check` (fmt + clippy) and `doppler-config` run alongside `test`.
 
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
 };
+use xtask_paths::RuntimePath;
 
 use crate::workflows::{
     runners,
@@ -34,15 +38,31 @@ pub fn code_check_cloud_storage() -> Workflow {
         .concurrency(vars::concurrency("code-check-cloud-storage"))
         .add_job("path-check", path_check())
         .add_job("check", check())
+        .add_job("doppler-config", doppler_config())
         .add_job("test", test())
         .add_job("status-check", status_check())
 }
 
-/// Decide whether the rest of the workflow runs, and compute the nextest filter.
+/// Same-repo PRs only: the binary cache below is shared, so an untrusted fork
+/// must not be able to plant a binary under a key a later PR would execute.
+const TRUSTED_CONTEXT: &str = steps::TRUSTED_NAMESPACE_SCCACHE_CONTEXT;
+
+/// Where `path-check` keeps the release `xtask_nextest_filter` binary (keyed by
+/// its source trees and `Cargo.lock`) and the target dir that builds it.
+const FILTER_CACHE_DIR: RuntimePath<'static> =
+    xtask_paths::runtime_path!("/home/runner/.cache/macro-nextest-filter");
+
+/// Decide whether the rest of the workflow runs and compute the nextest
+/// filter. Deliberately light: no Nix, no sccache, and a cached release
+/// binary for the filter.
 fn path_check() -> Job {
     Job::default()
-        .runs_on(runners::Runner::Small.to_string())
+        .runs_on(runners::Runner::Small.with_cache_tag(vars::NEXTEST_FILTER_CACHE_TAG))
         .add_output("should_run", "${{ steps.filter.outputs.should_run }}")
+        .add_output(
+            "doppler_candidates",
+            "${{ steps.filter.outputs.doppler_candidates }}",
+        )
         .add_output(
             "rust_packages",
             "${{ steps.nextest-filter.outputs.rust_packages }}",
@@ -51,38 +71,71 @@ fn path_check() -> Job {
             "skip_tests",
             "${{ steps.nextest-filter.outputs.skip_tests }}",
         )
-        .add_output(
-            "doppler_config_bins",
-            "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
-        )
         // PR merge commits need both parents for `git merge-base`; fetching
         // the entire repo (every branch) is not required.
         .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
         .add_step(steps::setup_rust_light())
         .add_step(paths_filter())
-        .add_step(compute_changed_files())
-        .add_step(compute_doppler_bins())
+        .add_step(
+            compute_changed_files()
+                .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'")),
+        )
+        .add_step(
+            steps::mount_path_cache_volume("Mount nextest-filter binary cache", FILTER_CACHE_DIR)
+                .if_condition(Expression::new(format!(
+                    "steps.filter.outputs.should_run == 'true' && ({TRUSTED_CONTEXT})"
+                ))),
+        )
         .add_step(compute_nextest_filter())
 }
 
-/// fmt + clippy (and Doppler-config validation).
+/// fmt + clippy.
 fn check() -> Job {
     steps::gated_job()
         .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
-        .add_env((
-            "RUSTFLAGS",
-            "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
-        ))
-        .add_env(("RUSTDOCFLAGS", "-Dwarnings"))
-        .add_env(("SQLX_OFFLINE", "true"))
+        .map(with_check_env)
         .add_step(steps::checkout(false, false))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
-        .add_step(validate_doppler_configs())
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::teardown_nix())
+}
+
+/// The env the clippy-side jobs share, so their sccache keys stay identical.
+fn with_check_env(job: Job) -> Job {
+    job.add_env((
+        "RUSTFLAGS",
+        "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
+    ))
+    .add_env(("RUSTDOCFLAGS", "-Dwarnings"))
+    .add_env(("SQLX_OFFLINE", "true"))
+}
+
+/// Live Doppler config-contract check for services whose config may have
+/// changed. Runs beside `check`/`test` instead of inside `path-check`, where
+/// computing the bin list compiled an xtask from scratch on every PR. A cheap
+/// path filter gates it; the xtask then picks the exact binaries.
+fn doppler_config() -> Job {
+    steps::gated_job()
+        .cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.doppler_candidates == 'true'",
+        ))
+        .runs_on(runners::Runner::RustCi.with_cache_tag(vars::CI_CACHE_TAG))
+        .map(with_check_env)
+        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        // Before the dev shell: its LD_LIBRARY_PATH points the runner's
+        // git-remote-https at Nix's glibc, which aborts `git fetch`.
+        .add_step(compute_changed_files())
+        .add_step(steps::mount_cache_volume())
+        .add_step(steps::setup_nix())
+        .add_step(steps::setup_dev_shell())
+        .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(compute_doppler_bins())
+        .add_step(validate_doppler_configs())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
@@ -102,6 +155,9 @@ fn test() -> Job {
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
+        // The default 10-minute idle timeout can stop the server during long
+        // link or test phases, which resets the stats reported at the end.
+        .add_env(("SCCACHE_IDLE_TIMEOUT", "0"))
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
@@ -109,6 +165,7 @@ fn test() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(steps::start_sccache_server())
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
@@ -126,6 +183,7 @@ fn status_check() -> Job {
         .needs(vec![
             "path-check".to_string(),
             "check".to_string(),
+            "doppler-config".to_string(),
             "test".to_string(),
         ])
         .add_step(check_job_results())
@@ -133,7 +191,9 @@ fn status_check() -> Job {
 
 // --- workflow-specific steps -------------------------------------------------
 
-/// Detect whether cloud-storage-relevant paths changed.
+/// Detect whether cloud-storage-relevant paths changed, and whether any
+/// change could affect a service's Doppler config contract (a superset of
+/// what `xtask doppler-bins` checks, so the gate never hides a bin).
 fn paths_filter() -> Step<gh_workflow::Use> {
     Step::new("Filter changed paths")
         .uses(
@@ -166,19 +226,27 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '.github/actions/setup-nix-dev-shell/**'
                   - '.github/actions/teardown-nix/**'
                   - '.github/actions/setup-sccache/**'
+                  - '.github/services-config.json'
+                  - .github/workflows/code_check_cloud_storage.yml
+                doppler_candidates:
+                  - '.github/services-config.json'
+                  - '**/src/config.rs'
+                  - '**/src/doppler_config.rs'
+                  - '**/Cargo.toml'
+                  - 'tooling/xtask/crates/xtask_doppler_bins/**'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))
 }
 
-/// Compute the changed-file set once (shared by the nextest filter and the
-/// Doppler-bin detection) and write it to `/tmp/changed-files`. On a missing
-/// merge-base we leave the list empty, which makes both downstream steps fall
-/// back to "everything": run all tests, validate no Doppler bins.
+/// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked
+/// PRs whose merge commit sits on another branch get their history deepened
+/// until it reaches the base branch. If no merge-base turns up, we leave the
+/// list empty, which makes downstream steps fall back to "everything": run all
+/// tests, validate no Doppler bins.
 fn compute_changed_files() -> Step<Run> {
     Step::new("compute changed files")
         .run(include_str!("scripts/compute_changed_files.sh"))
-        .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'"))
         .shell("bash")
 }
 
@@ -188,19 +256,21 @@ fn compute_doppler_bins() -> Step<Run> {
     Step::new("compute affected Doppler config bins")
         .run(include_str!("scripts/compute_doppler_bins.sh"))
         .id("doppler-bins")
-        .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'"))
         .shell("bash")
 }
 
 /// Compute the cargo-nextest / clippy package set from the changed files, via
-/// the `xtask nextest-filter` subcommand. Root Cargo/toolchain changes
-/// short-circuit to the full suite; unmapped files (a top-level JSON, a Nix
-/// shell tweak) select no packages.
+/// the `xtask nextest-filter` subcommand.
+/// Toolchain and cargo config changes short-circuit to the full suite; root
+/// `Cargo.toml` edits run the full suite unless they only touch workspace
+/// members or dependencies; unmapped files (a top-level JSON, a Nix shell
+/// tweak) select no packages.
 fn compute_nextest_filter() -> Step<Run> {
     Step::new("compute nextest package filter")
         .run(include_str!("scripts/compute_nextest_filter.sh"))
         .id("nextest-filter")
         .if_condition(Expression::new("steps.filter.outputs.should_run == 'true'"))
+        .add_env(("FILTER_CACHE_DIR", FILTER_CACHE_DIR.as_str()))
         .shell("bash")
 }
 
@@ -211,11 +281,11 @@ fn validate_doppler_configs() -> Step<Run> {
     Step::new("validate Doppler configs")
         .run(include_str!("scripts/validate_doppler_configs.sh"))
         .if_condition(Expression::new(
-            "needs.path-check.outputs.doppler_config_bins != ''",
+            "steps.doppler-bins.outputs.doppler_config_bins != ''",
         ))
         .add_env((
             "DOPPLER_CONFIG_BINS",
-            "${{ needs.path-check.outputs.doppler_config_bins }}",
+            "${{ steps.doppler-bins.outputs.doppler_config_bins }}",
         ))
         .add_env(("DOPPLER_TOKEN", vars::DOPPLER_TOKEN))
 }
@@ -235,10 +305,10 @@ fn cargo_clippy() -> Step<Run> {
         ))
 }
 
-/// pgvector service container, tuned env preserved.
+/// Match production's PostgreSQL major version so CI rejects incompatible migrations.
 fn postgres_service() -> Container {
     Container::default()
-        .image("pgvector/pgvector:pg18")
+        .image("pgvector/pgvector:pg14")
         .env(
             Env::new("POSTGRES_USER", "user")
                 .add("POSTGRES_PASSWORD", "password")
@@ -268,9 +338,11 @@ fn configure_postgres() -> Step<Run> {
         .run(include_str!("scripts/configure_postgres.sh"))
 }
 
-/// Set up test env files and databases.
+/// Set up test env files and databases. The pre-migrated template1 spares each
+/// `#[sqlx::test]` database from replaying every migration.
 fn prepare_tests() -> Step<Run> {
-    Step::new("prepare tests").run("just setup_test_envs && just initialize_dbs")
+    Step::new("prepare tests")
+        .run("just setup_test_envs && just initialize_dbs && just setup_test_template")
 }
 
 /// Run the test suite (no AWS credentials; sccache uses Namespace's remote cache).
@@ -283,11 +355,13 @@ fn check_job_results() -> Step<Run> {
     Step::new("Check job results").run(indoc::indoc! {r#"
         echo "path-check: ${{ needs.path-check.result }}"
         echo "check: ${{ needs.check.result }}"
+        echo "doppler-config: ${{ needs.doppler-config.result }}"
         echo "test: ${{ needs.test.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.check.result }}" == "failure" ]] || \
+           [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
            [[ "${{ needs.test.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1

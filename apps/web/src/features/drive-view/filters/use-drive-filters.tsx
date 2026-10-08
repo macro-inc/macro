@@ -1,6 +1,8 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
+import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { createMemo } from 'solid-js';
@@ -9,6 +11,8 @@ import { useDriveView } from '../context/drive-context';
 export type DriveFilterGroupId = 'type' | 'created-by' | 'tags' | 'scope';
 
 const typeOptions = [
+  { id: 'database', label: 'Database', type: 'database' },
+  { id: 'form', label: 'Form', type: 'form' },
   { id: 'doc-markdown', label: 'Markdown', type: 'md' },
   { id: 'doc-canvas', label: 'Canvas', type: 'canvas' },
   { id: 'doc-spreadsheet', label: 'Spreadsheet', type: 'spreadsheet' },
@@ -29,6 +33,8 @@ export function useDriveFilters() {
   const userId = actions.userId;
 
   const contacts = useContacts();
+  const databasesFlag = useFeatureFlag(enableDatabases);
+  const formsFlag = useFeatureFlag(enableForms);
 
   const tagGroup = useTagFilterGroup();
 
@@ -83,12 +89,18 @@ export function useDriveFilters() {
       groups.push({
         id: 'type',
         label: 'Type',
-        options: typeOptions.map((option) => ({
-          id: option.id,
-          label: option.label,
+        options: typeOptions
+          .filter(
+            (option) =>
+              (option.id !== 'database' || databasesFlag().enabled) &&
+              (option.id !== 'form' || formsFlag().enabled)
+          )
+          .map((option) => ({
+            id: option.id,
+            label: option.label,
 
-          icon: () => <EntityIcon targetType={option.type} size="xs" />,
-        })),
+            icon: () => <EntityIcon targetType={option.type} size="xs" />,
+          })),
       });
 
       if (showCreators()) {

@@ -1,17 +1,22 @@
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { Show, Suspense } from 'solid-js';
+import { CalendarSettings } from '../calendar/calendar-settings';
+import { CrmSettings as Crm } from '../crm/crm-settings';
+import { SchedulingSettings } from '../scheduling/scheduling';
+import { Usage } from '../usage/usage';
 import { Account } from './Account';
 import { Admin } from './Admin';
 import { Agent } from './Agent';
-import { Agents } from './Agents';
+import { AgentSettings } from './AgentSettings';
 import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
-import { Crm } from './Crm';
-import { Harness } from './Harness';
+import { DesktopApp } from './DesktopApp';
+import { EmailSettings } from './email-settings';
+import { McpConnections } from './McpConnections';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
@@ -34,6 +39,15 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('Account')}>
         <Account />
       </Show>
+      <Show when={isCurrentTab('Email')}>
+        <EmailSettings />
+      </Show>
+      <Show when={isCurrentTab('Calendar')}>
+        <CalendarSettings />
+      </Show>
+      <Show when={isCurrentTab('Booking links')}>
+        <SchedulingSettings />
+      </Show>
       <Show when={isCurrentTab('API Keys')}>
         <ApiKeys />
       </Show>
@@ -42,6 +56,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Billing')}>
         <Billing />
+      </Show>
+      <Show when={isCurrentTab('Usage')}>
+        <Usage />
       </Show>
       <Show when={isCurrentTab('Appearance')}>
         <Appearance />
@@ -61,6 +78,12 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('Connected')}>
         <ConnectedAccounts />
       </Show>
+      <Show when={isCurrentTab('Connections')}>
+        <McpConnections />
+      </Show>
+      <Show when={isCurrentTab('Desktop App')}>
+        <DesktopApp />
+      </Show>
       <Show when={isCurrentTab('Mobile App')}>
         <MobileApp />
       </Show>
@@ -68,10 +91,10 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
         <Agent />
       </Show>
       <Show when={isCurrentTab('Agents')}>
-        <Agents />
+        <AgentSettings />
       </Show>
       <Show when={isCurrentTab('Harness')}>
-        <Harness />
+        <AgentSettings initialSection="runtimes" />
       </Show>
       <Show when={isCurrentTab('Bots')}>
         <Bots />

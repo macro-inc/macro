@@ -2,6 +2,7 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity } from '@core/types';
 import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
+import { updateSoupForNotification } from '@queries/notification/notification-soup';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
@@ -48,14 +49,9 @@ import {
 export const CHANNEL_EVENT_TYPES = [
   'channel_mention',
   'channel_message_send',
+  'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
-] as const;
-
-export const DOCUMENT_COMMENT_EVENT_TYPES = [
-  'mentioned_in_document_comment',
-  'replied_to_document_comment_thread',
-  'commented_on_document',
 ] as const;
 
 type NotificationsByEntity = Record<CompositeEntity, UnifiedNotification[]>;
@@ -122,7 +118,8 @@ export function setDoneOverride(
   ids: readonly string[],
   done: boolean | undefined
 ) {
-  if (ids.length === 0) return () => undefined;
+  if (ids.length === 0)
+    return Object.assign(() => undefined, { release: () => {} });
   const previous = untrack(
     () => new Map(ids.map((id) => [id, doneOverrides().get(id)]))
   );
@@ -143,17 +140,22 @@ export function setDoneOverride(
     return next;
   });
   // A failed older mutation must not undo a newer local action.
-  return () =>
+  const finish = (restorePrevious: boolean) =>
     setDoneOverrides((current) => {
       const next = new Map(current);
       for (const id of ids) {
         if (current.get(id) !== applied.get(id)) continue;
-        const before = previous.get(id);
+        const before = restorePrevious ? previous.get(id) : undefined;
         if (before === undefined) next.delete(id);
         else next.set(id, before);
       }
       return next;
     });
+  return Object.assign(() => finish(true), {
+    // A partially committed reversal needs authoritative state, not a guessed
+    // all-or-nothing rollback. Only release this operation's own contribution.
+    release: () => finish(false),
+  });
 }
 
 // Client-asserted seen state, the `doneOverrides` twin for `viewed_at`. Seen
@@ -418,7 +420,9 @@ export function createNotificationSource(
       if (!usesGraphql()) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
-      dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
+      const notification = mapGraphqlNotification(patch.notification);
+      updateSoupForNotification(notification);
+      dispatchIncomingNotification(notification);
     }
   );
   onCleanup(() => {
@@ -463,11 +467,12 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    dispatchIncomingNotification(parsedNotification);
-
+    // Apply optimistic Soup writes before callbacks start list revalidation;
+    // otherwise those writes cancel the refetch triggered by this delivery.
     if (notificationsQuery.transport === 'rest') {
       optimisticInsertNotification(parsedNotification);
     }
+    dispatchIncomingNotification(parsedNotification);
   });
 
   // Skip empty batches: entity-level read markers fire on mount regardless

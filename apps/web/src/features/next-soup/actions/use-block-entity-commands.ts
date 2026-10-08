@@ -14,7 +14,7 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
+import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
@@ -32,7 +32,6 @@ import {
   makeMoveToProjectAction,
   makeMuteAction,
   makeRenameAction,
-  markReminderTargetDone,
 } from './index';
 
 /**
@@ -54,6 +53,7 @@ export type UseBlockEntityCommandsOptions = {
   scopeId?: string;
   resolveEntity?: () => EntityData | undefined;
   onDeleted?: () => void;
+  onEmailReminderSaved?: () => void | Promise<void>;
 };
 
 export const useBlockEntityCommands = (
@@ -129,20 +129,7 @@ export const useBlockEntityCommands = (
   // use-soup-navigation-hotkeys.
   const canUseMarkDoneHotkey = () => {
     const referredFrom = splitPanel?.handle.referredFrom();
-    return referredFrom === 'inbox' || referredFrom === 'mail';
-  };
-
-  // The canvas block binds 'h' to its hand tool in this same scope
-  // (CanvasController). Canvas keeps the key; the reminder falls back to its
-  // command-menu-only registration there so no shortcut is advertised that the
-  // hand tool would swallow.
-  const canUseReminderHotkey = () => {
-    const entity = getEntity();
-    return !(
-      entity &&
-      isDocumentEntity(entity) &&
-      entity.fileType === 'canvas'
-    );
+    return referredFrom === 'home' || referredFrom === 'mail';
   };
 
   /** Follows the list's next row into this split, as the triage flow does. */
@@ -163,11 +150,9 @@ export const useBlockEntityCommands = (
     });
   };
 
-  // Setting a reminder puts the entity down: it marks it done, so it leaves the
-  // list behind this block and the reminder is what brings it back. Declared
-  // after `advanceSplitTo` so the follow-up advances exactly as 'e' does.
+  // Advance the invoking email view after a confirmed snooze.
   const createReminderAction = makeCreateReminderAction({
-    onCreated: markReminderTargetDone(markDone, advanceSplitTo),
+    onEmailSaved: options.onEmailReminderSaved,
   });
 
   /**
@@ -193,11 +178,20 @@ export const useBlockEntityCommands = (
     if (soup && selectedRow) {
       void createReminderAction.executeWithSoup([selectedRow.original], soup, {
         advances: true,
+        onNavigate: advanceSplitTo,
       });
       return true;
     }
 
     createReminderAction.execute([entity]);
+    return true;
+  };
+
+  const runDelete = () => {
+    const entity = getEntity();
+    if (!entity) return false;
+    if (!deleteAction.canExecute(entity)) return false;
+    deleteAction.execute([entity]);
     return true;
   };
 
@@ -257,19 +251,41 @@ export const useBlockEntityCommands = (
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
+    // Delete without a keybinding: Backspace belongs to whatever editor the
+    // block hosts, so the command menu is the only way in.
     registerHotkey({
       scopeId,
       description: 'Delete item',
-      keyDownHandler: () => {
-        const entity = getEntity();
-        if (!entity) return false;
-        if (!deleteAction.canExecute(entity)) return false;
-        deleteAction.execute([entity]);
-        return true;
-      },
+      keyDownHandler: runDelete,
       condition: () => {
         const entity = getEntity();
-        return entity !== undefined && deleteAction.canExecute(entity);
+        return (
+          entity !== undefined &&
+          !isEmailEntity(entity) &&
+          deleteAction.canExecute(entity)
+        );
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
+    // An open email thread answers to '#' as its list does, so Trash is one
+    // keystroke whether the thread is a row or the thing being read. Unlike
+    // Backspace above, '#' costs an editor nothing: the reply composer is an
+    // editable input, where no hotkey runs.
+    registerHotkey({
+      hotkey: ['shift+3'],
+      hotkeyToken: TOKENS.email.trash,
+      scopeId,
+      description: 'Delete item',
+      keyDownHandler: runDelete,
+      condition: () => {
+        const entity = getEntity();
+        return (
+          entity !== undefined &&
+          isEmailEntity(entity) &&
+          deleteAction.canExecute(entity)
+        );
       },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
@@ -322,6 +338,24 @@ export const useBlockEntityCommands = (
     }).withGroup(group);
 
     // Mute notifications (command menu only, no keybinding)
+    registerHotkey({
+      scopeId,
+      description: 'Snooze notifications…',
+      keywords: ['pause', 'morning', 'weekend', 'notifications'],
+      keyDownHandler: () => {
+        const entity = getEntity();
+        if (!entity || !muteAction.canExecute(entity)) return false;
+        muteAction.snooze([entity]);
+        return true;
+      },
+      condition: () => {
+        const entity = getEntity();
+        return entity !== undefined && muteAction.canExecute(entity);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+
     registerHotkey({
       hotkeyToken: TOKENS.entity.action.mute,
       scopeId,
@@ -448,9 +482,7 @@ export const useBlockEntityCommands = (
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);
 
-    // Set a reminder - 'h'. 'add' rather than the default 'override', so this
-    // and the canvas hand tool coexist in the scope instead of whichever
-    // registered last evicting the other.
+    // Snooze the current email with H.
     registerHotkey({
       hotkey: ['h'],
       hotkeyToken: TOKENS.entity.action.createReminder,
@@ -458,26 +490,10 @@ export const useBlockEntityCommands = (
       description: 'Remind me',
       keyDownHandler: runCreateReminder,
       condition: () => {
-        if (!canUseReminderHotkey()) return false;
         const entity = getEntity();
         return entity !== undefined && createReminderAction.canExecute(entity);
       },
       registrationType: 'add',
-      displayPriority: 10,
-      tags: [HotkeyTags.SelectionModification],
-    }).withGroup(group);
-
-    // Set a reminder without a keybinding on canvas, so it stays reachable
-    // from the command menu
-    registerHotkey({
-      scopeId,
-      description: 'Remind me',
-      keyDownHandler: runCreateReminder,
-      condition: () => {
-        if (canUseReminderHotkey()) return false;
-        const entity = getEntity();
-        return entity !== undefined && createReminderAction.canExecute(entity);
-      },
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);

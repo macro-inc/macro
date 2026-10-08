@@ -1,5 +1,8 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
-
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -15,6 +18,7 @@ import {
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
+import { soupQueryExcludesDone } from '../excludes-done';
 import { refreshActiveGraphqlSoupQueries } from '../graphql/active-queries';
 import type { SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
@@ -35,6 +39,7 @@ import {
 } from './normalizer';
 import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
+import { retainRestoredSoupItem } from './restored-membership';
 import type {
   SoupEntityPartial,
   SoupEntityTag,
@@ -77,6 +82,14 @@ function cancelSoupQueries() {
 export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   partial: SoupEntityPartial<T>
 ): SoupTransaction {
+  return updateSoupEntity(partial, true);
+}
+
+/** Server hydration must not cancel the list revalidation it accompanies. */
+function updateSoupEntity<T extends SoupEntityTag>(
+  partial: SoupEntityPartial<T>,
+  cancelRefetches: boolean
+): SoupTransaction {
   const normalizer = getSoupNormalizer();
   const normKey = getNormalizationObjectKey(partial);
 
@@ -89,7 +102,7 @@ export function optimisticUpdateSoupEntity<T extends SoupEntityTag>(
   // list refetching on mount): the fetch dies and nothing retries it.
   // Skip cold initial fetches (data === undefined); cancelling those can leave
   // the query stuck pending, which is why cancelSoupQueries has the same guard.
-  for (const queryKey of dependentKeys) {
+  for (const queryKey of cancelRefetches ? dependentKeys : []) {
     if (
       partialMatchKey(queryKey, soupKeys.items._def) ||
       partialMatchKey(queryKey, soupKeys.astItems._def)
@@ -181,9 +194,9 @@ export function bumpSoupEntityTouchedAt(
  * without waiting for a refetch. Newest wins: an out-of-order delivery never
  * moves a row back down. The stamp is also recorded as a floor (see
  * `notified-floor.ts`) so a notified page that was in flight when the
- * notification landed cannot overwrite it with the previous stamp; the floor
- * clears once the server's value catches up. Non-notified responses omit the
- * field, so the field-merge never clears the stamp either.
+ * notification landed cannot overwrite it with the previous stamp. The floor
+ * survives optimistic reads and overlapping refreshes for a bounded interval.
+ * Non-notified responses omit the field, so field merges preserve the stamp.
  */
 export function bumpSoupEntityNotifiedAt(
   entityId: string,
@@ -228,7 +241,9 @@ export function invalidateSoupEntity(entityId: string): void {
   const normalizer = getSoupNormalizer();
   const keys = normalizer.getDependentQueriesByIds([soupNormKey(entityId)]);
   for (const queryKey of keys) {
-    queryClient.invalidateQueries({ queryKey });
+    // Normy JSON-roundtrips complete keys, turning undefined array slots into
+    // null. Exact matching uses the same hash; partial matching misses them.
+    void queryClient.invalidateQueries({ queryKey, exact: true });
   }
 }
 
@@ -440,77 +455,6 @@ export function removeSoupEntitiesFromQueriesReferencing(
   });
 }
 
-/** Detect positive active-state constraints without misreading OR/NOT subtrees. */
-function soupQueryExcludesDone(
-  key: QueryKey,
-  incomingState?: 'unseen' | 'seen'
-): boolean {
-  type Match = { excludesDone: boolean; acceptsIncoming: boolean };
-  const unknown: Match = { excludesDone: false, acceptsIncoming: true };
-  const combine = (parts: Match[], or = false): Match => ({
-    excludesDone:
-      parts.length > 0 &&
-      (or
-        ? parts.every((p) => p.excludesDone)
-        : parts.some((p) => p.excludesDone)),
-    acceptsIncoming: or
-      ? parts.some((p) => p.acceptsIncoming)
-      : parts.every((p) => p.acceptsIncoming),
-  });
-  const states = (values: unknown[]): Match => ({
-    excludesDone:
-      values.length > 0 && values.every((v) => v === 'unseen' || v === 'seen'),
-    acceptsIncoming:
-      incomingState === undefined || values.includes(incomingState),
-  });
-  const inspect = (value: unknown): Match => {
-    if (!value || typeof value !== 'object') return unknown;
-    if (Array.isArray(value)) return combine(value.map(inspect));
-    const node = value as Record<string, unknown>;
-    // No safe positive witness can be inferred from a negated subtree.
-    if ('!' in node || 'not' in node) return unknown;
-    if ('|' in node)
-      return Array.isArray(node['|'])
-        ? combine(node['|'].map(inspect), true)
-        : unknown;
-    if ('or' in node) {
-      const branches = node.or as { left?: unknown; right?: unknown } | null;
-      return branches
-        ? combine([inspect(branches.left), inspect(branches.right)], true)
-        : unknown;
-    }
-    if ('l' in node || 'literal' in node) {
-      const leaf = (node.l ?? node.literal) as Record<string, unknown> | null;
-      if (!leaf || typeof leaf !== 'object') return unknown;
-      const state = leaf.ns ?? leaf.NotificationState ?? leaf.notificationState;
-      if (typeof state === 'string') return states([state.toLowerCase()]);
-      return leaf.comp === false
-        ? { excludesDone: true, acceptsIncoming: true }
-        : unknown;
-    }
-    const matches: Match[] = [];
-    if (node.emailView === 'inbox') {
-      matches.push({ excludesDone: true, acceptsIncoming: true });
-    }
-    const filter = node.notification_filters as
-      | { states?: unknown[] }
-      | undefined;
-    if (Array.isArray(filter?.states) && filter.states.length) {
-      matches.push(states(filter.states));
-    }
-    // Inbox scoping and DTO selections are witnesses, not terminal nodes:
-    // every sibling state constraint must also accept the arriving state.
-    for (const [field, child] of Object.entries(node)) {
-      if (field !== 'emailView' && field !== 'notification_filters') {
-        matches.push(inspect(child));
-      }
-    }
-    return combine(matches);
-  };
-  const result = inspect(key);
-  return result.excludesDone && result.acceptsIncoming;
-}
-
 /**
  * Remove entities from soup queries that filter out done content, leaving
  * them in place everywhere else (e.g. mail "All", which shows done threads).
@@ -575,6 +519,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
         index === 0 ? { ...page, items: [item, ...page.items] } : page
       ),
     });
+    retainRestoredSoupItem(queryClient, key, item);
   }
 
   for (const [
@@ -610,6 +555,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
             : page
         ),
       });
+      retainRestoredSoupItem(queryClient, key, item);
       continue;
     }
 
@@ -768,6 +714,10 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
  * `refreshGraphql` also network-refreshes mounted GraphQL Soup operations.
  * REST's normalized entity insertion cannot change GraphQL list or grouped-bin
  * membership, so creation callers must request this transport revalidation.
+ *
+ * `created` marks an entity that did not exist a moment ago, so it sorts first
+ * in newest-first lists. It is inserted into the REST lists whose filters admit
+ * it, without refetching any list, in either transport.
  */
 export async function refetchSoupEntity(
   entityId: string,
@@ -776,10 +726,23 @@ export async function refetchSoupEntity(
     includeRoot?: boolean;
     ownTouch?: boolean;
     refreshGraphql?: boolean;
+    created?: boolean;
   }
 ): Promise<void> {
   if (options?.refreshGraphql) {
     void refreshActiveGraphqlSoupQueries();
+  }
+
+  // GraphQL lists never read this cache, so a miss means no REST list shows
+  // the entity. Own-touch inserts still land because Home's touched_by_me
+  // feed stays on REST.
+  if (
+    !options?.ownTouch &&
+    !options?.created &&
+    isFeatureEnabled(enableGraphqlSoup) &&
+    !hasSoupEntity(entityId)
+  ) {
+    return;
   }
 
   const { storageServiceClient } = await import('@service-storage/client');
@@ -808,9 +771,10 @@ export async function refetchSoupEntity(
       item = { ...item, touched_at: ownTouchStamp(itemId) };
     }
     if (hasSoupEntity(itemId)) {
-      optimisticUpdateSoupEntity(item);
+      updateSoupEntity(item, false);
     } else {
       insertSoupEntity(item);
+      if (options?.created) continue;
       if (options?.ownTouch) {
         invalidateAllSoupExceptTouched();
       } else {
@@ -894,14 +858,20 @@ export function buildSingleEntityFilter(
       ...base,
       calendar_event_filters: { calendar_event_ids: [entityId] },
     }))
-    .with('reminder', () => ({
+    .with('initiative', () => ({
       ...base,
-      reminder_filters: { ids: [entityId] },
+      initiative_filters: { initiative_ids: [entityId] },
     }))
     .with('agentSession', () => ({
       ...base,
       agent_session_filters: { ids: [entityId] },
     }))
+    .with('databaseRow', () => {
+      throw new Error('Database rows are read through GraphQL Soup only');
+    })
+    .with('crmContact', () => {
+      throw new Error('CRM contacts are read through GraphQL Soup only');
+    })
     .exhaustive();
 }
 

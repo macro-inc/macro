@@ -19,6 +19,38 @@ fn every_action_maps_to_stable_columns() {
         (Action::Deleted, "deleted", None),
         (Action::Messaged, "messaged", None),
         (Action::Sent, "sent", None),
+        (Action::PictureChanged, "picture_changed", None),
+        (
+            Action::Renamed(NameChange {
+                from: Some("Old".into()),
+                to: Some("New".into()),
+            }),
+            "renamed",
+            Some(json!({"from":"Old", "to":"New"})),
+        ),
+        (
+            Action::CallEnded(CallEnd {
+                call_id: "call-1".into(),
+                duration_ms: 480_000,
+            }),
+            "call_ended",
+            Some(json!({"call_id":"call-1", "duration_ms":480_000})),
+        ),
+        (Action::Responded, "responded", None),
+        (
+            Action::TaskAdded(InitiativeTaskChange {
+                task_id: "task-1".into(),
+            }),
+            "task_added",
+            Some(json!({"task_id":"task-1"})),
+        ),
+        (
+            Action::TaskRemoved(InitiativeTaskChange {
+                task_id: "task-1".into(),
+            }),
+            "task_removed",
+            Some(json!({"task_id":"task-1"})),
+        ),
         (
             Action::PropertyChanged(PropertyChange {
                 property: "prop-1".to_string(),
@@ -52,6 +84,9 @@ fn every_action_maps_to_stable_columns() {
     for (action, expected_tag, expected_payload) in cases {
         let (tag, payload) = action.to_columns();
         assert_eq!(tag, expected_tag, "tag for {action:?}");
+        // Reads select by `ActionTag`; it must name the same stored string.
+        let selected: &str = ActionTag::from(&action).into();
+        assert_eq!(selected, expected_tag, "ActionTag for {action:?}");
         assert_eq!(payload, expected_payload, "payload for {action:?}");
         // VIEW_ACTION_TAGS is the SQL-side mirror of is_view: every variant
         // must agree so tag-filtering queries classify rows identically.
@@ -73,12 +108,13 @@ fn every_action_maps_to_stable_columns() {
 fn unknown_tags_decode_to_recorded_unknown_preserving_the_row() {
     let payload = Some(json!({ "novel": true }));
 
-    let (recorded, error) = RecordedAction::from_columns("renamed".to_string(), payload.clone());
+    let (recorded, error) =
+        RecordedAction::from_columns("future_action".to_string(), payload.clone());
 
     assert_eq!(
         recorded,
         RecordedAction::Unknown {
-            tag: "renamed".to_string(),
+            tag: "future_action".to_string(),
             payload,
         }
     );
@@ -176,6 +212,36 @@ fn attribution_delegated_keeps_actor_and_scopes_the_subject() {
     );
     assert_eq!(activity.actor, actor);
     assert_eq!(activity.subject_id, "macro|teo@example.com");
+}
+
+#[test]
+fn creation_principal_attributes_the_mechanical_actor() {
+    let teo = user("macro|teo@example.com");
+    let bot = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xB07A));
+    let team_bot = bot_id::NonSystemBotId::new(bot).unwrap();
+
+    let by_user = Attribution::from(&CreationPrincipal::User(teo.clone()));
+    let for_user = Attribution::from(&CreationPrincipal::BotForUser {
+        bot,
+        user: teo.clone(),
+    });
+    let by_team_bot = Attribution::from(&CreationPrincipal::TeamBot {
+        bot: team_bot,
+        team: Uuid::from_u128(9),
+    });
+
+    assert_eq!(by_user.actor().as_ref(), "macro|teo@example.com");
+    assert_eq!(by_user.on_behalf_of(), None);
+    assert_eq!(
+        for_user.actor().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000b07a"
+    );
+    assert_eq!(for_user.on_behalf_of(), Some(teo));
+    assert_eq!(
+        by_team_bot.actor().as_ref(),
+        "bot|00000000-0000-0000-0000-00000000b07a"
+    );
+    assert_eq!(by_team_bot.on_behalf_of(), None);
 }
 
 #[test]

@@ -93,6 +93,55 @@ async fn update_thread_metadata_syncs_signal_flag(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
+const THREAD_MACRO_DIGEST: &str = "00000000-0000-0000-0000-00000000e207";
+
+// Macro's own notification emails are never signal: update_thread_metadata
+// clears a stale flag, and neither an address- nor a domain-important
+// override can promote the thread back.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn macro_notification_sender_is_never_signal(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    assert!(fetch_signal(&pool, THREAD_MACRO_DIGEST).await?);
+
+    let mut tx = pool.begin().await?;
+    super::super::thread::update_thread_metadata(
+        &mut tx,
+        Uuid::parse_str(THREAD_MACRO_DIGEST)?,
+        Uuid::parse_str(LINK_ID)?,
+    )
+    .await?;
+    tx.commit().await?;
+    assert!(!fetch_signal(&pool, THREAD_MACRO_DIGEST).await?);
+
+    let repo = EmailPgRepo::new(pool.clone());
+    let link_id = Uuid::parse_str(LINK_ID)?;
+    repo.upsert_email_filter(
+        link_id,
+        UpsertEmailFilterInput {
+            email_address: Some("no-reply@notification.macro.com".to_string()),
+            email_domain: None,
+            is_important: true,
+        },
+    )
+    .await?;
+    assert!(!fetch_signal(&pool, THREAD_MACRO_DIGEST).await?);
+
+    repo.upsert_email_filter(
+        link_id,
+        UpsertEmailFilterInput {
+            email_address: None,
+            email_domain: Some("notification.macro.com".to_string()),
+            is_important: true,
+        },
+    )
+    .await?;
+    assert!(!fetch_signal(&pool, THREAD_MACRO_DIGEST).await?);
+
+    Ok(())
+}
+
 const THREAD_DRAFT_SIGNAL: &str = "00000000-0000-0000-0000-00000000e204";
 const DRAFT_MSG: &str = "00000000-0000-0000-0000-00000000e505";
 

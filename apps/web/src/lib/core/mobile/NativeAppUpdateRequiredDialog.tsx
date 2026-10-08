@@ -1,8 +1,11 @@
 import { Button, Dialog, Surface } from '@ui';
+import { Show } from 'solid-js';
 
 export function NativeAppUpdateRequiredDialog(props: {
   open: boolean;
   onClose: () => void;
+  description?: string;
+  onRestart?: () => void;
 }) {
   const title = 'Update Macro App required';
   const description =
@@ -24,11 +27,20 @@ export function NativeAppUpdateRequiredDialog(props: {
               {title}
             </Dialog.Title>
             <Dialog.Description class="text-sm leading-5 text-ink-extra-muted">
-              {description}
+              {props.description ?? description}
             </Dialog.Description>
           </div>
-          <div class="flex justify-end">
-            <Dialog.CloseButton as={Button} variant="accent" size="sm">
+          <div class="flex justify-end gap-2">
+            <Show when={props.onRestart}>
+              <Button
+                variant="accent"
+                size="sm"
+                onClick={() => props.onRestart?.()}
+              >
+                Restart to update
+              </Button>
+            </Show>
+            <Dialog.CloseButton as={Button} variant="strong" size="sm">
               OK
             </Dialog.CloseButton>
           </div>

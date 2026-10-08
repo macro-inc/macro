@@ -104,7 +104,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     handle: {
       id: 'panel-1',
       isActive: () => true,
-      content: () => ({ type: 'component', id: 'inbox' }),
+      content: () => ({ type: 'component', id: 'home' }),
       currentEntryState: () => undefined,
       registerEntryStateCaptor: () => () => {},
     },
@@ -113,14 +113,6 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
-}));
-vi.mock('@companies/crm/deal-stages', () => ({
-  useDealStages: () => ({
-    stages: () => [],
-    stageDefinitionId: () => undefined,
-    resolveStage: () => undefined,
-    stageLabel: () => undefined,
-  }),
 }));
 vi.mock('@queries/team/teams', () => ({ useIsTeamAdmin: () => () => false }));
 vi.mock('@app/features/next-soup/use-soup-filter-persistence', () => ({
@@ -151,6 +143,10 @@ describe('SoupViewContextProvider setup', () => {
     expect(screen.getByTestId('child').textContent).toBe('ready');
     expect(mocks.itemsOptionsEvaluated).toHaveBeenCalledTimes(1);
     expect(mocks.groupedOptionsEvaluated).toHaveBeenCalledTimes(1);
+    expect(mocks.searchOptionsEvaluated).toHaveBeenCalledTimes(1);
+    expect(mocks.searchOptionsEvaluated).toHaveBeenCalledWith({
+      enabled: false,
+    });
     const meta = mocks.itemsOptionsEvaluated.mock.calls[0]?.[0]?.meta as {
       itemFilter?: unknown;
       insertFilter?: unknown;

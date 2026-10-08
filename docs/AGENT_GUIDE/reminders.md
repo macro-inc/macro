@@ -1,0 +1,98 @@
+# Email reminders
+
+Reminders snooze email conversations. They are available only inside Email;
+there is no global Reminders sidebar item, standalone reminder, task reminder,
+recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
+
+## Snooze or change a conversation
+
+On one selected email or an open conversation, press **H**, choose **Remind me**
+in its menu, or activate its bell. The shared command menu shows the subject
+and time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
+**Next week**. Type a future time such as `in 2 hours` or `tomorrow 9am` in
+**Remind me when**. Up/Down changes the selection; Enter or clicking a choice
+saves immediately. **Cancel** or Escape closes without saving. There is no
+separate title, note, or recurrence step.
+
+The time picker opens immediately, including on the first use. You can type or
+change the condition while its existing reminder is fetched; time choices enable
+once that lookup succeeds. The same input keeps focus and its text when data
+arrives. Reminders already loaded in the Reminders list reuse their cached data.
+A failed lookup shows an inline error and **Retry** inside the picker; **Cancel**
+and Escape remain available.
+
+**If no reply** is the default. A new inbound reply cancels that reminder;
+outgoing mail, drafts, replayed messages, and historical backfill do not.
+**Regardless** survives a reply. Only one active reminder is allowed per user
+and conversation. Opening the menu again edits that reminder; **Remove reminder**
+returns the conversation to its inbox. Scheduling archives it and advances
+within the invoking email list only after the server confirms success. The menu
+closes on confirmation; navigation and background list refreshes do not delay
+closing the menu or making undo available.
+
+Bare H still types inside reply, compose, search, and other editable fields.
+On tasks, H collapses the item or its parent group. On list group headers,
+H collapses the group.
+
+## Delivery and undo
+
+When due, an eligible conversation returns to the top of its inbox. Its reminder
+notification belongs to the original email row in Home; clicking the notification
+opens the conversation. An unseen reminder contributes to the row's unread dot
+without changing the mailbox read state. Mobile push titles read
+**Reminder: <email subject>**. No reply email is sent and no reminder toast appears.
+The dispatcher sweeps once a minute; delivery is not exact to the second.
+After delivery, the conversation leaves Email → Reminders immediately and its
+inbox position uses the return time, including when rows come from the local
+cache. Returning to the Reminders tab refreshes membership after missed updates.
+Deleted, trashed, or inaccessible conversations are not returned.
+
+Cmd/Ctrl+Z undoes a confirmed scheduling change. Undo of a new reminder restores
+the original inbox position; undo of an edit restores its previous time and
+condition. A stale undo cannot overwrite a newer edit.
+
+## Email → Reminders
+
+With reminders enabled, **Reminders** appears beside **Scheduled** in Email's
+sidebar and mobile selector. Scheduled contains outgoing send-later messages.
+Reminders contains original conversations with active snoozes, ordered by return
+time. Fired, cancelled, and removed snoozes are excluded.
+Archived conversations remain here while snoozed. Each row has one clock; click,
+tap, or keyboard-activate it to reopen that conversation's reminder menu.
+Opening the row itself opens the email.
+
+Inbox, Read, Done, Calendar, Tags, and attachment filters apply to the original
+conversation before pagination. Text search is unavailable in this view.
+Back/forward and reload retain the Email tab and inbox scope. Other Email and
+Soup views do not make reminder collection requests.
+
+A sparse page can have a **Load more** continuation; follow it. A final page
+stays loading until its email rows hydrate. Failed pagination preserves earlier
+rows and exposes **Couldn’t load more email. Try again**.
+
+## Verify safely
+
+For UI failure checks against hosted data, intercept
+`PUT **/dss/reminders/email/{threadId}`. Hold or reject the response and verify:
+
+- Delay `GET **/dss/reminders/email/{threadId}` with an empty detail cache:
+  the complete picker appears immediately, focuses **Remind me when**, accepts
+  typing, and never shows a separate loading dialog. Resolving the request
+  preserves the input and its focus. Verify both opening and reopening.
+- Reject the GET: the same picker shows **Retry**, preserves typed text, and
+  cannot save until a successful lookup. An existing reminder's condition is
+  applied unless the user has already changed it.
+- Saving disables controls and repeated input cannot issue duplicate writes.
+- A failure keeps the chosen time and condition, shows an inline retry message,
+  and does not navigate or send a separate client archive request.
+- Retrying an unchanged choice retains its operation ID, including after a
+  background read discovers a write whose response was lost.
+- A confirmed save closes the menu, advances the list, and adds keyboard undo.
+- Opening the menu from a row clock does not open or complete the email.
+
+Use local fixtures for real create/edit/remove/undo and due-delivery checks.
+For delivery, keep Reminders open through the firing, then switch to Signal and
+verify the conversation is in the newest time group without reloading. Repeat
+with an older conversation, a sent-only conversation, and a backgrounded tab.
+Also verify reply cancellation, caller isolation, multiple concurrent set
+requests, filtered pagination, desktop keyboard interaction, and a narrow viewport.

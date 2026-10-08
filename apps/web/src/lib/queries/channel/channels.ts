@@ -14,6 +14,7 @@ import type { CreateChannelRequest } from '@service-storage/generated/schemas/cr
 import type { CreateChannelResponse } from '@service-storage/generated/schemas/createChannelResponse';
 import type { PatchChannelRequest } from '@service-storage/generated/schemas/patchChannelRequest';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { invalidateChannelParticipants } from './channel-participants';
 import {
   type CachedGraphqlChannel,
@@ -69,12 +70,13 @@ function cachedGraphqlChannelsQueryOptions(cacheHost: CacheHost | undefined) {
 }
 
 /** Reads the recent Quick Access channel list from the normalized GraphQL cache. */
-export function useCachedGraphqlChannelsQuery(cacheHost?: CacheHost) {
-  return useQuery(() =>
-    cachedGraphqlChannelsQueryOptions(
-      cacheHost?.disabled ? undefined : cacheHost
-    )
-  );
+export function useCachedGraphqlChannelsQuery(
+  cacheHost: Accessor<CacheHost | undefined>
+) {
+  return useQuery(() => {
+    const host = cacheHost();
+    return cachedGraphqlChannelsQueryOptions(host?.disabled ? undefined : host);
+  });
 }
 
 export function invalidateListChannels() {

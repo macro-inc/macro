@@ -1,4 +1,8 @@
-import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
+import {
+  SaveEmailDraftDocument,
+  SetEmailThreadArchivedDocument,
+  UpdateNotificationsDocument,
+} from '@service-storage/graphql/generated/graphql';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
@@ -8,7 +12,9 @@ import { shouldRetryGraphqlMutation } from '@service-storage/graphql-mutation-re
 import {
   type Client,
   CombinedError,
+  createClient,
   createRequest,
+  fetchExchange,
   gql,
   makeOperation,
   type Operation,
@@ -24,7 +30,8 @@ import {
   type Source,
   subscribe,
 } from 'wonka';
-import type { CacheHost } from '../host/types';
+import { CacheNavigationError } from '../host/navigation-error';
+import type { CacheGenerationChange, CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
@@ -32,6 +39,7 @@ import {
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
+  OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
   type ReadResult,
   type WriteResult,
 } from '../protocol';
@@ -43,6 +51,7 @@ import {
   normalizedCacheResultMetadata,
 } from './normalized-cache-exchange';
 import {
+  executeOptimisticMutation,
   optimisticContextOf,
   optimisticMutationDispositionOf,
 } from './optimistic';
@@ -199,18 +208,24 @@ type FakeHost = CacheHost & {
   teardowns: number[];
   scriptRead: (result: ReadResult) => void;
   seedQueued: (
-    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0]
+    args: Parameters<CacheHost['enqueueOptimisticMutation']>[0],
+    serverFailureCount?: number
   ) => void;
   pushAffected: (opKeys: number[]) => void;
+  pushGeneration: (change: CacheGenerationChange) => void;
 };
 
 function makeFakeHost(): FakeHost {
   let readResult: ReadResult = { kind: 'miss' };
   const subscribers = new Set<(opKeys: number[]) => void>();
+  const generationSubscribers = new Set<
+    (change: CacheGenerationChange) => void
+  >();
   const queue: Array<{
     transactionId: string;
     args: Parameters<CacheHost['enqueueOptimisticMutation']>[0];
     attemptCount: number;
+    serverFailureCount: number;
     leased: boolean;
     nextAttemptAtMs?: number;
   }> = [];
@@ -231,12 +246,15 @@ function makeFakeHost(): FakeHost {
     return {
       transactionId: head.transactionId,
       uuid: head.args.uuid,
+      clientMetadata: head.args.clientMetadata,
       superseded: false,
+      requiresConfirmation: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
       variables: head.args.variables ?? {},
       attemptCount: head.attemptCount,
+      serverFailureCount: head.serverFailureCount,
     };
   }
 
@@ -255,19 +273,26 @@ function makeFakeHost(): FakeHost {
     scriptRead: (r) => {
       readResult = r;
     },
-    seedQueued: (args) => {
+    seedQueued: (args, serverFailureCount = 0) => {
       queue.push({
         transactionId: `restored-${queue.length + 1}`,
         args,
         attemptCount: 0,
+        serverFailureCount,
         leased: false,
       });
     },
     pushAffected: (opKeys) => {
       for (const cb of subscribers) cb(opKeys);
     },
+    pushGeneration: (change) => {
+      for (const cb of generationSubscribers) cb(change);
+    },
     async currentRevision() {
       return INITIAL_CACHE_REVISION;
+    },
+    async currentStorageGeneration() {
+      return '00000000-0000-4000-8000-000000000001';
     },
     async readQuery(args) {
       host.reads.push({
@@ -286,6 +311,12 @@ function makeFakeHost(): FakeHost {
       return { documents: [], nextCursor: null };
     },
     async entityFilter() {
+      return { kind: 'unsupported' };
+    },
+    async calendarRange() {
+      return { kind: 'unsupported' };
+    },
+    async calendarCommit() {
       return { kind: 'unsupported' };
     },
     async writeQuery(args): Promise<WriteResult> {
@@ -324,7 +355,13 @@ function makeFakeHost(): FakeHost {
         linkPatches: args.linkPatches,
       });
       const transactionId = `txn-${host.begins.length}`;
-      queue.push({ transactionId, args, attemptCount: 0, leased: false });
+      queue.push({
+        transactionId,
+        args,
+        attemptCount: 0,
+        serverFailureCount: 0,
+        leased: false,
+      });
       const mutation = claimQueueHead(claim.nowMs);
       return {
         transactionId,
@@ -355,13 +392,15 @@ function makeFakeHost(): FakeHost {
       transactionId,
       _claim: MutationClaim,
       nextAttemptAtMs,
-      error
+      error,
+      serverFailure = false
     ) {
       host.defers.push({ transactionId, error });
       const head = queue[0];
       if (head?.transactionId === transactionId) {
         head.leased = false;
         head.nextAttemptAtMs = nextAttemptAtMs;
+        if (serverFailure) head.serverFailureCount += 1;
       }
       return { kind: 'deferred' };
     },
@@ -385,9 +424,11 @@ function makeFakeHost(): FakeHost {
     },
     async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
+      const revalidations = queue[0]?.args.revalidations;
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
         kind: 'rolled-back' as const,
+        revalidations,
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: true,
         changed: [],
@@ -416,8 +457,9 @@ function makeFakeHost(): FakeHost {
     onCacheChanged() {
       return () => undefined;
     },
-    onCacheGenerationChanged() {
-      return () => undefined;
+    onCacheGenerationChanged(cb) {
+      generationSubscribers.add(cb);
+      return () => generationSubscribers.delete(cb);
     },
     onMutationSettled() {
       return () => undefined;
@@ -651,6 +693,42 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
+  it('evicts inferred missing records after writing the network response', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
+    const { ops, results } = harness(
+      host,
+      () => ({ data: { user: { emailThread: null } } }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(901, 'network-only'));
+    await tick();
+    expect(host.cacheActions.map((action) => action.kind)).toEqual([
+      'write',
+      'delete',
+    ]);
+    expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
+  it('does not infer deletions from GraphQL errors with partial data', async () => {
+    const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:keep']);
+    const { ops } = harness(
+      host,
+      () => ({
+        data: { user: { emailThread: null } },
+        error: new CombinedError({
+          graphQLErrors: [{ message: 'database unavailable' }],
+        }),
+      }),
+      { deletedRecordKeys }
+    );
+    ops.next(makeOp(902, 'network-only'));
+    await tick();
+    expect(deletedRecordKeys).not.toHaveBeenCalled();
+    expect(host.invalidations).toEqual([]);
+    expect(host.writes).toEqual([]);
+  });
+
   it('normalizes ordinary buffered subscription data without inspecting event types', async () => {
     const patches = ['document-1', 'document-2'].map((id) => ({
       __typename: 'SoupUpdated',
@@ -672,6 +750,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.writes[0]?.data).toBe(data);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: true,
+    });
   });
 
   it('deletes the exact normalized key from subscription patches', async () => {
@@ -836,6 +918,53 @@ describe('normalizedCacheExchange', () => {
     expect(cacheContainsDocument).toBe(false);
   });
 
+  it('cancels queued subscription effects on teardown even when the same key resubscribes', async () => {
+    const firstWrite = deferred<WriteResult>();
+    const write = vi
+      .spyOn(host, 'writeQuery')
+      .mockImplementationOnce(() => firstWrite.promise);
+    const remove = vi.spyOn(host, 'deleteRecords');
+    const { ops, network } = controlledQueryHarness(host);
+    const operation = makeSubscriptionOp(24);
+    ops.next(operation);
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [
+          {
+            __typename: 'SoupUpdated',
+            item: { __typename: 'GraphqlSoupDocument', id: 'one' },
+          },
+          {
+            __typename: 'GraphqlCacheDeletion',
+            graphqlTypeName: 'GraphqlSoupDocument',
+            entityId: 'one',
+          },
+        ],
+      })
+    );
+    network.next(
+      queryResult(operation, {
+        soupUpdates: [{ id: 'queued-before-navigation' }],
+      })
+    );
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+
+    ops.next(makeOperation('teardown', operation, operation.context));
+    ops.next(operation);
+    const fresh = { soupUpdates: [{ id: 'after-restore' }] };
+    network.next(queryResult(operation, fresh));
+    firstWrite.resolve({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    });
+    await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(2));
+    expect(write.mock.calls[1]?.[0].data).toBe(fresh);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it('reports cache failures without dropping subscription results or later patches', async () => {
     const error = new Error('subscription cache write failed');
     vi.spyOn(host, 'writeQuery').mockRejectedValueOnce(error);
@@ -870,6 +999,10 @@ describe('normalizedCacheExchange', () => {
     expect(host.invalidations).toEqual([['GraphqlSoupDocument:document-2']]);
     expect(results).toHaveLength(1);
     expect(results[0]?.data).toBe(data);
+    expect(normalizedCacheResultMetadata(results[0]!)).toEqual({
+      source: 'live-network',
+      cacheEffectsApplied: false,
+    });
   });
 
   it('cache-first miss forwards to network and writes through', async () => {
@@ -1118,6 +1251,24 @@ describe('normalizedCacheExchange', () => {
     if (metadata?.source === 'live-network') {
       await expect(metadata.persistence).resolves.toBeUndefined();
     }
+  });
+
+  it('keeps the persistence acknowledgement when the global Promise is patched', async () => {
+    const { ops, results } = harness(host);
+    ops.next(makeOp(1, 'network-only'));
+    await tick();
+    class PatchedPromise<T> extends Promise<T> {}
+    vi.stubGlobal('Promise', PatchedPromise);
+    let metadata: ReturnType<typeof normalizedCacheResultMetadata>;
+    try {
+      metadata = normalizedCacheResultMetadata(results[0]!);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(metadata?.source).toBe('live-network');
+    if (metadata?.source !== 'live-network') return;
+    expect(metadata.persistence).toBeDefined();
+    await expect(metadata.persistence).resolves.toBe(INITIAL_CACHE_REVISION);
   });
 
   it('settles persistence even when its diagnostic callback throws', async () => {
@@ -2294,6 +2445,72 @@ describe('normalizedCacheExchange', () => {
   describe('mutations', () => {
     const optimistic = { setEntityProperty: { id: 'prop-1' } };
 
+    it('carries submitted client metadata through queue admission and settlement', async () => {
+      const enqueue = vi.spyOn(host, 'enqueueOptimisticMutation');
+      const metadata = {
+        kind: 'email-draft',
+        id: 'discard-attempt',
+        revision: 7,
+      };
+      const beforeMutationAttempt = vi.fn(
+        async (mutation: ClaimedMutation) =>
+          mutation.clientMetadata?.id === metadata.id
+      );
+      const onMutationAttemptResult = vi.fn(async () => {});
+      const { client, forwarded } = harness(host, undefined, {
+        beforeMutationAttempt,
+        onMutationAttemptResult,
+      });
+      await executeOptimisticMutation(
+        client,
+        MUTATION,
+        { input: {} },
+        optimistic,
+        {
+          uuid: crypto.randomUUID(),
+          clientMetadata: metadata,
+        }
+      ).toPromise();
+      await tick();
+      expect(enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({ clientMetadata: metadata }),
+        expect.anything()
+      );
+      expect(beforeMutationAttempt).toHaveBeenCalledWith(
+        expect.objectContaining({ clientMetadata: metadata })
+      );
+      expect(forwarded).toHaveLength(1);
+      expect(forwarded[0].variables).toEqual({ input: {} });
+      expect(onMutationAttemptResult).toHaveBeenCalledWith(
+        expect.objectContaining({ clientMetadata: metadata }),
+        expect.anything(),
+        false
+      );
+      expect(host.commits).toHaveLength(1);
+    });
+
+    it('hands calendar events it cannot predict to the queue', async () => {
+      const enqueue = vi.spyOn(host, 'enqueueOptimisticMutation');
+      const { client } = harness(host);
+      await executeOptimisticMutation(
+        client,
+        MUTATION,
+        { input: {} },
+        optimistic,
+        {
+          uuid: crypto.randomUUID(),
+          uncertainCalendarEventKeys: ['GraphqlCalendarEvent:event-1'],
+        }
+      ).toPromise();
+      await tick();
+      expect(enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uncertainCalendarEventKeys: ['GraphqlCalendarEvent:event-1'],
+        }),
+        expect.anything()
+      );
+    });
+
     it.each([false, true])(
       'rolls back rejected favorites rather than committing list patches (replay=%s)',
       async (replay) => {
@@ -2450,6 +2667,586 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits[0]?.transactionId).toBe('restored-1');
     });
 
+    it.each(['rejects', 'hangs'] as const)(
+      'advances after a terminal draft error even when recovery bookkeeping %s',
+      async (failure) => {
+        vi.useFakeTimers();
+        try {
+          const metadata = { kind: 'email-draft', revision: 7 };
+          host.seedQueued({
+            uuid: 'draft-handle',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft-handle' } },
+            data: optimistic,
+            clientMetadata: metadata,
+          });
+          host.seedQueued({
+            uuid: 'unrelated',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const onMutationAttemptResult = vi.fn(
+            async (mutation: ClaimedMutation) => {
+              if (mutation.operationName !== 'SaveEmailDraft') return;
+              if (failure === 'rejects')
+                throw new Error('Recovery disk unavailable');
+              await new Promise<void>(() => {});
+            }
+          );
+          const { forwarded } = harness(
+            host,
+            (op) =>
+              'draftId' in op.variables!.input
+                ? {
+                    data: undefined,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: 'Draft rejected',
+                          extensions: { retryable: true },
+                        },
+                      ],
+                    }),
+                  }
+                : { data: { saved: true } },
+            {
+              shouldRetryMutation: shouldRetryGraphqlMutation,
+              onMutationAttemptResult,
+              onCacheError: () => {
+                throw new Error('Diagnostics unavailable');
+              },
+            }
+          );
+          await vi.advanceTimersByTimeAsync(2_010);
+          expect(onMutationAttemptResult).toHaveBeenCalledWith(
+            expect.objectContaining({ clientMetadata: metadata }),
+            expect.anything(),
+            false
+          );
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.defers).toHaveLength(0);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-2' }]);
+          expect(forwarded).toHaveLength(2);
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each(['rejects', 'hangs'] as const)(
+      'replays unrelated mutations when recovery initialization %s',
+      async (failure) => {
+        vi.useFakeTimers();
+        const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          host.seedQueued({
+            uuid: 'unrelated',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const { forwarded } = harness(host, undefined, {
+            prepareMutationQueue: async () => {
+              if (failure === 'rejects')
+                throw new Error('IndexedDB unavailable');
+              await new Promise<void>(() => {});
+            },
+          });
+          await vi.advanceTimersByTimeAsync(4_010);
+          expect(forwarded).toHaveLength(1);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-1' }]);
+          expect(warning).toHaveBeenCalled();
+        } finally {
+          warning.mockRestore();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([
+      { failure: 'rejects', legacy: false },
+      { failure: 'hangs', legacy: false },
+      { failure: 'rejects', legacy: true },
+      { failure: 'hangs', legacy: true },
+    ])(
+      'releases a draft when admission $failure (legacy=$legacy)',
+      async ({ failure, legacy }) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: 'draft',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft' } },
+            data: optimistic,
+            clientMetadata: legacy ? undefined : { kind: 'email-draft' },
+          });
+          host.seedQueued({
+            uuid: 'other',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: {} },
+            data: optimistic,
+          });
+          const onMutationAttemptResult = vi.fn(async () => {});
+          const { forwarded } = harness(host, undefined, {
+            beforeMutationAttempt: async (mutation) => {
+              if (mutation.operationName !== 'SaveEmailDraft') return true;
+              if (failure === 'rejects')
+                throw new Error('Recovery storage unavailable');
+              return await new Promise<boolean>(() => {});
+            },
+            onMutationAttemptResult,
+          });
+          await vi.advanceTimersByTimeAsync(2_010);
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.defers).toHaveLength(0);
+          expect(host.commits).toMatchObject([{ transactionId: 'restored-2' }]);
+          expect(forwarded).toHaveLength(1);
+          expect(onMutationAttemptResult).toHaveBeenCalledWith(
+            expect.objectContaining({ transactionId: 'restored-1' }),
+            expect.objectContaining({
+              error: expect.objectContaining({
+                message: expect.stringContaining('Unable to prepare'),
+              }),
+            }),
+            false
+          );
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it('returns a terminal recovery failure to a live caller without sending it', async () => {
+      const { ops, results, forwarded } = harness(host, undefined, {
+        beforeMutationAttempt: async () => {
+          throw new Error('Local storage unavailable');
+        },
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await vi.waitFor(() => expect(results).toHaveLength(1));
+      expect(forwarded).toHaveLength(0);
+      expect(host.defers).toHaveLength(0);
+      expect(host.rollbacks).toEqual(['txn-1']);
+      expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+        kind: 'permanently-failed',
+        error: results[0]?.error,
+      });
+      expect(results[0]?.error?.graphQLErrors[0]?.extensions.code).toBe(
+        'LOCAL_RECOVERY_FAILED'
+      );
+    });
+
+    it.each([true, false])(
+      'advances past an unavailable archived thread regardless of legacy metadata (retryable=%s)',
+      async (retryable) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SetEmailThreadArchivedDocument),
+            operationName: 'SetEmailThreadArchived',
+            variables: {
+              input: { threadId: 'trashed-thread', archived: true },
+            },
+            data: {
+              setEmailThreadArchived: {
+                __typename: 'GraphqlSoupEmailThread',
+                id: 'trashed-thread',
+                inboxVisible: false,
+              },
+            },
+          });
+          const readResult = {
+            updateNotifications: [
+              {
+                __typename: 'GraphqlNotification',
+                id: 'notification',
+                state: 'SEEN',
+              },
+            ],
+          };
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(UpdateNotificationsDocument),
+            operationName: 'UpdateNotifications',
+            variables: {
+              input: {
+                notificationIds: ['notification'],
+                operation: 'MARK_SEEN',
+              },
+            },
+            data: {
+              updateNotifications: [
+                { __typename: 'GraphqlNotification', id: 'notification' },
+              ],
+            },
+          });
+          const { forwarded } = harness(
+            host,
+            (op) =>
+              'threadId' in op.variables!.input
+                ? {
+                    data: undefined,
+                    error: new CombinedError({
+                      graphQLErrors: [
+                        {
+                          message: 'updated email thread is unavailable',
+                          extensions: retryable
+                            ? { code: 'INTERNAL', retryable: true }
+                            : { code: 'NOT_FOUND' },
+                        },
+                      ],
+                    }),
+                  }
+                : { data: readResult },
+            { shouldRetryMutation: shouldRetryGraphqlMutation }
+          );
+          await vi.advanceTimersByTimeAsync(10);
+          expect(forwarded).toHaveLength(2);
+          expect(host.defers).toHaveLength(0);
+          expect(host.rollbacks).toEqual(['restored-1']);
+          expect(host.commits).toMatchObject([
+            { transactionId: 'restored-2', data: readResult },
+          ]);
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([
+      'terminal',
+      'superseded',
+      'retryable',
+      'unhandled replay',
+    ] as const)(
+      'revalidates persisted recovery queries only after a terminal failure (%s)',
+      async (outcome) => {
+        vi.useFakeTimers();
+        try {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables: { input: { draftId: 'draft-handle', subject: 'Reply' } },
+            data: optimistic,
+            revalidations: [
+              {
+                query: stringifyDocument(QUERY),
+                operationName: 'Soup',
+                variablesJson: '{"input":{"limit":2}}',
+              },
+            ],
+          });
+          if (outcome === 'superseded') {
+            const rollback = host.rollbackOptimisticWrite.bind(host);
+            host.rollbackOptimisticWrite = async (...args) => ({
+              ...(await rollback(...args)),
+              kind: 'discarded-superseded',
+              replacementTransactionId: 'newer-intent',
+            });
+          }
+          const error = new CombinedError(
+            outcome === 'retryable'
+              ? { networkError: new Error('Connection lost') }
+              : {
+                  graphQLErrors: [
+                    {
+                      message: 'Draft rejected',
+                      extensions: { code: 'DRAFT_ALREADY_SENT' },
+                    },
+                  ],
+                }
+          );
+          const { client, forwarded } = harness(
+            host,
+            () => ({ error, data: undefined }),
+            {
+              shouldRetryMutation: shouldRetryGraphqlMutation,
+            }
+          );
+          if (outcome === 'unhandled replay') {
+            vi.mocked(client.mutation).mockReturnValue({
+              toPromise: async () => ({ error }),
+            } as never);
+          }
+          await vi.advanceTimersByTimeAsync(0);
+          expect(host.begins).toHaveLength(0);
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.rollbacks).toHaveLength(outcome === 'retryable' ? 0 : 1);
+          expect(host.defers).toHaveLength(outcome === 'retryable' ? 1 : 0);
+          const repairs =
+            outcome === 'terminal' || outcome === 'unhandled replay';
+          expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+            repairs ? 1 : 0
+          );
+          if (repairs) {
+            expect(vi.mocked(client.query)).toHaveBeenCalledWith(
+              expect.anything(),
+              { input: { limit: 2 } },
+              { requestPolicy: 'network-only' }
+            );
+          }
+          if (outcome !== 'unhandled replay')
+            expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([true, undefined])(
+      'settles a restored superseded identity write before its replacement (confirmation=%s)',
+      async (requiresConfirmation) => {
+        for (const version of ['create', 'edit']) {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000001',
+            query: stringifyDocument(MUTATION),
+            operationName: 'SetEntityProperty',
+            variables: { input: { version } },
+            data: optimistic,
+          });
+        }
+        const claimNext = host.claimNextMutation.bind(host);
+        host.claimNextMutation = async (...args) => {
+          const claimed = await claimNext(...args);
+          if (claimed?.transactionId === 'restored-1') {
+            claimed.superseded = true;
+            if (requiresConfirmation === undefined) {
+              // Old deployed hosts have no flag. They must also recover.
+              delete (claimed as Partial<ClaimedMutation>).requiresConfirmation;
+            } else {
+              claimed.requiresConfirmation = requiresConfirmation;
+            }
+          }
+          return claimed;
+        };
+        const onCacheError = vi.fn();
+        const { forwarded } = harness(host, undefined, { onCacheError });
+        await vi.waitFor(() =>
+          expect(host.commits.map((commit) => commit.transactionId)).toEqual([
+            'restored-1',
+            'restored-2',
+          ])
+        );
+        expect(forwarded.map((op) => op.variables?.input.version)).toEqual([
+          'create',
+          'edit',
+        ]);
+        expect(host.defers).toEqual([]);
+        expect(onCacheError).not.toHaveBeenCalled();
+      }
+    );
+
+    it('evicts deleted threads when a persisted mutation replays without its caller', async () => {
+      host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
+        query: stringifyDocument(MUTATION),
+        operationName: 'SetEntityProperty',
+        variables: { input: {} },
+        data: optimistic,
+      });
+      const deletedRecordKeys = vi.fn(() => {
+        expect(host.commits).toHaveLength(1);
+        return ['GraphqlSoupEmailThread:gone'];
+      });
+      harness(host, undefined, { deletedRecordKeys });
+      await tick();
+      expect(host.invalidations).toEqual([['GraphqlSoupEmailThread:gone']]);
+    });
+
+    describe('mutation drain after cache restoration', () => {
+      beforeEach(() => vi.useFakeTimers());
+      afterEach(() => {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+      });
+
+      it.each([
+        { wake: 'online', whileDeferring: false },
+        { wake: 'online', whileDeferring: true },
+        { wake: 'restore', whileDeferring: false },
+        { wake: 'restore', whileDeferring: true },
+      ])(
+        'preserves short retry deadlines after $wake (while deferring: $whileDeferring)',
+        async ({ wake, whileDeferring }) => {
+          // Isolate the online listener from other exchanges in this suite.
+          const events = new EventTarget();
+          vi.spyOn(globalThis, 'addEventListener').mockImplementation(
+            events.addEventListener.bind(events)
+          );
+          const deferring = deferred<void>();
+          const defer = host.deferOptimisticWrite.bind(host);
+          const deferSpy = vi.spyOn(host, 'deferOptimisticWrite');
+          if (whileDeferring) {
+            deferSpy.mockImplementationOnce(async (...args) => {
+              const result = await defer(...args);
+              await deferring.promise;
+              return result;
+            });
+          }
+          const error = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          let attempts = 0;
+          const { ops, forwarded } = harness(
+            host,
+            () =>
+              ++attempts <= 5
+                ? { error, data: undefined }
+                : { data: optimistic },
+            { shouldRetryMutation: () => true }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+
+          for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+            const retryAt = deferSpy.mock.calls.at(-1)![2];
+            expect(retryAt - Date.now()).toBe(delay);
+            const sendsBeforeWake = forwarded.length;
+            await vi.advanceTimersByTimeAsync(100);
+            if (wake === 'online') events.dispatchEvent(new Event('online'));
+            else host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            deferring.resolve();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+
+            await vi.advanceTimersByTimeAsync(retryAt - Date.now() - 1);
+            expect(forwarded).toHaveLength(sendsBeforeWake);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(forwarded).toHaveLength(sendsBeforeWake + 1);
+          }
+          expect(host.begins).toHaveLength(1);
+          expect(host.defers).toHaveLength(5);
+          expect(host.commits).toHaveLength(1);
+          expect(host.rollbacks).toHaveLength(0);
+        }
+      );
+
+      it('retires an expired retry hint if another runner owns the head', async () => {
+        const error = new CombinedError({ networkError: new Error('offline') });
+        const { ops, forwarded } = harness(
+          host,
+          () => ({ error, data: undefined }),
+          { shouldRetryMutation: () => true }
+        );
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(0);
+        const claim = vi
+          .spyOn(host, 'claimNextMutation')
+          .mockResolvedValue(undefined);
+        await vi.advanceTimersByTimeAsync(100);
+        host.pushGeneration({ storage: 'reset' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(claim).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(claim).toHaveBeenCalledTimes(2);
+        expect(forwarded).toHaveLength(1);
+      });
+
+      it.each([false, true])(
+        'resumes an interrupted claim without waiting for the poll (restore while pending: %s)',
+        async (restoreWhilePending) => {
+          const pendingClaim = deferred<ClaimedMutation | undefined>();
+          const claim = vi.spyOn(host, 'claimNextMutation');
+          claim.mockImplementationOnce(() => pendingClaim.promise);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const { forwarded } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(claim).toHaveBeenCalledOnce();
+
+          if (restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            expect(claim).toHaveBeenCalledOnce();
+          }
+          pendingClaim.reject(new CacheNavigationError());
+          await vi.advanceTimersByTimeAsync(1);
+          if (!restoreWhilePending) {
+            expect(forwarded).toHaveLength(0);
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+          }
+
+          expect(host.claims).toEqual(['restored-1']);
+          expect(host.commits).toHaveLength(1);
+          expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+        }
+      );
+
+      it.each([
+        { restoreWhilePending: false, committed: false },
+        { restoreWhilePending: false, committed: true },
+        { restoreWhilePending: true, committed: false },
+        { restoreWhilePending: true, committed: true },
+      ])(
+        'rechecks an uncertain commit without bypassing leases ($restoreWhilePending, $committed)',
+        async ({ restoreWhilePending, committed }) => {
+          const pendingCommit = deferred<CommitOptimisticWriteResult>();
+          const commit = host.commitOptimisticWrite.bind(host);
+          vi.spyOn(host, 'commitOptimisticWrite').mockImplementationOnce(
+            async (...args) => {
+              // The worker may have committed even though its reply was lost.
+              if (committed) await commit(...args);
+              return await pendingCommit.promise;
+            }
+          );
+          const claim = vi.spyOn(host, 'claimNextMutation');
+          const { ops, forwarded, results } = harness(host);
+          await vi.advanceTimersByTimeAsync(0);
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(1);
+          host.seedQueued({
+            uuid: crypto.randomUUID(),
+            query: stringifyDocument(MUTATION),
+            data: optimistic,
+          });
+          const claimsBeforeRestore = claim.mock.calls.length;
+
+          if (restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+            expect(claim).toHaveBeenCalledTimes(claimsBeforeRestore);
+          }
+          pendingCommit.reject(new CacheNavigationError());
+          await vi.advanceTimersByTimeAsync(1);
+          if (!restoreWhilePending) {
+            host.pushGeneration({ storage: 'reset' });
+            await vi.advanceTimersByTimeAsync(1);
+          }
+
+          expect(claim.mock.calls.length).toBeGreaterThan(claimsBeforeRestore);
+          expect(
+            optimisticMutationDispositionOf(
+              results.find((result) => result.operation.key === 1)!
+            )
+          ).toEqual({ kind: 'queued', transactionId: 'txn-1' });
+          // A runnable successor is sent immediately, but an unsettled head's
+          // existing lease must never be stolen or its network call duplicated.
+          expect(forwarded).toHaveLength(committed ? 2 : 1);
+          expect(host.commits).toHaveLength(committed ? 2 : 0);
+          const claimsAfterRestore = claim.mock.calls.length;
+          await vi.advanceTimersByTimeAsync(30_000);
+          // Forget the stale five-minute local backoff even if no head could
+          // be claimed on restore; the durable queue still controls eligibility.
+          expect(claim.mock.calls.length).toBeGreaterThan(claimsAfterRestore);
+          expect(forwarded).toHaveLength(committed ? 2 : 1);
+        }
+      );
+    });
+
     it('rolls back when a persisted replay resolves with an urql error', async () => {
       host.seedQueued({
         uuid: '00000000-0000-4000-8000-000000000002',
@@ -2473,6 +3270,65 @@ describe('normalizedCacheExchange', () => {
       expect(host.rollbacks).toEqual(['restored-1']);
     });
 
+    it.each(['foreground', 'restored', 'unhandled replay'] as const)(
+      'preserves an already-sent rejection across the %s boundary',
+      async (path) => {
+        const variables = {
+          input: { draftId: 'draft-handle', subject: 'Reply' },
+        };
+        const rejection = new CombinedError({
+          graphQLErrors: [
+            {
+              message: 'Draft was sent elsewhere',
+              extensions: { code: 'DRAFT_ALREADY_SENT' },
+            },
+          ],
+        });
+        const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+        if (path !== 'foreground') {
+          host.seedQueued({
+            uuid: '00000000-0000-4000-8000-000000000002',
+            query: stringifyDocument(SaveEmailDraftDocument),
+            operationName: 'SaveEmailDraft',
+            variables,
+            data: optimistic,
+          });
+        }
+        const { ops, client, forwarded } = harness(host, () => ({
+          error: rejection,
+          data: undefined,
+        }));
+        if (path === 'foreground') {
+          ops.next(
+            makeOperation(
+              'mutation',
+              createRequest(SaveEmailDraftDocument, variables),
+              makeMutationOp(1, optimistic).context
+            )
+          );
+        } else if (path === 'unhandled replay') {
+          // A reconstructed client may return an error without traversing
+          // writeThrough; the queue drain's fallback also preserves its code.
+          vi.mocked(client.mutation).mockReturnValue({
+            toPromise: async () => ({ error: rejection }),
+          } as never);
+        }
+        await tick();
+        expect(rollback).toHaveBeenCalledExactlyOnceWith(
+          path === 'foreground' ? 'txn-1' : 'restored-1',
+          expect.any(Object),
+          rejection.message,
+          'DRAFT_ALREADY_SENT'
+        );
+        expect(host.begins).toHaveLength(path === 'foreground' ? 1 : 0);
+        if (path === 'restored') {
+          expect(host.claims).toEqual(['restored-1']);
+          expect(forwarded[0]?.variables).toEqual(variables);
+          expect(optimisticContextOf(forwarded[0])).toBeUndefined();
+        }
+      }
+    );
+
     it('forwards optimistic mutations without cache work when the host is disabled', async () => {
       const disabledHost: CacheHost = { ...host, disabled: true };
       const { ops, forwarded } = harness(disabledHost);
@@ -2482,6 +3338,47 @@ describe('normalizedCacheExchange', () => {
       expect(host.begins).toHaveLength(0);
       expect(host.claims).toHaveLength(0);
       expect(forwarded.map((op) => op.kind)).toEqual(['mutation']);
+    });
+
+    it('acknowledges cache installation independently of the network result', async () => {
+      const acknowledge = vi.fn();
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      let release!: () => void;
+      const installation = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        await installation;
+        return enqueue(args, claim);
+      });
+      const { ops, forwarded, results, network } = controlledQueryHarness(host);
+      const operation = makeMutationOp(1, optimistic);
+      ops.next(
+        makeOperation('mutation', operation, {
+          ...operation.context,
+          normalizedCacheOptimisticEnqueued: acknowledge,
+        })
+      );
+      await tick();
+      expect(acknowledge).not.toHaveBeenCalled();
+      expect(forwarded).toEqual([]);
+      release();
+      await tick();
+      expect(acknowledge).toHaveBeenCalledOnce();
+      expect(results).toEqual([]);
+      expect(forwarded).toHaveLength(1);
+      expect(
+        vi.mocked(host.enqueueOptimisticMutation).mock.calls[0][0]
+      ).not.toHaveProperty('onEnqueued');
+      network.next({
+        operation: forwarded[0],
+        data: optimistic,
+        stale: false,
+        hasNext: false,
+      });
+      await tick();
+      expect(results).toHaveLength(1);
+      expect(acknowledge).toHaveBeenCalledOnce();
     });
 
     it('installs the optimistic layer before forwarding to the network', async () => {
@@ -2773,6 +3670,110 @@ describe('normalizedCacheExchange', () => {
       expect(host.commits).toHaveLength(1);
     });
 
+    it('sends a patched mutation directly while another context owns the database', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'query Group { user { groupSoup { bins { items { id } } } } }',
+              operationName: 'Group',
+              variablesJson: '{}',
+              path: [
+                { field: 'user' },
+                { field: 'groupSoup' },
+                { field: 'bins' },
+              ],
+              operation: {
+                kind: 'remove',
+                entityKey: 'GraphqlSoupItem:task-1',
+              },
+            },
+          ],
+          revalidations: [],
+        },
+      });
+      host.enqueueOptimisticMutation = vi.fn().mockRejectedValue(
+        Object.assign(new Error('owner lock is held by another build'), {
+          errorCode: OWNER_LOCK_UNAVAILABLE_ERROR_CODE,
+        })
+      );
+      const warn = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => undefined);
+      const onCacheError = vi.fn();
+      const { ops, results, forwarded } = harness(host, undefined, {
+        onCacheError,
+      });
+      try {
+        ops.next(op);
+        await tick();
+
+        // No link-patch degradation retry: the refusal says nothing about
+        // the patches, and nothing was admitted to a durable queue.
+        expect(host.enqueueOptimisticMutation).toHaveBeenCalledOnce();
+        expect(forwarded.map((forwardedOp) => forwardedOp.kind)).toEqual([
+          'mutation',
+        ]);
+        expect(results[0]?.data).toEqual({ from: 'network' });
+        expect(onCacheError).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('uses only explicit recovery queries when a record-rooted parent is missing', async () => {
+      const base = makeMutationOp(1, optimistic);
+      const recovery = {
+        query: 'query Target { user { id } }',
+        operationName: 'Target',
+        variablesJson: '{}',
+      };
+      const op = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: optimistic,
+          linkPatches: [
+            {
+              query:
+                'fragment Parent on GraphqlSoupDocument { properties { id } }',
+              recordRoot: {
+                fragmentName: 'Parent',
+                entityKey: 'GraphqlSoupDocument:missing',
+              },
+              variablesJson: '{}',
+              path: [{ field: 'properties' }],
+              operation: {
+                kind: 'prependUnique',
+                entityKey: 'GraphqlProperty:temporary',
+              },
+            },
+          ],
+          revalidations: [recovery],
+        },
+      });
+      const enqueue = host.enqueueOptimisticMutation.bind(host);
+      host.enqueueOptimisticMutation = vi.fn(async (args, claim) => {
+        if (args.linkPatches?.length) throw new Error('missing parent');
+        return enqueue(args, claim);
+      });
+      const { ops } = harness(host);
+      ops.next(op);
+      await tick();
+      expect(host.begins[0]?.linkPatches).toEqual([]);
+      expect(host.enqueueOptimisticMutation).toHaveBeenLastCalledWith(
+        expect.objectContaining({ linkPatches: [], revalidations: [recovery] }),
+        expect.anything()
+      );
+      expect(host.commits).toHaveLength(1);
+    });
+
     it('bounds queued network attempts to one minute', async () => {
       const timeoutSignal = new AbortController().signal;
       const existingSignal = new AbortController().signal;
@@ -2977,6 +3978,101 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each([false, true])(
+      'preserves a committed response when identity diagnostics are reported (callback throws=%s)',
+      async (callbackThrows) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          identityErrors: ['missing identity response object'],
+        });
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
+        const { ops, results, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            message: 'missing identity response object',
+          }),
+          expect.anything()
+        );
+        expect(host.commits).toHaveLength(1);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toEqual({
+          kind: 'committed',
+          data: results[0]?.data,
+        });
+        expect(results[0]?.data).toBeDefined();
+      }
+    );
+
+    it.each([
+      { replacementTransactionId: undefined, callbackThrows: false },
+      { replacementTransactionId: undefined, callbackThrows: true },
+      { replacementTransactionId: 'txn-2', callbackThrows: false },
+      { replacementTransactionId: 'txn-2', callbackThrows: true },
+    ])(
+      'settles an identity failure without replaying the failed attempt (replacement $replacementTransactionId, callback throws=$callbackThrows)',
+      async ({ replacementTransactionId, callbackThrows }) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          kind: 'failed',
+          error: 'missing identity response id',
+          replacementTransactionId,
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const onCacheError = vi.fn(() => {
+          if (callbackThrows) throw new Error('diagnostic failed');
+        });
+        const { ops, results, client, forwarded } = harness(host, undefined, {
+          onCacheError,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+
+        expect(onCacheError).toHaveBeenCalledWith(
+          expect.objectContaining({ message: 'missing identity response id' }),
+          expect.anything()
+        );
+        expect(onCacheError).toHaveBeenCalledTimes(1);
+        expect(host.commits).toHaveLength(1);
+        expect(host.defers).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(
+          replacementTransactionId ? 0 : 1
+        );
+        expect(results[0]?.data).toBeUndefined();
+        if (replacementTransactionId) {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'queued',
+            transactionId: replacementTransactionId,
+          });
+        } else {
+          expect(optimisticMutationDispositionOf(results[0])).toEqual({
+            kind: 'permanently-failed',
+            error: expect.objectContaining({
+              message: expect.stringContaining('missing identity response id'),
+            }),
+          });
+        }
+      }
+    );
+
     it('fires commit revalidations with network-only policy', async () => {
       const commit = host.commitOptimisticWrite.bind(host);
       host.commitOptimisticWrite = async (transactionId, claim, args) => ({
@@ -2999,6 +4095,64 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each([true, false])(
+      'delegates persisted commit revalidations only when an owner accepts: %s',
+      async (handled) => {
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+          ...(await commit(transactionId, claim, args)),
+          revalidations: [
+            {
+              query: stringifyDocument(QUERY),
+              operationName: 'Soup',
+              variablesJson: '{"input":{"limit":2}}',
+            },
+          ],
+        });
+        const delegateRevalidation = vi.fn(() => handled);
+        const { ops, client, results } = harness(host, undefined, {
+          delegateRevalidation,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await tick();
+        expect(delegateRevalidation).toHaveBeenCalledWith(client, {
+          document: expect.any(Object),
+          variables: { input: { limit: 2 } },
+        });
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(handled ? 0 : 1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(host.commits).toHaveLength(1);
+      }
+    );
+
+    it('preserves a committed mutation when delegated reconciliation fails', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{}',
+          },
+        ],
+      });
+      const error = new Error('refresh owner unavailable');
+      const onCacheError = vi.fn();
+      const { ops, results } = harness(host, undefined, {
+        delegateRevalidation: () => {
+          throw error;
+        },
+        onCacheError,
+      });
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+      expect(onCacheError).toHaveBeenCalledWith(error, expect.any(Object));
+      expect(results[0]?.error).toBeUndefined();
+      expect(host.commits).toHaveLength(1);
+      expect(host.rollbacks).toHaveLength(0);
+    });
+
     it('rolls back on a GraphQL error result', async () => {
       const error = new CombinedError({ graphQLErrors: ['nope'] });
       const { ops, results } = harness(host, (op) =>
@@ -3015,6 +4169,59 @@ describe('normalizedCacheExchange', () => {
         error,
       });
     });
+
+    it.each([
+      {
+        code: 'DRAFT_ALREADY_SENT',
+        network: false,
+        expected: 'DRAFT_ALREADY_SENT',
+      },
+      { code: 'INTERNAL', network: false, expected: 'INTERNAL' },
+      { code: 42, network: false, expected: undefined },
+      { code: 'DRAFT_ALREADY_SENT', network: true, expected: undefined },
+    ])(
+      'retains authoritative string error codes on background replay: %j',
+      async ({ code, network, expected }) => {
+        vi.useFakeTimers();
+        try {
+          const rejection = new CombinedError({
+            graphQLErrors: [
+              { message: 'server rejection', extensions: { code } },
+            ],
+            ...(network ? { networkError: new Error('transport failed') } : {}),
+          });
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          let attempts = 0;
+          const { ops } = harness(
+            host,
+            () => {
+              attempts += 1;
+              return {
+                error:
+                  attempts === 1
+                    ? new CombinedError({ networkError: new Error('offline') })
+                    : rejection,
+                data: undefined,
+              };
+            },
+            { shouldRetryMutation: () => attempts === 1 }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(rollback).not.toHaveBeenCalled();
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(attempts).toBe(2);
+          expect(rollback).toHaveBeenCalledExactlyOnceWith(
+            'txn-1',
+            expect.any(Object),
+            rejection.message,
+            expected
+          );
+        } finally {
+          vi.useRealTimers();
+        }
+      }
+    );
 
     it('keeps the disposition queued when permanent settlement is uncertain', async () => {
       const error = new CombinedError({ graphQLErrors: ['nope'] });
@@ -3073,7 +4280,304 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
-    it('retries a draft response failure with the same handles and commits after recovery', async () => {
+    it.each([
+      { status: 500, data: null, failures: 0 },
+      { status: 503, data: { from: 'server' }, failures: 0 },
+      { status: 500, data: null, failures: 9 },
+      { status: 503, data: { from: 'server' }, failures: 9 },
+    ])(
+      'handles HTTP $status without GraphQL errors after $failures server failures',
+      async ({ status, data, failures }) => {
+        vi.useFakeTimers();
+        try {
+          if (failures > 0) {
+            host.seedQueued(
+              {
+                uuid: crypto.randomUUID(),
+                query: stringifyDocument(MUTATION),
+                data: optimistic,
+              },
+              failures
+            );
+          }
+          const response = new Response(JSON.stringify({ data }), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+          const shouldRetryMutation = vi.fn(shouldRetryGraphqlMutation);
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          const defer = vi.spyOn(host, 'deferOptimisticWrite');
+          const client = createClient({
+            url: 'http://test/graphql',
+            fetch: vi.fn(async () => response),
+            exchanges: [
+              normalizedCacheExchange(host, { shouldRetryMutation }),
+              fetchExchange,
+            ],
+          });
+          const pending =
+            failures === 0
+              ? executeOptimisticMutation(
+                  client,
+                  MUTATION,
+                  { input: {} },
+                  optimistic,
+                  { uuid: crypto.randomUUID() }
+                ).toPromise()
+              : undefined;
+          await vi.advanceTimersByTimeAsync(10);
+          expect(shouldRetryMutation).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ response, graphQLErrors: [] })
+          );
+          expect(host.commits).toHaveLength(0);
+          if (failures === 0) {
+            expect(defer).toHaveBeenCalledExactlyOnceWith(
+              'txn-1',
+              expect.any(Object),
+              expect.any(Number),
+              expect.stringContaining(String(status)),
+              true
+            );
+            expect(host.rollbacks).toHaveLength(0);
+            expect(optimisticMutationDispositionOf((await pending)!)).toEqual({
+              kind: 'queued',
+              transactionId: 'txn-1',
+            });
+          } else {
+            expect(host.defers).toHaveLength(0);
+            expect(rollback).toHaveBeenCalledExactlyOnceWith(
+              'restored-1',
+              expect.any(Object),
+              expect.stringContaining('10 server failures'),
+              'MUTATION_RETRY_EXHAUSTED'
+            );
+          }
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each([false, true])(
+      'preserves success and explicit GraphQL rejection with fetchExchange (rejected=%s)',
+      async (rejected) => {
+        vi.useFakeTimers();
+        try {
+          const response = new Response(
+            JSON.stringify(
+              rejected
+                ? {
+                    errors: [
+                      { message: 'rejected', extensions: { code: 'INVALID' } },
+                    ],
+                  }
+                : { data: optimistic }
+            ),
+            {
+              status: rejected ? 503 : 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          );
+          const client = createClient({
+            url: 'http://test/graphql',
+            fetch: vi.fn(async () => response),
+            exchanges: [
+              normalizedCacheExchange(host, {
+                shouldRetryMutation: shouldRetryGraphqlMutation,
+              }),
+              fetchExchange,
+            ],
+          });
+          const pending = executeOptimisticMutation(
+            client,
+            MUTATION,
+            { input: {} },
+            optimistic,
+            { uuid: crypto.randomUUID() }
+          ).toPromise();
+          await vi.advanceTimersByTimeAsync(10);
+          const result = await pending;
+          expect(host.defers).toHaveLength(0);
+          expect(optimisticMutationDispositionOf(result)?.kind).toBe(
+            rejected ? 'permanently-failed' : 'committed'
+          );
+          if (rejected) {
+            expect(result.error?.graphQLErrors[0]?.extensions.code).toBe(
+              'INVALID'
+            );
+            expect(result.error?.response).toBe(response);
+          }
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it.each(['graphql', 'http-500', 'http-503'])(
+      'permanently fails the tenth %s failure and advances the queue',
+      async (kind) => {
+        vi.useFakeTimers();
+        try {
+          const error =
+            kind === 'graphql'
+              ? new CombinedError({
+                  graphQLErrors: [
+                    {
+                      message: 'persistent failure',
+                      extensions: { retryable: true },
+                    },
+                  ],
+                })
+              : new CombinedError({
+                  networkError: new Error('server unavailable'),
+                  response: new Response(null, {
+                    status: kind === 'http-500' ? 500 : 503,
+                  }),
+                });
+          const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+          let attempts = 0;
+          const { ops, results, forwarded } = harness(
+            host,
+            () =>
+              ++attempts <= 10
+                ? { error, data: undefined }
+                : { data: optimistic },
+            { shouldRetryMutation: () => true }
+          );
+          ops.next(makeMutationOp(1, optimistic));
+          ops.next(makeMutationOp(2, optimistic));
+          await vi.advanceTimersByTimeAsync(0);
+          for (let attempt = 1; attempt < 10; attempt += 1) {
+            expect(forwarded).toHaveLength(attempt);
+            expect(host.rollbacks).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(
+              Math.min(1_000 * 2 ** (attempt - 1), 60_000)
+            );
+          }
+          await vi.advanceTimersByTimeAsync(1);
+          expect(host.defers).toHaveLength(9);
+          expect(rollback).toHaveBeenCalledExactlyOnceWith(
+            'txn-1',
+            expect.any(Object),
+            expect.stringContaining('10 server failures'),
+            'MUTATION_RETRY_EXHAUSTED'
+          );
+          expect(host.commits.map((entry) => entry.transactionId)).toEqual([
+            'txn-2',
+          ]);
+          expect(forwarded).toHaveLength(11);
+          expect(
+            results.some(
+              (result) =>
+                optimisticMutationDispositionOf(result)?.kind ===
+                'permanently-failed'
+            )
+          ).toBe(true);
+        } finally {
+          vi.clearAllTimers();
+          vi.useRealTimers();
+        }
+      }
+    );
+
+    it('network failures neither consume nor reset the server failure budget', async () => {
+      vi.useFakeTimers();
+      try {
+        const server = new CombinedError({
+          graphQLErrors: [
+            { message: 'server failed', extensions: { retryable: true } },
+          ],
+        });
+        const network = new CombinedError({
+          networkError: new DOMException('request timed out', 'TimeoutError'),
+        });
+        let attempts = 0;
+        const { ops } = harness(
+          host,
+          () => {
+            attempts += 1;
+            // Transport failures before the first server error cannot consume
+            // the budget; transport failures after nine cannot reset it either.
+            return {
+              error:
+                (attempts >= 13 && attempts <= 21) || attempts === 34
+                  ? server
+                  : network,
+              data: undefined,
+            };
+          },
+          { shouldRetryMutation: () => true }
+        );
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(0);
+        for (let attempt = 1; attempt < 34; attempt += 1) {
+          expect(host.rollbacks).toHaveLength(0);
+          await vi.advanceTimersByTimeAsync(
+            Math.min(1_000 * 2 ** (attempt - 1), 60_000)
+          );
+        }
+        expect(attempts).toBe(34);
+        expect(host.defers).toHaveLength(33);
+        expect(host.rollbacks).toEqual(['txn-1']);
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    });
+
+    it('uses the persisted budget on replay, records exhaustion and revalidates', async () => {
+      host.seedQueued(
+        {
+          uuid: crypto.randomUUID(),
+          query: stringifyDocument(MUTATION),
+          data: optimistic,
+          revalidations: [
+            { query: stringifyDocument(QUERY), variablesJson: '{}' },
+          ],
+        },
+        9
+      );
+      const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
+      const onMutationAttemptResult = vi.fn(async () => {});
+      const error = new CombinedError({
+        graphQLErrors: [
+          { message: 'still failing', extensions: { retryable: true } },
+        ],
+      });
+      const { client } = harness(host, () => ({ error, data: undefined }), {
+        shouldRetryMutation: () => true,
+        onMutationAttemptResult,
+      });
+      await tick();
+      expect(host.defers).toHaveLength(0);
+      expect(rollback).toHaveBeenCalledExactlyOnceWith(
+        'restored-1',
+        expect.any(Object),
+        expect.stringContaining('10 server failures'),
+        'MUTATION_RETRY_EXHAUSTED'
+      );
+      expect(onMutationAttemptResult).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          transactionId: 'restored-1',
+          serverFailureCount: 9,
+        }),
+        expect.objectContaining({
+          error: expect.objectContaining({
+            graphQLErrors: [
+              expect.objectContaining({
+                extensions: { code: 'MUTATION_RETRY_EXHAUSTED' },
+              }),
+            ],
+          }),
+        }),
+        false
+      );
+      expect(client.query).toHaveBeenCalledOnce();
+    });
+
+    it('requires explicit retry after a draft application failure and preserves its handles', async () => {
       vi.useFakeTimers();
       try {
         const variables = {
@@ -3125,30 +4629,37 @@ describe('normalizedCacheExchange', () => {
         await vi.advanceTimersByTimeAsync(0);
 
         expect(attempts).toBe(1);
-        expect(host.rollbacks).toHaveLength(0);
-        expect(host.defers).toEqual([
-          { transactionId: 'txn-1', error: error.message },
-        ]);
-        expect(results[0]?.error).toBeUndefined();
+        expect(host.rollbacks).toEqual(['txn-1']);
+        expect(host.defers).toHaveLength(0);
+        expect(results[0]?.error).toBe(error);
         expect(optimisticMutationDispositionOf(results[0])).toEqual({
-          kind: 'queued',
-          transactionId: 'txn-1',
+          kind: 'permanently-failed',
+          error,
         });
         await vi.advanceTimersByTimeAsync(1_000);
+        expect(attempts).toBe(1);
+        ops.next(
+          makeOperation(
+            'mutation',
+            createRequest(SaveEmailDraftDocument, variables),
+            makeMutationOp(2, saved).context
+          )
+        );
+        await vi.advanceTimersByTimeAsync(0);
 
         expect(attempts).toBe(2);
         expect(forwarded.map((op) => op.variables)).toEqual([
           variables,
           variables,
         ]);
-        expect(host.begins).toHaveLength(1);
+        expect(host.begins).toHaveLength(2);
         expect(host.commits).toEqual([
           expect.objectContaining({
-            transactionId: 'txn-1',
+            transactionId: 'txn-2',
             data: saved,
           }),
         ]);
-        expect(host.rollbacks).toHaveLength(0);
+        expect(host.rollbacks).toEqual(['txn-1']);
       } finally {
         vi.useRealTimers();
       }

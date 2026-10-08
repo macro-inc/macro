@@ -3,6 +3,11 @@
 use models_properties::service::property_option::PropertyOption;
 use thiserror::Error;
 
+/// A stored property value cannot be decoded or used for the requested mutation.
+#[derive(Debug, Error)]
+#[error("Stored property value is invalid for this operation")]
+pub(crate) struct InvalidStoredPropertyValue;
+
 /// Domain error type for property operations.
 #[derive(Debug, Error)]
 pub enum PropertiesErr {

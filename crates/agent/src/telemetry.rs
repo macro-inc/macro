@@ -27,6 +27,7 @@
 mod test;
 
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use genai_telemetry::messages::{self, MediaSource};
 use genai_telemetry::{
@@ -55,8 +56,8 @@ struct Inner {
     /// Label for the agent, e.g. the AI feature driving it.
     agent_name: String,
     policy: ContentPolicy,
-    /// Whether anything is recorded at all. Off, every `record_*` is a no-op
-    /// and the model call's span is never parked.
+    /// Whether GenAI content and usage are recorded. Off, only each model
+    /// call's first-chunk timing is: nothing else measures it.
     enabled: bool,
     /// The routed `(provider, model)`, set once routing has decided.
     model: OnceLock<(String, String)>,
@@ -64,6 +65,12 @@ struct Inner {
     /// [`TracedModel`] on request, consumed by [`ChatSpanHook`] on response.
     /// Holding the handle keeps the span open, so it is always taken out again.
     chat_span: Mutex<Option<tracing::Span>>,
+    /// When the parked model call was requested, until its first chunk is
+    /// recorded.
+    chat_requested_at: Mutex<Option<Instant>>,
+    /// The time to first chunk and its kind of the current run's first model
+    /// call, until [`Self::take_run_first_chunk`].
+    run_first_chunk: Mutex<Option<(Duration, &'static str)>>,
 }
 
 impl GenAiContext {
@@ -80,6 +87,8 @@ impl GenAiContext {
             enabled,
             model: OnceLock::new(),
             chat_span: Mutex::new(None),
+            chat_requested_at: Mutex::new(None),
+            run_first_chunk: Mutex::new(None),
         }))
     }
 
@@ -114,10 +123,19 @@ impl GenAiContext {
     /// `chat` span when called from [`TracedModel`]) and park that span for
     /// [`Self::record_response`].
     fn record_request(&self, request: &CompletionRequest) {
-        if !self.0.enabled {
-            return;
-        }
         let span = tracing::Span::current();
+        if self.0.enabled {
+            self.record_request_fields(&span, request);
+        }
+        *self.0.chat_span.lock().expect("chat span slot poisoned") = Some(span);
+        *self
+            .0
+            .chat_requested_at
+            .lock()
+            .expect("chat request time poisoned") = Some(Instant::now());
+    }
+
+    fn record_request_fields(&self, span: &tracing::Span, request: &CompletionRequest) {
         let policy = &self.0.policy;
 
         if let Some(conversation_id) = self.conversation_id() {
@@ -156,13 +174,67 @@ impl GenAiContext {
                 span.set_bool(attr::MACRO_CONTENT_TRUNCATED, true);
             }
         }
+    }
 
-        *self.0.chat_span.lock().expect("chat span slot poisoned") = Some(span);
+    /// The model call in flight streamed a chunk of `kind`. The first one per
+    /// call records how long after the request it came.
+    pub(crate) fn record_chunk(&self, kind: &'static str) {
+        let Some(requested_at) = self
+            .0
+            .chat_requested_at
+            .lock()
+            .expect("chat request time poisoned")
+            .take()
+        else {
+            return;
+        };
+        let time_to_first_chunk = requested_at.elapsed();
+        self.0
+            .run_first_chunk
+            .lock()
+            .expect("run first chunk poisoned")
+            .get_or_insert((time_to_first_chunk, kind));
+        if let Some(span) = self
+            .0
+            .chat_span
+            .lock()
+            .expect("chat span slot poisoned")
+            .as_ref()
+        {
+            span.set_i64(
+                attr::MACRO_CHAT_TIME_TO_FIRST_CHUNK_MS,
+                i64::try_from(time_to_first_chunk.as_millis()).unwrap_or(i64::MAX),
+            );
+            span.set_str(attr::MACRO_CHAT_FIRST_CHUNK_KIND, kind);
+        }
+    }
+
+    /// The time to first chunk and its kind of the first model call recorded
+    /// since the last take: taken as a run starts, to clear the slot, and as
+    /// it ends.
+    pub(crate) fn take_run_first_chunk(&self) -> Option<(Duration, &'static str)> {
+        self.0
+            .run_first_chunk
+            .lock()
+            .expect("run first chunk poisoned")
+            .take()
     }
 
     /// Record the response side of the model call whose request was recorded
     /// last, then release the parked span so it can close.
     fn record_response(&self, content: &OneOrMany<AssistantContent>) {
+        // A call whose output arrived whole streamed nothing earlier: the
+        // response is its first chunk.
+        self.record_chunk(match content.first() {
+            AssistantContent::Text(_) => "text",
+            AssistantContent::ToolCall(_) => "tool_call",
+            AssistantContent::Reasoning(_) => "reasoning",
+            AssistantContent::Image(_) => "image",
+        });
+        if !self.0.enabled {
+            self.finish_run();
+            return;
+        }
         let Some(span) = self
             .0
             .chat_span
@@ -205,6 +277,7 @@ impl GenAiContext {
         detail: &str,
     ) {
         if !self.0.enabled {
+            self.finish_run();
             return;
         }
         let description = self.failure_description(error_type, detail);
@@ -219,6 +292,7 @@ impl GenAiContext {
     /// on every path - a one-shot completion has no run driver to do it.
     fn record_chat_failure(&self, error: &CompletionError) {
         if !self.0.enabled {
+            self.finish_run();
             return;
         }
         let description = self.failure_description("provider_error", &error.to_string());

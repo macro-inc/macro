@@ -90,20 +90,22 @@ export function createCommentLayout() {
 
     // The margin is display:none until the document has a comment; re-measure
     // once it is laid out.
-    const marginResizeObserver = new ResizeObserver(() => throttledUpdate());
+    // ResizeObserver runs before paint. Keep geometry changes synchronous:
+    // scroll anchoring can hold the text still while a resizing embed moves
+    // the margin, so throttling here paints cards at stale document offsets.
+    const marginResizeObserver = new ResizeObserver(updateMarkPositions);
     marginResizeObserver.observe(commentMargin);
     onCleanup(() => marginResizeObserver.disconnect());
 
-    // Throttle updates on comment positions. Update on (1) editor updates, (2)
-    // internal layout shifts causes by non-updating element height changed to
-    // embeds and media and (3) editor width changes.
+    // Coalesce editor updates, but measure layout shifts and editor resizes
+    // immediately so the margin and its text anchors move in the same frame.
     if (md.editor) {
       autoRegister(
         md.editor.registerUpdateListener(() => {
           throttledUpdate();
         }),
-        registerInternalLayoutShiftListener(md.editor, throttledUpdate),
-        registerEditorWidthObserver(md.editor, throttledUpdate)
+        registerInternalLayoutShiftListener(md.editor, updateMarkPositions),
+        registerEditorWidthObserver(md.editor, updateMarkPositions)
       );
     }
   });

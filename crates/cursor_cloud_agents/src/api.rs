@@ -17,10 +17,14 @@ mod test;
 /// Capturing raw SSE bytes as fixtures.
 pub mod record;
 
+/// Reading a stream's body, and the report written when it fails.
+mod stream;
+
 /// Request/response DTOs for the endpoints this crate uses.
 pub mod wire;
 
 use crate::api::record::SseRecording;
+use crate::api::stream::ConnectionFacts;
 use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, ArtifactDownloadResponse, ConversationResponse,
     CreateAgentRequest, CreateAgentResponse, CreateRunRequest, CreateRunResponse,
@@ -35,9 +39,7 @@ use crate::domain::model::{
 use crate::domain::ports::{
     ConnectedStream, CursorAgents, CursorArtifacts, RunStream, StreamConnectError,
 };
-use futures::{Stream, StreamExt as _};
-use sse_core::SseEvent;
-use std::collections::VecDeque;
+use futures::Stream;
 use std::num::NonZeroUsize;
 
 /// The largest single SSE record payload this agent will buffer, 16 MiB.
@@ -260,6 +262,22 @@ fn classify_repository_rejection(
     None
 }
 
+/// Whether a 4xx body is Cursor refusing for want of budget.
+///
+/// Keyed on the envelope's `error.code` alone. The message names a dollar
+/// figure and a dashboard, both Cursor's to reword; the code is the contract.
+/// Reached for a create and for a follow-up run alike - a budget runs out
+/// mid-conversation as readily as before it.
+fn classify_usage_limit(body: &str) -> Option<crate::domain::error::UsageLimitExceeded> {
+    let envelope = serde_json::from_str::<crate::api::wire::ApiErrorEnvelope>(body).ok()?;
+    crate::domain::error::UsageLimitExceeded::CODES
+        .contains(&envelope.error.code.as_str())
+        .then(|| crate::domain::error::UsageLimitExceeded {
+            code: envelope.error.code,
+            detail: body.to_owned(),
+        })
+}
+
 /// The Cursor cloud API client.
 #[derive(Debug, Clone)]
 pub struct CursorClient {
@@ -417,6 +435,9 @@ impl CursorClient {
     {
         if !status.is_success() {
             if status.is_client_error() && status != reqwest::StatusCode::REQUEST_TIMEOUT {
+                if let Some(exceeded) = classify_usage_limit(text) {
+                    return Err(rootcause::report!(exceeded).into_dynamic());
+                }
                 return Err(
                     rootcause::report!(crate::domain::error::PromptRejected(format!(
                         "cursor POST {path} -> {status}: {text}"
@@ -905,6 +926,17 @@ const RETENTION_HEADER: &str = "x-cursor-stream-retention-seconds";
 /// The SSE resume header. Not in `http`'s constant set, so it is spelled here.
 const LAST_EVENT_ID_HEADER: &str = "last-event-id";
 
+/// How long a stream connect waits for the response headers before it is a
+/// [`StreamConnectError::Stalled`].
+///
+/// A stream's headers ordinarily arrive within the second. The one case that
+/// takes longer is the one this bounds: a resume the server held open for
+/// minutes and answered all at once when the run ended (prod, 2026-09-26).
+/// Thirty seconds is far past any honest handshake and short enough that
+/// the domain, which checks the run's record on every stall, notices a run
+/// that has finished behind a wedged stream within the minute.
+const STREAM_HEADERS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 impl RunStream for CursorClient {
     // Covers connecting the stream, retries included; reading it belongs to
     // the caller's `cursor.run.ingest` span.
@@ -951,18 +983,46 @@ impl CursorClient {
         >,
         StreamConnectError,
     > {
+        // `identity` is stated rather than left to the default. This client
+        // is built without reqwest's decompression features, so it would
+        // never decode a compressed body — but it would not have asked for
+        // one either, and an intermediary that compresses an event stream
+        // when nothing forbids it buffers records until a block is full.
+        // Asking for identity forbids it, and a `content-encoding` on the
+        // answer becomes a fact worth a warning rather than a guess.
         let mut request = self
             .http
             .get(self.url(&format!("/v1/agents/{agent}/runs/{run}/stream")))
             .basic_auth(self.config.api_key.expose(), Some(""))
-            .header(reqwest::header::ACCEPT, "text/event-stream");
+            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .header(reqwest::header::ACCEPT_ENCODING, "identity");
         if let Some(resume_from) = resume_from {
             request = request.header(LAST_EVENT_ID_HEADER, resume_from);
         }
-        let response = request
-            .send()
-            .await
-            .map_err(|error| StreamConnectError::Other(rootcause::report!(error).into()))?;
+        let asked_at = std::time::Instant::now();
+        let response = match tokio::time::timeout(STREAM_HEADERS_TIMEOUT, request.send()).await {
+            Ok(Ok(response)) => response,
+            Ok(Err(error)) => {
+                return Err(StreamConnectError::Other(rootcause::report!(
+                    "{}",
+                    stream::error_chain(&error)
+                )));
+            }
+            Err(_elapsed) => {
+                tracing::warn!(
+                    cursor.run.id = %run,
+                    cursor.stream.resumed = resume_from.is_some(),
+                    cursor.stream.last_event_id = resume_from,
+                    cursor.stream.headers_timeout_ms = STREAM_HEADERS_TIMEOUT.as_millis() as u64,
+                    "Cursor sent no stream headers before the timeout"
+                );
+                return Err(StreamConnectError::Stalled(format!(
+                    "no response headers after {}s",
+                    STREAM_HEADERS_TIMEOUT.as_secs()
+                )));
+            }
+        };
+        let headers_ms = asked_at.elapsed().as_millis() as u64;
         let status = response.status();
         // Read before the body is consumed; a resumed stream's window is the
         // only thing that says whether the next drop is recoverable at all.
@@ -989,71 +1049,39 @@ impl CursorClient {
             )));
         }
 
+        let facts = ConnectionFacts::of(&response, resume_from.is_some());
+        tracing::info!(
+            cursor.run.id = %run,
+            cursor.stream.resumed = facts.resumed,
+            cursor.stream.last_event_id = resume_from,
+            cursor.stream.headers_ms = headers_ms,
+            cursor.stream.status = facts.status,
+            cursor.stream.http_version = %facts.version,
+            cursor.stream.content_type = facts.content_type.as_deref(),
+            cursor.stream.content_encoding = facts.content_encoding.as_deref(),
+            cursor.stream.transfer_encoding = facts.transfer_encoding.as_deref(),
+            cursor.stream.server = facts.server.as_deref(),
+            cursor.stream.request_id = facts.request_id.as_deref(),
+            cursor.stream.retention_seconds = retention_seconds,
+            "Cursor stream connected"
+        );
+        if facts.is_compressed() {
+            tracing::warn!(
+                cursor.run.id = %run,
+                cursor.stream.content_encoding = facts.content_encoding.as_deref(),
+                cursor.stream.request_id = facts.request_id.as_deref(),
+                "Cursor stream arrived compressed despite asking for identity"
+            );
+        }
+
         // Recording taps the bytes before the decoder sees them, so a
         // fixture is byte-identical to the wire.
         let recording = match &self.config.record_dir {
             Some(dir) => SseRecording::create(dir, agent.as_str(), run.as_str()),
             None => SseRecording::disabled(),
         };
-
-        // Decode incrementally: SSE records straddle read boundaries, so the
-        // decoder holds a partial record in its own buffers and the unfold
-        // drains whole ones only. One read can complete several records, hence
-        // the queue.
-        let state = (
-            response.bytes_stream().boxed(),
-            sse_core::SseDecoder::with_limit(MAX_SSE_PAYLOAD),
-            VecDeque::new(),
-            recording,
-        );
-        let records = futures::stream::try_unfold(
-            state,
-            |(mut bytes, mut decoder, mut pending, mut recording)| async move {
-                loop {
-                    if let Some(event) = pending.pop_front() {
-                        return Ok(Some((event?, (bytes, decoder, pending, recording))));
-                    }
-                    match bytes.next().await {
-                        Some(Ok(chunk)) => {
-                            recording.write(&chunk);
-                            let mut cursor = chunk;
-                            while let Some(record) = decoder.next(&mut cursor) {
-                                // A payload past the limit is the run's
-                                // problem, not this stream's shape: report it
-                                // and stop rather than resync mid-record.
-                                let record = match record {
-                                    Ok(record) => record,
-                                    Err(error) => {
-                                        // Deliver every earlier complete record
-                                        // in this chunk before the decoder error.
-                                        pending.push_back(Err(rootcause::report!(
-                                            "cursor sse payload over {} bytes: {error}",
-                                            MAX_SSE_PAYLOAD
-                                        )
-                                        .into_dynamic()));
-                                        break;
-                                    }
-                                };
-                                let SseEvent::Message(message) = record else {
-                                    continue; // `retry:`; the domain drives reconnects
-                                };
-                                pending.push_back(Ok(crate::domain::journal::NativeRecord {
-                                    event: message.event.into_owned(),
-                                    data: message.data,
-                                    id: message.last_event_id.map(|id| id.to_string()),
-                                }));
-                            }
-                        }
-                        Some(Err(error)) => {
-                            return Err(rootcause::report!(error).into_dynamic());
-                        }
-                        None => return Ok(None),
-                    }
-                }
-            },
-        );
         Ok(ConnectedStream {
-            records,
+            records: stream::records(response, facts, recording, MAX_SSE_PAYLOAD),
             retention_seconds,
         })
     }

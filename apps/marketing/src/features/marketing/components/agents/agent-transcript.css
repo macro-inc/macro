@@ -1,0 +1,46 @@
+/* block-agent Transcript: macro-message-width columns with px-4 pb-4. */
+.agent-transcript { display: flex; flex-direction: column; padding-top: 16px; }
+.agent-turn { width: 100%; max-width: 920px; margin-inline: auto; padding: 0 16px 16px; min-width: 0; }
+.agent-tool-enter { animation: agent-tool-enter 260ms ease-out both; }
+@keyframes agent-tool-enter { from { opacity: 0; transform: translateY(3px); } }
+
+/* StaticMarkdown's VERTICAL_GAP (my-4 first:mt-1.5 last:mb-1.5) plus channel-markdown's 2px
+   paragraph edges; feature pages reset p margins, so restate them here. */
+.workspace-demo .agent-answer .md > .md-p,
+.workspace-demo .agent-answer .md > .md-list { margin-block: 16px; }
+.workspace-demo .agent-answer .md > .md-list:first-child { margin-top: 6px; }
+.workspace-demo .agent-answer .md > .md-list:last-child { margin-bottom: 6px; }
+.workspace-demo .agent-answer .md > .md-p:first-child { margin-top: 2px; }
+.workspace-demo .agent-answer .md > .md-p:last-child { margin-bottom: 2px; }
+
+/* Agent citations: DocumentMention / UserMention as buttons that open the item. */
+.workspace-demo button.agent-mention { display: inline; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: inherit; cursor: pointer; }
+.workspace-demo button.agent-mention.mention-person { padding: 2px; }
+.workspace-demo button.agent-mention:hover .demo-mention-name { text-decoration-color: color-mix(in srgb, currentColor 60%, transparent); }
+.workspace-demo .agent-mention .demo-mention-icon.mention-email,
+.workspace-demo .agent-mention .demo-mention-icon.mention-call,
+.workspace-demo .agent-mention .demo-mention-icon.mention-channel { color: var(--color-default); }
+.workspace-demo .agent-mention-time { font-size: .8em; color: color-mix(in srgb, currentColor 50%, transparent); }
+.workspace-demo .agent-mention-task { display: inline-flex; align-items: center; gap: 4px; margin-inline: 4px; vertical-align: middle; position: relative; top: -0.05em; }
+.workspace-demo .agent-mention-avatar { display: inline-flex; width: 13px; height: 13px; margin-left: 2px; }
+.workspace-demo .agent-mention-avatar > * { width: 100%; height: 100%; }
+
+/* ChatComposer measures whether text and controls share a row; in a narrow
+   pane the editor takes its own row above them, with the placeholder truncated. */
+.agent-composer { container-type: inline-size; }
+.agent-composer .mail-channel-input:placeholder-shown,
+.agent-composer .mail-channel-input::placeholder,
+.workspace-demo .agent-composer .demo-mention-editor:empty::before { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 560px) {
+  .agent-composer [data-input-layout][data-agent-composer][data-composer-compact] {
+    grid-template-areas: 'body body body' 'left . right';
+    align-items: center;
+    row-gap: 3.75px;
+    padding: 7.5px;
+    --input-editor-padding: 4.6875px 9.375px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-tool-enter { animation: none; }
+}

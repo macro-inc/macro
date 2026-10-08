@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET synced_at=now(),materialized_starts_at='2026-07-01',materialized_ends_at='2026-08-01',materialized_start_date='2026-07-01',materialized_end_date='2026-08-01' WHERE account_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6024c12e588ebafc6003c0c003f042457a3ff3dbd83da2c22073c848cf21990a"
+}

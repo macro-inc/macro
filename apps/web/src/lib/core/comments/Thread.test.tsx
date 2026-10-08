@@ -14,12 +14,10 @@ import { MinimizedThread } from './MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
-  noopCommentOperations,
   ThreadBody,
 } from './Thread';
 
 const mocks = vi.hoisted(() => ({
-  unifiedDiscussions: true,
   confirmed: vi.fn(),
   patchThread: vi.fn(),
 }));
@@ -38,19 +36,6 @@ vi.mock('@core/context/user', () => ({ useAuthor: () => () => 'user' }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
-vi.mock('./MessageTopRow', () => ({
-  MessageTopRow: (props: { copyLink?: () => Promise<void> }) => (
-    <button onClick={props.copyLink}>Copy comment link</button>
-  ),
-}));
-vi.mock('./Inputs', () => ({
-  EditInput: () => null,
-  NewReplyInput: () => null,
-}));
-vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
-  isFeatureEnabled: () => mocks.unifiedDiscussions,
-}));
 vi.mock('@channel/Input', () => ({ ChannelInput: () => null }));
 vi.mock('@channel/Input/message-payload', () => ({
   buildPostMessageSendPayload: () => ({ message: {} }),
@@ -58,6 +43,8 @@ vi.mock('@channel/Input/message-payload', () => ({
 vi.mock('@core/messages/MessageThread', () => ({
   MessageThreadById: (props: {
     buildLink: (message: { id: string }) => string;
+    targetId?: string | null;
+    onClearTarget?: () => void;
   }) => {
     // Stands in for the message actions' delete confirmation, which the
     // thread renders into a portal outside the card.
@@ -65,6 +52,12 @@ vi.mock('@core/messages/MessageThread', () => ({
     return (
       <>
         <a href={props.buildLink({ id: 'comment-root' })}>Copy link</a>
+        <button
+          data-target={props.targetId ?? undefined}
+          onClick={() => props.onClearTarget?.()}
+        >
+          Linked comment
+        </button>
         <button onClick={() => setConfirming(true)}>Delete</button>
         <Dialog open={confirming()} onOpenChange={setConfirming}>
           <Dialog.Portal>
@@ -97,7 +90,6 @@ vi.mock('./MeasureContainer', () => ({
 
 const writeText = vi.fn();
 beforeEach(() => {
-  mocks.unifiedDiscussions = true;
   mocks.patchThread.mockReset();
   writeText.mockReset();
   vi.stubGlobal('navigator', { clipboard: { writeText } });
@@ -141,8 +133,7 @@ describe('anchored comment links', () => {
   // message API, which follows the flag unless a test says otherwise.
   const renderThreadBody = (
     documentType: CommentsContextType['documentType'] = 'md',
-    minimized = false,
-    messageApi = mocks.unifiedDiscussions
+    minimized = false
   ) =>
     render(() => (
       <CommentsContext.Provider
@@ -154,13 +145,7 @@ describe('anchored comment links', () => {
           highlightedCommentId: () => null,
           setActiveThread: () => {},
           setThreadHeight: () => {},
-          getCommentById: () => ({ ...comment, id: 'reply', text: 'Reply' }),
-          ownedComment: () => false,
-          inComment: true,
-          commentOperations: noopCommentOperations,
-          messageOperations: messageApi
-            ? { createComment: async () => null }
-            : undefined,
+          messageOperations: { createComment: async () => null },
         }}
       >
         {minimized ? (
@@ -188,18 +173,38 @@ describe('anchored comment links', () => {
     }
   );
 
+  it('releases the comment-link highlight when the highlighted comment is clicked', () => {
+    const [highlighted, setHighlighted] = createSignal<string | null>(
+      'comment-root'
+    );
+    const view = render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          documentType: 'md',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: highlighted,
+          clearHighlightedComment: () => setHighlighted(null),
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody comment={comment} isActive />
+      </CommentsContext.Provider>
+    ));
+    const linked = view.getByRole('button', { name: 'Linked comment' });
+    expect(linked.dataset.target).toBe('comment-root');
+    fireEvent.click(linked);
+    expect(highlighted()).toBeNull();
+    expect(linked.dataset.target).toBeUndefined();
+  });
+
   it('renders a PDF on the message API through the message thread', () => {
     const view = renderThreadBody('pdf');
     const url = new URL(view.getByRole('link').getAttribute('href')!);
     expect(url.pathname).toBe('/app/pdf/document');
-  });
-
-  it('keeps a PDF on the legacy path when its annotations did not choose the message API', () => {
-    // The flag is on, but the PDF read it as off when its annotations loaded.
-    const view = renderThreadBody('pdf', false, false);
-    // The message thread is mocked as the copy-link anchor.
-    expect(view.queryByRole('link')).toBeNull();
-    expect(view.getByText('Comment')).toBeTruthy();
   });
 
   it('expands a minimized comment in a document detail without a block provider', () => {
@@ -246,10 +251,7 @@ describe('anchored comment links', () => {
           highlightedCommentId: () => null,
           setActiveThread: () => {},
           setThreadHeight: () => {},
-          getCommentById: () => undefined,
-          ownedComment: () => false,
-          inComment: true,
-          commentOperations: noopCommentOperations,
+          messageOperations: { createComment: async () => null },
         }}
       >
         <MinimizedThread
@@ -293,10 +295,6 @@ describe('anchored comment links', () => {
           highlightedCommentId: () => null,
           setActiveThread,
           setThreadHeight: () => {},
-          getCommentById: () => undefined,
-          ownedComment: () => false,
-          inComment: true,
-          commentOperations: noopCommentOperations,
           messageOperations: { createComment: async () => null },
         }}
       >
@@ -318,29 +316,6 @@ describe('anchored comment links', () => {
     );
     expect(setActiveThread.mock.calls).toEqual(isActive ? [[null]] : []);
   });
-
-  it.each(['md', 'task', 'snippet', 'skill', 'pdf'] as const)(
-    'copies legacy %s root and reply links without a block provider',
-    async (documentType) => {
-      mocks.unifiedDiscussions = false;
-      const view = renderThreadBody(documentType);
-      expect(view.getByText('Comment')).toBeTruthy();
-      expect(view.getByText('Reply')).toBeTruthy();
-
-      const buttons = view.getAllByRole('button', {
-        name: 'Copy comment link',
-      });
-      for (const [index, id] of ['comment-root', 'reply'].entries()) {
-        fireEvent.click(buttons[index]);
-        await waitFor(() => expect(writeText).toHaveBeenCalledTimes(index + 1));
-        const url = new URL(writeText.mock.calls[index][0]);
-        expect(url.pathname).toBe(`/app/${documentType}/document`);
-        expect(url.searchParams.get(markdownParams.commentId)).toBe(
-          documentType === 'pdf' ? null : id
-        );
-      }
-    }
-  );
 });
 
 describe('resolved discussions', () => {
@@ -356,10 +331,6 @@ describe('resolved discussions', () => {
           highlightedCommentId: () => null,
           setActiveThread,
           setThreadHeight: () => {},
-          getCommentById: () => undefined,
-          ownedComment: () => false,
-          inComment: true,
-          commentOperations: noopCommentOperations,
           messageOperations: { createComment: async () => null },
         }}
       >

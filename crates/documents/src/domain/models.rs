@@ -1,11 +1,11 @@
 //! Domain models for the documents crate.
 
-use activity::{Actor, Attribution};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
-use models_permissions::share_permission::LinkShareState;
+use model_owner::Owner;
+use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
@@ -72,8 +72,8 @@ pub struct CopyDocumentResponse {
 pub struct CopyDocumentRepoArgs {
     /// The original document metadata to copy from.
     pub original_document: DocumentMetadata,
-    /// The new owner/copier user ID.
-    pub user_id: MacroUserIdStr<'static>,
+    /// Who owns the copy.
+    pub owner: Owner,
     /// The name for the new document.
     pub document_name: String,
     /// The file type of the document.
@@ -287,6 +287,39 @@ impl GithubPullRequestsResponse {
     }
 }
 
+/// The most pull requests one task lookup answers, one Reviews page.
+pub const MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP: usize = 100;
+
+/// Request body for looking up the tasks linked to GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksRequest {
+    /// Pull request `owner/repo/pull/number` keys, at most 100.
+    pub github_keys: Vec<String>,
+}
+
+/// The tasks linked to one GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasks {
+    /// The pull request's `owner/repo/pull/number` key, as requested.
+    pub github_key: String,
+    /// Ids of the task documents the pull request references, oldest link first. Empty when
+    /// the caller cannot see the pull request. The caller may still lack access to a task.
+    pub task_ids: Vec<String>,
+}
+
+/// The tasks linked to each requested GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksResponse {
+    /// One entry per requested pull request, in request order.
+    pub pull_requests: Vec<GithubPullRequestTasks>,
+}
+
 /// Request body for copying a document.
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
@@ -317,23 +350,23 @@ pub enum InitialLinkShare {
     Exact(LinkShareState),
 }
 
-/// Arguments for creating a document in the repository.
-pub struct CreateDocumentRepoArgs {
+/// A document to create, before its owner is known.
+///
+/// The service derives the owner from the verified creation principal.
+pub struct NewDocument {
     /// Optional user-provided document ID.
     pub id: Option<uuid::Uuid>,
     /// SHA256 hash of the document content.
     pub sha: String,
     /// Document name without extension.
     pub document_name: String,
-    /// The owner/creator of the document.
-    pub user_id: MacroUserIdStr<'static>,
     /// File type of the document.
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
     /// Team to use when assigning a per-team task number, never sharing authority.
     pub team_id: Option<uuid::Uuid>,
-    /// Explicit task creation consent. Initializes Comment using the persisted owner's team.
+    /// Explicit task creation consent. Initializes Edit using the persisted owner's team.
     /// Ordinary documents, snippets, and imports must leave this false.
     pub share_with_team: bool,
     /// Custom creation timestamp.
@@ -342,42 +375,35 @@ pub struct CreateDocumentRepoArgs {
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
     pub skip_history: bool,
-    /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
-    pub attribution: Option<Attribution>,
     /// How the new document's link share is initialized.
     pub initial_link_share: InitialLinkShare,
 }
 
-impl CreateDocumentRepoArgs {
-    /// Resolves who created this document for activity recording.
-    ///
-    /// Ownership (`user_id`) is unchanged.
-    pub fn resolved_attribution(&self) -> Attribution {
-        self.attribution
-            .clone()
-            .unwrap_or_else(|| Attribution::direct(Actor::new_from_user(self.user_id.clone())))
-    }
+/// Arguments for creating a document in the repository.
+pub struct CreateDocumentRepoArgs {
+    /// Who owns the document.
+    pub owner: Owner,
+    /// The document to create.
+    pub document: NewDocument,
 }
 
 /// Arguments for importing an email attachment as a document.
 pub struct ImportEmailAttachmentRepoArgs {
     /// The email attachment being imported.
     pub email_attachment_id: uuid::Uuid,
+    /// The mailbox owner, who owns the imported document.
+    pub owner: MacroUserIdStr<'static>,
     /// How to create the document when no reusable import exists.
-    pub create: CreateDocumentRepoArgs,
+    pub document: NewDocument,
 }
 
-impl ImportEmailAttachmentRepoArgs {
-    /// Resolves who created this import for activity recording.
-    ///
-    /// Unset attribution is the system bot: email import is an internal
-    /// pipeline, not a user-authored create. Ownership (`create.user_id`)
-    /// is unchanged.
-    pub fn resolved_attribution(&self) -> Attribution {
-        self.create.attribution.clone().unwrap_or_else(|| {
-            Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID))
-        })
-    }
+/// The team an owner resolves to, with the team's link-share preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OwnerTeam {
+    /// The owner's team.
+    pub team_id: uuid::Uuid,
+    /// The team's default link share for new documents.
+    pub default_link_share: TeamLinkShareDefault,
 }
 
 /// Fact returned by the repository for an email-attachment import.

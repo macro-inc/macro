@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT change_id, column_id, kind FROM database_change_columns WHERE change_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "change_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "column_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "kind",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "be79373fa509f2929265e9a99af1c1e88225b84f59b7eec3ab087427c965e8aa"
+}

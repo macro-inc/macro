@@ -1,5 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
-import { contentHash } from '@core/util/hash';
+import {
+  nativeUploadChecksum,
+  resolveUploadSource,
+  uploadNativeStagedFileToPresignedUrl,
+} from '@core/mobile/nativeStagedUpload';
 import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { emailClient } from '@service-email/client';
@@ -17,7 +21,14 @@ type UploadDraftAttachmentsParams = {
    * the content upload can take a long time, and a debounced draft save that
    * still sees the file without an id would add it to the draft a second time.
    */
-  onAttachmentAdded?: (file: File, attachmentID: string) => void;
+  onAttachmentAdded?: (
+    file: File,
+    attachmentID: string
+  ) => void | Promise<void>;
+  onAttachmentUploaded?: (
+    file: File,
+    attachmentID: string
+  ) => void | Promise<void>;
   /**
    * Called when the content upload fails, once its attachment record has been
    * confirmed removed from the draft, so the file becomes eligible for a
@@ -43,8 +54,7 @@ export const useUploadDraftAttachmentsMutation = (
   return useMutation(() => ({
     mutationFn: async (params: UploadDraftAttachmentsParams) => {
       for (const attachment of params.attachments) {
-        const arrayBuffer = await attachment.arrayBuffer();
-        const sha = await contentHash(arrayBuffer);
+        const source = await resolveUploadSource(attachment);
 
         const result = await throwOnErr(
           async () =>
@@ -53,53 +63,59 @@ export const useUploadDraftAttachmentsMutation = (
                 draftID: params.draftID,
                 attachment: {
                   file_name: attachment.name,
-                  size: attachment.size,
-                  sha,
+                  size: source.size,
+                  sha: source.sha,
                 },
               },
               params.linkId
             )
         );
 
-        params.onAttachmentAdded?.(attachment, result.attachment_id);
-
         // Any content-upload failure must become an UploadDraftAttachmentError
         // so onError removes the record and clears the id -- a plain throw from
         // the fetch (network drop, abort) would otherwise leave the id in
         // place and the broken record would never be retried.
-        let uploadedResponse: Awaited<ReturnType<typeof uploadToPresignedUrl>>;
+        const context = {
+          attachmentID: result.attachment_id,
+          file: attachment,
+        };
         try {
-          uploadedResponse = await uploadToPresignedUrl({
-            presignedUrl: result.upload_url,
-            sha,
-            buffer: arrayBuffer,
-            type: result.content_type,
-          });
+          await params.onAttachmentAdded?.(attachment, result.attachment_id);
+          if (source.kind === 'staged') {
+            await uploadNativeStagedFileToPresignedUrl(
+              { ...source.staged, mimeType: result.content_type },
+              result.upload_url,
+              nativeUploadChecksum(source.sha)
+            );
+          } else {
+            const uploaded = await uploadToPresignedUrl({
+              presignedUrl: result.upload_url,
+              sha: source.sha,
+              buffer: source.buffer,
+              type: result.content_type,
+            });
+            if (uploaded.isErr()) {
+              const uploadError = uploaded.error[0] ?? {
+                code: 'SERVER_ERROR',
+                message: 'Upload failed',
+              };
+              throw new UploadDraftAttachmentError(
+                uploadError.message,
+                { cause: uploadError.code },
+                context
+              );
+            }
+          }
         } catch (cause) {
+          if (cause instanceof UploadDraftAttachmentError) throw cause;
           throw new UploadDraftAttachmentError(
             'Upload failed',
             { cause },
-            {
-              attachmentID: result.attachment_id,
-              file: attachment,
-            }
+            context
           );
         }
-
-        if (uploadedResponse.isErr()) {
-          const uploadError = uploadedResponse.error[0] ?? {
-            code: 'SERVER_ERROR',
-            message: 'Upload failed',
-          };
-          throw new UploadDraftAttachmentError(
-            uploadError.message,
-            { cause: uploadError.code },
-            {
-              attachmentID: result.attachment_id,
-              file: attachment,
-            }
-          );
-        }
+        // Upload succeeded. A failed local receipt must not delete server data.
+        await params.onAttachmentUploaded?.(attachment, result.attachment_id);
       }
     },
     ...withCallbacks<void, Error, UploadDraftAttachmentsParams>(

@@ -23,17 +23,22 @@ use channels::domain::{
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
-use kafka_util::{GroupName, KafkaEventConsumer};
+use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
+use messages::domain::models::MessageParent;
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_value::PropertyValue;
 use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use rootcause::prelude::{Report, ResultExt as _};
+use system_properties::SystemPropertyKey;
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::Instrument as _;
 
@@ -42,6 +47,9 @@ struct SoupRealtimeConsumerGroup;
 
 impl GroupName for SoupRealtimeConsumerGroup {
     const GROUP_NAME: &'static str = "soup-realtime";
+    // `macro.messages` joined this group's subscription with no committed
+    // offset; starting at its head avoids replaying the topic's retention.
+    const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
 type SoupRealtimeKafkaAdapter = KafkaConsumerAdapter<SoupRealtimeConsumerGroup, DeclaredMacroEvent>;
@@ -55,7 +63,9 @@ macro_event_broker::declare_topics!(
         ChatMacroEvent,
         EmailMacroEvent,
         ChannelMacroEvent,
+        MessageMacroEvent,
         PropertyMacroEvent,
+        InitiativeMacroEvent,
 );
 
 fn entity(entity_type: EntityType, entity_id: impl ToString) -> Entity<'static> {
@@ -144,6 +154,17 @@ fn patches_from_document_event(event: &DocumentTopicEvent) -> Vec<SoupRealtimePa
         | DocumentTopicEvent::Purged(_) => {}
     }
     updates
+}
+
+fn patches_from_initiative_event(event: &InitiativeTopicEvent) -> Vec<SoupRealtimePatch> {
+    match event {
+        InitiativeTopicEvent::Created(change) | InitiativeTopicEvent::Updated(change) => {
+            vec![update(EntityType::Initiative, change.initiative_id)]
+        }
+        InitiativeTopicEvent::Purged { initiative_id } => {
+            vec![delete(EntityType::Initiative, initiative_id)]
+        }
+    }
 }
 
 fn patches_from_project_event(event: &ProjectTopicEvent) -> Vec<SoupRealtimePatch> {
@@ -318,6 +339,8 @@ fn channel_and_thread_entities(
 fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityType> {
     match ReferencedShareItemType::from_raw(entity_type)? {
         ReferencedShareItemType::AgentSession => Some(EntityType::AgentSession),
+        // Databases use their own list and table-change gateway events.
+        ReferencedShareItemType::Database => None,
         ReferencedShareItemType::Document => Some(EntityType::Document),
         ReferencedShareItemType::Chat => Some(EntityType::Chat),
         ReferencedShareItemType::Project => Some(EntityType::Project),
@@ -325,6 +348,8 @@ fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityTy
         ReferencedShareItemType::Call => Some(EntityType::Call),
         // A shared event is previewed in place, never listed in the soup.
         ReferencedShareItemType::CalendarEvent => None,
+        // Forms are not soup entities; a posted form renders as its card.
+        ReferencedShareItemType::Form => None,
     }
 }
 
@@ -346,58 +371,10 @@ fn push_channel_reference_update(
 
 fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
-        ChannelTopicEvent::Updated(metadata) => {
+        ChannelTopicEvent::PictureChanged(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
-        ChannelTopicEvent::MessagePosted(metadata) => {
-            let mut patches = channel_and_thread_entities(
-                metadata.channel_id,
-                metadata.message_id,
-                metadata.thread_id,
-            );
-            let channel = entity(EntityType::Channel, metadata.channel_id);
-            for mention in &metadata.mentions {
-                push_channel_reference_update(
-                    &mut patches,
-                    &channel,
-                    &mention.entity_type,
-                    &mention.entity_id,
-                );
-            }
-            patches
-        }
-        ChannelTopicEvent::MessagePatched(metadata) => channel_and_thread_entities(
-            metadata.channel_id,
-            metadata.message_id,
-            metadata.thread_id,
-        ),
-        ChannelTopicEvent::MessageDeleted(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
-            let thread_patch = match metadata.thread_id {
-                Some(thread_id) => Patch::Updated(entity(EntityType::ChannelMessage, thread_id)),
-                None => Patch::Deleted(entity(EntityType::ChannelMessage, metadata.message_id)),
-            };
-            vec![
-                SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
-                SoupRealtimePatch::new(thread_patch, channel),
-            ]
-        }
-        ChannelTopicEvent::MessageAttachmentCreated(metadata) => {
-            let channel = entity(EntityType::Channel, metadata.channel_id);
-            let mut patches = vec![SoupRealtimePatch::for_entity(Patch::Updated(
-                channel.clone(),
-            ))];
-            for attachment in &metadata.attachments {
-                push_channel_reference_update(
-                    &mut patches,
-                    &channel,
-                    &attachment.entity_type,
-                    &attachment.entity_id,
-                );
-            }
-            patches
-        }
-        ChannelTopicEvent::MessageAttachmentRemoved(metadata) => {
+        ChannelTopicEvent::Updated(metadata) => {
             vec![update(EntityType::Channel, metadata.channel_id)]
         }
         ChannelTopicEvent::ParticipantAdded(metadata) => {
@@ -412,9 +389,79 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Deleted(metadata) => {
             vec![delete(EntityType::Channel, metadata.channel_id)]
         }
-        // Mentions carry no entity change beyond the message_posted event
-        // emitted alongside them.
-        ChannelTopicEvent::Mentioned(_) => Vec::new(),
+    }
+}
+
+/// Message facts carry their parent. Channel messages are Soup items, so a
+/// channel post, edit, deletion, or attachment change patches the channel
+/// and its thread; document discussions are not Soup items and patch nothing.
+fn patches_from_message_event(event: &MessageTopicEvent) -> Vec<SoupRealtimePatch> {
+    let channel = |parent: &MessageParent| match parent {
+        MessageParent::Channel(channel_id) => Some(*channel_id),
+        _ => None,
+    };
+    match event {
+        MessageTopicEvent::Posted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let mut patches =
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id);
+            let channel = entity(EntityType::Channel, channel_id);
+            for mention in &metadata.mentions {
+                push_channel_reference_update(
+                    &mut patches,
+                    &channel,
+                    &mention.entity_type,
+                    &mention.entity_id,
+                );
+            }
+            patches
+        }
+        MessageTopicEvent::Patched(metadata) => match channel(&metadata.parent) {
+            Some(channel_id) => {
+                channel_and_thread_entities(channel_id, metadata.message_id, metadata.thread_id)
+            }
+            None => Vec::new(),
+        },
+        MessageTopicEvent::Deleted(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
+            let thread_patch = match metadata.thread_id {
+                Some(thread_id) => Patch::Updated(entity(EntityType::ChannelMessage, thread_id)),
+                None => Patch::Deleted(entity(EntityType::ChannelMessage, metadata.message_id)),
+            };
+            vec![
+                SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
+                SoupRealtimePatch::new(thread_patch, channel),
+            ]
+        }
+        MessageTopicEvent::AttachmentCreated(metadata) => {
+            let Some(channel_id) = channel(&metadata.parent) else {
+                return Vec::new();
+            };
+            let channel = entity(EntityType::Channel, channel_id);
+            let mut patches = vec![SoupRealtimePatch::for_entity(Patch::Updated(
+                channel.clone(),
+            ))];
+            for attachment in &metadata.attachments {
+                push_channel_reference_update(
+                    &mut patches,
+                    &channel,
+                    &attachment.entity_type,
+                    &attachment.entity_id,
+                );
+            }
+            patches
+        }
+        MessageTopicEvent::AttachmentRemoved(metadata) => channel(&metadata.parent)
+            .map(|channel_id| vec![update(EntityType::Channel, channel_id)])
+            .unwrap_or_default(),
+        // Mentions carry no entity change beyond the posted fact emitted
+        // alongside them.
+        MessageTopicEvent::Mentioned(_) => Vec::new(),
     }
 }
 
@@ -427,8 +474,13 @@ fn soup_entity_type_from_property(entity_type: PropertyEntityType) -> Option<Ent
         PropertyEntityType::Document | PropertyEntityType::Task => Some(EntityType::Document),
         PropertyEntityType::Project => Some(EntityType::Project),
         PropertyEntityType::Thread => Some(EntityType::EmailThread),
-        // Soup channels do not expose properties, and users are not Soup items.
-        PropertyEntityType::Channel | PropertyEntityType::User => None,
+        PropertyEntityType::Initiative => Some(EntityType::Initiative),
+        PropertyEntityType::DatabaseRow => Some(EntityType::DatabaseRow),
+        // Soup channels do not expose properties; users and CRM contacts are
+        // not Soup items.
+        PropertyEntityType::Channel | PropertyEntityType::User | PropertyEntityType::Contact => {
+            None
+        }
     }
 }
 
@@ -442,10 +494,50 @@ fn property_update(entity_type: PropertyEntityType, entity_id: &str) -> Vec<Soup
 fn patches_from_property_event(event: &PropertyTopicEvent) -> Vec<SoupRealtimePatch> {
     match event {
         PropertyTopicEvent::EntityPropertyUpdated(metadata) => {
-            property_update(metadata.entity_type, &metadata.entity_id)
+            let mut patches = property_update(metadata.entity_type, &metadata.entity_id);
+            // Deleting a project clears its tasks with internal, unattributed writes
+            // after publishing Purged; refreshing that project here could replace the
+            // deletion with a stale replica row.
+            let attributed = metadata.actor_user_id.is_some()
+                || metadata.actor.is_some()
+                || metadata.on_behalf_of.is_some();
+            if metadata.entity_type == PropertyEntityType::Task
+                && metadata.property_definition_id == SystemPropertyKey::PROJECT_UUID
+                && attributed
+            {
+                // The projects the task left and joined change their task lists.
+                for value in [&metadata.previous_value, &metadata.value]
+                    .into_iter()
+                    .flatten()
+                {
+                    let PropertyValue::EntityRef(references) = value else {
+                        continue;
+                    };
+                    for reference in references {
+                        push_unique_update(
+                            &mut patches,
+                            EntityType::Initiative,
+                            &reference.entity_id,
+                        );
+                    }
+                }
+            }
+            patches
         }
         PropertyTopicEvent::EntityPropertyDeleted(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
+        }
+        PropertyTopicEvent::EntityPropertiesCleared(metadata)
+            if metadata.entity_type == PropertyEntityType::Initiative
+                && metadata.actor_user_id.is_none()
+                && metadata.actor.is_none()
+                && metadata.on_behalf_of.is_none() =>
+        {
+            // Initiative deletion clears properties with an internal receipt after
+            // publishing Purged. The topics have no shared ordering; refreshing here
+            // could replace the deletion with a stale replica row. User/bot clears
+            // remain ordinary property updates below.
+            Vec::new()
         }
         PropertyTopicEvent::EntityPropertiesCleared(metadata) => {
             property_update(metadata.entity_type, &metadata.entity_id)
@@ -472,6 +564,12 @@ fn patches_from_event(event: &DeclaredMacroEvent) -> Vec<SoupRealtimePatch> {
         }
         DeclaredMacroEvent::ChannelMacroEvent(event) => {
             patches_from_channel_event(&event.event().event)
+        }
+        DeclaredMacroEvent::InitiativeMacroEvent(event) => {
+            patches_from_initiative_event(&event.event().event)
+        }
+        DeclaredMacroEvent::MessageMacroEvent(event) => {
+            patches_from_message_event(&event.event().event)
         }
         DeclaredMacroEvent::PropertyMacroEvent(event) => {
             patches_from_property_event(&event.event().event)

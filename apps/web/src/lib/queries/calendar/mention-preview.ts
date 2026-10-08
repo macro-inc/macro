@@ -3,6 +3,7 @@ import { previewKeys } from '@queries/preview/keys';
 import type { PreviewItem } from '@queries/preview/types';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
+import type { CalendarMentionPreviewRequestItem } from '@service-storage/generated/schemas/calendarMentionPreviewRequestItem';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { calendarKeys } from './keys';
@@ -36,6 +37,9 @@ export function invalidateCalendarEventPreviews(eventId?: string): void {
       },
     });
   }
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.searchPreviews._def,
+  });
   queryClient.invalidateQueries({
     queryKey: eventId
       ? [...calendarKeys.mentionPreview._def, eventId]
@@ -114,6 +118,32 @@ function calendarMentionPreviewQueryOptions(
       return fetchPreview(eventId, occurrenceKey);
     },
     enabled: eventId !== undefined && enabled,
+    staleTime: MENTION_PREVIEW_STALE_TIME,
+  });
+}
+
+/** Resolve search result locations in one request, scoped to each occurrence. */
+export function useCalendarSearchPreviewsQuery(
+  inputs: Accessor<CalendarMentionPreviewRequestItem[]>
+) {
+  return useQuery(() => calendarSearchPreviewsQueryOptions(inputs()));
+}
+
+function calendarSearchPreviewsQueryOptions(
+  items: CalendarMentionPreviewRequestItem[]
+) {
+  return queryOptions({
+    queryKey: calendarKeys.searchPreviews(items).queryKey,
+    queryFn: async () => {
+      const result = await storageServiceClient.getBatchCalendarEventPreviews({
+        items,
+      });
+      if (result.isErr()) {
+        throw new Error('Failed to fetch calendar search previews');
+      }
+      return result.value.items;
+    },
+    enabled: items.length > 0,
     staleTime: MENTION_PREVIEW_STALE_TIME,
   });
 }

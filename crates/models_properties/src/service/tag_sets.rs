@@ -151,7 +151,8 @@ impl CallerTagSets {
             let scope = match def.definition.owner {
                 PropertyOwner::User { .. } => TagScope::Personal,
                 PropertyOwner::Team { .. } => TagScope::Team,
-                PropertyOwner::System => continue,
+                // A database column is not a tag in the user/team namespace.
+                PropertyOwner::Database { .. } | PropertyOwner::System => continue,
             };
             for option in def.property_options {
                 let label = match option.value {

@@ -10,8 +10,11 @@ import {
 } from '@app/features/block-agent/component/parts/shared';
 import type { InteractionController } from '@app/features/block-agent/context/interaction';
 import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
+import { issueSessionAction } from '@app/features/block-agent/queries/issue-session-action';
+import { describeToolCall } from '@app/features/block-agent/state/tool-approval-wording';
 import { AgentSession } from '@core/agent-session/AgentSession';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -106,13 +109,16 @@ export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   interactions: InteractionController;
+  loading: Accessor<boolean>;
 } {
+  const [loading, setLoading] = createSignal(true);
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
   const session = () =>
     queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
   const canEdit = () => session()?.canEdit;
+  const userId = useUserId();
   const persistedStatus = () => {
     const status = session()?.status;
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
@@ -131,18 +137,31 @@ export function createMagicChipModel(props: MagicChipData): {
     }
   };
   const unsubscribe = live.subscribe(applyEvents);
-  void live
-    .load()
-    .then(() => live.snapshot())
-    .then((snapshot) => {
+  // A chip scrolled out of a virtualized list mid-load releases the session,
+  // which rejects the load or the snapshot. That is not a fault.
+  let released = false;
+  async function loadSession() {
+    try {
+      await live.load();
+      if (released) return;
+
+      const snapshot = await live.snapshot();
+      if (released) return;
+
       setMessages(snapshot.messages);
       setMetadata(snapshot.metadata);
-    })
-    .catch((error: unknown) => {
-      console.error('[magic-chip] session log could not be folded', error);
-    });
+    } catch (error: unknown) {
+      if (!released) {
+        console.error('[magic-chip] session log could not be folded', error);
+      }
+    } finally {
+      if (!released) setLoading(false);
+    }
+  }
+  void loadSession();
 
   onCleanup(() => {
+    released = true;
     unsubscribe();
     live.release();
   });
@@ -163,12 +182,25 @@ export function createMagicChipModel(props: MagicChipData): {
     sessionId: () => props.agentSessionId,
     pending: pendingForTurn,
     canEdit,
-    issue: (action) => live.issue(action),
+    issue: (action) => issueSessionAction(live, action),
     onFailure: toast.failure,
   });
   const asking = (): MagicChipInteraction | undefined => {
     const request = pendingForTurn()[0];
     if (!request) return undefined;
+    // A held tool call is answered in the session, where its arguments are.
+    if (request.kind === 'tool_approval') {
+      return {
+        request,
+        canAnswer: false,
+        answering: false,
+        action: `Wants to ${describeToolCall(
+          { slug: request.serverSlug, name: request.serverName },
+          request.toolName,
+          session()?.ownerId === userId() ? 'your' : "the owner's"
+        )}`,
+      };
+    }
     const tool = messages()
       .find(
         (message) =>
@@ -221,5 +253,5 @@ export function createMagicChipModel(props: MagicChipData): {
       : undefined;
   });
 
-  return { presentation, header, interactions };
+  return { presentation, header, interactions, loading };
 }

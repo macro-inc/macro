@@ -67,13 +67,25 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     return decodedHtml;
   });
 
+  function focusMessage(id: string) {
+    ctx.messages.setFocused(id);
+    const message = ctx
+      .messagesContainerRef()
+      ?.querySelector<HTMLElement>(
+        `[data-message-body-id="${CSS.escape(id)}"]`
+      );
+    const card = message?.closest<HTMLElement>('[tabindex="0"]');
+    card?.focus({ preventScroll: true });
+    return !!card;
+  }
+
   async function afterSend(newMessageId: string | null) {
     // Collapse the input after sending (Gmail-style).
     props.setShowReply?.(false);
 
     if (!newMessageId) return;
 
-    ctx.messages.setFocused(newMessageId);
+    focusMessage(newMessageId);
     await ctx.query.refetch();
     revealMessageAfterLayout(
       newMessageId,
@@ -89,6 +101,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
           <Layer depth={props.mobileDrawer ? 0 : 2}>
             <ReplyInputView
               context={viewContext.compose}
+              host={viewContext.composeHost}
               session={{
                 thread: ctx.thread,
                 recipientOptions: ctx.recipientOptions,
@@ -120,15 +133,7 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
                       ? ctx.messages.list().at(-1)?.db_id
                       : ctx.messages.focusedId();
                   if (!id) return false;
-                  ctx.messages.setFocused(id);
-                  const message = ctx
-                    .messagesContainerRef()
-                    ?.querySelector<HTMLElement>(
-                      `[data-message-body-id="${CSS.escape(id)}"]`
-                    );
-                  const card = message?.closest<HTMLElement>('[tabindex="0"]');
-                  card?.focus();
-                  return !!card;
+                  return focusMessage(id);
                 },
               }}
               sourceEntityId={

@@ -86,6 +86,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/frecency/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/reminders/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/slack_integration/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/slack_import_worker/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/user_api_key/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/.env
@@ -121,6 +123,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/share_permission_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/ai_projections_refresh_handler/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_billing/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/webhook/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar_events/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env
@@ -130,3 +133,10 @@ setup_macrodb:
     just crates/macro_db_client/migrate_db
 
 initialize_dbs: setup_macrodb
+
+# Migrate template1 so each `#[sqlx::test]` database starts with the macrodb schema:
+# Postgres clones template1 for every CREATE DATABASE, which leaves the test migrator
+# nothing to apply. Every database created on this server afterwards gets the schema
+# too, so only run it against a Postgres dedicated to one checkout, such as CI's.
+setup_test_template:
+    cd crates/macro_db_client && sqlx migrate run --database-url {{ replace(DATABASE_URL, "/macrodb", "/template1") }}

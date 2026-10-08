@@ -32,9 +32,13 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
 vi.mock('@core/component/AI/component/input/buildChatEditor', () => ({
-  buildChatEditor: () => ({
-    withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
-  }),
+  buildChatEditor: () => {
+    const builder = {
+      withAppLinkResolver: () => builder,
+      withMentions: () => ({ controls: { setMarkdown: mocks.setMarkdown } }),
+    };
+    return builder;
+  },
 }));
 vi.mock('@core/component/AI/component/input/ChatInput', () => ({
   ChatInput: (props: { onSend: typeof mocks.onSend }) => {
@@ -77,7 +81,7 @@ vi.mock('@service-cognition/client', () => ({
 
 const request: ChatSendInput = {
   content: 'Summarize **these documents**\nInclude the key decisions.',
-  model: Model.sonnet5,
+  model: Model.sonnet55,
   attachments: [
     { entity_id: 'document-1', entity_type: 'document' },
     { entity_id: 'project-1', entity_type: 'project' },

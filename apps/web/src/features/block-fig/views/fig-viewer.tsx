@@ -1,0 +1,1418 @@
+/**
+ * The `.fig` viewer: layers on the left, the canvas in the middle, the
+ * design panel on the right, Figma's keyboard shortcuts throughout.
+ */
+
+import '../components/editor-theme.css';
+import { IS_MAC } from '@core/constant/isMac';
+import type { NodeInfo, Rect } from '@core/fig-engine/types';
+import { Tabs } from '@kobalte/core/tabs';
+import {
+  createEffect,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
+import { match } from 'ts-pattern';
+import { ActionsPalette } from '../components/actions-palette';
+import { CommentPins } from '../components/comment-pins';
+import { DesignPanel } from '../components/design-panel';
+import { DevInspect } from '../components/dev-inspect';
+import { ExportSection } from '../components/export-section';
+import { FigContextMenu } from '../components/fig-context-menu';
+import { LayoutGridSection } from '../components/layout-grid-section';
+import { MainMenu } from '../components/main-menu';
+import { MissingFonts } from '../components/missing-fonts';
+import { PanelToggle } from '../components/panel-toggle';
+import { FollowFrame, PeerAvatars } from '../components/peer-presence';
+import { PrototypeNoodles } from '../components/prototype-noodles';
+import { PrototypePanel } from '../components/prototype-panel';
+import { ResizablePanel } from '../components/resizable-panel';
+import { CommentButton, PresentButton } from '../components/review-buttons';
+import { SaveIndicator } from '../components/save-indicator';
+import { ShortcutsDialog } from '../components/shortcuts-dialog';
+import { ViewerToolbar } from '../components/viewer-toolbar';
+import { ViewerZoom } from '../components/viewer-zoom';
+import { useFigViewerContext } from '../context/fig-viewer-context';
+import { type Point, zoomLabel } from '../core/camera';
+import { LIBRARY_ASSET_MIME } from '../core/libraries';
+import { MIXED, type MixedInfo, mergeInfos } from '../core/mixed';
+import { stepPage } from '../core/pages';
+import { type FigPeer, storesFile } from '../core/presence';
+import { rangeFills, rangeStyle, textInfoForRange } from '../core/rich-text';
+import {
+  controlOwnsKey,
+  EDIT_ACTIONS,
+  SELECTION_ACTIONS,
+  shortcutAction,
+  type ViewerAction,
+} from '../core/shortcuts';
+import { deleteVertex, VECTOR_EDITABLE } from '../core/vector';
+import { createDesignSystem } from '../primitives/create-design-system';
+import { createFigContextMenu } from '../primitives/create-fig-context-menu';
+import { createFigEditor, type Patch } from '../primitives/create-fig-editor';
+import { createFigLibraries } from '../primitives/create-fig-libraries';
+import { createFigReview } from '../primitives/create-fig-review';
+import { createFigViewer } from '../primitives/create-fig-viewer';
+import { createFontRegistry } from '../primitives/create-font-registry';
+import { createHandoff } from '../primitives/create-handoff';
+import { createLayoutAids } from '../primitives/create-layout-aids';
+import { createPeerOverlays } from '../primitives/create-peer-overlays';
+import { AssetsPanel } from './assets-panel';
+import { CommentsPanel } from './comments-panel';
+import {
+  DesignSystemSections,
+  LocalStylesView,
+  styleControlFor,
+} from './design-system-view';
+import { LayersPanel } from './layers-panel';
+import { LibraryUpdates } from './library-views';
+import { PresentMode } from './present-mode';
+import { TextEditor } from './text-editor';
+import { ViewerCanvas } from './viewer-canvas';
+
+/** How soon a second digit must follow the first to make an exact opacity. */
+const OPACITY_TYPING_MS = 600;
+
+const safeName = (name: string) =>
+  name.replace(/[\\/:*?"<>|]+/g, '-').trim() || 'export';
+
+export function FigViewer() {
+  const context = useFigViewerContext();
+  const { engine } = context;
+  const viewer = createFigViewer({
+    engine,
+    notifyError: context.notifyError,
+  });
+  let invalidate: ((rect: Rect) => void) | undefined;
+  const collab = context.collaboration;
+  const editor = createFigEditor({
+    engine,
+    viewer,
+    canEdit: () => context.canEdit?.() ?? false,
+    save: context.save,
+    fileKey: context.fileKey,
+    onDirty: (rect) => invalidate?.(rect),
+    notifyError: context.notifyError,
+    sharing: context.sharing,
+    stores: collab
+      ? () =>
+          storesFile(
+            { peerId: collab.peerId, editor: context.canEdit?.() ?? false },
+            collab.peers()
+          )
+      : undefined,
+    online: collab ? () => collab.status() === 'connected' : undefined,
+  });
+
+  const review = createFigReview({
+    context,
+    engine,
+    viewer,
+    editor,
+    mac: IS_MAC,
+  });
+
+  const [spaceHeld, setSpaceHeld] = createSignal(false);
+  const [altHeld, setAltHeld] = createSignal(false);
+  const [deepHeld, setDeepHeld] = createSignal(false);
+  const [showShortcuts, setShowShortcuts] = createSignal(false);
+  const [showActions, setShowActions] = createSignal(false);
+  const [leftWidth, setLeftWidth] = createSignal(280);
+  const [rightWidth, setRightWidth] = createSignal(240);
+  const [leftTab, setLeftTab] = createSignal<'layers' | 'assets'>('layers');
+  const [info, setInfo] = createSignal<NodeInfo>();
+  const designSystem = createDesignSystem({ engine, viewer, editor });
+  const librarySource = context.libraries;
+  const libraries = librarySource
+    ? createFigLibraries({
+        engine,
+        viewer,
+        editor,
+        source: librarySource,
+        notifyError: context.notifyError,
+        notifyInfo: context.notifyInfo,
+      })
+    : undefined;
+  const styleControl = styleControlFor(designSystem);
+  /** Dev Mode: the design panel shows the Code tab. */
+  const devMode = () =>
+    !viewer.uiHidden() && viewer.designOpen() && review.panelTab() === 'code';
+  const aids = createLayoutAids({ engine, viewer, editor, devMode, info });
+  const handoff = createHandoff({
+    context,
+    engine,
+    viewer,
+    editor,
+    info,
+    devMode,
+  });
+  let root!: HTMLDivElement;
+  let focusSearch: (() => void) | undefined;
+
+  onMount(() => {
+    void viewer.openPage(0);
+    if (document.activeElement === document.body)
+      root.focus({ preventScroll: true });
+  });
+
+  // The design panel follows a single selection (and edits to it).
+  let infoRequest = 0;
+  createEffect(
+    on([viewer.selected, viewer.editVersion], ([selected]) => {
+      const request = ++infoRequest;
+      if (selected.length !== 1) {
+        setInfo(undefined);
+        return;
+      }
+      engine
+        .nodeInfo(viewer.page(), selected[0].id)
+        .then((i) => {
+          if (request === infoRequest) setInfo(i);
+        })
+        .catch(() => {
+          if (request === infoRequest) setInfo(undefined);
+        });
+    })
+  );
+
+  // ---- design panel ---------------------------------------------------------
+
+  // Several selected layers: their shared and mixed values.
+  const [mixed, setMixed] = createSignal<MixedInfo>();
+
+  // Fonts for laying out edited text; what the document uses changes as
+  // it is edited.
+  const fonts = createFontRegistry({ engine, source: context.fonts });
+  createEffect(
+    on(viewer.editsSettled, () => void fonts.refresh(), { defer: true })
+  );
+  let mixedRequest = 0;
+  const loadMixed = async (ids: string[], request: number) => {
+    try {
+      const infos = await Promise.all(
+        ids.slice(0, 200).map((id) => engine.nodeInfo(viewer.page(), id))
+      );
+      if (request === mixedRequest) setMixed(mergeInfos(infos));
+    } catch {
+      if (request === mixedRequest) setMixed(undefined);
+    }
+  };
+  createEffect(
+    on([viewer.selected, viewer.editsSettled], ([selected]) => {
+      const request = ++mixedRequest;
+      if (selected.length < 2) setMixed(undefined);
+      else
+        void loadMixed(
+          selected.map((s) => s.id),
+          request
+        );
+    })
+  );
+
+  // A drag in the design panel (scrubbing a value, a color) sends live
+  // edits and commits on release: one undo step per drag.
+  let gesture: { what: string; key: string } | undefined;
+  let gestures = 0;
+  const gestureKey = (what: string, live: boolean) => {
+    if (gesture?.what !== what)
+      gesture = live ? { what, key: `panel-${what}-${++gestures}` } : undefined;
+    const key = gesture?.key;
+    if (!live) gesture = undefined;
+    return key;
+  };
+  /**
+   * A panel change: to the characters selected in the text editor when
+   * there are some, after loading a font it switches to.
+   */
+  const patchSelection = (patch: Patch, live: boolean) => {
+    const what = gestureKey(Object.keys(patch).join(','), live);
+    const range = editor.textSelection();
+    const ranged =
+      range && range.start !== range.end && range.id === info()?.id
+        ? { ...patch, textRange: [range.start, range.end] as [number, number] }
+        : patch;
+    const text = info()?.text;
+    if (!text || (!patch.fontFamily && !patch.fontStyle)) {
+      void editor.setProps(ranged, what);
+      return;
+    }
+    const style = rangeStyle(text, range?.start ?? 0, range?.end ?? 0);
+    const family =
+      patch.fontFamily ??
+      (style.fontFamily === MIXED ? text.fontFamily : style.fontFamily) ??
+      'Inter';
+    const fontStyle =
+      patch.fontStyle ??
+      (style.fontStyle === MIXED ? null : style.fontStyle) ??
+      'Regular';
+    void (async () => {
+      await fonts.ensure(family, fontStyle, text.characters);
+      await editor.setProps(ranged, what);
+      await fonts.refresh();
+    })();
+  };
+
+  /**
+   * A lifted move being dragged (the canvas draws it) and the layer's values
+   * from before it, which the panel shows moved along until the values
+   * after the drop arrive (`until`: the values shown at the drop).
+   */
+  const [moving, setMoving] = createSignal<{
+    offset: Point;
+    from: NodeInfo | undefined;
+    until?: NodeInfo;
+  }>();
+  const onMove = (offset: Point | undefined) => {
+    const m = moving();
+    if (offset) setMoving({ offset, from: m && !m.until ? m.from : info() });
+    else if (m) setMoving({ ...m, until: info() });
+  };
+  const movedInfo = () => {
+    const i = info();
+    const m = moving();
+    const from = m?.from;
+    if (!i || !m || !from || viewer.selected().length !== 1) return i;
+    if (i.id !== from.id || (m.until && i !== m.until)) return i;
+    const [a, b, c, d] = from.panelMove;
+    const { x: dx, y: dy } = m.offset;
+    return {
+      ...i,
+      x: from.x + a * dx + b * dy,
+      y: from.y + c * dx + d * dy,
+      bounds: { ...from.bounds, x: from.bounds.x + dx, y: from.bounds.y + dy },
+    };
+  };
+
+  /** The design panel's layer, showing the text editor's selection. */
+  const panel = () => {
+    const i = movedInfo();
+    const range = editor.textSelection();
+    if (!i?.text || !range || range.id !== i.id || range.start === range.end)
+      return { info: i, mixed: undefined };
+    const { text, mixed } = textInfoForRange(i.text, range.start, range.end);
+    const fills = rangeFills(i.text, range.start, range.end);
+    return {
+      info: { ...i, text, fills: fills && fills !== MIXED ? fills : i.fills },
+      mixed,
+    };
+  };
+  const shownFamily = () => panel().info?.text?.fontFamily ?? undefined;
+  const setPageColor = (hex: string, live: boolean) => {
+    const page = viewer.pages[viewer.page()];
+    if (!page) return;
+    void editor.apply(
+      [{ op: 'set', ids: [page.id], props: { fills: [{ color: hex }] } }],
+      gestureKey('page-color', live)
+    );
+  };
+
+  /** The page's colors, offered by the color pickers (loaded on opening). */
+  const [swatches, setSwatches] = createSignal<string[]>([]);
+  const loadSwatches = async () => {
+    try {
+      setSwatches(await engine.pageColors(viewer.page()));
+    } catch {
+      setSwatches([]);
+    }
+  };
+  const addImage = async (file: File) => {
+    try {
+      return (await engine.addImage(await file.arrayBuffer())).hash;
+    } catch (e) {
+      context.notifyError(
+        e instanceof Error ? e.message : `${file.name} could not be added`
+      );
+      return undefined;
+    }
+  };
+
+  // ---- export -------------------------------------------------------------
+
+  const copyPng = async () => {
+    const id = viewer.selected()[0]?.id;
+    if (!id) {
+      context.notifyInfo('Select a layer to copy');
+      return;
+    }
+    try {
+      const png = engine.exportPng(viewer.page(), id, 2);
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': png }),
+      ]);
+      context.notifyInfo('Copied as PNG');
+    } catch {
+      context.notifyError('Could not copy the image');
+    }
+  };
+
+  /** The single selected layer as an SVG document. */
+  const selectedSvg = async (): Promise<
+    { svg: string; name: string } | undefined
+  > => {
+    const id = viewer.selected()[0]?.id;
+    if (!id) {
+      context.notifyInfo('Select a layer to export');
+      return undefined;
+    }
+    const name = info()?.id === id ? info()?.name : undefined;
+    return {
+      svg: await engine.exportSvg(viewer.page(), id),
+      name: safeName(name ?? `${context.fileName()}-${id}`),
+    };
+  };
+
+  /** Figma's "Copy as SVG": the markup as text. */
+  const copySvg = async () => {
+    try {
+      const out = await selectedSvg();
+      if (!out) return;
+      await navigator.clipboard.writeText(out.svg);
+      context.notifyInfo('Copied as SVG');
+    } catch {
+      context.notifyError('Could not copy the SVG');
+    }
+  };
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      context.notifyInfo('Copied');
+    } catch {
+      context.notifyError('Could not copy');
+    }
+  };
+
+  // ---- keyboard -------------------------------------------------------------
+
+  const openStep = (step: 1 | -1) => {
+    const next = stepPage(viewer.pages, viewer.page(), step);
+    if (next !== undefined) void viewer.openPage(next);
+  };
+
+  /**
+   * Figma's opacity keys: a digit sets tens of percent (0 is 100%); a
+   * second one typed quickly makes it exact (4 then 5 is 45%).
+   */
+  let typedOpacity: { digit: number; at: number; key: string } | undefined;
+  let opacitySteps = 0;
+  const typeOpacity = (digit: number) => {
+    const now = performance.now();
+    const first = typedOpacity;
+    if (first && now - first.at < OPACITY_TYPING_MS) {
+      typedOpacity = undefined;
+      void editor.setProps(
+        { opacity: (first.digit * 10 + digit) / 100 },
+        first.key
+      );
+      return;
+    }
+    const key = `opacity-keys-${++opacitySteps}`;
+    typedOpacity = { digit, at: now, key };
+    void editor.setProps({ opacity: digit === 0 ? 1 : digit / 10 }, key);
+  };
+
+  /** Figma's place image (⇧⌘K): picked images go in the middle of the view. */
+  const placeImage = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = () => {
+      const files = [...(input.files ?? [])];
+      if (files.length === 0) return;
+      const c = viewer.camera();
+      const v = viewer.viewport();
+      const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
+      void viewer
+        .containerAt(at)
+        .then((parent) => editor.importImages(files, at, parent));
+    };
+    input.click();
+  };
+
+  const run = (action: ViewerAction) =>
+    match(action)
+      .with('tool-move', () => viewer.setTool('move'))
+      .with('tool-hand', () => viewer.setTool('hand'))
+      .with('zoom-in', () => viewer.zoomStep(1))
+      .with('zoom-out', () => viewer.zoomStep(-1))
+      .with('zoom-100', () => viewer.zoom100())
+      .with('zoom-fit', () => viewer.zoomToFit())
+      .with('zoom-selection', () => viewer.zoomToSelection())
+      .with('next-frame', () => viewer.stepFrame(1))
+      .with('previous-frame', () => viewer.stepFrame(-1))
+      .with('next-page', () => openStep(1))
+      .with('previous-page', () => openStep(-1))
+      .with('select-all', () => void viewer.selectAll())
+      .with('escape', () => {
+        if (showShortcuts()) setShowShortcuts(false);
+        else if (viewer.tool() !== 'move' && viewer.tool() !== 'hand')
+          viewer.setTool('move');
+        else viewer.escapeSelection();
+      })
+      .with('select-parent', () => viewer.selectParent())
+      .with('select-children', () => void viewer.selectChildren())
+      .with('next-sibling', () => void viewer.selectSibling(1))
+      .with('previous-sibling', () => void viewer.selectSibling(-1))
+      .with('toggle-ui', () => viewer.setUiHidden((h) => !h))
+      .with('toggle-outline', () => viewer.setOutlineView((o) => !o))
+      .with('toggle-rulers', () => viewer.setRulers((r) => !r))
+      .with('toggle-pixel-grid', () => viewer.setPixelGrid((g) => !g))
+      .with('toggle-layout-grids', () => aids.setGrids((g) => !g))
+      .with('toggle-layers', () => {
+        viewer.setUiHidden(false);
+        viewer.setLayersOpen((o) => !o);
+      })
+      .with('toggle-design', () => {
+        viewer.setUiHidden(false);
+        viewer.setDesignOpen((o) => !o);
+      })
+      .with('collapse-layers', () => viewer.collapseLayers())
+      .with('copy-png', () => void copyPng())
+      .with('export', () => void handoff.exportSelection())
+      .with('find', () => {
+        viewer.setUiHidden(false);
+        viewer.setLayersOpen(true);
+        setLeftTab('layers');
+        queueMicrotask(() => focusSearch?.());
+      })
+      .with('show-shortcuts', () => setShowShortcuts((s) => !s))
+      .with('open-actions', () => {
+        if (!showActions()) {
+          setShowActions(true);
+          return;
+        }
+        setShowActions(false);
+        root.focus({ preventScroll: true });
+      })
+      .with('toggle-assets', () => {
+        viewer.setUiHidden(false);
+        if (viewer.layersOpen() && leftTab() === 'assets') {
+          viewer.setLayersOpen(false);
+          return;
+        }
+        viewer.setLayersOpen(true);
+        setLeftTab('assets');
+      })
+      .with('tool-frame', () => viewer.setTool('frame'))
+      .with('tool-rectangle', () => viewer.setTool('rectangle'))
+      .with('tool-ellipse', () => viewer.setTool('ellipse'))
+      .with('tool-text', () => viewer.setTool('text'))
+      .with('tool-line', () => viewer.setTool('line'))
+      .with('tool-arrow', () => viewer.setTool('arrow'))
+      .with('tool-pen', () => viewer.setTool('pen'))
+      .with('tool-pencil', () => viewer.setTool('pencil'))
+      .with('place-image', () => placeImage())
+      .with('undo', () => {
+        editor.endVectorEdit();
+        editor.undo();
+      })
+      .with('redo', () => {
+        editor.endVectorEdit();
+        editor.redo();
+      })
+      .with('delete', () => void editor.deleteSelection())
+      .with('duplicate', () => void editor.duplicateSelection())
+      .with('copy', () => editor.copy())
+      .with('cut', () => void editor.cut())
+      .with('paste', () => void editor.paste())
+      .with('paste-replace', () => void editor.pasteToReplace())
+      .with('group', () => void editor.group())
+      .with('ungroup', () => void editor.ungroup())
+      .with('frame-selection', () => void editor.group(true))
+      .with('add-auto-layout', () => void editor.addAutoLayout())
+      .with('create-component', () => void editor.createComponent())
+      .with('detach-instance', () => void editor.detachInstance())
+      .with('remove-auto-layout', () => void editor.removeAutoLayout())
+      .with('boolean-union', () => void editor.booleanOp('UNION'))
+      .with('boolean-subtract', () => void editor.booleanOp('SUBTRACT'))
+      .with('boolean-intersect', () => void editor.booleanOp('INTERSECT'))
+      .with('boolean-exclude', () => void editor.booleanOp('XOR'))
+      .with('flatten', () => void editor.flatten())
+      .with('bring-forward', () => void editor.arrange('forward'))
+      .with('send-backward', () => void editor.arrange('backward'))
+      .with('bring-to-front', () => void editor.arrange('front'))
+      .with('send-to-back', () => void editor.arrange('back'))
+      .with('toggle-visible', () => {
+        const visible = info()?.visible ?? true;
+        void editor.setProps({ visible: !visible });
+      })
+      .with('toggle-locked', () => {
+        void editor.toggleLocked();
+      })
+      .with('flip-horizontal', () => void editor.flip(false))
+      .with('flip-vertical', () => void editor.flip(true))
+      .with('rename', () => viewer.requestRename())
+      .with('align-left', () => void editor.align('left'))
+      .with('align-center', () => void editor.align('center'))
+      .with('align-right', () => void editor.align('right'))
+      .with('align-top', () => void editor.align('top'))
+      .with('align-middle', () => void editor.align('middle'))
+      .with('align-bottom', () => void editor.align('bottom'))
+      .with('distribute-horizontal', () => void editor.distribute('horizontal'))
+      .with('distribute-vertical', () => void editor.distribute('vertical'))
+      .with('swap-fill-stroke', () => {
+        const i = info();
+        if (i) void editor.swapFillStroke(i);
+      })
+      .with(
+        'opacity-0',
+        'opacity-1',
+        'opacity-2',
+        'opacity-3',
+        'opacity-4',
+        'opacity-5',
+        'opacity-6',
+        'opacity-7',
+        'opacity-8',
+        'opacity-9',
+        (a) => typeOpacity(Number(a.slice('opacity-'.length)))
+      )
+      .with('nudge-left', () => void editor.nudge(-1, 0))
+      .with('nudge-right', () => void editor.nudge(1, 0))
+      .with('nudge-up', () => void editor.nudge(0, -1))
+      .with('nudge-down', () => void editor.nudge(0, 1))
+      .with('nudge-left-10', () => void editor.nudge(-10, 0))
+      .with('nudge-right-10', () => void editor.nudge(10, 0))
+      .with('nudge-up-10', () => void editor.nudge(0, -10))
+      .with('nudge-down-10', () => void editor.nudge(0, 10))
+      .exhaustive();
+
+  /**
+   * Enter on a lone text layer types into it, and on a lone shape edits its
+   * points, as in Figma.
+   */
+  const enterAction = (
+    action: ViewerAction
+  ): ViewerAction | 'edit-text' | 'edit-vector' => {
+    const i = info();
+    if (
+      action !== 'select-children' ||
+      !editor.enabled() ||
+      viewer.selected().length !== 1
+    )
+      return action;
+    if (i?.type === 'TEXT') return 'edit-text';
+    if (i && VECTOR_EDITABLE.has(i.type)) return 'edit-vector';
+    return action;
+  };
+
+  /**
+   * Keys while drawing with the pen or editing points: Enter and Escape
+   * finish, Delete removes the selected point. Returns whether it was used.
+   */
+  const shapeKey = (e: KeyboardEvent): boolean => {
+    const finish = e.key === 'Enter' || e.key === 'Escape';
+    if (editor.penPath()) {
+      if (!finish) return false;
+      void editor.penFinish(false);
+      return true;
+    }
+    const edit = editor.vectorEdit();
+    if (!edit) return false;
+    if (finish) {
+      editor.endVectorEdit();
+      return true;
+    }
+    if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      edit.selected !== undefined
+    ) {
+      void editor.setVectorNetwork(deleteVertex(edit.network, edit.selected));
+      return true;
+    }
+    return false;
+  };
+
+  const [textEditing, setTextEditing] = createSignal<string>();
+
+  // ---- other people -------------------------------------------------------
+
+  const [pointer, setPointer] = createSignal<Point | null>(null);
+  const [following, setFollowing] = createSignal<string>();
+  const peerOverlays = collab
+    ? createPeerOverlays(engine, viewer, collab.peers)
+    : undefined;
+  const followed = () => collab?.peers().find((p) => p.peerId === following());
+
+  // Presence goes to the sync service (an external system).
+  createEffect(() => {
+    if (!collab) return;
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    collab.setPresence({
+      page: viewer.pages[viewer.page()]?.id ?? '',
+      selection: viewer.selected().map((s) => s.id),
+      cursor: pointer(),
+      editing: textEditing() ?? null,
+      editor: editor.enabled(),
+      view:
+        v.w > 0 ? { x: c.x, y: c.y, w: v.w / c.zoom, h: v.h / c.zoom } : null,
+    });
+  });
+
+  /** Shows what a followed person sees: their page and view. */
+  let shownView = '';
+  const showPeerView = async (peer: FigPeer) => {
+    const { page, view } = peer.presence;
+    const key = `${page}|${view?.x}|${view?.y}|${view?.w}|${view?.h}`;
+    if (key === shownView) return;
+    shownView = key;
+    const index = viewer.pages.findIndex((p) => p.id === page);
+    if (index >= 0 && index !== viewer.page()) await viewer.openPage(index);
+    if (view) viewer.zoomToRect(view);
+  };
+  createEffect(
+    on(followed, (peer) => {
+      if (!peer) {
+        shownView = '';
+        if (following()) setFollowing(undefined);
+        return;
+      }
+      void showPeerView(peer);
+    })
+  );
+  /** Panning, zooming, or clicking the canvas stops following. */
+  const stopFollowing = (e: Event) => {
+    if ((e.target as Element).closest?.('[data-follow-control]')) return;
+    if (following()) setFollowing(undefined);
+  };
+
+  const contextMenu = createFigContextMenu({
+    viewer,
+    engine,
+    editor,
+    mac: IS_MAC,
+    run,
+    focus: () => root.focus({ preventScroll: true }),
+  });
+
+  /** Nothing to deselect, no tool to leave, no panel to close. */
+  const escapeIdle = () =>
+    !showShortcuts() &&
+    (viewer.tool() === 'move' || viewer.tool() === 'hand') &&
+    viewer.selected().length === 0;
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    // Presenting takes its own keys.
+    if (review.presenting()) return;
+    const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+    // ⌘P is the actions menu anywhere in the design, never the browser's
+    // print (Figma's quick actions; Figma's ⌘K is the app's command menu).
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyP') {
+      e.preventDefault();
+      e.stopPropagation();
+      run('open-actions');
+      return;
+    }
+    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyK') {
+      context.suggestActions?.(() => setShowActions(true));
+      return;
+    }
+    if (target.closest('input, textarea, [contenteditable="true"]')) return;
+    // Menus (portaled, so their events bubble here) handle their own keys.
+    if (target.closest('[role="menu"]')) return;
+    // Menus, tabs, and panel dividers use arrows without moving the selection.
+    if (
+      !mod &&
+      target.closest(
+        '[aria-haspopup="menu"], [aria-haspopup="true"], [role="tab"], [role="separator"]'
+      ) &&
+      [
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+      ].includes(e.key)
+    )
+      return;
+    // A focused select or button keeps the keys it uses itself.
+    const control = target.closest('select, button, a[href]');
+    if (control && controlOwnsKey(control.tagName, e)) return;
+    if (review.onKey(e)) return;
+    if (e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      setSpaceHeld(true);
+      return;
+    }
+    if (e.key === 'Alt') setAltHeld(true);
+    if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(true);
+    if (shapeKey(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    const action = shortcutAction(e, IS_MAC);
+    if (!action) return;
+    if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
+    // ⌘V goes through the paste event, which carries pasted image files.
+    if (action === 'paste') return;
+    // With nothing to act on, the key is the app's (⇧← focuses the split
+    // to the left, Escape leaves a spotlighted split, ⇧⌘C copies the link).
+    if (SELECTION_ACTIONS.has(action) && viewer.selected().length === 0) return;
+    if (action === 'escape' && escapeIdle()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const resolved = enterAction(action);
+    if (resolved === 'edit-text') setTextEditing(info()?.id);
+    else if (resolved === 'edit-vector') {
+      const id = info()?.id;
+      if (id) void editor.editVector(id);
+    } else run(resolved);
+  };
+
+  /**
+   * Keys pressed in the design reach it before the app's hotkeys (which
+   * listen on the document while capturing), so where they overlap the
+   * design's shortcuts win, as in Figma: R, T, O, H, \, ⌘\, ⌘Z and others.
+   * Keys it does not use go on to the app (⌘K, ⌘S, G, /…).
+   */
+  const handledEarly = new WeakSet<Event>();
+  onMount(() => {
+    const onWindowKeyDown = (e: KeyboardEvent) => {
+      if (!(e.target instanceof Node) || !root.contains(e.target)) return;
+      handledEarly.add(e);
+      onKeyDown(e);
+    };
+    window.addEventListener('keydown', onWindowKeyDown, true);
+    onCleanup(() =>
+      window.removeEventListener('keydown', onWindowKeyDown, true)
+    );
+  });
+  /** Keys from the design's portaled popovers, which bubble here. */
+  const onPortaledKeyDown = (e: KeyboardEvent) => {
+    if (!handledEarly.has(e)) onKeyDown(e);
+  };
+
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (e.key === ' ') setSpaceHeld(false);
+    if (e.key === 'Alt') setAltHeld(false);
+    if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(false);
+  };
+
+  // Pasting image files places them in the middle of the view.
+  const onPaste = (e: ClipboardEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest?.('input, textarea, [contenteditable="true"]')) return;
+    const files = [...(e.clipboardData?.files ?? [])].filter((f) =>
+      f.type.startsWith('image/')
+    );
+    if (!editor.enabled()) return;
+    e.preventDefault();
+    if (files.length === 0) {
+      // Layers copied here, in another file, or in Figma.
+      void editor.paste(e.clipboardData?.getData('text/html') || undefined);
+      return;
+    }
+    const c = viewer.camera();
+    const v = viewer.viewport();
+    const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
+    void viewer
+      .containerAt(at)
+      .then((parent) => editor.importImages(files, at, parent));
+  };
+
+  const releaseModifiers = () => {
+    setSpaceHeld(false);
+    setAltHeld(false);
+    setDeepHeld(false);
+  };
+  onMount(() => {
+    window.addEventListener('blur', releaseModifiers);
+    onCleanup(() => window.removeEventListener('blur', releaseModifiers));
+  });
+
+  const zoomItems = () => [
+    {
+      label: 'Zoom in',
+      shortcut: IS_MAC ? '⌘+' : 'Ctrl++',
+      onSelect: () => run('zoom-in'),
+    },
+    {
+      label: 'Zoom out',
+      shortcut: IS_MAC ? '⌘-' : 'Ctrl+-',
+      onSelect: () => run('zoom-out'),
+    },
+    {
+      label: 'Zoom to fit',
+      shortcut: '⇧1',
+      onSelect: () => run('zoom-fit'),
+      testId: 'fig-zoom-fit',
+    },
+    {
+      label: 'Zoom to selection',
+      shortcut: '⇧2',
+      onSelect: () => run('zoom-selection'),
+    },
+    {
+      label: 'Zoom to 100%',
+      shortcut: '⇧0',
+      onSelect: () => run('zoom-100'),
+      testId: 'fig-zoom-100',
+    },
+    'divider' as const,
+    {
+      label: 'Pixel grid',
+      shortcut: "⇧'",
+      checked: viewer.pixelGrid(),
+      onSelect: () => run('toggle-pixel-grid'),
+    },
+    {
+      label: 'Layout grids',
+      shortcut: IS_MAC ? '⌃G' : 'Ctrl+⇧4',
+      checked: aids.grids(),
+      onSelect: () => run('toggle-layout-grids'),
+      testId: 'fig-layout-grids-toggle',
+    },
+    {
+      label: 'Rulers',
+      shortcut: '⇧R',
+      checked: viewer.rulers(),
+      onSelect: () => run('toggle-rulers'),
+    },
+    {
+      label: 'Outline view',
+      shortcut: IS_MAC ? '⌘Y' : 'Ctrl+Y',
+      checked: viewer.outlineView(),
+      onSelect: () => run('toggle-outline'),
+      testId: 'fig-outline-toggle',
+    },
+    {
+      label: 'Show UI',
+      shortcut: IS_MAC ? '⌘\\' : 'Ctrl+\\',
+      checked: !viewer.uiHidden(),
+      onSelect: () => run('toggle-ui'),
+    },
+  ];
+
+  const showLayers = () => !viewer.uiHidden() && viewer.layersOpen();
+  const showDesign = () => !viewer.uiHidden() && viewer.designOpen();
+
+  return (
+    <div
+      ref={root}
+      tabIndex={0}
+      class="fig-editor-theme relative flex size-full min-h-0 min-w-0 bg-page outline-none"
+      data-testid="fig-viewer"
+      onKeyDown={onPortaledKeyDown}
+      onKeyUp={onKeyUp}
+      onPaste={onPaste}
+    >
+      <Show when={showLayers()}>
+        <ResizablePanel
+          side="left"
+          label="Pages and layers"
+          width={leftWidth()}
+          onResize={setLeftWidth}
+          onContextMenu={contextMenu.onLayers}
+        >
+          <Tabs
+            class="flex min-h-0 flex-1 flex-col"
+            value={leftTab()}
+            onChange={(value) => setLeftTab(value as 'layers' | 'assets')}
+          >
+            <div class="flex h-12 shrink-0 items-center gap-1 px-3 text-xs">
+              <MainMenu
+                canEdit={editor.enabled()}
+                hasSelection={viewer.selected().length > 0}
+                canUndo={editor.canUndo()}
+                canRedo={editor.canRedo()}
+                zoomItems={zoomItems()}
+                onRun={run}
+                onExportFramesPdf={() => void handoff.exportFramesPdf()}
+              />
+              <span
+                class="min-w-0 flex-1 truncate font-semibold"
+                title={context.fileName()}
+              >
+                {context.fileName()}
+              </span>
+              <Show when={editor.enabled()}>
+                <SaveIndicator state={editor.saveState()} />
+              </Show>
+              <PanelToggle
+                side="left"
+                open
+                onClick={() => viewer.setLayersOpen(false)}
+              />
+            </div>
+            <Tabs.List
+              class="flex h-10 shrink-0 items-center gap-1 border-edge-frame border-b px-3 text-xs"
+              aria-label="File navigation"
+            >
+              <For each={['layers', 'assets'] as const}>
+                {(t) => (
+                  <Tabs.Trigger
+                    value={t}
+                    class="rounded-md px-2 py-1 font-medium"
+                    classList={{
+                      'bg-hover text-ink': leftTab() === t,
+                      'text-ink-muted': leftTab() !== t,
+                    }}
+                    data-testid={`fig-tab-${t}`}
+                  >
+                    {t === 'layers' ? 'File' : 'Assets'}
+                  </Tabs.Trigger>
+                )}
+              </For>
+            </Tabs.List>
+            <Tabs.Content
+              value="assets"
+              class="flex min-h-0 flex-1 flex-col outline-none"
+            >
+              <AssetsPanel
+                viewer={viewer}
+                engine={engine}
+                editor={editor}
+                libraries={libraries}
+                fileName={context.fileName()}
+              />
+            </Tabs.Content>
+            <Tabs.Content
+              value="layers"
+              class="flex min-h-0 flex-1 flex-col outline-none"
+            >
+              <LayersPanel
+                viewer={viewer}
+                engine={engine}
+                editor={editor}
+                focusSearchRef={(focus) => {
+                  focusSearch = focus;
+                }}
+              />
+            </Tabs.Content>
+          </Tabs>
+        </ResizablePanel>
+      </Show>
+      <div
+        class="relative min-w-0 flex-1"
+        onPointerDown={stopFollowing}
+        onWheel={stopFollowing}
+        onContextMenu={contextMenu.onCanvas}
+      >
+        <ViewerCanvas
+          viewer={viewer}
+          engine={engine}
+          spaceHeld={spaceHeld}
+          altHeld={altHeld}
+          deepHeld={deepHeld}
+          editor={editor}
+          info={info}
+          onEditText={(id) => setTextEditing(id)}
+          onInvalidator={(fn) => {
+            invalidate = fn;
+          }}
+          peers={peerOverlays}
+          onPointer={collab ? setPointer : undefined}
+          onMove={onMove}
+          aids={aids}
+          devMode={devMode}
+          drop={
+            libraries && {
+              type: LIBRARY_ASSET_MIME,
+              onDrop: (data, at, parent) =>
+                void libraries.dropAsset(data, at, parent),
+            }
+          }
+        >
+          <Show when={textEditing()}>
+            {(id) => (
+              <TextEditor
+                id={id()}
+                viewer={viewer}
+                editor={editor}
+                engine={engine}
+                fonts={fonts}
+                onDone={() => {
+                  setTextEditing(undefined);
+                  root.focus({ preventScroll: true });
+                }}
+              />
+            )}
+          </Show>
+          <Show
+            when={
+              showDesign() &&
+              review.panelTab() === 'prototype' &&
+              !review.comments?.active() &&
+              review.prototype()
+            }
+          >
+            {(info) => (
+              <PrototypeNoodles
+                info={info()}
+                camera={viewer.camera()}
+                selected={viewer.selected().map((s) => s.id)}
+              />
+            )}
+          </Show>
+          <Show when={review.comments?.active() && review.comments}>
+            {(c) => (
+              <CommentPins
+                comments={c()}
+                camera={viewer.camera()}
+                viewport={viewer.viewport()}
+                onDismiss={() => root.focus({ preventScroll: true })}
+              />
+            )}
+          </Show>
+          <Show when={libraries}>
+            {(l) => <LibraryUpdates libraries={l()} />}
+          </Show>
+          <Show when={editor.enabled() && fonts.missing().length > 0}>
+            <MissingFonts
+              fonts={fonts.missing()}
+              canUseLocal={fonts.canUseLocalFonts()}
+              onUseLocal={() => void fonts.useLocalFonts()}
+            />
+          </Show>
+          <Show when={viewer.loadingPage()}>
+            <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
+              Loading page…
+            </div>
+          </Show>
+          <Show when={!viewer.uiHidden() && !showLayers()}>
+            <div class="absolute top-2 left-3 z-10 rounded-lg border border-edge-muted bg-panel p-1">
+              <PanelToggle
+                side="left"
+                open={false}
+                onClick={() => viewer.setLayersOpen(true)}
+              />
+            </div>
+          </Show>
+          <Show when={!viewer.uiHidden() && !showDesign()}>
+            <div
+              class="absolute top-2 right-3 z-10 flex items-center gap-1 rounded-lg border border-edge-muted bg-panel px-1"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <PresentButton
+                mac={IS_MAC}
+                onPresent={() => void review.present()}
+              />
+              <ViewerZoom
+                label={zoomLabel(viewer.camera().zoom)}
+                items={zoomItems()}
+              />
+              <Show when={!showDesign()}>
+                <PanelToggle
+                  side="right"
+                  open={false}
+                  onClick={() => viewer.setDesignOpen(true)}
+                />
+              </Show>
+            </div>
+          </Show>
+          <Show when={collab}>
+            {(c) => (
+              <div
+                data-follow-control
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <PeerAvatars
+                  peers={c().peers()}
+                  following={following()}
+                  onFollow={setFollowing}
+                  status={c().status()}
+                />
+              </div>
+            )}
+          </Show>
+          <Show when={followed()}>
+            {(peer) => (
+              <div
+                data-follow-control
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <FollowFrame
+                  peer={peer()}
+                  onStop={() => setFollowing(undefined)}
+                />
+              </div>
+            )}
+          </Show>
+          <Show when={showShortcuts()}>
+            <ShortcutsDialog
+              mac={IS_MAC}
+              onClose={() => setShowShortcuts(false)}
+            />
+          </Show>
+          <Show when={showActions()}>
+            <ActionsPalette
+              mac={IS_MAC}
+              available={(action) =>
+                !EDIT_ACTIONS.has(action) || editor.enabled()
+              }
+              onRun={run}
+              onClose={(refocus) => {
+                setShowActions(false);
+                // Back to the canvas, so its shortcuts work again.
+                if (refocus) root.focus({ preventScroll: true });
+              }}
+            />
+          </Show>
+          <FigContextMenu
+            at={contextMenu.menu()?.at}
+            entries={contextMenu.menu()?.entries ?? []}
+            mac={IS_MAC}
+            onSelect={contextMenu.choose}
+            onClose={contextMenu.close}
+          />
+        </ViewerCanvas>
+      </div>
+      <Show when={showDesign() && review.comments?.active() && review.comments}>
+        {(c) => (
+          <ResizablePanel
+            side="right"
+            label="Comments"
+            width={rightWidth()}
+            onResize={setRightWidth}
+          >
+            <CommentsPanel
+              comments={c()}
+              headerActions={
+                <>
+                  <PresentButton
+                    mac={IS_MAC}
+                    onPresent={() => void review.present()}
+                  />
+                  <PanelToggle
+                    side="right"
+                    open
+                    onClick={() => viewer.setDesignOpen(false)}
+                  />
+                </>
+              }
+              zoom={
+                <ViewerZoom
+                  label={zoomLabel(viewer.camera().zoom)}
+                  items={zoomItems()}
+                />
+              }
+              pageName={(id) => viewer.pages.find((p) => p.id === id)?.name}
+            />
+          </ResizablePanel>
+        )}
+      </Show>
+      <Show when={showDesign() && !review.comments?.active()}>
+        <ResizablePanel
+          side="right"
+          label="Properties"
+          width={rightWidth()}
+          onResize={setRightWidth}
+        >
+          <DesignPanel
+            tab={review.panelTab()}
+            headerActions={
+              <>
+                <PresentButton
+                  mac={IS_MAC}
+                  onPresent={() => void review.present()}
+                />
+                <PanelToggle
+                  side="right"
+                  open
+                  onClick={() => viewer.setDesignOpen(false)}
+                />
+              </>
+            }
+            zoom={
+              <ViewerZoom
+                label={zoomLabel(viewer.camera().zoom)}
+                items={zoomItems()}
+              />
+            }
+            info={panel().info}
+            fontFamilies={[
+              ...new Set([
+                'Inter',
+                ...fonts.documentFonts().map((f) => f.family),
+              ]),
+            ]}
+            type={{
+              mixed: panel().mixed,
+              googleFamilies: fonts.families().map((f) => f.family),
+              weights: shownFamily()
+                ? fonts.weightsOf(shownFamily() ?? '')
+                : undefined,
+              preview: fonts.preview,
+              onFontsOpen: () => void fonts.loadCatalog(),
+            }}
+            onAlign={
+              editor.enabled() ? (how) => void editor.align(how) : undefined
+            }
+            onFlip={
+              editor.enabled()
+                ? (axis) =>
+                    run(
+                      axis === 'horizontal'
+                        ? 'flip-horizontal'
+                        : 'flip-vertical'
+                    )
+                : undefined
+            }
+            onPatch={editor.enabled() ? patchSelection : undefined}
+            onPageColor={editor.enabled() ? setPageColor : undefined}
+            swatches={swatches()}
+            mixed={mixed()}
+            onPickerOpen={() => void loadSwatches()}
+            onAddImage={editor.enabled() ? addImage : undefined}
+            onAddAutoLayout={
+              editor.enabled() ? () => void editor.addAutoLayout() : undefined
+            }
+            selectionCount={viewer.selected().length}
+            page={viewer.pages[viewer.page()]}
+            exportSection={
+              <Show when={info()?.id} keyed>
+                {(id) => (
+                  <ExportSection
+                    name={info()?.name ?? ''}
+                    count={1}
+                    settings={info()?.exportSettings ?? []}
+                    onChange={
+                      editor.enabled() && !id.startsWith('I')
+                        ? handoff.setExports
+                        : undefined
+                    }
+                    onExport={(settings) =>
+                      void handoff.exportSelection(settings)
+                    }
+                    preview={handoff.preview}
+                    onCopyPng={() => void copyPng()}
+                    onCopySvg={() => void copySvg()}
+                  />
+                )}
+              </Show>
+            }
+            layoutGrids={
+              <Show
+                when={
+                  info() &&
+                  ['FRAME', 'SYMBOL', 'INSTANCE'].includes(
+                    info()?.type ?? ''
+                  ) &&
+                  (editor.enabled() || (info()?.layoutGrids.length ?? 0) > 0)
+                }
+              >
+                <LayoutGridSection
+                  grids={info()?.layoutGrids ?? []}
+                  onChange={
+                    editor.enabled() && !info()?.id.startsWith('I')
+                      ? handoff.setGrids
+                      : undefined
+                  }
+                  swatches={swatches()}
+                  onPickerOpen={() => void loadSwatches()}
+                />
+              </Show>
+            }
+            code={
+              <Show when={panel().info}>
+                {(i) => (
+                  <DevInspect
+                    info={i()}
+                    design={designSystem.info()}
+                    assets={handoff.assets()}
+                    onCopy={(text) => void copyText(text)}
+                    onDownload={(id, s) => void handoff.downloadAsset(id, s)}
+                  />
+                )}
+              </Show>
+            }
+            onBoolean={
+              editor.enabled() ? (op) => void editor.booleanOp(op) : undefined
+            }
+            onFlatten={() => void editor.flatten()}
+            onCreateComponent={
+              editor.enabled() &&
+              !viewer.selected().some((node) => node.id.startsWith('I'))
+                ? () => void editor.createComponent()
+                : undefined
+            }
+            onCopyText={(text) => void copyText(text)}
+            onTabChange={review.setPanelTab}
+            prototype={
+              <PrototypePanel
+                info={review.prototype()}
+                selected={
+                  viewer.selected().length === 1 && info()
+                    ? { id: info()?.id ?? '', name: info()?.name ?? '' }
+                    : undefined
+                }
+                onInteractions={
+                  editor.enabled()
+                    ? (id, index, edited) =>
+                        void review.setInteraction(id, index, edited)
+                    : undefined
+                }
+                onFlowStart={editor.enabled() ? review.setFlowStart : undefined}
+                onPresent={(frame) => void review.present(frame)}
+              />
+            }
+            designSections={
+              <DesignSystemSections
+                ds={designSystem}
+                selected={viewer.selected()[0]?.id}
+              />
+            }
+            styleControl={styleControl}
+            pageExtra={
+              <LocalStylesView ds={designSystem} swatches={swatches()} />
+            }
+          />
+        </ResizablePanel>
+      </Show>
+      <Show when={!viewer.uiHidden()}>
+        <ViewerToolbar
+          tool={review.comments?.active() ? undefined : viewer.tool()}
+          onTool={(tool) => {
+            review.comments?.setActive(false);
+            if (editor.penPath()) void editor.penFinish();
+            viewer.setTool(tool);
+          }}
+          editable={editor.enabled()}
+          onActions={() => setShowActions(true)}
+          devMode={review.panelTab() === 'code'}
+          onDevMode={() => {
+            viewer.setDesignOpen(true);
+            review.comments?.setActive(false);
+            review.setPanelTab((tab) => (tab === 'code' ? 'design' : 'code'));
+          }}
+          review={
+            <CommentButton
+              comments={
+                review.comments && {
+                  active: review.comments.active(),
+                  unread: review.comments.unreadCount(),
+                  onToggle: review.toggleComments,
+                }
+              }
+            />
+          }
+        />
+      </Show>
+      <Show when={review.presenting()}>
+        {(p) => (
+          <PresentMode
+            engine={engine}
+            page={p().page}
+            info={p().info}
+            start={p().start}
+            onExit={() => {
+              review.stopPresenting();
+              root.focus({ preventScroll: true });
+            }}
+            onCopyLink={review.copyFrameLink}
+          />
+        )}
+      </Show>
+    </div>
+  );
+}

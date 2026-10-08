@@ -15,6 +15,7 @@ pub mod domain;
 pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;
+pub mod tag_color;
 
 pub use domain::error::PropertiesErr;
 pub use domain::model::{
@@ -22,7 +23,9 @@ pub use domain::model::{
     PropertyAccessReceiptExt, PropertyOptionInfo, PropertyTargetKey, ViewReceipt,
     canonical_entity_type,
 };
-pub use domain::ports::{NotificationService, PermissionService, PropertiesRepo};
+pub use domain::ports::{
+    InitiativeAssigneeService, NotificationService, PermissionService, PropertiesRepo,
+};
 pub use domain::service::{PropertiesService, TeamReceipt};
 pub use domain::service_impl::PropertiesServiceImpl;
 #[cfg(feature = "outbound")]
@@ -31,3 +34,4 @@ pub use outbound::notification_service::NotificationServiceImpl;
 pub use outbound::permission_service::PermissionServiceImpl;
 #[cfg(feature = "outbound")]
 pub use outbound::properties_pg_repo::PropertiesPgRepo;
+pub use tag_color::TagColor;

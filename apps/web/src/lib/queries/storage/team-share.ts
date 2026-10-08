@@ -14,7 +14,7 @@ function documentTeamShareQueryOptions(documentId: string) {
     queryFn: () =>
       throwOnErr(() =>
         storageServiceClient.getDocumentTeamShare({
-          documentId: documentId,
+          documentId,
         })
       ),
     staleTime: STALE_TIME,

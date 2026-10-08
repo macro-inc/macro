@@ -21,12 +21,14 @@ mod db_types;
 mod draft;
 mod dynamic;
 mod email_filter;
+mod followup;
 mod label;
 mod link;
 mod message;
 mod preview;
 mod preview_views;
 mod project;
+mod scheduled;
 mod settings;
 mod thread;
 
@@ -60,6 +62,11 @@ impl EmailPgRepo {
 }
 
 impl EmailUserRepo for EmailPgRepo {
+    async fn user_sender_filters(&self, link_id: Uuid) -> Result<Vec<EmailFilter>, EmailErr> {
+        email_filter::list_email_filters(&self.pool, link_id)
+            .await
+            .map_err(|error| EmailErr::RepoErr(error.into()))
+    }
     async fn user_accessible_inboxes(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -215,6 +222,16 @@ impl EmailRepo for EmailPgRepo {
         message::labels_by_message_ids(&self.pool, message_ids).await
     }
 
+    async fn calendar_invitations_by_message_ids(
+        &self,
+        message_ids: &[Uuid],
+    ) -> Result<
+        HashMap<Uuid, Vec<crate::domain::models::calendar_invitation::CalendarInvitation>>,
+        Self::Err,
+    > {
+        crate::outbound::invitation_pg::load(&self.pool, message_ids).await
+    }
+
     async fn attachments_by_message_ids(
         &self,
         message_ids: &[Uuid],
@@ -307,7 +324,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<Option<SettledDraftIds>, Self::Err> {
+    ) -> Result<Option<SettledDraftIds>, EmailErr> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 
@@ -355,6 +372,25 @@ impl EmailRepo for EmailPgRepo {
         is_read: bool,
     ) -> Result<(), Self::Err> {
         label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
+    }
+
+    async fn set_thread_inbox_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        add: bool,
+        inbox_visible: bool,
+    ) -> Result<(), Self::Err> {
+        label::set_thread_inbox_state(
+            &self.pool,
+            thread_id,
+            link_id,
+            message_ids,
+            add,
+            inbox_visible,
+        )
+        .await
     }
 
     async fn update_message_read_status_batch(

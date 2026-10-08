@@ -29,7 +29,13 @@ function setup(
 ) {
   return createRoot((dispose) => {
     cleanups.push(dispose);
-    const [cells, updateCells] = createSignal(initial);
+    const [cells, replaceCells] = createSignal(initial);
+    // The store reports changes by revision because it patches cells in place.
+    const [revision, setRevision] = createSignal(0);
+    const updateCells = (next: SpreadsheetCells) => {
+      replaceCells(next);
+      setRevision((value) => value + 1);
+    };
     const [canEdit, setCanEdit] = createSignal(true);
     const [busy, setBusy] = createSignal(false);
     const [rowCount, setRowCount] = createSignal(200);
@@ -67,6 +73,7 @@ function setup(
     const actions = createSheetActions(
       {
         cells,
+        revision,
         canEdit,
         rowCount,
         setCells,
@@ -289,12 +296,12 @@ describe('spreadsheet menu actions', () => {
       '\uFEFF',
       'first\n"unclosed',
       `first\n${'x'.repeat(10_001)}`,
-      Array.from({ length: 802 }, () => 'row').join('\n'),
+      Array.from({ length: 99_802 }, () => 'row').join('\n'),
     ])
       state.actions.importCsv(input);
-    state.setRowCount(1000);
-    state.grid.select({ row: 999, column: 25 });
-    state.actions.importCsv('one,two');
+    state.setRowCount(100_000);
+    state.grid.select({ row: 99_999, column: 0 });
+    state.actions.importCsv('one\ntwo');
     expect(state.setCells).not.toHaveBeenCalled();
     expect(state.appendRows).not.toHaveBeenCalled();
     expect(state.cells().A200.value).toBe('keep');

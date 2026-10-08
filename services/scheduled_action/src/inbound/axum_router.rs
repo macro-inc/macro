@@ -6,12 +6,19 @@ use crate::domain::models::{
     InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
+use crate::domain::target_validation::TargetValidationError;
+use agent_session::domain::routines::RoutineSessionError;
+use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use chrono_tz::Tz;
+use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
+use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,
@@ -19,6 +26,7 @@ use macro_authorization::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model::response::EmptyResponse;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
@@ -48,7 +56,7 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     fn from(action: ScheduledAction) -> Self {
         let (schedule, timezone) = match &action.trigger {
             ActionTrigger::Cron { schedule, timezone } => (Some(schedule.clone()), Some(*timezone)),
-            ActionTrigger::Events { .. } => (None, None),
+            _ => (None, None),
         };
         Self {
             action,
@@ -58,6 +66,12 @@ impl From<ScheduledAction> for ScheduledActionResponse {
     }
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetScheduledActionEnabled {
+    pub enabled: bool,
+}
+
 #[derive(Debug, Default, Deserialize, IntoParams)]
 pub struct ListActionsQuery {
     /// Backend clients must opt in to event actions; defaults to false (cron-only).
@@ -65,65 +79,130 @@ pub struct ListActionsQuery {
     pub include_events: Option<bool>,
 }
 
-pub struct ScheduledActionRouterState<S, Auth> {
+pub struct ScheduledActionRouterState<S, Svc, Auth> {
     pub service: Arc<S>,
+    pub access_service: Arc<Svc>,
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, Auth> Clone for ScheduledActionRouterState<S, Auth> {
+impl<S, Svc, Auth> Clone for ScheduledActionRouterState<S, Svc, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
+            access_service: Arc::clone(&self.access_service),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S, Auth> FromRef<ScheduledActionRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &ScheduledActionRouterState<S, Auth>) -> Self {
+impl<S, Svc, Auth> FromRef<ScheduledActionRouterState<S, Svc, Auth>> for Arc<Svc> {
+    fn from_ref(state: &ScheduledActionRouterState<S, Svc, Auth>) -> Self {
+        Arc::clone(&state.access_service)
+    }
+}
+
+impl<S, Svc, Auth> FromRef<ScheduledActionRouterState<S, Svc, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &ScheduledActionRouterState<S, Svc, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
-pub fn scheduled_action_router<S, Auth, St>(
-    state: ScheduledActionRouterState<S, Auth>,
+/// Team bots reach the domain so a non-user owner is `OwnerNotUserError`.
+///
+/// `NonUserOwners::Disabled` would reject that caller with a generic 403
+/// before the service could return the explicit message.
+impl<S, Svc, Auth> FromRef<ScheduledActionRouterState<S, Svc, Auth>> for NonUserOwners {
+    fn from_ref(_state: &ScheduledActionRouterState<S, Svc, Auth>) -> Self {
+        NonUserOwners::Enabled
+    }
+}
+
+pub fn scheduled_action_router<S, Svc, Auth, St>(
+    state: ScheduledActionRouterState<S, Svc, Auth>,
 ) -> Router<St>
 where
     S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
     St: Send + Sync,
 {
     Router::new()
         .route(
             "/scheduled-actions/user/{user_id}",
-            delete(delete_user_actions::<S, Auth>),
+            delete(delete_user_actions::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/internal/{id}",
+            delete(purge_owned_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions",
-            get(list_actions::<S, Auth>).post(create_action::<S, Auth>),
+            get(list_actions::<S, Svc, Auth>).post(create_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}",
-            put(update_action::<S, Auth>).delete(delete_action::<S, Auth>),
+            get(get_action::<S, Svc, Auth>)
+                .put(update_action::<S, Svc, Auth>)
+                .delete(delete_action::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/enabled",
+            put(set_action_enabled::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/execute",
-            post(execute_action::<S, Auth>),
+            post(execute_action::<S, Svc, Auth>),
         )
         .route(
             "/scheduled-actions/{id}/history",
-            get(list_history::<S, Auth>),
+            get(list_history::<S, Svc, Auth>),
         )
         .with_state(state)
 }
 
-async fn delete_user_actions<S: ScheduledActionService, Auth: MacroAuthorizationService>(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
+async fn delete_user_actions<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
     Path(user_id): Path<MacroUserIdStr<'static>>,
-) -> Result<StatusCode, ScheduledActionApiError> {
+) -> Result<StatusCode, ScheduledActionApiError>
+where
+    S: ScheduledActionService,
+    Auth: MacroAuthorizationService,
+{
     state.service.delete_user_actions(user_id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Deserialize)]
+struct OwnerQuery {
+    owner: Owner,
+}
+
+/// Internal owner removal: never grants delete authority to a user or bot
+/// token. 204 once the action is gone, including when it already was. 409
+/// when another owner holds it, and nothing was deleted. 500 when the delete
+/// failed; the purge converges, so the caller retries.
+#[tracing::instrument(skip_all, fields(%id, owner.kind = ?owner.owner_type()))]
+async fn purge_owned_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    Path(id): Path<Uuid>,
+    Query(OwnerQuery { owner }): Query<OwnerQuery>,
+) -> StatusCode
+where
+    S: ScheduledActionService,
+    Auth: MacroAuthorizationService,
+{
+    match state.service.purge_owned_action(id, &owner).await {
+        Ok(OwnedPurgeOutcome::Purged) => StatusCode::NO_CONTENT,
+        Ok(OwnedPurgeOutcome::OwnedElsewhere) => StatusCode::CONFLICT,
+        Err(error) => {
+            tracing::error!(error = ?error, "unable to purge the owned scheduled action");
+            StatusCode::INTERNAL_SERVER_ERROR
+        }
+    }
 }
 
 #[utoipa::path(
@@ -149,22 +228,22 @@ pub async fn health() -> impl IntoResponse {
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
         (status = 401, body = String),
+        (status = 403, body = String),
         (status = 500, body = String),
     )
 )]
-pub async fn create_action<
-    S: ScheduledActionService + Send + Sync + 'static,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn create_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
     body: Result<Json<CreateScheduledAction>, JsonRejection>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state
-        .service
-        .create_action(req, user.authorization.user.macro_user_id.clone())
-        .await?;
+    let created = state.service.create_action(&principal, req).await?;
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),
@@ -184,14 +263,15 @@ pub async fn create_action<
         (status = 500, body = String),
     )
 )]
-pub async fn list_actions<
-    S: ScheduledActionService + Send + Sync + 'static,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
+pub async fn list_actions<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Query(query): Query<ListActionsQuery>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Auth: MacroAuthorizationService,
+{
     let actions = state
         .service
         .get_actions(
@@ -205,6 +285,35 @@ pub async fn list_actions<
             .map(ScheduledActionResponse::from)
             .collect::<Vec<_>>(),
     ))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}",
+    tag = "scheduled actions",
+    operation_id = "get_scheduled_action",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn get_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
+where
+    S: ScheduledActionService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.get_action(entity_access_receipt).await?;
+    Ok(Json(action.into()))
 }
 
 #[utoipa::path(
@@ -223,21 +332,62 @@ pub async fn list_actions<
         (status = 500, body = String),
     )
 )]
-pub async fn update_action<
-    S: ScheduledActionService + Send + Sync + 'static,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
+pub async fn update_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
     body: Result<Json<UpdateScheduledAction>, JsonRejection>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
     let updated = state
         .service
-        .update_action(&id, req, user.authorization.user.macro_user_id.clone())
+        .update_action(entity_access_receipt, req)
         .await?;
     Ok(Json(ScheduledActionResponse::from(updated)))
+}
+
+#[utoipa::path(
+    put,
+    path = "/scheduled-actions/{id}/enabled",
+    tag = "scheduled actions",
+    operation_id = "set_scheduled_action_enabled",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    request_body = SetScheduledActionEnabled,
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String),
+        (status = 409, body = String, description = "Configuration changed or execution is active"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn set_action_enabled<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+    body: Result<Json<SetScheduledActionEnabled>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let action = state
+        .service
+        .set_enabled(entity_access_receipt, req.enabled)
+        .await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
 }
 
 #[utoipa::path(
@@ -253,18 +403,19 @@ pub async fn update_action<
         (status = 500, body = String),
     )
 )]
-pub async fn delete_action<
+pub async fn delete_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
     S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
-    state
-        .service
-        .delete_action(&id, user.authorization.user.macro_user_id.clone())
-        .await?;
+{
+    state.service.delete_action(entity_access_receipt).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -280,20 +431,26 @@ pub async fn delete_action<
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 409, body = String, description = "Action is already running"),
+        (status = 402, body = AiAdmissionErrorBody, description = "AI allowance exhausted"),
+        (status = 503, body = AiAdmissionErrorBody, description = "AI usage validation unavailable; retry later"),
         (status = 500, body = String),
     )
 )]
-pub async fn execute_action<
+pub async fn execute_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<OwnerAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
     S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
+{
     let execution = state
         .service
-        .execute_action_now(&id, user.authorization.user.macro_user_id.clone())
+        .execute_action_now(entity_access_receipt)
         .await?;
     Ok(Json(execution))
 }
@@ -311,17 +468,21 @@ pub async fn execute_action<
         (status = 500, body = String),
     )
 )]
-pub async fn list_history<
+pub async fn list_history<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
     S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
->(
-    State(state): State<ScheduledActionRouterState<S, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, ScheduledActionApiError> {
+{
     let records = state
         .service
-        .get_execution_records(&id, user.authorization.user.macro_user_id.clone())
+        .get_execution_records(entity_access_receipt)
         .await?;
     Ok(Json(records))
 }
@@ -350,15 +511,52 @@ impl IntoResponse for ScheduledActionApiError {
             }
             Self::Service(error) => error,
         };
+        if let Some(admission) = error.downcast_ref::<AiAdmissionError>() {
+            return (*admission).into_response();
+        }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
-                ActionPolicyError::NoFutureFirings | ActionPolicyError::EventManagementDisabled => {
-                    StatusCode::BAD_REQUEST
-                }
+                ActionPolicyError::NoFutureFirings
+                | ActionPolicyError::EventManagementDisabled
+                | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
+            let status = match validation {
+                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
+                    StatusCode::BAD_REQUEST
+                }
+                TargetValidationError::ExplicitAgentRequired => StatusCode::CONFLICT,
+            };
+            return (status, validation.to_string()).into_response();
+        }
+        if let Some(session) = error.downcast_ref::<RoutineSessionError>() {
+            let (status, message) = match session {
+                RoutineSessionError::Admission(error) => return (*error).into_response(),
+                RoutineSessionError::InvalidCommand | RoutineSessionError::ModelMismatch => {
+                    (StatusCode::BAD_REQUEST, session.to_string())
+                }
+                RoutineSessionError::PersonaUnavailable => {
+                    (StatusCode::NOT_FOUND, session.to_string())
+                }
+                RoutineSessionError::Forbidden => (StatusCode::FORBIDDEN, session.to_string()),
+                RoutineSessionError::Conflict => (StatusCode::CONFLICT, session.to_string()),
+                RoutineSessionError::RuntimeUnavailable | RoutineSessionError::OperationFailed => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "agent service is unavailable".to_owned(),
+                ),
+                RoutineSessionError::PromptDeliveryUnknown => {
+                    (StatusCode::SERVICE_UNAVAILABLE, session.to_string())
+                }
+                RoutineSessionError::SessionMismatch => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_owned(),
+                ),
+            };
+            return (status, message).into_response();
         }
         if let Some(already_running) = error.downcast_ref::<AlreadyRunningError>() {
             tracing::info!(error=%already_running, "scheduled action already running");

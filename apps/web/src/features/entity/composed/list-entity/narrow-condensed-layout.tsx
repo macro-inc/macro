@@ -15,9 +15,9 @@ export function NarrowCondensedLayout(props: LayoutProps) {
         'w-full gap-x-(--soup-row-column-gap) items-center pr-2 pl-(--soup-row-padding-l) grid text-sm'
       )}
       style={{
-        'grid-template-columns': 'var(--soup-row-indicator-width) 1fr',
+        'grid-template-columns': 'var(--soup-row-indicator-width) 1fr auto',
         'grid-template-rows': '36px',
-        'grid-template-areas': '"indicator title"',
+        'grid-template-areas': '"indicator title timestamp"',
       }}
     >
       <Entity.Slot placement="indicator" class="relative">
@@ -56,6 +56,7 @@ export function NarrowCondensedLayout(props: LayoutProps) {
           )}
         </Show>
       </Entity.Slot>
+      <Entity.Slot placement="timestamp">{props.scheduleStatus}</Entity.Slot>
     </Entity.Layout>
   );
 }

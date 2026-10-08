@@ -9,20 +9,22 @@ use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::{MessageCommands, MessageReader},
     models::{
-        Message, MessageAttribution, MessageParent, MessageThread, PostMessage,
+        Message, MessageAttribution, MessageParent, MessageThread, NewThreadAnchor, PostMessage,
         PostMessageNotificationPolicy, ThreadPatch, ThreadState,
     },
-    ports::{MessageError, MessagePage, MessagePatch, MessageTimelineQuery},
+    ports::{MessageError, MessagePage, MessagePatch, MessageTimelinePage, MessageTimelineQuery},
     service::{MessageView, MessageWrite},
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 
+use crate::domain::permission_token::decode_permission_token;
+
 use super::{
     DocumentToolContext,
+    comment_on_document::CommentOnDocument,
     edit_document::test::{FakeDocumentService, FakeEditingWorker, FakeEntityAccessService},
-    reply_to_document_comment::ReplyToDocumentComment,
     resolve_document_comment::ResolveDocumentComment,
 };
 
@@ -35,6 +37,8 @@ const THREAD: Uuid = Uuid::from_u128(7);
 #[derive(Clone)]
 pub(in crate::inbound::toolset) struct FakeMessages {
     thread_exists: bool,
+    /// Refuse every post, as the message service does an anchor it rejects.
+    fail_posts: bool,
     posts: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, PostMessage)>>>,
     thread_patches: Arc<Mutex<Vec<(EntityAccessReceipt<MessageWrite>, Uuid, ThreadPatch)>>>,
 }
@@ -43,6 +47,7 @@ impl Default for FakeMessages {
     fn default() -> Self {
         Self {
             thread_exists: true,
+            fail_posts: false,
             posts: Arc::default(),
             thread_patches: Arc::default(),
         }
@@ -72,6 +77,13 @@ impl MessageReader for FakeMessages {
     ) -> Result<MessagePage, MessageError> {
         panic!("unexpected timeline call")
     }
+    async fn timeline_entries(
+        &self,
+        _access: EntityAccessReceipt<MessageView>,
+        _query: MessageTimelineQuery,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        panic!("unexpected timeline call")
+    }
     async fn preceding(
         &self,
         _access: EntityAccessReceipt<MessageView>,
@@ -88,10 +100,22 @@ impl MessageReader for FakeMessages {
     ) -> Result<Message, MessageError> {
         panic!("unexpected resolve_legacy call")
     }
+    async fn parent_of(&self, _id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+        panic!("unexpected parent_of call")
+    }
 }
 
 #[async_trait::async_trait]
 impl MessageCommands for FakeMessages {
+    async fn post_from_event(
+        &self,
+        _: EntityAccessReceipt<MessageWrite>,
+        _: Uuid,
+        _: PostMessage,
+    ) -> Result<Message, MessageError> {
+        unimplemented!("comment tools do not post broker events")
+    }
+
     async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -99,6 +123,9 @@ impl MessageCommands for FakeMessages {
     ) -> Result<Message, MessageError> {
         if input.thread_id.is_some() && !self.thread_exists {
             return Err(MessageError::NotFound);
+        }
+        if self.fail_posts {
+            return Err(MessageError::Invalid("anchor already in use"));
         }
         let at = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
         let message = Message {
@@ -198,12 +225,21 @@ type TestToolContext =
     DocumentToolContext<FakeDocumentService, FakeEntityAccessService, FakeEditingWorker>;
 
 fn context(access_level: AccessLevel, messages: FakeMessages) -> ServiceContext<TestToolContext> {
+    context_with(access_level, messages, "md", FakeEditingWorker::default())
+}
+
+fn context_with(
+    access_level: AccessLevel,
+    messages: FakeMessages,
+    file_type: &str,
+    editing: FakeEditingWorker,
+) -> ServiceContext<TestToolContext> {
     ServiceContext(DocumentToolContext::new(
-        FakeDocumentService::new("md"),
+        FakeDocumentService::new(file_type),
         FakeEntityAccessService { access_level },
         LexicalClient::new("unused".to_owned(), "http://localhost/lexical".to_owned()),
         SyncServiceClient::new("unused".to_owned(), "http://localhost/sync".to_owned()),
-        FakeEditingWorker::default(),
+        editing,
         "unused-jwt-secret".to_owned(),
         Arc::new(messages),
     ))
@@ -227,10 +263,12 @@ fn assert_bot_on_document(access: &EntityAccessReceipt<MessageWrite>) {
 #[tokio::test]
 async fn reply_posts_in_the_thread_as_the_bot_for_the_user() {
     let messages = FakeMessages::default();
-    let response = ReplyToDocumentComment {
+    let response = CommentOnDocument {
         document_id: DOCUMENT,
         content: "Fixed in the latest draft.".to_owned(),
         thread_id: Some(THREAD),
+        quote: None,
+        occurrence: None,
     }
     .call(context(AccessLevel::Comment, messages.clone()), request())
     .await
@@ -238,6 +276,12 @@ async fn reply_posts_in_the_thread_as_the_bot_for_the_user() {
 
     assert_eq!(response.document_id, DOCUMENT);
     assert_eq!(response.thread_id, THREAD);
+    assert!(
+        serde_json::to_value(&response)
+            .unwrap()
+            .get("markedText")
+            .is_none()
+    );
     assert_eq!(response.comment_id, Uuid::from_u128(99));
     let posts = messages.posts.lock().unwrap();
     let [(access, post)] = posts.as_slice() else {
@@ -255,18 +299,26 @@ async fn reply_posts_in_the_thread_as_the_bot_for_the_user() {
 }
 
 #[tokio::test]
-async fn reply_without_a_thread_starts_a_discussion_comment() {
+async fn comment_without_a_thread_or_quote_starts_a_discussion_comment() {
     let messages = FakeMessages::default();
-    let response = ReplyToDocumentComment {
+    let response = CommentOnDocument {
         document_id: DOCUMENT,
         content: "Summary of the open questions.".to_owned(),
         thread_id: None,
+        quote: None,
+        occurrence: None,
     }
     .call(context(AccessLevel::Comment, messages.clone()), request())
     .await
     .unwrap();
 
     assert_eq!(response.thread_id, response.comment_id);
+    assert!(
+        serde_json::to_value(&response)
+            .unwrap()
+            .get("markedText")
+            .is_none()
+    );
     let posts = messages.posts.lock().unwrap();
     assert_eq!(posts.len(), 1);
     assert_eq!(posts[0].1.thread_id, None);
@@ -276,10 +328,12 @@ async fn reply_without_a_thread_starts_a_discussion_comment() {
 #[tokio::test]
 async fn reply_needs_comment_access() {
     let messages = FakeMessages::default();
-    let error = ReplyToDocumentComment {
+    let error = CommentOnDocument {
         document_id: DOCUMENT,
         content: "Looks good.".to_owned(),
         thread_id: Some(THREAD),
+        quote: None,
+        occurrence: None,
     }
     .call(context(AccessLevel::View, messages.clone()), request())
     .await
@@ -299,10 +353,12 @@ async fn reply_to_a_thread_not_on_the_document_says_so() {
         thread_exists: false,
         ..FakeMessages::default()
     };
-    let error = ReplyToDocumentComment {
+    let error = CommentOnDocument {
         document_id: DOCUMENT,
         content: "Done.".to_owned(),
         thread_id: Some(THREAD),
+        quote: None,
+        occurrence: None,
     }
     .call(context(AccessLevel::Edit, messages), request())
     .await
@@ -386,4 +442,379 @@ async fn resolve_needs_comment_access() {
         error.description
     );
     assert!(messages.thread_patches.lock().unwrap().is_empty());
+}
+
+fn comment_on_text(text: &str, occurrence: Option<u32>) -> CommentOnDocument {
+    CommentOnDocument {
+        document_id: DOCUMENT,
+        thread_id: None,
+        quote: Some(text.to_owned()),
+        occurrence,
+        content: "Is this date still right?".to_owned(),
+    }
+}
+
+#[tokio::test]
+async fn comment_on_text_places_the_mark_then_posts_a_thread_anchored_to_it() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::default();
+    let response = comment_on_text("ships on Friday", Some(2))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap();
+
+    let marks = editing.added_comment_marks.lock().unwrap();
+    let [mark] = marks.as_slice() else {
+        panic!("expected one mark, got {}", marks.len());
+    };
+    assert_eq!(mark.document_id, DOCUMENT.to_string());
+    assert_eq!(mark.text, "ships on Friday");
+    assert_eq!(mark.occurrence, Some(2));
+    let token = decode_permission_token(&mark.token, "unused-jwt-secret").unwrap();
+    assert_eq!(token.access_level, AccessLevel::Comment);
+    assert_eq!(token.user_id.as_ref().map(|user| user.as_ref()), Some(USER));
+
+    let posts = messages.posts.lock().unwrap();
+    let [(access, post)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_bot_on_document(access);
+    assert_eq!(post.thread_id, None);
+    assert_eq!(post.content, "Is this date still right?");
+    assert_eq!(post.attribution, MessageAttribution::ActingUser);
+    let Some(NewThreadAnchor::Markdown {
+        mark_id,
+        marked_text,
+    }) = &post.anchor
+    else {
+        panic!("expected a markdown anchor, got {:?}", post.anchor);
+    };
+    assert_eq!(*mark_id, mark.mark_id);
+    assert_eq!(marked_text.as_deref(), Some("ships on Friday"));
+
+    assert_eq!(response.document_id, DOCUMENT);
+    assert_eq!(response.thread_id, Uuid::from_u128(99));
+    assert_eq!(response.comment_id, Uuid::from_u128(99));
+    assert_eq!(response.marked_text.as_deref(), Some("ships on Friday"));
+    assert_eq!(
+        serde_json::to_value(&response).unwrap()["markedText"],
+        "ships on Friday"
+    );
+    assert!(editing.removed_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_refused_by_the_document_posts_nothing() {
+    for reason in ["The text appears 2 times.", "The text was not found."] {
+        let messages = FakeMessages::default();
+        let editing = FakeEditingWorker::refusing_comment_marks(reason);
+        let error = comment_on_text("TBD", None)
+            .call(
+                context_with(AccessLevel::Edit, messages.clone(), "md", editing),
+                request(),
+            )
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.description, reason);
+        assert!(messages.posts.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn comment_on_text_removes_the_mark_when_the_thread_cannot_be_posted() {
+    let messages = FakeMessages {
+        fail_posts: true,
+        ..FakeMessages::default()
+    };
+    let editing = FakeEditingWorker::default();
+    let error = comment_on_text("ships on Friday", None)
+        .call(
+            context_with(AccessLevel::Comment, messages, "md", editing.clone()),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "unable to post the comment: anchor already in use"
+    );
+    let placed = editing.added_comment_marks.lock().unwrap()[0].mark_id;
+    assert_eq!(*editing.removed_comment_marks.lock().unwrap(), vec![placed]);
+}
+
+#[tokio::test]
+async fn comment_on_text_needs_comment_access() {
+    let editing = FakeEditingWorker::default();
+    let error = comment_on_text("ships on Friday", None)
+        .call(
+            context_with(
+                AccessLevel::View,
+                FakeMessages::default(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("comment access"),
+        "{}",
+        error.description
+    );
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_rejects_documents_that_are_not_markdown() {
+    let editing = FakeEditingWorker::default();
+    let error = comment_on_text("ships on Friday", None)
+        .call(
+            context_with(
+                AccessLevel::Edit,
+                FakeMessages::default(),
+                "pdf",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .description
+            .contains("markdown and Word documents only"),
+        "{}",
+        error.description
+    );
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_posts_a_thread_the_editor_places_by_its_quote() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::default();
+    let response = comment_on_text("  thirty (30) days  ", Some(1))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap();
+
+    // DOCX marks live in the collaborative document, not in Lexical: no
+    // editing-worker round trip.
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+    let posts = messages.posts.lock().unwrap();
+    let [(access, post)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_bot_on_document(access);
+    assert_eq!(post.thread_id, None);
+    let Some(NewThreadAnchor::Markdown { marked_text, .. }) = &post.anchor else {
+        panic!("expected a text anchor, got {:?}", post.anchor);
+    };
+    assert_eq!(marked_text.as_deref(), Some("thirty (30) days"));
+    assert_eq!(response.marked_text.as_deref(), Some("thirty (30) days"));
+    assert_eq!(response.thread_id, Uuid::from_u128(99));
+}
+
+#[tokio::test]
+async fn comment_on_docx_text_asks_for_a_unique_quote_instead_of_an_occurrence() {
+    let messages = FakeMessages::default();
+    let error = comment_on_text("the Agreement", Some(2))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "docx",
+                FakeEditingWorker::default(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("first appearance"),
+        "{}",
+        error.description
+    );
+    assert!(messages.posts.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_removes_the_mark_when_placing_it_fails() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::failing_comment_marks();
+    let error = comment_on_text("ships on Friday", None)
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "unable to anchor the comment to the text"
+    );
+    let placed = editing.added_comment_marks.lock().unwrap()[0].mark_id;
+    assert_eq!(*editing.removed_comment_marks.lock().unwrap(), vec![placed]);
+    assert!(messages.posts.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_rejects_occurrence_zero() {
+    let editing = FakeEditingWorker::default();
+    let error = comment_on_text("ships on Friday", Some(0))
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                FakeMessages::default(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.description.contains("counts from 1"),
+        "{}",
+        error.description
+    );
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_rejects_thread_id_with_quote() {
+    let messages = FakeMessages::default();
+    let editing = FakeEditingWorker::default();
+    let mut tool = comment_on_text("ships on Friday", None);
+    tool.thread_id = Some(THREAD);
+    let error = tool
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .description
+            .contains("threadId and quote cannot be combined")
+    );
+    assert!(messages.posts.lock().unwrap().is_empty());
+    assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_rejects_occurrence_without_quote() {
+    for thread_id in [None, Some(THREAD)] {
+        let messages = FakeMessages::default();
+        let editing = FakeEditingWorker::default();
+        let error = CommentOnDocument {
+            document_id: DOCUMENT,
+            content: "Looks good.".to_owned(),
+            thread_id,
+            quote: None,
+            occurrence: Some(1),
+        }
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "md",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(
+            error
+                .description
+                .contains("occurrence only applies with quote")
+        );
+        assert!(messages.posts.lock().unwrap().is_empty());
+        assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn discussion_comments_and_replies_support_non_markdown_documents() {
+    for thread_id in [None, Some(THREAD)] {
+        let messages = FakeMessages::default();
+        let editing = FakeEditingWorker::default();
+        let response = CommentOnDocument {
+            document_id: DOCUMENT,
+            content: "Looks good.".to_owned(),
+            thread_id,
+            quote: None,
+            occurrence: None,
+        }
+        .call(
+            context_with(
+                AccessLevel::Comment,
+                messages.clone(),
+                "pdf",
+                editing.clone(),
+            ),
+            request(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.thread_id, thread_id.unwrap_or(response.comment_id));
+        assert!(response.marked_text.is_none());
+        let posts = messages.posts.lock().unwrap();
+        assert_eq!(posts.len(), 1);
+        assert_eq!(posts[0].1.thread_id, thread_id);
+        assert!(posts[0].1.anchor.is_none());
+        assert!(editing.added_comment_marks.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn comment_optional_fields_can_be_omitted() {
+    let tool: CommentOnDocument = serde_json::from_value(serde_json::json!({
+        "documentId": DOCUMENT,
+        "content": "Looks good.",
+    }))
+    .unwrap();
+
+    assert!(tool.thread_id.is_none());
+    assert!(tool.quote.is_none());
+    assert!(tool.occurrence.is_none());
 }

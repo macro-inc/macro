@@ -616,8 +616,8 @@ service_url! {
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {
             local: "http://localhost:8096",
-            dev: "https://lexical-service-dev.macroverse.workers.dev",
-            prod: "https://lexical-service-prod.macroverse.workers.dev",
+            dev: "https://dev-gateway.macro.com/lexical",
+            prod: "https://gateway.macro.com/lexical",
         },
         /// Sync service API URL.
         pub SyncServiceUrl {
@@ -631,5 +631,14 @@ service_url! {
             dev: "https://ai-editing-worker-dev.macroverse.workers.dev",
             prod: "https://ai-editing-worker.macroverse.workers.dev",
         },
+    }
+}
+
+service_url! {
+    /// Control and internal MCP surface of the live preview service.
+    pub struct PreviewGatewayUrl {
+        local: "http://localhost:8110",
+        dev: "https://dev-gateway.macro.com/preview",
+        prod: "https://gateway.macro.com/preview",
     }
 }

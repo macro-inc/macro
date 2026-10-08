@@ -12,6 +12,7 @@
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
+import { openExternalUrl } from '@core/util/url';
 import type {
   FoldedMessage,
   MessagePart,
@@ -19,23 +20,27 @@ import type {
 import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
+import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { isControlMessage } from '../state/control-message';
+import { isNotificationMessage } from '../state/notification-message';
 import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
+  FailureNoticeCard,
   isToolActive,
   Thought,
-  ToolGroup,
   WorkingLine,
 } from '../ui';
+import { LiveToolGroup } from '../views/LiveToolGroup';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
-import type { ToolUsePart } from './parts/shared';
+import { type ToolUsePart, toolUsedAfter } from './parts/shared';
 import { TextPart } from './parts/TextPart';
+import { ToolApprovalPart } from './parts/ToolApprovalPart';
 import { ToolCallPart } from './parts/ToolCallPart';
 
 /**
@@ -54,12 +59,28 @@ function AgentMessagePart(props: {
   /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
+  const session = useOptionalAgentSession();
   // Match accessors keep a part's renderer mounted when a streamed snapshot
   // replaces the object, preserving disclosures while updating their contents.
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
-        {(part) => <TextPart text={part().text} inFlight={props.inFlight} />}
+        {(part) => (
+          <TextPart
+            text={part().text}
+            inFlight={props.inFlight}
+            observeRender={
+              props.message.author.kind === 'agent'
+                ? (element) =>
+                    session?.observeRenderedText?.(
+                      props.message.agentSessionId,
+                      props.message.turn,
+                      element
+                    )
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={props.part.kind === 'attachment' && props.part}>
         {(part) => <AttachmentPart part={part()} />}
@@ -86,12 +107,16 @@ function AgentMessagePart(props: {
               messageId: `${props.message.agentSessionId}:${props.message.turn}:${props.message.author.kind}`,
               partIndex: props.index,
               inFlight: props.inFlight,
+              followedBy: toolUsedAfter(props.message.parts, props.index),
             }}
           />
         )}
       </Match>
       <Match when={props.part.kind === 'permission' && props.part}>
         {(part) => <PermissionPart part={part()} />}
+      </Match>
+      <Match when={props.part.kind === 'tool_approval' && props.part}>
+        {(part) => <ToolApprovalPart part={part()} />}
       </Match>
       <Match when={props.part.kind === 'plan' && props.part}>
         {(part) => <PlanPart part={part()} />}
@@ -121,29 +146,39 @@ function ToolGroupPart(props: {
   const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
-  const live = () => props.inFlight && props.end === props.message.parts.length;
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Calling".
-  const active = () =>
-    props.inFlight && calls().some((call) => isToolActive(call.status));
+  const activeIndex = () =>
+    props.inFlight
+      ? parts().findIndex(
+          (part) => part.kind === 'tool_use' && isToolActive(part.status)
+        )
+      : -1;
+  const active = () => activeIndex() !== -1;
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
-        <AgentMessagePart
-          part={part()}
-          message={props.message}
-          index={props.start + offset}
-          inFlight={props.inFlight}
-        />
+        <div class="min-h-8 shrink-0">
+          <AgentMessagePart
+            part={part()}
+            message={props.message}
+            index={props.start + offset}
+            inFlight={props.inFlight}
+          />
+        </div>
       )}
     </Index>
   );
 
   return (
     <Show when={calls().length > 0} fallback={renderParts()}>
-      <ToolGroup count={calls().length} active={active()} live={live()}>
+      <LiveToolGroup
+        count={calls().length}
+        active={active()}
+        activeIndex={active() ? activeIndex() : undefined}
+      >
         {renderParts()}
-      </ToolGroup>
+      </LiveToolGroup>
     </Show>
   );
 }
@@ -169,6 +204,7 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       { kind: 'text' },
       { kind: 'thought' },
       { kind: 'permission' },
+      { kind: 'tool_approval' },
       { kind: 'elicitation' },
       () => false
     )
@@ -266,14 +302,17 @@ export function Message(props: {
 }) {
   const inFlight = () => props.inFlight;
   const failure = () =>
-    props.message.stop?.kind === 'failed'
-      ? props.message.stop.message
-      : undefined;
+    props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
   return (
+    // A control and an event notification are both user-authored by the
+    // fold's account and neither is a prompt: they take the full-width
+    // treatment, where the notification renders as its own card.
     <Show
       when={
-        props.message.author.kind === 'user' && !isControlMessage(props.message)
+        props.message.author.kind === 'user' &&
+        !isControlMessage(props.message) &&
+        !isNotificationMessage(props.message)
       }
       fallback={
         <div class="flex flex-col gap-1 min-w-0">
@@ -315,14 +354,27 @@ export function Message(props: {
               session, like a model change or a stop — so it reads as one,
               at the foot of whatever the agent managed to say first. The
               line says what to do about it; the runtime's own account of
-              what happened is the detail. */}
+              what happened is the detail. A failure the runtime wrote in the
+              person's terms is theirs to act on, so it gets a card instead. */}
           <Show when={failure()}>
-            {(message) => (
-              <ActionLine
-                label={`${TURN_FAILED_LABEL} — ${message()}`}
-                detail={message()}
-                failed
-              />
+            {(failed) => (
+              <Show
+                when={failed().notice}
+                fallback={
+                  <ActionLine
+                    label={TURN_FAILED_LABEL}
+                    detail={failed().message}
+                    failed
+                  />
+                }
+              >
+                {(notice) => (
+                  <FailureNoticeCard
+                    notice={notice()}
+                    onOpenLink={openExternalUrl}
+                  />
+                )}
+              </Show>
             )}
           </Show>
         </div>

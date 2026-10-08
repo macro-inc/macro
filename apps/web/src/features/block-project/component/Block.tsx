@@ -10,6 +10,7 @@ import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -26,7 +27,7 @@ import { refetchSoupEntity } from '@queries/soup/cache';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { type Component, createSignal, Show } from 'solid-js';
-import { ModalsProvider } from './ModalsProvider';
+import { useProjectScopedPanel } from './project-scoped-panel';
 import { ProjectSidePanelSections } from './sidepanel/ProjectSidePanelSections';
 import { TopBar } from './TopBar';
 
@@ -103,7 +104,7 @@ const Block: Component = () => {
   return (
     <DocumentBlockContainer>
       <div
-        class="size-full bg-surface flex flex-col relative"
+        class="size-full flex flex-col relative"
         use:fileFolderDrop={{
           onDragStart: () => setIsDragging(true),
           onDragEnd: () => setIsDragging(false),
@@ -113,26 +114,24 @@ const Block: Component = () => {
           disabled: isSpecialProject,
         }}
       >
-        <ModalsProvider>
-          <Show when={isDragging() && !isSpecialProject}>
-            <FileDropOverlay>Upload to this folder</FileDropOverlay>
+        <Show when={isDragging() && !isSpecialProject}>
+          <FileDropOverlay>Upload to this folder</FileDropOverlay>
+        </Show>
+        <SidePanel.Layout defaultOpen={false} floating>
+          <Show when={!isSpecialProject}>
+            <ProjectSidePanelSections />
           </Show>
-          <SidePanel.Layout defaultOpen={false}>
-            <Show when={!isSpecialProject}>
-              <ProjectSidePanelSections />
-            </Show>
-            <div class="flex size-full min-w-0 flex-col overflow-hidden">
-              <TopBar />
-              <ProjectEntityList
-                projectId={projectId}
-                soup={projectSoup}
-                // Scope is already attached by the block container so we can use that
-                // Change this when we remove blocks
-                scopeId={blockHotkeyScopeSignal.get()}
-              />
-            </div>
-          </SidePanel.Layout>
-        </ModalsProvider>
+          <div class="flex size-full min-w-0 flex-col overflow-hidden">
+            <TopBar />
+            <ProjectEntityList
+              projectId={projectId}
+              soup={projectSoup}
+              // Scope is already attached by the block container so we can use that
+              // Change this when we remove blocks
+              scopeId={blockHotkeyScopeSignal.get()}
+            />
+          </div>
+        </SidePanel.Layout>
       </div>
     </DocumentBlockContainer>
   );
@@ -145,11 +144,21 @@ function projectMembershipFilter(projectId: string) {
     soupItemMatchesProjectMembership(item, projectId);
 }
 
-const ProjectEntityList = (props: {
+type ProjectEntityListProps = {
   scopeId: string;
   projectId: string;
   soup: SoupState;
-}) => {
+};
+
+const ProjectEntityList = (props: ProjectEntityListProps) => {
+  return (
+    <SplitPanelContext.Provider value={useProjectScopedPanel(props.projectId)}>
+      <ProjectEntityListContent {...props} />
+    </SplitPanelContext.Provider>
+  );
+};
+
+const ProjectEntityListContent = (props: ProjectEntityListProps) => {
   return (
     <SoupContextProvider soup={props.soup}>
       <SoupViewContextProvider
@@ -175,7 +184,11 @@ const ProjectEntityList = (props: {
           emailView: 'all',
         })}
       >
-        <SoupViewList customScrollbarHidden={true} scopeId={props.scopeId} />
+        <SoupViewList
+          customScrollbarHidden={true}
+          scopeId={props.scopeId}
+          uploadProjectId={props.projectId}
+        />
       </SoupViewContextProvider>
     </SoupContextProvider>
   );

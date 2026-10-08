@@ -8,7 +8,7 @@ import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import type { EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity/types/entity';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
@@ -190,7 +190,7 @@ export const useSoupNavigationHotkeys = (
     return (
       contentType === 'component' ||
       contentType === 'project' ||
-      referredFrom === 'inbox' ||
+      referredFrom === 'home' ||
       referredFrom === 'mail'
     );
   };
@@ -291,11 +291,29 @@ export const useSoupNavigationHotkeys = (
   };
 
   registerHotkey({
-    hotkey: ['h', 'arrowleft'],
+    hotkey: ['h'],
+    scopeId,
+    description: 'Collapse group',
+    hotkeyToken: TOKENS.unifiedList.navigation.collapseGroup,
+    // Consume H on headers even when already collapsed; selected entities
+    // elsewhere must not turn this into a reminder action.
+    keyDownHandler: () => toggleFocusedGroupHeader(false) !== undefined,
+    registrationType: 'add',
+    handlerPriority: 4,
+    hide: true,
+  }).withGroup(group);
+
+  registerHotkey({
+    hotkey: ['arrowleft', 'h'],
     scopeId,
     description: 'Collapse item',
     hotkeyToken: TOKENS.unifiedList.navigation.parent,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
+      if (
+        event?.key.toLowerCase() === 'h' &&
+        (!soup.focus.row() || !isTaskEntity(soup.focus.row()!.original))
+      )
+        return false;
       const groupHandled = toggleFocusedGroupHeader(false);
       if (groupHandled !== undefined) return groupHandled;
 

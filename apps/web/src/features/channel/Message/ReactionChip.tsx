@@ -78,6 +78,8 @@ export function ReactionChip(props: ReactionChipProps) {
           <Button
             data-message-reaction-chip
             data-emoji={props.emoji}
+            data-user-reacted={props.selected ? '' : undefined}
+            aria-pressed={!!props.selected}
             noTouchResize
             ref={(el) =>
               touchHandler(el, () => ({
@@ -90,11 +92,8 @@ export function ReactionChip(props: ReactionChipProps) {
             size="sm"
             variant={props.selected ? 'accent' : 'outline'}
             class={cn(
-              'flex flex-row items-center h-7 min-w-7 gap-1 rounded-full',
-              {
-                'border-accent/10': props.selected,
-                'pointer-events-auto': !props.interactive,
-              }
+              'flex flex-row items-center h-7 min-w-7 gap-1',
+              !props.interactive && 'pointer-events-auto'
             )}
             disabled={!props.interactive}
             onClick={(event) => {

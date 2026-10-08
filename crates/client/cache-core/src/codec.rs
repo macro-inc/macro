@@ -1,10 +1,11 @@
 //! Binary record codec shared by all persistent Turso backends (browser and
 //! native hosts). Records are stored as postcard bytes; the logical namespace
-//! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`].
-//! A healthy, graceful browser reopen with matching versions preserves records,
-//! queued mutations, and optimistic layers. A compatibility/format mismatch or
-//! abrupt/uncertain browser owner loss physically resets the database and
-//! discards all three.
+//! embeds [`CACHE_FORMAT_VERSION`] and [`CACHE_SCHEMA_COMPATIBILITY_EPOCH`],
+//! and so does the browser's physical database name after
+//! [`UNVERSIONED_STORAGE_VERSIONS`]. A healthy, graceful
+//! browser reopen with matching versions preserves records, queued mutations,
+//! and optimistic layers. A compatibility/format mismatch or abrupt/uncertain
+//! browser owner loss physically resets the database and discards all three.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -23,7 +24,8 @@ pub const CACHE_FORMAT_VERSION: u32 = 3;
 /// fetched. Bump this epoch for incompatible changes to normalized identity,
 /// field storage shape, or other schema-derived cache semantics.
 // File-type facts now preserve raw server text instead of enum-normalizing it.
-pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 3;
+// Calendar range tables index cached occurrences, so older caches lack rows.
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum CodecError {
@@ -86,15 +88,41 @@ pub fn cache_namespace(scope: &str) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{CACHE_FORMAT_VERSION}")
 }
 
-/// Stable physical database name for a cache scope.
+/// Storage versions `(schema compatibility epoch, cache format, storage
+/// schema)` in use when database names began to embed versions. A build at
+/// exactly these versions keeps the unversioned name, so that change moved no
+/// database: the next build opens the same file, queued mutations included.
+pub const UNVERSIONED_STORAGE_VERSIONS: (u32, u32, u32) = (3, 3, 11);
+
+/// Physical database name for a cache scope at one storage version.
 ///
-/// Unlike [`cache_namespace`], this deliberately excludes the schema
-/// compatibility epoch and cache format version so the browser can acquire the
-/// same main/WAL paths and validate their metadata. Only a healthy, graceful
-/// close and compatible reopen preserves those files. A compatibility/format
-/// mismatch or abrupt/uncertain owner loss physically resets both files,
-/// discarding every row, including queued mutations and optimistic layers.
-pub fn cache_database_name(scope: &str) -> String {
+/// After [`UNVERSIONED_STORAGE_VERSIONS`], it embeds the schema compatibility
+/// epoch, the cache format version, and the backend's
+/// `storage_schema_version`, so builds that cannot share records use separate
+/// files and owner locks instead of resetting each other's database while tabs
+/// of both stay open after a deploy. Builds with matching versions share one
+/// database: only a healthy, graceful close and reopen preserves its files.
+/// Metadata is still validated on open, and a mismatch or an abrupt/uncertain
+/// owner loss physically resets both files, discarding every row, including
+/// queued mutations and optimistic layers.
+pub fn cache_database_name(scope: &str, storage_schema_version: u32) -> String {
+    let unversioned = legacy_cache_database_name(scope);
+    if (
+        CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        CACHE_FORMAT_VERSION,
+        storage_schema_version,
+    ) == UNVERSIONED_STORAGE_VERSIONS
+    {
+        return unversioned;
+    }
+    format!(
+        "{unversioned}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}.v{CACHE_FORMAT_VERSION}.t{storage_schema_version}"
+    )
+}
+
+/// Physical name every storage version shared before names embedded versions,
+/// and still the name at [`UNVERSIONED_STORAGE_VERSIONS`].
+pub fn legacy_cache_database_name(scope: &str) -> String {
     format!("graphql-cache:{scope}")
 }
 
@@ -142,7 +170,25 @@ mod tests {
     fn namespace_uses_schema_compatibility_epoch_not_schema_hash() {
         assert_eq!(
             cache_namespace("client-token-1"),
-            "graphql-cache:client-token-1:s3:v3"
+            "graphql-cache:client-token-1:s4:v3"
+        );
+    }
+
+    #[test]
+    fn database_name_separates_storage_versions() {
+        // The versions of the last unversioned builds kept their file; every
+        // later epoch embeds its versions, even at that storage schema.
+        assert_eq!(
+            cache_database_name("client-token-1", 11),
+            "graphql-cache:client-token-1:s4.v3.t11"
+        );
+        assert_eq!(
+            cache_database_name("client-token-1", 12),
+            "graphql-cache:client-token-1:s4.v3.t12"
+        );
+        assert_eq!(
+            legacy_cache_database_name("client-token-1"),
+            "graphql-cache:client-token-1"
         );
     }
 }

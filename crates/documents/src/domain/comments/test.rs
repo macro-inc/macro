@@ -264,13 +264,24 @@ async fn pdf_anchors_are_inline_threads() {
         Ok(page(
             vec![
                 item(
+                    message(3, None, "blank highlight"),
+                    Some(ThreadAnchor::PdfHighlight {
+                        anchor_id: id(11),
+                        marked_text: None,
+                    }),
+                    vec![],
+                ),
+                item(
                     message(2, None, "pin"),
                     Some(ThreadAnchor::PdfPlaceable { anchor_id: id(20) }),
                     vec![],
                 ),
                 item(
                     message(1, None, "highlight"),
-                    Some(ThreadAnchor::PdfHighlight { anchor_id: id(10) }),
+                    Some(ThreadAnchor::PdfHighlight {
+                        anchor_id: id(10),
+                        marked_text: Some("highlighted words".to_owned()),
+                    }),
                     vec![],
                 ),
             ],
@@ -291,11 +302,21 @@ async fn pdf_anchors_are_inline_threads() {
         vec![
             (
                 CommentThreadKind::Inline,
-                CommentAnchor::PdfHighlight { anchor_id: id(10) }
+                CommentAnchor::PdfHighlight {
+                    anchor_id: id(10),
+                    marked_text: Some("highlighted words".to_owned()),
+                }
             ),
             (
                 CommentThreadKind::Inline,
                 CommentAnchor::PdfPin { anchor_id: id(20) }
+            ),
+            (
+                CommentThreadKind::Inline,
+                CommentAnchor::PdfHighlight {
+                    anchor_id: id(11),
+                    marked_text: None,
+                }
             ),
         ]
     );
@@ -473,6 +494,30 @@ fn serializes_ids_kind_and_anchor_for_agents() {
     );
 }
 
+#[test]
+fn pdf_highlights_serialize_like_text_anchors() {
+    let anchor = |marked_text: Option<&str>| {
+        serde_json::to_value(CommentAnchor::PdfHighlight {
+            anchor_id: id(10),
+            marked_text: marked_text.map(str::to_owned),
+        })
+        .unwrap()
+    };
+
+    assert_eq!(
+        anchor(Some("highlighted words")),
+        serde_json::json!({
+            "type": "pdfHighlight",
+            "anchorId": id(10),
+            "markedText": "highlighted words"
+        })
+    );
+    assert_eq!(
+        anchor(None),
+        serde_json::json!({ "type": "pdfHighlight", "anchorId": id(10) })
+    );
+}
+
 #[tokio::test]
 async fn deleted_threads_do_not_count_toward_the_cap() {
     let mut messages = MockMessageReader::new();
@@ -518,4 +563,92 @@ async fn deleted_threads_do_not_count_toward_the_cap() {
         discussions.iter().map(|d| d.id).collect::<Vec<_>>(),
         vec![id(1)]
     );
+}
+
+#[tokio::test]
+async fn spreadsheet_ranges_are_inline_and_workbook_comments_are_discussions() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(message(2, None, "Workbook comment"), None, vec![]),
+                item(
+                    message(1, None, "Range comment"),
+                    Some(ThreadAnchor::Spreadsheet {
+                        sheet_id: "sheet-1".into(),
+                        sheet_name: "Budget".into(),
+                        range: "B4:C9".into(),
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert_eq!(discussions[0].kind, CommentThreadKind::Inline);
+    assert_eq!(
+        discussions[0].anchor,
+        CommentAnchor::Spreadsheet {
+            sheet_id: "sheet-1".into(),
+            sheet_name: "Budget".into(),
+            range: "B4:C9".into()
+        }
+    );
+    assert_eq!(discussions[1].kind, CommentThreadKind::Discussion);
+    assert_eq!(discussions[1].anchor, CommentAnchor::Document);
+}
+
+#[tokio::test]
+async fn design_pins_are_inline_and_name_their_layer_and_point() {
+    let mut messages = MockMessageReader::new();
+    messages.expect_timeline().returning(|_, _| {
+        Ok(page(
+            vec![
+                item(
+                    message(1, None, "Layer comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: Some("12:34".into()),
+                        x: 18.5,
+                        y: -4.0,
+                    }),
+                    vec![],
+                ),
+                item(
+                    message(2, None, "Canvas comment"),
+                    Some(ThreadAnchor::Fig {
+                        page_id: "0:1".into(),
+                        node_id: None,
+                        x: 100.0,
+                        y: 200.0,
+                    }),
+                    vec![],
+                ),
+            ],
+            None,
+        ))
+    });
+    let discussions = reader(messages, no_marks())
+        .discussions(receipt())
+        .await
+        .unwrap();
+    assert!(
+        discussions
+            .iter()
+            .all(|d| d.kind == CommentThreadKind::Inline)
+    );
+    let anchors: Vec<_> = discussions
+        .iter()
+        .map(|d| serde_json::to_value(&d.anchor).unwrap())
+        .collect();
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "nodeId": "12:34", "x": 18.5, "y": -4.0
+    })));
+    assert!(anchors.contains(&serde_json::json!({
+        "type": "fig", "pageId": "0:1", "x": 100.0, "y": 200.0
+    })));
 }

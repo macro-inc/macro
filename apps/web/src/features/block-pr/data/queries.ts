@@ -1,20 +1,15 @@
 import { throwOnErr } from '@core/util/result';
+import { queryClient } from '@queries/client';
 import type { GithubPullRequestWithDetails } from '@queries/storage/github-pull-requests';
 import { storageServiceClient } from '@service-storage/client';
-import type { ForeignEntity } from '@service-storage/generated/schemas';
+import type { StoredGithubPullRequest } from '@service-storage/generated/schemas/storedGithubPullRequest';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
 import type { PrRef } from '../util/prKey';
-import {
-  parseGithubKey,
-  prDisplayName,
-  prHtmlUrl,
-  toGithubKey,
-} from '../util/prKey';
+import { prDisplayName } from '../util/prKey';
 
 const PR_STALE_TIME = 60 * 1000;
-const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
 
 export type PrForeignEntityData = {
   id: string;
@@ -26,93 +21,53 @@ export function prForeignEntityQueryKey(id: string): string[] {
   return ['github-pr', 'foreign-entity', id];
 }
 
-function metadataRecord(metadata: unknown): Record<string, unknown> {
-  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
-    return metadata as Record<string, unknown>;
-  }
-  return {};
+/** Refetch one PR detail after it was merged. */
+export function invalidatePrForeignEntity(id: string): void {
+  void queryClient.invalidateQueries({ queryKey: prForeignEntityQueryKey(id) });
 }
 
-function optionalString(value: unknown): string | null | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function optionalNumber(value: unknown): number | null | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
-function optionalArray<T>(value: unknown): T[] | null | undefined {
-  return Array.isArray(value) ? (value as T[]) : undefined;
-}
-
-function prForeignEntityDataFromParts(args: {
-  id: string;
-  foreignId: string;
-  metadata: unknown;
-}): PrForeignEntityData {
-  const metadata = metadataRecord(args.metadata);
-  const owner = optionalString(metadata.owner);
-  const repo = optionalString(metadata.repo);
-  const number = optionalNumber(metadata.number);
-  const refFromMetadata =
-    owner && repo && number != null ? { owner, repo, number } : null;
-  const prRef = refFromMetadata ?? parseGithubKey(args.foreignId);
-
-  if (!prRef) {
-    throw new Error(`Invalid GitHub pull request metadata for ${args.id}`);
-  }
-
-  const githubKey =
-    optionalString(metadata.githubKey) ?? args.foreignId ?? toGithubKey(prRef);
+function prForeignEntityDataFromStored(
+  pullRequest: StoredGithubPullRequest
+): PrForeignEntityData {
+  const prRef: PrRef = {
+    owner: pullRequest.owner,
+    repo: pullRequest.repo,
+    number: pullRequest.number,
+  };
 
   return {
-    id: args.id,
+    id: pullRequest.id,
     prRef,
     pullRequest: {
-      additions: optionalNumber(metadata.additions),
-      authorLogin: optionalString(metadata.authorLogin),
-      description: optionalString(metadata.description),
-      checks: optionalArray(metadata.checks),
-      comments: optionalArray(metadata.comments),
-      deletions: optionalNumber(metadata.deletions),
-      displayName: optionalString(metadata.displayName) ?? prDisplayName(prRef),
-      foreignEntityId: args.id,
-      githubKey,
-      name: optionalString(metadata.name),
-      number: prRef.number,
-      owner: prRef.owner,
-      repo: prRef.repo,
-      status: optionalString(metadata.status),
-      url: optionalString(metadata.url) ?? prHtmlUrl(prRef),
+      additions: pullRequest.additions,
+      authorLogin: pullRequest.authorLogin,
+      description: pullRequest.description,
+      checks: pullRequest.checks,
+      comments: pullRequest.comments,
+      deletions: pullRequest.deletions,
+      displayName: prDisplayName(prRef),
+      foreignEntityId: pullRequest.id,
+      githubKey: pullRequest.githubKey,
+      labels: pullRequest.labels,
+      name: pullRequest.title,
+      number: pullRequest.number,
+      owner: pullRequest.owner,
+      repo: pullRequest.repo,
+      status: pullRequest.status,
+      url: pullRequest.url,
     },
   };
 }
 
-function prForeignEntityDataFromForeignEntity(
-  entity: ForeignEntity
-): PrForeignEntityData {
-  if (entity.foreignEntitySource !== GITHUB_PULL_REQUEST_SOURCE) {
-    throw new Error(`Foreign entity ${entity.id} is not a GitHub pull request`);
-  }
-
-  return prForeignEntityDataFromParts({
-    id: entity.id,
-    foreignId: entity.foreignEntityId,
-    metadata: entity.metadata,
-  });
-}
-
-async function fetchPrForeignEntity(id: string): Promise<PrForeignEntityData> {
-  const entity = await throwOnErr(() =>
-    storageServiceClient.getForeignEntity({ id })
-  );
-  return prForeignEntityDataFromForeignEntity(entity);
-}
-
-function prForeignEntityQueryOptions(id: string) {
+export function prForeignEntityQueryOptions(id: string) {
   return queryOptions({
     queryKey: prForeignEntityQueryKey(id),
-    queryFn: () => fetchPrForeignEntity(id),
+    queryFn: async (): Promise<PrForeignEntityData> =>
+      prForeignEntityDataFromStored(
+        await throwOnErr(() =>
+          storageServiceClient.getGithubPullRequest({ id })
+        )
+      ),
     staleTime: PR_STALE_TIME,
     retry: 1,
   });

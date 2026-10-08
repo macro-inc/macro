@@ -7,33 +7,32 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 
+fn claim_identity() -> (Uuid, Uuid) {
+    (
+        Uuid::parse_str("00000000-0000-0000-0000-000000000e01").unwrap(),
+        Uuid::parse_str("00000000-0000-0000-0000-00000000e501").unwrap(),
+    )
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_returns_message_with_old_processing_value(
+async fn claim_returns_owned_processing_row_and_duplicate_skips(
     pool: Pool<Postgres>,
 ) -> Result<()> {
-    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
-
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
-
-    let result = get_and_start_processing_scheduled_message(&pool, link_id, message_id).await?;
-
-    assert!(result.is_some());
-    let scheduled_message = result.unwrap();
-
-    // Should return the OLD processing value (false) before the update
-    assert_eq!(scheduled_message.link_id, link_id);
-    assert_eq!(scheduled_message.message_id, message_id);
-    assert!(!scheduled_message.processing);
-    assert!(!scheduled_message.sent);
-    assert_eq!(
-        scheduled_message.send_time,
-        Utc.with_ymd_and_hms(2025, 1, 15, 10, 0, 0).unwrap()
+    let (link, message) = claim_identity();
+    let claimed = get_and_start_processing_scheduled_message(&pool, link, message)
+        .await?
+        .unwrap();
+    assert!(claimed.processing && !claimed.sent);
+    assert_eq!(claimed.link_id, link);
+    assert_eq!(claimed.message_id, message);
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, link, message)
+            .await?
+            .is_none()
     );
-
     Ok(())
 }
 
@@ -41,22 +40,26 @@ async fn get_and_start_processing_returns_message_with_old_processing_value(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_sets_processing_to_true_in_database(
-    pool: Pool<Postgres>,
-) -> Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
-
-    // First call should return processing = false (old value)
-    let result = get_and_start_processing_scheduled_message(&pool, link_id, message_id).await?;
-    assert!(result.is_some());
-    assert!(!result.unwrap().processing);
-
-    // Second call should return processing = true (the new old value after first update)
-    let result2 = get_and_start_processing_scheduled_message(&pool, link_id, message_id).await?;
-    assert!(result2.is_some());
-    assert!(result2.unwrap().processing);
-
+async fn processing_and_sent_rows_are_not_claimed_or_changed(pool: Pool<Postgres>) -> Result<()> {
+    let (link, _) = claim_identity();
+    for (id, sent, processing) in [
+        ("00000000-0000-0000-0000-00000000e502", false, true),
+        ("00000000-0000-0000-0000-00000000e503", true, false),
+    ] {
+        let message = Uuid::parse_str(id)?;
+        assert!(
+            get_and_start_processing_scheduled_message(&pool, link, message)
+                .await?
+                .is_none()
+        );
+        let row = sqlx::query!(
+            "SELECT sent, processing FROM email_scheduled_messages WHERE message_id = $1",
+            message
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!((row.sent, row.processing), (sent, processing));
+    }
     Ok(())
 }
 
@@ -64,21 +67,23 @@ async fn get_and_start_processing_sets_processing_to_true_in_database(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_returns_message_already_processing(
-    pool: Pool<Postgres>,
-) -> Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e502")?;
-
-    let result = get_and_start_processing_scheduled_message(&pool, link_id, message_id).await?;
-
-    assert!(result.is_some());
-    let scheduled_message = result.unwrap();
-
-    // Should return the OLD processing value which is already true
-    assert!(scheduled_message.processing);
-    assert!(!scheduled_message.sent);
-
+async fn wrong_inbox_and_missing_rows_are_not_claimed(pool: Pool<Postgres>) -> Result<()> {
+    let (link, message) = claim_identity();
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, Uuid::nil(), message)
+            .await?
+            .is_none()
+    );
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, link, Uuid::nil())
+            .await?
+            .is_none()
+    );
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, link, message)
+            .await?
+            .is_some()
+    );
     Ok(())
 }
 
@@ -86,18 +91,22 @@ async fn get_and_start_processing_returns_message_already_processing(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_returns_already_sent_message(pool: Pool<Postgres>) -> Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e503")?;
-
-    let result = get_and_start_processing_scheduled_message(&pool, link_id, message_id).await?;
-
-    assert!(result.is_some());
-    let scheduled_message = result.unwrap();
-
-    assert!(scheduled_message.sent);
-    assert!(!scheduled_message.processing);
-
+async fn future_rows_are_not_marked_processing(pool: Pool<Postgres>) -> Result<()> {
+    let (link, message) = claim_identity();
+    sqlx::query!("UPDATE email_scheduled_messages SET send_time = NOW() + INTERVAL '1 hour' WHERE message_id = $1", message)
+        .execute(&pool).await?;
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, link, message)
+            .await?
+            .is_none()
+    );
+    let processing = sqlx::query_scalar!(
+        "SELECT processing FROM email_scheduled_messages WHERE message_id = $1",
+        message
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!processing);
     Ok(())
 }
 
@@ -105,17 +114,19 @@ async fn get_and_start_processing_returns_already_sent_message(pool: Pool<Postgr
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_returns_none_for_wrong_link_id(
-    pool: Pool<Postgres>,
-) -> Result<()> {
-    let wrong_link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e02")?;
-    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
-
-    let result =
-        get_and_start_processing_scheduled_message(&pool, wrong_link_id, message_id).await?;
-
-    assert!(result.is_none());
-
+async fn immediate_send_undo_rows_remain_claimable(pool: Pool<Postgres>) -> Result<()> {
+    let (link, message) = claim_identity();
+    sqlx::query!(
+        "UPDATE email_messages SET is_draft = false WHERE id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        get_and_start_processing_scheduled_message(&pool, link, message)
+            .await?
+            .is_some()
+    );
     Ok(())
 }
 
@@ -123,41 +134,20 @@ async fn get_and_start_processing_returns_none_for_wrong_link_id(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
 )]
-async fn get_and_start_processing_returns_none_for_nonexistent_message(
-    pool: Pool<Postgres>,
-) -> Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let nonexistent_message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000ffff")?;
-
-    let result =
-        get_and_start_processing_scheduled_message(&pool, link_id, nonexistent_message_id).await?;
-
-    assert!(result.is_none());
-
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("get_process_scheduled_messages"))
-)]
-async fn get_and_start_processing_does_not_affect_other_messages(
-    pool: Pool<Postgres>,
-) -> Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000e01")?;
-    let message_id_1 = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
-    let message_id_2 = Uuid::parse_str("00000000-0000-0000-0000-00000000e502")?;
-
-    // Process message 1
-    let result1 = get_and_start_processing_scheduled_message(&pool, link_id, message_id_1).await?;
-    assert!(result1.is_some());
-    assert!(!result1.unwrap().processing);
-
-    // Message 2 should still have its original processing state (true)
-    let result2 = get_and_start_processing_scheduled_message(&pool, link_id, message_id_2).await?;
-    assert!(result2.is_some());
-    assert!(result2.unwrap().processing);
-
+async fn concurrent_workers_have_exactly_one_winner(pool: Pool<Postgres>) -> Result<()> {
+    let (link, message) = claim_identity();
+    let (a, b) = tokio::join!(
+        get_and_start_processing_scheduled_message(&pool, link, message),
+        get_and_start_processing_scheduled_message(&pool, link, message),
+    );
+    assert_eq!(usize::from(a?.is_some()) + usize::from(b?.is_some()), 1);
+    let processing = sqlx::query_scalar!(
+        "SELECT processing FROM email_scheduled_messages WHERE message_id = $1",
+        message
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(processing);
     Ok(())
 }
 

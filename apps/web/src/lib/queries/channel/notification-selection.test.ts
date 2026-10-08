@@ -22,13 +22,29 @@ const channel = (
 describe('channel selection hydration', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('does not load history for a read channel or a legacy row', async () => {
+  it('returns synchronously for a legacy row', () => {
     const legacy = channel(undefined);
-    expect(await hydrateChannelNotificationSelection(legacy)).toBe(legacy);
-    expect(
-      (await hydrateChannelNotificationSelection(channel([]))).notifications?.()
-    ).toEqual([]);
+    expect(hydrateChannelNotificationSelection(legacy)).toBe(legacy);
     expect(fetchNotifications).not.toHaveBeenCalled();
+  });
+
+  it('refreshes an empty unread witness instead of treating a stale list as read', async () => {
+    const incoming = [{ id: 'new-reply' }];
+    fetchNotifications.mockResolvedValue(incoming);
+
+    const selection = await hydrateChannelNotificationSelection(channel([]));
+
+    expect(fetchNotifications).toHaveBeenCalledOnce();
+    expect(selection.notifications?.()).toEqual(incoming);
+  });
+
+  it('returns an empty selection only after refreshing a read channel', async () => {
+    fetchNotifications.mockResolvedValue([]);
+
+    const selection = await hydrateChannelNotificationSelection(channel([]));
+
+    expect(fetchNotifications).toHaveBeenCalledOnce();
+    expect(selection.notifications?.()).toEqual([]);
   });
 
   it('uses the complete edge, not the one unread witness, for the selected row', async () => {
@@ -45,12 +61,53 @@ describe('channel selection hydration', () => {
     expect(full.target?.messageId).toBe('explicit-search-target');
   });
 
-  it('does not silently mark a partial selection on a failed full read', async () => {
-    fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
-    await expect(
-      hydrateChannelNotificationSelection(
-        channel([{ id: 'one', state: 'unseen', createdAt: '2026-01-01' }])
-      )
-    ).rejects.toThrow('offline and uncached');
+  it('keeps the pre-await channel id if the store proxy loses it mid-fetch', async () => {
+    const row = channel([
+      { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+    ]);
+    fetchNotifications.mockImplementation(async () => {
+      (row as { id?: string }).id = undefined;
+      return [{ id: 'one' }];
+    });
+    const full = await hydrateChannelNotificationSelection(row);
+    expect(full.id).toBe('channel');
+    expect(full.type).toBe('channel');
+    expect(full.notifications?.()).toEqual([{ id: 'one' }]);
   });
+
+  it.each([true, false, undefined])(
+    'preserves participant status (%s) when the source changes during hydration',
+    async (isParticipant) => {
+      const row = {
+        ...channel([{ id: 'one', state: 'unseen', createdAt: '2026-01-01' }]),
+        isParticipant,
+      };
+      fetchNotifications.mockImplementation(async () => {
+        row.isParticipant = undefined;
+        return [{ id: 'one' }];
+      });
+
+      const full = await hydrateChannelNotificationSelection(row);
+
+      expect(full.isParticipant).toBe(isParticipant);
+      expect(full.notifications?.()).toEqual([{ id: 'one' }]);
+    }
+  );
+
+  it.each<{ unreadNotifications: ChannelEntity['unreadNotifications'] }>([
+    { unreadNotifications: [] },
+    {
+      unreadNotifications: [
+        { id: 'one', state: 'unseen', createdAt: '2026-01-01' },
+      ],
+    },
+  ])(
+    'does not silently use a partial selection when the refresh fails (%j)',
+    async ({ unreadNotifications }) => {
+      fetchNotifications.mockRejectedValue(new Error('offline and uncached'));
+      await expect(
+        hydrateChannelNotificationSelection(channel(unreadNotifications))
+      ).rejects.toThrow('offline and uncached');
+    }
+  );
 });

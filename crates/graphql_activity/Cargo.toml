@@ -10,6 +10,7 @@ async-stream = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 futures = { workspace = true }
 graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }

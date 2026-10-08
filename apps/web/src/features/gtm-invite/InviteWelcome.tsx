@@ -1,5 +1,5 @@
-import { NoiseBackground } from '@app/features/setup/flow/shared';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { NoiseBackground } from '@core/component/NoiseBackground';
 import { useIsAuthenticated } from '@core/context/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
@@ -158,8 +158,7 @@ export function InviteWelcome() {
                       {details().freeMonths === 1
                         ? 'first month'
                         : `first ${details().freeMonths} months`}{' '}
-                      of Premium {details().freeMonths === 1 ? 'is' : 'are'} on
-                      us.
+                      of Pro {details().freeMonths === 1 ? 'is' : 'are'} on us.
                     </p>
                   </div>
                   <div class="flex flex-col gap-3">

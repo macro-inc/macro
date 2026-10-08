@@ -2,12 +2,13 @@
 //! gateway channel.
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use crate::outbound::acp_process::AcpProcess;
-use agent_client_protocol::{Client, ConnectTo};
+use agent_client_protocol::{Client, ConnectTo, LineDirection};
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
@@ -29,11 +30,16 @@ pub enum BridgeError {
     Harness(String),
 }
 
-/// Spawn the harness in ACP mode and pump frames until either side ends.
+/// Observes every line crossing the harness's stdio.
+pub type LineTap = Arc<dyn Fn(&str, LineDirection) + Send + Sync>;
+
+/// Spawn the harness in ACP mode and pump frames until either side ends,
+/// handing every ACP line to `tap` when there is one.
 pub async fn bridge(
     harness: &Harness,
     cwd: &Path,
     channel: RuntimeChannel,
+    tap: Option<LineTap>,
 ) -> Result<(), BridgeError> {
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
@@ -44,8 +50,11 @@ pub async fn bridge(
         .envs(harness.env.clone())
         // The wire tap: every ndjson line crossing the child's stdio, plus
         // its stderr. Enable with RUST_LOG=coding_agent_worker=trace.
-        .with_debug(|line, direction| {
+        .with_debug(move |line, direction| {
             tracing::trace!(?direction, line, "acp line");
+            if let Some(tap) = &tap {
+                tap(line, direction);
+            }
         });
 
     runtime

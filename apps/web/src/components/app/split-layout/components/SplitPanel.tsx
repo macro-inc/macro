@@ -2,29 +2,22 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
-import { SplitRouter } from '@app/lib/split-router';
+import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
-import { isSoloSettings } from '@core/constant/SettingsState';
 import { splitContainerAttribute } from '@core/dom-selectors';
+import { EVENT_MODIFIER_KEYS } from '@core/hotkey/constants';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
+import { isPlatform } from '@core/util/platform';
 import CloseIcon from '@phosphor/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
@@ -67,6 +60,7 @@ export function SplitPanel(props: SplitPanelProps) {
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
+  let pointerTarget: Element | undefined;
 
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
@@ -89,7 +83,7 @@ export function SplitPanel(props: SplitPanelProps) {
       );
       if (wentBack) return;
       props.handle.replace({
-        next: { type: 'component', id: LIST_VIEW_ID.inbox },
+        next: { type: 'component', id: LIST_VIEW_ID.home },
         referredFrom: 'hotkey',
       });
     },
@@ -121,25 +115,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const headerSize = createElementSize(headerRef);
 
   const [hasToolbarContent, setHasToolbarContent] = createSignal(false);
-  onMount(() => {
-    const checkContent = () => {
-      setHasToolbarContent(
-        Boolean(
-          layoutRefs.toolbarLeft?.hasChildNodes() ||
-            layoutRefs.toolbarRight?.hasChildNodes()
-        )
-      );
-    };
-    checkContent();
-    const observer = new MutationObserver(checkContent);
-    if (layoutRefs.toolbarLeft) {
-      observer.observe(layoutRefs.toolbarLeft, { childList: true });
-    }
-    if (layoutRefs.toolbarRight) {
-      observer.observe(layoutRefs.toolbarRight, { childList: true });
-    }
-    onCleanup(() => observer.disconnect());
-  });
 
   createEffect(() => {
     const safeTop = isTouchDevice() ? getSafeAreaInset('top') : 0;
@@ -152,10 +127,6 @@ export function SplitPanel(props: SplitPanelProps) {
     const splits = globalSplitManager()?.splits?.();
     return Boolean(splits && splits.length > 1);
   }
-
-  // On mobile the header stays visible for list views too: it hosts the
-  // floating filter-pill strip (see MobileSoupViewTabs).
-  const shouldHideSplitHeader = createMemo(() => isSoloSettings());
 
   const splitFocusStyling = () =>
     !isTouchDevice() &&
@@ -188,12 +159,25 @@ export function SplitPanel(props: SplitPanelProps) {
       }}
     >
       <Suspense fallback={<ContentLoading />}>
-        <SoupViewContextProvider soup={nextSoup}>
+        <Show
+          when={
+            props.split.mount.kind === 'component' &&
+            props.split.mount.meta.ownsCollectionState
+          }
+          fallback={
+            <SoupViewContextProvider soup={nextSoup}>
+              <SplitRouter.Outlet
+                pane={props.handle.id as string as PaneId}
+                fallback={<Dynamic component={props.split.mount.element} />}
+              />
+            </SoupViewContextProvider>
+          }
+        >
           <SplitRouter.Outlet
-            splitId={props.handle.id}
-            fallback={() => <Dynamic component={props.split.mount.element} />}
+            pane={props.handle.id as string as PaneId}
+            fallback={<Dynamic component={props.split.mount.element} />}
           />
-        </SoupViewContextProvider>
+        </Show>
       </Suspense>
     </SplitPanelControllerProvider>
   );
@@ -228,6 +212,7 @@ export function SplitPanel(props: SplitPanelProps) {
           replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
+          pointerTarget: () => pointerTarget,
         }}
       >
         <SplitDrawerGroup panelSize={panelSize}>
@@ -248,9 +233,7 @@ export function SplitPanel(props: SplitPanelProps) {
               'relative size-full touch:isolate': !props.handle.isSpotLight(),
             }}
             style={{
-              '--split-header-height': `${
-                shouldHideSplitHeader() ? 0 : (headerSize.height ?? 0)
-              }px`,
+              '--split-header-height': `${headerSize.height ?? 0}px`,
               // The hard spacer for top-anchored content on full-frame
               // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
@@ -260,6 +243,23 @@ export function SplitPanel(props: SplitPanelProps) {
               setPanelRef(ref);
               props.setPanelRef(ref);
               attachHotKeys(ref);
+            }}
+            on:pointerdown={{
+              capture: true,
+              handleEvent: (e) => {
+                pointerTarget =
+                  e.target instanceof Element ? e.target : undefined;
+              },
+            }}
+            // A split opened from the keyboard has no pressed element to keep
+            // in view. Modifiers are held through Shift- and Cmd-clicks.
+            on:keydown={{
+              capture: true,
+              handleEvent: (e) => {
+                if (!EVENT_MODIFIER_KEYS.has(e.key.toLowerCase())) {
+                  pointerTarget = undefined;
+                }
+              },
             }}
             data-split-id={props.split.id}
             {...splitContainerAttribute}
@@ -271,7 +271,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
                 props.handle.isSpotLight()
                   ? 'rounded-xl'
-                  : multipleSplits()
+                  : isPlatform('desktop') || multipleSplits()
                     ? 'rounded-md'
                     : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
@@ -281,7 +281,11 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
-              hideBorder={!props.handle.isSpotLight() && !multipleSplits()}
+              hideBorder={
+                !props.handle.isSpotLight() &&
+                !isPlatform('desktop') &&
+                !multipleSplits()
+              }
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header
@@ -290,8 +294,7 @@ export function SplitPanel(props: SplitPanelProps) {
                     'z-split-panel-chrome',
                     // On mobile/tablet the header collapses to a zero-height grid row;
                     // SplitHeader overlays the body as floating islands.
-                    'touch:min-h-0 touch:border-b-0',
-                    shouldHideSplitHeader() && 'hidden'
+                    'touch:min-h-0 touch:border-b-0'
                   )}
                 >
                   <SplitHeader
@@ -311,6 +314,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   <SplitToolbar
                     ref={setToolbarRef}
                     collapseController={toolbarCollapseController}
+                    onContentChange={setHasToolbarContent}
                   />
                 </Panel.Toolbar>
               </Show>
@@ -329,8 +333,8 @@ export function SplitPanel(props: SplitPanelProps) {
                   </div>
                   <Show when={!usesComposableLayout() && bottomPanel()}>
                     {(panel) => (
-                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-muted bg-surface flex flex-col">
-                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-muted px-2">
+                      <div class="h-1/2 min-h-0 min-w-0 border-t border-edge-frame bg-surface flex flex-col">
+                        <div class="flex h-10 shrink-0 items-center gap-2 border-b border-edge-frame px-2">
                           <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink-muted">
                             {panel().title}
                           </h3>

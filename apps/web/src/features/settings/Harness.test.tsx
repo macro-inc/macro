@@ -24,6 +24,12 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
+import { chooseSelectOption } from './tests/select-helpers';
+
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: vi.fn(async () => true),
+}));
 
 vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
@@ -273,11 +279,7 @@ describe('Harness', () => {
       expect(screen.queryByText('Settings suspended')).toBeNull();
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
-        (
-          screen.getByRole('combobox', {
-            name: 'Default model',
-          }) as HTMLSelectElement
-        ).disabled
+        (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
       ).toBe(true);
 
       if (outcome === 'error') {
@@ -300,17 +302,11 @@ describe('Harness', () => {
           ],
         });
         await waitFor(() =>
-          expect(
-            screen.getByRole('option', { name: 'Loaded Model' })
-          ).toBeTruthy()
+          expect(screen.getByText('Loaded Model')).toBeTruthy()
         );
         expect(screen.queryByText('Settings suspended')).toBeNull();
         expect(
-          (
-            screen.getByRole('combobox', {
-              name: 'Default model',
-            }) as HTMLSelectElement
-          ).disabled
+          (screen.getByLabelText('Default model') as HTMLButtonElement).disabled
         ).toBe(false);
       }
       view.unmount();
@@ -330,9 +326,11 @@ describe('Harness', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'Bring your own agent' })
+      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
     ).toBeTruthy();
-    expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
+    expect(
+      screen.getByText(/Uses official Macro tools and MCPs to get the job done/)
+    ).toBeTruthy();
   });
 
   it('validates and saves a Cursor API key', async () => {
@@ -368,6 +366,10 @@ describe('Harness', () => {
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.models.data.models.push({
+      id: 'another-model',
+      name: 'Another Model',
+    });
 
     render(() => <Harness />);
 
@@ -375,11 +377,9 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Default model'), {
-      target: { value: 'default-model' },
-    });
+    chooseSelectOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('default-model');
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
     });
 
@@ -400,22 +400,38 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
-  it('links the empty BYOA list to the setup documentation', () => {
+  it('hides the empty paired runtimes section and keeps the setup guide', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No agents connected')).toBeTruthy();
+    expect(screen.queryByText('No paired runtimes yet')).toBeNull();
+    expect(
+      screen.queryByRole('heading', { name: 'Paired runtimes' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Enter pairing code' })
+    ).toBeNull();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers "Enter pairing code" in the header and empty state', () => {
+  it('opens pairing from the bring-your-own card', () => {
     render(() => <Harness />);
 
+    expect(screen.getAllByRole('button', { name: 'New runtime' })).toHaveLength(
+      2
+    );
+    const card = screen
+      .getByRole('heading', { name: 'Bring your agent to Macro' })
+      .closest('section')!;
+    fireEvent.click(within(card).getByRole('button', { name: 'New runtime' }));
+    expect(screen.getByRole('region', { name: 'New runtime' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(
-      screen.getAllByRole('button', { name: 'Enter pairing code' })
-    ).toHaveLength(2);
+      screen.getByRole('heading', { name: 'Bring your agent to Macro' })
+    ).toBeTruthy();
   });
 
   it('renders a registered harness row', () => {
@@ -456,19 +472,19 @@ describe('Harness', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Remove Dev box?')).toBeTruthy();
     expect(
-      within(dialog).getByText(/Agents using this harness will stop running/)
+      within(dialog).getByText(/Agents using this runtime will stop running/)
     ).toBeTruthy();
     expect(harnessMocks.deleteHarness).not.toHaveBeenCalled();
 
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove harness' })
+      within(dialog).getByRole('button', { name: 'Remove runtime' })
     );
 
     await waitFor(() => {
       expect(harnessMocks.deleteHarness).toHaveBeenCalledWith({
         harnessId: REGISTERED_HARNESS.id,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness removed');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
   });
@@ -478,7 +494,8 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    const dialog = screen.getByRole('dialog');
+    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(

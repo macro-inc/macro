@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   mutedEntitiesQuery: {} as Record<string, unknown>,
   notificationsQuery: {} as Record<string, unknown>,
   optimisticInsertNotification: vi.fn(),
+  updateSoupForNotification: vi.fn(),
   socketCallback: undefined as
     | ((data: { type: string; data: string }) => void)
     | undefined,
@@ -56,6 +57,10 @@ vi.mock('@macro-inc/collaboration/websocket', () => ({
       mocks.socketCallback = callback;
     }
   ),
+}));
+
+vi.mock('@queries/notification/notification-soup', () => ({
+  updateSoupForNotification: mocks.updateSoupForNotification,
 }));
 
 vi.mock('@queries/notification/user-notifications', () => ({
@@ -128,6 +133,7 @@ describe('createNotificationSource', () => {
     mocks.graphqlPatchCallback = undefined;
     mocks.socketCallback = undefined;
     mocks.optimisticInsertNotification.mockReset();
+    mocks.updateSoupForNotification.mockReset();
     mocks.seenMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.doneMutation.mutateAsync.mockReset().mockResolvedValue(undefined);
     mocks.mutedEntitiesQuery = {
@@ -180,6 +186,7 @@ describe('createNotificationSource', () => {
         });
         await Promise.resolve();
         expect(receive).toHaveBeenCalledWith(incoming);
+        expect(mocks.updateSoupForNotification).toHaveBeenCalledWith(incoming);
         expect(started).toBe(false);
         expect(dataRead).not.toHaveBeenCalled();
         expect(refetch).not.toHaveBeenCalled();
@@ -452,6 +459,38 @@ describe('createNotificationSource', () => {
       }
     }
   );
+
+  it('can release a failed reversal to authoritative state without clearing newer intent', () => {
+    mocks.graphqlEnabled = true;
+    const row: UnifiedNotification = {
+      ...notification('partial-reversal', 'document', 'task'),
+      state: 'seen',
+    };
+    mocks.notificationsQuery = {
+      data: [row],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    try {
+      setDoneOverride([row.id], true);
+      const inverse = setDoneOverride([row.id], false);
+      inverse.release();
+      expect(source.notifications()[0].state).toBe('seen'); // not the prior done override
+
+      const older = setDoneOverride([row.id], true);
+      setDoneOverride([row.id], false);
+      row.state = 'done';
+      older.release();
+      expect(source.notifications()[0].state).toBe('seen'); // newer local Undo still owns the id
+    } finally {
+      setDoneOverride([row.id], undefined);
+      dispose();
+    }
+  });
 
   it('undo reopens a GraphQL-attached notification whose cached server state is already done', () => {
     mocks.graphqlEnabled = true;
@@ -941,6 +980,12 @@ describe('createNotificationSource', () => {
       expect(onNotification).toHaveBeenCalledWith(incoming);
       expect(subscriber).toHaveBeenCalledOnce();
       expect(subscriber).toHaveBeenCalledWith(incoming);
+      expect(mocks.updateSoupForNotification).toHaveBeenCalledExactlyOnceWith(
+        incoming
+      );
+      expect(
+        mocks.updateSoupForNotification.mock.invocationCallOrder[0]
+      ).toBeLessThan(subscriber.mock.invocationCallOrder[0]);
       expect(refetch).not.toHaveBeenCalled();
       await Promise.resolve();
       expect(refetch).toHaveBeenCalledOnce();
@@ -1056,6 +1101,10 @@ describe('createNotificationSource', () => {
       });
       expect(onNotification).toHaveBeenCalledOnce();
       expect(mocks.optimisticInsertNotification).toHaveBeenCalledOnce();
+      expect(
+        mocks.optimisticInsertNotification.mock.invocationCallOrder[0]
+      ).toBeLessThan(onNotification.mock.invocationCallOrder[0]);
+      expect(mocks.updateSoupForNotification).not.toHaveBeenCalled();
     } finally {
       dispose();
     }

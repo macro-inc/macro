@@ -4,13 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiEntityFilterAstFavoritesOnly } from './apiEntityFilterAstFavoritesOnly';
 
 /**
  * Wire-format entity filter AST accepted by soup AST endpoints.
  */
 export interface ApiEntityFilterAst {
-  /** Filters applied to agent sessions (wire key `asf`). Like reminders,
-empty/omitted returns **no** agent sessions: they are opt-in, so the
+  /** Filters applied to agent sessions (wire key `asf`). An empty or
+omitted filter returns **no** agent sessions: they are opt-in, so the
 caller must send `inc`, an id, or an owner to get any. */
   asf?: unknown;
   /** filters applied to canonical calendar events */
@@ -24,6 +25,8 @@ Empty/omitted = team's full visible list. */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
   chanf?: unknown;
+  /** Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`). */
+  crmf?: unknown;
   /** the filters that should be applied to the channel-thread entity */
   cthf?: unknown;
   /** the filters that should be applied to the document entity */
@@ -43,14 +46,14 @@ tree only; CRM scope is carried by the `ecd` / `eca` sibling
 fields). On this endpoint the email filter stays a bare tree,
 unlike the materialized [`EntityFilterAst`] used for cursors. */
   ef?: unknown;
+  /** Restrict to the authenticated viewer's favorites before pagination when true. */
+  favorites_only?: ApiEntityFilterAstFavoritesOnly;
   /** the filters that should be applied to foreign entity records */
   fef?: unknown;
+  /** the filters that should be applied to GitHub pull request records, on top of `fef` */
+  ghprf?: unknown;
   /** the filters that should be applied to the project entity */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */
   propf?: unknown;
-  /** Filters applied to reminders (wire key `remf`). Unlike every other
-filter here, empty/omitted returns **no** reminders: they are opt-in,
-so the caller must send `inc`, an id, or an entity to get any. */
-  remf?: unknown;
 }

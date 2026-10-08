@@ -90,6 +90,7 @@ describe('GraphQL preview hover reactivity', () => {
     const host = {
       clientId: 'preview-test',
       onOpsAffected: () => () => {},
+      onCacheGenerationChanged: () => () => {},
       claimNextMutation: async () => undefined,
       readQuery: async () =>
         cachedData
@@ -110,6 +111,7 @@ describe('GraphQL preview hover reactivity', () => {
       CacheHost,
       | 'clientId'
       | 'onOpsAffected'
+      | 'onCacheGenerationChanged'
       | 'claimNextMutation'
       | 'readQuery'
       | 'writeQuery'

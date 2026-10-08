@@ -70,7 +70,16 @@ impl DocumentSyncSession {
         }
         if !is_update {
             let state = self.document_state().await?;
-            return match document::snapshot(&access, &state.loro_doc) {
+            let compact = req
+                .url()?
+                .query_pairs()
+                .any(|(key, value)| key == "shallow" && value == "true");
+            let snapshot = if compact {
+                document::shallow_snapshot(&access, &state.loro_doc)
+            } else {
+                document::snapshot(&access, &state.loro_doc)
+            };
+            return match snapshot {
                 Ok((snapshot, revision)) => Response::from_json(&SnapshotResponse {
                     snapshot: STANDARD.encode(snapshot),
                     revision: STANDARD.encode(revision),
@@ -112,30 +121,26 @@ impl DocumentSyncSession {
         };
         let state = self.document_state().await?;
         let storage = self.session_storage().await?;
-        let attribution = match claims
-            .actor
-            .as_ref()
-            .map(|actor| {
-                document::DocumentAttribution::from_signed_claims(
-                    actor.clone(),
-                    claims.user_id.clone(),
-                )
-            })
-            .transpose()
-        {
-            Ok(attribution) => attribution,
+        // Only agent actors are stored with the operation; humans are still editors.
+        let is_agent = claims.actor.is_some();
+        let editor = match document::DocumentAttribution::from_session_claims(
+            claims.actor,
+            claims.user_id,
+        ) {
+            Ok(editor) => editor,
             Err(error) => return error_response(error),
         };
+        let stored_attribution = if is_agent { editor.as_ref() } else { None };
         let port = DocumentUpdateStorage {
             document_state: &state,
             storage: &storage,
-            attribution: attribution.as_ref(),
+            attribution: stored_attribution,
         };
         let effects = WorkerDocumentEffects {
             session: self,
             document_state: &state,
             document_id,
-            attribution: attribution.as_ref(),
+            attribution: editor.as_ref(),
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.

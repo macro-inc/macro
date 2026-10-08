@@ -6,6 +6,7 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::calendar::{CalendarRangeRow, CalendarSpan, CalendarSyncState, project_calendar_range};
 use crate::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
     reconcile_predicate_baseline,
@@ -30,6 +31,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+mod calendar;
 
 /// Whether a storage implementation can provide queue diagnostics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -82,11 +85,12 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Loads the compact catalog for text search. This must read only the
-    /// derived search table, never normalized record payloads.
+    /// Loads one compact bucket for text search. Must use the profile/bucket
+    /// index, never unrelated buckets or normalized record payloads.
     fn load_search_documents(
         &self,
         _profile: SearchProfile,
+        _bucket: &str,
     ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
         async { Ok(Vec::new()) }
     }
@@ -206,14 +210,15 @@ pub trait Storage: MaybeSend {
     ) -> impl Future<Output = Result<Option<ClaimedMutation>, Self::Error>> + MaybeSend;
 
     /// Retains a retryable mutation and its optimistic layer, releases its
-    /// lease, and records the next eligible attempt time. Returns `false`
-    /// when the claim is stale.
+    /// lease, and records the next eligible attempt time. Server failures also
+    /// increment the retry budget atomically. Returns `false` when the claim is stale.
     fn defer_mutation(
         &mut self,
         id: MutationId,
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
     /// Atomically writes the real response records and removes the mutation
@@ -282,7 +287,11 @@ pub struct InMemoryStorage {
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
     search_catalog_load_count: Arc<AtomicUsize>,
+    search_catalog_rows_loaded: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
+    calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
+    calendar_coverage: Vec<CalendarSpan>,
+    calendar_sync: CalendarSyncState,
 }
 
 #[derive(Clone, Debug)]
@@ -304,6 +313,33 @@ impl InMemoryStorage {
 
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
+    }
+
+    /// Writes one record with every derived row, like a relational write-through.
+    fn write_record(&mut self, key: EntityKey<'static>, record: Record) {
+        self.search_documents
+            .retain(|(_, existing_key), _| existing_key != &key);
+        for document in project_search_documents(&key, &record) {
+            self.search_documents
+                .insert((document.profile, key.clone()), document);
+        }
+        match project_calendar_range(&key, &record) {
+            Some(row) => {
+                self.calendar_ranges.insert(key.clone(), row);
+            }
+            None => {
+                self.calendar_ranges.remove(&key);
+            }
+        }
+        self.records.insert(key, record);
+    }
+
+    /// Deletes one record with every derived row.
+    fn remove_record(&mut self, key: &EntityKey<'static>) {
+        self.records.remove(key);
+        self.search_documents
+            .retain(|(_, existing_key), _| existing_key != key);
+        self.calendar_ranges.remove(key);
     }
 
     fn rebase_projections(&mut self, keys: &[PredicateRecordKey]) {
@@ -351,6 +387,11 @@ impl InMemoryStorage {
         self.search_catalog_load_count.load(Ordering::Relaxed)
     }
 
+    /// Number of compact rows loaded across bucket reads (test diagnostics).
+    pub fn search_catalog_rows_loaded(&self) -> usize {
+        self.search_catalog_rows_loaded.load(Ordering::Relaxed)
+    }
+
     /// Number of full mutation-queue loads (test diagnostics).
     pub fn mutation_queue_load_count(&self) -> usize {
         self.mutation_queue_load_count.load(Ordering::Relaxed)
@@ -370,13 +411,7 @@ impl Storage for InMemoryStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         Ok(())
     }
@@ -398,9 +433,7 @@ impl Storage for InMemoryStorage {
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         for key in keys {
-            self.records.remove(key);
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != key);
+            self.remove_record(key);
         }
         Ok(())
     }
@@ -408,15 +441,19 @@ impl Storage for InMemoryStorage {
     async fn load_search_documents(
         &self,
         profile: SearchProfile,
+        bucket: &str,
     ) -> Result<Vec<SearchDocument>, Self::Error> {
         self.search_catalog_load_count
             .fetch_add(1, Ordering::Relaxed);
-        Ok(self
+        let documents: Vec<_> = self
             .search_documents
-            .iter()
-            .filter(|((candidate, _), _)| *candidate == profile)
-            .map(|(_, document)| document.clone())
-            .collect())
+            .values()
+            .filter(|document| document.profile == profile && document.bucket == bucket)
+            .cloned()
+            .collect();
+        self.search_catalog_rows_loaded
+            .fetch_add(documents.len(), Ordering::Relaxed);
+        Ok(documents)
     }
 
     async fn browse_search_documents(
@@ -479,10 +516,12 @@ impl Storage for InMemoryStorage {
             .map(|(id, queued)| {
                 (
                     *id,
-                    queued
-                        .mutation
-                        .lease_expires_at_ms
-                        .is_some_and(|expiry| expiry > now_ms),
+                    crate::queue::collision_stays_active(
+                        queued.mutation.lease_expires_at_ms,
+                        now_ms,
+                        queued.mutation.attempt_count > 0,
+                        &queued.optimistic.optimistic_data_json,
+                    ),
                 )
             });
         let kind = match collision {
@@ -622,6 +661,7 @@ impl Storage for InMemoryStorage {
         claim: MutationClaimToken,
         next_attempt_at_ms: i64,
         error: String,
+        server_failure: bool,
     ) -> Result<bool, Self::Error> {
         let Some(queued) = self.mutations.get_mut(&id) else {
             return Ok(false);
@@ -632,6 +672,9 @@ impl Storage for InMemoryStorage {
         let mutation = &mut queued.mutation;
         mutation.next_attempt_at_ms = Some(next_attempt_at_ms);
         mutation.last_error = Some(error);
+        if server_failure {
+            mutation.server_failure_count = mutation.server_failure_count.saturating_add(1);
+        }
         mutation.lease_owner = None;
         mutation.lease_expires_at_ms = None;
         Ok(true)
@@ -661,13 +704,7 @@ impl Storage for InMemoryStorage {
             return Ok(false);
         }
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
@@ -701,13 +738,7 @@ impl Storage for InMemoryStorage {
             }
         }
         for (key, record) in entries {
-            self.search_documents
-                .retain(|(_, existing_key), _| existing_key != &key);
-            for document in project_search_documents(&key, &record) {
-                self.search_documents
-                    .insert((document.profile, key.clone()), document);
-            }
-            self.records.insert(key, record);
+            self.write_record(key, record);
         }
         apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
@@ -777,6 +808,9 @@ impl Storage for InMemoryStorage {
         self.projections.clear();
         self.optimistic_projections.clear();
         self.mutations.clear();
+        self.calendar_ranges.clear();
+        self.calendar_coverage.clear();
+        self.calendar_sync = CalendarSyncState::default();
         Ok(())
     }
 }

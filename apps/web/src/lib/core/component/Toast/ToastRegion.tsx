@@ -1,4 +1,7 @@
+import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
+import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
+import { Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 export function ToastRegion() {
@@ -6,9 +9,18 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card.
+        capped at one visible card. Upload progress sits nearest the corner.
       */}
       <div class="fixed bottom-2 right-2 m-0 p-2 sm:p-4 list-none outline-none pointer-events-none z-toast-region flex flex-col items-end gap-2">
+        <Toast.Region
+          regionId="reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="right"
+        >
+          <Toast.List class="flex flex-col gap-2" />
+        </Toast.Region>
         <Toast.Region
           regionId="prompt-region"
           duration={Infinity}
@@ -26,13 +38,9 @@ export function ToastRegion() {
         >
           <Toast.List class="flex flex-col gap-2" />
         </Toast.Region>
-        <Toast.Region
-          regionId="stable-toast"
-          duration={Infinity}
-          swipeDirection="right"
-        >
-          <Toast.List class="flex flex-col gap-2" />
-        </Toast.Region>
+        <Show when={!isMobile()}>
+          <UploadProgressIndicator />
+        </Show>
       </div>
 
       {/*
@@ -48,6 +56,15 @@ export function ToastRegion() {
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
       >
+        <Toast.Region
+          regionId="mobile-reminder-region"
+          duration={Infinity}
+          limit={1}
+          pauseOnInteraction={false}
+          swipeDirection="left"
+        >
+          <Toast.List class="flex flex-col gap-2" />
+        </Toast.Region>
         <Toast.Region
           regionId="mobile-prompt-region"
           duration={Infinity}
@@ -65,6 +82,11 @@ export function ToastRegion() {
         >
           <Toast.List class="flex flex-col gap-2" />
         </Toast.Region>
+        <Show when={isMobile()}>
+          <div class="flex justify-center">
+            <UploadProgressIndicator />
+          </div>
+        </Show>
       </div>
     </Portal>
   );

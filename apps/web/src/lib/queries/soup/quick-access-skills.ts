@@ -1,5 +1,6 @@
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { isSkillEntity, type SkillEntity } from '@entity';
+import { queryReadyGate } from '@queries/gate';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { createMemo } from 'solid-js';
 
@@ -33,8 +34,8 @@ export function useQuickAccessSkillsQuery() {
     () => ({ staleTime: STALE_TIME })
   );
 
-  const skills = createMemo<SkillEntity[]>(
-    () => query.data?.filter(isSkillEntity) ?? []
+  const skills = createMemo<SkillEntity[]>(() =>
+    queryReadyGate(query) ? query.data.filter(isSkillEntity) : []
   );
 
   return { query, skills };

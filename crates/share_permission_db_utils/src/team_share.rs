@@ -376,6 +376,20 @@ pub async fn initialize(
     if target.is_none() {
         return Ok(());
     }
+    if let Some(target) = target
+        && state.facts.owner_team_id == Some(target.team_id)
+        && direct_level(
+            transaction.as_mut(),
+            &entity_uuid(entity)?,
+            entity.entity_type,
+            target.team_id,
+        )
+        .await
+        .context(TeamShareError::Infrastructure)?
+            == Some(AccessLevel::Owner)
+    {
+        return Ok(());
+    }
     reject_untracked(transaction.as_mut(), &state.facts, target).await?;
     write_state(transaction, state, target, 1).await
 }

@@ -6,15 +6,6 @@ version = "0.1.0"
 
 [features]
 default = []
-# AI tools. Driving adapter like `inbound`, but for the agent loop rather than
-# HTTP, so it needs neither axum nor utoipa.
-ai_tools = [
-  "dep:ai_toolset",
-  "dep:anyhow",
-  "dep:async-trait",
-  "dep:schemars",
-  "ports",
-]
 # The queue worker. Transport-agnostic: it drives the domain through the
 # dispatch ports, so it needs an async runtime but no AWS SDK.
 dispatch = ["dep:serde_json", "dep:tokio", "dep:tokio-util", "ports"]
@@ -31,28 +22,23 @@ inbound = [
 ]
 notify = ["dep:model_notifications", "dep:notification", "outbound"]
 outbound = ["ports"]
-ports = ["dep:entity_access", "dep:tracing"]
-postgres = ["dep:macro_uuid", "dep:sqlx", "outbound"]
+ports = ["dep:entity_access", "dep:tracing", "dep:email", "dep:serde_json"]
+postgres = ["dep:macro_uuid", "dep:sqlx", "dep:tokio", "outbound"]
 
 [dependencies]
-ai_toolset = { path = "../ai_toolset", optional = true }
-anyhow = { workspace = true, optional = true }
-async-trait = { workspace = true, optional = true }
+email = { path = "../email", optional = true, default-features = false, features = ["ports"] }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 # `query` brings `axum_extra::extract::Query`, whose deserializer collects
 # repeated query keys into a vector; `axum::extract::Query` keeps only one.
 axum-extra = { workspace = true, optional = true, features = ["query"] }
 chrono = { workspace = true, features = ["serde"] }
-chrono-tz = { workspace = true }
-cron = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity" }
 rootcause = { workspace = true }
-schemars = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
 notification = { path = "../notification", optional = true }

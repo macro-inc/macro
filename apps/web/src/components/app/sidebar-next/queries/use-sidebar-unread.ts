@@ -1,6 +1,6 @@
 import { buildEmailQuery } from '@app/features/email-view/queries/email-query';
-import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
-import { useInboxEntitiesQuery } from '@app/features/inbox-view/queries/use-inbox-query';
+import { soupItemMatchesHomeTab } from '@app/features/home/queries/home-item-filter';
+import { useHomeEntitiesQuery } from '@app/features/home/queries/use-home-query';
 import {
   compileToAst,
   defineQueryFilters,
@@ -12,6 +12,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
+import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import {
@@ -22,7 +23,7 @@ import { createMemo } from 'solid-js';
 
 // Module scope: cached query meta outlives the hook that registered it.
 const signalInsertFilter: SoupApiItemFilter = (item) =>
-  soupItemMatchesInboxTab(item, 'signal');
+  soupItemMatchesHomeTab(item, 'signal');
 
 /** Presence in the loaded unread page, never a total or a pagination loop. */
 export function useSidebarUnread() {
@@ -43,7 +44,7 @@ export function useSidebarUnread() {
     }),
     () => graphqlFlag().enabled
   );
-  const inbox = useInboxEntitiesQuery({
+  const home = useHomeEntitiesQuery({
     tab: 'signal',
     facets: { read: ['unread'] },
   });
@@ -62,9 +63,9 @@ export function useSidebarUnread() {
 
   // Guard resource reads so loading a badge cannot suspend the app shell.
   // Re-check cached rows: optimistic read/done changes can leave them in a page.
-  const inboxUnread = createMemo(() => {
-    if (inbox.query.isLoading) return false;
-    return inbox.hasUnreadEntity(inbox.query.data?.entities ?? []);
+  const homeUnread = createMemo(() => {
+    if (home.query.isLoading) return false;
+    return home.hasUnreadEntity(home.query.data?.entities ?? []);
   });
   const emailUnread = createMemo(() => {
     if (email.isLoading) return false;
@@ -90,12 +91,13 @@ export function useSidebarUnread() {
       .some(
         (notification) =>
           notification.entity_type === 'channel' &&
-          !notificationIsRead(notification)
+          !notificationIsRead(notification) &&
+          isUnreadChannelMessageNotification(notification)
       );
   });
 
   return (id: string): boolean => {
-    if (id === 'inbox') return inboxUnread();
+    if (id === 'home') return homeUnread();
     if (id === 'mail') return emailUnread();
     if (id === 'channels') return channelsUnread();
     return false;

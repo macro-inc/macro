@@ -62,6 +62,8 @@ pub enum GraphqlActivityAction {
     Messaged(GraphqlActivityMessaged),
     /// An email message was sent on the thread.
     Sent(GraphqlActivitySent),
+    /// Someone submitted a response to the entity (form).
+    Responded(GraphqlActivityResponded),
     /// A property value changed on the entity.
     PropertyChanged(GraphqlActivityPropertyChanged),
     /// A principal was added to the entity (channel membership).
@@ -70,6 +72,10 @@ pub enum GraphqlActivityAction {
     ParticipantRemoved(GraphqlActivityParticipantRemoved),
     /// A call was started in the entity (channel).
     CallStarted(GraphqlActivityCallStarted),
+    /// A task was added; references are resolved through authorized project history.
+    TaskAdded(GraphqlActivityTaskAdded),
+    /// A task was removed; references are resolved through authorized project history.
+    TaskRemoved(GraphqlActivityTaskRemoved),
     /// An action outside this deployment's vocabulary, carried through raw.
     Unknown(GraphqlActivityUnknownAction),
 }
@@ -100,6 +106,12 @@ payload_free_action_objects!(
     GraphqlActivityMessaged,
     /// An email message was sent on the thread.
     GraphqlActivitySent,
+    /// Someone submitted a response to the entity.
+    GraphqlActivityResponded,
+    /// A task was added to a project.
+    GraphqlActivityTaskAdded,
+    /// A task was removed from a project.
+    GraphqlActivityTaskRemoved,
 );
 
 /// A property value changed on the entity.
@@ -153,6 +165,7 @@ impl From<RecordedAction> for GraphqlActivityAction {
             RecordedAction::Known(Action::Deleted) => Self::Deleted(Default::default()),
             RecordedAction::Known(Action::Messaged) => Self::Messaged(Default::default()),
             RecordedAction::Known(Action::Sent) => Self::Sent(Default::default()),
+            RecordedAction::Known(Action::Responded) => Self::Responded(Default::default()),
             RecordedAction::Known(Action::PropertyChanged(change)) => {
                 Self::PropertyChanged(GraphqlActivityPropertyChanged {
                     property: change.property,
@@ -173,6 +186,17 @@ impl From<RecordedAction> for GraphqlActivityAction {
             RecordedAction::Known(Action::CallStarted(start)) => {
                 Self::CallStarted(GraphqlActivityCallStarted {
                     call_id: ID(start.call_id),
+                })
+            }
+            RecordedAction::Known(Action::TaskAdded(_)) => Self::TaskAdded(Default::default()),
+            RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved(Default::default()),
+            RecordedAction::Known(
+                action @ (Action::Renamed(_) | Action::PictureChanged | Action::CallEnded(_)),
+            ) => {
+                let (tag, payload) = action.to_columns();
+                Self::Unknown(GraphqlActivityUnknownAction {
+                    tag: tag.to_owned(),
+                    payload: payload.map(Json),
                 })
             }
             RecordedAction::Unknown { tag, payload } => {

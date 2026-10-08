@@ -49,22 +49,21 @@ function historyItemFromSearchDocument(
   if (separator < 0) return undefined;
   const typename = document.recordKey.slice(0, separator);
   const id = document.recordKey.slice(separator + 1);
-  const date = new Date(document.timestampMs);
-  const updatedAt = Number.isNaN(date.getTime())
-    ? undefined
-    : date.toISOString();
   const base = {
     id,
     name: record.name,
     rawName: record.name,
     ownerId: record.ownerId,
     createdAt: record.createdAt,
-    updatedAt,
+    updatedAt: record.updatedAt,
+    viewedAt: record.viewedAt,
     deletedAt: null,
   };
   switch (typename) {
     case 'GraphqlSoupDocument': {
       if (record.__typename !== 'GraphqlSoupDocument') return undefined;
+      if (record.subType?.__typename === 'GraphqlInitiativeDescriptionSubType')
+        return undefined;
       const markdown = document.bucket !== 'document';
       const subType =
         document.bucket === 'task' ||
@@ -85,7 +84,7 @@ function historyItemFromSearchDocument(
       return {
         ...base,
         type: 'document',
-        fileType: markdown ? 'md' : undefined,
+        fileType: record.fileType ?? (markdown ? 'md' : undefined),
         subType,
       } as HistoryItem;
     }
@@ -135,6 +134,17 @@ export async function materializeCachedGraphqlHistoryItems(
   });
 }
 
+/** Buckets consumed by history and its hydration subscription. */
+export const HISTORY_SEARCH_BUCKETS = [
+  'document',
+  'note',
+  'task',
+  'snippet',
+  'skill',
+  'chat',
+  'project',
+] as const;
+
 /** Reads a bounded recent history through the indexed search projection, then
  * materializes only those final normalized entity keys. */
 export async function readCachedGraphqlHistoryItems(
@@ -142,15 +152,7 @@ export async function readCachedGraphqlHistoryItems(
 ): Promise<HistoryItem[]> {
   const page = await cacheHost.search({
     profile: 'quick-access-v1',
-    buckets: [
-      'document',
-      'note',
-      'task',
-      'snippet',
-      'skill',
-      'chat',
-      'project',
-    ],
+    buckets: [...HISTORY_SEARCH_BUCKETS],
     query: '',
     limit: 500,
   });

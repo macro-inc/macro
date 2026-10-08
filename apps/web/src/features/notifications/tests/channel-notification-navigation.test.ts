@@ -1,4 +1,4 @@
-import { createSplitLayout } from '@components/app/split-layout/layoutManager';
+import { createRoutedSplitLayout } from '@components/app/split-layout/tests/fixtures';
 import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
@@ -23,13 +23,15 @@ vi.mock('@app/features/calendar-view/calendar-navigation', () => ({
   openCalendarView: vi.fn(),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
+  blocks: { channel: {} },
   isBlockAlias: () => false,
   itemToBlockName: (value: { fileType: string }) => value.fileType,
   resolveBlockAlias: (type: string) => type,
 }));
 
 beforeEach(() => vi.clearAllMocks());
-vi.mock('@core/constant/featureFlags', () => ({
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   enableCalendarUi: false,
   enableReminders: false,
   isFeatureEnabled: vi.fn(),
@@ -77,12 +79,10 @@ function setup(location: 'preview' | 'split' | 'closed') {
   } as unknown as BlockOrchestrator;
   const layout = createRoot((dispose) => {
     onTestFinished(dispose);
-    return createSplitLayout(orchestrator, [
-      location === 'split'
-        ? { type: 'channel', id: 'channel' }
-        : { type: 'component', id: 'channels' },
-      { type: 'component', id: 'inbox' },
-    ]);
+    return createRoutedSplitLayout(
+      orchestrator,
+      location === 'split' ? '/channel/channel/~/home' : '/channels/~/home'
+    );
   });
   const [first, other] = layout.splits();
   layout.activateSplit(other.id);
@@ -157,6 +157,26 @@ it.each(['channel_invite', 'call_started'] as const)(
     expect(navigate).not.toHaveBeenCalled();
   }
 );
+
+it('reports an ordinary channel notification applied after preview activation', async () => {
+  const { layout, activate } = setup('preview');
+  const onApplied = vi.fn();
+
+  await openNotification(
+    {
+      entity_id: 'channel',
+      notification_metadata: { tag: 'channel_invite', content: {} },
+    } as UnifiedNotification,
+    layout,
+    false,
+    undefined,
+    undefined,
+    { onApplied }
+  );
+
+  expect(activate).toHaveBeenCalledOnce();
+  expect(onApplied).toHaveBeenCalledOnce();
+});
 
 it.each(['split', 'closed'] as const)(
   'preserves notification navigation when the channel is %s',

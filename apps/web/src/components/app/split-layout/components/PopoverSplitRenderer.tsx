@@ -1,7 +1,7 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { ContentLoading } from '@components/app/ContentLoading';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
@@ -19,6 +19,7 @@ import type {
   SplitMount,
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
+import { focusPopoverInput } from '../utils/focusPopoverInput';
 
 false;
 
@@ -138,16 +139,6 @@ function PopoverSplitModal(props: {
     toolbarCollapser: { register: () => () => {} },
   };
 
-  registerHotkey({
-    hotkey: 'escape',
-    scopeId,
-    description: 'Close Popover',
-    keyDownHandler() {
-      props.onClose();
-      return true;
-    },
-  });
-
   const attachPanel = (element: HTMLElement) => {
     setPanelRef(element);
     bindHotKeyDom(element);
@@ -177,8 +168,12 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
+          onOpenAutoFocus={(event) => focusPopoverInput(event, panelRef())}
         >
-          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+          <Panel
+            hideBorder
+            class="bg-transparent rounded-[inherit] *:max-h-[75vh]"
+          >
             <Content />
           </Panel>
         </Dialog>
@@ -188,6 +183,7 @@ function PopoverSplitModal(props: {
         side="bottom"
         open={props.popover.isOpen}
         onOpenChange={onOpenChange}
+        onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />

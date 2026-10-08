@@ -23,8 +23,12 @@ export type FavoriteEntityRefEntityType =
   | 'static_file'
   | 'crm_company'
   | 'crm_contact'
+  | 'crm_pipeline'
   | 'reminder'
   | 'skill'
   | 'agent_session'
   | 'scheduled_action'
-  | 'initiative';
+  | 'initiative'
+  | 'database'
+  | 'database_row'
+  | 'form';

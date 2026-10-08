@@ -7,10 +7,18 @@ import type {
   MessagePart,
 } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX, onMount } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Message } from './AgentMessage';
+
+const renderTelemetry = vi.hoisted(() => ({
+  context: vi.fn(),
+  observe: vi.fn(),
+}));
+vi.mock('../context/AgentSessionContext', () => ({
+  useOptionalAgentSession: renderTelemetry.context,
+}));
 
 // The layer under test is how a message lays its parts out — which calls fold
 // into a group and at what index — so every part renderer and ui primitive
@@ -33,15 +41,33 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./parts/TextPart', () => ({
-  TextPart: (props: { text: string }) => <p data-testid="text">{props.text}</p>,
+  TextPart: (props: {
+    text: string;
+    observeRender?: (element: HTMLElement) => void;
+  }) => {
+    let element!: HTMLParagraphElement;
+    onMount(() => props.observeRender?.(element));
+    return (
+      <p ref={element} data-testid="text">
+        {props.text}
+      </p>
+    );
+  },
 }));
 vi.mock('./parts/ToolCallPart', () => ({
   ToolCallPart: (props: {
     part: { id: string; status: string };
-    context: { partIndex: number; inFlight: boolean };
+    context: {
+      partIndex: number;
+      inFlight: boolean;
+      followedBy: (name: string) => boolean;
+    };
   }) => (
     <div
       data-index={props.context.partIndex}
+      data-followed-by-save={String(
+        props.context.followedBy('SaveDatabaseQuery')
+      )}
       data-status={props.part.status}
       data-live={String(props.context.inFlight)}
       data-testid="tool"
@@ -72,17 +98,30 @@ vi.mock('../ui', () => ({
   WorkingLine: (props: { label?: string }) => (
     <div data-testid="working">{props.label}</div>
   ),
-  ActionLine: (props: { label: string }) => <div>{props.label}</div>,
-  ToolGroup: (props: {
+  ActionLine: (props: { label: string; detail?: string }) => (
+    <div data-testid="action-line" data-detail={props.detail}>
+      {props.label}
+    </div>
+  ),
+  FailureNoticeCard: (props: {
+    notice: { title: string; body: string; link?: { url: string } | null };
+  }) => (
+    <div data-link={props.notice.link?.url} data-testid="failure-notice">
+      {props.notice.title}
+    </div>
+  ),
+}));
+vi.mock('../views/LiveToolGroup', () => ({
+  LiveToolGroup: (props: {
     count: number;
     active: boolean;
-    live: boolean;
+    activeIndex?: number;
     children: JSX.Element;
   }) => (
     <div
       data-active={String(props.active)}
       data-count={props.count}
-      data-live={String(props.live)}
+      data-active-index={props.activeIndex}
       data-testid="group"
     >
       {props.children}
@@ -92,6 +131,8 @@ vi.mock('../ui', () => ({
 
 afterEach(() => {
   viewerId.current = 'macro|me@macro.com';
+  renderTelemetry.context.mockReset();
+  renderTelemetry.observe.mockReset();
   cleanup();
 });
 
@@ -128,6 +169,29 @@ const message = (
 });
 
 describe('Message tool grouping', () => {
+  it('observes only agent answer DOM on the existing session and matching turn', () => {
+    renderTelemetry.context.mockReturnValue({
+      observeRenderedText: renderTelemetry.observe,
+    });
+    const answer = message([text('Hello')]);
+    answer.turn = 3;
+    render(() => <Message message={answer} inFlight />);
+    expect(renderTelemetry.observe).toHaveBeenCalledExactlyOnceWith(
+      'session',
+      3,
+      expect.any(HTMLElement)
+    );
+    cleanup();
+    renderTelemetry.observe.mockClear();
+    render(() => (
+      <Message
+        message={{ ...answer, author: { kind: 'user', userId: null } }}
+        inFlight={false}
+      />
+    ));
+    expect(renderTelemetry.observe).not.toHaveBeenCalled();
+  });
+
   it('folds consecutive tool calls into one group, keeping their indices', () => {
     const view = render(() => (
       <Message
@@ -152,7 +216,7 @@ describe('Message tool grouping', () => {
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('3');
     expect(group.dataset.active).toBe('false');
-    expect(group.dataset.live).toBe('false');
+    expect(group.dataset.activeIndex).toBeUndefined();
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -164,14 +228,47 @@ describe('Message tool grouping', () => {
     ]);
   });
 
-  it('leaves a lone tool call as its own card', () => {
+  it('tells each call whether a later call of the turn saves the query', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          {
+            kind: 'tool_use',
+            id: 'query',
+            name: { kind: 'mcp', server: 'macro', tool: 'QueryDatabase' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          {
+            kind: 'tool_use',
+            id: 'save',
+            name: { kind: 'mcp', server: 'macro', tool: 'SaveDatabaseQuery' },
+            status: 'completed',
+            detail: { kind: 'macro', input: {}, output: {}, error: null },
+          },
+          text('Saved.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view
+        .getAllByTestId('tool')
+        .map((el) => [el.textContent, el.dataset.followedBySave])
+    ).toEqual([
+      ['query', 'true'],
+      ['save', 'false'],
+    ]);
+  });
+
+  it('starts a stable group with the first tool call', () => {
     const view = render(() => (
       <Message
         message={message([text('Looking.'), tool('read')])}
         inFlight={false}
       />
     ));
-    expect(view.queryByTestId('group')).toBeNull();
+    expect(view.getByTestId('group').dataset.count).toBe('1');
     expect(view.getByTestId('tool').dataset.index).toBe('1');
   });
 
@@ -244,6 +341,53 @@ describe('Message tool grouping', () => {
     expect(view.getByTestId('group').dataset.active).toBe('true');
   });
 
+  it('follows unfinished work even when later calls have completed', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [tool('slow', { status: 'running' }), tool('fast')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('0');
+  });
+
+  it('keeps delegated agents visible between tool bursts', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('before'),
+            tool('agent', {
+              status: 'running',
+              detail: {
+                kind: 'subagent',
+                title: 'Investigate',
+                agentType: null,
+                description: null,
+                background: false,
+                prompt: null,
+                children: [],
+                result: null,
+              },
+            }),
+            tool('after'),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    const agent = view
+      .getAllByTestId('tool')
+      .find((el) => el.textContent === 'agent');
+    expect(agent?.closest('[data-testid="group"]')).toBeNull();
+    expect(agent?.dataset.index).toBe('1');
+    expect(view.getAllByTestId('group')).toHaveLength(2);
+  });
+
   it('settles a run the log left running once the turn is no longer live', () => {
     // A superseded turn keeps `stop: null` and its last call `running`
     // forever; a dead runtime leaves the tail the same way.
@@ -273,7 +417,7 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group')).toBe(group);
     expect(group.dataset.count).toBe('3');
-    expect(group.dataset.live).toBe('true');
+    expect(group.dataset.activeIndex).toBeUndefined();
     expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
       '1',
       '2',
@@ -281,12 +425,13 @@ describe('Message tool grouping', () => {
     ]);
   });
 
-  it('promotes a lone call to a group when a second follows it', () => {
+  it('keeps the first tool and its group mounted when a second follows it', () => {
     const [store, setStore] = createStore({
       message: message([text('Looking.'), tool('a')], null),
     });
     const view = render(() => <Message message={store.message} inFlight />);
-    expect(view.queryByTestId('group')).toBeNull();
+    const group = view.getByTestId('group');
+    const firstTool = view.getByTestId('tool');
     const prose = view.getByTestId('text');
 
     setStore(
@@ -294,6 +439,8 @@ describe('Message tool grouping', () => {
       reconcile(message([text('Looking.'), tool('a'), tool('b')], null))
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
+    expect(view.getByTestId('group')).toBe(group);
+    expect(view.getAllByTestId('tool')[0]).toBe(firstTool);
     expect(view.getByTestId('text')).toBe(prose);
   });
 
@@ -315,11 +462,11 @@ describe('Message tool grouping', () => {
     expect(view.getAllByTestId('tool')[2].dataset.status).toBe('running');
   });
 
-  it('marks a completed batch as live so its arrivals remain visible briefly', () => {
+  it('keeps completed batches inactive even at the live tail', () => {
     const view = render(() => (
       <Message message={message([tool('a'), tool('b')], null)} inFlight />
     ));
-    expect(view.getByTestId('group').dataset.live).toBe('true');
+    expect(view.getByTestId('group').dataset.activeIndex).toBeUndefined();
     expect(view.getByTestId('group').dataset.active).toBe('false');
   });
 
@@ -334,7 +481,7 @@ describe('Message tool grouping', () => {
       />
     ));
     expect(view.getByTestId('group').dataset.active).toBe('true');
-    expect(view.getByTestId('group').dataset.live).toBe('false');
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
     expect(view.getAllByTestId('tool').map((row) => row.dataset.live)).toEqual([
       'true',
       'true',
@@ -571,5 +718,70 @@ describe('Message prompt attribution', () => {
     ));
     expect(view.queryByTestId('prompt-author')).toBeNull();
     expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+
+  it('renders a notification Cursor wrote full-width, not as a prompt', () => {
+    const notification = [
+      '<system_notification source="github" conclusion="success" checks="27" subscriptionType="github:ci:branch">',
+      'All 27 CI checks completed without failures.',
+      '</system_notification>',
+    ].join('\n');
+    const view = render(() => (
+      <Message
+        message={{
+          ...message([text(notification)]),
+          author: { kind: 'user', userId: 'macro|wolf@macro.com' },
+        }}
+        inFlight={false}
+      />
+    ));
+    expect(view.queryByTestId('bubble')).toBeNull();
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('text').textContent).toBe(notification);
+  });
+});
+
+describe('Message failed turns', () => {
+  it('reads an opaque failure as an action line carrying the runtime message', () => {
+    const view = render(() => (
+      <Message
+        message={message([], {
+          kind: 'failed',
+          message: 'Internal error: something broke',
+        })}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('action-line').dataset.detail).toBe(
+      'Internal error: something broke'
+    );
+    expect(view.queryByTestId('failure-notice')).toBeNull();
+  });
+
+  it("shows a classified failure as a notice card, not the runtime's message", () => {
+    const view = render(() => (
+      <Message
+        message={message([], {
+          kind: 'failed',
+          message: 'Cursor usage limit reached. Raise the limit.',
+          notice: {
+            kind: 'provider_usage_limit',
+            title: 'Cursor usage limit reached',
+            body: 'Raise the spending limit in your Cursor dashboard.',
+            link: {
+              label: 'Manage Cursor usage',
+              url: 'https://www.cursor.com/dashboard?tab=settings',
+            },
+          },
+        })}
+        inFlight={false}
+      />
+    ));
+    const notice = view.getByTestId('failure-notice');
+    expect(notice.textContent).toBe('Cursor usage limit reached');
+    expect(notice.dataset.link).toBe(
+      'https://www.cursor.com/dashboard?tab=settings'
+    );
+    expect(view.queryByTestId('action-line')).toBeNull();
   });
 });

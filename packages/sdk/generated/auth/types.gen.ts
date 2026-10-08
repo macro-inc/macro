@@ -6,9 +6,80 @@ export type ClientOptions = {
 
 export type AbGroup = 'A' | 'B';
 
+/**
+ * Error response body.
+ */
+export type AiBillingErrorBody = {
+    /**
+     * Human-readable error description.
+     */
+    error: string;
+};
+
 export type AppleLoginRequest = {
     code: string;
     id_token: string;
+};
+
+/**
+ * The automatic reload thresholds a payer starts from.
+ */
+export type AutoReloadDefaults = {
+    /**
+     * Balance below which a reload fires, cents.
+     */
+    minimum_balance_cents: number;
+    /**
+     * Balance a reload tops up to, cents.
+     */
+    target_balance_cents: number;
+};
+
+/**
+ * The payer's automatic reload settings, as shown in Billing settings.
+ */
+export type AutoReloadSnapshot = {
+    /**
+     * Whether reloads will fire: the payer opted in and reloads are not suspended.
+     */
+    active: boolean;
+    /**
+     * Reload once the effective balance drops below this, in customer cents.
+     */
+    minimum_balance_cents: number;
+    /**
+     * Most reloaded per UTC calendar month, in customer cents. `null` when
+     * there is no limit.
+     */
+    monthly_spend_limit_cents?: number | null;
+    /**
+     * Whether reloads are paused after a failed reload charge.
+     */
+    suspended: boolean;
+    /**
+     * Reload the balance back up to this, in customer cents.
+     */
+    target_balance_cents: number;
+};
+
+/**
+ * Request body for switching plans
+ */
+export type ChangePlanRequest = {
+    /**
+     * The plan to move the active subscription to
+     */
+    plan: SeatPlan;
+};
+
+/**
+ * Response for a plan change
+ */
+export type ChangePlanResponse = {
+    /**
+     * The plan the subscription is now on
+     */
+    plan: SeatPlan;
 };
 
 /**
@@ -27,6 +98,20 @@ export type CheckoutSessionMetadata = {
      * Google Analytics client ID for conversion tracking
      */
     gaClientId?: string | null;
+};
+
+/**
+ * Hosted checkout with the billing terms the server actually granted.
+ */
+export type CheckoutSessionV2Response = {
+    /**
+     * Trial duration, absent for an immediately paid checkout.
+     */
+    trialDays?: number | null;
+    /**
+     * The opaque URL returned by Stripe.
+     */
+    url: string;
 };
 
 /**
@@ -162,6 +247,11 @@ export type CreateCheckoutSessionV2Request = {
      */
     metadata?: CheckoutSessionMetadata;
     /**
+     * Request the automatic, first-subscription 30-day Premium trial.
+     */
+    onboardingTrial?: boolean;
+    plan?: null | SeatPlan;
+    /**
      * The URL to redirect to on successful checkout
      */
     successUrl: string;
@@ -213,24 +303,32 @@ export type CreateTeamRequest = {
 };
 
 /**
- * The request body to create a new user in fusionauth
- * NOTE: Never derive debug here as we don't want to accidentally log the password
+ * Request body for [`create_credit_checkout_handler`].
  */
-export type CreateUserRequest = {
+export type CreditCheckoutRequestBody = {
     /**
-     * The primary email address of the user.
-     * This will be the user's root "profile".
+     * Pack size, cents; one of the catalog's `credit_packs_cents`.
      */
-    email: string;
+    amountCents: number;
     /**
-     * The password for the user.
-     * TODO: configure password policy and validate password before attempting to create user
+     * Where Stripe returns the user on cancel. Same rules as `success_url`.
      */
-    password: string;
+    cancelUrl: string;
     /**
-     * The unique username for the user.
+     * Where Stripe returns the user after paying. Must be an `https` URL
+     * on the origin the request came from.
      */
-    username: string;
+    successUrl: string;
+};
+
+/**
+ * Response for [`create_credit_checkout_handler`].
+ */
+export type CreditCheckoutResponse = {
+    /**
+     * The hosted Checkout URL to redirect to.
+     */
+    url: string;
 };
 
 /**
@@ -296,6 +394,11 @@ export type CursorModelsResponse = {
 };
 
 /**
+ * Why a request was refused.
+ */
+export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -331,6 +434,10 @@ export type EnrichedGithubPullRequest = {
      */
     additions?: number | null;
     /**
+     * The users assigned to the pull request, when known.
+     */
+    assignees?: Array<GithubPullRequestUser> | null;
+    /**
      * The stable numeric GitHub user id for the pull request author, when available.
      */
     authorId?: number | null;
@@ -363,6 +470,10 @@ export type EnrichedGithubPullRequest = {
      */
     githubKey: string;
     /**
+     * The pull request's labels, when known.
+     */
+    labels?: Array<GithubPullRequestLabel> | null;
+    /**
      * The GitHub pull request title, when enrichment succeeds.
      */
     name?: string | null;
@@ -384,6 +495,11 @@ export type EnrichedGithubPullRequest = {
      * The GitHub repository name.
      */
     repo: string;
+    /**
+     * Each reviewer's latest submitted review, when known. Stored metadata merges this per
+     * reviewer, so a write that knows one review keeps the others.
+     */
+    reviews?: Array<GithubPullRequestReview> | null;
     status?: null | GithubPullRequestStatus;
     /**
      * The public GitHub URL for the pull request.
@@ -490,10 +606,23 @@ export type GetUserInfo = {
 
 export type GithubLinkStatusResponse = {
     /**
+     * Stable ID of the authenticated user's linked GitHub account.
+     */
+    github_user_id: string;
+    /**
+     * Login of the authenticated user's linked GitHub account.
+     */
+    github_username: string;
+    /**
      * Whether the user must reauthenticate their GitHub link.
      */
     reauthentication_required: boolean;
 };
+
+/**
+ * How GitHub combines a pull request's commits into its base branch.
+ */
+export type GithubMergeMethod = 'merge' | 'squash' | 'rebase';
 
 /**
  * A check run associated with a GitHub pull request.
@@ -597,6 +726,20 @@ export type GithubPullRequestComment = {
 };
 
 /**
+ * A label on a GitHub pull request.
+ */
+export type GithubPullRequestLabel = {
+    /**
+     * The label color as six hex digits without a leading `#`, when known.
+     */
+    color?: string | null;
+    /**
+     * The label name, unique within its repository regardless of case.
+     */
+    name: string;
+};
+
+/**
  * A pull request reference that can be enriched with live GitHub data.
  */
 export type GithubPullRequestRef = {
@@ -627,9 +770,50 @@ export type GithubPullRequestRef = {
 };
 
 /**
+ * A reviewer's latest submitted review on a pull request.
+ */
+export type GithubPullRequestReview = {
+    /**
+     * The stable numeric GitHub user id of the reviewer, as a string.
+     */
+    reviewerGithubUserId: string;
+    /**
+     * The reviewer's GitHub login, when known.
+     */
+    reviewerLogin?: string | null;
+    /**
+     * What the review said.
+     */
+    state: GithubPullRequestReviewState;
+    /**
+     * When the review was submitted, when known.
+     */
+    submittedAt?: string | null;
+};
+
+/**
+ * What a reviewer's latest review on a pull request said.
+ */
+export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+
+/**
  * The normalized lifecycle status for a GitHub pull request.
  */
 export type GithubPullRequestStatus = 'open' | 'closed' | 'merged';
+
+/**
+ * A GitHub user named on a pull request, such as an assignee.
+ */
+export type GithubPullRequestUser = {
+    /**
+     * The stable numeric GitHub user id, as a string.
+     */
+    githubUserId: string;
+    /**
+     * The user's GitHub login, when known.
+     */
+    login?: string | null;
+};
 
 export type GmailLinkStatusResponse = {
     /**
@@ -832,6 +1016,40 @@ export type MacroApiTokenResponse = {
     macro_api_token: string;
 };
 
+/**
+ * A request to merge one pull request on the user's behalf.
+ */
+export type MergeGithubPullRequestRequest = {
+    mergeMethod?: null | GithubMergeMethod;
+    /**
+     * The GitHub pull request number.
+     */
+    number: number;
+    /**
+     * The GitHub repository owner or organization.
+     */
+    owner: string;
+    /**
+     * The GitHub repository name.
+     */
+    repo: string;
+};
+
+/**
+ * Response body for a merged pull request.
+ */
+export type MergeGithubPullRequestResponse = {
+    /**
+     * GitHub's own summary of the merge.
+     */
+    message: string;
+    pullRequest?: null | EnrichedGithubPullRequest;
+    /**
+     * The merge commit's SHA.
+     */
+    sha: string;
+};
+
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -904,6 +1122,16 @@ export type PatchTeamCrmSettingsResponse = {
      * The resulting `crm_enabled` value after the call.
      */
     enabled: boolean;
+};
+
+/**
+ * Request body for `PATCH /team/members/{member_user_id}/plan`.
+ */
+export type PatchTeamMemberPlanRequest = {
+    /**
+     * The plan to bill the member's seat at from now on.
+     */
+    plan: SeatPlan;
 };
 
 /**
@@ -983,6 +1211,65 @@ export type Permission = {
     id: string;
 };
 
+/**
+ * One plan in the catalog.
+ */
+export type PlanCatalogEntry = {
+    /**
+     * Included AI per seat per period, in cents at provider cost. For the
+     * free plan this is its monthly hard cap.
+     */
+    included_ai_cents_per_seat: number;
+    /**
+     * Monthly subscription price per seat, cents.
+     */
+    monthly_price_cents: number;
+    /**
+     * Whether a new purchase or plan move may pick this plan today.
+     */
+    purchasable: boolean;
+    /**
+     * The tier.
+     */
+    tier: PlanTier;
+};
+
+/**
+ * The plan catalog and the knobs the billing UI offers.
+ */
+export type PlanCatalogResponse = {
+    /**
+     * Thresholds automatic reload starts from before the payer sets their own.
+     */
+    auto_reload_defaults: AutoReloadDefaults;
+    /**
+     * Largest allowed automatic reload target, cents.
+     */
+    auto_reload_target_max_cents: number;
+    /**
+     * Credit packs a payer may buy, cents.
+     */
+    credit_packs_cents: Array<number>;
+    /**
+     * Largest allowed overage cap, cents.
+     */
+    overage_limit_max_cents: number;
+    /**
+     * Smallest allowed overage cap, cents.
+     */
+    overage_limit_min_cents: number;
+    /**
+     * Every plan, cheapest first. Clients read allowances from here rather
+     * than hard-coding them; `purchasable` marks the plans a user can buy.
+     */
+    plans: Array<PlanCatalogEntry>;
+};
+
+/**
+ * The plans a user can be on, cheapest first.
+ */
+export type PlanTier = 'free' | 'premium' | 'max';
+
 export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
 };
@@ -1061,6 +1348,13 @@ export type ResendFusionauthVerifyUserEmailRequest = {
      */
     email: string;
 };
+
+/**
+ * The paid plan a seat is billed at. Every member of a paying team has one;
+ * a team may mix them, and its Stripe subscription carries one seat item per
+ * plan in use.
+ */
+export type SeatPlan = 'premium' | 'max';
 
 /**
  * The body which is used to describe the recipient email
@@ -1184,6 +1478,11 @@ export type TeamInvitesResponse = {
  */
 export type TeamMember = {
     /**
+     * The paid plan the member's seat is billed at. Meaningful on paying
+     * and enterprise teams; free-team members carry the default.
+     */
+    plan: SeatPlan;
+    /**
      * The role of the team member
      */
     role: TeamRole;
@@ -1241,6 +1540,129 @@ export type ToggleNonAdminInvitesResponse = {
      * toggle.
      */
     allow_non_admin_invites: boolean;
+};
+
+/**
+ * Request body for [`update_auto_reload_handler`].
+ */
+export type UpdateAutoReloadRequest = {
+    /**
+     * Purchase prepaid credits automatically using the payer's card.
+     */
+    enabled: boolean;
+    /**
+     * Reload once the balance drops below this, cents. Must be positive.
+     */
+    minimumBalanceCents: number;
+    /**
+     * Most to reload per calendar month, cents. Omit or `null` for no limit.
+     * Must be at least the catalog's `overage_limit_min_cents` (legacy name).
+     */
+    monthlySpendLimitCents?: number | null;
+    /**
+     * Reload the balance back up to this, cents. At least $0.50 above the
+     * minimum and no more than the catalog's `auto_reload_target_max_cents`.
+     */
+    targetBalanceCents: number;
+};
+
+/**
+ * Request body for [`update_overage_handler`].
+ */
+export type UpdateOverageRequest = {
+    /**
+     * Bill usage past allowance and credits.
+     */
+    enabled: boolean;
+    /**
+     * Per-period cap on overage spend, cents. Required when enabling.
+     */
+    limitCents?: number;
+};
+
+/**
+ * The payer's current-period position, as shown in Billing settings and used
+ * by the gate.
+ */
+export type UsageSnapshot = {
+    /**
+     * Automatic credit reload settings. `active` means the payer opted in and
+     * reloads are not suspended.
+     */
+    auto_reload: AutoReloadSnapshot;
+    blocked_reason?: null | DenyReason;
+    /**
+     * Whether the requesting user is the payer.
+     */
+    can_manage_billing: boolean;
+    /**
+     * Shared prepaid credit balance, in customer cents.
+     */
+    credit_balance_cents: number;
+    /**
+     * Shared payer credits already applied to this period, in customer cents.
+     */
+    credits_consumed_cents: number;
+    /**
+     * Included AI for this user's seat this period, in cents at provider cost.
+     */
+    included_cents: number;
+    /**
+     * Shared overage charged so far this period, in customer cents.
+     */
+    overage_charged_cents: number;
+    /**
+     * Legacy API name for the automatic reload opt-in. Never authorizes direct charges.
+     */
+    overage_enabled: boolean;
+    /**
+     * Per-period overage cap, in customer cents.
+     */
+    overage_limit_cents: number;
+    /**
+     * Whether overage is paused after a failed charge.
+     */
+    overage_suspended: boolean;
+    /**
+     * The payer for this user's AI.
+     */
+    payer: string;
+    /**
+     * Period end (exclusive).
+     */
+    period_end: string;
+    /**
+     * Period start.
+     */
+    period_start: string;
+    /**
+     * Cost cents of usage this seat may still consume: its remaining allowance
+     * plus whatever shared credit and overage headroom pays for at the markup.
+     * 0 when blocked.
+     */
+    remaining_cents: number;
+    /**
+     * Seats billed to the payer.
+     */
+    seats: number;
+    /**
+     * The plan.
+     */
+    tier: PlanTier;
+    /**
+     * Team-wide usage beyond per-seat allowances, at the overage markup, that
+     * is not yet covered by shared credits or charges (awaiting settlement).
+     * Customer cents.
+     */
+    uncovered_cents: number;
+    /**
+     * Enterprise: never metered.
+     */
+    unlimited: boolean;
+    /**
+     * AI used by this user this period, in cents at provider cost.
+     */
+    used_cents: number;
 };
 
 export type UserLinkResponse = {
@@ -1309,6 +1731,174 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type UpdateAiBillingAutoReloadData = {
+    body: UpdateAutoReloadRequest;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/auto-reload';
+};
+
+export type UpdateAiBillingAutoReloadErrors = {
+    /**
+     * Invalid thresholds
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may change billing
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type UpdateAiBillingAutoReloadError = UpdateAiBillingAutoReloadErrors[keyof UpdateAiBillingAutoReloadErrors];
+
+export type UpdateAiBillingAutoReloadResponses = {
+    /**
+     * Updated position
+     */
+    200: UsageSnapshot;
+};
+
+export type UpdateAiBillingAutoReloadResponse = UpdateAiBillingAutoReloadResponses[keyof UpdateAiBillingAutoReloadResponses];
+
+export type CreateAiCreditCheckoutData = {
+    body: CreditCheckoutRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/checkout';
+};
+
+export type CreateAiCreditCheckoutErrors = {
+    /**
+     * Invalid pack, untrusted return URL, or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may buy credits
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type CreateAiCreditCheckoutError = CreateAiCreditCheckoutErrors[keyof CreateAiCreditCheckoutErrors];
+
+export type CreateAiCreditCheckoutResponses = {
+    /**
+     * Checkout URL
+     */
+    200: CreditCheckoutResponse;
+};
+
+export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type UpdateAiBillingOverageData = {
+    body: UpdateOverageRequest;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/overage';
+};
+
+export type UpdateAiBillingOverageErrors = {
+    /**
+     * Invalid limit
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Only the payer may change billing
+     */
+    403: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type UpdateAiBillingOverageError = UpdateAiBillingOverageErrors[keyof UpdateAiBillingOverageErrors];
+
+export type UpdateAiBillingOverageResponses = {
+    /**
+     * Updated position
+     */
+    200: UsageSnapshot;
+};
+
+export type UpdateAiBillingOverageResponse = UpdateAiBillingOverageResponses[keyof UpdateAiBillingOverageResponses];
+
+export type GetAiBillingPlansData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/plans';
+};
+
+export type GetAiBillingPlansResponses = {
+    /**
+     * Plan catalog
+     */
+    200: PlanCatalogResponse;
+};
+
+export type GetAiBillingPlansResponse = GetAiBillingPlansResponses[keyof GetAiBillingPlansResponses];
+
+export type GetAiBillingSummaryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/summary';
+};
+
+export type GetAiBillingSummaryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type GetAiBillingSummaryError = GetAiBillingSummaryErrors[keyof GetAiBillingSummaryErrors];
+
+export type GetAiBillingSummaryResponses = {
+    /**
+     * Current-period position
+     */
+    200: UsageSnapshot;
+};
+
+export type GetAiBillingSummaryResponse = GetAiBillingSummaryResponses[keyof GetAiBillingSummaryResponses];
 
 export type DisconnectCodexData = {
     body?: never;
@@ -1617,6 +2207,40 @@ export type EnrichGithubPullRequestsResponses = {
 };
 
 export type EnrichGithubPullRequestsResponse2 = EnrichGithubPullRequestsResponses[keyof EnrichGithubPullRequestsResponses];
+
+export type MergeGithubPullRequestData = {
+    body: MergeGithubPullRequestRequest;
+    path?: never;
+    query?: never;
+    url: '/github_pull_requests/merge';
+};
+
+export type MergeGithubPullRequestErrors = {
+    401: ErrorResponse;
+    /**
+     * The user cannot push to the repository
+     */
+    403: ErrorResponse;
+    /**
+     * No GitHub link, or the pull request is not visible to the user
+     */
+    404: ErrorResponse;
+    /**
+     * The pull request is not mergeable as it stands, or its head moved
+     */
+    409: ErrorResponse;
+    422: ErrorResponse;
+    428: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
+
+export type MergeGithubPullRequestResponses = {
+    200: MergeGithubPullRequestResponse;
+};
+
+export type MergeGithubPullRequestResponse2 = MergeGithubPullRequestResponses[keyof MergeGithubPullRequestResponses];
 
 export type ListGtmInviteLinksData = {
     body?: never;
@@ -2636,6 +3260,37 @@ export type JoinTeamResponses = {
     200: unknown;
 };
 
+export type PatchTeamMemberPlanData = {
+    body: PatchTeamMemberPlanRequest;
+    path: {
+        /**
+         * The member whose seat plan changes
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/team/members/{member_user_id}/plan';
+};
+
+export type PatchTeamMemberPlanErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The team has no active subscription
+     */
+    402: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PatchTeamMemberPlanError = PatchTeamMemberPlanErrors[keyof PatchTeamMemberPlanErrors];
+
+export type PatchTeamMemberPlanResponses = {
+    200: TeamMember;
+};
+
+export type PatchTeamMemberPlanResponse = PatchTeamMemberPlanResponses[keyof PatchTeamMemberPlanResponses];
+
 export type ToggleTeamNonAdminInvitesData = {
     body?: never;
     path?: never;
@@ -2723,27 +3378,6 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
-
-export type CreateUserData = {
-    body: CreateUserRequest;
-    path?: never;
-    query?: never;
-    url: '/user';
-};
-
-export type CreateUserErrors = {
-    400: ErrorResponse;
-    403: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type CreateUserError = CreateUserErrors[keyof CreateUserErrors];
-
-export type CreateUserResponses = {
-    200: EmptyResponse;
-};
-
-export type CreateUserResponse = CreateUserResponses[keyof CreateUserResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
@@ -3071,10 +3705,49 @@ export type CreateCheckoutSessionV2Errors = {
 export type CreateCheckoutSessionV2Error = CreateCheckoutSessionV2Errors[keyof CreateCheckoutSessionV2Errors];
 
 export type CreateCheckoutSessionV2Responses = {
-    200: StripeSessionResponse;
+    200: CheckoutSessionV2Response;
 };
 
 export type CreateCheckoutSessionV2Response = CreateCheckoutSessionV2Responses[keyof CreateCheckoutSessionV2Responses];
+
+export type ChangePlanData = {
+    body: ChangePlanRequest;
+    path?: never;
+    query?: never;
+    url: '/user/stripe/plan';
+};
+
+export type ChangePlanErrors = {
+    /**
+     * Plan not available
+     */
+    400: ErrorResponse;
+    /**
+     * The team has no active subscription
+     */
+    402: ErrorResponse;
+    /**
+     * Only team admins change plans on a team
+     */
+    403: ErrorResponse;
+    /**
+     * No active subscription
+     */
+    404: ErrorResponse;
+    /**
+     * Already on this plan, or more than one active subscription
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ChangePlanError = ChangePlanErrors[keyof ChangePlanErrors];
+
+export type ChangePlanResponses = {
+    200: ChangePlanResponse;
+};
+
+export type ChangePlanResponse2 = ChangePlanResponses[keyof ChangePlanResponses];
 
 export type CreatePortalSessionData = {
     body: CreatePortalSessionRequest;

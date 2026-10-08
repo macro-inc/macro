@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET sync_token = 'old-token', synced_at = now(), materialized_starts_at = now(), materialized_ends_at = now() + interval '1 day', materialized_start_date = current_date, materialized_end_date = current_date + 1 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "05016877d16bc358544653739ae4049e57e021d1bcfdc0dcfa506ff1d9eaaa50"
+}

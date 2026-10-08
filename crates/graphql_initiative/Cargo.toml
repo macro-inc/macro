@@ -1,0 +1,34 @@
+[package]
+name = "graphql_initiative"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true, features = ["dataloader"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+futures = { workspace = true }
+graphql_common = { path = "../graphql_common" }
+graphql_permission = { path = "../graphql_permission" }
+graphql_properties = { path = "../graphql_properties" }
+graphql_soup = { path = "../graphql_soup" }
+initiative = { path = "../initiative", default-features = false, features = ["ports"] }
+macro_user_id = { path = "../macro_user_id" }
+models_permissions = { path = "../models_permissions" }
+model-entity = { path = "../model-entity" }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+soup = { path = "../soup", default-features = false, features = ["ports"] }
+models_soup = { path = "../models_soup" }
+models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+model_owner = { path = "../model_owner" }
+serde = { workspace = true }
+chrono = { workspace = true }
+activity = { path = "../activity", default-features = false }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

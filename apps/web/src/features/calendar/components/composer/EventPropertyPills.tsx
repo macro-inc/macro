@@ -27,6 +27,7 @@ import {
   REMINDER_OVERRIDES_MAX,
   REMINDER_PRESET_MINUTES,
 } from '../../utils/event-reminders';
+import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
 import {
   type EventEditorCalendarOption,
   type EventEditorConferenceChoice,
@@ -42,7 +43,7 @@ import {
 } from './out-of-office';
 
 const PROPERTY_TRIGGER_CLASS =
-  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-surface px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
+  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
 const PROPERTY_VALUE_CLASS =
   'group-hover:text-ink group-focus-visible:text-ink group-data-expanded:text-ink';
 
@@ -148,7 +149,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-1.5 text-sm glass menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
@@ -187,7 +188,7 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
             </Show>
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }
@@ -255,7 +256,7 @@ function GuestsPopoverEditor(props: {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen()}>
-      <EditorPopover>
+      <EditorPopover portalScope="local">
         <PropertyEntitySelector
           config={{
             isMultiSelect: true,
@@ -335,7 +336,7 @@ export function EventComposerLocationPill(
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
             class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
@@ -353,11 +354,11 @@ export function EventComposerLocationPill(
               placeholder="Add location..."
               aria-label="Location"
               disabled={props.disabled}
-              class="h-8 w-full rounded-md border border-edge-muted bg-surface px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+              class="h-8 w-full rounded-md border border-edge-muted bg-control px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }
@@ -371,6 +372,10 @@ const GOOGLE_MEET_OPTION: EventComposerConferenceOption = {
   value: 'google_meet',
   label: 'Google Meet',
 };
+const MACRO_CALL_OPTION: EventComposerConferenceOption = {
+  value: 'macro',
+  label: 'Macro call',
+};
 const NO_CONFERENCING_OPTION: EventComposerConferenceOption = {
   value: 'none',
   label: 'No meeting link',
@@ -383,6 +388,7 @@ const EXISTING_CONFERENCING_OPTION: EventComposerConferenceOption = {
 export interface EventComposerConferencePillProps {
   value: EventEditorConferenceChoice;
   canKeepExisting: boolean;
+  macroCallsEnabled: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
 }
@@ -391,10 +397,14 @@ export interface EventComposerConferencePillProps {
 export function EventComposerConferencePill(
   props: EventComposerConferencePillProps
 ) {
+  const includesMacroCall = createMemo(
+    () => props.macroCallsEnabled || props.value === 'macro'
+  );
   const options = createMemo(() => [
-    NO_CONFERENCING_OPTION,
-    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
     GOOGLE_MEET_OPTION,
+    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    NO_CONFERENCING_OPTION,
   ]);
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
@@ -430,7 +440,7 @@ export function EventComposerConferencePill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -551,7 +561,7 @@ export function EventComposerRemindersPill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content class="w-56 p-0">
+      <Select.Content portalScope="local" class="w-56 p-0">
         <div class="flex items-center justify-between border-edge-muted border-b px-3 py-2 text-xs text-ink-muted">
           <span>Choose reminders</span>
           <span
@@ -604,7 +614,7 @@ export function EventComposerRecurrencePill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -613,7 +623,7 @@ export function EventComposerRecurrencePill(
 
 export interface EventComposerCalendarPillProps {
   options: EventEditorCalendarOption[];
-  value: EventEditorCalendarOption;
+  value: EventEditorCalendarOption | undefined;
   onChange: (calendarId: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -625,6 +635,7 @@ export function EventComposerCalendarPill(
 ) {
   return (
     <Select<EventEditorCalendarOption>
+      placeholder="Choose calendar"
       options={props.options}
       value={props.value}
       onChange={(option) => {
@@ -646,7 +657,7 @@ export function EventComposerCalendarPill(
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -712,7 +723,7 @@ export function EventComposerKindPill(props: EventComposerKindPillProps) {
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -780,7 +791,7 @@ export function EventComposerDeclinePill(props: EventComposerDeclinePillProps) {
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
     </Select>
@@ -826,7 +837,7 @@ export function EventComposerDeclineMessagePill(
         </span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
       </Popover.Trigger>
-      <Popover.Portal>
+      <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
             class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
@@ -844,11 +855,11 @@ export function EventComposerDeclineMessagePill(
               placeholder="Add decline message..."
               aria-label="Decline message"
               disabled={props.disabled}
-              class="h-8 w-full rounded-md border border-edge-muted bg-surface px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
+              class="h-8 w-full rounded-md border border-edge-muted bg-control px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
             />
           </Popover.Content>
         </Layer>
-      </Popover.Portal>
+      </EventComposerPopoverPortal>
     </Popover>
   );
 }

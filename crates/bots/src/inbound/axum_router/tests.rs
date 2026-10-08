@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::models::{
     Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
-    CreateAgentRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    BotOwnerProfile, CreateAgentRequest, CreateChannelScopedBotRequest,
+    CreateChannelScopedBotResponse, PatchAgentRequest,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -54,6 +55,8 @@ struct TestBotService {
     remove_calls: Arc<AtomicUsize>,
     list_bot_channels_calls: Arc<AtomicUsize>,
     list_channel_bots_calls: Arc<AtomicUsize>,
+    owner_profiles: Vec<BotOwnerProfile>,
+    owner_profile_calls: Arc<AtomicUsize>,
 }
 
 impl TestBotService {
@@ -85,6 +88,15 @@ impl TestBotService {
             remove_calls: Arc::new(AtomicUsize::new(0)),
             list_bot_channels_calls: Arc::new(AtomicUsize::new(0)),
             list_channel_bots_calls: Arc::new(AtomicUsize::new(0)),
+            owner_profiles: Vec::new(),
+            owner_profile_calls: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
+    fn with_owner_profiles(owner_profiles: Vec<BotOwnerProfile>) -> Self {
+        Self {
+            owner_profiles,
+            ..Self::new(TestBotMode::Ok)
         }
     }
 
@@ -110,6 +122,15 @@ impl BotService for TestBotService {
         _caller: MacroUserIdStr<'static>,
         _bot_id: BotId,
         _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn patch_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
+        _req: PatchAgentRequest,
     ) -> Result<Agent, BotError> {
         unimplemented!()
     }
@@ -145,6 +166,19 @@ impl BotService for TestBotService {
         _bot_id: BotId,
     ) -> Result<Bot, BotError> {
         unimplemented!()
+    }
+
+    async fn get_owner_profiles(&self, ids: &[BotId]) -> Result<Vec<BotOwnerProfile>, BotError> {
+        self.owner_profile_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(ids
+            .iter()
+            .filter_map(|id| {
+                self.owner_profiles
+                    .iter()
+                    .find(|profile| profile.id == *id)
+                    .cloned()
+            })
+            .collect())
     }
 
     async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
@@ -716,6 +750,70 @@ async fn bot_owner_can_list_bot_channels_via_http() {
     assert_eq!(channels[0].name.as_deref(), Some("alarms"));
     assert_eq!(channels[0].channel_type, BotChannelType::Private);
     assert_eq!(service.list_bot_channels_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn bots_profiles_requires_credentials_without_invoking_service() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_owner_profiles(vec![BotOwnerProfile {
+        id: bot_id,
+        name: "Datadog Alerts".to_string(),
+        avatar_url: None,
+        deleted_at: None,
+        owner: None,
+    }]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/profiles?ids={bot_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router_without_credentials(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.owner_profile_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn bots_profiles_returns_owner_profile_json() {
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let service = TestBotService::with_owner_profiles(vec![BotOwnerProfile {
+        id: bot_id,
+        name: "Datadog Alerts".to_string(),
+        avatar_url: None,
+        deleted_at: None,
+        owner: None,
+    }]);
+    let request = Request::builder()
+        .method("GET")
+        .uri(format!("/bots/profiles?ids={bot_id}"))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = router(service.clone(), EntityParticipantRole::Member)
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let profiles: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(
+        profiles,
+        serde_json::json!([{
+            "id": bot_id,
+            "name": "Datadog Alerts",
+            "avatar_url": null,
+            "deleted_at": null,
+            "owner": null
+        }])
+    );
+    assert_eq!(service.owner_profile_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

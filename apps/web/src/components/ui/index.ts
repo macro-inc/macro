@@ -48,6 +48,14 @@ export {
 } from './components/Checkbox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
+export type {
+  ColorPickerFieldProps,
+  ColorPickerInputProps,
+  ColorPickerPreviewProps,
+  ColorPickerRootProps,
+  ColorPickerTrackProps,
+} from './components/ColorPicker';
+export { ColorPicker } from './components/ColorPicker';
 export {
   type CommandListController,
   CommandMenuEmptyState,
@@ -64,6 +72,7 @@ export type {
   ConfirmDialogProps,
 } from './components/ConfirmDialog';
 export { ConfirmDialog, confirmDialog } from './components/ConfirmDialog';
+export { CopyButton, type CopyButtonProps } from './components/CopyButton';
 export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
@@ -74,6 +83,7 @@ export type {
   EmptyStatePanelProps,
 } from './components/EmptyStatePanel';
 export { EmptyStatePanel } from './components/EmptyStatePanel';
+export { EntityComposer } from './components/EntityComposer';
 export type { FilteredHiddenBannerProps } from './components/FilteredHiddenBanner';
 export { FilteredHiddenBanner } from './components/FilteredHiddenBanner';
 export { Hotkey } from './components/Hotkey';
@@ -116,6 +126,7 @@ export type {
   InputGroupVariantProps,
 } from './components/InputGroup';
 export { InputGroup, inputGroupVariants } from './components/InputGroup';
+export { InvertUtil } from './components/InvertUtil';
 export { Item, type ItemProps } from './components/Item';
 export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
@@ -145,6 +156,7 @@ export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
+export { TabSelector } from './components/TabSelector';
 export type { TabItem, TabsProps } from './components/Tabs';
 export { Tabs } from './components/Tabs';
 export { TagDot, type TagDotProps, type TagDotSize } from './components/TagDot';
