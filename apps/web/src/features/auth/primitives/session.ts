@@ -16,12 +16,19 @@ export function redeemSessionToken(
 ) {
   const attempted = new Set<string>();
   createEffect(
-    on(token, (code) => {
+    on(token, async (code) => {
       if (!code || attempted.has(code)) return;
       attempted.add(code);
-      void context.redeemSessionToken(code).then((ok) => {
-        if (!ok) context.notifyFailure('Sign-in failed. Please try again.');
-      });
+      // Redemption reaches the network and then re-primes the session, so it
+      // can reject as well as answer false. Both leave the user signed out
+      // and both have to say so.
+      let redeemed = false;
+      try {
+        redeemed = await context.redeemSessionToken(code);
+      } catch (error) {
+        console.error('Failed to redeem session code', error);
+      }
+      if (!redeemed) context.notifyFailure('Sign-in failed. Please try again.');
     })
   );
 }

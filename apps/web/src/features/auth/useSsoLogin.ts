@@ -18,6 +18,37 @@ import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 
+/**
+ * Run the hosted flow in the system browser and return through the `macro://`
+ * deep link.
+ *
+ * The callback is pinned rather than derived from the current page by the
+ * native navigation plugin: that rewrite only runs for a navigation it
+ * classifies as external, so behind the development proxy's same-origin auth
+ * host it never fires and the callback lands back in the browser. It also
+ * derives the callback from whatever page sign-in started on — normally
+ * `/welcome`, which does not redeem session codes.
+ */
+async function startDesktopSso(
+  authUrl: URL,
+  originalLocation: RedirectLocation['originalLocation'] | undefined
+) {
+  authUrl.searchParams.set('original_url', DESKTOP_AUTH_CALLBACK_URL);
+
+  // The callback route sends the user home, so park the destination they were
+  // headed for; BasePathComponent restores it after sign-in.
+  if (originalLocation) {
+    const { pathname, search, hash } = originalLocation;
+    setPostLoginRedirect(`${pathname}${search}${hash}`);
+  }
+
+  const result = await openDesktopAuthSession(authUrl.toString());
+  if (!result.success) {
+    console.error('Failed to open the browser for sign-in', result.error);
+    toast.failure('Sign-in failed. Please try again.');
+  }
+}
+
 export function useSsoLogin(opts?: { signupMode?: boolean }) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
@@ -97,28 +128,8 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
     }
 
     if (desktop) {
-      // The desktop shell has no in-app browser, so the flow runs in the
-      // system browser and returns through the `macro://` deep link. Pin the
-      // callback rather than letting the native navigation plugin derive one
-      // from this page: that rewrite only runs for a navigation it classifies
-      // as external, so behind the development proxy it never fires and the
-      // callback lands back in the browser instead of the app.
-      authUrl.searchParams.set('original_url', DESKTOP_AUTH_CALLBACK_URL);
-
-      // The callback route sends the user home, so park the destination they
-      // were headed for; BasePathComponent restores it after sign-in.
-      if (location.state?.originalLocation) {
-        const { pathname, search, hash } = location.state.originalLocation;
-        setPostLoginRedirect(`${pathname}${search}${hash}`);
-      }
-
       analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
-
-      const result = await openDesktopAuthSession(authUrl.toString());
-      if (!result.success) {
-        console.error('Failed to open the browser for sign-in', result.error);
-        toast.failure('Sign-in failed. Please try again.');
-      }
+      await startDesktopSso(authUrl, location.state?.originalLocation);
       return;
     }
 

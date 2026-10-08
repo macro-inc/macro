@@ -49,7 +49,11 @@ function setup(
 
 /** As `setup`, but the session code can arrive after the view has mounted. */
 function setupWithTokenSignal(
-  options: { world?: Partial<FakeAuthWorld> } = {}
+  options: {
+    world?: Partial<FakeAuthWorld>;
+    /** Replaces the fake backend's redemption, e.g. to make it reject. */
+    redeem?: (token: string) => Promise<boolean>;
+  } = {}
 ) {
   const [token, setToken] = createSignal<string | undefined>(undefined);
   const { fake } = renderWithFakeAuth(
@@ -68,6 +72,9 @@ function setupWithTokenSignal(
     ),
     options.world
   );
+  // Safe after render: the effect's first run sees no code and returns early,
+  // so nothing redeems until setToken.
+  if (options.redeem) fake.context.redeemSessionToken = options.redeem;
   return { fake, setToken };
 }
 
@@ -271,6 +278,26 @@ describe('single sign-on', () => {
         fake.calls().filter((call) => call === 'redeem:tok-deep-link')
       ).toHaveLength(1)
     );
+  });
+
+  // Redemption re-primes the session after the network call, so it can reject
+  // rather than answer false — that must still tell the user.
+  it('reports a session code whose redemption throws', async () => {
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
+    const { fake, setToken } = setupWithTokenSignal({
+      redeem: () => Promise.reject(new Error('network down')),
+    });
+
+    setToken('tok-deep-link');
+
+    await waitFor(() =>
+      expect(fake.notifications()).toEqual([
+        'Sign-in failed. Please try again.',
+      ])
+    );
+    consoleError.mockRestore();
   });
 
   it('reports a session code that cannot be redeemed', async () => {
