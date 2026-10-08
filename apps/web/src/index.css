@@ -349,11 +349,11 @@ body.tauri-ios {
   --color-task:        var(--color-green);
   --color-snippet:     var(--color-note);
   --color-form:        var(--color-pink);
-  --color-communication: var(--color-blue);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-ink);
+  --color-email:       var(--color-communication);
 }
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
@@ -548,11 +548,11 @@ body.tauri-ios {
   --color-task:        var(--color-green);
   --color-snippet:     var(--color-note);
   --color-form:        var(--color-pink);
-  --color-communication: var(--color-blue);
+  --color-communication: color-mix(in srgb, var(--color-ink-muted) 70%, var(--color-blue));
   --color-pdf:         var(--color-red);
   --color-rss:         var(--color-blue);
   --color-default:     var(--color-content-1);
-  --color-email:       var(--color-ink);
+  --color-email:       var(--color-communication);
 
   /* Font families */
   /* Apple devices get the system font (SF): `-apple-system` and
