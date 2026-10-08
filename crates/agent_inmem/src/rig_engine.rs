@@ -303,7 +303,8 @@ async fn drive_turn(
     );
     // How the race went, on one span per turn. `outcome` is `complete` (the
     // line was the whole reply), `opening` (the line opened the turn's
-    // reply), `turn_first` (the turn's model spoke first), `no_verdict` (the
+    // reply), `silent` (no line fit this follow-up), `turn_first` (the
+    // turn's model spoke first), `no_verdict` (the
     // fast model failed or answered without one) or `timeout`.
     let opener_span = tracing::info_span!(
         "agent.opener",
@@ -435,33 +436,38 @@ async fn drive_turn(
                     return Ok(());
                 }
             }
-            Race::Opening(Ok(Some(opener::Opening { complete, head }))) => {
-                opener_span.record(
-                    "agent.opener.outcome",
-                    if complete { "complete" } else { "opening" },
-                );
+            Race::Opening(Ok(Some(verdict))) => {
                 opener_span.record("agent.opener.verdict_ms", elapsed_ms(started));
-                let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
-                let mut line_chars = 0;
-                let mut delta = Some(head);
-                while let Some(text) = delta {
-                    line_chars += text.chars().count();
-                    opener_span.record("agent.opener.line_chars", line_chars);
-                    if !text.is_empty() && parts.send(Ok(StreamPart::Content(text))).await.is_err()
-                    {
+                let (outcome, line) = match verdict {
+                    opener::Verdict::Complete(head) => ("complete", Some((true, head))),
+                    opener::Verdict::Opening(head) => ("opening", Some((false, head))),
+                    opener::Verdict::Silent => ("silent", None),
+                };
+                opener_span.record("agent.opener.outcome", outcome);
+                if let Some((complete, head)) = line {
+                    let deadline = tokio::time::Instant::now() + opener::LINE_TIMEOUT;
+                    let mut line_chars = 0;
+                    let mut delta = Some(head);
+                    while let Some(text) = delta {
+                        line_chars += text.chars().count();
+                        opener_span.record("agent.opener.line_chars", line_chars);
+                        if !text.is_empty()
+                            && parts.send(Ok(StreamPart::Content(text))).await.is_err()
+                        {
+                            loop_cancel.cancel();
+                            return Ok(());
+                        }
+                        delta = tokio::time::timeout_at(deadline, opening_line.recv())
+                            .await
+                            .ok()
+                            .flatten();
+                    }
+                    if complete {
                         loop_cancel.cancel();
                         return Ok(());
                     }
-                    delta = tokio::time::timeout_at(deadline, opening_line.recv())
-                        .await
-                        .ok()
-                        .flatten();
+                    separate = true;
                 }
-                if complete {
-                    loop_cancel.cancel();
-                    return Ok(());
-                }
-                separate = true;
             }
             Race::Opening(Ok(None)) => {
                 opener_span.record("agent.opener.outcome", "no_verdict");
@@ -502,7 +508,7 @@ async fn drive_turn(
 enum Race {
     TurnFirst(Option<Result<StreamPart, AgentError>>),
     /// The verdict, `None` without one, or `Err` past the verdict timeout.
-    Opening(Result<Option<opener::Opening>, tokio::time::error::Elapsed>),
+    Opening(Result<Option<opener::Verdict>, tokio::time::error::Elapsed>),
 }
 
 fn elapsed_ms(since: tokio::time::Instant) -> u64 {

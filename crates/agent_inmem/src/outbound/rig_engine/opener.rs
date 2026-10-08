@@ -52,12 +52,15 @@ pub(super) struct Speaker<'a> {
     pub model: &'a str,
 }
 
-/// The fast model's verdict and the part of its line that came with it.
-pub(super) struct Opening {
+/// The fast model's verdict. A line's text so far comes with it; the rest
+/// follows on the receiver.
+pub(super) enum Verdict {
     /// The line is the entire reply.
-    pub complete: bool,
-    /// The line's text so far; the rest follows on the receiver.
-    pub head: String,
+    Complete(String),
+    /// The line opens a reply the turn's model writes.
+    Opening(String),
+    /// No line fits this follow-up; nothing is shown.
+    Silent,
 }
 
 /// Start the fast model on `messages`, the conversation ending with the
@@ -71,7 +74,10 @@ pub(super) fn spawn(
     messages: &[ChatMessage],
 ) -> mpsc::Receiver<String> {
     let (lines, receiver) = mpsc::channel(32);
-    let system_prompt = system_prompt(speaker, tool_names);
+    let follow_up = messages
+        .iter()
+        .any(|message| matches!(message.role, Role::Assistant));
+    let system_prompt = system_prompt(speaker, tool_names, follow_up);
     let prompt = Message::user(format!(
         "The conversation so far. Write the first line of the reply to the last message.\n\n{}",
         transcript(messages)
@@ -121,44 +127,53 @@ pub(super) fn spawn(
     receiver
 }
 
-/// Read up to the fast model's `true|` / `false|` verdict. `None` when it
-/// wrote anything else or stopped first.
-pub(super) async fn verdict(lines: &mut mpsc::Receiver<String>) -> Option<Opening> {
+/// Read up to the fast model's verdict: `true|`, `false|`, or `skip|`.
+/// `None` when it wrote anything else or stopped first.
+pub(super) async fn verdict(lines: &mut mpsc::Receiver<String>) -> Option<Verdict> {
     let mut text = String::new();
     while let Some(delta) = lines.recv().await {
         text.push_str(&delta);
-        if let Some((flag, head)) = text.split_once('|') {
-            let complete = match flag.trim() {
-                "true" => true,
-                "false" => false,
-                _ => return None,
+        let written = text.trim_start();
+        if let Some((flag, head)) = written.split_once('|') {
+            let head = head.trim_start().to_owned();
+            return match flag.trim() {
+                "true" => Some(Verdict::Complete(head)),
+                "false" => Some(Verdict::Opening(head)),
+                "skip" => Some(Verdict::Silent),
+                _ => None,
             };
-            return Some(Opening {
-                complete,
-                head: head.trim_start().to_owned(),
-            });
         }
-        if text.len() > "false|".len() + 2 {
+        if written.len() > "false|".len() + 2 {
             return None;
         }
     }
     None
 }
 
-fn system_prompt(speaker: &Speaker<'_>, tool_names: &str) -> String {
+fn system_prompt(speaker: &Speaker<'_>, tool_names: &str, follow_up: bool) -> String {
     let Speaker { agent, model } = speaker;
+    // Mid-conversation, a generic "Let me check that." often reads oddly;
+    // there the model may show nothing instead.
+    let silence = if follow_up {
+        "This is a follow-up. If the reply is complete, answer true as usual. Otherwise write an \
+opener only if it is specific to this request (\"move it to 3\" → false|Let me move it to 3.). \
+If the only line you would write is filler like \"Let me check that.\", \"On it.\", \"Sure —\" or \
+\"Got it.\", output skip| instead (\"shorter\" → skip|, \"who is priya again\" → skip|).\n"
+    } else {
+        ""
+    };
     format!(
         "You write the very first line of an AI assistant's reply. It is shown to the user \
 instantly while the assistant works on the real answer. Write as the assistant: you are \
 {agent}, running on the model {model}. If asked who you are or which model you are, answer \
 with exactly these facts; never claim any other name, model or company.
-Output format, exactly: <complete>|<line>
-- complete = true only if <line> is the ENTIRE reply and nothing else needs doing: greetings, \
+Output format, exactly: <verdict>|<line>
+{silence}- true only if <line> is the ENTIRE reply and nothing else needs doing: greetings, \
 thanks, acknowledgements, arithmetic, who you are or which model you run on (\"hi there\" → \
 true|Hi!, \"thanks\" → true|You're welcome!, \"what's 2+2\" → true|4.). A message that also \
 asks for anything to be done or looked up is false (\"thanks, now add Sarah\" → false). If in \
 any doubt, false.
-- complete = false for everything else. Then <line> only shows the assistant is starting, in \
+- false for everything else. Then <line> only shows the assistant is starting, in \
 the obvious direction, states no facts or answers, and never claims anything was done \
 (\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \
 \"false|Let me think about that.\"). Never ask questions.

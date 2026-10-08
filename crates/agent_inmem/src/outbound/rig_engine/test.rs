@@ -240,10 +240,9 @@ async fn opening_verdict_split_across_deltas_keeps_the_head_of_the_line() {
         lines.send(delta.to_owned()).await.unwrap();
     }
 
-    let opening = opener::verdict(&mut receiver).await.unwrap();
+    let verdict = opener::verdict(&mut receiver).await;
 
-    assert!(opening.complete);
-    assert_eq!(opening.head, "Hi");
+    assert!(matches!(verdict, Some(opener::Verdict::Complete(head)) if head == "Hi"));
     assert_eq!(receiver.recv().await.as_deref(), Some(" there"));
 }
 
@@ -255,10 +254,24 @@ async fn opening_verdict_reads_false_as_an_opening_only() {
         .await
         .unwrap();
 
-    let opening = opener::verdict(&mut receiver).await.unwrap();
+    let verdict = opener::verdict(&mut receiver).await;
 
-    assert!(!opening.complete);
-    assert_eq!(opening.head, "Let me check your calendar.");
+    assert!(matches!(
+        verdict,
+        Some(opener::Verdict::Opening(head)) if head == "Let me check your calendar."
+    ));
+}
+
+#[tokio::test]
+async fn opening_verdict_skip_shows_nothing() {
+    let (lines, mut receiver) = mpsc::channel(8);
+    for delta in ["sk", "ip|"] {
+        lines.send(delta.to_owned()).await.unwrap();
+    }
+
+    let verdict = opener::verdict(&mut receiver).await;
+
+    assert!(matches!(verdict, Some(opener::Verdict::Silent)));
 }
 
 #[tokio::test]
