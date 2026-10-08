@@ -17,6 +17,7 @@
 //! because one input is blank, but a formula whose every column is empty is
 //! empty, and so is anything involving an empty date or dividing by zero.
 
+mod lexer;
 mod parser;
 #[cfg(test)]
 mod test;
@@ -126,7 +127,7 @@ fn render_at<'name>(
 ) -> String {
     match formula {
         Formula::Column { column } => match name(*column) {
-            Some(name) if is_word(name) => name.to_owned(),
+            Some(name) if lexer::is_word(name) => name.to_owned(),
             Some(name) => format!("{{{name}}}"),
             None => "{?}".into(),
         },
@@ -159,15 +160,6 @@ fn render_at<'name>(
             format!("-{}", render_at(operand, name, Precedence::Unary))
         }
     }
-}
-
-/// Whether a name can be written without braces.
-fn is_word(name: &str) -> bool {
-    let mut characters = name.chars();
-    characters
-        .next()
-        .is_some_and(|first| first.is_alphabetic() || first == '_')
-        && characters.all(|character| character.is_alphanumeric() || character == '_')
 }
 
 /// What the formula's cells hold, if its columns and operators fit. `own`

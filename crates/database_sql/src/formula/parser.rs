@@ -1,89 +1,92 @@
-//! nom combinators over the formula text, one function per grammar rule.
-//! Errors carry the byte range they point at, measured from what input is
-//! left when they are raised.
+//! nom combinators over the formula's tokens, one function per grammar rule.
+//! A rule that declines its first token fails recoverably, so `alt` can try
+//! the next; once a rule has committed (read an operator or a `(`), what
+//! follows is `cut`, and its failure is final.
 
 use nom::branch::alt;
-use nom::bytes::complete::{take_till, take_while1};
-use nom::character::complete::{char, multispace0};
-use nom::combinator::{cut, map, opt, recognize};
+use nom::combinator::{cut, opt};
 use nom::multi::many0;
-use nom::number::complete::recognize_float;
-use nom::sequence::{delimited, preceded, terminated};
-use nom::{Finish, IResult, Parser};
+use nom::{Finish, IResult, Input, Parser};
 
 use models_databases::{Formula, Operator};
 
+use super::lexer::{self, Token, TokenKind};
 use crate::catalog::Table;
 use crate::parse::ParseError;
+use crate::parse::tokens::Tokens;
 
-/// What failed and how much input was left there.
-#[derive(Debug)]
-struct Failure {
-    remaining: usize,
-    length: usize,
-    message: String,
-}
+type Formulas<'a> = Tokens<'a, Token>;
+type Parsed<'a, Output> = IResult<Formulas<'a>, Output, ParseError>;
 
-impl<'a> nom::error::ParseError<&'a str> for Failure {
-    fn from_error_kind(input: &'a str, _kind: nom::error::ErrorKind) -> Self {
-        Failure {
-            remaining: input.len(),
-            length: 0,
-            message: match input.trim_start().chars().next() {
-                Some(found) => format!("Expected a column, a number or `(`, found `{found}`."),
-                None => "The formula ends too soon.".into(),
-            },
-        }
+impl nom::error::ParseError<Formulas<'_>> for ParseError {
+    fn from_error_kind(input: Formulas<'_>, _: nom::error::ErrorKind) -> Self {
+        expected_operand(input)
     }
 
-    fn append(_input: &'a str, _kind: nom::error::ErrorKind, other: Self) -> Self {
+    fn append(_: Formulas<'_>, _: nom::error::ErrorKind, other: Self) -> Self {
         other
     }
-
-    fn or(self, other: Self) -> Self {
-        // Keep the failure that got furthest.
-        if other.remaining < self.remaining {
-            other
-        } else {
-            self
-        }
-    }
 }
 
-type Parsed<'a, Output> = IResult<&'a str, Output, Failure>;
-
 pub(super) fn formula(table: &Table, text: &str) -> Result<Formula, ParseError> {
-    let error = |failure: Failure| {
-        let start = text.len() - failure.remaining;
-        ParseError {
-            span: start..(start + failure.length).min(text.len()),
-            message: failure.message,
-        }
-    };
     if text.trim().is_empty() {
         return Err(ParseError {
             span: 0..0,
             message: "Write a formula, like `Price * Quantity`.".into(),
         });
     }
-    let (rest, formula) = terminated(|input| sum(table, input), multispace0)
-        .parse(text)
-        .finish()
-        .map_err(error)?;
-    match rest.chars().next() {
+    let tokens = lexer::lex(text)?;
+    let input = Tokens {
+        tokens: &tokens,
+        end: text.len(),
+    };
+    let (rest, formula) = sum(table, input).finish()?;
+    match rest.first() {
         None => Ok(formula),
-        Some(found) => Err(error(Failure {
-            remaining: rest.len(),
-            length: found.len_utf8(),
-            message: format!("Expected an operator (+ - * /), found `{found}`."),
-        })),
+        Some(token) => Err(ParseError {
+            span: token.span.clone(),
+            message: format!(
+                "Expected an operator (+ - * /), found `{}`.",
+                &text[token.span.clone()]
+            ),
+        }),
     }
 }
 
-fn token<'a, Output>(
-    parser: impl Parser<&'a str, Output = Output, Error = Failure>,
-) -> impl Parser<&'a str, Output = Output, Error = Failure> {
-    preceded(multispace0, parser)
+/// What the next token should have been: something to compute with.
+fn expected_operand(input: Formulas<'_>) -> ParseError {
+    match input.first() {
+        Some(token) => ParseError {
+            span: token.span.clone(),
+            message: "Expected a column, a number or `(` here.".into(),
+        },
+        None => ParseError {
+            span: input.end..input.end,
+            message: "The formula ends too soon.".into(),
+        },
+    }
+}
+
+/// The next token as `read` takes it; a recoverable failure when it
+/// declines it or none is left.
+fn next<'a, Output>(
+    read: impl Fn(&'a Token) -> Option<Output>,
+) -> impl FnMut(Formulas<'a>) -> Parsed<'a, Output> {
+    move |input: Formulas<'a>| match input.tokens.first().and_then(&read) {
+        Some(output) => Ok((input.take_from(1), output)),
+        None => Err(nom::Err::Error(expected_operand(input))),
+    }
+}
+
+fn operator<'a>(
+    operators: &'static [(TokenKind, Operator)],
+) -> impl FnMut(Formulas<'a>) -> Parsed<'a, Operator> {
+    next(move |token: &Token| {
+        operators
+            .iter()
+            .find(|(kind, _)| *kind == token.kind)
+            .map(|(_, operator)| *operator)
+    })
 }
 
 fn binary(operator: Operator, left: Formula, right: Formula) -> Formula {
@@ -94,13 +97,14 @@ fn binary(operator: Operator, left: Formula, right: Formula) -> Formula {
     }
 }
 
-fn sum<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
+/// `term {(+ | -) term}`, grouping to the left.
+fn sum<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
     let (input, first) = product(table, input)?;
     let (input, rest) = many0((
-        token(alt((
-            map(char('+'), |_| Operator::Add),
-            map(char('-'), |_| Operator::Subtract),
-        ))),
+        operator(&[
+            (TokenKind::Plus, Operator::Add),
+            (TokenKind::Minus, Operator::Subtract),
+        ]),
         cut(|input| product(table, input)),
     ))
     .parse(input)?;
@@ -112,13 +116,14 @@ fn sum<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
     ))
 }
 
-fn product<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
+/// `unary {(* | /) unary}`, grouping to the left.
+fn product<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
     let (input, first) = unary(table, input)?;
     let (input, rest) = many0((
-        token(alt((
-            map(char('*'), |_| Operator::Multiply),
-            map(char('/'), |_| Operator::Divide),
-        ))),
+        operator(&[
+            (TokenKind::Star, Operator::Multiply),
+            (TokenKind::Slash, Operator::Divide),
+        ]),
         cut(|input| unary(table, input)),
     ))
     .parse(input)?;
@@ -130,79 +135,63 @@ fn product<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
     ))
 }
 
-fn unary<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
-    let (input, minus) = opt(token(char('-'))).parse(input)?;
-    match minus {
-        Some(_) => map(cut(|input| unary(table, input)), |operand| match operand {
+/// `- unary | atom`; a negated number is just a negative number.
+fn unary<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
+    let (input, minus) = opt(next(|token: &Token| {
+        (token.kind == TokenKind::Minus).then_some(())
+    }))
+    .parse(input)?;
+    if minus.is_none() {
+        return atom(table, input);
+    }
+    let (input, operand) = cut(|input| unary(table, input)).parse(input)?;
+    Ok((
+        input,
+        match operand {
             Formula::Number { value } => Formula::Number { value: -value },
             operand => Formula::Negate {
                 operand: Box::new(operand),
             },
-        })
-        .parse(input),
-        None => atom(table, input),
-    }
+        },
+    ))
 }
 
-fn atom<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
-    let (input, _) = multispace0(input)?;
+/// `number | name | ( sum )`.
+fn atom<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
     alt((
-        |input| number(input),
-        |input| braced(table, input),
-        |input| word(table, input),
+        number,
+        |input| column(table, input),
         |input| parenthesized(table, input),
     ))
     .parse(input)
 }
 
-fn number(input: &str) -> Parsed<'_, Formula> {
-    let (rest, digits) = recognize_float(input)?;
-    match digits.parse::<f64>() {
-        Ok(value) if value.is_finite() => Ok((rest, Formula::Number { value })),
-        _ => Err(nom::Err::Failure(Failure {
-            remaining: input.len(),
-            length: digits.len(),
-            message: format!("`{digits}` isn't a number."),
-        })),
+fn number(input: Formulas<'_>) -> Parsed<'_, Formula> {
+    let (rest, (value, span)) = next(|token: &Token| match token.kind {
+        TokenKind::Number(value) => Some((value, token.span.clone())),
+        _ => None,
+    })(input)?;
+    if !value.is_finite() {
+        return Err(nom::Err::Failure(ParseError {
+            span,
+            message: "That number is too large.".into(),
+        }));
     }
+    Ok((rest, Formula::Number { value }))
 }
 
-fn braced<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
-    let start = input;
-    let (input, name) =
-        preceded(char('{'), cut(take_till(|character| character == '}'))).parse(input)?;
-    let (input, _) = cut(char('}'))
-        .parse(input)
-        .map_err(|_: nom::Err<Failure>| {
-            nom::Err::Failure(Failure {
-                remaining: start.len(),
-                length: start.len(),
-                message: "A `{` needs a closing `}`.".into(),
-            })
-        })?;
-    column(table, name, start, input)
-}
-
-fn word<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
-    let start = input;
-    let (input, name) = recognize((
-        take_while1(|character: char| character.is_alphabetic() || character == '_'),
-        opt(take_while1(|character: char| {
-            character.is_alphanumeric() || character == '_'
-        })),
-    ))
-    .parse(input)?;
-    column(table, name, start, input)
-}
-
-/// The column `name` names; `start` is where its text began and `rest` what
-/// follows it.
-fn column<'a>(table: &Table, name: &str, start: &'a str, rest: &'a str) -> Parsed<'a, Formula> {
-    let name = name.trim();
+/// A word or a braced name, as the table's column it names, ignoring case.
+fn column<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
+    let (rest, (name, braced, span)) = next(|token: &Token| match &token.kind {
+        TokenKind::Word(name) => Some((name.as_str(), false, token.span.clone())),
+        TokenKind::Braced(name) => Some((name.as_str(), true, token.span.clone())),
+        _ => None,
+    })(input)?;
+    let wanted = name.to_lowercase();
     match table
         .columns
         .iter()
-        .find(|column| column.name.to_lowercase() == name.to_lowercase())
+        .find(|column| column.name.to_lowercase() == wanted)
     {
         Some(column) => Ok((
             rest,
@@ -210,10 +199,9 @@ fn column<'a>(table: &Table, name: &str, start: &'a str, rest: &'a str) -> Parse
                 column: column.placement,
             },
         )),
-        None => Err(nom::Err::Failure(Failure {
-            remaining: start.len(),
-            length: start.len() - rest.len(),
-            message: if name.contains(' ') || start.starts_with('{') {
+        None => Err(nom::Err::Failure(ParseError {
+            span,
+            message: if braced {
                 format!("There's no column called {name}.")
             } else {
                 format!(
@@ -224,24 +212,20 @@ fn column<'a>(table: &Table, name: &str, start: &'a str, rest: &'a str) -> Parse
     }
 }
 
-fn parenthesized<'a>(table: &Table, input: &'a str) -> Parsed<'a, Formula> {
-    let start = input;
-    delimited(
-        char('('),
-        cut(|input| sum(table, input)),
-        cut(token(char(')'))),
+fn parenthesized<'a>(table: &Table, input: Formulas<'a>) -> Parsed<'a, Formula> {
+    let (input, open) =
+        next(|token: &Token| (token.kind == TokenKind::LeftParen).then(|| token.span.clone()))(
+            input,
+        )?;
+    let (input, inner) = cut(|input| sum(table, input)).parse(input)?;
+    let (input, _) = next(|token: &Token| (token.kind == TokenKind::RightParen).then_some(()))(
+        input,
     )
-    .parse(input)
-    .map_err(|error| match error {
-        nom::Err::Failure(failure)
-            if failure.length == 0 && failure.message.ends_with("too soon.") =>
-        {
-            nom::Err::Failure(Failure {
-                remaining: start.len(),
-                length: 1,
-                message: "A `(` needs a closing `)`.".into(),
-            })
-        }
-        other => other,
-    })
+    .map_err(|_| {
+        nom::Err::Failure(ParseError {
+            span: open,
+            message: "A `(` needs a closing `)`.".into(),
+        })
+    })?;
+    Ok((input, inner))
 }

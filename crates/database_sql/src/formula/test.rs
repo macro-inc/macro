@@ -144,6 +144,14 @@ fn parse_errors_point_at_the_problem() {
     let error = parse(&orders(), "{Unit price * 2").unwrap_err();
     assert_eq!(error.message, "A `{` needs a closing `}`.");
 
+    let error = parse(&orders(), "Quantity % 2").unwrap_err();
+    assert_eq!(error.span, 9..10);
+    assert_eq!(error.message, "`%` can't be used in a formula.");
+
+    let error = parse(&orders(), "Quantity * * 2").unwrap_err();
+    assert_eq!(error.span, 11..12);
+    assert_eq!(error.message, "Expected a column, a number or `(` here.");
+
     let error = parse(&orders(), "  ").unwrap_err();
     assert_eq!(error.message, "Write a formula, like `Price * Quantity`.");
 }

@@ -43,11 +43,12 @@
 //! it.
 
 pub mod ast;
-mod lexer;
+pub(crate) mod lexer;
 mod parser;
 pub mod schema;
 #[cfg(test)]
 mod test;
+pub(crate) mod tokens;
 
 use std::ops::Range;
 
