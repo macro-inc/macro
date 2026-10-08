@@ -789,22 +789,58 @@ async fn sandbox_size_round_trips_and_user_default_falls_back(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn user_task_tracking_defaults_off_and_upserts(pool: PgPool) {
+async fn user_coding_preferences_default_off_and_upsert_both_fields(pool: PgPool) {
     let repo = test_repo(&pool);
     insert_user(&pool, OWNER).await;
     let owner = user_id(OWNER);
 
-    assert!(!repo.user_task_tracking(&owner).await.expect("missing row"));
+    assert_eq!(
+        repo.user_coding_preferences(&owner)
+            .await
+            .expect("missing row"),
+        CodingPreferences {
+            create_tasks: false,
+            open_pull_requests: false,
+        }
+    );
 
-    repo.set_user_task_tracking(&owner, true)
-        .await
-        .expect("enable");
-    assert!(repo.user_task_tracking(&owner).await.expect("enabled"));
+    repo.set_user_coding_preferences(
+        &owner,
+        CodingPreferences {
+            create_tasks: true,
+            open_pull_requests: false,
+        },
+    )
+    .await
+    .expect("insert");
+    assert_eq!(
+        repo.user_coding_preferences(&owner)
+            .await
+            .expect("inserted"),
+        CodingPreferences {
+            create_tasks: true,
+            open_pull_requests: false,
+        }
+    );
 
-    repo.set_user_task_tracking(&owner, false)
-        .await
-        .expect("disable");
-    assert!(!repo.user_task_tracking(&owner).await.expect("disabled"));
+    repo.set_user_coding_preferences(
+        &owner,
+        CodingPreferences {
+            create_tasks: false,
+            open_pull_requests: true,
+        },
+    )
+    .await
+    .expect("replace");
+    assert_eq!(
+        repo.user_coding_preferences(&owner)
+            .await
+            .expect("replaced"),
+        CodingPreferences {
+            create_tasks: false,
+            open_pull_requests: true,
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

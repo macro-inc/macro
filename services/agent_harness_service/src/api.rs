@@ -21,8 +21,8 @@ use agent_session::domain::ports::{
 use agent_session::domain::service::AgentSessionService;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
-    agent_sandbox_size_router, agent_session_control_router, agent_session_create_router,
-    agent_session_read_router, agent_task_tracking_router,
+    agent_coding_preferences_router, agent_sandbox_size_router, agent_session_control_router,
+    agent_session_create_router, agent_session_read_router,
 };
 use anyhow::Context;
 use axum::Router;
@@ -257,7 +257,7 @@ where
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read.clone()))
-        .merge(agent_task_tracking_router(states.read))
+        .merge(agent_coding_preferences_router(states.read))
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)

@@ -191,29 +191,41 @@ describe('AgentSession', () => {
     ]);
   });
 
-  test('reads and writes the caller task-tracking setting', async () => {
+  test('reads and replaces the caller coding preferences', async () => {
     const requests: Request[] = [];
     globalThis.fetch = (async (input) => {
       const request = input instanceof Request ? input : new Request(input);
       requests.push(request.clone());
-      return Response.json({ enabled: true }, { status: 200 });
+      return Response.json(
+        { createTasks: true, openPullRequests: false },
+        { status: 200 }
+      );
     }) as typeof fetch;
     const macro = new Macro({
       token: 'user-token',
       hosts: { 'agent-harness': 'https://agent.example.test' },
     });
 
-    await expect(macro.agentSessions.taskTracking()).resolves.toBe(true);
-    await expect(macro.agentSessions.setTaskTracking(true)).resolves.toBe(
-      true
-    );
+    await expect(macro.agentSessions.codingPreferences()).resolves.toEqual({
+      createTasks: true,
+      openPullRequests: false,
+    });
+    await expect(
+      macro.agentSessions.setCodingPreferences({
+        createTasks: true,
+        openPullRequests: false,
+      })
+    ).resolves.toEqual({ createTasks: true, openPullRequests: false });
 
     expect(requests.map((request) => request.method)).toEqual(['GET', 'PUT']);
     expect(requests.map((request) => request.url)).toEqual([
-      'https://agent.example.test/agent-task-tracking',
-      'https://agent.example.test/agent-task-tracking',
+      'https://agent.example.test/agent-coding-preferences',
+      'https://agent.example.test/agent-coding-preferences',
     ]);
-    await expect(requests[1]?.json()).resolves.toEqual({ enabled: true });
+    await expect(requests[1]?.json()).resolves.toEqual({
+      createTasks: true,
+      openPullRequests: false,
+    });
   });
 
   test('lists one repository branches through the agent-harness service', async () => {

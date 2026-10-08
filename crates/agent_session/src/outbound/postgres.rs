@@ -17,6 +17,7 @@ mod sharing;
 mod turn_state;
 mod working_branch;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
@@ -1051,40 +1052,51 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         Ok(())
     }
 
-    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
-        let enabled = sqlx::query_scalar!(
+    async fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<CodingPreferences> {
+        let preferences = sqlx::query!(
             r#"
-            SELECT enabled
-            FROM user_agent_task_tracking
+            SELECT create_tasks, open_pull_requests
+            FROM user_agent_coding_preferences
             WHERE user_id = $1
             "#,
             user_id.as_ref(),
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to read user task tracking")?;
-        Ok(enabled.unwrap_or(false))
+        .context("failed to read user coding preferences")?;
+        Ok(preferences
+            .map(|row| CodingPreferences {
+                create_tasks: row.create_tasks,
+                open_pull_requests: row.open_pull_requests,
+            })
+            .unwrap_or_default())
     }
 
-    async fn set_user_task_tracking(
+    async fn set_user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+        preferences: CodingPreferences,
     ) -> Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO user_agent_task_tracking (user_id, enabled, modified_at)
-            VALUES ($1, $2, NOW())
+            INSERT INTO user_agent_coding_preferences
+                (user_id, create_tasks, open_pull_requests, modified_at)
+            VALUES ($1, $2, $3, NOW())
             ON CONFLICT (user_id) DO UPDATE
-            SET enabled = EXCLUDED.enabled,
+            SET create_tasks = EXCLUDED.create_tasks,
+                open_pull_requests = EXCLUDED.open_pull_requests,
                 modified_at = NOW()
             "#,
             user_id.as_ref(),
-            enabled,
+            preferences.create_tasks,
+            preferences.open_pull_requests,
         )
         .execute(&self.pool)
         .await
-        .context("failed to persist user task tracking")?;
+        .context("failed to persist user coding preferences")?;
         Ok(())
     }
 

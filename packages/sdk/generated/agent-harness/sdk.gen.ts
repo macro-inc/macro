@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetAgentTaskTrackingData, GetAgentTaskTrackingErrors, GetAgentTaskTrackingResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, PutAgentTaskTrackingData, PutAgentTaskTrackingErrors, PutAgentTaskTrackingResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
+import type { AgentSessionsForPullRequestData, AgentSessionsForPullRequestErrors, AgentSessionsForPullRequestResponses, AgentSessionsForPullRequestsData, AgentSessionsForPullRequestsErrors, AgentSessionsForPullRequestsResponses, AnswerAgentSessionToolApprovalData, AnswerAgentSessionToolApprovalErrors, AnswerAgentSessionToolApprovalResponses, CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, DiscoverAgentCapabilitiesHandlerData, DiscoverAgentCapabilitiesHandlerErrors, DiscoverAgentCapabilitiesHandlerResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentCodingPreferencesData, GetAgentCodingPreferencesErrors, GetAgentCodingPreferencesResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionPermissionsData, GetAgentSessionPermissionsErrors, GetAgentSessionPermissionsResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LinkAgentSessionPullRequestData, LinkAgentSessionPullRequestErrors, LinkAgentSessionPullRequestResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, ListAgentRepositoryBranchesData, ListAgentRepositoryBranchesErrors, ListAgentRepositoryBranchesResponses, ListAgentSessionPullRequestsData, ListAgentSessionPullRequestsErrors, ListAgentSessionPullRequestsResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentCodingPreferencesData, PutAgentCodingPreferencesErrors, PutAgentCodingPreferencesResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, SetAgentSessionArchivedData, SetAgentSessionArchivedErrors, SetAgentSessionArchivedResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses, SteerQueuedActionData, SteerQueuedActionErrors, SteerQueuedActionResponses, UnlinkAgentSessionPullRequestData, UnlinkAgentSessionPullRequestErrors, UnlinkAgentSessionPullRequestResponses, UpdateAgentSessionPermissionsData, UpdateAgentSessionPermissionsErrors, UpdateAgentSessionPermissionsResponses, WarmAgentSessionHandlerData, WarmAgentSessionHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -64,6 +64,27 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<DiscoverAgentCapabilitiesHandlerResponses, DiscoverAgentCapabilitiesHandlerErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent-capabilities/discover',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Read what the caller's new coding sessions are told to do beyond their assignment.
+     */
+    public getAgentCodingPreferences<ThrowOnError extends boolean = false>(options?: Options<GetAgentCodingPreferencesData, ThrowOnError>): RequestResult<GetAgentCodingPreferencesResponses, GetAgentCodingPreferencesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAgentCodingPreferencesResponses, GetAgentCodingPreferencesErrors, ThrowOnError>({ url: '/agent-coding-preferences', ...options });
+    }
+    
+    /**
+     * Replace the caller's coding preferences.
+     */
+    public putAgentCodingPreferences<ThrowOnError extends boolean = false>(options: Options<PutAgentCodingPreferencesData, ThrowOnError>): RequestResult<PutAgentCodingPreferencesResponses, PutAgentCodingPreferencesErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutAgentCodingPreferencesResponses, PutAgentCodingPreferencesErrors, ThrowOnError>({
+            url: '/agent-coding-preferences',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
@@ -426,27 +447,6 @@ export class Sdk extends HeyApiClient {
     public answerAgentSessionToolApproval<ThrowOnError extends boolean = false>(options: Options<AnswerAgentSessionToolApprovalData, ThrowOnError>): RequestResult<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AnswerAgentSessionToolApprovalResponses, AnswerAgentSessionToolApprovalErrors, ThrowOnError>({
             url: '/agent-sessions/{session_id}/tool-approvals/{approval_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Read whether the caller's new coding sessions track their work with tasks.
-     */
-    public getAgentTaskTracking<ThrowOnError extends boolean = false>(options?: Options<GetAgentTaskTrackingData, ThrowOnError>): RequestResult<GetAgentTaskTrackingResponses, GetAgentTaskTrackingErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetAgentTaskTrackingResponses, GetAgentTaskTrackingErrors, ThrowOnError>({ url: '/agent-task-tracking', ...options });
-    }
-    
-    /**
-     * Set whether the caller's new coding sessions track their work with tasks.
-     */
-    public putAgentTaskTracking<ThrowOnError extends boolean = false>(options: Options<PutAgentTaskTrackingData, ThrowOnError>): RequestResult<PutAgentTaskTrackingResponses, PutAgentTaskTrackingErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<PutAgentTaskTrackingResponses, PutAgentTaskTrackingErrors, ThrowOnError>({
-            url: '/agent-task-tracking',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

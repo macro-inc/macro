@@ -3,9 +3,9 @@
 //! recording announcer. Only the edges are doubles.
 
 mod chat_reply;
+mod coding_preferences;
 mod owned_purge;
 mod quota;
-mod task_tracking;
 mod user_cleanup;
 mod warm;
 

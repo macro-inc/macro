@@ -14,6 +14,7 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -29,13 +30,12 @@ import type {
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SharePermissionV2,
-  TaskTrackingBody,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { SandboxSize, SandboxSizeBody, TaskTrackingBody };
+export type { CodingPreferencesBody, SandboxSize, SandboxSizeBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -297,22 +297,22 @@ export const agentHarnessServiceClient = {
     );
   },
 
-  getTaskTracking() {
-    return fetchWithToken<TaskTrackingBody>(
-      `${agentHarnessHost}/agent-task-tracking`,
+  getCodingPreferences() {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
       {
         method: 'GET',
       }
     );
   },
 
-  setTaskTracking(enabled: boolean) {
-    return fetchWithToken<TaskTrackingBody>(
-      `${agentHarnessHost}/agent-task-tracking`,
+  setCodingPreferences(preferences: CodingPreferencesBody) {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(preferences),
       }
     );
   },

@@ -1,5 +1,6 @@
 use std::pin::Pin;
 
+use super::coding_preferences::CodingPreferences;
 use super::error::{AgentSessionError, Result};
 use super::model::*;
 use super::session::StopReason;
@@ -541,19 +542,19 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Whether the user's new coding sessions carry the task-tracking workflow.
+    /// The user's coding preferences.
     ///
-    /// A missing row is `false`, not an error.
-    fn user_task_tracking(
+    /// A missing row is every preference off, not an error.
+    fn user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<bool>> + Send;
+    ) -> impl Future<Output = Result<CodingPreferences>> + Send;
 
-    /// Upsert whether the user's new coding sessions track their work with tasks.
-    fn set_user_task_tracking(
+    /// Upsert the user's coding preferences, replacing every field.
+    fn set_user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+        preferences: CodingPreferences,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete an agent session by id.

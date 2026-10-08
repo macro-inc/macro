@@ -7,6 +7,7 @@ use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
+use agent_session::domain::coding_preferences::CodingPreferences;
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
     AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
@@ -223,16 +224,19 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("resizing is the harness service's job")
     }
 
-    async fn user_task_tracking(&self, _owner: &MacroUserIdStr<'static>) -> SessionResult<bool> {
-        unimplemented!("task tracking is read when a session opens")
-    }
-
-    async fn set_user_task_tracking(
+    async fn user_coding_preferences(
         &self,
         _owner: &MacroUserIdStr<'static>,
-        _enabled: bool,
+    ) -> SessionResult<CodingPreferences> {
+        unimplemented!("coding preferences are read when a session opens")
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _preferences: CodingPreferences,
     ) -> SessionResult<()> {
-        unimplemented!("task tracking is read when a session opens")
+        unimplemented!("coding preferences are read when a session opens")
     }
 
     async fn list_queued_actions(

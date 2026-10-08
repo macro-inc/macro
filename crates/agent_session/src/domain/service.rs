@@ -55,6 +55,7 @@ use tracing::instrument::WithSubscriber as _;
 
 use bots::domain::models::BotId;
 
+use super::coding_preferences::CodingPreferences;
 use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::lifecycle::session_identity;
@@ -349,19 +350,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Whether the user's new coding sessions carry the task-tracking workflow.
-    ///
-    /// A missing preference is `false`.
-    fn user_task_tracking(
+    /// The user's coding preferences; every preference is off until set.
+    fn user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<bool>> + Send;
+    ) -> impl Future<Output = Result<CodingPreferences>> + Send;
 
-    /// Upsert whether the user's new coding sessions track their work with tasks.
-    fn set_user_task_tracking(
+    /// Upsert the user's coding preferences, replacing every field.
+    fn set_user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+        preferences: CodingPreferences,
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
@@ -1086,16 +1085,21 @@ where
         self.repo.set_user_sandbox_size(user_id, size).await
     }
 
-    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
-        self.repo.user_task_tracking(user_id).await
-    }
-
-    async fn set_user_task_tracking(
+    async fn user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+    ) -> Result<CodingPreferences> {
+        self.repo.user_coding_preferences(user_id).await
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
     ) -> Result<()> {
-        self.repo.set_user_task_tracking(user_id, enabled).await
+        self.repo
+            .set_user_coding_preferences(user_id, preferences)
+            .await
     }
 }
 
@@ -1803,16 +1807,21 @@ where
         self.repo.set_user_sandbox_size(user_id, size).await
     }
 
-    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
-        self.repo.user_task_tracking(user_id).await
-    }
-
-    async fn set_user_task_tracking(
+    async fn user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+    ) -> Result<CodingPreferences> {
+        self.repo.user_coding_preferences(user_id).await
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
     ) -> Result<()> {
-        self.repo.set_user_task_tracking(user_id, enabled).await
+        self.repo
+            .set_user_coding_preferences(user_id, preferences)
+            .await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

@@ -18,8 +18,10 @@ use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
-mod task_tracking;
-pub use task_tracking::{TASK_TRACKING_INSTRUCTIONS, with_task_tracking};
+mod coding_preferences;
+pub use coding_preferences::{
+    CREATE_TASKS_INSTRUCTIONS, OPEN_PULL_REQUESTS_INSTRUCTIONS, with_coding_preferences,
+};
 
 /// How a channel message's attached files are named to an agent.
 ///

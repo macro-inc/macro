@@ -2,7 +2,7 @@
 //! external runtime that dials in. Each creates the row, provisions egress
 //! where there is a sandbox to give it to, and attaches the runtime.
 
-use crate::domain::model::{is_coding_agent, with_task_tracking};
+use crate::domain::model::{is_coding_agent, with_coding_preferences};
 use agent_session::domain::model::session_owner_user;
 use agent_session::domain::repository_branch::RepositoryBranch;
 use model_owner::Owner;
@@ -92,7 +92,7 @@ where
         };
         let instructions = self
             .inner
-            .with_owner_task_tracking(
+            .with_owner_coding_preferences(
                 &owner_user,
                 request.bot_id,
                 AgentKind::for_session(request.bot_id, &harness),
@@ -234,12 +234,12 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    /// A new session's instructions, ending with the task-tracking workflow
-    /// when the session is a coding agent's and its owner opted in.
+    /// A new session's instructions, ending with the workflows its owner's
+    /// coding preferences add when the session is a coding agent's.
     ///
     /// Warm sessions are only ever the in-memory chat agent's, which never
-    /// gets the workflow, so the warm claim's instructions match still holds.
-    pub(super) async fn with_owner_task_tracking(
+    /// gets the workflows, so the warm claim's instructions match still holds.
+    pub(super) async fn with_owner_coding_preferences(
         &self,
         owner: &MacroUserIdStr<'static>,
         bot_id: BotId,
@@ -251,10 +251,11 @@ where
             .coding_agent_choice(bot_id)
             .await
             .map_err(AgentSessionError::Unknown)?;
-        if !is_coding_agent(choice, kind) || !self.sessions.user_task_tracking(owner).await? {
+        if !is_coding_agent(choice, kind) {
             return Ok(instructions);
         }
-        Ok(Some(with_task_tracking(instructions)))
+        let preferences = self.sessions.user_coding_preferences(owner).await?;
+        Ok(with_coding_preferences(instructions, preferences))
     }
 
     #[tracing::instrument(err, skip(self, command), fields(
@@ -326,7 +327,7 @@ where
         // Assignments retain the original task and update policy alongside the
         // profile instructions, including across later turns and reattachments.
         let instructions = self
-            .with_owner_task_tracking(
+            .with_owner_coding_preferences(
                 &actor,
                 bot_id,
                 runtime.kind,

@@ -46,9 +46,9 @@ import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
 import { AgentSettingsDescription } from './components/agent-settings-description';
+import { CodingPreferencesSetting } from './components/coding-preferences-setting';
 import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
-import { TaskTrackingSetting } from './components/task-tracking-setting';
 import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
@@ -333,7 +333,7 @@ export function Agents(props: { navigation?: JSX.Element } = {}) {
             </SettingsCard>
           </SettingsSection>
 
-          <TaskTrackingSetting />
+          <CodingPreferencesSetting />
         </SettingsPage>
       </Show>
 

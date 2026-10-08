@@ -1,4 +1,7 @@
-import type { SandboxSize } from '../../../generated/agent-harness/types.gen';
+import type {
+  CodingPreferencesBody,
+  SandboxSize,
+} from '../../../generated/agent-harness/types.gen';
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
@@ -55,13 +58,15 @@ export class AgentSessionNamespace {
     return AgentSession.setDefaultSandboxSize(this.client, size);
   }
 
-  /** Whether the caller's new coding sessions track their work with Macro tasks. */
-  taskTracking(): Promise<boolean> {
-    return AgentSession.taskTracking(this.client);
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  codingPreferences(): Promise<CodingPreferencesBody> {
+    return AgentSession.codingPreferences(this.client);
   }
 
-  /** Set whether the caller's new coding sessions track their work with Macro tasks. */
-  setTaskTracking(enabled: boolean): Promise<boolean> {
-    return AgentSession.setTaskTracking(this.client, enabled);
+  /** Replace the caller's coding preferences. */
+  setCodingPreferences(
+    preferences: CodingPreferencesBody
+  ): Promise<CodingPreferencesBody> {
+    return AgentSession.setCodingPreferences(this.client, preferences);
   }
 }

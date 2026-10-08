@@ -673,6 +673,20 @@ export type ChannelSharePermission = {
 };
 
 /**
+ * Request or response body for the caller's coding preferences.
+ */
+export type CodingPreferencesBody = {
+    /**
+     * Whether new coding sessions research prior work and link a Macro task.
+     */
+    createTasks: boolean;
+    /**
+     * Whether new coding sessions deliver their work as a pull request.
+     */
+    openPullRequests: boolean;
+};
+
+/**
  * One-time manual code. Deliberately does not implement Debug.
  */
 export type CompleteRequest = {
@@ -1444,16 +1458,6 @@ export type StatusResponse = {
 };
 
 /**
- * Request or response body for the caller's task-tracking setting.
- */
-export type TaskTrackingBody = {
-    /**
-     * Whether new coding sessions track their work with Macro tasks.
-     */
-    enabled: boolean;
-};
-
-/**
  * How a person answers a held tool call.
  */
 export type ToolApprovalAnswerDto = 'approve' | 'approve_and_remember' | 'deny' | 'cancel';
@@ -1559,6 +1563,46 @@ export type DiscoverAgentCapabilitiesHandlerResponses = {
 };
 
 export type DiscoverAgentCapabilitiesHandlerResponse = DiscoverAgentCapabilitiesHandlerResponses[keyof DiscoverAgentCapabilitiesHandlerResponses];
+
+export type GetAgentCodingPreferencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-coding-preferences';
+};
+
+export type GetAgentCodingPreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type GetAgentCodingPreferencesError = GetAgentCodingPreferencesErrors[keyof GetAgentCodingPreferencesErrors];
+
+export type GetAgentCodingPreferencesResponses = {
+    200: CodingPreferencesBody;
+};
+
+export type GetAgentCodingPreferencesResponse = GetAgentCodingPreferencesResponses[keyof GetAgentCodingPreferencesResponses];
+
+export type PutAgentCodingPreferencesData = {
+    body: CodingPreferencesBody;
+    path?: never;
+    query?: never;
+    url: '/agent-coding-preferences';
+};
+
+export type PutAgentCodingPreferencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type PutAgentCodingPreferencesError = PutAgentCodingPreferencesErrors[keyof PutAgentCodingPreferencesErrors];
+
+export type PutAgentCodingPreferencesResponses = {
+    200: CodingPreferencesBody;
+};
+
+export type PutAgentCodingPreferencesResponse = PutAgentCodingPreferencesResponses[keyof PutAgentCodingPreferencesResponses];
 
 export type LoadAgentModelsHandlerData = {
     body: LoadAgentModelsRequest;
@@ -2413,46 +2457,6 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
-
-export type GetAgentTaskTrackingData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/agent-task-tracking';
-};
-
-export type GetAgentTaskTrackingErrors = {
-    401: string;
-    500: string;
-};
-
-export type GetAgentTaskTrackingError = GetAgentTaskTrackingErrors[keyof GetAgentTaskTrackingErrors];
-
-export type GetAgentTaskTrackingResponses = {
-    200: TaskTrackingBody;
-};
-
-export type GetAgentTaskTrackingResponse = GetAgentTaskTrackingResponses[keyof GetAgentTaskTrackingResponses];
-
-export type PutAgentTaskTrackingData = {
-    body: TaskTrackingBody;
-    path?: never;
-    query?: never;
-    url: '/agent-task-tracking';
-};
-
-export type PutAgentTaskTrackingErrors = {
-    401: string;
-    500: string;
-};
-
-export type PutAgentTaskTrackingError = PutAgentTaskTrackingErrors[keyof PutAgentTaskTrackingErrors];
-
-export type PutAgentTaskTrackingResponses = {
-    200: TaskTrackingBody;
-};
-
-export type PutAgentTaskTrackingResponse = PutAgentTaskTrackingResponses[keyof PutAgentTaskTrackingResponses];
 
 export type DisconnectData = {
     body: EmptyRequest;

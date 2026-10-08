@@ -47,6 +47,7 @@ use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
@@ -292,8 +293,8 @@ where
         .with_state(state)
 }
 
-/// Build the caller's task-tracking setting router. Mount at `/agent-task-tracking`.
-pub fn agent_task_tracking_router<T, Access, Auth, S>(
+/// Build the caller's coding preferences router. Mount at `/agent-coding-preferences`.
+pub fn agent_coding_preferences_router<T, Access, Auth, S>(
     state: AgentSessionRouterState<T, Access, Auth>,
 ) -> Router<S>
 where
@@ -304,9 +305,9 @@ where
 {
     Router::new()
         .route(
-            "/agent-task-tracking",
-            get(get_agent_task_tracking_handler::<T, Access, Auth>)
-                .put(put_agent_task_tracking_handler::<T, Access, Auth>),
+            "/agent-coding-preferences",
+            get(get_agent_coding_preferences_handler::<T, Access, Auth>)
+                .put(put_agent_coding_preferences_handler::<T, Access, Auth>),
         )
         .with_state(state)
 }
@@ -1407,72 +1408,96 @@ pub async fn put_agent_sandbox_size_handler<
     Ok(Json(req))
 }
 
-/// Request or response body for the caller's task-tracking setting.
+/// Request or response body for the caller's coding preferences.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct TaskTrackingBody {
-    /// Whether new coding sessions track their work with Macro tasks.
-    pub enabled: bool,
+pub struct CodingPreferencesBody {
+    /// Whether new coding sessions research prior work and link a Macro task.
+    pub create_tasks: bool,
+    /// Whether new coding sessions deliver their work as a pull request.
+    pub open_pull_requests: bool,
+}
+
+impl From<CodingPreferences> for CodingPreferencesBody {
+    fn from(preferences: CodingPreferences) -> Self {
+        Self {
+            create_tasks: preferences.create_tasks,
+            open_pull_requests: preferences.open_pull_requests,
+        }
+    }
+}
+
+impl From<CodingPreferencesBody> for CodingPreferences {
+    fn from(body: CodingPreferencesBody) -> Self {
+        Self {
+            create_tasks: body.create_tasks,
+            open_pull_requests: body.open_pull_requests,
+        }
+    }
 }
 
 #[utoipa::path(
     get,
-    path = "/agent-task-tracking",
+    path = "/agent-coding-preferences",
     tag = "agent-sessions",
-    operation_id = "get_agent_task_tracking",
+    operation_id = "get_agent_coding_preferences",
     responses(
-        (status = 200, body = TaskTrackingBody),
+        (status = 200, body = CodingPreferencesBody),
         (status = 401, body = String),
         (status = 500, body = String),
     )
 )]
-/// Read whether the caller's new coding sessions track their work with tasks.
+/// Read what the caller's new coding sessions are told to do beyond their assignment.
 #[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
-pub async fn get_agent_task_tracking_handler<
+pub async fn get_agent_coding_preferences_handler<
     T: AgentSessionService,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, ActingUser>,
-) -> Result<Json<TaskTrackingBody>, AgentSessionApiError> {
-    let enabled = state
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
+    let preferences = state
         .service
-        .user_task_tracking(&caller.authorization.user.macro_user_id)
+        .user_coding_preferences(&caller.authorization.user.macro_user_id)
         .await?;
-    Ok(Json(TaskTrackingBody { enabled }))
+    Ok(Json(preferences.into()))
 }
 
 #[utoipa::path(
     put,
-    path = "/agent-task-tracking",
+    path = "/agent-coding-preferences",
     tag = "agent-sessions",
-    operation_id = "put_agent_task_tracking",
-    request_body = TaskTrackingBody,
+    operation_id = "put_agent_coding_preferences",
+    request_body = CodingPreferencesBody,
     responses(
-        (status = 200, body = TaskTrackingBody),
+        (status = 200, body = CodingPreferencesBody),
         (status = 401, body = String),
         (status = 500, body = String),
     )
 )]
-/// Set whether the caller's new coding sessions track their work with tasks.
+/// Replace the caller's coding preferences.
 #[tracing::instrument(
     skip_all,
-    fields(actor = %caller.acting_entity(), enabled = req.enabled),
+    fields(
+        actor = %caller.acting_entity(),
+        create_tasks = req.create_tasks,
+        open_pull_requests = req.open_pull_requests,
+    ),
     err(Debug)
 )]
-pub async fn put_agent_task_tracking_handler<
+pub async fn put_agent_coding_preferences_handler<
     T: AgentSessionService,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, ActingUser>,
-    Json(req): Json<TaskTrackingBody>,
-) -> Result<Json<TaskTrackingBody>, AgentSessionApiError> {
+    Json(req): Json<CodingPreferencesBody>,
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
     state
         .service
-        .set_user_task_tracking(&caller.authorization.user.macro_user_id, req.enabled)
+        .set_user_coding_preferences(&caller.authorization.user.macro_user_id, req.into())
         .await?;
     Ok(Json(req))
 }

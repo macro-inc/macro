@@ -3,6 +3,7 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  CodingPreferencesBody,
   ControlResponse,
   PromptAttachment,
   PullRequestLinkSource,
@@ -287,21 +288,23 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     ).size;
   }
 
-  /** Whether the caller's new coding sessions track their work with Macro tasks. */
-  static async taskTracking(client: MacroClient): Promise<boolean> {
-    return unwrap(await client.agentHarness.getAgentTaskTracking()).enabled;
+  /** What the caller's new coding sessions are told to do beyond their assignment. */
+  static async codingPreferences(
+    client: MacroClient
+  ): Promise<CodingPreferencesBody> {
+    return unwrap(await client.agentHarness.getAgentCodingPreferences());
   }
 
-  /** Set whether the caller's new coding sessions track their work with Macro tasks. */
-  static async setTaskTracking(
+  /** Replace the caller's coding preferences. */
+  static async setCodingPreferences(
     client: MacroClient,
-    enabled: boolean
-  ): Promise<boolean> {
+    preferences: CodingPreferencesBody
+  ): Promise<CodingPreferencesBody> {
     return unwrap(
-      await client.agentHarness.putAgentTaskTracking({
-        body: { enabled },
+      await client.agentHarness.putAgentCodingPreferences({
+        body: preferences,
       })
-    ).enabled;
+    );
   }
 
   /**

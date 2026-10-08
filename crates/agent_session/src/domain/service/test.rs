@@ -676,16 +676,21 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.set_user_sandbox_size(user_id, size).await
     }
 
-    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
-        self.repo.user_task_tracking(user_id).await
-    }
-
-    async fn set_user_task_tracking(
+    async fn user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+    ) -> Result<CodingPreferences> {
+        self.repo.user_coding_preferences(user_id).await
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
     ) -> Result<()> {
-        self.repo.set_user_task_tracking(user_id, enabled).await
+        self.repo
+            .set_user_coding_preferences(user_id, preferences)
+            .await
     }
 
     async fn delete(&self, id: AgentSessionId) -> Result<()> {

@@ -1,11 +1,31 @@
-//! A user's task-tracking setting appends the workflow to new coding sessions'
+//! A user's coding preferences append their workflows to new coding sessions'
 //! instructions, after the persona's and any task assignment's.
 
 use super::*;
-use crate::domain::model::{TASK_TRACKING_INSTRUCTIONS, TaskAssignmentOrigin};
+use crate::domain::model::{
+    CREATE_TASKS_INSTRUCTIONS, OPEN_PULL_REQUESTS_INSTRUCTIONS, TaskAssignmentOrigin,
+};
+use agent_session::domain::coding_preferences::CodingPreferences;
 
-fn workflow() -> &'static str {
-    TASK_TRACKING_INSTRUCTIONS.trim()
+const TASKS: CodingPreferences = CodingPreferences {
+    create_tasks: true,
+    open_pull_requests: false,
+};
+const PULL_REQUESTS: CodingPreferences = CodingPreferences {
+    create_tasks: false,
+    open_pull_requests: true,
+};
+const BOTH: CodingPreferences = CodingPreferences {
+    create_tasks: true,
+    open_pull_requests: true,
+};
+
+fn tasks() -> &'static str {
+    CREATE_TASKS_INSTRUCTIONS.trim()
+}
+
+fn pull_requests() -> &'static str {
+    OPEN_PULL_REQUESTS_INSTRUCTIONS.trim()
 }
 
 fn assignment_command(kind: AgentKind, harness: &str) -> OpenSession {
@@ -44,11 +64,11 @@ async fn opened_instructions(
 }
 
 #[tokio::test]
-async fn an_opted_in_coding_assignment_ends_with_the_workflow() {
+async fn a_coding_assignment_with_tasks_ends_with_the_tasks_workflow() {
     let bench = harness();
     bench
         .1
-        .set_user_task_tracking(&sender(), true)
+        .set_user_coding_preferences(&sender(), TASKS)
         .await
         .unwrap();
 
@@ -60,26 +80,52 @@ async fn an_opted_in_coding_assignment_ends_with_the_workflow() {
 
     assert_eq!(
         instructions,
-        Some(format!("Persona.\n\n{}\n\n{}", assignment(), workflow()))
+        Some(format!("Persona.\n\n{}\n\n{}", assignment(), tasks()))
     );
 }
 
 #[tokio::test]
-async fn an_opted_in_coding_mention_without_instructions_gets_only_the_workflow() {
+async fn a_coding_mention_with_pull_requests_and_no_instructions_gets_only_that_workflow() {
     let bench = harness();
     bench
         .1
-        .set_user_task_tracking(&sender(), true)
+        .set_user_coding_preferences(&sender(), PULL_REQUESTS)
         .await
         .unwrap();
 
     let instructions = opened_instructions(&bench, open_command()).await;
 
-    assert_eq!(instructions.as_deref(), Some(workflow()));
+    assert_eq!(instructions.as_deref(), Some(pull_requests()));
 }
 
 #[tokio::test]
-async fn coding_sessions_of_users_who_have_not_opted_in_are_unchanged() {
+async fn a_coding_assignment_with_both_puts_tasks_before_pull_requests() {
+    let bench = harness();
+    bench
+        .1
+        .set_user_coding_preferences(&sender(), BOTH)
+        .await
+        .unwrap();
+
+    let instructions = opened_instructions(
+        &bench,
+        assignment_command(AgentKind::SandboxedCoder, "opencode"),
+    )
+    .await;
+
+    assert_eq!(
+        instructions,
+        Some(format!(
+            "Persona.\n\n{}\n\n{}\n\n{}",
+            assignment(),
+            tasks(),
+            pull_requests()
+        ))
+    );
+}
+
+#[tokio::test]
+async fn coding_sessions_of_users_without_preferences_are_unchanged() {
     let bench = harness();
 
     let instructions = opened_instructions(
@@ -92,11 +138,11 @@ async fn coding_sessions_of_users_who_have_not_opted_in_are_unchanged() {
 }
 
 #[tokio::test]
-async fn chat_sessions_never_get_the_workflow() {
+async fn chat_sessions_never_get_the_workflows() {
     let bench = harness();
     bench
         .1
-        .set_user_task_tracking(&sender(), true)
+        .set_user_coding_preferences(&sender(), BOTH)
         .await
         .unwrap();
 
@@ -110,11 +156,11 @@ async fn chat_sessions_never_get_the_workflow() {
 }
 
 #[tokio::test]
-async fn a_persona_that_chose_chat_never_gets_the_workflow() {
+async fn a_persona_that_chose_chat_never_gets_the_workflows() {
     let (bench, _signals) = harness_with_coding_choice(false);
     bench
         .1
-        .set_user_task_tracking(&sender(), true)
+        .set_user_coding_preferences(&sender(), BOTH)
         .await
         .unwrap();
 
@@ -128,9 +174,11 @@ async fn a_persona_that_chose_chat_never_gets_the_workflow() {
 }
 
 #[tokio::test]
-async fn an_opted_in_managed_open_ends_with_the_workflow() {
+async fn a_managed_open_ends_with_both_workflows() {
     let (service, repo, containers, _, _) = harness();
-    repo.set_user_task_tracking(&sender(), true).await.unwrap();
+    repo.set_user_coding_preferences(&sender(), BOTH)
+        .await
+        .unwrap();
     containers.fail_next_spawn("no sandbox in this test");
     let id = AgentSessionId::new();
 
@@ -150,14 +198,16 @@ async fn an_opted_in_managed_open_ends_with_the_workflow() {
 
     assert_eq!(
         repo.get(id).await.unwrap().instructions,
-        Some(format!("Ad hoc.\n\n{}", workflow()))
+        Some(format!("Ad hoc.\n\n{}\n\n{}", tasks(), pull_requests()))
     );
 }
 
 #[tokio::test]
-async fn an_opted_in_external_open_ends_with_the_workflow() {
+async fn an_external_open_ends_with_the_tasks_workflow() {
     let (service, repo, _, _, _) = harness();
-    repo.set_user_task_tracking(&sender(), true).await.unwrap();
+    repo.set_user_coding_preferences(&sender(), TASKS)
+        .await
+        .unwrap();
 
     let session = service
         .open_external_session(OpenExternalAgentSession {
@@ -169,6 +219,6 @@ async fn an_opted_in_external_open_ends_with_the_workflow() {
 
     assert_eq!(
         session.instructions,
-        Some(format!("Ad hoc.\n\n{}", workflow()))
+        Some(format!("Ad hoc.\n\n{}", tasks()))
     );
 }

@@ -62,6 +62,92 @@
         ]
       }
     },
+    "/agent-coding-preferences": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "Read what the caller's new coding sessions are told to do beyond their assignment.",
+        "operationId": "get_agent_coding_preferences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace the caller's coding preferences.",
+        "operationId": "put_agent_coding_preferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodingPreferencesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodingPreferencesBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-models/load": {
       "post": {
         "tags": ["agent-models"],
@@ -2035,92 +2121,6 @@
         }
       }
     },
-    "/agent-task-tracking": {
-      "get": {
-        "tags": ["agent-sessions"],
-        "summary": "Read whether the caller's new coding sessions track their work with tasks.",
-        "operationId": "get_agent_task_tracking",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskTrackingBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": ["agent-sessions"],
-        "summary": "Set whether the caller's new coding sessions track their work with tasks.",
-        "operationId": "put_agent_task_tracking",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TaskTrackingBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskTrackingBody"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/claude-auth": {
       "get": {
         "tags": ["claude-auth"],
@@ -3207,6 +3207,21 @@
           }
         }
       },
+      "CodingPreferencesBody": {
+        "type": "object",
+        "description": "Request or response body for the caller's coding preferences.",
+        "required": ["createTasks", "openPullRequests"],
+        "properties": {
+          "createTasks": {
+            "type": "boolean",
+            "description": "Whether new coding sessions research prior work and link a Macro task."
+          },
+          "openPullRequests": {
+            "type": "boolean",
+            "description": "Whether new coding sessions deliver their work as a pull request."
+          }
+        }
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -4191,17 +4206,6 @@
           "ephemeral": {
             "type": "boolean",
             "description": "Whether reconnecting after service restart is required."
-          }
-        }
-      },
-      "TaskTrackingBody": {
-        "type": "object",
-        "description": "Request or response body for the caller's task-tracking setting.",
-        "required": ["enabled"],
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "description": "Whether new coding sessions track their work with Macro tasks."
           }
         }
       },

@@ -4,6 +4,7 @@
 //! exercise their own logic against a real [`AgentSessionRepo`] /
 //! [`AgentSessionLogRepo`] contract without a database.
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
@@ -74,7 +75,7 @@ pub struct InMemoryAgentSessionRepo {
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
-    user_task_tracking: Arc<Mutex<HashMap<String, bool>>>,
+    user_coding_preferences: Arc<Mutex<HashMap<String, CodingPreferences>>>,
     log_reads: Arc<AtomicUsize>,
     session_reads: Arc<AtomicUsize>,
     /// Replica heartbeats and published addresses, mirroring `harness_replica`.
@@ -497,25 +498,28 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
-    async fn user_task_tracking(&self, user_id: &MacroUserIdStr<'static>) -> Result<bool> {
+    async fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<CodingPreferences> {
         Ok(self
-            .user_task_tracking
+            .user_coding_preferences
             .lock()
             .expect("in-memory session store is not poisoned")
             .get(user_id.as_ref())
             .copied()
-            .unwrap_or(false))
+            .unwrap_or_default())
     }
 
-    async fn set_user_task_tracking(
+    async fn set_user_coding_preferences(
         &self,
         user_id: &MacroUserIdStr<'static>,
-        enabled: bool,
+        preferences: CodingPreferences,
     ) -> Result<()> {
-        self.user_task_tracking
+        self.user_coding_preferences
             .lock()
             .expect("in-memory session store is not poisoned")
-            .insert(user_id.as_ref().to_owned(), enabled);
+            .insert(user_id.as_ref().to_owned(), preferences);
         Ok(())
     }
 

@@ -42,8 +42,8 @@ vi.mock('./components/instructions-editor', () => ({
 }));
 
 // Covered by its own suite; it owns a live query.
-vi.mock('./components/task-tracking-setting', () => ({
-  TaskTrackingSetting: () => null,
+vi.mock('./components/coding-preferences-setting', () => ({
+  CodingPreferencesSetting: () => null,
 }));
 
 const claudeFlag = vi.hoisted(() => ({ enabled: true }));
