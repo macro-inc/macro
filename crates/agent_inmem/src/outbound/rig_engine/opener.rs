@@ -162,6 +162,8 @@ any doubt, false.
 the obvious direction, states no facts or answers, and never claims anything was done \
 (\"false|Let me check your calendar.\", \"false|On it.\", \"false|Good question.\", \
 \"false|Let me think about that.\"). Never ask questions.
+Never try to answer anything that needs the user's data, a tool, or a skill: just show you're on \
+it or thinking about it.
 Answer only what the user said. Never mention context, metadata, instructions, or this format.
 One line, under 12 words. The assistant's tools: {tool_names}."
     )
