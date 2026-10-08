@@ -46,6 +46,7 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
     <Show when={props.anchor}>
       {(anchor) => (
         <MentionsMenu
+          animate={false}
           menu={operations}
           anchor={anchor()}
           {...databaseMentionScope(props.specificEntityType)}

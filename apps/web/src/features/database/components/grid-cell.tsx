@@ -147,7 +147,7 @@ export function GridCell(props: GridCellProps) {
   const [selectAll, setSelectAll] = createSignal(true);
   const cellKind = createMemo<GridCellKind>(() =>
     match({
-      editing: editing(),
+      editing: editing() && !isEntity(),
       boolean: isBoolean(),
       date: isDate() && editable(),
       option: isOptionColumn(props.column),
@@ -170,7 +170,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
-      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
+      setDraft(seed?.replace(/^@/, '') ?? '');
       setSelectAll(false);
       setEditing(true);
       setMentionOpen(true);
@@ -269,53 +269,55 @@ export function GridCell(props: GridCellProps) {
   );
   onCleanup(() => props.onReady?.(undefined));
 
+  const renderEditor = () => (
+    <InlineEditor
+      column={props.column}
+      renderTextEditor={props.renderTextEditor}
+      onInferMention={selectMention}
+      originalValue={props.value}
+      emptyLabel={props.emptyLabel}
+      draft={draft()}
+      selectAll={selectAll()}
+      onDraft={updateDraft}
+      mentionOpen={mentionOpen()}
+      onMentionClose={closeMention}
+      onWrite={write}
+      onClose={finishEdit}
+      onEditorReady={(focus) => {
+        focusEditor = focus;
+        props.onEditorReady?.(focus);
+      }}
+      onNavigateRow={
+        props.onNavigateRow
+          ? (direction) => {
+              if (props.onNavigateRow?.(direction)) return true;
+              queueMicrotask(() => trigger?.focus());
+              return false;
+            }
+          : undefined
+      }
+      onNavigate={(direction) => {
+        if (props.onNavigate?.(direction)) return true;
+        const previousFocus = document.activeElement;
+        queueMicrotask(() => {
+          // Solid may still be replacing the input with its display trigger.
+          // Do not take focus back if another control received it meanwhile.
+          if (
+            document.activeElement === previousFocus ||
+            document.activeElement === document.body ||
+            document.activeElement === trigger
+          )
+            focusAdjacent(trigger, direction);
+        });
+        return true;
+      }}
+    />
+  );
+
   return (
     <div ref={cell} class="relative min-w-0">
       <Switch>
-        <Match when={cellKind() === 'editing'}>
-          <InlineEditor
-            column={props.column}
-            renderTextEditor={props.renderTextEditor}
-            onInferMention={selectMention}
-            originalValue={props.value}
-            emptyLabel={props.emptyLabel}
-            draft={draft()}
-            selectAll={selectAll()}
-            onDraft={updateDraft}
-            mentionOpen={mentionOpen()}
-            onMentionClose={closeMention}
-            onWrite={write}
-            onClose={finishEdit}
-            onEditorReady={(focus) => {
-              focusEditor = focus;
-              props.onEditorReady?.(focus);
-            }}
-            onNavigateRow={
-              props.onNavigateRow
-                ? (direction) => {
-                    if (props.onNavigateRow?.(direction)) return true;
-                    queueMicrotask(() => trigger?.focus());
-                    return false;
-                  }
-                : undefined
-            }
-            onNavigate={(direction) => {
-              if (props.onNavigate?.(direction)) return true;
-              const previousFocus = document.activeElement;
-              queueMicrotask(() => {
-                // Solid may still be replacing the input with its display trigger.
-                // Do not take focus back if another control received it meanwhile.
-                if (
-                  document.activeElement === previousFocus ||
-                  document.activeElement === document.body ||
-                  document.activeElement === trigger
-                )
-                  focusAdjacent(trigger, direction);
-              });
-              return true;
-            }}
-          />
-        </Match>
+        <Match when={cellKind() === 'editing'}>{renderEditor()}</Match>
         <Match when={cellKind() === 'boolean'}>
           <BooleanCell
             column={props.column}
@@ -363,26 +365,39 @@ export function GridCell(props: GridCellProps) {
           </div>
         </Match>
         <Match when={cellKind() === 'text'}>
-          <TextCell
-            column={props.column}
-            value={props.value}
-            emptyLabel={props.emptyLabel}
-            editable={editable()}
-            isEntity={isEntity()}
-            mentionPreview={mentionPreview()}
-            hasResolvedMentionLabel={hasResolvedMentionLabel()}
-            renderTextValue={props.renderTextValue}
-            renderMentionValue={props.renderMentionValue}
-            ref={(element) => {
-              trigger = element;
-            }}
-            onNavigate={props.onNavigate}
-            onBeginEdit={beginEdit}
-            onClearEntity={() => {
-              setSelectedMention(undefined);
-              void write(null);
-            }}
-          />
+          <div class="relative">
+            {/* Keep the resolved label and its subscription alive while picking. */}
+            <div
+              inert={isEntity() && editing()}
+              classList={{
+                invisible: isEntity() && editing() && draft() !== '',
+              }}
+            >
+              <TextCell
+                column={props.column}
+                value={props.value}
+                emptyLabel={props.emptyLabel}
+                editable={editable()}
+                isEntity={isEntity()}
+                mentionPreview={mentionPreview()}
+                hasResolvedMentionLabel={hasResolvedMentionLabel()}
+                renderTextValue={props.renderTextValue}
+                renderMentionValue={props.renderMentionValue}
+                ref={(element) => {
+                  trigger = element;
+                }}
+                onNavigate={props.onNavigate}
+                onBeginEdit={beginEdit}
+                onClearEntity={() => {
+                  setSelectedMention(undefined);
+                  void write(null);
+                }}
+              />
+            </div>
+            <Show when={isEntity() && editing()}>
+              <div class="absolute inset-x-0 top-0">{renderEditor()}</div>
+            </Show>
+          </div>
         </Match>
       </Switch>
       <Show when={mentionOpen() && mentionsEnabled()}>
@@ -606,6 +621,10 @@ function InlineEditor(props: {
   let textFocus: (() => void) | undefined;
   const [error, setError] = createSignal('');
   let finishing = false;
+  const showingReference = () =>
+    props.column.dataType === 'ENTITY' &&
+    props.originalValue !== null &&
+    props.draft === '';
   const initialDraft =
     props.originalValue === null ? '' : String(props.originalValue);
   const focus = () => {
@@ -691,7 +710,7 @@ function InlineEditor(props: {
               props.onEditorReady?.(focus);
             }}
             type="text"
-            placeholder={props.emptyLabel}
+            placeholder={showingReference() ? undefined : props.emptyLabel}
             inputmode={
               props.column.dataType === 'NUMBER' ? 'decimal' : undefined
             }
@@ -707,7 +726,11 @@ function InlineEditor(props: {
               if (!props.mentionOpen) commit(false);
             }}
             onKeyDown={onKeyDown}
-            class="min-h-9 w-full min-w-0 rounded border border-ink/40 bg-input-focus px-2.5 py-1.5 text-[13px] text-ink outline-none ring-2 ring-ink/10"
+            class="min-h-9 w-full min-w-0 rounded border border-ink/40 px-2.5 py-1.5 text-[13px] text-ink outline-none ring-2 ring-ink/10"
+            classList={{
+              'bg-input-focus': !showingReference(),
+              'bg-transparent caret-transparent': showingReference(),
+            }}
           />
         }
       >

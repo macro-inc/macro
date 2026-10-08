@@ -67,6 +67,10 @@ Calculation choices are local to the open table, not saved with the view.
 
 ## CRM pipelines
 
+Clicking a company/contact cell opens its picker while preserving the current
+label. Type to search for a replacement; Escape cancels and restores cell focus
+without changing the record. The picker opens without an entrance animation.
+
 Pipelines are created from the CRM sidebar's **New pipeline** action. Their
 records are read and edited through the pipeline's access; they are not standalone
 database app entities and do not appear in the Databases list. Use **Share → Team access**
