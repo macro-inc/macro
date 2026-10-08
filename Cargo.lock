@@ -11483,6 +11483,8 @@ name = "macro_cors"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "tokio",
+ "tower 0.5.3",
  "tower-http",
  "workspace-hack",
 ]
