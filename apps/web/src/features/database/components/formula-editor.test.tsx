@@ -2,7 +2,13 @@ import type {
   Formula,
   FormulaReading,
 } from '@core/database-sql/generated/types';
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { okAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -65,7 +71,7 @@ const columns: DatabaseViewColumn[] = [
 ];
 
 describe('formula editor', () => {
-  it('builds a formula from the column and operator buttons and saves it with its name', async () => {
+  it('suggests columns as their names are typed and saves the formula with its name', async () => {
     const onSave = vi.fn(() => okAsync(undefined));
     render(() => (
       <FormulaEditor
@@ -76,21 +82,31 @@ describe('formula editor', () => {
         onCancel={() => {}}
       />
     ));
-    const save = screen.getByRole('button', { name: 'Save' });
-    // Only number and date columns are offered.
-    expect(screen.queryByRole('button', { name: 'Name' })).toBeNull();
+    const input = (await screen.findByRole('combobox', {
+      name: 'Formula',
+    })) as HTMLInputElement;
+    await waitFor(() => expect(input.disabled).toBe(false));
 
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Unit price' })
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Multiply' }));
+    await userEvent.type(input, 'un');
+    const suggested = screen.getByRole('listbox', { name: 'Columns' });
+    expect(
+      within(suggested)
+        .getAllByRole('option')
+        .map((option) => option.textContent)
+    ).toEqual(['Unit price']);
+    await userEvent.keyboard('{Enter}');
+    expect(input.value).toBe('{Unit price}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+
+    // Only number and date columns are suggested.
+    await userEvent.type(input, ' * na');
+    expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.getByText('The formula ends too soon.')).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Save' });
     expect((save as HTMLButtonElement).disabled).toBe(true);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Quantity' }));
-    const input = screen.getByRole('textbox', {
-      name: 'Formula',
-    }) as HTMLInputElement;
+    await userEvent.type(input, '{Backspace}{Backspace}q');
+    await userEvent.keyboard('{Tab}');
     expect(input.value).toBe('{Unit price} * Quantity');
     expect(screen.getByText('number')).toBeTruthy();
 

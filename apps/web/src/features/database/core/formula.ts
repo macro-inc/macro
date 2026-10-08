@@ -97,3 +97,40 @@ function engineKind(column: DatabaseViewColumn): ColumnKind {
     }))
     .exhaustive();
 }
+
+/** Columns the name being typed at the caret could mean, and where it starts. */
+export type FormulaCompletion = {
+  /** Where the partial name starts, its `{` included. */
+  start: number;
+  matches: DatabaseViewColumn[];
+};
+
+/**
+ * The columns matching the name typed just before `caret`: a word, or
+ * anything after an unclosed `{`. Names starting with it come first, then
+ * names containing it. Nothing is offered once the name is complete.
+ */
+export function formulaCompletion(
+  text: string,
+  caret: number,
+  columns: readonly DatabaseViewColumn[]
+): FormulaCompletion | undefined {
+  const before = text.slice(0, caret);
+  const braced = /\{([^{}]*)$/.exec(before);
+  const word = braced ? undefined : /[\p{L}_][\p{L}\p{N}_]*$/u.exec(before);
+  const found = braced ?? word;
+  if (!found) return undefined;
+  const query = (braced ? braced[1] : found[0]).trim().toLocaleLowerCase();
+  if (!braced && !query) return undefined;
+  const named = (column: DatabaseViewColumn) => column.name.toLocaleLowerCase();
+  if (!braced && columns.some((column) => named(column) === query))
+    return undefined;
+  const matches = [
+    ...columns.filter((column) => named(column).startsWith(query)),
+    ...columns.filter(
+      (column) =>
+        !named(column).startsWith(query) && named(column).includes(query)
+    ),
+  ];
+  return matches.length ? { start: found.index, matches } : undefined;
+}
