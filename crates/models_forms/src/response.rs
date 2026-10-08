@@ -144,6 +144,7 @@ pub struct UnlockedBooking {
 }
 
 /// A form's response counts, for its editors.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ResponseSummary {
@@ -158,6 +159,7 @@ pub struct ResponseSummary {
 }
 
 /// How many responses one gate stopped.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SectionCount {

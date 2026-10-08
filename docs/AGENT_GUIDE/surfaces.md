@@ -1208,7 +1208,13 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+pill. On a cold reload, the first event paint waits for calendar metadata so events
+appear in their configured colors. A REST/GraphQL handoff for the same user and
+date range keeps the visible events and calendar list while the new reader loads;
+changing the user or date range must not retain the old events. Verify both handoff
+directions with delayed responses and delay calendar metadata past occurrences.
+If metadata fails, events remain usable with the default calendar presentation.
+Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 Errors retain the separate retry state. Verify delayed occurrence
@@ -1226,7 +1232,12 @@ coming online, or returning to the tab runs one `CalendarChanges` delta that
 applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
 through the durable mutation queue: a rejected write rolls back with the usual
 error, and a write made offline stays visible and replays on reconnect. Native
-apps whose engine lacks the calendar cache commands keep the REST path.
+apps whose engine lacks the calendar cache commands keep the REST path. Until the
+cache answers its first calendar read, viewports wait at most a second and then
+read from REST, and writes use REST, so a cache that is slow to start or fails
+("Local cache unavailable") never leaves the calendar on skeletons. Writes in
+that window behave as on the REST path: offline, they roll back with an error
+instead of replaying.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

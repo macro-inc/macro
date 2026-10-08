@@ -33,6 +33,7 @@ describe('invalidateCalendarOccurrences', () => {
       order.push('invalidate');
     });
     setActiveCalendarSyncController({
+      answering: () => true,
       runDelta,
     } as unknown as CalendarSyncController);
 
@@ -44,9 +45,23 @@ describe('invalidateCalendarOccurrences', () => {
     });
   });
 
+  it('refetches without waiting on a cache that is still starting', async () => {
+    const runDelta = vi.fn(() => new Promise<void>(() => {}));
+    setActiveCalendarSyncController({
+      answering: () => false,
+      runDelta,
+    } as unknown as CalendarSyncController);
+
+    await invalidateCalendarOccurrences();
+
+    expect(runDelta).not.toHaveBeenCalled();
+    expect(invalidateQueriesMock).toHaveBeenCalledTimes(1);
+  });
+
   it('still refetches when the delta fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     setActiveCalendarSyncController({
+      answering: () => true,
       runDelta: vi.fn().mockRejectedValue(new Error('offline')),
     } as unknown as CalendarSyncController);
 

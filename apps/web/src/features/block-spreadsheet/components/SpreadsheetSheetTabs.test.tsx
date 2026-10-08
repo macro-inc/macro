@@ -41,6 +41,7 @@ function tabs(overrides: Partial<SpreadsheetSheetTabsProps> = {}) {
   const onRename = vi.fn();
   const onDuplicate = vi.fn();
   const onDelete = vi.fn();
+  const onMove = vi.fn();
   const view = render(() => (
     <SpreadsheetSheetTabs
       sheets={[
@@ -56,10 +57,57 @@ function tabs(overrides: Partial<SpreadsheetSheetTabsProps> = {}) {
       onRename={onRename}
       onDuplicate={onDuplicate}
       onDelete={onDelete}
+      onMove={onMove}
       {...overrides}
     />
   ));
-  return { ...view, active, onSelect, onAdd, onRename, onDuplicate, onDelete };
+  return {
+    ...view,
+    active,
+    onSelect,
+    onAdd,
+    onRename,
+    onDuplicate,
+    onDelete,
+    onMove,
+  };
+}
+
+/** Lay the tabs out 100px apart, as jsdom has no layout. */
+function layOutTabs(view: ReturnType<typeof tabs>) {
+  for (const [index, tab] of view.getAllByRole('tab').entries())
+    tab.getBoundingClientRect = () =>
+      DOMRect.fromRect({ x: index * 100, y: 0, width: 100, height: 30 });
+}
+
+/** jsdom has no PointerEvent; a mouse event carries the pointer fields. */
+function pointer(
+  target: Element | Window,
+  type: 'pointerdown' | 'pointermove' | 'pointerup',
+  clientX: number,
+  pointerType: 'mouse' | 'touch' = 'mouse'
+) {
+  const event = new MouseEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX,
+  });
+  Object.defineProperties(event, {
+    pointerId: { value: 1 },
+    pointerType: { value: pointerType },
+  });
+  fireEvent(target, event);
+}
+
+function drag(
+  tab: HTMLElement,
+  toX: number,
+  pointerType: 'mouse' | 'touch' = 'mouse'
+) {
+  pointer(tab, 'pointerdown', 150, pointerType);
+  pointer(window, 'pointermove', toX, pointerType);
+  pointer(window, 'pointerup', toX, pointerType);
 }
 
 describe('spreadsheet sheet tabs', () => {
@@ -85,6 +133,111 @@ describe('spreadsheet sheet tabs', () => {
     expect(document.activeElement).toBe(budget);
     fireEvent.click(sales);
     expect(view.active()).toBe('sales');
+  });
+
+  it('drags a tab to the insertion point under the pointer and selects it', () => {
+    const view = tabs();
+    layOutTabs(view);
+    const sales = view.getByRole('tab', { name: 'Sales' });
+    pointer(sales, 'pointerdown', 150);
+    pointer(window, 'pointermove', 290);
+    expect(
+      document.querySelectorAll('[data-sheet-drop-indicator]')
+    ).toHaveLength(1);
+    expect(sales.classList.contains('opacity-60')).toBe(true);
+    pointer(window, 'pointerup', 290);
+    expect(view.onMove).toHaveBeenCalledWith('sales', 2);
+    expect(view.active()).toBe('sales');
+    expect(document.querySelector('[data-sheet-drop-indicator]')).toBeNull();
+    drag(view.getByRole('tab', { name: 'Sales' }), 10);
+    expect(view.onMove).toHaveBeenLastCalledWith('sales', 0);
+  });
+
+  it('ignores drops in place, touch presses, and viewers', () => {
+    const [readonly, setReadonly] = createSignal(false);
+    const view = tabs({
+      get readonly() {
+        return readonly();
+      },
+    });
+    layOutTabs(view);
+    const sales = view.getByRole('tab', { name: 'Sales' });
+    drag(sales, 160);
+    drag(sales, 220);
+    drag(sales, 290, 'touch');
+    setReadonly(true);
+    drag(sales, 290);
+    expect(view.onMove).not.toHaveBeenCalled();
+  });
+
+  it.each(['readonly', 'preserveEditorFocus'] as const)(
+    'drops nothing when %s turns on during a drag',
+    (guard) => {
+      const [enabled, setEnabled] = createSignal(false);
+      const view = tabs({
+        get readonly() {
+          return guard === 'readonly' && enabled();
+        },
+        get preserveEditorFocus() {
+          return guard === 'preserveEditorFocus' && enabled();
+        },
+      });
+      layOutTabs(view);
+      pointer(view.getByRole('tab', { name: 'Sales' }), 'pointerdown', 150);
+      pointer(window, 'pointermove', 290);
+      setEnabled(true);
+      pointer(window, 'pointerup', 290);
+      expect(view.onMove).not.toHaveBeenCalled();
+      expect(view.onSelect).not.toHaveBeenCalled();
+      expect(document.querySelector('[data-sheet-drop-indicator]')).toBeNull();
+    }
+  );
+
+  it.each([
+    ['Move left', 'budget'],
+    ['Move right', 'forecast'],
+  ] as const)(
+    '%s from the tab menu moves the right-clicked sheet',
+    async (label, edge) => {
+      const view = tabs();
+      fireEvent.contextMenu(view.getByRole('tab', { name: 'Sales' }));
+      fireEvent.keyDown(await screen.findByRole('menuitem', { name: label }), {
+        key: 'Enter',
+      });
+      await waitFor(() =>
+        expect(view.onMove).toHaveBeenCalledWith(
+          'sales',
+          label === 'Move left' ? 0 : 2
+        )
+      );
+      view.onMove.mockClear();
+      fireEvent.contextMenu(
+        view.getByRole('tab', {
+          name: edge === 'budget' ? 'Budget' : 'Forecast',
+        })
+      );
+      const item = await screen.findByRole('menuitem', { name: label });
+      await waitFor(() =>
+        expect(item.getAttribute('aria-disabled')).toBe('true')
+      );
+    }
+  );
+
+  it('moves the active sheet from the sheet actions menu', async () => {
+    const view = tabs();
+    fireEvent.keyDown(
+      view.getByRole('button', { name: 'Sheet actions for Budget' }),
+      { key: 'ArrowDown' }
+    );
+    expect(
+      (await screen.findByRole('menuitem', { name: 'Move left' })).getAttribute(
+        'aria-disabled'
+      )
+    ).toBe('true');
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Move right' }), {
+      key: 'Enter',
+    });
+    expect(view.onMove).toHaveBeenCalledWith('budget', 1);
   });
 
   it('opens rename for the double-clicked tab and prevents viewer renames', () => {

@@ -24,6 +24,7 @@ use crate::domain::models::{
     FormStatus, QuestionLayout, StoredForm, Widget,
 };
 
+mod authoring_workflow;
 mod booking;
 mod catalog;
 mod create;

@@ -55,12 +55,19 @@ An empty title uses **New Note** when expanding.
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
-the left margin. Every section whose content overlaps the editor viewport is
+the left margin. The rail appears only where the text column's left margin is
+wide enough to hold it clear of the text, so it never overlaps the checkbox
+markers of a checklist; a document whose margin comments have pushed the text
+column against the container padding shows no rail at any window width. Every
+section whose content overlaps the editor viewport is
 highlighted, including a section whose heading has already scrolled above it.
 Hover a tick (or Tab to its button) to expand it and nearby ticks and show a
 rounded preview with the section heading and up to three lines of body text.
 While a preview is open, only its tick is emphasized; visible-section highlights
 return when the preview closes.
+The preview overlays the text column, but it does not take the pointer: a click
+that lands on it reaches the document underneath, so checkboxes it covers still
+toggle, and moving off the rail closes it even if the pointer crosses the card.
 Click a tick or press Enter to jump immediately to its heading without closing its preview
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
@@ -109,23 +116,43 @@ You can also open a native spreadsheet and use the bottom-right **Import and exp
 
 Imported Excel workbooks keep conditional formatting, data validation and notes.
 Conditional formats recolor cells and draw data bars and icons, and they update as
-values change. A selected cell with a list rule shows an arrow at its right edge:
-click it or press Alt+Down to choose a value. Typing a value the rule does not allow
+values change.
+
+To add an in-cell dropdown, select the cells and choose **Format and data →
+Dropdown…** in the toolbar (sliders icon), or **Dropdown…** in the cell context
+menu. The **Dropdown** dialog takes **Type the choices** (one per line in
+**Choices, one per line**) or **Use the values of a range** (**Range of choices**,
+such as `A2:A10` or `'Sheet 2'!A2:A10`), and **Reject values that are not a
+choice** (on by default). **Save** replaces any validation on the selected cells;
+**Remove** clears it from them. Reopening the dialog on a dropdown cell shows its
+current choices. Agents add the same dropdowns with `EditSpreadsheet`'s
+`set_dropdown` operation and remove them with `clear_validation`.
+
+Every cell with a dropdown (from the dialog, an agent, or an Excel list rule) shows
+a small arrow at its right edge; clicking it selects the cell and opens its
+choices. The selected cell's arrow sits just outside its right edge (**Choose a
+value for B2**); click it or press Alt+Down. Typing a value the rule does not allow
 shows the rule's message in the footer, and a "stop" rule keeps the previous value.
 A red corner marks a cell with a note; selecting the cell shows the note, and any
 input message, beside it.
 
-Images and charts (column, bar, line, area, pie, doughnut, scatter, radar,
-bubble, stock and surface, drawn as a contour) are drawn over their cells and
-move with them; charts redraw as the cells they read change. Each is a `figure`
-named after the chart title ("Chart: Revenue") or the image description. The
-toolbar's **Insert chart or image** menu (chart icon) adds a chart of the
-selected cells — or, from one cell, of the table around it, placed beside it —
-or an image file (PNG, JPEG, GIF, WebP or BMP up to 2 MB) at the active cell.
-Its **More charts** submenu holds Radar, Filled radar, Bubble, Stock and
-Contour; a stock chart needs three or four series (high, low, close, with open
-first for up-down bars), and a bubble chart reads x values from the first
-column, then values and sizes in pairs. Imported shapes, text boxes, lines,
+Images and charts (column, bar, line and area, each clustered, stacked or
+100% stacked, plus pie, doughnut, scatter, combo, radar, bubble, stock and
+surface, drawn as a contour) are drawn over their cells and move with them;
+charts redraw as the cells they read change. A 100% stacked chart fills each
+category to 100% of its positive values and to 100% of its negative values.
+Scatter charts plot markers without connecting lines. A combo chart draws
+every series but the last as columns and the last series as a line on a second
+axis. Each is a `figure` named after the chart title ("Chart: Revenue") or the
+image description. The toolbar's **Insert chart or image** menu (chart icon)
+adds a chart of the selected cells — or, from one cell, of the table around
+it, placed beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to
+2 MB) at the active cell. Its **More charts** submenu holds Radar, Filled
+radar, Bubble, Stock and Contour. Edit chart's type list also offers 100%
+stacked bar, stacked line, 100% stacked line, 100% stacked area and Combo. A
+stock chart needs three or four series (high, low, close, with open first for
+up-down bars), a bubble chart reads x values from the first column, then
+values and sizes in pairs, and a combo chart needs at least two series. Imported shapes, text boxes, lines,
 groups and SmartArt are drawn too, as `figure`s named after their text (or
 their name, such as "Straight Connector 2"); a shape linked to a cell shows the
 cell's value. They move, size and delete like images, and download as Excel
@@ -249,7 +276,10 @@ case-sensitive and whole-cell matching. Find next selects each result. Formula r
 but replacements preserve the formulas unless **Search within formulas** is checked.
 **Format and data** sorts the selected rectangle by its active column, keeping each
 row's values, styles, and relative formulas together, or trims whitespace in text
-cells. The same menu offers fill down/right, clear formatting, and clear values.
+cells. **Goal Seek…** in that menu finds the number to put in one cell so a formula
+cell reaches a value you type: set the formula cell, the goal, and the number cell
+to change, then confirm to write that number. Cancel leaves the sheet unchanged.
+The same menu offers fill down/right, clear formatting, and clear values.
 Select data without its header when sorting. A concurrent edit cancels a pending
 sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
 
@@ -310,8 +340,11 @@ calculated values. Clipboard menu actions use the browser clipboard; if access i
 unavailable, use Cmd/Ctrl+V or Cmd/Ctrl+Shift+V in the grid.
 
 Use **+** in the footer to add a sheet, select its tab to switch, and open the
-adjacent sheet menu to rename, duplicate, or delete. Double-click a tab to rename it,
-or right-click any tab for its Rename, Duplicate, and Delete actions. Sheet operations can be undone;
+adjacent sheet menu to rename, duplicate, move, or delete. Double-click a tab to rename it,
+or right-click any tab for its Rename, Duplicate, Move left, Move right, and Delete actions.
+Drag a tab with the mouse to reorder sheets; a vertical accent bar marks where it will
+land, and the dragged sheet becomes active. Touch drags scroll the tab strip instead,
+so use Move left/right there. Sheet operations can be undone;
 the last sheet cannot be deleted. Each sheet remembers its selection. Tab navigation
 supports Left/Right and Home/End; a view-only user can switch tabs and copy cells.
 Adding or duplicating a sheet focuses its grid so typing immediately edits the new sheet.
@@ -1924,6 +1957,13 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+
+Every top-level checklist shows a completed count and progress meter on a thin
+line above its items, left-aligned with the checkboxes. Checklists containing
+an actual task mention additionally get a filter menu (status, priority,
+assignee, due date) that reveals on hover and stays while filters are active;
+filters dim unmatched items in place and persist with the document. Plain
+checkbox lists have no filter, and removing the last task mention removes it.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu

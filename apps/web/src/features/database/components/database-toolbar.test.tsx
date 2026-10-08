@@ -477,7 +477,7 @@ describe('database toolbar views', () => {
     );
   });
 
-  it('creates a view from the New view dialog', async () => {
+  it('creates a table view directly from the New view menu', async () => {
     const create = vi.fn(() => okAsync(undefined));
     render(() => (
       <DatabaseToolbar
@@ -513,19 +513,16 @@ describe('database toolbar views', () => {
         onReorderViews={vi.fn()}
       />
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'New view' }));
-    await screen.findByRole('dialog', { name: 'New view' });
-    const name = screen.getByRole('textbox', {
-      name: 'View name',
-    }) as HTMLInputElement;
-    expect(name.value).toBe('Table view');
-    fireEvent.input(name, { target: { value: 'Planning' } });
-    fireEvent.submit(name.closest('form')!);
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'New view' })).toBeNull()
-    );
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New view' }), {
+      key: 'Enter',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Table' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
     expect(create).toHaveBeenCalledExactlyOnceWith({
-      name: 'Planning',
+      name: 'Table view',
       layout: 'table',
     });
   });
@@ -803,5 +800,118 @@ describe('database toolbar view controls', () => {
       />
     ));
     expect(screen.queryByRole('button', { name: 'New record' })).toBeNull();
+  });
+});
+
+describe('quick view creation and board grouping', () => {
+  const view: DatabaseView = {
+    id: 'board',
+    databaseId: 'database',
+    tableId: 'table',
+    name: 'Board view',
+    position: 'a0',
+    query: { filter: null, sort: [] },
+    layout: {
+      kind: 'board',
+      groupBy: 'priority',
+      title: 'name',
+      cardFields: ['name'],
+      lanes: [],
+      hideEmptyLanes: true,
+    },
+    createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z',
+  };
+  const columns = ['Priority', 'Status'].map((name) => ({
+    id: name.toLowerCase(),
+    name,
+    dataType: 'SELECT_STRING' as const,
+    isMultiSelect: false,
+    writable: true,
+    options: [],
+  }));
+  function toolbar(
+    options: { noGroups?: boolean; canEdit?: boolean; fail?: boolean } = {}
+  ) {
+    const create = vi.fn(() =>
+      options.fail
+        ? errAsync({
+            kind: 'ops' as const,
+            error: {
+              code: 'NETWORK_ERROR' as const,
+              message: 'Offline',
+              refusal: null,
+            },
+          })
+        : okAsync(undefined)
+    );
+    const change = vi.fn();
+    render(() => (
+      <DatabaseToolbar
+        columns={options.noGroups ? [] : columns}
+        views={[view]}
+        view={view}
+        selectedViewId={view.id}
+        canEdit={options.canEdit ?? true}
+        onSelectView={vi.fn()}
+        onChangeView={change}
+        onCreateView={create}
+        onRenameView={vi.fn(() => okAsync(undefined))}
+        onDeleteView={vi.fn(() => okAsync(undefined))}
+        onShowViewAs={vi.fn(() => okAsync(undefined))}
+        onReorderViews={vi.fn()}
+      />
+    ));
+    return { create, change };
+  }
+  async function newBoard() {
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New view' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Board' }), {
+      key: 'Enter',
+    });
+  }
+  it('creates a uniquely named board with an existing grouping column', async () => {
+    const { create } = toolbar();
+    await newBoard();
+    expect(create).toHaveBeenCalledExactlyOnceWith({
+      name: 'Board view 2',
+      layout: 'board',
+      groupBy: { kind: 'column', columnId: 'priority' },
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('creates a Status column when no column can group a board', async () => {
+    const { create } = toolbar({ noGroups: true });
+    await newBoard();
+    expect(create).toHaveBeenCalledExactlyOnceWith({
+      name: 'Board view 2',
+      layout: 'board',
+      groupBy: { kind: 'new-status' },
+    });
+  });
+  it('reports a refused creation', async () => {
+    toolbar({ fail: true });
+    await newBoard();
+    expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+  it('changes grouping after creation while preserving card settings', async () => {
+    const { change } = toolbar();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Group board by' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitemradio', { name: 'Status' }),
+      { key: 'Enter' }
+    );
+    expect(change).toHaveBeenCalledExactlyOnceWith({
+      layout: { ...view.layout, groupBy: 'status', lanes: [] },
+    });
+  });
+  it('does not offer shared grouping changes to viewers', () => {
+    toolbar({ canEdit: false });
+    expect(screen.queryByRole('button', { name: 'Group board by' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New view' })).toBeNull();
   });
 });

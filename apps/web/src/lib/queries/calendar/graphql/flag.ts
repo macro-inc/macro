@@ -10,6 +10,7 @@ import {
   graphqlCacheEnabled,
 } from '@service-storage/graphql-soup';
 import { type Accessor, createSignal } from 'solid-js';
+import { calendarCacheAnswered } from './readiness';
 
 // Hosts whose native engine predates calendar ranges stay on REST.
 const [unsupportedHosts, setUnsupportedHosts] = createSignal(
@@ -46,4 +47,14 @@ export function graphqlCalendarHost(): CacheHost | undefined {
     isFeatureEnabled(enableGraphqlSoup) &&
       isFeatureEnabled(enableGraphqlCalendar)
   );
+}
+
+/**
+ * The cache host for calendar writes: only one that has answered a calendar
+ * read, so a mutation never waits behind cache startup and goes to REST
+ * meanwhile.
+ */
+export function answeringGraphqlCalendarHost(): CacheHost | undefined {
+  const host = graphqlCalendarHost();
+  return host && calendarCacheAnswered(host) ? host : undefined;
 }

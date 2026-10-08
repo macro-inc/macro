@@ -646,3 +646,8 @@ registerComponent(
   'ui',
   lazy(() => import('@app/features/ui-gallery/UiGallery'))
 );
+
+registerComponent(
+  'create-menu-demo',
+  lazy(() => import('@app/features/command/debug/CreateMenuDemo'))
+);

@@ -7,8 +7,8 @@ Opening **Ctrl-K** refreshes database discovery so a database created by AI or
 another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
 
-Creating from Home immediately shows the table tabs, **New table**, **Database
-actions**, and **AI**; no reload is needed to use them.
+Creating from Home immediately shows the table selector with its **+** menu, **Database
+actions**, and **AI** in the top bar; no reload is needed to use them.
 Databases open at
 `/app/database/<uuid>`. A database contains tables; records belong to a table and
 its properties describe each record. The database name in the split header is an
@@ -55,6 +55,15 @@ PostHog unless the variable was set when it was built. With the flag off:
   database surface mounts with the flag on.
 
 `showDatabaseSql` (`VITE_SHOW_DATABASE_SQL`) is separate and only hides SQL.
+
+The table selector matches the inset project/channel navigation. In narrow panes,
+scroll its tabs horizontally with a trackpad, mouse wheel, or the arrow buttons.
+The **+** menu stays visible, and focusing or selecting a table reveals its tab.
+
+The grid’s sticky bottom summary shows the saved records in the current view.
+Choose **+ Add calculation** in a column’s footer for filled/unique counts, or
+sum, average, min, and max on numeric columns. Numeric columns default to Sum.
+Calculation choices are local to the open table, not saved with the view.
 
 ## CRM pipelines
 
@@ -165,10 +174,12 @@ When the column's property is used outside this database, the editor says
 header's **Edit options** menu item and from a board lane header. Changes show at
 once and are rolled back if the server refuses them.
 
-**New table**, beside the table tabs in the toolbar under the split header, creates another table
-with a Name column. Enter a table name and press Enter. The table and its
-column are one request, so a failure creates neither and the dialog stays open
-to retry.
+**+ → New table**, at the right edge of the table selector in the split header,
+adds an inline name field to the tab strip and focuses it immediately. Enter a
+name and press Enter or leave the field to create the table with a Name column.
+Escape cancels the draft; leaving an empty name also cancels. Duplicate names
+are rejected inline. The table and its column are one request, so a failure
+creates neither and keeps the draft available to retry with Enter.
 To rename a table, right-click its tab and choose **Rename table**, double-click
 the tab, or focus it and press F2. These actions also work on inactive tabs.
 The tab itself becomes an input. Enter or leaving the input saves; Escape cancels.
@@ -275,10 +286,13 @@ the table in its own order. Filters, sorts and column changes made on All record
 change only what you see, until you make a view of them. Viewers can search and use
 All records; only editors change stored views.
 
-**New view** (the **+** beside the tabs) offers **Table** or **Board**, a name, and
-for a board **Group by**, then **Create view**. The new view starts from what is on
-screen (its filter and sort) and opens. A board groups by a single **Select**
-column; multi-selects and checkboxes cannot group one. Double-click a view tab, press
+**New view** (the **+** beside the tabs) opens a dropdown with **Table** and
+**Board**. Choosing one immediately creates and opens it with an available default
+name, keeping the current filter and sort. A board starts grouped by the first
+single-select or single-person column, or creates a Status column if there are
+none. After creation, use the **Group by** dropdown in the board toolbar to change
+the grouping column. Card settings stay; lane ordering resets for the new groups.
+Multi-selects and checkboxes cannot group a board. Double-click a view tab, press
 F2, or right-click it and choose **Rename view** to rename it in place (Enter saves,
 Escape cancels). **Delete view** asks for confirmation; the records stay. Drag a tab
 to reorder the views.
@@ -307,7 +321,7 @@ not show it. Escape closes the search and returns focus to where it was opened
 from. The term is kept while you switch tables.
 
 A view's layout, Table or Board, is chosen when the view is created. Creating a
-view closes the dialog and opens its tab immediately while saving. If saving
+view closes the menu and opens its tab immediately while saving. If saving
 fails, the view shows **Retry** and **Dismiss**; retry checks whether the first
 attempt committed before creating anything again. Columns
 cannot be hidden, and they are added only from **Add column** after the headers or
@@ -502,8 +516,9 @@ completed import does not create a second table.
 
 ## Side panel and activity
 
-The split header's `Show Side Panel` toggle (or `]`) opens the database side panel,
-closed by default. **Details** shows the Owner and Created time. **Activity** (behind
+The split header's `Show Side Panel` toggle (or `]`) opens the shared floating details panel,
+closed by default. It overlays the database without resizing its content; click
+outside to dismiss it. **Details** shows the Owner and Created time. **Activity** (behind
 the `enable-entity-activity-section` flag, like documents) lists who created,
 renamed, edited, shared, trashed, or restored the database, with the same glyph rail
 and folding as a document's Activity section. Every write is one entry: a cell edit,
