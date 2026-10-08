@@ -3,6 +3,7 @@ export type Project = {
   id: string;
   name: string;
   updatedAt: string;
+  createdAt?: string;
   access?: ProjectAccess;
   taskCount?: number;
   completedTaskCount?: number;

@@ -212,7 +212,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       route: projectDetailRoute,
       params: { projectId: props.route.id, section },
     });
-  const createTask = () => {
+  const createTask = (dueDate?: Date) => {
     const projectId = props.route.id;
     layout.popoverSplit({
       type: 'component',
@@ -222,6 +222,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
           ...args: Parameters<NonNullable<ComposeTaskProps['createTask']>>
         ) => commands.createTask(projectId, ...args),
         initialProjectId: projectId,
+        initialDueDate: dueDate,
         onSuccess: () => section('tasks'),
       },
     });

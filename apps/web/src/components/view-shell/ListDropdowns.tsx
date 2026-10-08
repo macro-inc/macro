@@ -2,6 +2,7 @@ import {
   FilterSubmenu,
   SearchableFilterSubmenu,
 } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
+import GanttIcon from '@phosphor/chart-bar-horizontal.svg';
 import CheckIcon from '@phosphor/check.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import BoardIcon from '@phosphor/kanban.svg';
@@ -93,18 +94,20 @@ function SingleSelectDropdown<TId extends string>(
   );
 }
 
-export type ViewLayout = 'list' | 'board';
+export type ViewLayout = 'list' | 'board' | 'gantt';
 
 export type ViewLayoutDropdownProps = Omit<
   SingleSelectDropdownProps<ViewLayout>,
   'icon' | 'label' | 'options'
 > & {
   label?: string;
+  layouts?: readonly ViewLayout[];
 };
 
 const VIEW_LAYOUT_OPTIONS: ListControlOption<ViewLayout>[] = [
   { id: 'list', label: 'List', icon: () => <ListIcon /> },
   { id: 'board', label: 'Board', icon: () => <BoardIcon /> },
+  { id: 'gantt', label: 'Gantt', icon: () => <GanttIcon /> },
 ];
 
 export function ViewLayoutDropdown(props: ViewLayoutDropdownProps) {
@@ -112,10 +115,19 @@ export function ViewLayoutDropdown(props: ViewLayoutDropdownProps) {
     <SingleSelectDropdown
       {...props}
       label={props.label ?? 'Layout'}
-      options={VIEW_LAYOUT_OPTIONS}
+      options={VIEW_LAYOUT_OPTIONS.filter(
+        (option) => !props.layouts || props.layouts.includes(option.id)
+      )}
       icon={
-        <Show when={props.value === 'board'} fallback={<ListIcon />}>
-          <BoardIcon />
+        <Show
+          when={props.value === 'gantt'}
+          fallback={
+            <Show when={props.value === 'board'} fallback={<ListIcon />}>
+              <BoardIcon />
+            </Show>
+          }
+        >
+          <GanttIcon />
         </Show>
       }
     />

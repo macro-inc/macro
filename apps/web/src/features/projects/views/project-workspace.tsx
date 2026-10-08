@@ -35,7 +35,7 @@ export function ProjectWorkspace(props: {
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
   onOpenTask: ProjectTasksListProps['onOpenTask'];
-  onCreateTask(): void;
+  onCreateTask(dueDate?: Date): void;
   discussion: JSX.Element;
   description: JSX.Element;
 }) {

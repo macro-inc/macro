@@ -11,7 +11,7 @@ export const tasksTabSearch = {
   namespace: 'tasks',
   schema: z.object({
     tab: z.enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects']),
-    layout: z.enum(['list', 'board']).optional(),
+    layout: z.enum(['list', 'board', 'gantt']).optional(),
     sort: z.enum(['updated_at', 'created_at', 'viewed_at']).optional(),
     sortReversed: z.enum(['true', 'false']).optional(),
     groupBy: z

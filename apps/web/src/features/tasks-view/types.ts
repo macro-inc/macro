@@ -25,7 +25,7 @@ export type TaskDetailTarget = {
 };
 
 export type TasksViewState = {
-  layout: 'list' | 'board';
+  layout: 'list' | 'board' | 'gantt';
   tab: TasksTab;
   search: string;
   groupBy: TaskGroupBy;

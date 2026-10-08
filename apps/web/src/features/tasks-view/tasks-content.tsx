@@ -1,7 +1,8 @@
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Show, Suspense } from 'solid-js';
+import { Match, Suspense, Switch } from 'solid-js';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksBoard } from './tasks-board';
+import { TasksGantt } from './tasks-gantt';
 import { useTasksView } from './tasks-view-context';
 
 export function TasksLoading() {
@@ -12,7 +13,7 @@ export function TasksLoading() {
   );
 }
 
-/** Renders either layout from the host's task scope and navigation capabilities. */
+/** Renders the selected layout from the host's task scope and navigation capabilities. */
 export function TasksContent(props: {
   ref?: (element: HTMLDivElement) => void;
 }) {
@@ -20,12 +21,17 @@ export function TasksContent(props: {
 
   return (
     <Suspense fallback={<TasksLoading />}>
-      <Show
-        when={state.layout === 'board'}
-        fallback={<TaskList ref={props.ref} />}
-      >
-        <TasksBoard ref={props.ref} />
-      </Show>
+      <Switch>
+        <Match when={state.layout === 'board'}>
+          <TasksBoard ref={props.ref} />
+        </Match>
+        <Match when={state.layout === 'gantt'}>
+          <TasksGantt ref={props.ref} />
+        </Match>
+        <Match when={state.layout === 'list'}>
+          <TaskList ref={props.ref} />
+        </Match>
+      </Switch>
     </Suspense>
   );
 }

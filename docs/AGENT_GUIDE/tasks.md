@@ -50,10 +50,10 @@ Filters (including Tags). The mobile bottom dock has the Ask AI input, a separat
 button, and Search.
 Mobile does not show the separate layout, sort, group, and filter toolbar.
 Use the compact sliders drawer for task-list controls; project task lists use the
-same drawer. Mobile supports List only. Opening a Board link or restoring a Board
-entry automatically selects List and replaces that host's layout URL parameter,
-without adding a history entry or clearing search, sorting, grouping, or filters.
-The desktop Board layout remains available.
+same drawer. Mobile supports List only. Opening a Board or Gantt link, or
+restoring either layout, automatically selects List and replaces that host's
+layout URL parameter without adding history or clearing search, sorting,
+grouping, or filters. Desktop supports List, Board, and Gantt.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
@@ -77,6 +77,61 @@ layouts. Narrow splits also show a close button when multiple splits are open. C
 the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
+
+## Gantt layout
+
+Choose **Gantt** from the **Task layout** dropdown to see task timelines.
+The same option is available in a project's Tasks section. The timeline uses
+Created at as the start and Due date as the end; no separate Start date is
+created or saved. Dashed, open-ended bars mean no due date is set. Invalid or
+missing start dates and due dates before creation are identified rather than
+silently displayed as valid intervals.
+The calendar fills the available pane width and height, including empty space
+below loaded rows. Zooming, resizing, and loading earlier items preserve the
+visible calendar position. On first load, the chart centers on today after its
+viewport is measurable. Refetches and later resizes do not reset the scroll.
+Bars use the task color. Calendar content stays outside the sidebar during fast
+horizontal scrolling. The pointer's date label stays in the sticky calendar header
+during vertical scrolling, and the vertical scrollbar begins below that header.
+Hold **Ctrl** and scroll to zoom between 4 and 80 pixels per day, keeping the date
+under the pointer in place. Ordinary scrolling is unchanged. Period presets in
+the settings menu also set zoom; calendar labels adapt to the zoom level.
+
+**Today** centers the current day; its line extends into the calendar header,
+stays above row hover backgrounds but behind bars, and remains outside sticky labels. The settings menu
+changes the displayed period (Day, Week, Month), toggles calendar lines, and
+changes their spacing (Daily, Weekly, Monthly) and
+style (Solid, Dashed). Grid settings do not change item dates. Larger bold month
+headings use abbreviated months and an apostrophe before the two-digit year
+(for example, **Oct '26**), anchored to their calendar cells rather than sliding
+across them. Labels remain visible during horizontal scrolling, and the date
+header remains visible during vertical scrolling. The calendar extends as you
+approach either horizontal edge. Click a task label or bar to open the task;
+right-click either for the same actions as its list item.
+
+When editing is permitted, drag a bar's right edge to change Due date. The edge
+tracks the pointer smoothly and shows a date tooltip below the edge. There is no
+resize snapping indicator or settling animation. Release saves the calendar date.
+Escape cancels the preview; failed saves restore the previous date.
+Arrow keys on the resize handle change one day; Shift changes one week.
+Created at stays fixed: whole-bar dragging and start-date resizing are unavailable.
+
+A subtle diagonal-line scrim marks calendar space where creation is unavailable:
+before today, or throughout the calendar when creation is not permitted. It stays
+outside the sidebar and header; available space remains clear. Drag horizontally
+across clear space to open the task composer with Due date prefilled and visible.
+This works with no loaded rows too. Release opens the composer rather than
+immediately creating a task; Escape cancels the selection.
+In a project's Tasks section, creation preserves that project and its edit gate.
+The Projects collection offers the same interaction with the project composer.
+There is no Start date property, so the selection sets only Due date; Created at
+remains automatic. New selections begin today or later, so creation never produces
+an end before Created at. Existing overdue items remain unchanged.
+
+The timeline reuses the list's filtered, sorted, grouped rows and collapsed
+state. Use **Load more tasks** to continue a group or the task feed; the chart
+contains loaded results, not an implied complete schedule. Selecting Gantt
+persists in `tasks.layout` or `projectTasks.layout`, just like List and Board.
 
 ## Board layout
 
@@ -357,6 +412,16 @@ Search and filters apply before pagination. Scrolling or navigating near the
 end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
+
+On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
+bar per visible project from Created at to Due date, using the same search,
+filters, sort, grouping, and pagination as the project list. Click a project
+label or bar to open its overview. Right-click either for its project list menu.
+The same timeline settings and permission-gated Due date resize controls apply
+as in task Gantt. **Load more projects** continues the chart.
+The selection persists in `projects.layout` and restores with the navigation
+entry. Projects without a due date have explicitly open-ended bars. Mobile
+continues to render the project list.
 
 Right-click a project row for its context menu; the row takes focus, as in
 Tasks. Every project offers `Open in new split` (disabled when no split fits),

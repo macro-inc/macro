@@ -81,6 +81,8 @@ export type TasksViewProviderProps = ContextProviderProps & {
     options?: EntityDetailNavigationOptions
   ) => boolean;
   onCloseTask?: () => void;
+  /** Host-owned task creation, including scope and permissions for embedded views. */
+  onCreateTask?: (dueDate?: Date) => void;
 };
 
 export type TasksListActivationMetadata = {
@@ -96,6 +98,7 @@ type TasksListController = ListController<
 export type TasksViewContext = {
   scopeKey?: string;
   state: Store<TasksViewState>;
+  createTask?: (dueDate?: Date) => void;
   projectsEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
@@ -222,7 +225,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       setSearch: setTabSearch,
       tab: routeTab,
       enabled: syncSearch,
-      boardEnabled: () => !isTouchDevice(),
+      nonListLayoutsEnabled: () => !isTouchDevice(),
     });
   const currentSearch = () =>
     tasksTabSearchCodec.serialize({
@@ -397,6 +400,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   return {
     scopeKey: props.scopeKey,
+    get createTask() {
+      return props.onCreateTask;
+    },
     state,
     projectsEnabled,
     setState: setStateWithSearch,

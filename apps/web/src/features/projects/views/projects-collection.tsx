@@ -1,3 +1,4 @@
+import { Gantt } from '@app/components/gantt/gantt';
 import { useListInteractions } from '@app/components/list';
 import { ListViewport } from '@app/components/list/ListViewport';
 import {
@@ -7,6 +8,7 @@ import {
   ListSortDropdown,
   SearchBar,
   useViewControlHotkeys,
+  ViewLayoutDropdown,
   ViewShell,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
@@ -17,6 +19,7 @@ import {
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -29,6 +32,7 @@ import {
   type Accessor,
   batch,
   createSignal,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -42,17 +46,22 @@ import {
   type ProjectRow as ProjectRowData,
   useProjectsContext,
 } from '../context/projects-context';
+import { canEditProject } from '../core/project';
+import type { ProjectComposerDraft } from '../primitives/create-project';
 import type {
   createProjectCollection,
   ProjectListActivation,
   ProjectListEntity,
 } from '../primitives/project-collection';
+import { projectTimelineDates } from '../queries/project-timeline';
+import { ProjectsGantt } from './projects-gantt';
 
 type FilterGroup = 'status' | 'priority' | 'assignee';
 
 export function ProjectsCollection(props: {
   onOpen(id: string, metadata?: ProjectListActivation): void;
-  onCreate(): void;
+  createAssigneeName: (id: Accessor<string>) => Accessor<string>;
+  onCreate(draft?: ProjectComposerDraft): void;
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
@@ -69,8 +78,10 @@ export function ProjectsCollection(props: {
   const definitions = context.createPropertyDefinitionsSource();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   let grid: HTMLDivElement | undefined;
+  let timeline: HTMLDivElement | undefined;
   let searchInput: HTMLInputElement | undefined;
   const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  const isGantt = () => !isTouchDevice() && collection.layout() === 'gantt';
   const definition = (id: string) =>
     definitions
       .properties()
@@ -123,7 +134,7 @@ export function ProjectsCollection(props: {
   const interaction = useListInteractions({
     controller: list,
     scopeId: props.scopeId,
-    enabled: props.isActive,
+    enabled: () => props.isActive() && !isGantt(),
     scrollHandle: virtualizer,
     activation: {
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
@@ -163,10 +174,83 @@ export function ProjectsCollection(props: {
   // The menu entry that opened a dialog no longer exists when it closes.
   const returnFocusToList = (event: Event) => {
     event.preventDefault();
-    grid?.focus();
+    if (isGantt())
+      timeline?.querySelector<HTMLElement>('[tabindex="0"]')?.focus();
+    else grid?.focus();
   };
   const menuTargets = (entity: ProjectListEntity) =>
     getSoupMenuEntities(entity, getSoupRowEntities(list.selection.items()));
+  const canEditDueDate = (entity: ProjectListEntity) => {
+    const property = definition(SYSTEM_PROPERTY_IDS.DUE_DATE);
+    return (
+      canEditProject(entity.project) &&
+      property?.valueType === 'DATE' &&
+      !property.isMetadata &&
+      !commands.pending()
+    );
+  };
+  const saveDueDate = async (id: string, date: Date) => {
+    const row = collection
+      .items()
+      .find((item) => item.kind === 'entity' && item.entity.id === id);
+    const property = definition(SYSTEM_PROPERTY_IDS.DUE_DATE);
+    try {
+      if (row?.kind !== 'entity' || !property || !canEditDueDate(row.entity))
+        throw new Error('Project is no longer editable');
+      await commands.saveProperty(id, property, {
+        valueType: 'DATE',
+        value: date,
+      });
+    } catch (error) {
+      toast.failure('Could not update due date');
+      throw error;
+    }
+  };
+  const createOnTimeline = (date: Date) => {
+    const property = definition(SYSTEM_PROPERTY_IDS.DUE_DATE);
+    if (!property || property.valueType !== 'DATE') return;
+    props.onCreate({
+      name: '',
+      description: '',
+      shareWithTeam: true,
+      properties: [{ property, value: { valueType: 'DATE', value: date } }],
+    });
+  };
+  function ProjectMenu(menu: {
+    entity: ProjectListEntity;
+    rowId?: string;
+    children: JSX.Element;
+  }) {
+    return (
+      <ProjectRowMenu
+        targets={() => (isGantt() ? [menu.entity] : menuTargets(menu.entity))}
+        status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+        priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
+        canOpenInNewSplit={props.canOpenInNewSplit()}
+        onOpenInNewSplit={(row) =>
+          props.onOpen(row.project.id, { newSplit: true })
+        }
+        onRename={(row) => setRenaming(row)}
+        onSetOption={(rows, property, optionId) =>
+          void setOption(rows, property, optionId)
+        }
+        onCopyLink={(row) => props.onCopyLink(row.project.id)}
+        onCopyId={(row) => props.onCopyId(row.project.id)}
+        onShare={props.onShare && ((row) => props.onShare?.(row.project.id))}
+        onDelete={(rows) => setDeleting({ rows })}
+        onOpenChange={(open) => {
+          if (!open || isGantt() || !menu.rowId) return;
+          list.focus.set(menu.rowId, { reason: 'pointer', force: true });
+          list.selection.setAnchor(menu.rowId);
+        }}
+        onCloseAutoFocus={(event) => {
+          if (renaming() || deleting()) event.preventDefault();
+        }}
+      >
+        {menu.children}
+      </ProjectRowMenu>
+    );
+  }
   const setOption = async (
     rows: readonly ProjectRowData[],
     property: Property,
@@ -284,7 +368,10 @@ export function ProjectsCollection(props: {
               Projects
             </h1>
             <div class="ml-auto shrink-0">
-              <SidebarCreateButton label="New" onCreate={props.onCreate} />
+              <SidebarCreateButton
+                label="New"
+                onCreate={() => props.onCreate()}
+              />
             </div>
           </div>
           <div class="flex min-w-0 items-center justify-between gap-3">
@@ -301,6 +388,16 @@ export function ProjectsCollection(props: {
               hotkey="cmd+f"
             />
             <div class="flex shrink-0 items-center gap-2">
+              <Show when={!isTouchDevice()}>
+                <ViewLayoutDropdown
+                  label="Project layout"
+                  layouts={['list', 'gantt']}
+                  value={collection.layout()}
+                  onChange={(layout) => {
+                    if (layout !== 'board') collection.setLayout(layout);
+                  }}
+                />
+              </Show>
               <ListSortDropdown
                 label="Sort projects"
                 value={collection.sort()}
@@ -398,7 +495,7 @@ export function ProjectsCollection(props: {
               <Button
                 variant="outline"
                 class="touch:hidden @max-[720px]/view-shell:hidden"
-                onClick={props.onCreate}
+                onClick={() => props.onCreate()}
               >
                 <PlusIcon class="size-4" />
                 New project
@@ -408,214 +505,251 @@ export function ProjectsCollection(props: {
         </div>
       </ViewShell.Header>
       <ViewShell.Content>
-        <div
-          ref={(element) => {
-            grid = element;
-          }}
-          role="grid"
-          aria-label="Projects"
-          aria-multiselectable="true"
-          aria-activedescendant={list.focus.key()}
-          tabIndex={0}
-          class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
-        >
-          <ProjectListHeader />
-          <Show when={backgroundError()}>
-            <p role="status" class="px-3 text-xs text-ink-muted">
-              Could not refresh projects. Showing the last loaded list.
-            </p>
-          </Show>
-          <Switch>
-            <Match when={collection.state().kind === 'loading'}>
-              <div class="grid flex-1 place-items-center text-ink-muted">
-                <SpinnerIcon
-                  class="size-5 animate-spin"
-                  aria-label="Loading projects"
-                />
-              </div>
-            </Match>
-            <Match when={sourceError()}>
-              <div
-                role="alert"
-                class="grid flex-1 place-items-center gap-3 text-sm text-ink-muted"
-              >
-                <span>Projects couldn’t be loaded.</span>
-                <Button onClick={() => void collection.refresh()}>
-                  Try again
-                </Button>
-              </div>
-            </Match>
-            <Match when={collection.items().length === 0}>
-              <div class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-                <span>
-                  {filtered() ? 'No matching projects' : 'No projects yet'}
-                </span>
-                <Show when={!filtered()}>
-                  <Button onClick={props.onCreate}>New project</Button>
-                </Show>
-              </div>
-            </Match>
-            <Match when={true}>
-              <ListViewport
-                ref={(handle) => {
-                  setVirtualizer(handle);
-                  handle?.scrollTo(collection.scrollOffset());
-                }}
-                items={collection.items()}
-                focusedIndex={list.focus.index()}
-                onScroll={checkNearEnd}
-              >
-                {(row) => (
-                  <Switch>
-                    <Match when={row.kind === 'group-header' ? row : undefined}>
-                      {(group) => (
-                        <TaskGroupHeader
-                          row={group()}
-                          columnCount={taskGridColumnCount(true)}
-                          groupBy={collection.groupBy()}
-                          expanded={collection.disclosure.isExpanded(
-                            group().groupId
-                          )}
-                          focused={list.focus.key() === group().id}
-                          onFocus={() =>
-                            list.focus.set(group().id, { reason: 'hover' })
-                          }
-                          onToggle={() =>
-                            list.activate.key(group().id, { reason: 'pointer' })
-                          }
-                        />
-                      )}
-                    </Match>
-                    <Match when={row.kind === 'entity' ? row : undefined}>
-                      {(item) => (
-                        <ProjectRowMenu
-                          targets={() => menuTargets(item().entity)}
-                          status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
-                          priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
-                          canOpenInNewSplit={props.canOpenInNewSplit()}
-                          onOpenInNewSplit={(row) =>
-                            props.onOpen(row.project.id, { newSplit: true })
-                          }
-                          onRename={(row) => setRenaming(row)}
-                          onSetOption={(rows, property, optionId) =>
-                            void setOption(rows, property, optionId)
-                          }
-                          onCopyLink={(row) => props.onCopyLink(row.project.id)}
-                          onCopyId={(row) => props.onCopyId(row.project.id)}
-                          onShare={
-                            props.onShare &&
-                            ((row) => props.onShare?.(row.project.id))
-                          }
-                          onDelete={(rows) => setDeleting({ rows })}
-                          onOpenChange={(open) => {
-                            if (!open) return;
-                            list.focus.set(item().id, {
-                              reason: 'pointer',
-                              force: true,
-                            });
-                            list.selection.setAnchor(item().id);
-                          }}
-                          onCloseAutoFocus={(event) => {
-                            // Leave focus with a dialog the entry just opened.
-                            if (renaming() || deleting())
-                              event.preventDefault();
-                          }}
+        <Show
+          when={isGantt()}
+          fallback={
+            <div
+              ref={(element) => {
+                grid = element;
+              }}
+              role="grid"
+              aria-label="Projects"
+              aria-multiselectable="true"
+              aria-activedescendant={list.focus.key()}
+              tabIndex={0}
+              class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+            >
+              <ProjectListHeader />
+              <Show when={backgroundError()}>
+                <p role="status" class="px-3 text-xs text-ink-muted">
+                  Could not refresh projects. Showing the last loaded list.
+                </p>
+              </Show>
+              <Switch>
+                <Match when={collection.state().kind === 'loading'}>
+                  <div class="grid flex-1 place-items-center text-ink-muted">
+                    <SpinnerIcon
+                      class="size-5 animate-spin"
+                      aria-label="Loading projects"
+                    />
+                  </div>
+                </Match>
+                <Match when={sourceError()}>
+                  <div
+                    role="alert"
+                    class="grid flex-1 place-items-center gap-3 text-sm text-ink-muted"
+                  >
+                    <span>Projects couldn’t be loaded.</span>
+                    <Button onClick={() => void collection.refresh()}>
+                      Try again
+                    </Button>
+                  </div>
+                </Match>
+                <Match when={collection.items().length === 0}>
+                  <div class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
+                    <span>
+                      {filtered() ? 'No matching projects' : 'No projects yet'}
+                    </span>
+                    <Show when={!filtered()}>
+                      <Button onClick={() => props.onCreate()}>
+                        New project
+                      </Button>
+                    </Show>
+                  </div>
+                </Match>
+                <Match when={true}>
+                  <ListViewport
+                    ref={(handle) => {
+                      setVirtualizer(handle);
+                      handle?.scrollTo(collection.scrollOffset());
+                    }}
+                    items={collection.items()}
+                    focusedIndex={list.focus.index()}
+                    onScroll={checkNearEnd}
+                  >
+                    {(row) => (
+                      <Switch>
+                        <Match
+                          when={row.kind === 'group-header' ? row : undefined}
                         >
-                          <ProjectRow
-                            rowId={item().id}
-                            row={item().entity}
-                            highlighted={list.focus.key() === item().id}
-                            checked={list.selection.isSelected(item().id)}
-                            onFocus={() =>
-                              list.focus.set(item().id, { reason: 'hover' })
-                            }
-                            onChecked={(selected, range) =>
-                              interaction.selection.set(item().id, selected, {
-                                range,
-                              })
-                            }
-                            onOpen={(event) => {
-                              if (event.ctrlKey || event.metaKey)
-                                interaction.selection.toggle(item().id);
-                              else
-                                list.activate.key(item().id, {
-                                  reason: 'pointer',
-                                  metadata: { event, newSplit: event.shiftKey },
-                                });
-                            }}
-                            onSave={(property, value) =>
-                              commands.saveProperty(
-                                item().entity.id,
-                                property,
-                                value
-                              )
-                            }
-                          />
-                        </ProjectRowMenu>
-                      )}
-                    </Match>
-                    <Match when={row.kind === 'load-more' ? row : undefined}>
-                      {(more) => (
-                        <div role="row" id={more().id}>
-                          <div
-                            role="gridcell"
-                            aria-colspan={taskGridColumnCount(true)}
-                            class="flex justify-center py-2"
-                          >
-                            <Button
-                              disabled={collection.loadingMore()}
-                              onClick={() =>
-                                list.activate.key(more().id, {
+                          {(group) => (
+                            <TaskGroupHeader
+                              row={group()}
+                              columnCount={taskGridColumnCount(true)}
+                              groupBy={collection.groupBy()}
+                              expanded={collection.disclosure.isExpanded(
+                                group().groupId
+                              )}
+                              focused={list.focus.key() === group().id}
+                              onFocus={() =>
+                                list.focus.set(group().id, {
+                                  reason: 'hover',
+                                })
+                              }
+                              onToggle={() =>
+                                list.activate.key(group().id, {
                                   reason: 'pointer',
                                 })
                               }
+                            />
+                          )}
+                        </Match>
+                        <Match when={row.kind === 'entity' ? row : undefined}>
+                          {(item) => (
+                            <ProjectMenu
+                              entity={item().entity}
+                              rowId={item().id}
                             >
-                              {collection.loadingMore()
-                                ? 'Loading…'
-                                : 'Load more projects'}
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </Match>
-                  </Switch>
-                )}
-              </ListViewport>
-            </Match>
-          </Switch>
-          <Show when={list.selection.count()}>
-            <EntitySelectionToolbarModal
-              selectedCount={list.selection.count()}
-              onClose={interaction.selection.clear}
+                              <ProjectRow
+                                rowId={item().id}
+                                row={item().entity}
+                                highlighted={list.focus.key() === item().id}
+                                checked={list.selection.isSelected(item().id)}
+                                onFocus={() =>
+                                  list.focus.set(item().id, {
+                                    reason: 'hover',
+                                  })
+                                }
+                                onChecked={(selected, range) =>
+                                  interaction.selection.set(
+                                    item().id,
+                                    selected,
+                                    {
+                                      range,
+                                    }
+                                  )
+                                }
+                                onOpen={(event) => {
+                                  if (event.ctrlKey || event.metaKey)
+                                    interaction.selection.toggle(item().id);
+                                  else
+                                    list.activate.key(item().id, {
+                                      reason: 'pointer',
+                                      metadata: {
+                                        event,
+                                        newSplit: event.shiftKey,
+                                      },
+                                    });
+                                }}
+                                onSave={(property, value) =>
+                                  commands.saveProperty(
+                                    item().entity.id,
+                                    property,
+                                    value
+                                  )
+                                }
+                              />
+                            </ProjectMenu>
+                          )}
+                        </Match>
+                        <Match
+                          when={row.kind === 'load-more' ? row : undefined}
+                        >
+                          {(more) => (
+                            <div role="row" id={more().id}>
+                              <div
+                                role="gridcell"
+                                aria-colspan={taskGridColumnCount(true)}
+                                class="flex justify-center py-2"
+                              >
+                                <Button
+                                  disabled={collection.loadingMore()}
+                                  onClick={() =>
+                                    list.activate.key(more().id, {
+                                      reason: 'pointer',
+                                    })
+                                  }
+                                >
+                                  {collection.loadingMore()
+                                    ? 'Loading…'
+                                    : 'Load more projects'}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </Match>
+                      </Switch>
+                    )}
+                  </ListViewport>
+                </Match>
+              </Switch>
+              <Show when={list.selection.count()}>
+                <EntitySelectionToolbarModal
+                  selectedCount={list.selection.count()}
+                  onClose={interaction.selection.clear}
+                />
+              </Show>
+            </div>
+          }
+        >
+          <ProjectsGantt
+            collection={collection}
+            onOpen={props.onOpen}
+            createAssigneeName={props.createAssigneeName}
+            onCreate={
+              definition(SYSTEM_PROPERTY_IDS.DUE_DATE)?.valueType === 'DATE'
+                ? (dates) => createOnTimeline(dates.end)
+                : undefined
+            }
+            ref={(element) => {
+              timeline = element;
+            }}
+            renderEntity={(entity, label) => (
+              <ProjectMenu entity={entity()}>
+                <Gantt.Row>
+                  {label}
+                  <Gantt.Bar
+                    {...projectTimelineDates(entity())}
+                    title={entity().project.name}
+                    onEndChange={
+                      canEditDueDate(entity())
+                        ? (date) => saveDueDate(entity().id, date)
+                        : undefined
+                    }
+                    onClick={(event) =>
+                      props.onOpen(entity().id, {
+                        event,
+                        newSplit:
+                          event.shiftKey ||
+                          event.ctrlKey ||
+                          event.metaKey ||
+                          event.altKey,
+                      })
+                    }
+                  >
+                    {entity().project.name}
+                  </Gantt.Bar>
+                </Gantt.Row>
+              </ProjectMenu>
+            )}
+          />
+        </Show>
+        <Show when={renaming()} keyed>
+          {(row) => (
+            <RenameProjectDialog
+              name={row.project.name}
+              onOpenChange={(open) => {
+                if (!open) setRenaming(undefined);
+              }}
+              onRename={(name) => commands.rename(row.project.id, name)}
+              onCloseAutoFocus={returnFocusToList}
             />
-          </Show>
-          <Show when={renaming()} keyed>
-            {(row) => (
-              <RenameProjectDialog
-                name={row.project.name}
-                onOpenChange={(open) => {
-                  if (!open) setRenaming(undefined);
-                }}
-                onRename={(name) => commands.rename(row.project.id, name)}
-                onCloseAutoFocus={returnFocusToList}
-              />
-            )}
-          </Show>
-          <Show when={deleting()}>
-            {(request) => (
-              <DeleteProjectsDialog
-                count={request().rows.length}
-                pending={deletePending()}
-                error={request().error}
-                onOpenChange={(open) => {
-                  if (!open) setDeleting(undefined);
-                }}
-                onDelete={() => void deleteProjects(request().rows)}
-                onCloseAutoFocus={returnFocusToList}
-              />
-            )}
-          </Show>
-        </div>
+          )}
+        </Show>
+        <Show when={deleting()}>
+          {(request) => (
+            <DeleteProjectsDialog
+              count={request().rows.length}
+              pending={deletePending()}
+              error={request().error}
+              onOpenChange={(open) => {
+                if (!open) setDeleting(undefined);
+              }}
+              onDelete={() => void deleteProjects(request().rows)}
+              onCloseAutoFocus={returnFocusToList}
+            />
+          )}
+        </Show>
       </ViewShell.Content>
     </>
   );

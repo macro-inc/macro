@@ -17,7 +17,7 @@ function setup(
     search?: Partial<TasksTabSearchParams>;
     scopedTab?: TasksTab;
     enabled?: boolean;
-    boardEnabled?: Accessor<boolean>;
+    nonListLayoutsEnabled?: Accessor<boolean>;
   } = {}
 ) {
   return createRoot((dispose) => {
@@ -51,7 +51,7 @@ function setup(
       setSearch: writeSearch,
       tab: () => options.scopedTab ?? search.tab,
       enabled: options.enabled ?? true,
-      boardEnabled: options.boardEnabled,
+      nonListLayoutsEnabled: options.nonListLayoutsEnabled,
     });
 
     return { state, search, setSearch, writeSearch, ...controls };
@@ -142,45 +142,48 @@ it('leaves embedded entry state and the parent URL untouched without a URL capab
   expect(view.search.sort).toBe('created_at');
 });
 
-it('replaces mobile board URLs with list while preserving task controls and entry state', () => {
-  const view = setup({
-    boardEnabled: () => false,
-    search: {
-      layout: 'board',
+it.each(['board', 'gantt'] as const)(
+  'replaces mobile %s URLs with list while preserving task controls and entry state',
+  (layout) => {
+    const view = setup({
+      nonListLayoutsEnabled: () => false,
+      search: {
+        layout,
+        groupBy: 'date',
+        sort: 'created_at',
+        sortReversed: 'true',
+      },
+    });
+
+    expect(view.writeSearch).toHaveBeenCalledExactlyOnceWith(
+      { layout: 'list' },
+      { history: 'replace' }
+    );
+    expect(view.state.layout).toBe('list');
+    expect(view.search).toMatchObject({
+      layout: 'list',
       groupBy: 'date',
       sort: 'created_at',
       sortReversed: 'true',
-    },
-  });
+    });
+    expect(view.state.groupBy).toBe('date');
+    expect(view.state.search).toBe('keep this search');
+    expect(view.state.facets).toEqual({ priority: ['high'] });
+    expect(view.state.collapsedGroupIds).toEqual(['collapsed']);
 
-  expect(view.writeSearch).toHaveBeenCalledExactlyOnceWith(
-    { layout: 'list' },
-    { history: 'replace' }
-  );
-  expect(view.state.layout).toBe('list');
-  expect(view.search).toMatchObject({
-    layout: 'list',
-    groupBy: 'date',
-    sort: 'created_at',
-    sortReversed: 'true',
-  });
-  expect(view.state.groupBy).toBe('date');
-  expect(view.state.search).toBe('keep this search');
-  expect(view.state.facets).toEqual({ priority: ['high'] });
-  expect(view.state.collapsedGroupIds).toEqual(['collapsed']);
-
-  view.setSearch('layout', 'board');
-  expect(view.state.layout).toBe('list');
-  expect(view.search.layout).toBe('list');
-  view.setState('layout', 'board');
-  expect(view.state.layout).toBe('list');
-  expect(view.search.layout).toBe('list');
-});
+    view.setSearch('layout', layout);
+    expect(view.state.layout).toBe('list');
+    expect(view.search.layout).toBe('list');
+    view.setState('layout', layout);
+    expect(view.state.layout).toBe('list');
+    expect(view.search.layout).toBe('list');
+  }
+);
 
 it('falls back from restored board entries and from desktop boards when mobile activates', () => {
   const restored = setup({
     state: { layout: 'board' },
-    boardEnabled: () => false,
+    nonListLayoutsEnabled: () => false,
     scopedTab: 'team-tasks',
   });
   expect(restored.state.layout).toBe('list');
@@ -190,15 +193,15 @@ it('falls back from restored board entries and from desktop boards when mobile a
     { history: 'replace' }
   );
 
-  const [boardEnabled, setBoardEnabled] = createSignal(true);
-  const desktop = setup({ search: { layout: 'board' }, boardEnabled });
+  const [nonListLayoutsEnabled, setNonListLayoutsEnabled] = createSignal(true);
+  const desktop = setup({ search: { layout: 'board' }, nonListLayoutsEnabled });
   expect(desktop.state.layout).toBe('board');
   expect(desktop.writeSearch).not.toHaveBeenCalled();
 
-  setBoardEnabled(false);
+  setNonListLayoutsEnabled(false);
   expect(desktop.state.layout).toBe('list');
   expect(desktop.search.layout).toBe('list');
-  setBoardEnabled(true);
+  setNonListLayoutsEnabled(true);
   expect(desktop.state.layout).toBe('list');
   desktop.setState('layout', 'board');
   expect(desktop.state.layout).toBe('board');

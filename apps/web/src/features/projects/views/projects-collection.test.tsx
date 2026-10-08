@@ -49,6 +49,7 @@ vi.mock('@app/components/view-shell', () => ({
   ListSortDropdown: () => null,
   ListGroupDropdown: () => null,
   ListFilterDropdown: () => null,
+  ViewLayoutDropdown: () => null,
   useViewControlHotkeys: () => {},
 }));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({
@@ -255,6 +256,7 @@ function setup(
           scopeId="projects"
           isActive={() => true}
           collection={collection}
+          createAssigneeName={(id) => id}
           canOpenInNewSplit={() => options.canOpenInNewSplit ?? true}
         />
       </ProjectsProvider>

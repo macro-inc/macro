@@ -5,6 +5,7 @@ import type { ProjectCollectionSnapshot } from './primitives/project-collection'
 
 const ENTRY_KEY = 'initiatives.collection';
 const snapshotSchema = z.object({
+  layout: z.enum(['list', 'gantt']).default('list'),
   search: z.string(),
   status: z.string(),
   priority: z.string(),

@@ -40,7 +40,7 @@ const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
-  layout: z.enum(['list', 'board']).catch('list').default('list'),
+  layout: z.enum(['list', 'board', 'gantt']).catch('list').default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
   groupBy: taskGroupBySchema.default('priority'),

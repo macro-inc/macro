@@ -15,6 +15,7 @@ import { createProjectTasksDataSource } from '../queries/project-tasks';
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
+  onCreateTask?: (dueDate?: Date) => void;
 }>;
 
 export type ProjectTasksListProps = Omit<
@@ -22,7 +23,6 @@ export type ProjectTasksListProps = Omit<
   'children'
 > & {
   projectName: string;
-  onCreateTask?: () => void;
   addTasksAction?: JSX.Element;
 };
 
@@ -38,6 +38,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           scopeKey={`initiative:${projectId}:tasks`}
           searchNamespace="projectTasks"
           onOpenTask={props.onOpenTask}
+          onCreateTask={props.onCreateTask}
           onCloseTask={() => {}}
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
@@ -60,6 +61,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
     <ProjectTasksProvider
       projectId={props.projectId}
       onOpenTask={props.onOpenTask}
+      onCreateTask={props.onCreateTask}
     >
       <ProjectTasksListBody {...props} />
     </ProjectTasksProvider>
@@ -80,7 +82,7 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="outline" onClick={props.onCreateTask}>
+            <Button variant="outline" onClick={() => props.onCreateTask?.()}>
               <PlusIcon class="size-4" />
               New task
             </Button>

@@ -17,7 +17,7 @@ export function createTasksViewSearch(options: {
   ) => void;
   tab: Accessor<TasksTab>;
   enabled: boolean;
-  boardEnabled?: Accessor<boolean>;
+  nonListLayoutsEnabled?: Accessor<boolean>;
 }) {
   const { state, search } = options;
   // Missing URL controls restore the entry snapshot, not the latest selection.
@@ -35,9 +35,9 @@ export function createTasksViewSearch(options: {
           search.sort,
           search.sortReversed,
           search.groupBy,
-          options.boardEnabled?.() ?? true,
+          options.nonListLayoutsEnabled?.() ?? true,
         ] as const,
-      ([tab, layout, sort, sortReversed, groupBy, boardEnabled]) => {
+      ([tab, layout, sort, sortReversed, groupBy, nonListLayoutsEnabled]) => {
         if (!options.enabled) return;
         const requestedLayout = layout ?? entryLayout;
 
@@ -51,7 +51,7 @@ export function createTasksViewSearch(options: {
               draft.collapsedGroupIds = [];
             }
 
-            draft.layout = boardEnabled ? requestedLayout : 'list';
+            draft.layout = nonListLayoutsEnabled ? requestedLayout : 'list';
             draft.groupBy =
               groupBy ??
               (tab === entryTab ? entryGroupBy : TASK_DEFAULT_GROUP_BY[tab]);
@@ -61,7 +61,7 @@ export function createTasksViewSearch(options: {
           })
         );
 
-        if (!boardEnabled && requestedLayout === 'board') {
+        if (!nonListLayoutsEnabled && requestedLayout !== 'list') {
           options.setSearch({ layout: 'list' }, { history: 'replace' });
         }
       }
@@ -74,7 +74,7 @@ export function createTasksViewSearch(options: {
       if (!options.enabled) return;
 
       if (args[0] === 'layout') {
-        if (options.boardEnabled?.() === false) {
+        if (options.nonListLayoutsEnabled?.() === false) {
           options.setState('layout', 'list');
         }
         options.setSearch({ layout: state.layout });
