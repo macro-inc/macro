@@ -1,7 +1,7 @@
 import { ThrownResultError } from '@core/util/result';
-import UserPlusIcon from '@phosphor/user-plus.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import {
   type CompanyOption,
@@ -29,6 +29,7 @@ function createErrorMessage(cause: unknown): string {
 
 /** Companies without a domain cannot hold contacts, whose emails must match one. */
 function ContactCompanySelect(props: {
+  mount: HTMLElement | undefined;
   value: CompanyOption | undefined;
   onChange: (company: CompanyOption) => void;
 }) {
@@ -53,7 +54,7 @@ function ContactCompanySelect(props: {
       value={props.value}
       onChange={props.onChange}
       loading={suggestions.query.isLoading}
-      portalScope="local"
+      mount={props.mount}
     />
   );
 }
@@ -68,6 +69,8 @@ export function CreateContactModal(props: {
   const [name, setName] = createSignal('');
   const [localPart, setLocalPart] = createSignal('');
   const [pickedCompany, setPickedCompany] = createSignal<CompanyOption>();
+  // The panel clips overflow, so the company menu mounts on the dialog itself.
+  const [dialog, setDialog] = createSignal<HTMLElement>();
   const [error, setError] = createSignal<string>();
   const company = () => {
     const picked = pickedCompany();
@@ -116,8 +119,8 @@ export function CreateContactModal(props: {
     setError(undefined);
   }
 
-  async function handleSubmit(event: SubmitEvent) {
-    event.preventDefault();
+  async function submit() {
+    if (createContactMutation.isPending) return;
     const target = company();
     if (!target) {
       setError('Choose a company');
@@ -151,119 +154,121 @@ export function CreateContactModal(props: {
     <Dialog
       open={props.target !== undefined}
       onOpenChange={(open) => !open && close()}
-      class="w-120"
+      contentRef={(element) => setDialog(element)}
     >
-      <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
+      <Panel hideBorder class="bg-transparent rounded-[inherit] *:max-h-[75vh]">
         <Panel.Body>
-          <form class="flex flex-col gap-4 p-5" onSubmit={handleSubmit}>
-            <div class="flex items-center gap-1">
-              <div class="flex-1" />
-              <Dialog.CloseButton
-                as={Button}
-                size="icon-sm"
-                label="Close"
-                tabIndex={-1}
-                disabled={createContactMutation.isPending}
-              >
-                <XIcon />
-              </Dialog.CloseButton>
-            </div>
-
-            <div class="flex flex-col gap-4">
-              <div class="flex items-center gap-2 px-2">
-                <Dialog.Title class="sr-only">Add a contact</Dialog.Title>
-                <label for="new-contact-name" class="sr-only">
-                  Name
-                </label>
-                <UserPlusIcon
-                  aria-hidden="true"
-                  class="size-5 shrink-0 text-ink-placeholder"
-                />
-                <input
-                  id="new-contact-name"
-                  type="text"
-                  value={name()}
-                  onInput={(event) => {
-                    setName(event.currentTarget.value);
-                    setError(undefined);
-                  }}
-                  placeholder="Contact name"
-                  autocomplete="off"
-                  data-1p-ignore
-                  aria-invalid={error() === 'Enter a name'}
-                  class="h-10 w-full border-none bg-transparent px-0 text-xl font-medium text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
-                />
-              </div>
-
-              <Show when={!props.target?.company}>
-                <div class="flex flex-col gap-2 px-2">
-                  <label
-                    for="new-contact-company"
-                    class="text-xs font-medium text-ink-muted"
-                  >
-                    Company
-                  </label>
-                  <ContactCompanySelect
-                    value={pickedCompany()}
-                    onChange={(picked) => {
-                      setPickedCompany(picked);
+          <form
+            class="h-full min-h-0"
+            aria-label="New contact"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.isComposing
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                void submit();
+              }
+            }}
+          >
+            <EntityComposer.Root>
+              <EntityComposer.Header>
+                <Dialog.Title class="sr-only">New contact</Dialog.Title>
+                <EntityComposer.Title class="mb-0 min-w-0 flex-1 self-center">
+                  <input
+                    autofocus
+                    aria-label="Contact name"
+                    placeholder="Contact name"
+                    autocomplete="off"
+                    data-1p-ignore
+                    aria-invalid={error() === 'Enter a name'}
+                    class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
+                    value={name()}
+                    disabled={createContactMutation.isPending}
+                    onInput={(event) => {
+                      setName(event.currentTarget.value);
                       setError(undefined);
                     }}
                   />
-                </div>
-              </Show>
-
-              <div class="flex flex-col gap-2 px-2">
-                <label
-                  for="new-contact-email"
-                  class="text-xs font-medium text-ink-muted"
+                </EntityComposer.Title>
+                <Button
+                  tabIndex={-1}
+                  aria-label="Close"
+                  tooltip="Close"
+                  size="icon-composer"
+                  disabled={createContactMutation.isPending}
+                  onClick={close}
                 >
-                  Email
-                </label>
-                <div class="flex h-9 w-full items-center rounded-lg border border-edge-muted focus-within:border-edge">
-                  <input
-                    id="new-contact-email"
-                    type="text"
-                    value={localPart()}
-                    onInput={(event) =>
-                      handleLocalPartInput(event.currentTarget.value)
-                    }
-                    placeholder="jane"
-                    autocomplete="off"
-                    spellcheck={false}
-                    data-1p-ignore
-                    aria-invalid={
-                      error() === 'Enter the part of the email before the @'
-                    }
-                    class="h-full min-w-0 flex-1 border-none bg-transparent pl-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
+                  <XIcon />
+                </Button>
+              </EntityComposer.Header>
+              <EntityComposer.Main class="gap-4">
+                <label class="flex min-w-0 items-center gap-2 px-2 text-sm">
+                  <EnvelopeIcon
+                    aria-hidden="true"
+                    class="size-4 shrink-0 text-ink-muted"
                   />
-                  <span class="shrink-0 select-none pr-3 pl-0.5 text-sm text-ink-placeholder">
-                    @{company()?.domain ?? 'company domain'}
+                  <span class="flex min-w-0 items-center">
+                    <input
+                      aria-label="Email"
+                      placeholder="jane"
+                      autocomplete="off"
+                      spellcheck={false}
+                      data-1p-ignore
+                      aria-invalid={
+                        error() === 'Enter the part of the email before the @'
+                      }
+                      class="ph-no-capture field-sizing-content max-w-full bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
+                      value={localPart()}
+                      disabled={createContactMutation.isPending}
+                      onInput={(event) =>
+                        handleLocalPartInput(event.currentTarget.value)
+                      }
+                    />
+                    <span class="shrink-0 select-none text-ink-muted">
+                      @{company()?.domain ?? 'company domain'}
+                    </span>
                   </span>
-                </div>
-              </div>
-            </div>
-
-            <Show when={error()}>
-              {(message) => (
-                <div class="border-y border-edge-muted p-2">
-                  <div class="px-3 py-2 text-sm text-failure-ink" role="alert">
+                </label>
+                <Show when={!props.target?.company}>
+                  <EntityComposer.Properties class="px-2">
+                    <ContactCompanySelect
+                      mount={dialog()}
+                      value={pickedCompany()}
+                      onChange={(picked) => {
+                        setPickedCompany(picked);
+                        setError(undefined);
+                      }}
+                    />
+                  </EntityComposer.Properties>
+                </Show>
+              </EntityComposer.Main>
+              <Show when={error()}>
+                {(message) => (
+                  <p role="alert" class="px-2 text-sm text-failure">
                     {message()}
-                  </div>
-                </div>
-              )}
-            </Show>
-
-            <div class="flex shrink-0 items-end justify-end gap-2">
-              <Button
-                type="submit"
-                variant="strong"
-                depth={3}
-                disabled={!canSubmit()}
-              >
-                {createContactMutation.isPending ? 'Adding…' : 'Add Contact'}
-              </Button>
-            </div>
+                  </p>
+                )}
+              </Show>
+              <EntityComposer.Footer class="items-center">
+                <EntityComposer.Submit
+                  type="submit"
+                  class="ml-auto"
+                  hasContent={canSubmit()}
+                  disabled={!canSubmit()}
+                >
+                  {createContactMutation.isPending
+                    ? 'Creating…'
+                    : 'Create Contact'}
+                </EntityComposer.Submit>
+              </EntityComposer.Footer>
+            </EntityComposer.Root>
           </form>
         </Panel.Body>
       </Panel>

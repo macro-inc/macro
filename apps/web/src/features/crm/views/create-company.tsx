@@ -1,8 +1,8 @@
-import { isMobile } from '@core/mobile/isMobile';
 import { ThrownResultError } from '@core/util/result';
-import BuildingsIcon from '@phosphor/buildings.svg';
+import EnvelopeIcon from '@phosphor/envelope.svg';
+import GlobeIcon from '@phosphor/globe.svg';
 import XIcon from '@phosphor/x.svg';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useCreateCompanyMutation } from './use-crm';
 
@@ -56,8 +56,8 @@ export function CreateCompanyModal(props: {
     resetAndClose();
   }
 
-  async function handleSubmit(event: SubmitEvent) {
-    event.preventDefault();
+  async function submit() {
+    if (createCompanyMutation.isPending) return;
     if (!companyName()) {
       setError('Enter a company name');
       return;
@@ -82,108 +82,110 @@ export function CreateCompanyModal(props: {
   }
 
   return (
-    <Dialog
-      open={props.open}
-      onOpenChange={(open) => !open && close()}
-      class="w-120"
-    >
-      <Panel
-        depth={2}
-        hideBorder={isMobile()}
-        class="rounded-xl touch:h-auto *:max-h-[75vh]"
-      >
+    <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
+      <Panel hideBorder class="bg-transparent rounded-[inherit] *:max-h-[75vh]">
         <Panel.Body>
-          <form class="flex flex-col gap-4 p-5" onSubmit={handleSubmit}>
-            <Dialog.CloseButton
-              as={Button}
-              size="icon-sm"
-              label="Close"
-              aria-label="Close company creation"
-              class="self-end"
-              tabIndex={-1}
-              disabled={createCompanyMutation.isPending}
-            >
-              <XIcon />
-            </Dialog.CloseButton>
-
-            <div class="flex flex-col gap-4">
-              <div class="flex items-center gap-2 px-2">
-                <Dialog.Title class="sr-only">Create a company</Dialog.Title>
-                <label for="new-company-name" class="sr-only">
-                  Name
-                </label>
-                <BuildingsIcon
-                  aria-hidden="true"
-                  class="size-5 shrink-0 text-ink-placeholder"
-                />
-                <input
-                  id="new-company-name"
-                  type="text"
-                  value={name()}
-                  onInput={(event) => {
-                    setName(event.currentTarget.value);
-                    setError(undefined);
-                  }}
-                  placeholder="Company name"
-                  autocomplete="off"
-                  data-1p-ignore
-                  aria-invalid={error() === 'Enter a company name'}
-                  class="h-10 w-full border-none bg-transparent px-0 text-xl font-medium text-ink outline-none placeholder:text-ink-placeholder focus:ring-0"
-                />
-              </div>
-
-              <div class="flex flex-col gap-2 px-2">
-                <label
-                  for="new-company-domain"
-                  class="text-xs font-medium text-ink-muted"
+          <form
+            class="h-full min-h-0"
+            aria-label="New company"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.isComposing
+              ) {
+                event.preventDefault();
+                event.stopPropagation();
+                void submit();
+              }
+            }}
+          >
+            <EntityComposer.Root>
+              <EntityComposer.Header>
+                <Dialog.Title class="sr-only">New company</Dialog.Title>
+                <EntityComposer.Title class="mb-0 min-w-0 flex-1 self-center">
+                  <input
+                    autofocus
+                    aria-label="Company name"
+                    placeholder="Company name"
+                    autocomplete="off"
+                    data-1p-ignore
+                    aria-invalid={error() === 'Enter a company name'}
+                    class="ph-no-capture w-full min-w-0 text-xl/7 font-medium outline-none bg-transparent placeholder:text-ink-placeholder"
+                    value={name()}
+                    disabled={createCompanyMutation.isPending}
+                    onInput={(event) => {
+                      setName(event.currentTarget.value);
+                      setError(undefined);
+                    }}
+                  />
+                </EntityComposer.Title>
+                <Button
+                  tabIndex={-1}
+                  aria-label="Close"
+                  tooltip="Close"
+                  size="icon-composer"
+                  disabled={createCompanyMutation.isPending}
+                  onClick={close}
                 >
-                  Domain
+                  <XIcon />
+                </Button>
+              </EntityComposer.Header>
+              <EntityComposer.Main class="gap-4">
+                <label class="flex min-w-0 items-center gap-2 px-2 text-sm">
+                  <GlobeIcon
+                    aria-hidden="true"
+                    class="size-4 shrink-0 text-ink-muted"
+                  />
+                  <input
+                    aria-label="Domain"
+                    placeholder="Domain, like acme.com"
+                    autocomplete="off"
+                    spellcheck={false}
+                    data-1p-ignore
+                    aria-invalid={
+                      error() === 'Enter a valid domain like acme.com'
+                    }
+                    class="ph-no-capture w-full min-w-0 bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
+                    value={domain()}
+                    disabled={createCompanyMutation.isPending}
+                    onInput={(event) => {
+                      setDomain(event.currentTarget.value);
+                      setError(undefined);
+                    }}
+                  />
                 </label>
-                <input
-                  id="new-company-domain"
-                  type="text"
-                  value={domain()}
-                  onInput={(event) => {
-                    setDomain(event.currentTarget.value);
-                    setError(undefined);
-                  }}
-                  placeholder="acme.com"
-                  autocomplete="off"
-                  spellcheck={false}
-                  data-1p-ignore
-                  aria-invalid={
-                    error() === 'Enter a valid domain like acme.com'
-                  }
-                  class="h-9 w-full rounded-lg border border-edge-muted bg-transparent px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-edge"
-                />
-                <span class="text-xs text-ink-extra-muted">
-                  Emails with this domain will be linked to the company.
-                </span>
-              </div>
-            </div>
-
-            <Show when={error()}>
-              {(message) => (
-                <div class="border-y border-edge-muted p-2">
-                  <div class="px-3 py-2 text-sm text-failure-ink" role="alert">
+              </EntityComposer.Main>
+              <Show when={error()}>
+                {(message) => (
+                  <p role="alert" class="px-2 text-sm text-failure">
                     {message()}
-                  </div>
-                </div>
-              )}
-            </Show>
-
-            <div class="flex shrink-0 items-end justify-end gap-2">
-              <Button
-                type="submit"
-                variant="strong"
-                depth={3}
-                disabled={!canSubmit()}
-              >
-                {createCompanyMutation.isPending
-                  ? 'Creating…'
-                  : 'Create Company'}
-              </Button>
-            </div>
+                  </p>
+                )}
+              </Show>
+              <EntityComposer.Footer class="items-center">
+                <span class="flex min-w-0 items-center gap-1.5 px-2 text-xs text-ink-muted">
+                  <EnvelopeIcon class="size-4 shrink-0" />
+                  <span class="truncate">
+                    Emails from this domain link to the company
+                  </span>
+                </span>
+                <EntityComposer.Submit
+                  type="submit"
+                  class="ml-auto"
+                  hasContent={canSubmit()}
+                  disabled={!canSubmit()}
+                >
+                  {createCompanyMutation.isPending
+                    ? 'Creating…'
+                    : 'Create Company'}
+                </EntityComposer.Submit>
+              </EntityComposer.Footer>
+            </EntityComposer.Root>
           </form>
         </Panel.Body>
       </Panel>

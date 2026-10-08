@@ -4,7 +4,7 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { Layer } from '@ui';
+import { badgeTriggerClasses, Layer } from '@ui';
 import { type Accessor, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
@@ -66,10 +66,9 @@ export function CompanySelect(props: {
   value: CompanyOption | undefined;
   onChange: (company: CompanyOption) => void;
   loading: boolean;
-  /** Mount the menu in the nearest portal scope, e.g. inside a modal dialog. */
-  portalScope?: 'local';
+  /** Mount the menu here, e.g. a modal dialog's content, which hides body portals. */
+  mount?: HTMLElement;
 }) {
-  let trigger: HTMLButtonElement | undefined;
   const [search, setSearch] = createSignal('');
   const matches = (option: CompanyOption, query: string) =>
     option.name.toLowerCase().includes(query) ||
@@ -96,27 +95,33 @@ export function CompanySelect(props: {
       virtualized
       allowsEmptyCollection
       placement="bottom-start"
-      sameWidth
       gutter={4}
     >
       <Combobox.Control>
         <Combobox.Trigger
-          ref={trigger}
           id={props.id}
           type="button"
-          class="flex h-9 w-full min-w-0 items-center gap-2 rounded-lg border border-edge-muted px-3 text-left text-sm text-ink outline-none focus-visible:border-edge"
+          // Kobalte's default name is "Show suggestions".
+          aria-label={
+            props.value ? `Company: ${props.value.name}` : 'Choose a company'
+          }
+          class={badgeTriggerClasses({
+            variant: 'outline',
+            size: 'sm',
+            class: 'max-w-full min-w-0 text-left',
+          })}
         >
-          <BuildingsIcon class="size-4 shrink-0 text-ink-placeholder" />
+          <BuildingsIcon class="size-3 shrink-0" />
           <Show
             when={props.value}
             fallback={
-              <span class="flex-1 truncate text-ink-placeholder">
+              <span class="truncate text-ink-extra-muted">
                 {props.loading ? 'Loading companies…' : 'Choose a company'}
               </span>
             }
           >
             {(company) => (
-              <span class="flex min-w-0 flex-1 items-baseline gap-2">
+              <span class="flex min-w-0 items-baseline gap-1.5">
                 <span class="truncate">{company().name}</span>
                 <span class="truncate text-xs text-ink-extra-muted">
                   {company().domain}
@@ -127,15 +132,9 @@ export function CompanySelect(props: {
           <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
         </Combobox.Trigger>
       </Combobox.Control>
-      <Combobox.Portal
-        mount={
-          props.portalScope === 'local'
-            ? (trigger?.closest<HTMLElement>('.portal-scope') ?? undefined)
-            : undefined
-        }
-      >
+      <Combobox.Portal mount={props.mount}>
         <Layer depth={2}>
-          <Combobox.Content class="z-action-menu overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-md">
+          <Combobox.Content class="z-action-menu w-72 overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-md">
             <div class="flex items-center gap-2 border-b border-edge-muted px-3 py-2">
               <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
               <Combobox.Input

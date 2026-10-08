@@ -1896,9 +1896,12 @@ and contacts under hidden companies are excluded. Columns are Person (name and
 email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. **New contact** sits at the right end of the toolbar. Its
-dialog asks for a company (searchable by name or domain, from the up to 500 most
-relevant companies with a domain) and fixes the email to that company's primary
-domain; **Add contact** on a company's Team tab skips the company field.
+dialog asks for a company through a **Choose a company** pill (searchable by name
+or domain, from the up to 500 most relevant companies with a domain) and fixes
+the email to that company's primary domain; **Add contact** on a company's Team
+tab skips the company pill. The company, contact and pipeline dialogs share the
+task/project composer layout: name on the first row beside **Close**, details
+below, and a **Create …** button that also submits on Command-Enter.
 
 `Search companies` and `Search people` use the shared Email/Tasks search bar.
 Command-F focuses it, `Clear search` resets it, and Escape leaves the field.
@@ -1971,8 +1974,10 @@ storage does not appear as a separate database in navigation.
 use **Open CRM settings** in the empty state to enable CRM, then return to
 Customers to create a pipeline. Verify this with a newly created team as well as
 an existing CRM-enabled team.
-Choose **New pipeline**, enter a name, choose **Companies** or **Contacts**, and
-choose **Just me** (the default) or **My team**. Creating opens the pipeline's
+Choose **New pipeline**, enter a name in the dialog's first row, pick
+**Companies** (the default) or **Contacts** from the record-type pill, and tick
+**Share with my team** to share it (unticked keeps it private). **Create
+pipeline** or Command-Enter submits. Creating opens the pipeline's
 editable table. Team members can edit shared pipelines; the creator owns them
 and can change access later through the standard **Share** dialog. Under
 **Team access**, choose **Edit** to share with the team or **None** to make the
