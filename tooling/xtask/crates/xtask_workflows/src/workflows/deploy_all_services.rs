@@ -1,8 +1,9 @@
-//! `Deploy All Services` — the shared cloud-storage deploy pipeline: warm the
-//! two shared dep closures onto sticky disks, fan a build matrix out per
-//! service (binaries via crane, lambdas via crane + cargo-zigbuild), hand the
-//! artifacts off through Namespace artifact storage, run DB migrations, then
-//! deploy every service via Pulumi. Called by `deploy_on_push`
+//! `Deploy All Services` — the shared cloud-storage deploy pipeline: run DB
+//! migrations while warming the two shared dep closures onto sticky disks,
+//! then fan out one [`crate::workflows::reusable_deploy_service`] call per
+//! service, which builds that service (binaries via crane, lambdas via crane +
+//! cargo-zigbuild) and deploys it via Pulumi as soon as its own builds finish.
+//! Called by `deploy_on_push`
 //! (dev) and `release-production` (prod), and manually dispatchable.
 //! Generated into `deploy_all_services.yml` (replaces the hand-written
 //! `deploy-all-services.yml`).
@@ -13,7 +14,7 @@ use gh_workflow::{
     WorkflowDispatch,
 };
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::{runners, steps};
 
 #[cfg(test)]
 mod test;
@@ -62,8 +63,6 @@ pub fn deploy_all_services() -> Workflow {
                 "Shared lambda deps realised into /nix/store; committed on job exit.",
             ),
         )
-        .add_job("build-service-binaries", build_service_binaries())
-        .add_job("build-lambda-artifacts", build_lambda_artifacts())
         .add_job("migrate-db", migrate_db())
         .add_job("deploy-services", deploy_services())
         .add_job("deployment-summary", deployment_summary())
@@ -110,6 +109,28 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               NIX_CACHE_SIGNING_KEY:
                 required: false
+        "#})?,
+    );
+
+    // `Job::default()` injects `runs-on`, which is invalid alongside `uses:`.
+    let deploy = crate::workflows::job_mut(root, "deploy-services")?;
+    deploy.remove("runs-on");
+    deploy.insert(
+        "with".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            environment: ${{ inputs.environment }}
+            service-name: ${{ matrix.service }}
+        "#})?,
+    );
+    deploy.insert(
+        "secrets".into(),
+        crate::workflows::yaml_fragment(indoc::indoc! {r#"
+            AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+            DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+            DD_API_KEY: ${{ secrets.DD_API_KEY }}
+            NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
         "#})?,
     );
     Ok(())
@@ -180,133 +201,16 @@ fn warm_job(
         .add_step(steps::teardown_nix())
 }
 
-/// Base for the per-service build matrix jobs: clones the warm /nix cache
-/// volume populated by the matching warm job, so only each service's own
-/// crate compiles. No max-parallel:
-/// runners autoscale, so all services build concurrently.
-fn build_job(name: &str, warm_job_id: &str, gate_output: &str) -> Job {
-    Job::default()
-        .name(name)
-        .needs(vec!["setup".to_string(), warm_job_id.to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ needs.setup.outputs.{gate_output} != '[]' }}}}"
-        )))
-        .runs_on(runners::Runner::Mid.to_string())
-        .strategy(Strategy {
-            fail_fast: Some(false),
-            matrix: Some(serde_json::json!({
-                "service": format!("${{{{ fromJson(needs.setup.outputs.{gate_output}) }}}}"),
-            })),
-            max_parallel: None,
-        })
-        .add_step(steps::checkout_v4().add_with(("clean", false)))
-        .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix_with_cache())
-}
-
-fn build_service_binaries() -> Job {
-    build_job(
-        "Build ${{ matrix.service }} binaries",
-        "warm-binaries",
-        "binaries",
-    )
-    .add_step(build_prebuilt_binaries())
-    // Pushing the built output is what makes this service a pure substitution
-    // next run when it is unchanged, even on a cold volume.
-    .add_step(steps::push_nix_cache(
-        ".#deploy-service-binaries-${{ matrix.service }}",
-    ))
-    .add_step(steps::upload_handoff_artifact(
-        "prebuilt-binaries.tar.gz",
-        "${{ matrix.service }}",
-    ))
-    .add_step(steps::teardown_nix())
-}
-
-fn build_prebuilt_binaries() -> Step<Run> {
-    let script = indoc::indoc! {r#"
-        set -euo pipefail
-        mkdir -p prebuilt
-        # DSS bundles two cargo packages; the hand-written nix.conf leaves
-        # max-jobs at 1, which would build them one after the other.
-        nix build --max-jobs auto --print-build-logs ".#deploy-service-binaries-${SERVICE}"
-        cp -r result/bin/* prebuilt/
-        mkdir -p prebuilt/nix-store
-        while IFS= read -r store_path; do
-          cp -a "$store_path" prebuilt/nix-store/
-        done < <(nix-store -qR result)
-        touch prebuilt/.keep
-        tar -C prebuilt -czf prebuilt-binaries.tar.gz .
-        # Receipt: the deploy job logs the same hash on read.
-        echo "handoff receipt: $(sha256sum prebuilt-binaries.tar.gz | cut -d' ' -f1) ($(stat -c%s prebuilt-binaries.tar.gz) bytes)"
-    "#};
-    Step::new("Build prebuilt binaries")
-        .run(script)
-        .shell("bash")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
-}
-
-/// Each handler is a crane + cargo-zigbuild nix package. This job builds all
-/// of a service's handlers via `nix build .#deploy-lambda-<name>`, cloning the
-/// warm lambda /nix disk committed by warm-lambdas. Unchanged handlers are
-/// pure cache hits from the Namespace Nix volume (no recompile).
-fn build_lambda_artifacts() -> Job {
-    build_job(
-        "Build ${{ matrix.service }} Lambda artifacts",
-        "warm-lambdas",
-        "lambdas",
-    )
-    .add_step(build_lambdas())
-    .add_step(log_lambda_receipt())
-    .add_step(steps::upload_handoff_artifact(
-        "lambda-artifacts.tar.gz",
-        "${{ matrix.service }}",
-    ))
-    .add_step(steps::teardown_nix())
-}
-
-fn build_lambdas() -> Step<Run> {
-    // The cache env lets the script push the handler out-paths it just built
-    // (see the script's push block) — the store-path equivalent of the binary
-    // job's push step, minus a second flake evaluation.
-    Step::new("Build Lambda artifacts")
-        .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
-        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
-        .add_env(Env::new(
-            "NIX_CACHE_SIGNING_KEY",
-            vars::NIX_CACHE_SIGNING_KEY,
-        ))
-        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
-        .add_env(Env::new(
-            "AWS_SECRET_ACCESS_KEY",
-            vars::AWS_SECRET_ACCESS_KEY,
-        ))
-}
-
-fn log_lambda_receipt() -> Step<Run> {
-    Step::new("Log handoff receipt")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            # The build script writes lambda-artifacts.tar.gz to the workspace
-            # root; the deploy job logs the same hash on read.
-            echo "handoff receipt: $(sha256sum lambda-artifacts.tar.gz | cut -d' ' -f1) ($(stat -c%s lambda-artifacts.tar.gz) bytes)"
-        "#})
-        .shell("bash")
-}
-
+/// Migrations need only the source tree, so they run alongside the warm jobs
+/// and are done before any service build finishes. They may land even when a
+/// build later fails; that is safe because every migration must already work
+/// with the code still running, which serves traffic until its deploy ends.
 fn migrate_db() -> Job {
     Job::default()
         .name("Run Database Migrations")
-        .needs(vec![
-            "setup".to_string(),
-            "warm-binaries".to_string(),
-            "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
-        ])
+        .needs(vec!["setup".to_string()])
         .cond(Expression::new(
-            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
+            "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.setup.result == 'success' }}",
         ))
         .runs_on(DB_MIGRATOR_RUNNER)
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
@@ -321,27 +225,24 @@ fn run_migrations() -> Step<Use> {
     .add_with(("environment", "${{ inputs.environment }}"))
 }
 
-/// Deploys via Pulumi + Docker; AWS auth is via explicit static keys
-/// (configure-aws-credentials). PULUMI_HOME is pinned to a fixed path (outside
-/// the workspace, which the deploy action's checkout cleans) so the plugins
-/// subdir can be backed by a sticky disk; it propagates into the composite
-/// action's pulumi step via the job env.
+/// One reusable-workflow call per service: each builds its own binaries and
+/// lambdas, then deploys as soon as those finish, without waiting on the other
+/// services' builds. A failed build fails only its own service — the same
+/// partial-deploy outcome as one failed Pulumi deploy, which the matrix has
+/// always tolerated (`fail-fast: false`). Both warm jobs gate every service:
+/// they run in parallel and finish within a minute of each other.
 fn deploy_services() -> Job {
     Job::default()
-        .name("Deploy ${{ matrix.service }}")
+        .name("${{ matrix.service }}")
         .needs(vec![
             "setup".to_string(),
             "warm-binaries".to_string(),
             "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
             "migrate-db".to_string(),
         ])
         .cond(Expression::new(
             "${{ !cancelled() && needs.setup.outputs.matrix != '[]' && needs.migrate-db.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}",
         ))
-        .runs_on(runners::Runner::Small.to_string())
-        .add_env(("PULUMI_HOME", "/pulumi"))
         .strategy(Strategy {
             fail_fast: Some(false),
             matrix: Some(serde_json::json!({
@@ -349,97 +250,7 @@ fn deploy_services() -> Job {
             })),
             max_parallel: None,
         })
-        .add_step(steps::checkout_v4())
-        .add_step(get_project_name())
-        .add_step(check_artifact_config())
-        .add_step(download_handoff_artifacts())
-        .add_step(steps::cache_pulumi_plugins())
-        .add_step(steps::ensure_pulumi_home_writable())
-        .add_step(deploy_service())
-}
-
-fn get_project_name() -> Step<Use> {
-    steps::uses_local(
-        "Get project name",
-        xtask_paths::repo_dir!(".github/actions/get-project-name"),
-    )
-    .id("project-name")
-    .add_with(("service-name", "${{ matrix.service }}"))
-}
-
-fn check_artifact_config() -> Step<Run> {
-    Step::new("Check artifact config")
-        .run(indoc::indoc! {r#"
-            has_binaries=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_binaries // []) | length) > 0' .github/services-config.json)
-            has_lambdas=$(jq -r --arg service "$SERVICE" '((.services[$service].deploy_lambdas // []) | length) > 0' .github/services-config.json)
-            echo "has_binaries=$has_binaries" >> "$GITHUB_OUTPUT"
-            echo "has_lambdas=$has_lambdas" >> "$GITHUB_OUTPUT"
-        "#})
-        .id("check-artifacts")
-        .add_env(Env::new("SERVICE", "${{ matrix.service }}"))
-}
-
-/// Pull the handoff tars from Namespace artifact storage into runner.temp
-/// (outside the workspace, which the composite action's checkout cleans).
-/// The composite's tar-path branch handles receipts + the extract guard.
-fn download_handoff_artifacts() -> Step<Run> {
-    Step::new("Download handoff artifacts")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            if ! command -v nsc >/dev/null 2>&1; then
-              echo "::error::nsc CLI not found — this job expects a Namespace runner (or add namespacelabs/nscloud-setup)"
-              exit 1
-            fi
-            mkdir -p "$RUNNER_TEMP/handoff"
-            if [[ "$HAS_BINARIES" == "true" ]]; then
-              nsc artifact download "$BASE/prebuilt-binaries.tar.gz" "$RUNNER_TEMP/handoff/prebuilt-binaries.tar.gz"
-            fi
-            if [[ "$HAS_LAMBDAS" == "true" ]]; then
-              nsc artifact download "$BASE/lambda-artifacts.tar.gz" "$RUNNER_TEMP/handoff/lambda-artifacts.tar.gz"
-            fi
-        "#})
-        .if_condition(Expression::new(
-            "${{ steps.check-artifacts.outputs.has_binaries == 'true' || steps.check-artifacts.outputs.has_lambdas == 'true' }}",
-        ))
-        .shell("bash")
-        .add_env(Env::new(
-            "HAS_BINARIES",
-            "${{ steps.check-artifacts.outputs.has_binaries }}",
-        ))
-        .add_env(Env::new(
-            "HAS_LAMBDAS",
-            "${{ steps.check-artifacts.outputs.has_lambdas }}",
-        ))
-        .add_env(Env::new(
-            "BASE",
-            "handoff/${{ github.run_id }}-${{ github.run_attempt }}/${{ matrix.service }}",
-        ))
-}
-
-fn deploy_service() -> Step<Use> {
-    steps::uses_local(
-        "Deploy ${{ matrix.service }}",
-        xtask_paths::repo_dir!(".github/actions/deploy-cloud-storage-pulumi"),
-    )
-    .add_with(("environment", "${{ inputs.environment }}"))
-    .add_with(("aws-access-key", vars::AWS_ACCESS_KEY))
-    .add_with(("aws-secret-key", vars::AWS_SECRET_ACCESS_KEY))
-    .add_with(("pulumi-access-token", vars::PULUMI_ACCESS_TOKEN))
-    .add_with((
-        "pulumi-service-name",
-        "${{ steps.project-name.outputs.project-name }}",
-    ))
-    .add_with(("use-namespace-builder", "true"))
-    .add_with((
-        "prebuilt-binaries-tar",
-        "${{ steps.check-artifacts.outputs.has_binaries == 'true' && format('{0}/handoff/prebuilt-binaries.tar.gz', runner.temp) || '' }}",
-    ))
-    .add_with((
-        "lambda-artifacts-tar",
-        "${{ steps.check-artifacts.outputs.has_lambdas == 'true' && format('{0}/handoff/lambda-artifacts.tar.gz', runner.temp) || '' }}",
-    ))
-    .add_with(("dd-app-key", vars::DD_APP_KEY))
-    .add_with(("dd-api-key", vars::DD_API_KEY))
+        .uses("./.github/workflows/reusable_deploy_service.yml")
 }
 
 fn deployment_summary() -> Job {
@@ -450,8 +261,6 @@ fn deployment_summary() -> Job {
             "setup".to_string(),
             "warm-binaries".to_string(),
             "warm-lambdas".to_string(),
-            "build-service-binaries".to_string(),
-            "build-lambda-artifacts".to_string(),
             "migrate-db".to_string(),
             "deploy-services".to_string(),
         ])
@@ -469,17 +278,11 @@ fn check_deployment_results() -> Step<Run> {
         elif [[ "${{ needs.warm-binaries.result }}" == "failure" || "${{ needs.warm-lambdas.result }}" == "failure" ]]; then
           echo "❌ Warming shared deps onto a sticky disk failed"
           exit 1
-        elif [[ "${{ needs.build-service-binaries.result }}" == "failure" ]]; then
-          echo "❌ One or more service binary builds failed"
-          exit 1
-        elif [[ "${{ needs.build-lambda-artifacts.result }}" == "failure" ]]; then
-          echo "❌ One or more Lambda artifact builds failed"
-          exit 1
         elif [[ "${{ needs.migrate-db.result }}" == "failure" ]]; then
           echo "❌ Database migrations failed"
           exit 1
         elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
-          echo "❌ One or more service deployments failed"
+          echo "❌ One or more services failed to build or deploy"
           exit 1
         elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
           echo "⏭️ No services to deploy"

@@ -1,14 +1,14 @@
-//! `Reusable Deploy Service` — single-service deploy on the shared
-//! namespace + nix + crane pipeline: the same warm sticky-disk nix builds,
-//! crane/cargo-zigbuild lambdas, nsc artifact handoff, and Namespace Docker
-//! builder used by [`crate::workflows::deploy_all_services`], scoped to one
-//! service. Generated into `reusable_deploy_service.yml` (replaces the
+//! `Reusable Deploy Service` — build and deploy one service on the shared
+//! namespace + nix + crane pipeline: sticky-disk nix builds,
+//! crane/cargo-zigbuild lambdas, nsc artifact handoff, and the Namespace
+//! Docker builder. Generated into `reusable_deploy_service.yml` (replaces the
 //! hand-written `reusable-deploy-service.yml`).
 //!
-//! deploy-all-services warms a shared dep closure once and fans a build
-//! matrix out across it; with a single service there is no fan-out to
-//! amortise, so the per-service build realises its own closure directly (the
-//! /nix sticky disk still substitutes everything unchanged from prior runs).
+//! [`crate::workflows::deploy_all_services`] calls this once per service as a
+//! matrix, so each service deploys as soon as its own builds finish. It warms
+//! the shared dep closures first; a standalone caller has no fan-out to
+//! amortise, so its build realises the closure directly (the /nix sticky disk
+//! still substitutes everything unchanged from prior runs).
 
 use anyhow::Result;
 use gh_workflow::{Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall};
@@ -69,6 +69,8 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 required: true
               DD_API_KEY:
                 required: true
+              NIX_CACHE_SIGNING_KEY:
+                required: false
         "#})?,
     );
     Ok(())
@@ -118,12 +120,17 @@ fn build_job(name: &str, gate_output: &str) -> Job {
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4().add_with(("clean", false)))
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_cache())
 }
 
 fn build_service_binaries() -> Job {
     build_job("Build ${{ inputs.service-name }} binaries", "has_binaries")
         .add_step(build_prebuilt_binaries())
+        // Pushing the built output is what makes this service a pure
+        // substitution next run when it is unchanged, even on a cold volume.
+        .add_step(steps::push_nix_cache(
+            ".#deploy-service-binaries-${{ inputs.service-name }}",
+        ))
         .add_step(steps::upload_handoff_artifact(
             "prebuilt-binaries.tar.gz",
             "${{ inputs.service-name }}",
@@ -173,9 +180,22 @@ fn build_lambda_artifacts() -> Job {
 }
 
 fn build_lambdas() -> Step<Run> {
+    // The cache env lets the script push the handler out-paths it just built
+    // (see the script's push block) — the store-path equivalent of the binary
+    // job's push step, minus a second flake evaluation.
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
         .add_env(Env::new("SERVICE", "${{ inputs.service-name }}"))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new(
+            "NIX_CACHE_SIGNING_KEY",
+            vars::NIX_CACHE_SIGNING_KEY,
+        ))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
 }
 
 fn log_lambda_receipt() -> Step<Run> {
