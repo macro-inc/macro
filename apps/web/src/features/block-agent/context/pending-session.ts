@@ -96,6 +96,8 @@ export type StartPendingSessionOptions = {
   instructions?: string;
   /** Opaque harness setting confirmed before the first prompt. */
   effortOverride?: { configId: string; value: string };
+  /** Inference speed confirmed before the first prompt. */
+  speedOverride?: { configId: string; value: string };
   /**
    * Explicit GitHub repository for the managed Cursor session.
    */
@@ -197,10 +199,15 @@ export function startPendingSession(
         // an effort holds the block in preflight. Then adopt the session before
         // issuing the first prompt so that prompt is folded speculatively while
         // its POST is in flight.
-        if (options.effortOverride || prompt || options.attachments?.length) {
+        if (
+          options.effortOverride ||
+          options.speedOverride ||
+          prompt ||
+          options.attachments?.length
+        ) {
           const session = AgentSession.acquire(created);
           try {
-            if (options.effortOverride) {
+            if (options.effortOverride || options.speedOverride) {
               await session.load();
               trace?.stage('loaded');
               await sessionConfigReported(session);
@@ -209,6 +216,13 @@ export function startPendingSession(
                 options.modelOverride,
                 options.effortOverride
               );
+              if (options.speedOverride) {
+                await configureSessionModel(
+                  session,
+                  options.modelOverride,
+                  options.speedOverride
+                );
+              }
               trace?.stage('configured');
             }
             // The prompt's reference ends when its POST answers. Navigation

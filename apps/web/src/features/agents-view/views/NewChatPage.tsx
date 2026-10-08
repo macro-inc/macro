@@ -6,6 +6,12 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import {
+  acceleratedSpeed,
+  speedForModel,
+} from '@core/component/AI/constant/speed';
+import { fastModeEnabled } from '@core/component/AI/signal/speed';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
@@ -45,6 +51,7 @@ export type StartConversation = {
   repoBranch?: string;
   modelOverride?: string;
   effortOverride?: { configId: string; value: string };
+  speedOverride?: { configId: string; value: string };
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -229,6 +236,16 @@ export function NewChatPage(props: {
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
       effortOverride: effortOverride(),
+      ...(model &&
+      ['macro-inmem', 'in-memory'].includes(selected()?.harness ?? '') &&
+      acceleratedSpeed(model)
+        ? {
+            speedOverride: {
+              configId: 'speed',
+              value: speedForModel(model, fastModeEnabled()),
+            },
+          }
+        : {}),
     });
     attachmentTracker.clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
@@ -281,7 +298,18 @@ export function NewChatPage(props: {
       draft={draft()}
       onDraftChange={setDraft}
       blockedReason={blocked()}
-      selector={agentSelector()}
+      selector={
+        <div class="flex min-w-0 items-center gap-1">
+          {agentSelector()}
+          <Show
+            when={['macro-inmem', 'in-memory'].includes(
+              selected()?.harness ?? ''
+            )}
+          >
+            <SpeedToggle model={composerModelOverride() ?? ''} />
+          </Show>
+        </div>
+      }
       drawer={
         <RepositoryPicker
           onOpenChange={setRepositoryPickerOpen}

@@ -255,6 +255,7 @@ async fn drive_turn(
         owner,
         model,
         reasoning_effort,
+        speed,
         identity,
         instructions,
         messages,
@@ -316,6 +317,7 @@ async fn drive_turn(
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
+        .with_speed(speed)?
         .with_genai_telemetry(false);
     if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(

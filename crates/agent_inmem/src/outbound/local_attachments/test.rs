@@ -150,6 +150,7 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         owner: Owner::from_principal_str("macro|test@macro.com").expect("user"),
         model: "test-model".to_owned(),
         reasoning_effort: agent::ReasoningEffort::default(),
+        speed: agent::ModelSpeed::Standard,
         identity: None,
         instructions: None,
         messages,

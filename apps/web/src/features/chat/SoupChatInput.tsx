@@ -100,6 +100,7 @@ function SoupChatInputInner() {
       cognitionApiServiceClient.sendStreamChatMessage({
         content: request.content,
         model: request.model,
+        speed: request.speed,
         chat_id: chatId,
         attachments:
           request.attachments.length > 0 ? request.attachments : undefined,
@@ -112,6 +113,7 @@ function SoupChatInputInner() {
         content: request.content,
         attachments: request.attachments,
         model: request.model,
+        speed: request.speed,
       });
 
       // Replace the soup split with the chat split

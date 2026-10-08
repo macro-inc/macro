@@ -142,6 +142,7 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
       cognitionApiServiceClient.sendStreamChatMessage({
         content: request.content,
         model: request.model,
+        speed: request.speed,
         chat_id: chatId,
         attachments:
           request.attachments.length > 0 ? request.attachments : undefined,
@@ -154,6 +155,7 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
         content: request.content,
         attachments: request.attachments,
         model: request.model,
+        speed: request.speed,
       });
 
       if (props.openChat) {

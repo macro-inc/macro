@@ -142,6 +142,8 @@ pub(crate) struct RecordedTurn {
     pub(crate) model: String,
     /// Reasoning effort the turn was to use.
     pub(crate) reasoning_effort: agent::ReasoningEffort,
+    /// Provider speed selected for this turn.
+    pub(crate) speed: agent::ModelSpeed,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
     /// Every image URL attached across the conversation, in order.
@@ -177,6 +179,7 @@ impl TurnEngine for ScriptedEngine {
             .push(RecordedTurn {
                 model: request.model.clone(),
                 reasoning_effort: request.reasoning_effort,
+                speed: request.speed,
                 messages: request
                     .messages
                     .iter()

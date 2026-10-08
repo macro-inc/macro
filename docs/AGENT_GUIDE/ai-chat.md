@@ -1506,3 +1506,24 @@ only that link. If another edit makes the revision stale, the AI reads the lates
 settings and confirms a fresh proposal. Identical retries reuse the saved link.
 Old pending booking review requests can be dismissed so the agent can resume with
 conversational confirmation.
+
+## Accelerated model speed
+
+The lightning button beside the model selector enables Ultrafast for GPT-6 Astra
+and GPT-6.1 Sol (6× token pricing), or Fast for Claude Opus 5.5 (2× token pricing).
+Its tooltip shows the mode, state, and usage multiplier before sending. Other
+models keep standard speed. The preference is saved in browser local storage and
+shared by legacy chat and native Macro agent composers. External coding agents
+use their own speed controls.
+
+Preview the controls at `/app/debug/ui?ui=speed-toggle`.
+Click the bolt and verify its brief scale/rotation animation and highlighted state.
+Reload, change between supported models, and confirm the preference survives.
+Select an unsupported model and verify the bolt is inactive; switching back restores
+the preference. With reduced motion enabled, toggling changes the state without
+animation. Native sessions confirm speed configuration before sending the prompt;
+a rejected configuration must retain the unsent draft and attachments.
+
+Usage records follow the provider's delivered speed for each call, including tool
+loops. OpenAI prompts exceeding 272,000 tokens use the long-context rate for that
+call. Standard and accelerated rates have separate pricing keys.

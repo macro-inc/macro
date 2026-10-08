@@ -1940,3 +1940,74 @@ async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
         .await;
     }
 }
+
+#[tokio::test]
+async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
+    struct SpeedEngine(ScriptedEngine);
+    impl TurnEngine for SpeedEngine {
+        fn supported_models(&self) -> &[&str] {
+            &["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"]
+        }
+        fn run_turn(
+            &self,
+            request: TurnRequest,
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+            self.0.run_turn(request)
+        }
+    }
+    let engine = Arc::new(SpeedEngine(ScriptedEngine::new(vec![])));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-opus-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                "speed",
+                "fast",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "fast please"))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "standard please"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    let requests = engine.0.requests();
+    assert_eq!(requests[0].speed, agent::ModelSpeed::Fast);
+    assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+}

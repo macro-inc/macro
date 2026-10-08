@@ -111,8 +111,30 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
 /// Rebuild the last valid reasoning-effort selection from durable frames.
 #[must_use]
 pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
+    replay_config(frames, effort_from_options)
+}
+
+/// Restore the last confirmed speed selection after a runtime restart.
+pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
+    replay_config(frames, |options| {
+        options
+            .iter()
+            .find_map(|option| {
+                if option.id.to_string() != "speed" {
+                    return None;
+                }
+                let SessionConfigKind::Select(select) = &option.kind else {
+                    return None;
+                };
+                agent::ModelSpeed::parse(&select.current_value.to_string())
+            })
+            .unwrap_or_default()
+    })
+}
+
+fn replay_config<T: Default>(frames: &[Message], read: impl Fn(&[SessionConfigOption]) -> T) -> T {
     let mut pending = HashSet::new();
-    let mut current = ReasoningEffort::default();
+    let mut current = T::default();
     for frame in frames {
         match frame {
             Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => {
@@ -135,7 +157,7 @@ pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
                     if let Some(options) = result.get("configOptions").and_then(|options| {
                         serde_json::from_value::<Vec<SessionConfigOption>>(options.clone()).ok()
                     }) {
-                        current = effort_from_options(&options);
+                        current = read(&options);
                     }
                 }
                 RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
@@ -147,7 +169,7 @@ pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
                         ..
                     }) = deserialize_params::<SessionNotification>(notification.params.as_ref())
                     {
-                        current = effort_from_options(&update.config_options);
+                        current = read(&update.config_options);
                     }
                 }
                 _ => {}
