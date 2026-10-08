@@ -51,6 +51,7 @@ import {
   CONVERT_CHECKBOXES_TO_TASKS,
   checkboxToTaskPlugin,
 } from '../plugins/checkbox-to-task';
+import { createChecklistControls } from '../plugins/checklist-controls';
 import { codePlugin } from '../plugins/code/codePlugin';
 import { emojisPlugin } from '../plugins/emojis/emojisPlugin';
 import { iosCursorScrollPlugin } from '../plugins/ios-cursor-scroll';
@@ -238,6 +239,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
     );
   }
   useAll(slots?.beforeCode?.(accessories));
+  const checklistControls = createChecklistControls();
   plugins
     .use(
       codePlugin({
@@ -245,6 +247,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
         setAccessories: setAccessoryStore,
       })
     )
+    .use(checklistControls.plugin)
     .use(listToTablePlugin());
 
   return {
@@ -252,6 +255,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
     dragInsert,
     draggableBlock,
     accessories,
+    checklistControls: checklistControls.data,
     /** Whether an inline menu owns the arrow and enter keys. */
     isInlineMenuOpen: () =>
       menus.mentions.isOpen() ||

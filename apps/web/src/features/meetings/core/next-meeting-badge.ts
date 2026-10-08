@@ -22,7 +22,7 @@ export function nextMeetingBadge(
     if (event.allDay) continue;
     const start = Date.parse(event.start);
     const end = Date.parse(event.end);
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
       continue;
     }
     if (start <= nowMs && nowMs < end) return { kind: 'now', label: 'Now' };

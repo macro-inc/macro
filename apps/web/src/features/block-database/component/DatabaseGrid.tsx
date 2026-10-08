@@ -314,6 +314,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
               inferNewColumns
             >
               <DatabaseRecords
+                contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted"
                 view={props.view}
                 stored={props.stored}
                 preparingView={props.preparingView}

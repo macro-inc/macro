@@ -12,6 +12,7 @@ import {
   useGraphqlCalendarHost,
 } from './graphql/flag';
 import { readCalendarRange } from './graphql/range';
+import { calendarCacheAnswered } from './graphql/readiness';
 import { activeCalendarSyncController } from './graphql/sync-controller';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
@@ -108,6 +109,7 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+/** Reuses only the current user's date range when the transport changes. */
 export function useCalendarOccurrencesQuery(
   input: Accessor<CalendarOccurrencesQueryInput>,
   options?: Accessor<CalendarOccurrencesQueryOptions>
@@ -141,31 +143,59 @@ export function useCalendarOccurrencesQuery(
     const enabled =
       Boolean(userId) && range !== undefined && options?.().enabled !== false;
     const host = cacheHost();
+    const keys = calendarKeys.occurrences(userId ?? '', range);
+    // Seed the new transport's cache, rather than an observer-only placeholder,
+    // so optimistic edits and rollbacks can update the visible events too.
+    const queryKey = host ? keys._ctx.graphql.queryKey : keys.queryKey;
+    if (activeQueryClient.getQueryData(queryKey) === undefined) {
+      const previous = activeQueryClient.getQueryData<CalendarOccurrencesData>(
+        host ? keys.queryKey : keys._ctx.graphql.queryKey
+      );
+      if (previous) {
+        activeQueryClient.setQueryData(queryKey, previous, { updatedAt: 0 });
+      }
+    }
+    // Even the otherwise infinitely fresh GraphQL query must run once after
+    // being seeded. A successful read restores its normal freshness policy.
+    const staleTime = (query: { state: { dataUpdatedAt: number } }) =>
+      query.state.dataUpdatedAt === 0
+        ? 0
+        : host
+          ? Infinity
+          : CALENDAR_STALE_TIME;
 
     if (host) {
       return {
-        queryKey: calendarKeys.occurrences(userId ?? '', range)._ctx.graphql
-          .queryKey,
+        queryKey: keys._ctx.graphql.queryKey,
         queryFn: async ({ signal }: { signal: AbortSignal }) => {
           if (!range) {
             throw new Error('Calendar occurrence range is unavailable');
           }
-          const cached = await readCalendarRange(host, range, { signal });
-          if (cached) return cached;
-          markCalendarCacheUnsupported(host);
+          const read = await readCalendarRange(host, range, { signal });
+          if (read.kind === 'range') return read.data;
+          if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
           return fetchCalendarOccurrences(range, signal);
         },
         enabled,
-        staleTime: Infinity,
+        staleTime,
         // Covered viewports never touch the network, so offline reads run.
         networkMode: 'offlineFirst' as const,
-        placeholderData: (p: CalendarOccurrencesData | undefined) => p,
         refetchOnWindowFocus: false,
+        // Read from REST while the cache was starting: poll like the REST
+        // path until the provider sync finishes.
+        refetchInterval: (query: {
+          state: { data: CalendarOccurrencesData | undefined };
+        }) =>
+          options?.().pollWhileSyncing !== false &&
+          !calendarCacheAnswered(host) &&
+          query.state.data?.syncStatus === CalendarSyncStatus.syncing
+            ? CALENDAR_SYNC_POLL_INTERVAL
+            : false,
       };
     }
 
     return {
-      queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
+      queryKey: keys.queryKey,
       queryFn: ({ signal }) => {
         if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
@@ -175,8 +205,7 @@ export function useCalendarOccurrencesQuery(
       },
       enabled:
         Boolean(userId) && range !== undefined && options?.().enabled !== false,
-      staleTime: CALENDAR_STALE_TIME,
-      placeholderData: (p) => p,
+      staleTime,
       refetchOnWindowFocus: options?.().refetchOnWindowFocus ?? true,
       refetchInterval: (query) =>
         options?.().pollWhileSyncing !== false &&
@@ -190,11 +219,12 @@ export function useCalendarOccurrencesQuery(
 /**
  * Refetches every mounted occurrence viewport. With calendar reads on the
  * cache, the delta runs first so the viewports see the change that prompted
- * the refresh rather than the cache from before it.
+ * the refresh rather than the cache from before it. A cache still starting
+ * would hold the delta, so the viewports refetch without it.
  */
 export async function invalidateCalendarOccurrences() {
   const controller = activeCalendarSyncController();
-  if (controller) {
+  if (controller?.answering()) {
     await controller.runDelta().catch((error) => {
       console.warn('Calendar delta sync failed', error);
     });

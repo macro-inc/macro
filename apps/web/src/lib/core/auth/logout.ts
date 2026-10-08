@@ -6,6 +6,7 @@ import { syncLoginStorage } from '@core/util/cookies';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { clearTeamCalendarQueries } from '@queries/calendar/team-cache';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import {
@@ -49,6 +50,7 @@ export async function clearLocalAuthSession() {
   syncLoginStorage(false);
   const documentContextsCleared = clearOfflineDocumentContexts();
   clearDocumentQueryCache(queryClient);
+  clearTeamCalendarQueries();
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.removeQueries({ queryKey: notificationKeys._def });

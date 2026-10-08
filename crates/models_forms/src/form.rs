@@ -7,6 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::ids::FormId;
 
 /// Who may respond to a form.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
     Clone,
@@ -34,6 +35,7 @@ pub enum Audience {
 
 /// Whether a form takes responses, as its owner set it. A form also stops
 /// taking them once its closing time passes.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
     Clone,
@@ -59,6 +61,7 @@ pub enum FormStatus {
 
 /// The caller's level on a form: view responds, edit changes questions and
 /// reads responses, owner also sets the audience, closes and trashes it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
     Clone,
@@ -83,6 +86,7 @@ pub enum FormAccess {
 }
 
 /// A form: a view of one database table whose rows are its responses.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Form {
@@ -136,6 +140,7 @@ impl Form {
 }
 
 /// A request to create a form.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateForm {
@@ -146,6 +151,7 @@ pub struct CreateForm {
 }
 
 /// Where a new form's responses go.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(
     tag = "kind",
@@ -173,6 +179,7 @@ pub enum FormSource {
 /// A change to a form's facts; what is left out stays. The description and
 /// confirmation message take edit, the rest owner. A form is renamed
 /// through the entity mutation router.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug, Clone, PartialEq, Default, Serialize, Deserialize, utoipa::ToSchema, specta::Type,
 )]
@@ -236,6 +243,7 @@ where
 
 /// A form the caller reaches through a grant, as the forms catalog lists
 /// it, with the caller's level on it.
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct ListedForm {

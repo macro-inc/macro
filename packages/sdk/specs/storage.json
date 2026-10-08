@@ -816,6 +816,67 @@
         }
       }
     },
+    "/calendar-events/team": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Query authorized projections in a bounded viewport.",
+        "operationId": "list_team_calendar",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive instant.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive instant.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Continuation returned by the preceding page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum source occurrences, at most 2,000. Zero returns the roster only.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamCalendarPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/calendar-events/team-out-of-office": {
       "get": {
         "tags": ["calendar_events"],
@@ -8586,6 +8647,66 @@
         }
       }
     },
+    "/documents/github_prs/tasks": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Handler for `POST /documents/github_prs/tasks`.",
+        "description": "Returns the task documents each of up to 100 GitHub pull requests references, for the pull\nrequests the caller can see.",
+        "operationId": "get_github_pull_request_tasks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GithubPullRequestTasksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GithubPullRequestTasksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/initialize_user_documents": {
       "post": {
         "tags": ["document"],
@@ -14388,6 +14509,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ThreadState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/timeline": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read a bounded window of messages and the parent's activity, ordered by the server.",
+        "operationId": "message_timeline_entries",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selection",
+            "in": "query",
+            "description": "Serialized MessageTimelineQuery; absent selects the latest roots.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageTimelinePage"
                 }
               }
             }
@@ -20938,6 +21105,22 @@
           }
         }
       },
+      "ChannelPictureChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for a channel picture update, including removals.",
+        "required": ["channel_id", "actor"],
+        "properties": {
+          "actor": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User who changed the picture."
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel whose picture changed."
+          }
+        }
+      },
       "ChannelPreview": {
         "oneOf": [
           {
@@ -21078,6 +21261,21 @@
       },
       "ChannelTopicEvent": {
         "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel's profile picture changed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["channel.picture_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/ChannelPictureChangedMetadata",
+                "description": "A channel's profile picture changed."
+              }
+            }
+          },
           {
             "type": "object",
             "description": "A channel was created.",
@@ -26091,7 +26289,7 @@
               "endsAt": {
                 "type": "string",
                 "format": "date-time",
-                "description": "Exclusive end instant."
+                "description": "Exclusive end instant; equal to the start for an imported point event."
               },
               "kind": {
                 "type": "string",
@@ -28693,6 +28891,52 @@
         "description": "What a reviewer's latest review on a pull request said.",
         "enum": ["approved", "changes_requested", "commented", "dismissed"]
       },
+      "GithubPullRequestTasks": {
+        "type": "object",
+        "description": "The tasks linked to one GitHub pull request.",
+        "required": ["githubKey", "taskIds"],
+        "properties": {
+          "githubKey": {
+            "type": "string",
+            "description": "The pull request's `owner/repo/pull/number` key, as requested."
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ids of the task documents the pull request references, oldest link first. Empty when\nthe caller cannot see the pull request. The caller may still lack access to a task."
+          }
+        }
+      },
+      "GithubPullRequestTasksRequest": {
+        "type": "object",
+        "description": "Request body for looking up the tasks linked to GitHub pull requests.",
+        "required": ["githubKeys"],
+        "properties": {
+          "githubKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pull request `owner/repo/pull/number` keys, at most 100."
+          }
+        }
+      },
+      "GithubPullRequestTasksResponse": {
+        "type": "object",
+        "description": "The tasks linked to each requested GitHub pull request.",
+        "required": ["pullRequests"],
+        "properties": {
+          "pullRequests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GithubPullRequestTasks"
+            },
+            "description": "One entry per requested pull request, in request order."
+          }
+        }
+      },
       "GithubPullRequestUser": {
         "type": "object",
         "description": "A GitHub user named on a pull request, such as an assignee.",
@@ -30659,12 +30903,12 @@
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "description": "Last root creation time."
+            "description": "Last message creation time or activity occurrence time."
           },
           "id": {
             "type": "string",
             "format": "uuid",
-            "description": "Last root UUID, used to break timestamp ties."
+            "description": "Last entry UUID, used to break timestamp ties across both sources."
           }
         }
       },
@@ -31151,6 +31395,77 @@
             "type": "integer",
             "format": "int64",
             "description": "Total live reply count."
+          }
+        }
+      },
+      "MessageTimelineEntry": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A root message with its bounded thread preview.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/MessageListItem",
+                "description": "The message and thread state."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["message"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A recorded fact about the parent, such as a rename or a finished call.",
+            "required": ["activity", "type"],
+            "properties": {
+              "activity": {
+                "$ref": "#/components/schemas/TimelineActivity",
+                "description": "The recorded activity."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["activity"]
+              }
+            }
+          }
+        ],
+        "description": "One chronological entry in a parent's timeline."
+      },
+      "MessageTimelinePage": {
+        "type": "object",
+        "description": "A bounded, newest-first window of a parent's messages and activity, ordered\nby the server on one `(timestamp, id)` keyset.",
+        "required": ["entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageTimelineEntry"
+            },
+            "description": "Messages and activity, newest first."
+          },
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to older entries."
+              }
+            ]
+          },
+          "previous_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to newer entries."
+              }
+            ]
           }
         }
       },
@@ -37696,6 +38011,164 @@
           }
         }
       },
+      "TeamCalendarContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No provider or event metadata.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["busy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicitly authorized source content.",
+            "required": ["details", "kind"],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/TeamCalendarDetails",
+                "description": "Detail projection."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["details"]
+              }
+            }
+          }
+        ],
+        "description": "Disjoint busy/detail shapes prevent new event fields leaking by default."
+      },
+      "TeamCalendarCoverage": {
+        "type": "string",
+        "description": "Whether a member's calendar projection can establish availability.",
+        "enum": ["ready", "unavailable", "hidden"]
+      },
+      "TeamCalendarDetails": {
+        "type": "object",
+        "description": "Safe details from a single authorized source.",
+        "required": ["title", "attendees", "calendarName"],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees; self flags are relative to the requesting viewer."
+          },
+          "calendarName": {
+            "type": "string",
+            "description": "Source calendar name, shown only with details."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Join URL, if supplied by this source."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Body, if supplied by this source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location, if supplied by this source."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer address from this source."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer name from this source."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          }
+        }
+      },
+      "TeamCalendarItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TeamCalendarContent",
+            "description": "Authorized content variant."
+          },
+          {
+            "type": "object",
+            "required": ["id", "ownerId", "time", "contributesToAvailability"],
+            "properties": {
+              "contributesToAvailability": {
+                "type": "boolean",
+                "description": "Whether this occurrence blocks the sharer's personal availability.\nA subscribed calendar's block can be shared without occupying the sharer."
+              },
+              "id": {
+                "type": "string",
+                "description": "Stable opaque projection identity, never an event entity id."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The person sharing access to the source."
+              },
+              "time": {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Occurrence interval."
+              }
+            }
+          }
+        ],
+        "description": "A read-only team calendar occurrence."
+      },
+      "TeamCalendarMember": {
+        "type": "object",
+        "description": "A current member of the requester's team.",
+        "required": ["userId", "sharing", "coverage"],
+        "properties": {
+          "coverage": {
+            "$ref": "#/components/schemas/TeamCalendarCoverage",
+            "description": "Coverage available for a trustworthy calculation."
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/TeamCalendarSharing",
+            "description": "Current team-sharing policy."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Macro user identifier."
+          }
+        }
+      },
+      "TeamCalendarPage": {
+        "type": "object",
+        "description": "A bounded page of team calendar projections.",
+        "required": ["members", "items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamCalendarItem"
+            },
+            "description": "Authorized read-only projections."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamCalendarMember"
+            },
+            "description": "Current membership and sharing policies."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque continuation token; null after the last source occurrence."
+          }
+        }
+      },
+      "TeamCalendarSharing": {
+        "type": "string",
+        "description": "What a user exposes through their team membership.",
+        "enum": ["all", "busy_only", "none"]
+      },
       "TeamOutOfOfficeItem": {
         "type": "object",
         "description": "One teammate's out-of-office occurrence.",
@@ -37963,6 +38436,34 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          }
+        }
+      },
+      "TimelineActivity": {
+        "type": "object",
+        "description": "A displayable fact returned together with a message page.",
+        "required": ["id", "actor_id", "occurred_at", "action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Durable action tag. Unknown tags remain representable during rollouts."
+          },
+          "actor_id": {
+            "type": "string",
+            "description": "Principal who performed the action."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable activity identity, independent of message ids."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Immutable chronological position."
+          },
+          "payload": {
+            "description": "The action's stored payload."
           }
         }
       },

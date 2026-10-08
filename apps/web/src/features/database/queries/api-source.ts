@@ -67,6 +67,8 @@ export function createDatabaseApiSource(args: {
   const table = useQuery(
     () => ({
       queryKey: [...key, 'schema'],
+      // Polls refetch the schema; stable columns keep cells from remounting previews.
+      reconcile: 'id',
       queryFn: async () => {
         const result = await api.readTable(tableId);
         if (result.isErr()) throw result.error;

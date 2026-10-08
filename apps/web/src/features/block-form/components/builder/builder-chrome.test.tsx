@@ -34,7 +34,6 @@ function mount() {
     <TitleCard
       name={name()}
       description={description()}
-      meta={null}
       databaseLink={null}
       onName={names.save}
       onDescription={descriptions.save}
@@ -64,7 +63,6 @@ describe('TitleCard', () => {
       <TitleCard
         name={name()}
         description={description()}
-        meta={null}
         databaseLink={null}
         onName={(value) => {
           sentNames.push(value);
@@ -142,7 +140,6 @@ describe('TitleCard', () => {
       <TitleCard
         name="Workshop ideas"
         description="Saved words"
-        meta={null}
         databaseLink={null}
         onName={async () => true}
         onDescription={() => failure}

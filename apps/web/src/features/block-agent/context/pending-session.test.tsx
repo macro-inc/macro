@@ -35,6 +35,7 @@ vi.mock('@queries/agent-session/log', () => ({
   AgentSessionLogUnavailable: class extends Error {},
   watchAgentSessionLog: () => ({
     cached: Promise.resolve(undefined),
+    cacheMiss: () => undefined,
     fetched: Promise.resolve({ bot: { id: 'bot' }, rows: [] }),
     stop: () => {},
   }),

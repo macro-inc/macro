@@ -510,7 +510,7 @@ pub async fn run() -> anyhow::Result<()> {
         config.docx_document_upload_bucket.as_ref(),
     );
     let markdown_initializer =
-        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::new(
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer::detached(
             lexical_client.as_ref().clone(),
             sync_service_client.as_ref().clone(),
         );
@@ -581,10 +581,17 @@ pub async fn run() -> anyhow::Result<()> {
             installation_state_secret: config.github_installation_state_secret.to_string(),
         },
         document_service.clone(),
-        Arc::new(GithubPullRequestServiceImpl::new(
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
-            PgGithubPullRequestRepo::new(db.clone()),
-        )),
+        Arc::new(
+            GithubPullRequestServiceImpl::new(
+                ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
+                PgGithubPullRequestRepo::new(db.clone()),
+            )
+            .with_event_publisher(
+                github_pull_requests::broker::BrokerGithubPullRequestPublisher(
+                    macro_event_broker.clone(),
+                ),
+            ),
+        ),
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
@@ -968,6 +975,24 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let (timeline_publisher, timeline_delivery) = crate::service::activity::TimelinePublisher::new(
+        conn_gateway_client.clone(),
+        messages::outbound::connection_gateway::ConnectionGatewayMessages(Arc::new(
+            conn_gateway_client.clone(),
+        )),
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+            (*entity_access_service).clone(),
+        ),
+    );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            tokio::select! {
+                _ = cancellation_token.cancelled() => {},
+                _ = timeline_delivery => {},
+            }
+        }
+    });
     let activity_consumer_brokers = config.kafka_brokers.as_ref().to_string();
     let editing_activity = Arc::new(
         documents_hex::outbound::editing_activity::RedisEditingActivityStore::new(
@@ -997,7 +1022,7 @@ pub async fn run() -> anyhow::Result<()> {
                         crate::service::activity::ingest(event, editing_activity.as_ref()).await
                     }
                 },
-                activity_realtime,
+                (activity_realtime, timeline_publisher),
             );
             loop {
                 if cancellation_token.is_cancelled() {
@@ -1209,6 +1234,9 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
             ),
         )
+        .with_activity(activity::outbound::pg_activity_repo::PgActivityRepo::new(
+            db.clone(),
+        ))
         .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
             PgChannelsRepo::new(db.clone()),
         ))
@@ -1678,6 +1706,10 @@ pub async fn run() -> anyhow::Result<()> {
     });
 
     consumer_tracker.spawn({
+        let session_repo = agent_session::outbound::postgres::PgAgentSessionRepo::new(
+            db.clone(),
+            owned_entity_registrar.clone(),
+        );
         let brokers = config.kafka_brokers.as_ref().to_string();
         let entity_access_service = entity_access_service.as_ref().clone();
         let macro_event_broker = macro_event_broker.clone();
@@ -1695,7 +1727,13 @@ pub async fn run() -> anyhow::Result<()> {
                 );
                 tracing::info!("starting realtime Soup entity consumer");
                 let result = fanout_service
-                    .run_entity_update_consumer(&brokers, cancellation_token.cancelled())
+                    .run_entity_update_consumer(
+                        &brokers,
+                        &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
+                            session_repo.clone(),
+                        ),
+                        cancellation_token.cancelled(),
+                    )
                     .await;
 
                 if cancellation_token.is_cancelled() {
@@ -1757,8 +1795,18 @@ pub async fn run() -> anyhow::Result<()> {
             ),
         ),
     );
-    let calendar_state =
-        CalendarRouterState::new(calendar_read_service, authorization_state.clone());
+    // Team policy reads use the primary so a sharing downgrade cannot be
+    // served from a lagging replica. The GraphQL own-calendar feed retains
+    // its existing readonly-pool routing.
+    let calendar_state = CalendarRouterState::new(
+        Arc::new(
+            calendar_events::domain::service::CalendarService::new(
+                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+            )
+            .with_team_sharing_enabled(config.calendar_team_sharing_enabled),
+        ),
+        authorization_state.clone(),
+    );
     // Calendar writes belong to calendar_service; each GraphQL mutation then
     // answers from the primary so it reads the state its write committed.
     let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(

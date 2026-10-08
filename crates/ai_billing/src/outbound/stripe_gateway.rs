@@ -1,5 +1,5 @@
 //! Stripe adapter: one-off Checkout for credit packs, immediate invoices for
-//! overage chunks and automatic credit reloads, and the current subscription
+//! automatic credit reloads, and the current subscription
 //! period.
 
 #[cfg(test)]
@@ -39,7 +39,6 @@ pub const PAYER_METADATA_KEY: &str = "macro_user_id";
 pub const CHARGE_METADATA_KEY: &str = "macro_charge_id";
 /// Metadata key carrying the `ai_credit_reload` id on reload invoices.
 pub const RELOAD_METADATA_KEY: &str = "macro_reload_id";
-const OVERAGE_INVOICE_DESCRIPTION: &str = "Macro AI usage beyond plan";
 const CREDIT_RELOAD_INVOICE_DESCRIPTION: &str = "Macro AI credits (automatic reload)";
 const BILLING_SCOPE_METADATA_KEY: &str = "macro_billing_scope";
 const PERSONAL_SCOPE_STAMP: &str = "personal";
@@ -224,16 +223,6 @@ struct OneOffInvoice<'a> {
     amount_cents: i64,
     /// Line description shown on the invoice.
     line_description: &'a str,
-}
-
-fn overage_metadata(charge_id: Uuid) -> HashMap<String, String> {
-    HashMap::from([
-        (
-            PURPOSE_METADATA_KEY.to_string(),
-            PURPOSE_AI_OVERAGE.to_string(),
-        ),
-        (CHARGE_METADATA_KEY.to_string(), charge_id.to_string()),
-    ])
 }
 
 fn credit_reload_metadata(reload_id: Uuid, payer: &MacroUserIdStr<'_>) -> HashMap<String, String> {
@@ -467,19 +456,7 @@ impl PaymentGateway for StripePaymentGateway {
 
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
     async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
-        let customer = parse_customer(&request.customer_id)?;
-        self.open_one_off_invoice(
-            customer,
-            request.scope,
-            OneOffInvoice {
-                idempotency_prefix: format!("ai_overage:{}", request.charge_id),
-                metadata: overage_metadata(request.charge_id),
-                invoice_description: OVERAGE_INVOICE_DESCRIPTION,
-                amount_cents: request.amount_cents,
-                line_description: &request.description,
-            },
-        )
-        .await
+        Err(BillingError::DirectUsageBillingDisabled)
     }
 
     #[tracing::instrument(skip(self, request), fields(reload = %request.reload_id, payer = %request.payer, cents = request.amount_cents), err)]
@@ -512,6 +489,15 @@ impl PaymentGateway for StripePaymentGateway {
         let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
             .await
             .map_err(payment)?;
+        if invoice
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.get(PURPOSE_METADATA_KEY))
+            .map(String::as_str)
+            == Some(PURPOSE_AI_OVERAGE)
+        {
+            return Err(BillingError::DirectUsageBillingDisabled);
+        }
         if invoice.status == Some(InvoiceStatus::Paid) {
             return Ok(true);
         }

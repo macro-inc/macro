@@ -2594,6 +2594,20 @@ export type ChannelParticipantRemovedMetadata = {
 };
 
 /**
+ * Metadata for a channel picture update, including removals.
+ */
+export type ChannelPictureChangedMetadata = {
+    /**
+     * User who changed the picture.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * Channel whose picture changed.
+     */
+    channel_id: string;
+};
+
+/**
  * Preview entry for a single channel id.
  */
 export type ChannelPreview = (ChannelPreviewData & {
@@ -2671,6 +2685,12 @@ export type ChannelThreadFilters = {
  * Events that can be published to [`MacroChannelsTopic`].
  */
 export type ChannelTopicEvent = {
+    event_type: 'channel.picture_changed';
+    /**
+     * A channel's profile picture changed.
+     */
+    metadata: ChannelPictureChangedMetadata;
+} | {
     event_type: 'channel.created';
     /**
      * A channel was created.
@@ -5992,7 +6012,7 @@ export type EventStatus = 'confirmed' | 'tentative' | 'cancelled';
  */
 export type EventTime = {
     /**
-     * Exclusive end instant.
+     * Exclusive end instant; equal to the start for an imported point event.
      */
     endsAt: string;
     kind: 'timed';
@@ -7414,6 +7434,41 @@ export type GithubPullRequestReviewDecision = 'approved' | 'changes_requested' |
 export type GithubPullRequestReviewState = 'approved' | 'changes_requested' | 'commented' | 'dismissed';
 
 /**
+ * The tasks linked to one GitHub pull request.
+ */
+export type GithubPullRequestTasks = {
+    /**
+     * The pull request's `owner/repo/pull/number` key, as requested.
+     */
+    githubKey: string;
+    /**
+     * Ids of the task documents the pull request references, oldest link first. Empty when
+     * the caller cannot see the pull request. The caller may still lack access to a task.
+     */
+    taskIds: Array<string>;
+};
+
+/**
+ * Request body for looking up the tasks linked to GitHub pull requests.
+ */
+export type GithubPullRequestTasksRequest = {
+    /**
+     * Pull request `owner/repo/pull/number` keys, at most 100.
+     */
+    githubKeys: Array<string>;
+};
+
+/**
+ * The tasks linked to each requested GitHub pull request.
+ */
+export type GithubPullRequestTasksResponse = {
+    /**
+     * One entry per requested pull request, in request order.
+     */
+    pullRequests: Array<GithubPullRequestTasks>;
+};
+
+/**
  * A GitHub user named on a pull request, such as an assignee.
  */
 export type GithubPullRequestUser = {
@@ -8679,11 +8734,11 @@ export type MessageChange = {
  */
 export type MessageCursor = {
     /**
-     * Last root creation time.
+     * Last message creation time or activity occurrence time.
      */
     created_at: string;
     /**
-     * Last root UUID, used to break timestamp ties.
+     * Last entry UUID, used to break timestamp ties across both sources.
      */
     id: string;
 };
@@ -9013,6 +9068,36 @@ export type MessageThreadPreview = {
      * Total live reply count.
      */
     reply_count: number;
+};
+
+/**
+ * One chronological entry in a parent's timeline.
+ */
+export type MessageTimelineEntry = {
+    /**
+     * The message and thread state.
+     */
+    message: MessageListItem;
+    type: 'message';
+} | {
+    /**
+     * The recorded activity.
+     */
+    activity: TimelineActivity;
+    type: 'activity';
+};
+
+/**
+ * A bounded, newest-first window of a parent's messages and activity, ordered
+ * by the server on one `(timestamp, id)` keyset.
+ */
+export type MessageTimelinePage = {
+    /**
+     * Messages and activity, newest first.
+     */
+    entries: Array<MessageTimelineEntry>;
+    next_cursor?: null | MessageCursor;
+    previous_cursor?: null | MessageCursor;
 };
 
 /**
@@ -13013,6 +13098,126 @@ export type TaskFilters = {
 };
 
 /**
+ * Disjoint busy/detail shapes prevent new event fields leaking by default.
+ */
+export type TeamCalendarContent = {
+    kind: 'busy';
+} | {
+    /**
+     * Detail projection.
+     */
+    details: TeamCalendarDetails;
+    kind: 'details';
+};
+
+/**
+ * Whether a member's calendar projection can establish availability.
+ */
+export type TeamCalendarCoverage = 'ready' | 'unavailable' | 'hidden';
+
+/**
+ * Safe details from a single authorized source.
+ */
+export type TeamCalendarDetails = {
+    /**
+     * Attendees; self flags are relative to the requesting viewer.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Source calendar name, shown only with details.
+     */
+    calendarName: string;
+    /**
+     * Join URL, if supplied by this source.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Body, if supplied by this source.
+     */
+    description?: string | null;
+    /**
+     * Location, if supplied by this source.
+     */
+    location?: string | null;
+    /**
+     * Organizer address from this source.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer name from this source.
+     */
+    organizerName?: string | null;
+    /**
+     * Display title.
+     */
+    title: string;
+};
+
+/**
+ * A read-only team calendar occurrence.
+ */
+export type TeamCalendarItem = TeamCalendarContent & {
+    /**
+     * Whether this occurrence blocks the sharer's personal availability.
+     * A subscribed calendar's block can be shared without occupying the sharer.
+     */
+    contributesToAvailability: boolean;
+    /**
+     * Stable opaque projection identity, never an event entity id.
+     */
+    id: string;
+    /**
+     * The person sharing access to the source.
+     */
+    ownerId: string;
+    /**
+     * Occurrence interval.
+     */
+    time: EventTime;
+};
+
+/**
+ * A current member of the requester's team.
+ */
+export type TeamCalendarMember = {
+    /**
+     * Coverage available for a trustworthy calculation.
+     */
+    coverage: TeamCalendarCoverage;
+    /**
+     * Current team-sharing policy.
+     */
+    sharing: TeamCalendarSharing;
+    /**
+     * Macro user identifier.
+     */
+    userId: string;
+};
+
+/**
+ * A bounded page of team calendar projections.
+ */
+export type TeamCalendarPage = {
+    /**
+     * Authorized read-only projections.
+     */
+    items: Array<TeamCalendarItem>;
+    /**
+     * Current membership and sharing policies.
+     */
+    members: Array<TeamCalendarMember>;
+    /**
+     * Opaque continuation token; null after the last source occurrence.
+     */
+    nextCursor?: string | null;
+};
+
+/**
+ * What a user exposes through their team membership.
+ */
+export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
+
+/**
  * One teammate's out-of-office occurrence.
  */
 export type TeamOutOfOfficeItem = {
@@ -13198,6 +13403,32 @@ export type ThreadState = {
      * User who owns this discussion, including imported discussions.
      */
     user_id: string;
+};
+
+/**
+ * A displayable fact returned together with a message page.
+ */
+export type TimelineActivity = {
+    /**
+     * Durable action tag. Unknown tags remain representable during rollouts.
+     */
+    action: string;
+    /**
+     * Principal who performed the action.
+     */
+    actor_id: string;
+    /**
+     * Stable activity identity, independent of message ids.
+     */
+    id: string;
+    /**
+     * Immutable chronological position.
+     */
+    occurred_at: string;
+    /**
+     * The action's stored payload.
+     */
+    payload?: unknown;
 };
 
 /**
@@ -14642,6 +14873,36 @@ export type MentionPreviewsResponses = {
 };
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
+export type ListTeamCalendarData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive instant.
+         */
+        start: string;
+        /**
+         * Exclusive instant.
+         */
+        end: string;
+        /**
+         * Continuation returned by the preceding page.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum source occurrences, at most 2,000. Zero returns the roster only.
+         */
+        limit?: number | null;
+    };
+    url: '/calendar-events/team';
+};
+
+export type ListTeamCalendarResponses = {
+    200: TeamCalendarPage;
+};
+
+export type ListTeamCalendarResponse = ListTeamCalendarResponses[keyof ListTeamCalendarResponses];
 
 export type ListTeamOutOfOfficeData = {
     body?: never;
@@ -17798,6 +18059,27 @@ export type CreateTaskHandlerResponses = {
 
 export type CreateTaskHandlerResponse = CreateTaskHandlerResponses[keyof CreateTaskHandlerResponses];
 
+export type GetGithubPullRequestTasksData = {
+    body: GithubPullRequestTasksRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/github_prs/tasks';
+};
+
+export type GetGithubPullRequestTasksErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGithubPullRequestTasksError = GetGithubPullRequestTasksErrors[keyof GetGithubPullRequestTasksErrors];
+
+export type GetGithubPullRequestTasksResponses = {
+    200: GithubPullRequestTasksResponse;
+};
+
+export type GetGithubPullRequestTasksResponse = GetGithubPullRequestTasksResponses[keyof GetGithubPullRequestTasksResponses];
+
 export type InitializeUserDocumentsData = {
     body?: never;
     path?: never;
@@ -20113,6 +20395,27 @@ export type EntityMessagePatchThreadResponses = {
 };
 
 export type EntityMessagePatchThreadResponse = EntityMessagePatchThreadResponses[keyof EntityMessagePatchThreadResponses];
+
+export type MessageTimelineEntriesData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Serialized MessageTimelineQuery; absent selects the latest roots.
+         */
+        selection?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/timeline';
+};
+
+export type MessageTimelineEntriesResponses = {
+    200: MessageTimelinePage;
+};
+
+export type MessageTimelineEntriesResponse = MessageTimelineEntriesResponses[keyof MessageTimelineEntriesResponses];
 
 export type EntityMessageTypingData = {
     body: TypingInput;

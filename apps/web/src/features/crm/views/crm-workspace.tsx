@@ -192,12 +192,17 @@ export function CrmWorkspaceView(props: {
   const teamQuery = useCurrentTeamQuery();
   const teamId = () =>
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
+  const pipelinesEnabled = useCrmContext().pipelinesEnabled();
   const canCreatePipeline = () =>
-    teamQuery.isSuccess && teamQuery.data?.team.crm_enabled === true;
-  const pipelines = useCrmContext().createPipelines(teamId);
+    pipelinesEnabled() &&
+    teamQuery.isSuccess &&
+    teamQuery.data?.team.crm_enabled === true;
+  const pipelines = useCrmContext().createPipelines(() =>
+    pipelinesEnabled() ? teamId() : undefined
+  );
   const [creatingPipeline, setCreatingPipeline] = createSignal(false);
   const pipelineId = () =>
-    view.activeTab()?.startsWith('pipeline:')
+    pipelinesEnabled() && view.activeTab()?.startsWith('pipeline:')
       ? view.activeTab()?.slice('pipeline:'.length)
       : undefined;
   const activePipeline = () =>
@@ -294,16 +299,18 @@ export function CrmWorkspaceView(props: {
   const sidebar = () => (
     <CrmSidebar
       pipelines={
-        <PipelineSidebar
-          pipelines={pipelines.pipelines()}
-          activeId={pipelineId()}
-          loading={pipelines.loading()}
-          error={pipelines.error()}
-          canCreate={canCreatePipeline()}
-          onCreate={() => setCreatingPipeline(true)}
-          onSelect={selectPipeline}
-          onRetry={() => void pipelines.refresh()}
-        />
+        <Show when={pipelinesEnabled()}>
+          <PipelineSidebar
+            pipelines={pipelines.pipelines()}
+            activeId={pipelineId()}
+            loading={pipelines.loading()}
+            error={pipelines.error()}
+            canCreate={canCreatePipeline()}
+            onCreate={() => setCreatingPipeline(true)}
+            onSelect={selectPipeline}
+            onRetry={() => void pipelines.refresh()}
+          />
+        </Show>
       }
       active={pipelineId() ? `pipeline:${pipelineId()}` : active()}
       viewMode={view.viewMode()}

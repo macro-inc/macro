@@ -1139,7 +1139,18 @@ combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
-The New menu and drag/drop uploads target the selected folder. In a folder
+The New menu and drag/drop uploads target the selected folder. **New → Folder**
+and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,
+choose **Add tags**, and stage files or nested folders in the large drop area
+(or use **Add files** / **Add folder**). Staged items can be removed before
+**Create Folder** (Cmd/Ctrl+Enter); nothing uploads until submission. Confirmation
+closes the composer immediately while creation and uploads finish in the background.
+On touch devices, the folder composer uses the same bottom drawer as Task, with
+the name and tags fields; the upload area and file/folder picker buttons are hidden.
+Expanding into a split keeps the draft. Creation preserves the current location
+and offers an **Open** toast action when finished. On failure, the toast’s **Retry**
+action restores the draft, retaining any created folder and only unsuccessful uploads. Close an unused draft
+without submitting when verifying against hosted dev data. In a folder
 opened in its own split or an inline preview, drop files from the computer onto
 the empty state or file list, then reopen the folder to verify membership.
 Check both one file and multiple files; the nested list drop target must retain
@@ -1197,7 +1208,13 @@ Quick loads skip the skeletons. Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
-pill. Provider backfill shows a persistent `Syncing your calendar…` banner above the
+pill. On a cold reload, the first event paint waits for calendar metadata so events
+appear in their configured colors. A REST/GraphQL handoff for the same user and
+date range keeps the visible events and calendar list while the new reader loads;
+changing the user or date range must not retain the old events. Verify both handoff
+directions with delayed responses and delay calendar metadata past occurrences.
+If metadata fails, events remain usable with the default calendar presentation.
+Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
 Errors retain the separate retry state. Verify delayed occurrence
@@ -1205,6 +1222,32 @@ responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
 handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
+
+Imported timed events with identical start and end are points: they show a compact
+chip with one time and `No duration` in details, and do not block availability.
+Future points also appear in Upcoming events, without becoming ongoing meetings.
+Grid dragging and resizing are disabled for points. An owned point's metadata,
+RSVP, and deletion still work; metadata saves preserve its exact provider time.
+Creating an event or changing its time requires positive duration. Shared points
+remain read-only and appear only when their details are shared.
+An existing Macro call can keep its schedule during point metadata edits; adding
+a new Macro call requires giving the event a duration first.
+
+Calendar reads come from the local GraphQL cache when both `enable-graphql-soup`
+and `enable-graphql-calendar` are on (PostHog in production, on by default in dev
+for the calendar flag; set `VITE_ENABLE_GRAPHQL_CALENDAR=false` to test the REST
+path). A range the cache has covered renders with no occurrence request, and a far
+jump fetches only the uncovered weeks. A `refresh_calendar` poke, reconnecting,
+coming online, or returning to the tab runs one `CalendarChanges` delta that
+applies edits made elsewhere. RSVPs, edits, deletions, and creates show at once
+through the durable mutation queue: a rejected write rolls back with the usual
+error, and a write made offline stays visible and replays on reconnect. Native
+apps whose engine lacks the calendar cache commands keep the REST path. Until the
+cache answers its first calendar read, viewports wait at most a second and then
+read from REST, and writes use REST, so a cache that is slow to start or fails
+("Local cache unavailable") never leaves the calendar on skeletons. Writes in
+that window behave as on the REST path: offline, they roll back with an error
+instead of replaying.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without
@@ -1347,6 +1390,52 @@ beside the bottom AI input offers Event, feature-gated Call, and feature-gated
 Reminder. Inline Calendar previews retain their host's chrome without adding
 another sidebar; their left header island has a compact New menu because the
 bottom New action follows the foreground host view.
+
+With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
+**Team sharing**: `Busy blocks` (the default), `Event details`, and `Nothing`.
+These are Macro read permissions. They do not change Google Calendar ACLs,
+invite teammates to meetings, or let teammates edit, RSVP, or manage reminders.
+The sharing choice covers every currently authorized calendar synced to Macro.
+Private/confidential events only expose generic time blocks; event details
+come from one authorized source copy. Disconnecting an account or losing
+source access removes its team projection.
+
+**Calendars that count as busy** controls which calendars represent the user's
+personal schedule. Primary calendars count by default; other calendars require
+explicit inclusion. Meetings the user attends also contribute, except declined
+meetings. Following a coworker's calendar does not automatically make that
+coworker's events occupy the user's time. In team overlays, `Busy` means the
+block contributes to that teammate's availability; `Shared calendar block`
+means it belongs to a calendar the teammate can access and does not count
+toward their busy time. Event details show the same distinction explicitly.
+
+The sidebar's **Team calendars** section has a master `Show team calendars`
+switch and per-teammate checkboxes; Settings exposes the same display controls.
+Display toggles affect this viewer's grid only. Team chips are prefixed with
+the sharer's name and open read-only details. Copy-event links, guest-email
+actions, RSVP, editing, and deletion are unavailable on team projections.
+A directly accessible copy retains its own actions; another person's projection
+of the same meeting may appear separately, with its sharing provenance.
+Distinct authorized source copies may also appear separately for the same
+teammate and meeting: their detail masking and availability contribution can differ.
+Team projections and availability use server-confirmed copies. An offline queued
+edit appears in the editor's own calendar, but reaches teammates only after the
+server commits the provider-backed change and their shared projection refreshes.
+An unavailable team fetch displays a warning and removes stale shared details.
+Sharing-change notifications clear open shared details before refetching;
+focus/reconnect and a 30-second refresh provide a fallback. Shared details also
+disappear when an offline refresh is paused; they are not persisted for offline
+use. While the app is running, team responses and in-flight requests expire
+after 60 seconds, so a hung refresh cannot retain old details. Replacing a login
+session clears team data and open shared details before the new identity loads.
+Legacy out-of-office rows are read-only status displays and do not claim
+that every absence blocks availability.
+
+The `GetTeamAvailability` AI tool checks the requester together with the selected
+teammates. It reports confirmed free windows only when every participant has
+complete availability coverage. Hidden, disconnected, stale, or incomplete
+calendars are reported as unknown, never free. Busy blocks contain no event
+titles or private event metadata.
 
 The in-view desktop Calendar header uses one responsive top bar. The viewed
 month and year stay on the left in a heading that scales from 16px in narrow
@@ -1617,6 +1706,15 @@ Old `/app/pr/<foreignEntityId>` links redirect to Reviews. Check a copied link,
 a PR opened from a list or agent session, a second split, breadcrumb return,
 side-panel toggle, and phone layout. If no GitHub data loads, the detail shows
 an error banner with a Retry button; pressing it refetches the PR in place.
+
+PR metadata changes should update an already loaded Reviews list row and the
+linked agent session's PR status without reloading the page. To verify, keep
+both rows visible and change the PR in GitHub; check the status after the
+webhook arrives. Include a team-owned PR and a PR also stored for your personal
+account. In the network panel, confirm the update arrives on the Soup GraphQL
+subscription without triggering a refetch of every Soup list. Replaying an
+unchanged webhook should not produce another Soup update. The PR detail's
+separate diff and discussion requests are outside this subscription behavior.
 
 ## Calls — `/app/component/calls`
 
@@ -2161,6 +2259,17 @@ Section headings and controls share a white surface in light mode and the
 composer border in dark mode, with subtle row separators. The compact sidebar
 uses the shared workspace width.
 
+On desktop release builds, **Account → Desktop app update** shows native update
+progress. When a verified update is ready, an **Update available** arrow icon
+appears in the sidebar above the mobile-app and settings icons. Click it to open
+**Update Macro**, then choose **Restart and update** or **Later**. Dismissing the
+modal leaves the sidebar notification available. While preparing to restart,
+the modal disables its actions. Restart waits for pending canvas/PDF saves and
+local persistence; active calls, uploads, and imports must finish first. A ready
+update also installs on normal app quit. Closing a window only triggers
+installation if it exits the app. Browser, mobile, and development builds do not
+show this native updater row.
+
 Left nav (feature and platform gates still apply):
 
 - **Blocks**: Email, Calendar, Agents, CRM.
@@ -2212,16 +2321,19 @@ The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
 It contains Minimum balance (default `$10`), Target balance (default `$100`),
 optional Maximum monthly spend (`No limit`), a payment-method management link,
 and the automatic-charge warning. The dialog saves for paid payers:
-`Turn on auto-reload` enables usage billing with those thresholds (the monthly
-limit also caps usage billing per period), `Save` updates them while on, and
-`Turn off` disables usage billing. The **Automatic reload** switch reflects the
-saved state. Paid team members who are not the payer see
+`Turn on auto-reload` enables automatic credit purchases with those thresholds,
+`Save` updates them while on, and `Turn off` disables automatic reload. The monthly
+limit caps reload purchases per UTC calendar month. The **Automatic reload**
+switch reflects the saved state. Paid team members who are not the payer see
 `Only the account that pays for this plan can change automatic reload.` and
 cannot save. After a failed automatic reload the dialog shows `Your last
 automatic reload could not be charged. Update your payment method, then save to
-try again.`; saving retries. Existing postpaid usage billing is shown separately
-and can be turned off by the payer; while it is on, credits reload automatically
-when the balance drops below the minimum. Local **Developer tools** offer
+try again.`; saving retries. Extra usage is funded entirely by prepaid credits.
+If the reload budget runs out or payment fails, uncovered usage cannot trigger a
+direct usage charge; with quota enforcement enabled, exhausted credits and
+allowance block further AI requests. Historical direct-charge invoices are still
+recognized by webhooks, but settlement never creates or retries them. Local
+**Developer tools** offer
 `Preview Free plan` and `Preview paid plan` to display either Usage page with
 sample usage, regardless of the signed-in account's tier.
 `Open Free usage-limit dialog` and `Open paid usage-limit dialog` open the
@@ -2234,11 +2346,43 @@ Usage controls, including usage-limit dialogs. Dev tools remain interactive:
 Free and paid previews can be combined with this state, and `Reset preview`
 restores the normal dev view.
 
-`Billing` shows the current plan and `Manage`, an `Upgrade` section for Free
-users with Premium (`Upgrade now`) and Max (`Get Max`), an `Upgrade to Max` card
-on Premium, and a `Switch to Premium` link on Max. On a team, a plan change moves
-only the viewer's own seat. Plan allowance copy uses the backend catalog and
-still follows the `enable-ai-usage-billing` flag; usage controls live in Usage.
+`Billing` shows the current plan and `Manage`. Free users see separate Pro
+(`Get Pro`) and Max (`Get Max`) cards, side by side when the panel is wide enough
+and stacked on narrow panels. The Pro card shows `Free for one month!` for Free
+users. `Get Pro` requests the same server-validated 30-day first-subscription
+trial as onboarding; checkout redirects only after the server confirms the trial.
+Ineligible accounts see the rejection reason and are not silently charged.
+`Get Max` keeps standard paid terms. Prices read `/ month` for solo users and
+`per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
+the price when narrow. Free lists 2 connected email accounts; Pro and Max list
+unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
+users see a Pro card (`Switch to Pro`). Cards appear only for users who can
+manage their subscription. Team-paid members see no plan options, including
+on Free seats. Member options stay hidden until the billing summary confirms
+they pay for their own seat. On a team, a plan change moves only the viewer's
+own seat. Max lists "10x more AI usage than Pro"; Free and Pro allowance labels
+still follow the `enable-ai-usage-billing` flag. Usage controls live in Usage.
+The upgrade modal and Billing use the same plan cards and benefits, including
+the same flag-gated AI usage label and responsive card layout. The modal offers
+Pro and Max to Free accounts, only Max to Pro accounts, and no upgrade cards to
+Max accounts. Cards in the modal show benefits without purchase buttons. The footer’s
+`Manage plan` closes the modal and opens Billing settings, where checkout and
+plan changes take place. Team-paid members see a message
+to contact their team owner. Plan options wait for the billing summary and team
+lookup; failed lookups show `Try again` rather than guessed upgrade options.
+
+On a local HMR dev server, `Preview billing & paywall` opens an opt-in preview in
+Billing. Choose Solo, a team-paid member, a self-paying member, or a team owner,
+and Free, Pro, or Max. `Permissions, loading, and feature states` exposes the
+billing summary status, billing permission, active/trialing license, AI usage
+flag, and pending plan actions. The preview uses the real Billing UI with local
+fixtures; checkout, plan changes, Manage, and Team settings only show preview
+status messages. `Preview paywall` opens the same modal for the selected state,
+without developer controls inside it. Dismissing the modal returns to Billing
+with the selection preserved. `Manage plan` returns to the selected Billing preview.
+`Reset preview` restores Solo/Free; `Exit preview` restores
+the signed-in account. State is not persisted and resets on leaving Billing.
+These controls are excluded from deployed builds, including dev.macro.com.
 
 `Team` (members list; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Premium and Max with the `Seat plan`

@@ -1,10 +1,12 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
   batch,
   createEffect,
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type ParentProps,
 } from 'solid-js';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
@@ -22,6 +24,7 @@ interface CalendarDisplaySettings {
   readonly showWeekends: boolean;
   readonly weekStartsOn: CalendarWeekStart;
   readonly timeFormat: CalendarTimeFormat;
+  readonly showTeamCalendars: boolean;
 }
 
 type CalendarViewContextProps = ParentProps<{
@@ -56,7 +59,10 @@ function createCalendarEventSelection(
       setAnchor(nextAnchor);
       setOrigin(nextOrigin);
     });
-    onFocusedEventIdChange?.(nextEvent.eventId);
+    // Opaque team projections have no direct-event navigation capability.
+    onFocusedEventIdChange?.(
+      nextEvent.teamProjection ? undefined : nextEvent.eventId
+    );
   };
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
@@ -70,7 +76,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
     'CalendarViewContext',
     (props: CalendarViewContextProps) => {
       const [preferences, setPreferences] = useCalendarPreferences();
-      const { sources, sourceById } = useCalendarSources();
+      const { sources, sourceById, sourcesReady } = useCalendarSources();
       // Sources default to visible, so calendars discovered after a
       // preference was saved (or events whose calendar is still loading)
       // never silently disappear.
@@ -83,6 +89,17 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const selection = createCalendarEventSelection(
         props.onFocusedEventIdChange
       );
+      // A revoked OOO agenda entry can lie outside every mounted viewport.
+      // Close detached selections synchronously when authorization resets data.
+      const unsubscribeTeamReset = subscribeToTeamCalendarReset(() => {
+        const selected = selection.event();
+        if (
+          selected?.teamProjection ||
+          selected?.calendar.id.startsWith('team-ooo:')
+        )
+          selection.close();
+      });
+      onCleanup(unsubscribeTeamReset);
       // Preferences are shared across providers; track only this route's period
       // so two mounted calendars never overwrite each other in a loop.
       createEffect(
@@ -102,6 +119,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
               previousEventId !== undefined &&
               focusedEventId !== previousEventId &&
               selectedEvent &&
+              !selectedEvent.teamProjection &&
               selectedEvent.eventId !== focusedEventId
             ) {
               selection.close(false);
@@ -122,6 +140,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
         get timeFormat() {
           return preferences.timeFormat;
         },
+        get showTeamCalendars() {
+          return preferences.showTeamCalendars;
+        },
       };
 
       const closeEventDetails = () => selection.close();
@@ -137,7 +158,10 @@ export const [CalendarViewContextProvider, useCalendarView] =
           if (isCalendarEventVisible(event, isSourceVisible))
             selection.refresh(event);
           else closeEventDetails();
-        } else if (rangeIsCurrent && selection.origin() === 'grid') {
+        } else if (
+          (rangeIsCurrent || selected.teamProjection) &&
+          selection.origin() === 'grid'
+        ) {
           // Agenda selections can be outside the visible grid's date range.
           closeEventDetails();
         }
@@ -175,6 +199,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
         displaySettings,
         sources,
         sourceById,
+        sourcesReady,
         hiddenSourceIds,
         isSourceVisible,
         setSourceVisibility,
@@ -191,6 +216,11 @@ export const [CalendarViewContextProvider, useCalendarView] =
           setPreferences('weekStartsOn', weekStartsOn),
         setTimeFormat: (timeFormat: CalendarTimeFormat) =>
           setPreferences('timeFormat', timeFormat),
+        setShowTeamCalendars: (visible: boolean) => {
+          setPreferences('showTeamCalendars', visible);
+          if (!visible && selection.event()?.teamProjection)
+            closeEventDetails();
+        },
         closeEventDetails,
         selectEvent: selection.select,
         refreshSelectedEvent: selection.refresh,

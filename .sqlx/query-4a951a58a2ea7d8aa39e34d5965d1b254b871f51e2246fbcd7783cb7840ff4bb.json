@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT github_key, task_id\n            FROM github_pr_tasks\n            WHERE github_key = ANY($1)\n            ORDER BY created_at ASC, task_id ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "github_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "task_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4a951a58a2ea7d8aa39e34d5965d1b254b871f51e2246fbcd7783cb7840ff4bb"
+}

@@ -133,7 +133,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .with_state(state)
         .route(
             "/{document_id}/processing/{job_id}",
-            get(job_processing_result::job_processing_result_handler),
+            get(job_processing_result::job_processing_result_handler)
+                .layer(ensure_document_exists_middleware),
         )
         .route(
             "/preview",

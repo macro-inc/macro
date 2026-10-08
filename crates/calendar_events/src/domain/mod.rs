@@ -18,3 +18,7 @@ pub mod ports;
 pub mod reminder_dispatch;
 /// Calendar business policy.
 pub mod service;
+/// Source-aware, read-only team calendar sharing.
+pub mod team;
+/// Coverage-aware personal availability from authorized team sources.
+pub mod team_availability;

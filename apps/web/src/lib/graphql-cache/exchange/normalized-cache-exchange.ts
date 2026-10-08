@@ -1292,6 +1292,7 @@ export function normalizedCacheExchange(
           revalidations: optimistic.revalidations,
           identityBindings: optimistic.identityBindings,
           clientMetadata: optimistic.clientMetadata,
+          uncertainCalendarEventKeys: optimistic.uncertainCalendarEventKeys,
         };
         const now = Date.now();
         const claim = {

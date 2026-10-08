@@ -9,6 +9,7 @@ import { createCalendarOccurrenceQueryRange } from '../occurrences';
 import { runCalendarBackfill } from './backfill';
 import { useGraphqlCalendarHost } from './flag';
 import { mapCalendarSyncStatus } from './map';
+import { trackCalendarCreateSettlements } from './mutations';
 import {
   beginCalendarSyncStatusSample,
   fetchCalendarOccurrencePage,
@@ -62,6 +63,7 @@ export function useCalendarCache(): void {
     const unsubscribeReconnect = subscribeGraphqlSoupReconnected(() =>
       controller.markStale('reconnect')
     );
+    const untrackCreates = trackCalendarCreateSettlements(cacheHost);
     const unsubscribeGeneration = cacheHost.onCacheGenerationChanged(() => {
       controller.markStale('generation');
       setGeneration((value) => value + 1);
@@ -91,6 +93,7 @@ export function useCalendarCache(): void {
       removeOnline();
       unsubscribeGeneration();
       unsubscribeReconnect();
+      untrackCreates();
       controller.dispose();
       if (activeCalendarSyncController() === controller) {
         setActiveCalendarSyncController(undefined);

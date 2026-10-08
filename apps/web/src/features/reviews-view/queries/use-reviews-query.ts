@@ -32,6 +32,8 @@ const REVIEWS_SORTS: Record<
   ReviewsSortId,
   { sort_method: 'updated_at' | 'created_at'; sort_direction: 'asc' | 'desc' }
 > = {
+  // Priority comes from links, so loaded rows are ordered on the client.
+  priority: { sort_method: 'updated_at', sort_direction: 'desc' },
   recently_updated: { sort_method: 'updated_at', sort_direction: 'desc' },
   least_recently_updated: { sort_method: 'updated_at', sort_direction: 'asc' },
   newest: { sort_method: 'created_at', sort_direction: 'desc' },

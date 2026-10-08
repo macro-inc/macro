@@ -164,6 +164,16 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
           operation.context
         ),
       }))
+      .with({ type: 'goal-seek' }, (operation) => ({
+        id: operation.id,
+        type: 'goal-seek',
+        result: operation.sheets
+          ? engine.goalSeek(operation.sheets, operation.request)
+          : (session?.goalSeek(operation.request) ?? {
+              status: 'invalid' as const,
+              message: 'Calculate the sheet before using Goal Seek.',
+            }),
+      }))
       .exhaustive();
   } catch (error) {
     response = {

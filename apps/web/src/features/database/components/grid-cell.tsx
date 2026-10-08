@@ -1,6 +1,7 @@
 import { Popover } from '@kobalte/core/popover';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
+import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
 import {
   createMemo,
@@ -432,27 +433,31 @@ function BooleanCell(props: {
   onNavigate?: (direction: 1 | -1) => boolean;
   onWrite: (value: DatabaseCellValue) => Promise<boolean>;
 }) {
+  let wrapper: HTMLDivElement | undefined;
+  onMount(() => {
+    const input = wrapper?.querySelector<HTMLInputElement>(
+      'input[type="checkbox"]'
+    );
+    if (input) props.inputRef(input);
+  });
   return (
-    <div
-      ref={props.wrapperRef}
+    <Checkbox
+      ref={(element: HTMLDivElement) => {
+        wrapper = element;
+        props.wrapperRef(element);
+      }}
       tabindex={props.editable ? undefined : -1}
       class="flex min-h-9 items-center px-3 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
+      checked={Boolean(props.value)}
+      disabled={!props.editable}
+      onChange={(checked) => void props.onWrite(checked ? 1 : 0)}
+      onKeyDown={(event: KeyboardEvent) => {
+        if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
+      }}
     >
-      <input
-        ref={props.inputRef}
-        type="checkbox"
-        checked={Boolean(props.value)}
-        disabled={!props.editable}
-        aria-label={props.column.name}
-        class="size-3.5 rounded border-edge-muted accent-ink outline-none focus-visible:ring-2 focus-visible:ring-ink/50 disabled:opacity-50"
-        onChange={(event) =>
-          void props.onWrite(event.currentTarget.checked ? 1 : 0)
-        }
-        onKeyDown={(event) => {
-          if (!isComposingKey(event)) navigateOnTab(event, props.onNavigate);
-        }}
-      />
-    </div>
+      <Checkbox.Control />
+      <Checkbox.Label class="sr-only">{props.column.name}</Checkbox.Label>
+    </Checkbox>
   );
 }
 
@@ -477,7 +482,9 @@ function TextCell(props: {
   onBeginEdit: (seed?: string, event?: Event) => void;
   onClearEntity: () => void;
 }) {
-  const formatted = () => formatCellValue(props.column, props.value);
+  // Refreshes rebuild row objects; only a changed value may rerun renderers and remount previews.
+  const value = createMemo(() => props.value);
+  const formatted = () => formatCellValue(props.column, value());
   return (
     <button
       ref={props.ref}
@@ -485,7 +492,7 @@ function TextCell(props: {
       class="flex min-h-9 w-full min-w-0 items-center rounded px-2.5 py-1.5 text-left text-[13px] leading-5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
       classList={{
         'text-ink-muted': !props.editable,
-        'text-ink-placeholder': props.value === null && !props.mentionPreview,
+        'text-ink-placeholder': value() === null && !props.mentionPreview,
         'font-medium': props.column.dataType === 'STRING',
       }}
       aria-label={
@@ -548,9 +555,9 @@ function TextCell(props: {
         <Switch
           fallback={
             (props.column.dataType === 'STRING' &&
-            typeof props.value === 'string' &&
+            typeof value() === 'string' &&
             props.renderTextValue
-              ? props.renderTextValue(props.value)
+              ? props.renderTextValue(String(value()))
               : formatted()) || (
               <span class="opacity-40">{props.emptyLabel || '—'}</span>
             )
@@ -562,16 +569,14 @@ function TextCell(props: {
           <Match
             when={
               props.isEntity &&
-              typeof props.value === 'string' &&
+              typeof value() === 'string' &&
               props.renderMentionValue
                 ? props.column.specificEntityType
                 : undefined
             }
           >
             {(entityType) => (
-              <>
-                {props.renderMentionValue?.(String(props.value), entityType())}
-              </>
+              <>{props.renderMentionValue?.(String(value()), entityType())}</>
             )}
           </Match>
         </Switch>

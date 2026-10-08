@@ -168,444 +168,482 @@ export function RespondView(props: {
     );
 
   return (
-    <div
-      ref={root}
-      class={cn(
-        'mx-auto flex w-full flex-col',
-        props.compact ? 'gap-3' : 'max-w-[680px] gap-4 px-4 pt-6 pb-28 sm:pb-10'
-      )}
-      data-form-respond={form().id}
-    >
-      <Show when={props.header}>{props.header}</Show>
-      <Show when={!props.compact}>
-        <RespondTitleCard
-          name={form().name}
-          description={form().description}
-          compact={false}
-        />
-      </Show>
-      <Switch>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'preview-complete' ? view : undefined;
-          })()}
-        >
-          {(completed) => (
-            <Confirmation
-              message={form().confirmationMessage || 'Preview complete.'}
-              fresh
-              submittedAt={undefined}
-              receipt={receipt(completed().answers)}
-              canEdit={false}
-              compact={props.compact}
-              renderEntityLabel={context.ui.renderEntityLabel}
-              onEdit={respond.restartPreview}
-              notice={
-                <p class="text-sm text-ink-muted">No response was saved.</p>
-              }
-              footer={
-                <Button
-                  variant="outline"
-                  class="self-start"
-                  onClick={() => {
-                    respond.restartPreview();
-                    revealTop();
-                  }}
-                >
-                  Try again
-                </Button>
-              }
-            />
-          )}
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'booking' ? view : undefined;
-          })()}
-        >
-          {(step) => (
-            <>
-              <BookingStepView
-                booking={step().booking}
-                preview={step().preview}
-              />
-              <Show when={step().preview}>
-                <Button
-                  variant="outline"
-                  class="self-start"
-                  onClick={() => {
-                    respond.restartPreview();
-                    revealTop();
-                  }}
-                >
-                  Try again
-                </Button>
-              </Show>
-            </>
-          )}
-        </Match>
-        <Match when={respond.view().kind === 'loading'}>
-          <div
-            class="flex flex-col gap-3"
-            aria-busy="true"
-            aria-label="Loading"
+    <div class={props.compact ? undefined : 'px-6'}>
+      <div
+        ref={root}
+        class={cn(
+          'mx-auto flex w-full flex-col',
+          props.compact ? 'gap-3' : 'max-w-3xl gap-6 pt-12 pb-24'
+        )}
+        data-form-respond={form().id}
+      >
+        <Show when={props.header}>{props.header}</Show>
+        <Show when={!props.compact}>
+          <RespondTitleCard
+            name={form().name}
+            description={form().description}
+            compact={false}
+          />
+        </Show>
+        <Switch>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'preview-complete' ? view : undefined;
+            })()}
           >
-            <div class="h-24 animate-pulse rounded-xl bg-hover" />
-            <div class="h-24 animate-pulse rounded-xl bg-hover" />
-          </div>
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'closed' ? view : undefined;
-          })()}
-        >
-          {(closed) => <ClosedNotice reason={closed().reason} />}
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'response-unavailable' ? view : undefined;
-          })()}
-        >
-          {(unavailable) => (
+            {(completed) => (
+              <Confirmation
+                message={form().confirmationMessage || 'Preview complete.'}
+                fresh
+                submittedAt={undefined}
+                receipt={receipt(completed().answers)}
+                canEdit={false}
+                compact={props.compact}
+                renderEntityLabel={context.ui.renderEntityLabel}
+                onEdit={respond.restartPreview}
+                notice={
+                  <p class="text-sm text-ink-muted">No response was saved.</p>
+                }
+                footer={
+                  <Button
+                    variant="outline"
+                    class="self-start"
+                    onClick={() => {
+                      respond.restartPreview();
+                      revealTop();
+                    }}
+                  >
+                    Try again
+                  </Button>
+                }
+              />
+            )}
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'booking' ? view : undefined;
+            })()}
+          >
+            {(step) => (
+              <>
+                <BookingStepView
+                  booking={step().booking}
+                  preview={step().preview}
+                />
+                <Show when={step().preview}>
+                  <Button
+                    variant="outline"
+                    class="self-start"
+                    onClick={() => {
+                      respond.restartPreview();
+                      revealTop();
+                    }}
+                  >
+                    Try again
+                  </Button>
+                </Show>
+              </>
+            )}
+          </Match>
+          <Match when={respond.view().kind === 'loading'}>
             <div
-              role="alert"
-              class="flex flex-col gap-3 rounded-xl border border-edge bg-surface p-5"
+              class="flex flex-col gap-3"
+              aria-busy="true"
+              aria-label="Loading"
             >
-              <p class="font-medium text-ink">You’ve already responded</p>
+              <div class="h-24 animate-pulse rounded-xl bg-hover" />
+              <div class="h-24 animate-pulse rounded-xl bg-hover" />
+            </div>
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'closed' ? view : undefined;
+            })()}
+          >
+            {(closed) => <ClosedNotice reason={closed().reason} />}
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'response-unavailable' ? view : undefined;
+            })()}
+          >
+            {(unavailable) => (
+              <div
+                role="alert"
+                class="flex flex-col gap-3 rounded-xl border border-edge bg-surface p-5"
+              >
+                <p class="font-medium text-ink">You’ve already responded</p>
+                <p class="text-sm text-ink-muted">
+                  Your saved response couldn’t be loaded.
+                </p>
+                <Button
+                  variant="outline"
+                  class="self-start"
+                  disabled={unavailable().retrying}
+                  aria-busy={unavailable().retrying}
+                  onClick={() => void respond.retryResponse()}
+                >
+                  Try again
+                </Button>
+              </div>
+            )}
+          </Match>
+          <Match when={respond.view().kind === 'updating'}>
+            <div
+              role="status"
+              class="flex flex-col gap-1 rounded-xl border border-edge bg-surface p-5"
+            >
+              <p class="text-sm font-medium text-ink">
+                This form is being updated
+              </p>
               <p class="text-sm text-ink-muted">
-                Your saved response couldn’t be loaded.
+                Nothing you entered was submitted. Try again in a moment.
               </p>
               <Button
                 variant="outline"
-                class="self-start"
-                disabled={unavailable().retrying}
-                aria-busy={unavailable().retrying}
-                onClick={() => void respond.retryResponse()}
+                size="sm"
+                class="mt-2 self-start"
+                onClick={() => void retry()}
               >
                 Try again
               </Button>
             </div>
-          )}
-        </Match>
-        <Match when={respond.view().kind === 'updating'}>
-          <div
-            role="status"
-            class="flex flex-col gap-1 rounded-xl border border-edge bg-surface p-5"
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'stopped' ? view : undefined;
+            })()}
           >
-            <p class="text-sm font-medium text-ink">
-              This form is being updated
-            </p>
-            <p class="text-sm text-ink-muted">
-              Nothing you entered was submitted. Try again in a moment.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              class="mt-2 self-start"
-              onClick={() => void retry()}
-            >
-              Try again
-            </Button>
-          </div>
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'stopped' ? view : undefined;
-          })()}
-        >
-          {(stopped) => (
-            <StopScreen
-              message={stopped().message}
-              editing={respond.editing()}
-              onCheckAnswers={() => {
-                respond.checkAnswers();
-                revealTop();
-              }}
-              onMessageOwner={
-                signedIn() && context.viewer.userId() !== form().ownerId
-                  ? () =>
-                      void context
-                        .messageOwner(form().ownerId)
-                        .mapErr((failure) =>
-                          context.notify.failure(
-                            `The conversation couldn’t be opened: ${failure.message}`
+            {(stopped) => (
+              <StopScreen
+                message={stopped().message}
+                editing={respond.editing()}
+                onCheckAnswers={() => {
+                  respond.checkAnswers();
+                  revealTop();
+                }}
+                onMessageOwner={
+                  signedIn() && context.viewer.userId() !== form().ownerId
+                    ? () =>
+                        void context
+                          .messageOwner(form().ownerId)
+                          .mapErr((failure) =>
+                            context.notify.failure(
+                              `The conversation couldn’t be opened: ${failure.message}`
+                            )
                           )
-                        )
-                  : undefined
-              }
-            />
-          )}
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'confirmation' ? view : undefined;
-          })()}
-        >
-          {(confirmation) => (
-            <Confirmation
-              message={form().confirmationMessage}
-              fresh={confirmation().fresh}
-              submittedAt={confirmation().submittedAt}
-              receipt={receipt(confirmation().answers)}
-              canEdit={confirmation().canEdit}
-              compact={props.compact}
-              renderEntityLabel={context.ui.renderEntityLabel}
-              onEdit={() => {
-                respond.editResponse();
-                revealTop();
-              }}
-              notice={
-                <>
-                  <Show when={!confirmation().fresh && !open()}>
-                    <p class="text-xs text-ink">
-                      This form is closed, so your response can’t be changed.
+                    : undefined
+                }
+              />
+            )}
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'confirmation' ? view : undefined;
+            })()}
+          >
+            {(confirmation) => (
+              <Confirmation
+                message={form().confirmationMessage}
+                fresh={confirmation().fresh}
+                submittedAt={confirmation().submittedAt}
+                receipt={receipt(confirmation().answers)}
+                canEdit={confirmation().canEdit}
+                compact={props.compact}
+                renderEntityLabel={context.ui.renderEntityLabel}
+                onEdit={() => {
+                  respond.editResponse();
+                  revealTop();
+                }}
+                notice={
+                  <>
+                    <Show when={!confirmation().fresh && !open()}>
+                      <p class="text-xs text-ink">
+                        This form is closed, so your response can’t be changed.
+                      </p>
+                    </Show>
+                    <Show when={confirmation().alreadyResponded}>
+                      <p class="text-xs text-ink">
+                        You had already responded, so the answers you just gave
+                        weren’t sent. This is your saved response.
+                      </p>
+                    </Show>
+                  </>
+                }
+                footer={
+                  <>
+                    <Show when={confirmation().booking}>
+                      <Button
+                        variant="cta"
+                        class="self-start"
+                        onClick={() => {
+                          respond.openBooking();
+                          revealTop();
+                        }}
+                      >
+                        <CalendarCheck class="size-3.5" />
+                        Book a time
+                      </Button>
+                    </Show>
+                    <p class="px-1 text-xs text-ink-muted">
+                      Stored as a row in a database the form owner controls.
+                      Your answers are visible to the form’s editors.
                     </p>
+                  </>
+                }
+              />
+            )}
+          </Match>
+          <Match
+            when={(() => {
+              const view = respond.view();
+              return view.kind === 'answering' ? view : undefined;
+            })()}
+          >
+            {(answering) => (
+              <form
+                class="flex flex-col gap-3"
+                noValidate
+                aria-label={answering().section?.title || form().name}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (answering().isLast) {
+                    void submitAndReveal();
+                    return;
+                  }
+                  if (respond.next()) revealTop();
+                  else revealProblem();
+                }}
+              >
+                <div
+                  class={
+                    props.compact
+                      ? 'flex flex-col gap-3'
+                      : 'overflow-hidden rounded-xl border border-edge bg-surface shadow-xs divide-y divide-edge-divider'
+                  }
+                >
+                  <Show
+                    when={
+                      answering().total > 1 ||
+                      answering().section?.title ||
+                      answering().section?.description
+                    }
+                  >
+                    <div
+                      class={
+                        props.compact
+                          ? 'flex flex-col gap-3'
+                          : 'flex flex-col gap-3 pt-3 pr-2 pb-2 pl-4'
+                      }
+                    >
+                      <Show when={answering().total > 1}>
+                        <ProgressStrip
+                          position={answering().position}
+                          total={answering().total}
+                        />
+                      </Show>
+                      <SectionHeading
+                        title={answering().section?.title ?? ''}
+                        description={answering().section?.description ?? ''}
+                      />
+                    </div>
                   </Show>
-                  <Show when={confirmation().alreadyResponded}>
-                    <p class="text-xs text-ink">
-                      You had already responded, so the answers you just gave
-                      weren’t sent. This is your saved response.
+                  <For each={answering().section?.questions}>
+                    {(question) => {
+                      const column = () =>
+                        respond.columns().get(question.columnId);
+                      return (
+                        <Show when={column()}>
+                          {(columnFacts) => {
+                            const widget = () =>
+                              resolvedWidget(
+                                columnFacts().kind,
+                                question.widget
+                              );
+                            // Files and Macro pickers need an account; an
+                            // anonymous visitor is told so, not shown a dead end.
+                            const needsSignIn = () => {
+                              if (signedIn()) return undefined;
+                              if (widget() === 'file' && isPublic())
+                                return 'asks for a file';
+                              const kind = columnFacts().kind.type;
+                              return kind === 'entity' || kind === 'relation'
+                                ? 'picks from Macro'
+                                : undefined;
+                            };
+                            return (
+                              <Show
+                                when={!needsSignIn()}
+                                fallback={
+                                  <div
+                                    class={
+                                      props.compact
+                                        ? 'rounded-xl border border-edge bg-surface px-4 py-3 text-sm text-ink-muted'
+                                        : 'py-3 pr-2 pl-4 text-sm text-ink-muted'
+                                    }
+                                  >
+                                    <p>
+                                      “{columnFacts().name}” {needsSignIn()},
+                                      which needs you to sign in.
+                                    </p>
+                                    <Show
+                                      when={respond.problems()[question.id]}
+                                    >
+                                      {(problem) => (
+                                        <p
+                                          id={`${fieldId(scope, question.id)}-error`}
+                                          class="mt-1 text-xs text-failure-ink"
+                                        >
+                                          {problem()}
+                                        </p>
+                                      )}
+                                    </Show>
+                                  </div>
+                                }
+                              >
+                                <QuestionField
+                                  scope={scope}
+                                  question={question}
+                                  column={columnFacts()}
+                                  widget={widget()}
+                                  number={numbers().get(question.id) ?? 0}
+                                  value={respond.answers()[question.id]}
+                                  problem={respond.problems()[question.id]}
+                                  disabled={answering().submitting}
+                                  compact={props.compact}
+                                  upload={upload}
+                                  onChange={(value) =>
+                                    respond.setAnswer(question.id, value)
+                                  }
+                                  renderEntityPicker={(picker) =>
+                                    context.ui.renderEntityPicker({
+                                      ...picker,
+                                      label: columnFacts().name,
+                                      value: respond.answers()[question.id],
+                                      onChange: (value) =>
+                                        respond.setAnswer(question.id, value),
+                                    })
+                                  }
+                                  renderRelationPicker={(picker) =>
+                                    context.ui.renderRelationPicker({
+                                      ...picker,
+                                      label: columnFacts().name,
+                                      value: respond.answers()[question.id],
+                                      onChange: (value) =>
+                                        respond.setAnswer(question.id, value),
+                                    })
+                                  }
+                                />
+                              </Show>
+                            );
+                          }}
+                        </Show>
+                      );
+                    }}
+                  </For>
+                </div>
+                <Show
+                  when={
+                    answering().section?.questions.some(
+                      (question) => question.required
+                    ) || editNote()
+                  }
+                >
+                  <div
+                    role="note"
+                    aria-label="Form guidance"
+                    class="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-xs text-ink-muted"
+                  >
+                    <Show
+                      when={answering().section?.questions.some(
+                        (question) => question.required
+                      )}
+                    >
+                      <p class="inline-flex items-center gap-1.5">
+                        <span class="text-failure-ink" aria-hidden="true">
+                          *
+                        </span>
+                        <span>Required fields</span>
+                      </p>
+                    </Show>
+                    <Show when={editNote()}>{(note) => <p>{note()}</p>}</Show>
+                  </div>
+                </Show>
+                <Show when={respond.failure()}>
+                  {(message) => (
+                    <p role="alert" class="px-1 text-sm text-failure-ink">
+                      {message()}
                     </p>
-                  </Show>
-                </>
-              }
-              footer={
-                <>
-                  <Show when={confirmation().booking}>
+                  )}
+                </Show>
+                <div
+                  class={cn(
+                    'flex items-center justify-between gap-2',
+                    !props.compact &&
+                      'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 touch:max-sm:bottom-[var(--mobile-content-inset-bottom,0px)] max-sm:z-10 max-sm:border-t max-sm:border-edge max-sm:bg-surface max-sm:px-4 max-sm:py-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]'
+                  )}
+                >
+                  <Show when={!answering().isFirst} fallback={<span />}>
                     <Button
-                      variant="cta"
-                      class="self-start"
+                      type="button"
+                      variant="ghost"
+                      size="md"
+                      disabled={answering().submitting}
                       onClick={() => {
-                        respond.openBooking();
+                        respond.back();
                         revealTop();
                       }}
                     >
-                      <CalendarCheck class="size-3.5" />
-                      Book a time
+                      <ArrowLeft class="size-3.5" />
+                      Back
                     </Button>
                   </Show>
-                  <p class="px-1 text-xs text-ink-muted">
-                    Stored as a row in a database the form owner controls. Your
-                    answers are visible to the form’s editors.
-                  </p>
-                </>
-              }
-            />
-          )}
-        </Match>
-        <Match
-          when={(() => {
-            const view = respond.view();
-            return view.kind === 'answering' ? view : undefined;
-          })()}
-        >
-          {(answering) => (
-            <form
-              class="flex flex-col gap-3"
-              noValidate
-              aria-label={answering().section?.title || form().name}
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (answering().isLast) {
-                  void submitAndReveal();
-                  return;
-                }
-                if (respond.next()) revealTop();
-                else revealProblem();
-              }}
-            >
-              <Show when={answering().total > 1}>
-                <ProgressStrip
-                  position={answering().position}
-                  total={answering().total}
-                />
-              </Show>
-              <SectionHeading
-                title={answering().section?.title ?? ''}
-                description={answering().section?.description ?? ''}
-              />
-              <For each={answering().section?.questions}>
-                {(question) => {
-                  const column = () => respond.columns().get(question.columnId);
-                  return (
-                    <Show when={column()}>
-                      {(columnFacts) => {
-                        const widget = () =>
-                          resolvedWidget(columnFacts().kind, question.widget);
-                        // Files and Macro pickers need an account; an
-                        // anonymous visitor is told so, not shown a dead end.
-                        const needsSignIn = () => {
-                          if (signedIn()) return undefined;
-                          if (widget() === 'file' && isPublic())
-                            return 'asks for a file';
-                          const kind = columnFacts().kind.type;
-                          return kind === 'entity' || kind === 'relation'
-                            ? 'picks from Macro'
-                            : undefined;
-                        };
-                        return (
-                          <Show
-                            when={!needsSignIn()}
-                            fallback={
-                              <div class="rounded-xl border border-edge bg-surface px-4 py-3 text-sm text-ink-muted">
-                                <p>
-                                  “{columnFacts().name}” {needsSignIn()}, which
-                                  needs you to sign in.
-                                </p>
-                                <Show when={respond.problems()[question.id]}>
-                                  {(problem) => (
-                                    <p
-                                      id={`${fieldId(scope, question.id)}-error`}
-                                      class="mt-1 text-xs text-failure-ink"
-                                    >
-                                      {problem()}
-                                    </p>
-                                  )}
-                                </Show>
-                              </div>
-                            }
-                          >
-                            <QuestionField
-                              scope={scope}
-                              question={question}
-                              column={columnFacts()}
-                              widget={widget()}
-                              number={numbers().get(question.id) ?? 0}
-                              value={respond.answers()[question.id]}
-                              problem={respond.problems()[question.id]}
-                              disabled={answering().submitting}
-                              compact={props.compact}
-                              upload={upload}
-                              onChange={(value) =>
-                                respond.setAnswer(question.id, value)
-                              }
-                              renderEntityPicker={(picker) =>
-                                context.ui.renderEntityPicker({
-                                  ...picker,
-                                  label: columnFacts().name,
-                                  value: respond.answers()[question.id],
-                                  onChange: (value) =>
-                                    respond.setAnswer(question.id, value),
-                                })
-                              }
-                              renderRelationPicker={(picker) =>
-                                context.ui.renderRelationPicker({
-                                  ...picker,
-                                  label: columnFacts().name,
-                                  value: respond.answers()[question.id],
-                                  onChange: (value) =>
-                                    respond.setAnswer(question.id, value),
-                                })
-                              }
-                            />
-                          </Show>
-                        );
-                      }}
-                    </Show>
-                  );
-                }}
-              </For>
-              <Show
-                when={
-                  answering().section?.questions.some(
-                    (question) => question.required
-                  ) || editNote()
-                }
-              >
-                <div
-                  role="note"
-                  aria-label="Form guidance"
-                  class="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-xs text-ink-muted"
-                >
-                  <Show
-                    when={answering().section?.questions.some(
-                      (question) => question.required
-                    )}
-                  >
-                    <p class="inline-flex items-center gap-1.5">
-                      <span class="text-failure-ink" aria-hidden="true">
-                        *
-                      </span>
-                      <span>Required fields</span>
-                    </p>
-                  </Show>
-                  <Show when={editNote()}>{(note) => <p>{note()}</p>}</Show>
-                </div>
-              </Show>
-              <Show when={respond.failure()}>
-                {(message) => (
-                  <p role="alert" class="px-1 text-sm text-failure-ink">
-                    {message()}
-                  </p>
-                )}
-              </Show>
-              <div
-                class={cn(
-                  'flex items-center justify-between gap-2',
-                  !props.compact &&
-                    'max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 touch:max-sm:bottom-[var(--mobile-content-inset-bottom,0px)] max-sm:z-10 max-sm:border-t max-sm:border-edge max-sm:bg-surface max-sm:px-4 max-sm:py-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]'
-                )}
-              >
-                <Show when={!answering().isFirst} fallback={<span />}>
                   <Button
-                    type="button"
-                    variant="ghost"
+                    type="submit"
+                    variant="cta"
                     size="md"
-                    disabled={answering().submitting}
-                    onClick={() => {
-                      respond.back();
-                      revealTop();
-                    }}
-                  >
-                    <ArrowLeft class="size-3.5" />
-                    Back
-                  </Button>
-                </Show>
-                <Button
-                  type="submit"
-                  variant="cta"
-                  size="md"
-                  disabled={answering().submitting || answering().uploading}
-                  aria-busy={answering().submitting}
-                >
-                  <Show
-                    when={!answering().uploading}
-                    fallback={<>Waiting for upload…</>}
+                    disabled={answering().submitting || answering().uploading}
+                    aria-busy={answering().submitting}
                   >
                     <Show
-                      when={answering().isLast}
-                      fallback={
-                        <>
-                          Next
-                          <ArrowRight class="size-3.5" />
-                        </>
-                      }
+                      when={!answering().uploading}
+                      fallback={<>Waiting for upload…</>}
                     >
                       <Show
-                        when={answering().submitting}
-                        fallback={<PaperPlaneTilt class="size-3.5" />}
+                        when={answering().isLast}
+                        fallback={
+                          <>
+                            Next
+                            <ArrowRight class="size-3.5" />
+                          </>
+                        }
                       >
-                        <Spinner class="size-3.5 animate-spin" />
+                        <Show
+                          when={answering().submitting}
+                          fallback={<PaperPlaneTilt class="size-3.5" />}
+                        >
+                          <Spinner class="size-3.5 animate-spin" />
+                        </Show>
+                        {respond.editing()
+                          ? 'Update response'
+                          : answering().continuesToBooking
+                            ? 'Continue to booking'
+                            : 'Submit'}
                       </Show>
-                      {respond.editing()
-                        ? 'Update response'
-                        : answering().continuesToBooking
-                          ? 'Continue to booking'
-                          : 'Submit'}
                     </Show>
-                  </Show>
-                </Button>
-              </div>
-            </form>
-          )}
-        </Match>
-      </Switch>
+                  </Button>
+                </div>
+              </form>
+            )}
+          </Match>
+        </Switch>
+      </div>
     </div>
   );
 }

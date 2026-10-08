@@ -77,6 +77,10 @@ export type GithubPullRequestEntity = ForeignEntityBase & {
     labels: GithubPullRequestLabel[];
     authorLogin?: string;
     authorId?: number;
+    /** The pull request description (body), when stored. */
+    description?: string;
+    /** The branch carrying the pull request's changes, when stored. */
+    headBranch?: string;
   };
 };
 

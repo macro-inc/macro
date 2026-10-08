@@ -104,13 +104,15 @@ export function normalizeChannelMessageSender(
 }
 
 export function normalizeMessageTimelinePageSenders(
-  page: Omit<MessageTimelinePage, 'items'> & {
-    items: ChannelMessageWithMaybeSender[];
-  }
+  page: MessageTimelinePage
 ): MessageTimelinePage {
   return {
     ...page,
-    items: page.items.map(normalizeChannelMessageSender),
+    entries: page.entries.map((entry) =>
+      entry.type === 'message'
+        ? { ...entry, message: normalizeChannelMessageSender(entry.message) }
+        : entry
+    ),
   };
 }
 

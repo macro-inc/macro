@@ -391,6 +391,7 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(
                 error @ (AgentSessionError::TooManyPreviewIds(_)
+                | AgentSessionError::TooManyPullRequests(_)
                 | AgentSessionError::InvalidPullRequestUrl),
             ) => (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
             Self::Domain(error @ AgentSessionError::Archived(_)) => {

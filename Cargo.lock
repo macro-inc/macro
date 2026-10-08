@@ -39,6 +39,7 @@ dependencies = [
  "tokio-retry",
  "tokio-util",
  "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -949,6 +950,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "foreign_entity",
+ "forms",
  "frecency",
  "futures",
  "github_pull_requests",
@@ -3450,7 +3452,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.41"
+version = "0.6.43"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -3535,6 +3537,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "chrono-tz",
  "futures",
  "macro_authorization",
  "macro_db_migrator",
@@ -7849,9 +7852,13 @@ name = "forms"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "ai_toolset",
  "anyhow",
+ "async-trait",
  "axum",
+ "base64 0.22.1",
  "bot_id",
+ "calendar_scheduling",
  "chrono",
  "collab_surface",
  "connection_gateway_client",
@@ -7864,6 +7871,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_tower_layers",
  "macro_user_id",
  "model-entity",
  "model-error-response",
@@ -7871,10 +7879,14 @@ dependencies = [
  "models_forms",
  "models_permissions",
  "models_properties",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -8427,9 +8439,12 @@ dependencies = [
  "item_filters",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_user_id",
  "model-error-response",
  "models_pagination",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -11472,6 +11487,8 @@ name = "macro_cors"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "tokio",
+ "tower 0.5.3",
  "tower-http",
  "workspace-hack",
 ]
@@ -12157,6 +12174,7 @@ dependencies = [
 name = "messages"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-trait",
  "axum",
  "bot_id",
@@ -12164,6 +12182,7 @@ dependencies = [
  "chrono",
  "connection_gateway_client",
  "entity_access",
+ "futures",
  "initiative",
  "macro_authorization",
  "macro_db_migrator",
@@ -12567,6 +12586,7 @@ dependencies = [
  "chrono",
  "macro_uuid",
  "models_databases",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "specta",
@@ -17977,6 +17997,7 @@ dependencies = [
 name = "soup_realtime"
 version = "0.1.0"
 dependencies = [
+ "agent_session",
  "broadcast",
  "channels",
  "chat",
@@ -17985,6 +18006,7 @@ dependencies = [
  "email",
  "entity_access",
  "futures",
+ "github_pull_requests",
  "initiative",
  "kafka_util",
  "macro_event_broker",

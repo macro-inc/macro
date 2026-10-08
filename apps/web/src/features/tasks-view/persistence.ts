@@ -40,6 +40,7 @@ const taskFacetsSchema = z.record(z.string(), z.array(z.string()));
 
 const tasksEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
+  layout: z.enum(['list', 'board']).catch('list').default('list'),
   tab: taskTabSchema.default('my-tasks'),
   search: z.string().default(''),
   groupBy: taskGroupBySchema.default('priority'),
@@ -54,6 +55,7 @@ type TasksEntryState = z.infer<typeof tasksEntryStateSchemaWithDefaults>;
 
 const DEFAULT_TASKS_ENTRY_STATE = {
   version: 1,
+  layout: 'list',
   tab: 'my-tasks',
   search: '',
   groupBy: 'priority',
@@ -70,12 +72,6 @@ const tasksListStateSchemaWithDefaults = z.object({
 
 type TasksListEntryState = z.infer<typeof tasksListStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_LIST_ENTRY_STATE = {
-  version: 1,
-  focusKey: undefined,
-  scrollOffset: 0,
-} satisfies TasksListEntryState;
-
 export type TasksListStateSnapshot = {
   focusKey: TasksListEntryState['focusKey'];
   scrollOffset: TasksListEntryState['scrollOffset'];
@@ -89,6 +85,7 @@ export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
 function selectEntryState(state: TasksViewState): TasksEntryState {
   return {
     version: 1,
+    layout: state.layout,
     tab: state.tab,
     search: state.search,
     groupBy: state.groupBy,
@@ -115,6 +112,7 @@ function createTasksEntryStorage(options: {
       const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
         ...current,
+        layout: restored.layout,
         tab: restored.tab,
         search: restored.search,
         groupBy: restored.groupBy,
@@ -138,9 +136,7 @@ export function createTasksListEntryStorage(
       : TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
       const result = tasksListStateSchemaWithDefaults.safeParse(stored);
-      const restored = result.success
-        ? result.data
-        : DEFAULT_TASKS_LIST_ENTRY_STATE;
+      const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
         ...current,

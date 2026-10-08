@@ -80,6 +80,7 @@ export async function copyCalendarEventMentionTarget(
 
 /** Copy a calendar-grid event, pinning the instance when it repeats. */
 export async function copyCalendarEventMention(event: CalendarEvent) {
+  if (event.teamProjection) return;
   await copyCalendarEventMentionTarget({
     eventId: event.eventId,
     title: event.title,

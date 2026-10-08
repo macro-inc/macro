@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_events SET starts_at=$2,ends_at=$3,start_date=$4,end_date=$4 WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c24c56dc8063f9c911e9d839dbea07785d609f3edadb5853cafec4944f83dd40"
+}

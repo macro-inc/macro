@@ -545,6 +545,7 @@ fn cross_inbox_draft_settlement_preserves_source_thread_and_rebases_queued_edits
 
         let mut engine = Engine::new(engine.into_storage());
         let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             "fragment Draft on GraphqlSoupEmailMessage { id subject }",
             "Draft",
         )
