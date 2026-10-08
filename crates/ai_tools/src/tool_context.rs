@@ -42,7 +42,7 @@ use documents::{
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService as _;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -1269,6 +1269,8 @@ pub struct ToolEntityCreator {
     /// Backend-owned document creation use case (shared with document tools).
     pub document_creator:
         documents::inbound::toolset::DefaultDocumentToolCreator<ToolDocumentService>,
+    /// Folder (project) creation for imports that mirror a source's structure.
+    pub projects: Arc<ToolProjectService>,
     /// Team lookup so imported tasks get the user's team task numbering.
     pub entity_access_service: Arc<ToolEntityAccessService>,
     /// Channel creation service.
@@ -1296,15 +1298,19 @@ impl ToolEntityCreator {
         markdown: &str,
         is_task: bool,
         team_id: Option<uuid::Uuid>,
+        folder: Option<uuid::Uuid>,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
-        )
-        .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
-        .text(markdown.to_string())
-        .task_flag(is_task, team_id)
-        .build()?;
+        let mut metadata =
+            documents::domain::create::NewDocumentMetadata::builder(name.to_string());
+        if let Some(folder) = folder {
+            metadata = metadata.project_id(folder);
+        }
+        let document = documents::domain::create::NewPlainTextDocument::builder(metadata.build())
+            .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
+            .text(markdown.to_string())
+            .task_flag(is_task, team_id)
+            .build()?;
         let ai_for_user = Self::creation_principal(user);
         let created = self
             .document_creator
@@ -1468,8 +1474,15 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         // Same team resolution as the CreateDocument tool, so imported tasks
         // number correctly within the user's team; the roster doubles as the
         // assignee-email lookup.
-        let (team_id, roster) = self.team_roster(user).await;
-        let task_id = self.create_doc(user, name, markdown, true, team_id).await?;
+        let (team_id, mut roster) = self.team_roster(user).await;
+        // The importing user can always be assigned their own task, team or
+        // no team (imported Linear issues are their own assignments).
+        if !roster.contains(user) {
+            roster.push(user.clone());
+        }
+        let task_id = self
+            .create_doc(user, name, markdown, true, team_id, None)
+            .await?;
         self.apply_task_properties(user, &task_id, properties, &roster)
             .await;
         Ok(task_id)
@@ -1481,8 +1494,24 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         name: &str,
         markdown: &str,
         properties: &import::domain::ports::ImportedDocumentProperties,
+        folder: Option<uuid::Uuid>,
     ) -> anyhow::Result<String> {
-        let document_id = self.create_doc(user, name, markdown, false, None).await?;
+        if let Some(folder) = folder {
+            // Folders are the import's own, created for this user; still
+            // refuse to file into one the user cannot edit.
+            self.entity_access_service
+                .generate_entity_access_receipt::<EditAccessLevel>(
+                    user,
+                    None,
+                    &folder.to_string(),
+                    model_entity::EntityType::Project,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("cannot file into folder {folder}: {e:?}"))?;
+        }
+        let document_id = self
+            .create_doc(user, name, markdown, false, None, folder)
+            .await?;
         let access = match self
             .entity_access_service
             .generate_entity_access_receipt::<EditAccessLevel>(
@@ -1507,6 +1536,81 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
             .apply(user, &access, &document_id, properties)
             .await;
         Ok(document_id)
+    }
+
+    async fn create_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        name: &str,
+        parent: Option<uuid::Uuid>,
+    ) -> anyhow::Result<uuid::Uuid> {
+        use projects::domain::ports::ProjectService as _;
+        if let Some(parent) = parent {
+            // Same rule as creating a project in the app: edit access to the
+            // parent folder.
+            self.entity_access_service
+                .generate_entity_access_receipt::<EditAccessLevel>(
+                    user,
+                    None,
+                    &parent.to_string(),
+                    model_entity::EntityType::Project,
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("cannot create a folder in {parent}: {e:?}"))?;
+        }
+        let project = self
+            .projects
+            .create_project(
+                &Self::creation_principal(user),
+                model::project::request::CreateProjectRequest {
+                    name: name.to_string(),
+                    project_parent_id: parent,
+                },
+            )
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to create folder {name:?}: {e:?}"))?;
+        Ok(project.id.parse()?)
+    }
+
+    async fn folder_usable(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: uuid::Uuid,
+    ) -> anyhow::Result<bool> {
+        use entity_access::domain::models::AccessError;
+        use projects::domain::models::ProjectError;
+        use projects::domain::ports::ProjectService as _;
+        // Filing needs edit access; the same receipt then reads the folder.
+        let receipt = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+        {
+            Ok(receipt) => receipt,
+            Err(
+                AccessError::Unauthorized
+                | AccessError::UnauthorizedWithMessage(_)
+                | AccessError::NotFound(_),
+            ) => return Ok(false),
+            Err(error) => anyhow::bail!("checking access to import folder {folder}: {error}"),
+        };
+        let receipt = receipt
+            .try_into_requirement::<ViewAccessLevel>()
+            .map_err(|e| anyhow::anyhow!("narrowing folder receipt: {e:?}"))?;
+        match self.projects.get_project(receipt).await {
+            Ok(project) => Ok(project.project_metadata.deleted_at.is_none()),
+            Err(
+                ProjectError::NotFound(_)
+                | ProjectError::Unauthorized
+                | ProjectError::UnauthorizedWithMessage(_),
+            ) => Ok(false),
+            Err(error) => anyhow::bail!("reading import folder {folder}: {error}"),
+        }
     }
 
     async fn create_channel(
@@ -1535,6 +1639,20 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
 pub type ToolPipedreamConnection =
     Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
 
+/// Requests to connected apps' own APIs (Notion, Linear) through Pipedream
+/// Connect's API proxy, as the user's Pipedream connection for each app.
+pub type ToolConnectProxy = pipedream_mcp::domain::service::PipedreamConnectProxy<
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    ToolPipedreamConnection,
+>;
+
+/// The typed API readers the import service discovers through.
+pub type ToolImportApis = import::domain::service::ApiSources<
+    import::outbound::linear_api_source::LinearApiSource<ToolConnectProxy>,
+    import::outbound::notion_api_source::NotionApiSource<ToolConnectProxy>,
+    import::outbound::static_file_image_rehoster::StaticFileImageRehoster,
+>;
+
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
 /// serves a user's tools (Pipedream connectors win; see `mcp_select`).
@@ -1550,6 +1668,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     ToolMcpSelector,
     ToolEntityCreator,
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
+    ToolImportApis,
 >;
 
 /// Type alias for the import tool context. Built `unwired` by the shared

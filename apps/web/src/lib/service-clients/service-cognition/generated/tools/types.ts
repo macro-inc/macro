@@ -8765,7 +8765,7 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
- * Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, fetches through the user's connected Notion MCP, normalizes the page, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases and database-first pages are intentionally not imported.
+ * Import one specific Notion page through Macro's canonical Notion importer. Use this when the user explicitly asks to import a page URL or id. The tool performs deduplication, reads the page through the user's Notion connection, converts it, files it under the Notion folder, creates the Macro markdown document, and returns its entity id. Do not fetch and recreate the page manually with generic document tools. Notion databases themselves are not imported, only pages.
  */
 export interface ImportNotionPage {
   /**

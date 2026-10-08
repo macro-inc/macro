@@ -144,6 +144,7 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
 strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }

@@ -1,0 +1,16 @@
+{
+  "object": "user",
+  "id": "bot-redacted",
+  "name": "Macro",
+  "type": "bot",
+  "bot": {
+    "owner": {
+      "type": "user",
+      "user": {
+        "object": "user",
+        "id": "9f000000-0000-4000-8000-000000000001"
+      }
+    },
+    "workspace_name": "Example Co"
+  }
+}

@@ -932,3 +932,100 @@ async fn concurrent_different_workspace_bindings_have_one_winner(pool: PgPool) {
     assert_eq!(confirmed.workspace_id, known.workspace_id);
     assert!(confirmed.confirmed_unknown_at.is_some());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn excluded_importing_rows_are_removed_and_stay_rediscoverable(pool: PgPool) {
+    let actor = ledger_actor(&pool, "excluded-page").await;
+    let repo = PgImportRepo::new(pool);
+    let staged = repo
+        .upsert_staged(
+            &actor,
+            ImportSource::Notion,
+            Initiator::Onboarding,
+            "0123456789abcdef0123456789abcdef",
+            &serde_json::json!({"title": "Empty"}),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    // Only importing rows can be removed.
+    assert!(!repo.remove_importing(&actor, staged.id).await.unwrap());
+    repo.mark_importing(&actor, &[staged.id]).await.unwrap();
+    assert!(repo.remove_importing(&actor, staged.id).await.unwrap());
+    assert!(repo.get(&actor, staged.id).await.unwrap().is_none());
+    // Nothing remembers it: a later discovery can stage it again.
+    assert!(
+        repo.upsert_staged(
+            &actor,
+            ImportSource::Notion,
+            Initiator::Manual,
+            "0123456789abcdef0123456789abcdef",
+            &serde_json::json!({"title": "Now with content"}),
+        )
+        .await
+        .unwrap()
+        .is_some()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn import_folders_are_per_user_replaceable_and_purged_with_their_project(pool: PgPool) {
+    let actor = ledger_actor(&pool, "folders").await;
+    let other = ledger_actor(&pool, "folders-other").await;
+    let first = Uuid::now_v7();
+    let second = Uuid::now_v7();
+    for project in [first, second] {
+        sqlx::query!(
+            r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Notion', $2)"#,
+            project.to_string(),
+            actor.as_ref(),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = PgImportRepo::new(pool.clone());
+
+    assert_eq!(
+        repo.import_folder(&actor, ImportSource::Notion, "")
+            .await
+            .unwrap(),
+        None
+    );
+    repo.save_import_folder(&actor, ImportSource::Notion, "", first)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.import_folder(&actor, ImportSource::Notion, "")
+            .await
+            .unwrap(),
+        Some(first)
+    );
+    assert_eq!(
+        repo.import_folder(&other, ImportSource::Notion, "")
+            .await
+            .unwrap(),
+        None
+    );
+    // A replaced (e.g. deleted) folder is overwritten, not duplicated.
+    repo.save_import_folder(&actor, ImportSource::Notion, "", second)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.import_folder(&actor, ImportSource::Notion, "")
+            .await
+            .unwrap(),
+        Some(second)
+    );
+    // Purging the project removes the mapping.
+    sqlx::query!(r#"DELETE FROM "Project" WHERE id = $1"#, second.to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.import_folder(&actor, ImportSource::Notion, "")
+            .await
+            .unwrap(),
+        None
+    );
+}

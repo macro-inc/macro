@@ -8,6 +8,11 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+mod linear;
+mod notion;
+pub use linear::*;
+pub use notion::*;
+
 #[cfg(test)]
 mod test;
 
@@ -401,12 +406,17 @@ pub enum ImportTargetLookup {
 /// Caps applied to metadata text at the tool write boundary, so a chatty
 /// agent can't bloat rows.
 const MAX_TEXT: usize = 300;
-/// Cap for long-form text (issue descriptions).
-const MAX_LONG_TEXT: usize = 4_000;
+/// Cap for long-form text (issue descriptions, imported verbatim). Generous:
+/// Linear descriptions are Markdown documents in their own right.
+const MAX_LONG_TEXT: usize = 200_000;
 /// Cap for summaries and purposes.
 const MAX_SUMMARY: usize = 600;
 /// Cap on matched Slack participants, bounded by Macro team size, not channel size.
 const MAX_PARTICIPANTS: usize = 100;
+/// Cap on imported document properties.
+const MAX_PROPERTIES: usize = 50;
+/// Cap on values of one imported property (and on tags).
+const MAX_PROPERTY_VALUES: usize = 25;
 
 /// Truncate to a character boundary at most `max` bytes in.
 fn truncated(s: String, max: usize) -> String {
@@ -428,15 +438,19 @@ fn truncate_opt(s: Option<String>, max: usize) -> Option<String> {
 }
 
 /// Metadata for one staged Linear issue.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+///
+/// Discovery fills every field from Linear's API; chat agents staging an
+/// issue by hand may fill only the original label fields, so everything
+/// beyond `title` is optional and older rows keep deserializing.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct LinearIssueMeta {
     /// Linear's human identifier (e.g. `ENG-142`).
     pub identifier: Option<String>,
     /// Issue title.
     pub title: String,
-    /// Short markdown description.
+    /// The issue's Markdown description, verbatim.
     pub description: Option<String>,
-    /// Workflow status name (e.g. `In Progress`).
+    /// Workflow state name (e.g. `In Progress`).
     pub status: Option<String>,
     /// Priority label (e.g. `Urgent`).
     pub priority: Option<String>,
@@ -449,6 +463,19 @@ pub struct LinearIssueMeta {
     pub due_date: Option<String>,
     /// Deep link back to the issue in Linear.
     pub url: Option<String>,
+    /// Linear's stable issue id (a UUID), when read from the API.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub linear_id: Option<String>,
+    /// The workflow state's type, which status mapping keys on.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub state_type: Option<LinearStateType>,
+    /// When the issue last changed in Linear (RFC 3339). Kept so a future
+    /// re-import can update instead of duplicating.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub updated_at: Option<String>,
 }
 
 impl LinearIssueMeta {
@@ -463,13 +490,20 @@ impl LinearIssueMeta {
             assignee_email: truncate_opt(self.assignee_email, MAX_TEXT),
             due_date: truncate_opt(self.due_date, MAX_TEXT),
             url: truncate_opt(self.url, MAX_TEXT),
+            linear_id: truncate_opt(self.linear_id, MAX_TEXT),
+            state_type: self.state_type,
+            updated_at: truncate_opt(self.updated_at, MAX_TEXT),
         }
     }
 }
 
 /// Metadata for one staged Notion page. Deliberately has NO content field:
 /// page bodies are fetched at import time, for accepted pages only.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+///
+/// Discovery records the page facts the import needs (so it never re-reads
+/// the page object); chat staging may record only `title`/`url`, so every
+/// field beyond `title` is optional and older rows keep deserializing.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, ToSchema)]
 pub struct NotionDocMeta {
     /// Page title.
     pub title: String,
@@ -477,6 +511,28 @@ pub struct NotionDocMeta {
     pub url: Option<String>,
     /// One-line summary of what the page contains.
     pub summary: Option<String>,
+    /// The page's emoji icon, when it has one.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub icon_emoji: Option<String>,
+    /// When the page was last edited in Notion (RFC 3339). Kept so a future
+    /// re-import can update instead of duplicating.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub last_edited_time: Option<String>,
+    /// Whether the connected user made the last edit; `None` when the
+    /// connection's owner is not a person.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub edited_by_user: Option<bool>,
+    /// Where the page lives in Notion.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub parent: Option<NotionParent>,
+    /// Database-row properties, mapped to Macro property values.
+    #[serde(default)]
+    #[schema(ignore)]
+    pub properties: Option<ImportedDocumentProperties>,
 }
 
 impl NotionDocMeta {
@@ -485,8 +541,129 @@ impl NotionDocMeta {
             title: truncated(self.title, MAX_TEXT),
             url: truncate_opt(self.url, MAX_TEXT),
             summary: truncate_opt(self.summary, MAX_SUMMARY),
+            icon_emoji: truncate_opt(self.icon_emoji, 32),
+            last_edited_time: truncate_opt(self.last_edited_time, MAX_TEXT),
+            edited_by_user: self.edited_by_user,
+            parent: self.parent,
+            properties: self.properties.map(ImportedDocumentProperties::capped),
         }
     }
+}
+
+/// Properties recovered from a Notion page and attached to the imported
+/// Macro document. The creator applies these best-effort after the document
+/// exists, so unsupported or invalid values never prevent the body import.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedDocumentProperties {
+    /// Ordinary Notion database properties.
+    #[serde(default)]
+    pub values: Vec<ImportedDocumentProperty>,
+    /// Notion tag/label values, mapped onto Macro's personal tag set.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+impl ImportedDocumentProperties {
+    /// Bound what ledger metadata carries.
+    fn capped(self) -> Self {
+        Self {
+            values: self
+                .values
+                .into_iter()
+                .take(MAX_PROPERTIES)
+                .map(|property| ImportedDocumentProperty {
+                    name: truncated(property.name, MAX_TEXT),
+                    value: property.value.capped(),
+                })
+                .collect(),
+            tags: self
+                .tags
+                .into_iter()
+                .take(MAX_PROPERTY_VALUES)
+                .map(|tag| truncated(tag, MAX_TEXT))
+                .collect(),
+        }
+    }
+}
+
+impl ImportedDocumentPropertyValue {
+    fn capped(self) -> Self {
+        let cap = |values: Vec<String>| -> Vec<String> {
+            values
+                .into_iter()
+                .take(MAX_PROPERTY_VALUES)
+                .map(|value| truncated(value, MAX_TEXT))
+                .collect()
+        };
+        match self {
+            Self::String { value } => Self::String {
+                value: truncated(value, MAX_TEXT),
+            },
+            Self::Date { value } => Self::Date {
+                value: truncated(value, MAX_TEXT),
+            },
+            Self::Select { values, multi } => Self::Select {
+                values: cap(values),
+                multi,
+            },
+            Self::Link { urls, multi } => Self::Link {
+                urls: cap(urls),
+                multi,
+            },
+            other @ (Self::Boolean { .. } | Self::Number { .. }) => other,
+        }
+    }
+}
+
+/// One named property recovered from a Notion database page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportedDocumentProperty {
+    /// Property display name.
+    pub name: String,
+    /// Typed property value.
+    pub value: ImportedDocumentPropertyValue,
+}
+
+/// Portable property values that have direct Macro property equivalents.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum ImportedDocumentPropertyValue {
+    /// Boolean value.
+    Boolean {
+        /// Imported value.
+        value: bool,
+    },
+    /// Date or date-time value, encoded as ISO-8601.
+    Date {
+        /// Imported value.
+        value: String,
+    },
+    /// Numeric value.
+    Number {
+        /// Imported value.
+        value: f64,
+    },
+    /// Plain text value.
+    String {
+        /// Imported value.
+        value: String,
+    },
+    /// One or more select labels.
+    Select {
+        /// Imported option labels.
+        values: Vec<String>,
+        /// Whether the source property accepts multiple options.
+        multi: bool,
+    },
+    /// One or more URLs.
+    Link {
+        /// Imported URLs.
+        urls: Vec<String>,
+        /// Whether the source property accepts multiple links.
+        multi: bool,
+    },
 }
 
 /// A person active in a staged Slack channel.

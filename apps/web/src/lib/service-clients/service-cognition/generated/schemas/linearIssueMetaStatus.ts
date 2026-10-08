@@ -6,6 +6,6 @@
  */
 
 /**
- * Workflow status name (e.g. `In Progress`).
+ * Workflow state name (e.g. `In Progress`).
  */
 export type LinearIssueMetaStatus = string | null;

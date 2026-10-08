@@ -558,6 +558,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
         let creator = ai_tools::ToolEntityCreator {
             document_creator: document_tool_context.creator.clone(),
+            projects: tool_service_context.project_tool_context.service.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: tool_service_context.channel_tool_context.service.clone(),
             task_properties: ai_tools::build_task_properties_adapter(
@@ -591,6 +592,30 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             .with_slack_source(Arc::new(
                 import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
             ))
+            .with_api_sources({
+                let connect_proxy: Arc<ai_tools::ToolConnectProxy> =
+                    Arc::new(pipedream_mcp::domain::service::PipedreamConnectProxy::new(
+                        Arc::new(
+                            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
+                                pool.clone(),
+                            ),
+                        ),
+                        Arc::new(None),
+                    ));
+                Arc::new(import::domain::service::ApiSources::new(
+                    import::outbound::linear_api_source::LinearApiSource::new(
+                        connect_proxy.clone(),
+                    ),
+                    import::outbound::notion_api_source::NotionApiSource::new(connect_proxy),
+                    import::outbound::static_file_image_rehoster::StaticFileImageRehoster::new(
+                        static_file_service_client::StaticFileServiceClient::new(
+                            "test-key".to_string(),
+                            "https://static.example.test".to_string(),
+                        ),
+                    )
+                    .expect("image rehoster"),
+                ))
+            })
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(

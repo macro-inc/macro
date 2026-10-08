@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO import_folder (user_id, source, foreign_id, project_id)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (user_id, source, foreign_id) DO UPDATE\n            SET project_id = EXCLUDED.project_id, updated_at = NOW()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bb8d1819466ae88c7e85308c7ee28853382d1ad1535b81ccef39bb1ba5e644b"
+}

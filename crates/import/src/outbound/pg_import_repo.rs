@@ -419,6 +419,21 @@ impl ImportRepo for PgImportRepo {
         Ok(result.rows_affected())
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_importing(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            DELETE FROM import_entity
+            WHERE user_id = $1 AND id = $2 AND status = 'importing'
+            "#,
+            user.as_ref(),
+            id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
     #[tracing::instrument(skip(self, ids), fields(rows = ids.len()), err)]
     async fn touch_importing(&self, user: &MacroUserIdStr<'static>, ids: &[Uuid]) -> Result<u64> {
         let result = sqlx::query!(
@@ -499,6 +514,57 @@ impl ImportRepo for PgImportRepo {
         .execute(&self.pool)
         .await?;
         Ok(result.rows_affected())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn import_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+    ) -> Result<Option<Uuid>> {
+        let project = sqlx::query_scalar!(
+            r#"
+            SELECT project_id FROM import_folder
+            WHERE user_id = $1 AND source = $2 AND foreign_id = $3
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            key,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        project
+            .map(|id| {
+                Uuid::parse_str(&id)
+                    .map_err(|_| anyhow::anyhow!("import folder is not a uuid: {id}").into())
+            })
+            .transpose()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn save_import_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        source: ImportSource,
+        key: &str,
+        folder: Uuid,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO import_folder (user_id, source, foreign_id, project_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, source, foreign_id) DO UPDATE
+            SET project_id = EXCLUDED.project_id, updated_at = NOW()
+            "#,
+            user.as_ref(),
+            source.as_ref(),
+            key,
+            folder.to_string(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self), err)]

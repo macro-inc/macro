@@ -79,8 +79,20 @@ impl EntityCreator for ReservedCreator {
         _: &str,
         _: &str,
         _: &ImportedDocumentProperties,
+        _: Option<Uuid>,
     ) -> anyhow::Result<String> {
         unreachable!()
+    }
+    async fn create_folder(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: Option<Uuid>,
+    ) -> anyhow::Result<Uuid> {
+        unreachable!()
+    }
+    async fn folder_usable(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
+        Ok(true)
     }
     async fn create_channel(
         &self,

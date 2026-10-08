@@ -616,6 +616,13 @@ pub async fn run() -> anyhow::Result<()> {
     };
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
+    // Imports read Notion's and Linear's own APIs through Pipedream Connect's
+    // API proxy, as the user's Pipedream connection for each app.
+    let connect_proxy: Arc<ai_tools::ToolConnectProxy> =
+        Arc::new(pipedream_mcp::domain::service::PipedreamConnectProxy::new(
+            Arc::new(pipedream_repo.clone()),
+            Arc::new(pipedream_client.clone()),
+        ));
 
     // The one sanctioned meeting point of the two MCP stacks: agents load
     // tools through this selector, which prefers a user's Pipedream
@@ -634,8 +641,18 @@ pub async fn run() -> anyhow::Result<()> {
         channels_connection_gateway.clone(),
     );
 
+    let project_tool_context = ai_tools::build_project_tool_context(
+        db.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        chat_tool_context.service.clone(),
+        user_email_service.clone(),
+    );
+
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
+        projects: project_tool_context.service.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
         task_properties: task_properties_for_import,
@@ -652,6 +669,16 @@ pub async fn run() -> anyhow::Result<()> {
         .with_slack_source(Arc::new(
             import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
         ))
+        .with_api_sources(Arc::new(import::domain::service::ApiSources::new(
+            import::outbound::linear_api_source::LinearApiSource::new(connect_proxy.clone()),
+            import::outbound::notion_api_source::NotionApiSource::new(connect_proxy),
+            import::outbound::static_file_image_rehoster::StaticFileImageRehoster::new(
+                static_file_service_client::StaticFileServiceClient::new(
+                    internal_api_key.clone(),
+                    StaticFileServiceUrl::new()?.to_string(),
+                ),
+            )?,
+        )))
         .with_admission(admission.clone())
         .with_notifier(import_notify),
     );
@@ -660,15 +687,6 @@ pub async fn run() -> anyhow::Result<()> {
     // read path reaps rows whose heartbeat stopped — safe with multiple
     // replicas, where a boot-time sweep would clobber other instances' jobs.
     tracing::info!("initialized import service");
-
-    let project_tool_context = ai_tools::build_project_tool_context(
-        db.clone(),
-        macro_event_broker.clone(),
-        entity_access_service.clone(),
-        document_tool_context.service.clone(),
-        chat_tool_context.service.clone(),
-        user_email_service.clone(),
-    );
 
     let initiative_tool_context = ai_tools::build_initiative_tool_context(
         db.clone(),
