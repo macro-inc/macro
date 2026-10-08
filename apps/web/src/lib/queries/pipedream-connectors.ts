@@ -70,9 +70,9 @@ export function usePipedreamConnectedSlugs(options?: {
   const slugs = createMemo<ReadonlySet<string>>(
     () =>
       new Set(
-        (queryReadyGate(query) ? query.data : NO_CONNECTIONS).map(
-          (connection) => connection.app_slug
-        )
+        (queryReadyGate(query) ? query.data : NO_CONNECTIONS)
+          .filter((connection) => connection.enabled)
+          .map((connection) => connection.app_slug)
       )
   );
   const ready = () => !query.isPlaceholderData && queryReadyGate(query);
@@ -223,6 +223,9 @@ export async function connectPipedreamApp(args: {
                     server_name: args.serverName,
                   })
               );
+              if (connection.app_slug !== args.appSlug || !connection.enabled) {
+                throw new Error('The requested connector was not enabled');
+              }
               upsertConnection(connection);
               await invalidateConnections();
               resolve('connected');

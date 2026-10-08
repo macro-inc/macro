@@ -92,6 +92,7 @@ pub use tool_context::{
     build_properties_tool_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_repository, build_team_tool_context,
 };
+pub use tool_context::{ToolConnectorToolContext, build_connector_tool_context};
 #[cfg(any(test, feature = "test-support"))]
 pub use tool_context::{build_image_generation_tool_context_test, no_op_schedule_context};
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
@@ -198,6 +199,7 @@ pub const EAGER_TOOLS: &[&str] = &[
     "ContentSearch",
     "CreateDocument",
     "DisplayResults",
+    "DiscoverConnectors",
     "EditDocument",
     "GetThread",
     "ListEntities",
@@ -252,6 +254,15 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
             toolset.add_tool::<DisplayResults, ToolServiceContext>()
         }
         AiHost::ChannelBot | AiHost::Mcp => toolset,
+    };
+    // Chat rebuilds the caller's connector toolset on each continuation.
+    // Pinned agent sessions have a separate MCP policy and are not widened here.
+    let toolset = match host {
+        AiHost::Chat => toolset.add_tool::<
+            pipedream_mcp::inbound::toolset::DiscoverConnectors,
+            ToolConnectorToolContext,
+        >(),
+        AiHost::AgentSession | AiHost::ChannelBot | AiHost::Mcp => toolset,
     };
     // External MCP clients have no `LoadTools`, so they get every schema.
     let deferred = match host {

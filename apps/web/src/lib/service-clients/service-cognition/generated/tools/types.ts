@@ -471,6 +471,55 @@ export type ColumnType =
  */
 export type SpelledColumnType = string;
 /**
+ * Search by app name, then inspect a returned slug before recommending auth.
+ */
+export type DiscoveryRequest =
+  | {
+      /**
+       * App name, e.g. "LinkedIn" or "Linear", not a task description.
+       */
+      query: string;
+      operation: 'search';
+    }
+  | {
+      /**
+       * Exact app slug from search results.
+       */
+      app_slug: string;
+      operation: 'inspect';
+    };
+/**
+ * Discovery results never execute tools or change connections.
+ */
+export type DiscoveryResult =
+  | {
+      /**
+       * Matching apps.
+       */
+      apps: DiscoveredApp[];
+      /**
+       * Narrow the app name if this is true.
+       */
+      more_results: boolean;
+      operation: 'search';
+    }
+  | {
+      app: DiscoveredApp;
+      /**
+       * Whether this caller has an enabled connection.
+       */
+      connected: boolean;
+      /**
+       * Advertised tools. Use SearchTools after connecting to load them.
+       */
+      tools: ConnectorTool[];
+      /**
+       * True when some advertised tools were omitted.
+       */
+      tools_truncated: boolean;
+      operation: 'inspect';
+    };
+/**
  * One edit operation.
  */
 export type EditOp =
@@ -6325,6 +6374,52 @@ export interface ToolRelation {
    * Table whose row ids this relation stores.
    */
   tableId: string;
+}
+/**
+ * Find an integration when SearchTools cannot find the capability needed for the user's task. Search by app name, then inspect a returned app_slug to see its actual tools and connection status. Only recommend connecting if an advertised tool supports the task; an app's name alone is not evidence. Inspection does not load or execute tools. If suitable and unconnected, include the returned connect_markup in your reply and explain what connecting enables. After connection, use SearchTools again in the same chat to load and call the new tools.
+ */
+export interface DiscoverConnectors {
+  request: DiscoveryRequest;
+}
+/**
+ * Discovery metadata and optional markup for a user-controlled auth flow.
+ */
+export interface DiscoverConnectorsResponse {
+  result: DiscoveryResult;
+  /**
+   * Include verbatim only if an advertised tool supports the requested task.
+   */
+  connect_markup?: string | null;
+}
+/**
+ * A verified app identity from the directory.
+ */
+export interface DiscoveredApp {
+  /**
+   * Exact identity to inspect or connect.
+   */
+  app_slug: string;
+  /**
+   * Human-readable app name.
+   */
+  name: string;
+  /**
+   * Directory description; inspect tools to verify specific capabilities.
+   */
+  description?: string | null;
+}
+/**
+ * An advertised action, not a tool loaded into the current turn.
+ */
+export interface ConnectorTool {
+  /**
+   * Upstream tool name.
+   */
+  name: string;
+  /**
+   * What the action supports.
+   */
+  description: string;
 }
 /**
  * Start a new coding agent session for a task using an agent returned by ListCodingAgents. Pass a self-contained task with the relevant repository, requirements, findings, and acceptance criteria; the coding agent does not inherit this conversation. Returns a live session reference after its first prompt is accepted, not completed code. Dispatch once per task and do not retry automatically after an uncertain failure.

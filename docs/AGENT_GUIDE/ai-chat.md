@@ -5,6 +5,26 @@ User-sent messages in chat and agent transcripts use an ink-colored bubble with
 lighter bubble with the normal text palette. Preview Markdown and controls at
 `/app/debug/ui?ui=invert-util` under **User-sent AI message**.
 
+## Connecting an app from regular AI chat
+
+When existing tools cannot handle a request, regular AI chat can use
+`DiscoverConnectors` to search Pipedream by app name and inspect an app's actual
+tool list. Expand the discovery row to see the results. An app name alone does
+not establish that the requested action is supported.
+
+For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
+it opens the hosted authorization flow over the chat. After the backend verifies
+and registers the connection, the chat sends a visible continuation message in
+the same conversation; the new request rebuilds connector tools. The unsent draft
+is preserved. Closing authorization or a failed registration sends no message.
+If the conversation changed or was closed during auth, there is no automatic
+continuation; the connected app remains available for the next request.
+
+Verify with an unconnected app: inspect its tools, click Connect, cancel once,
+then complete authorization and check that exactly one continuation appears and
+the assistant can discover the app's tools. Also verify a disabled connection
+does not display as connected. Agent-session MCP selection remains separate.
+
 ## Checking first-response latency
 
 From outside an editor, press `c`, then `a`, type a prompt, and press Enter.

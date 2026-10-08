@@ -43,10 +43,12 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
+import { AppConnectionContext } from '@core/pipedream/connection-context';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -56,9 +58,11 @@ import { useCanEdit } from '@core/signal/permissions';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
 import { invalidateUserQuota } from '@queries/auth';
+import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
+import { createConnectorContinuation } from '../primitives/create-connector-continuation';
 
 export function Chat(props: { data: ChatData }) {
   const loadedState = getChatInputStoredState(props.data.chat.id);
@@ -241,6 +245,25 @@ function ChatInner(props: {
     invalidateUserQuota();
   });
 
+  const connectorContinuation = createConnectorContinuation({
+    disabled: () => disabled() || chat.isGenerating(),
+    revision: () =>
+      `${chat.chatId()}:${chat
+        .messages()
+        .map((message) => message.id)
+        .join(',')}`,
+    connect: connectPipedreamApp,
+    resume: async (name) => {
+      await onSend({
+        content: `I connected ${name}. Continue my previous request using the newly available tools.`,
+        model: input.model(),
+        attachments: [],
+        toolset: { type: 'all' },
+      });
+    },
+    notify: (message) => toast.alert(message),
+  });
+
   const onStop = async () => {
     if (!chat.isGenerating()) return;
     const streamId = chat.stream()?.id()?.stream_id;
@@ -358,10 +381,12 @@ function ChatInner(props: {
           ref={setScrollRef}
         >
           <div class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)">
-            <ChatMessages
-              editDisabled={disabled()}
-              pendingLocationParams={pendingLocationParamsSignal.get}
-            />
+            <AppConnectionContext.Provider value={connectorContinuation}>
+              <ChatMessages
+                editDisabled={disabled()}
+                pendingLocationParams={pendingLocationParamsSignal.get}
+              />
+            </AppConnectionContext.Provider>
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />

@@ -67,6 +67,7 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
 // than the context object this chip reads its selection from.
 vi.mock('../../plugins', () => ({}));
 
+import { AppConnectionContext } from '@core/pipedream/connection-context';
 import { ConnectApp } from './ConnectApp';
 
 beforeEach(() => {
@@ -81,6 +82,49 @@ beforeEach(() => {
 });
 
 describe('connect-app chip', () => {
+  it('connects in place when a chat owns the continuation', () => {
+    const connect = vi.fn(async () => {});
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => false }}>
+        <ConnectApp
+          appSlug="linear"
+          name="Linear"
+          target="connections"
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }));
+    expect(connect).toHaveBeenCalledExactlyOnceWith({
+      appSlug: 'linear',
+      name: 'Linear',
+    });
+    expect(mocks.openAgentsPage).not.toHaveBeenCalled();
+    expect(mocks.requestConnectApp).not.toHaveBeenCalled();
+  });
+
+  it('disables connection while the chat cannot safely continue', () => {
+    const connect = vi.fn(async () => {});
+    render(() => (
+      <AppConnectionContext.Provider value={{ connect, disabled: () => true }}>
+        <ConnectApp
+          appSlug="linear"
+          name="Linear"
+          target="connections"
+          key="node"
+          theme={{}}
+        />
+      </AppConnectionContext.Provider>
+    ));
+    expect(
+      screen
+        .getByRole('button', { name: 'Connect Linear' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it('sends a Pipedream chip to Connections with the app queued', () => {
     render(() => (
       <ConnectApp

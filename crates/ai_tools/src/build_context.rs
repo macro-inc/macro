@@ -483,6 +483,10 @@ pub async fn build_tool_service_context_from_env(
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
 
     Ok(ToolServiceContext {
+        connector_tool_context: crate::tool_context::build_connector_tool_context(
+            pool.clone(),
+            crate::mcp_app_catalog::pipedream_client_from_env()?,
+        ),
         search_service_client: search_client.clone(),
         email_service_client: email_ext_client,
         soup_service,

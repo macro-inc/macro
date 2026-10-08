@@ -2618,6 +2618,75 @@ export const ToolDatabaseSchema = z.object({
   ),
 });
 
+export const DiscoverConnectors = z.object({
+  request: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({ query: z.string(), operation: z.literal('search') }),
+      z.object({ app_slug: z.string(), operation: z.literal('inspect') }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+});
+
+export const DiscoverConnectorsResponse = z.object({
+  result: z.any().superRefine((x, ctx) => {
+    const schemas = [
+      z.object({
+        apps: z.array(
+          z.object({
+            app_slug: z.string(),
+            name: z.string(),
+            description: z.union([z.string(), z.null()]).optional(),
+          })
+        ),
+        more_results: z.boolean(),
+        operation: z.literal('search'),
+      }),
+      z.object({
+        app: z.object({
+          app_slug: z.string(),
+          name: z.string(),
+          description: z.union([z.string(), z.null()]).optional(),
+        }),
+        connected: z.boolean(),
+        tools: z.array(z.object({ name: z.string(), description: z.string() })),
+        tools_truncated: z.boolean(),
+        operation: z.literal('inspect'),
+      }),
+    ];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  connect_markup: z.union([z.string(), z.null()]).optional(),
+});
+
 export const DispatchCodingAgent = z
   .object({ agent_id: z.string().uuid(), prompt: z.string() })
   .strict();

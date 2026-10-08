@@ -16,6 +16,25 @@ use super::*;
 use ai_toolset::ToolSet as _;
 
 #[test]
+fn connector_discovery_is_eager_in_chat_and_does_not_widen_other_hosts() {
+    assert!(EAGER_TOOLS.contains(&"DiscoverConnectors"));
+    assert!(
+        tools_for(AiHost::Chat)
+            .toolset
+            .tools
+            .contains_key("DiscoverConnectors")
+    );
+    for host in [AiHost::AgentSession, AiHost::ChannelBot, AiHost::Mcp] {
+        assert!(
+            !tools_for(host)
+                .toolset
+                .tools
+                .contains_key("DiscoverConnectors")
+        );
+    }
+}
+
+#[test]
 fn subagent_toolset_passes_schema_validation() {
     let tools = subagent_toolset();
     for name in [
@@ -220,8 +239,11 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
         tools_for(AiHost::Chat)
             .toolset
             .request_schemas()
-            .map(|schemas| schemas.len()),
-        "the same tools as chat"
+            .map(|schemas| schemas
+                .into_iter()
+                .filter(|schema| schema.name != "DiscoverConnectors")
+                .count()),
+        "the same tools as chat except chat-only connector discovery"
     );
 }
 

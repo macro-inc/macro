@@ -428,6 +428,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
 
     let tool_context = ToolServiceContext {
+        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
         email_service_client: Arc::new(EmailServiceClientExternal::new(
             email_service_client.url().to_owned(),
         )),
