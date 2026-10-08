@@ -11,9 +11,13 @@ export function createTasksViewSearch(options: {
   state: Store<TasksViewState>;
   setState: SetStoreFunction<TasksViewState>;
   search: TasksTabSearchParams;
-  setSearch: (patch: Partial<TasksTabSearchParams>) => void;
+  setSearch: (
+    patch: Partial<TasksTabSearchParams>,
+    options?: { history: 'replace' }
+  ) => void;
   tab: Accessor<TasksTab>;
   enabled: boolean;
+  boardEnabled?: Accessor<boolean>;
 }) {
   const { state, search } = options;
   // Missing URL controls restore the entry snapshot, not the latest selection.
@@ -31,9 +35,11 @@ export function createTasksViewSearch(options: {
           search.sort,
           search.sortReversed,
           search.groupBy,
+          options.boardEnabled?.() ?? true,
         ] as const,
-      ([tab, layout, sort, sortReversed, groupBy]) => {
+      ([tab, layout, sort, sortReversed, groupBy, boardEnabled]) => {
         if (!options.enabled) return;
+        const requestedLayout = layout ?? entryLayout;
 
         options.setState(
           produce((draft) => {
@@ -45,7 +51,7 @@ export function createTasksViewSearch(options: {
               draft.collapsedGroupIds = [];
             }
 
-            draft.layout = layout ?? entryLayout;
+            draft.layout = boardEnabled ? requestedLayout : 'list';
             draft.groupBy =
               groupBy ??
               (tab === entryTab ? entryGroupBy : TASK_DEFAULT_GROUP_BY[tab]);
@@ -54,6 +60,10 @@ export function createTasksViewSearch(options: {
               : entrySort.map((item) => ({ ...item }));
           })
         );
+
+        if (!boardEnabled && requestedLayout === 'board') {
+          options.setSearch({ layout: 'list' }, { history: 'replace' });
+        }
       }
     )
   );
@@ -64,6 +74,9 @@ export function createTasksViewSearch(options: {
       if (!options.enabled) return;
 
       if (args[0] === 'layout') {
+        if (options.boardEnabled?.() === false) {
+          options.setState('layout', 'list');
+        }
         options.setSearch({ layout: state.layout });
       }
 

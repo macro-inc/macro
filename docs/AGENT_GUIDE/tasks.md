@@ -48,6 +48,12 @@ clears it, and switching tabs clears it like any other filter. On mobile, the ta
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has the Ask AI input, a separate **+ Task**
 button, and Search.
+Mobile does not show the separate layout, sort, group, and filter toolbar.
+Use the compact sliders drawer for task-list controls; project task lists use the
+same drawer. Mobile supports List only. Opening a Board link or restoring a Board
+entry automatically selects List and replaces that host's layout URL parameter,
+without adding a history entry or clearing search, sorting, grouping, or filters.
+The desktop Board layout remains available.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again
@@ -175,8 +181,9 @@ those older results must not hide a failure for the new, uncached query.
 
 ## Reviews view
 
-With `enable-tasks-reviews` enabled (on by default in development), a
-`Reviews` shortcut appears above `My Tasks` in the Tasks sidebar and mobile tabs.
+With `enable-tasks-reviews` enabled (on by default in development),
+`Reviews` is available in desktop navigation and the mobile bottom dock's
+`More views` drawer, not the mobile Tasks tabs.
 It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and

@@ -1076,8 +1076,9 @@ no corresponding database timestamp.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
-leading filter-drawer button, like Tasks. Touch opens on **Recent** (the first
-pill). The drawer holds Sort (hidden on Recent, where the viewer's own
+leading filter-drawer button, like Tasks. Opening Files from the mobile dock
+starts on **Recent**; explicit tab and folder links keep their destination. The
+first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
 edit order applies) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The in-view `Search Drive` field, the
@@ -1633,6 +1634,10 @@ count, plus the first lines of the event description (its links open), and no la
 byline.
 
 ## Pull requests — `/app/reviews/pr/<foreignEntityId>`
+
+Opening **Reviews** from the mobile dock's **More** drawer starts on **Pull
+requests** (the **All** scope). Explicit review-tab links keep their selected
+scope; desktop's default scope remains **Involves me**.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
