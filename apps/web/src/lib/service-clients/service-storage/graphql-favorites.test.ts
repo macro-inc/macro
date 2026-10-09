@@ -51,11 +51,13 @@ const reorderData = {
     },
   ],
 };
-const revalidations = [
+/** Refreshes display metadata of the one added favorite, never a whole list. */
+const addRevalidations = [
   {
     query: stringifyDocument(FavoritesDocument),
     operationName: 'Favorites',
-    variablesJson: '{"filter":null}',
+    variablesJson:
+      '{"filter":{"entityTypes":["DOCUMENT"],"entityIds":["document-1"]}}',
   },
 ];
 
@@ -116,16 +118,35 @@ describe('favorites GraphQL mutations', () => {
       ]);
       expect(
         mutationMock.mock.calls[0][2].normalizedCacheOptimistic.revalidations
-      ).toEqual(revalidations);
+      ).toEqual([]);
     }
   );
 
   it.each([
-    { favorite: true, patchKind: 'prependUnique' },
-    { favorite: false, patchKind: 'remove' },
+    {
+      favorite: true,
+      identityBindings: [
+        {
+          localKey: 'GraphqlFavorite:document:document-1',
+          responsePath: ['setFavorite', 'favorite'],
+        },
+      ],
+      revalidations: addRevalidations,
+    },
+    {
+      favorite: false,
+      identityBindings: [
+        {
+          localKey: 'GraphqlFavorite:document:document-1',
+          responsePath: [],
+          deleteRecord: true,
+        },
+      ],
+      revalidations: [],
+    },
   ] as const)(
-    'submits durable optimism when favorite=$favorite',
-    async ({ favorite, patchKind }) => {
+    'predicts only the favorite record when favorite=$favorite',
+    async ({ favorite, identityBindings, revalidations }) => {
       await executeGraphqlSetFavoriteMutation(client, input, favorite, 2);
       expect(mutationMock).toHaveBeenCalledWith(
         SetFavoriteDocument,
@@ -160,18 +181,9 @@ describe('favorites GraphQL mutations', () => {
                   : null,
               },
             },
-            linkPatches: [
-              {
-                query: stringifyDocument(FavoritesDocument),
-                operationName: 'Favorites',
-                variablesJson: '{"filter":null}',
-                path: [{ field: 'user' }, { field: 'favorites' }],
-                operation: {
-                  kind: patchKind,
-                  entityKey: 'GraphqlFavorite:document:document-1',
-                },
-              },
-            ],
+            // The cache derives every favorites list from the record.
+            identityBindings,
+            linkPatches: [],
             revalidations,
           },
         }
@@ -213,7 +225,7 @@ describe('favorites GraphQL mutations', () => {
           uuid: '86cc4bfe-c45a-4e28-880a-6ba5ca921d35',
           optimisticResponse: reorderData,
           linkPatches: [],
-          revalidations,
+          revalidations: [],
         },
       }
     );

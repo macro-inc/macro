@@ -1,10 +1,6 @@
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
-  prependUnique,
-  remove,
-  select,
-  update,
 } from '@graphql-cache/exchange/optimistic';
 import { type Client, createRequest, type OperationResult } from '@urql/core';
 import { v4 as uuidv4 } from 'uuid';
@@ -108,16 +104,16 @@ export type SetFavoriteArgs = {
   entityId: string;
 };
 
-/** Explicit null keeps unfiltered reads, link patches, and revalidations on the
- * same cache field; the cache cannot resolve an omitted optional variable. */
+/** Explicit null keeps every unfiltered read on the same cache field; the cache
+ * cannot resolve an omitted optional variable. */
 export const UNFILTERED_FAVORITES_VARIABLES = {
   filter: null,
 } satisfies FavoritesQueryVariables;
 
-export type FavoritesCacheTarget = {
-  variables: FavoritesQueryVariables;
-  updateCachedList: boolean;
-};
+/** The server's cache identity of a favorite (`GraphqlFavorite.id`). */
+function favoriteId(args: SetFavoriteArgs): string {
+  return `${args.entityType}:${args.entityId}`;
+}
 
 type FavoriteEffects = Extract<
   SetFavoriteMutation['setFavorite']['result'],
@@ -169,20 +165,24 @@ function favoriteSoupEffects(
     : [];
 }
 
-/** Submit a durable optimistic GraphQL add/remove favorite mutation. */
+/**
+ * Submit a durable optimistic GraphQL add/remove favorite mutation.
+ *
+ * The prediction is record data only: the favorite with the sort order the
+ * server will assign, or its deletion. The cache derives every favorites
+ * list's members and order from those records (`GraphqlUser.favorites` is a
+ * declared relation), including lists mounted later, pushes, and rollback.
+ */
 export function executeGraphqlSetFavoriteMutation(
   client: Client,
   args: SetFavoriteArgs,
   favorite: boolean,
-  optimisticSortOrder: number,
-  cacheTargets: readonly FavoritesCacheTarget[] = [
-    { variables: UNFILTERED_FAVORITES_VARIABLES, updateCachedList: true },
-  ]
+  optimisticSortOrder: number
 ): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
   const entityType = toGraphqlFavoriteEntityType(args.entityType);
   const optimisticFavorite: FavoriteFieldsFragment = {
     __typename: 'GraphqlFavorite',
-    id: `${args.entityType}:${args.entityId}`,
+    id: favoriteId(args),
     entityType,
     entityId: args.entityId,
     sortOrder: optimisticSortOrder,
@@ -192,10 +192,7 @@ export function executeGraphqlSetFavoriteMutation(
     channelType: null,
     channelId: null,
   };
-  const identity = {
-    __typename: optimisticFavorite.__typename,
-    id: optimisticFavorite.id,
-  };
+  const localKey = `${optimisticFavorite.__typename}:${optimisticFavorite.id}`;
   const optimisticData: SetFavoriteMutation = {
     setFavorite: {
       __typename: 'SetFavoritePayload',
@@ -220,23 +217,26 @@ export function executeGraphqlSetFavoriteMutation(
       // appends a favorite. Coalescing that pair into an add would preserve
       // the server's old position instead. Keep each toggle in queue order.
       uuid: uuidv4(),
-      // A cold offline cache has no user.favorites field to patch. The
-      // optimistic mutation itself can still be durably queued; replay
-      // revalidation populates the list once the network is available.
-      updates: cacheTargets
-        .filter((target) => target.updateCachedList)
-        .map((target) =>
-          update(
-            select(FavoritesDocument, target.variables)
-              .field('user')
-              .field('favorites'),
-            favorite ? prependUnique(identity) : remove(identity)
-          )
-        ),
-      revalidations: cacheTargets.map((target) => ({
-        document: FavoritesDocument,
-        variables: target.variables,
-      })),
+      // Removing hides the record until the server confirms, then keeps its
+      // tombstone. Adding restores a record that an earlier removal deleted.
+      identityBindings: [
+        favorite
+          ? { localKey, responsePath: ['setFavorite', 'favorite'] }
+          : { localKey, responsePath: [], deleteRecord: true },
+      ],
+      // The mutation's favorite omits display metadata (file, document and
+      // channel types) that only the list resolver hydrates. Refresh this one
+      // record after an add; membership itself needs no refetch.
+      revalidations: favorite
+        ? [
+            {
+              document: FavoritesDocument,
+              variables: {
+                filter: { entityTypes: [entityType], entityIds: [args.entityId] },
+              },
+            },
+          ]
+        : [],
     }
   ).toPromise();
 }
@@ -274,13 +274,13 @@ export type ReorderFavoritesResult =
   | { kind: 'committed' }
   | { kind: 'queued'; transactionId: string };
 
-/** Submit a durable optimistic GraphQL favorites reorder. */
+/**
+ * Submit a durable optimistic GraphQL favorites reorder. The prediction is
+ * each favorite's new sort order; every list derives its order from them.
+ */
 export function executeGraphqlReorderFavoritesMutation(
   client: Client,
-  args: ReorderFavoritesRequest,
-  revalidationVariables: readonly FavoritesQueryVariables[] = [
-    UNFILTERED_FAVORITES_VARIABLES,
-  ]
+  args: ReorderFavoritesRequest
 ): Promise<
   OperationResult<ReorderFavoritesMutation, ReorderFavoritesMutationVariables>
 > {
@@ -319,13 +319,7 @@ export function executeGraphqlReorderFavoritesMutation(
     ReorderFavoritesDocument,
     variables,
     optimisticData,
-    {
-      uuid: REORDER_FAVORITES_OPTIMISTIC_UUID,
-      revalidations: revalidationVariables.map((variables) => ({
-        document: FavoritesDocument,
-        variables,
-      })),
-    }
+    { uuid: REORDER_FAVORITES_OPTIMISTIC_UUID }
   ).toPromise();
 }
 
