@@ -265,6 +265,18 @@ impl AccessRepository for PgAccessRepository {
         .transpose()
     }
 
+    async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        Ok(sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM agent_session WHERE id = $1) AS "exists!""#,
+            session,
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
+
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,
@@ -303,6 +315,30 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    async fn get_pipeline_access(
+        &self,
+        id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let id = id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
+        let sources = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
+    }
+
+    async fn list_pipeline_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_access(
         &self,
@@ -330,6 +366,32 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(anyhow_access_error)?;
         Ok(queries::database_access::list_database_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn list_form_access(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
+        let source_ids = queries::get_user_source_ids(&self.pool, Some(user_id))
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::list_form_access(&self.pool, &source_ids).await?)
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_form_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let form_uuid = form_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid form ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -503,6 +565,9 @@ impl AccessRepository for PgAccessRepository {
                 )
                 .await
             }
+            EntityType::CrmPipeline => {
+                queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, &source_ids).await
+            }
             EntityType::Database => {
                 queries::database_access::get_database_access(
                     &self.pool,
@@ -518,6 +583,9 @@ impl AccessRepository for PgAccessRepository {
                     &source_ids,
                 )
                 .await
+            }
+            EntityType::Form => {
+                queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await
             }
             EntityType::User
             | EntityType::Channel

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE forms SET updated_at = $2, layout_revision = CASE WHEN $3 THEN $4 ELSE layout_revision END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4453c2168f1b4d7f5c1d011a9cf34ce66663c4cb264e1aa70a025c31ac269b6"
+}

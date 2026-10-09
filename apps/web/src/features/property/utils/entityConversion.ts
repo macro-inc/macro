@@ -108,5 +108,8 @@ export function macroEntityToPropertyEntityType(
     .with({ type: 'database' }, () => {
       throw new Error('databases do not support properties');
     })
+    .with({ type: 'form' }, () => {
+      throw new Error('forms do not support properties');
+    })
     .exhaustive();
 }

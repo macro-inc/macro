@@ -80,10 +80,13 @@ It does not deploy the backend or apply migrations to shared databases.
 `ListBookingLinks` discovers personal links, current team IDs, reusable schedules and
 full editable drafts. Pass a returned team ID to discover that team's links. Both
 active and paused links include their shareable URL and profile revision.
-`CreateBookingLink` and `EditBookingLink` present one editable review in chat and
-agent sessions. The review reuses the normal booking options and availability
-controls; accepting executes the edited draft, while declining/cancelling does not
-write anything. Headless hosts register executable tools, not deferred user tools.
+`CreateBookingLink` and `EditBookingLink` execute directly in every host after
+conversational confirmation. The agent explains the complete proposal, waits for
+the user's approval, then passes that reply verbatim in required `userConfirmation`.
+Missing or blank confirmation is rejected before calling the scheduling service.
+As with confirmed email/calendar tools, the quote is not verified against conversation
+history. There is no booking review card, elicitation, or deferred user-tool result.
+The agent discovers internal identities through tools instead of asking users for IDs.
 
 The scheduling service owns authorization and validates the complete draft. Edits
 replace only the chosen event type; changed hours use a separate schedule to

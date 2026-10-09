@@ -69,7 +69,9 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { replaceCitations } from '../../citationsUtils';
+import { MarkdownHostContext } from '../../context/MarkdownHostContext';
 import '../../styles.css';
+import type { BlockName } from '@core/block';
 import {
   ENABLE_STATIC_DOCUMENT_CARDS,
   ENABLE_SVG_PREVIEW,
@@ -864,7 +866,10 @@ const DocumentCard: TypedRenderableEntity<DocumentCardNode> = {
   guard: (node: LexicalNode): node is DocumentCardNode =>
     node.__type === 'document-card',
   render: (props) => {
-    if (ENABLE_STATIC_DOCUMENT_CARDS) {
+    // A form's card is its body (RFC 03), for every recipient: the forms
+    // flag gates authoring only, and the service decides who may respond.
+    const isForm = props.node.getBlockName() === 'form';
+    if (ENABLE_STATIC_DOCUMENT_CARDS || isForm) {
       return DocumentCardDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
@@ -1207,6 +1212,8 @@ export function StaticMarkdownContext(props: {
   children: JSX.Element;
   theme?: EditorThemeClasses;
   lazy?: boolean;
+  /** The surface outside any block, e.g. a channel in the channels shell. */
+  host?: BlockName;
 }) {
   const mergedTheme = () => {
     if (!props.theme) return baseTheme;
@@ -1225,7 +1232,9 @@ export function StaticMarkdownContext(props: {
         lazy: () => props.lazy ?? true,
       }}
     >
-      {props.children}
+      <MarkdownHostContext.Provider value={props.host}>
+        {props.children}
+      </MarkdownHostContext.Provider>
     </context.Provider>
   );
 }

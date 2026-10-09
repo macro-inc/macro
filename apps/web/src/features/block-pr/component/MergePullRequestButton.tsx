@@ -5,16 +5,23 @@ import {
   createMergePullRequestAction,
   type MergePullRequestTarget,
 } from '../primitives/create-merge-pull-request-action';
+import {
+  type PullRequestCheck,
+  pullRequestReadyToMerge,
+} from '../primitives/pull-request-ready-to-merge';
 import { prDisplayName } from '../util/prKey';
 
 /**
  * Merge an open pull request as the signed-in user. Renders nothing unless
- * the pull request is open; GitHub's own permissions decide whether the
- * merge goes through once asked.
+ * the pull request is open, not a draft, and its checks have finished
+ * without failing. GitHub's own permissions decide whether the merge goes
+ * through once asked.
  */
 export function MergePullRequestButton(props: {
   target: MergePullRequestTarget;
   status: string | null | undefined;
+  draft?: boolean | null;
+  checks?: readonly PullRequestCheck[] | null;
   size?: ButtonSize;
   class?: string;
   /** Hide the label and show the icon alone, with the label as its name. */
@@ -61,7 +68,13 @@ export function MergePullRequestButton(props: {
   });
   const label = () => (action.pending() ? 'Merging…' : 'Merge');
   return (
-    <Show when={props.status === 'open'}>
+    <Show
+      when={pullRequestReadyToMerge({
+        status: props.status,
+        draft: props.draft,
+        checks: props.checks,
+      })}
+    >
       <Button
         variant="success"
         size={props.size ?? 'sm'}

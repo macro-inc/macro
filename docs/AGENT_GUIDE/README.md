@@ -10,6 +10,7 @@ verified live against a local stack (`just run_local`).
 | [navigation.md](navigation.md) | Routes, sidebar, command menu, keyboard model, splits |
 | [documents.md](documents.md) | Creating docs, typing in the editor, AI edit, comments, Word (DOCX) editor, PowerPoint presentations, Figma designs, Photoshop and Illustrator editors, Photoshop and Illustrator documents (AI tools, search), side panel |
 | [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
+| [forms.md](forms.md) | Forms: create doors, builder (drag and drop, gates), respond route, Responses grid, sharing, polls |
 | [ai-chat.md](ai-chat.md) | Standalone and doc-scoped AI chat |
 | [../CLAUDE_CLOUD_DEMO.md](../CLAUDE_CLOUD_DEMO.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |

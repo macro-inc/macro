@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_event_sources source\n        SET provider_access_role = $4\n        FROM calendars calendar\n        WHERE source.calendar_id = calendar.id\n          AND calendar.account_id = $1\n          AND source.account_id = $1\n          AND source.calendar_id = $2\n          AND source.provider_event_id = $3\n          AND $4::text IS NOT NULL\n          AND calendar.access_role = $4\n          AND source.provider_access_role IS DISTINCT FROM $4\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f56c86535a53feba7824d0af28e64d3502734254a2585a6bd1bbbe9be38c9a32"
+}

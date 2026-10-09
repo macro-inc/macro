@@ -2,7 +2,7 @@ use super::*;
 
 const SAVE: &str = r#"mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
     saveEmailDraft(input: $input) { thread {
-        __typename id linkId ownerId inboxVisible isRead isSignal isFavorited cacheProjection latestInboundMessageTs updatedAt
+        __typename id linkId ownerId inboxVisible isRead isSignal isFavorited cacheProjection latestInboundMessageTs reminderReturnedAt updatedAt
         mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id }
         properties { __typename propertyDefinitionId }
         mailDraftState {
@@ -64,6 +64,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .clone();
     let mut projections = optimistic_updates(
         projection_updates(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             SAVE,
             Some("SaveEmailDraft"),
@@ -75,6 +76,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
     );
     projections.extend(
         draft_optimistic_updates(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             SAVE,
             Some("SaveEmailDraft"),
@@ -85,6 +87,7 @@ async fn offline_lifecycle<S: PredicateIndexStorage>(storage: S) {
         .unwrap(),
     );
     let projections = crate::properties::augment_optimistic(
+        cache_core::meta::bundled_schema_ref(),
         engine.storage(),
         SAVE,
         Some("SaveEmailDraft"),
@@ -185,6 +188,7 @@ fn absent_thread_revalidation_revokes_stale_mail_membership() {
         let variables = json!({"threadId":thread_id}).as_object().unwrap().clone();
         let data = json!({"user":{"id":VIEWER,"emailThread":null}});
         let projections = projection_updates(
+            cache_core::meta::bundled_schema_ref(),
             engine.storage(),
             query,
             Some("EmailThreadPage"),

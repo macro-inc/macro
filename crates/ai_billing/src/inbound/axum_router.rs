@@ -90,8 +90,7 @@ pub struct UpdateOverageRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateAutoReloadRequest {
-    /// Reload credits automatically, billing usage past allowance and
-    /// credits to the payer's card. Turning this off also turns off overage.
+    /// Purchase prepaid credits automatically using the payer's card.
     pub enabled: bool,
     /// Reload once the balance drops below this, cents. Must be positive.
     pub minimum_balance_cents: i64,
@@ -99,9 +98,7 @@ pub struct UpdateAutoReloadRequest {
     /// minimum and no more than the catalog's `auto_reload_target_max_cents`.
     pub target_balance_cents: i64,
     /// Most to reload per calendar month, cents. Omit or `null` for no limit.
-    /// Also serves as the per-period overage cap, so it must be at least the
-    /// catalog's `overage_limit_min_cents`; larger values are capped at
-    /// `overage_limit_max_cents`.
+    /// Must be at least the catalog's `overage_limit_min_cents` (legacy name).
     #[serde(default)]
     pub monthly_spend_limit_cents: Option<i64>,
 }
@@ -327,6 +324,7 @@ fn error_response(e: BillingError) -> Response {
         BillingError::FreePlan => StatusCode::PAYMENT_REQUIRED,
         BillingError::InvalidCreditAmount
         | BillingError::InvalidOverageLimit
+        | BillingError::DirectUsageBillingDisabled
         | BillingError::InvalidAutoReload(_)
         | BillingError::NoStripeCustomer => StatusCode::BAD_REQUEST,
         BillingError::Payment(_) | BillingError::Storage(_) | BillingError::Entitlement(_) => {
@@ -408,7 +406,7 @@ pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCat
     })
 }
 
-/// Turn overage billing on or off and set the per-period cap. Payer only.
+/// Retired direct-usage opt-in. Enabling is rejected; disabling remains supported.
 #[utoipa::path(
     patch,
     path = "/ai-billing/overage",
@@ -443,7 +441,7 @@ pub async fn update_overage_handler<B: BillingService, Auth: MacroAuthorizationS
     }
 }
 
-/// Turn automatic credit reloads (and with them overage) on with the given
+/// Turn automatic credit reloads on with the given
 /// thresholds, or off. Payer only. Enabling settles right away, so a balance
 /// already under the minimum reloads immediately.
 #[utoipa::path(

@@ -108,6 +108,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
+| `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
@@ -431,6 +432,33 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
+On desktop, the rail **Create** button, **C**, and the command menu’s **Create**
+entry open the detailed launcher at standard dialog width. Selecting **Create**
+closes the command menu and hands focus to the launcher; individual creation
+commands remain searchable in the command menu. The left list starts with up to three **Recents** from
+actual launcher usage, followed by the remaining choices grouped by category.
+Recent items do not repeat in their categories. With no history, the list starts
+with categories. Hover or keyboard navigation updates the right detail panel;
+click a row or press Enter to start that creation flow. The detail panel is
+top-aligned, shares the list background, and is separated by a vertical divider.
+
+The **Search mode** toggle (or **/**) switches between direct entity shortcuts
+shown beside each choice and the standard create search input. The preference
+persists across opens. Search filters both Recents and categories. Up/Down moves
+through the displayed order and scrolls the selected row into view; Left/Right
+edits the search input. Enter creates the selected item, Shift+Enter opens it in a
+new split where supported, and Escape closes the launcher. Typing in search mode
+never runs an entity shortcut. Switching modes preserves selection and dimensions.
+
+The detailed layout replaces the old desktop launcher, including the onboarding
+Create lesson. The PostHog flag `enable-carousel-create-menu` opts into the
+carousel instead; when off, unknown, or loading, the detailed layout is used.
+For local testing, set `VITE_ENABLE_CAROUSEL_CREATE_MENU=true` (or `false` to force
+the detailed layout). The carousel shares creation actions, recents ordering,
+search mode, and shortcuts; Left/Right also navigates its cards outside search.
+The inline `/app/debug/create-menu-demo` keeps all three layouts for comparison
+without creating data. Mobile continues to use its create sheet.
+
 On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
@@ -463,10 +491,8 @@ directly in the sheet without replacing the current view or changing its URL.
 If a requested section is unavailable, the sheet shows an unavailable message
 and a **Back to settings** button that returns to the grouped main page.
 
-Fresh mobile CRM visits default to list view, including when
-applying a default saved view; explicitly selected saved views and back/forward
-navigation retain their layout. The mobile **+ Company** button opens the
-company-creation sheet.
+CRM Companies and People are list-only on every device. The mobile
+**+ Company** button opens the company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
@@ -581,6 +607,15 @@ the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
 or delegated changes do not retrigger routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
 
+When `enable-routine-conditions` is on, every activity trigger panel has an
+**Only run if** box for an optional yes/no question about each event, such as
+**Is this email an invoice or a receipt?** Before a run starts, the event's
+content (the email, channel message, document, or task, read as the routine
+owner) is checked against it, and events answered no are skipped. The chip
+shows the question after **· if**. Saving a condition fails with "trigger
+conditions are not enabled" while the scheduled-action service has no
+`TYPESAFE_API_KEY`.
+
 A routine can combine up to sixteen trigger groups: each schedule is a group,
 and up to thirty-two activity filters share one event group;
 matching any trigger runs it. Open a trigger chip and choose **Remove trigger**
@@ -595,7 +630,10 @@ The **Run options** dropdown contains
 **Enable routine** / **Disable routine** and **Copy prompt**, which copies the
 current instructions, including unsaved edits. **Run History** uses full-width
 Soup rows for past agent sessions, with each run's
-outcome, duration, and time. Click a row or press Enter to open its session;
+outcome, duration, and time. Runs a trigger's condition skipped show
+**Condition not met** (hover for how likely the answer was yes) or **Condition
+couldn’t be checked**, marked **Skipped**; consecutive skips collapse into one
+**N events skipped by the condition** row that expands on click. Click a row or press Enter to open its session;
 Shift opens it in another split. **Back to routines** returns to the list in the
 same pane.
 
@@ -676,6 +714,23 @@ notifications. External contacts insert a link to their original CRM record;
 they do not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only.
 
+Cmd+K **People** and a typed **All** query also find CRM contacts, using the same
+accessible-team search, hidden-record exclusions, and full-email collapsing as
+mentions. Cached contacts appear at once; the server search starts about 250 ms
+after typing stops and pages 100 contacts at a time, so contacts beyond the first
+500 cached records are found too. An empty query keeps People and All on their
+usual recency lists without contacts. A contact whose email belongs to a Macro user
+appears as that person instead, even when only the CRM name matched: their existing
+direct message when you have one, otherwise the person, and selecting them opens a
+direct message. Other contacts show their email and open the contact page; Enter and
+click open in place, Shift+Enter in a new split. A server match that arrives after
+typing takes the default selection from the Search for… row. Global Search does not
+list CRM contacts; Search for… from People still opens the Channels search. Verify
+a contact outside the cached rows, an email-only query, rapid query changes (rows
+from an earlier query must disappear unless they still match), scrolling or Down
+past the last row to load more, and that Files/Tasks/Channels/Agents never show
+contacts.
+
 Cmd+K merges cached and locally available items before applying recency order.
 An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Searching retains the menu's
@@ -727,6 +782,9 @@ restart rules still apply.
 Settings → Agents → Agents / Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
+Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+tasks** and **Open pull requests** switches, both off by default. Each saves on
+toggle and reverts with a toast if the save fails.
 
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
 Settings → Agents → Runtimes, above Cursor, with the
@@ -756,6 +814,13 @@ polled into Macro about every two seconds; disconnected runtimes must resume fir
 Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).
 Use the item menu to delete an item from Home.
+
+Home and Agents unsent composer storage follows the current account identity.
+Before identity is available, it uses memory only and does not restore legacy
+shared drafts or attachment projections. Logout
+clears composer drafts and attachment projections, including legacy keys. When
+checking Android draft recovery, verify the actual editor text after process
+death; storage unit tests alone do not establish lifecycle recovery.
 
 `C A` (Create → Agent) opens the Agents new-conversation page and focuses its
 message input; `C Shift+A` requests a new split. It does not open a modal or
@@ -829,3 +894,12 @@ retry errors inline. See [Email reminders](reminders.md).
 Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
 The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+
+### Native update-required dialog
+
+When newer frontend JS requires a newer native app, the mobile shell offers
+**Update app** and **OK**. Update app uses the native opener; Android targets the
+HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
+is absent. An opener failure displays an inline error and the dialog stays
+dismissible. A missing listing is handled in the external store/browser: return
+to Macro, dismiss, and retry later. Task 07 verifies the live listing.

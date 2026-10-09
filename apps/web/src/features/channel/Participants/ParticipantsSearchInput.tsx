@@ -4,10 +4,15 @@ import { InputGroup } from '@ui';
 export function ParticipantsSearchInput(props: {
   value: string;
   placeholder?: string;
+  embedded?: boolean;
   onInput: (value: string) => void;
 }) {
   return (
-    <InputGroup size="lg" class="rounded-full">
+    <InputGroup
+      size="lg"
+      variant={props.embedded ? 'bare' : 'outline'}
+      class={props.embedded ? 'h-full rounded-none border-0' : 'rounded-full'}
+    >
       <InputGroup.Addon>
         <MagnifyingGlassIcon />
       </InputGroup.Addon>
@@ -18,7 +23,10 @@ export function ParticipantsSearchInput(props: {
         placeholder={props.placeholder ?? 'Search participants'}
         aria-label={props.placeholder ?? 'Search participants'}
       />
-      <InputGroup.Addon align="inline-end">
+      <InputGroup.Addon
+        align="inline-end"
+        class={props.embedded ? 'pe-6!' : undefined}
+      >
         <InputGroup.ClearButton />
       </InputGroup.Addon>
     </InputGroup>

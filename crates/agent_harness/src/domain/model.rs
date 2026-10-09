@@ -18,6 +18,10 @@ use macro_uuid::Uuid;
 use messages::domain::events::MessageEventAttachment;
 mod session_origin;
 pub use session_origin::{MentionOrigin, SessionOrigin, TaskAssignmentOrigin};
+mod coding_preferences;
+pub use coding_preferences::{
+    CREATE_TASKS_INSTRUCTIONS, OPEN_PULL_REQUESTS_INSTRUCTIONS, with_coding_preferences,
+};
 
 /// How a channel message's attached files are named to an agent.
 ///
@@ -193,6 +197,14 @@ impl AgentKind {
     #[must_use]
     pub const fn folds_instructions(self) -> bool {
         !matches!(self, Self::InMemory | Self::ClaudeCloud)
+    }
+
+    /// Whether this kind's runtime starts on the session row's model by itself.
+    /// The others are sent a model chosen at creation over ACP, before their
+    /// first prompt.
+    #[must_use]
+    pub const fn starts_on_session_model(self) -> bool {
+        matches!(self, Self::InMemory | Self::Cursor | Self::ClaudeCloud)
     }
 
     /// Whether a deployment provisions this kind's runtimes itself.

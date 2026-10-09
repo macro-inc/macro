@@ -32,7 +32,10 @@ import {
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
-import { handleMessageEvent } from '@queries/messages/sync';
+import {
+  handleMessageEvent,
+  handleTimelineActivity,
+} from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -103,6 +106,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
+      })
+      .with({ type: 'timeline_activity' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleTimelineActivity
+        );
       })
       .with({ type: 'message_update' }, () => {
         withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(

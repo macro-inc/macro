@@ -15,6 +15,7 @@ mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
+mod build_web_app;
 mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
 mod cargo_workspace_dependency_check;
@@ -34,7 +35,6 @@ mod deploy_preview;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
-mod docs_check;
 mod ensure_daytona_snapshot;
 mod ios_preview;
 mod path_validation;
@@ -139,6 +139,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "code_check_infra",
         file_name: "code_check_infra.yml",
         render_yaml: || render_gh_workflow(code_check_infra::code_check_infra)(),
+    },
+    WorkflowFile {
+        slug: "build_web_app",
+        file_name: "build_web_app.yml",
+        render_yaml: || render_patched(build_web_app::build_web_app, build_web_app::patch),
     },
     WorkflowFile {
         slug: "cancel_stuck_cloud_storage_deploys",
@@ -324,11 +329,6 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "sdk_check",
         file_name: "sdk-check.yml",
         render_yaml: || render_gh_workflow(sdk_check::sdk_check)(),
-    },
-    WorkflowFile {
-        slug: "docs_check",
-        file_name: "docs-check.yml",
-        render_yaml: || render_gh_workflow(docs_check::docs_check)(),
     },
 ];
 

@@ -131,12 +131,15 @@ mod tests {
 
     #[sqlx::test(fixtures(path = "../../fixtures"))]
     async fn test_upsert_item_last_accessed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        // Seed well in the past. The column has millisecond precision, so a row
+        // seeded at NOW() can share its timestamp with the upsert that follows.
         let last_accessed = sqlx::query!(
             r#"
-            INSERT INTO "ItemLastAccessed" ("item_id", "item_type", "last_accessed") VALUES ($1, $2, NOW())
+            INSERT INTO "ItemLastAccessed" ("item_id", "item_type", "last_accessed")
+            VALUES ($1, $2, '2019-10-16 00:00:00')
             RETURNING "last_accessed" as last_accessed
-            "#, 
-            "d1", 
+            "#,
+            "d1",
             "document"
         )
         .map(|row| row.last_accessed)
@@ -157,7 +160,10 @@ mod tests {
         .fetch_one(&pool)
         .await?;
 
-        assert_ne!(last_accessed, updated_last_access);
+        assert!(
+            updated_last_access > last_accessed,
+            "upsert must move last_accessed forward: {last_accessed} -> {updated_last_access}"
+        );
 
         Ok(())
     }

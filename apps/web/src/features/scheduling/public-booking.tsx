@@ -86,21 +86,9 @@ function ReceiptContent(params: { id: string }) {
 }
 
 export function BookingReceiptPage(props: { id: string }) {
-  const scheduling = useFeatureFlag(enableCalendarScheduling);
   return (
-    <Show
-      when={scheduling().enabled}
-      fallback={
-        <p class="p-12 text-center text-ink-muted">
-          {scheduling().loading
-            ? 'Loading…'
-            : 'This booking page is unavailable.'}
-        </p>
-      }
-    >
-      <Suspense fallback={<p class="p-12">Loading…</p>}>
-        <ReceiptContent id={props.id} />
-      </Suspense>
-    </Show>
+    <Suspense fallback={<p class="p-12">Loading…</p>}>
+      <ReceiptContent id={props.id} />
+    </Suspense>
   );
 }

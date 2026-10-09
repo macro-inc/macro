@@ -68,12 +68,15 @@ pub trait GithubOauth: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
-    /// Constructs the oauth url to authenticate with github
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
+    /// Constructs the oauth url to authenticate with github.
+    ///
+    /// `state` is the opaque, already-encoded value the callback expects
+    /// back; it is placed in the URL as-is.
+    fn construct_oauth_url(
         &self,
         client_id: &str,
         redirect_uri: &str,
-        state: T,
+        state: &str,
     ) -> Result<String, Self::Err>;
 
     /// Exchanges the oauth code for tokens
@@ -163,12 +166,11 @@ pub trait Auth: Send + Sync + 'static {
 ///
 /// Handles OAuth URL construction and user account linking.
 pub trait GithubLinkService: Send + Sync + 'static {
-    /// Constructs the oauth url to authenticate with github
-    fn construct_oauth_url<T: serde::Serialize + std::fmt::Debug + 'static>(
-        &self,
-        redirect_uri: &str,
-        state: T,
-    ) -> Result<String, GithubError>;
+    /// Constructs the oauth url to authenticate with github.
+    ///
+    /// `state` is the opaque, already-encoded value the callback expects
+    /// back; it is placed in the URL as-is.
+    fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError>;
 
     /// Uses token exchange to link the user to the github account
     fn link_user(

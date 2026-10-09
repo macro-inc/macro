@@ -7,7 +7,7 @@ use axum::{
 use macro_middleware::tracking::ClientIp;
 
 use crate::api::{context::ApiContext, utils::default_redirect_url};
-use authentication_service::service::user::create_user::create_user_profile;
+use crate::service::user::create_user::create_user_profile;
 
 use model::response::{EmptyResponse, ErrorResponse};
 

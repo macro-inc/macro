@@ -1,4 +1,5 @@
 import ChatCircle from '@phosphor/chat-circle.svg';
+import ClipboardText from '@phosphor/clipboard-text.svg';
 import Eye from '@phosphor/eye.svg';
 import Minus from '@phosphor/minus.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
@@ -25,6 +26,7 @@ const GLYPHS = {
   'participant-added': UserPlus,
   'participant-removed': UserMinus,
   'call-started': Phone,
+  responded: ClipboardText,
   unknown: PencilSimple,
 } as const;
 

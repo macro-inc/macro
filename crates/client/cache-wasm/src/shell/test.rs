@@ -85,6 +85,32 @@ fn read_response_conversion_preserves_unsafe_integer_errors() {
 }
 
 #[wasm_bindgen_test]
+fn watch_patches_reject_unsafe_integers_like_hits() {
+    use cache_core::engine::live_query::{LiveFieldPatch, ResponsePathSegment};
+    use cache_core::engine::watch_query::QueryUpdate;
+    let value = serde_json::json!({"nested": [{"value": 9_007_199_254_740_992_u64}]});
+    let hit = QueryUpdate::Hit {
+        data: std::sync::Arc::new(value.clone()),
+        revision: "1".into(),
+    };
+    let patch = QueryUpdate::Patch {
+        patches: vec![LiveFieldPatch {
+            path: vec![ResponsePathSegment::Field("payload".into())],
+            value,
+        }],
+        revision: "2".into(),
+    };
+    for update in [&hit, &patch] {
+        assert_eq!(
+            read_response_to_js(update, query_update_values(update))
+                .unwrap_err()
+                .as_string(),
+            to_js(update).unwrap_err().as_string()
+        );
+    }
+}
+
+#[wasm_bindgen_test]
 fn build_info_reports_compiled_versions_without_opening_storage() {
     let info: serde_json::Value =
         serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
@@ -287,6 +313,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
         revision: "0".to_string(),
@@ -1397,6 +1424,7 @@ async fn optimistic_v2_patch_is_filterable_after_enqueue_reopen_and_rollback() {
             0.0,
             100.0,
             js(serde_json::json!({"draftRevision": 10})),
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1540,6 +1568,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             0.0,
             50.0,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1562,6 +1591,7 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
             "second-owner".into(),
             0.0,
             50.0,
+            JsValue::UNDEFINED,
             JsValue::UNDEFINED,
         ))
         .await,
@@ -1668,6 +1698,7 @@ async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed
             10.0,
             1_000.0,
             JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1767,6 +1798,7 @@ async fn destroy_recovery_wipes_records_and_queue() {
         "destroy-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     ))
     .await;
@@ -1986,6 +2018,7 @@ async fn storage_reset_errors_latch_and_block_hot_read_write_and_control_methods
         0.0,
         100.0,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     ))
     .await;
     assert_reset_required(engine.bound_identity()).await;
@@ -2099,6 +2132,7 @@ async fn physical_reset_serializes_recreates_and_preserves_interner_registration
         "reset-owner".into(),
         0.0,
         100.0,
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     ))
     .await;
@@ -2220,6 +2254,7 @@ async fn every_method_rejects_after_consuming_close() {
         "closed".into(),
         1.0,
         2.0,
+        JsValue::UNDEFINED,
         JsValue::UNDEFINED,
     ))
     .await;
@@ -2573,6 +2608,7 @@ async fn queue_one_mutation(engine: &CacheEngine) {
         0.0,
         100.0,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     ))
     .await;
 }
@@ -2712,4 +2748,89 @@ async fn stale_databases_are_removed_only_when_unused_and_empty() {
     }
     remove_opfs_pair(&queued).await;
     remove_opfs_pair(&own).await;
+}
+
+#[wasm_bindgen_test(async)]
+async fn calendar_ranges_report_gaps_watermarks_and_uncertain_events_across_the_js_boundary() {
+    const SCOPE: &str = "cache-wasm-calendar-range";
+    let engine = fresh_engine(SCOPE).await;
+    // 2026-10-05T00:00:00Z through 2026-10-12.
+    let week = serde_json::json!({
+        "startMs": 1_791_158_400_000_i64,
+        "endMs": 1_791_763_200_000_i64,
+        "startDay": 20_731,
+        "endDay": 20_738,
+    });
+    let week_spans = serde_json::json!([
+        { "kind": "timed", "start": 1_791_158_400_000_i64, "end": 1_791_763_200_000_i64 },
+        { "kind": "allDay", "start": 20_731, "end": 20_738 },
+    ]);
+
+    let empty: serde_json::Value = from_js(resolved(engine.calendar_range(js(week.clone()))).await);
+    assert_eq!(
+        empty,
+        serde_json::json!({
+            "kind": "range",
+            "revision": empty["revision"],
+            "occurrenceKeys": [],
+            "gaps": week_spans,
+            "freshness": "unknown",
+            "uncertainEventKeys": [],
+            "optimistic": false,
+            "watermark": null,
+        })
+    );
+
+    let commit: serde_json::Value = from_js(
+        resolved(engine.calendar_commit(js(serde_json::json!({
+            "coverage": week_spans,
+            "watermark": { "kind": "merge", "links": [{ "linkId": "l1", "seq": "7" }] },
+            "freshness": "fresh",
+        }))))
+        .await,
+    );
+    assert_eq!(commit["revisionAdvanced"], true);
+    assert_eq!(commit["changed"], serde_json::json!([]));
+
+    resolved(engine.enqueue_optimistic_mutation(
+        None,
+        "00000000-0000-4000-8000-0000000000c1".into(),
+        PROPERTY_MUTATION.into(),
+        Some("SetEntityProperty".into()),
+        js(mutation_variables()),
+        js(serde_json::json!({
+            "setEntityProperty": { "id": "prop-1", "displayName": "Moved" }
+        })),
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
+        0.0,
+        "runner".into(),
+        0.0,
+        100.0,
+        JsValue::UNDEFINED,
+        js(serde_json::json!(["GraphqlCalendarEvent:e1"])),
+    ))
+    .await;
+    let covered: serde_json::Value = from_js(resolved(engine.calendar_range(js(week))).await);
+    assert_eq!(covered["gaps"], serde_json::json!([]));
+    assert_eq!(covered["freshness"], "fresh");
+    assert_eq!(
+        covered["watermark"],
+        serde_json::json!([{ "linkId": "l1", "seq": "7" }])
+    );
+    assert_eq!(
+        covered["uncertainEventKeys"],
+        serde_json::json!(["GraphqlCalendarEvent:e1"])
+    );
+    assert_eq!(covered["optimistic"], true);
+
+    assert!(
+        JsFuture::from(engine.calendar_commit(js(serde_json::json!({
+            "deletedEventKeys": ["GraphqlCalendar:c1"],
+        }))))
+        .await
+        .is_err()
+    );
+    close_and_destroy(&engine, SCOPE).await;
 }

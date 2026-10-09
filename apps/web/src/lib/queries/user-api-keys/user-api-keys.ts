@@ -7,11 +7,14 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { userApiKeyKeys } from './keys';
 import { normalizeUserApiKeyName } from './name';
 
+function fetchUserApiKeys(): Promise<UserApiKeyInfo[]> {
+  return throwOnErr(() => storageServiceClient.listUserApiKeys());
+}
+
 export function useUserApiKeysQuery() {
   return useQuery(() => ({
     queryKey: userApiKeyKeys.list.queryKey,
-    queryFn: async (): Promise<UserApiKeyInfo[]> =>
-      await throwOnErr(() => storageServiceClient.listUserApiKeys()),
+    queryFn: fetchUserApiKeys,
   }));
 }
 

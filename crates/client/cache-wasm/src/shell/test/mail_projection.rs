@@ -32,6 +32,7 @@ fn enqueue(engine: &CacheEngine) -> js_sys::Promise {
         1.0,
         100.0,
         JsValue::UNDEFINED,
+        JsValue::UNDEFINED,
     )
 }
 

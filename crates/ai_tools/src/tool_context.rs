@@ -4,6 +4,7 @@ use bots::{
     domain::service::BotServiceImpl, inbound::toolset::BotToolContext,
     outbound::pg_bots_repo::PgBotsRepo,
 };
+use calendar_events::inbound::team_toolset::TeamCalendarToolContext;
 use calendar_events::inbound::toolset::CalendarToolContext;
 use call::domain::models::{CallError, CallWebhookEvent, EgressS3Config};
 use call::domain::ports::CallRtcClient;
@@ -80,6 +81,9 @@ mod images;
 #[cfg(any(test, feature = "test-support"))]
 pub use images::build_image_generation_tool_context_test;
 pub use images::{ToolImageGenerationToolContext, build_image_generation_tool_context};
+
+mod forms;
+pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
 pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
@@ -445,6 +449,27 @@ pub type ToolCalendarMutationService =
 /// Type alias for the calendar AI tool context.
 pub type ToolCalendarToolContext =
     CalendarToolContext<ToolCalendarMutationService, ToolCalendarReadService>;
+
+/// Source-scoped team calendar domain service for read-only AI availability.
+pub type ToolTeamCalendarService = calendar_events::domain::team::CalendarTeamServiceImpl<
+    calendar_events::outbound::pg_team::PgCalendarTeamRepository,
+>;
+
+/// Team availability tool dependencies, separate from provider mutation access.
+pub type ToolTeamCalendarToolContext = TeamCalendarToolContext<ToolTeamCalendarService>;
+
+/// Construct the authorized availability service at the AI composition root.
+pub fn build_team_calendar_tool_context(
+    pool: sqlx::PgPool,
+    enabled: bool,
+) -> ToolTeamCalendarToolContext {
+    TeamCalendarToolContext {
+        service: Arc::new(calendar_events::domain::team::CalendarTeamServiceImpl::new(
+            calendar_events::outbound::pg_team::PgCalendarTeamRepository::new(pool),
+            enabled,
+        )),
+    }
+}
 
 /// Build the calendar AI tool context: reads query the local occurrence
 /// projections from `pool`; mutations call the calendar service at
@@ -1577,6 +1602,8 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Read-only discovery of connectors the caller has not yet authorized.
+    pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,
     pub email_service_client: Arc<email_service_client::EmailServiceClientExternal>,
     pub soup_service: Arc<ToolSoupService>,
@@ -1589,9 +1616,11 @@ pub struct ToolServiceContext {
     pub email_tool_context: ToolEmailToolContext,
     pub call_tool_context: ToolCallToolContext,
     pub calendar_tool_context: ToolCalendarToolContext,
+    pub team_calendar_tool_context: ToolTeamCalendarToolContext,
     pub booking_link_tool_context: ToolBookingLinkToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     pub databases_tool_context: ToolDatabasesToolContext,
+    pub forms_tool_context: ToolFormsToolContext,
     pub databases_sql_tool_context: ToolDatabasesSqlToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
@@ -1622,6 +1651,27 @@ pub struct ToolServiceContext {
     /// this context. Set per-session by the caller so AI calls made by tools
     /// (e.g. subagents) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
+}
+
+/// Pipedream discovery dependencies shared by chat tools.
+pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
+    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+>;
+
+/// Wire connector discovery at the composition boundary.
+pub fn build_connector_tool_context(
+    pool: sqlx::PgPool,
+    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+) -> ToolConnectorToolContext {
+    pipedream_mcp::inbound::toolset::ConnectorToolContext {
+        service: Arc::new(
+            pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
+                client,
+                Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+            ),
+        ),
+    }
 }
 
 impl FromRef<ToolServiceContext> for AnthropicToolContext {
@@ -1656,6 +1706,7 @@ impl ToolServiceContext {
         self.initiative_tool_context = self.initiative_tool_context.with_actor(actor);
         self.channel_tool_context = self.channel_tool_context.with_actor(actor);
         self.databases_tool_context = self.databases_tool_context.with_actor(actor);
+        self.forms_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
         self
     }

@@ -616,6 +616,7 @@ fn identity_binding_keeps_newer_edits_readable_across_commit_and_restart() {
             "newer body"
         );
         let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             "fragment Draft on GraphqlSoupEmailMessage { id bodyHtmlSanitized }",
             "Draft",
         )

@@ -13,6 +13,7 @@ export type EntityActionSenderBucket = 'signal' | 'noise';
 
 export type EntityActionViewContext = {
   supportsMarkDone: boolean;
+  supportsOpenInNewSplit: boolean;
   senderBucket: EntityActionSenderBucket | undefined;
 };
 
@@ -88,6 +89,7 @@ export function resolveEntityActionViewContext(options: {
       activeTab !== undefined &&
       isListViewID(activeListView) &&
       canExecuteMarkDoneOnView(activeListView, activeTab),
+    supportsOpenInNewSplit: true,
     senderBucket: resolveSenderBucket(activeTab),
   };
 }

@@ -7,10 +7,12 @@ import { isPaymentError } from '@core/util/handlePaymentError';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
+import type { ModelSpeed } from '../../constant/speed';
 
 export type ChatSendInput = {
   content: string;
   model: Model;
+  speed?: ModelSpeed;
   attachments: Attachment[];
   toolset: ToolSet;
   metaKey?: boolean;
@@ -31,6 +33,7 @@ export function useSendChatMessage() {
   return async function sendChatMessage({
     content,
     model,
+    speed,
     chatId,
     attachments,
     toolset,
@@ -38,6 +41,7 @@ export function useSendChatMessage() {
     const response = await cognitionApiServiceClient.sendStreamChatMessage({
       content,
       model: model ?? DEFAULT_MODEL,
+      speed: speed ?? 'standard',
       chat_id: chatId,
       attachments: attachments.length > 0 ? attachments : undefined,
       toolset,

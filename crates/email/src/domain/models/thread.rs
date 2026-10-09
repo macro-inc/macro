@@ -11,6 +11,8 @@ pub struct EmailThreadMetadata {
     pub link_id: uuid::Uuid,
     /// Timestamp of the latest inbound message, when one exists.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
+    /// Most recent explicit return from an email reminder, independent of message recency.
+    pub reminder_returned_at: Option<DateTime<Utc>>,
 }
 
 /// A thread record without messages.

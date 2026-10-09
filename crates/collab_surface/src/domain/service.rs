@@ -8,41 +8,92 @@ use std::sync::Arc;
 use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
+use model_entity::{Entity, EntityType};
+use models_permissions::share_permission::access_level::AccessLevel;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CollabSurface, CollabSurfaceError, SurfaceOwnership, SurfaceState, surface_ownership,
+    CollabSurface, CollabSurfaceError, SurfaceOwnership, SurfaceSnapshot, SurfaceState,
+    SurfaceUpdate, surface_ownership,
 };
 use crate::domain::ports::{
-    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, OwnedSurfaceService, SurfaceInitializer,
+    CollabSurfaceRepo, CollabSurfaceService, DocumentIds, FormIds, OwnedSurfaceService,
+    SurfaceInitializer,
 };
-use crate::domain::token::{access_level_for, encode_surface_token};
+use crate::domain::token::{
+    access_level_for, encode_service_surface_token, encode_surface_token, surface_access_level,
+};
 
 /// Upper bound on initial markdown, mirroring the lexical-service request cap.
 const MAX_INITIAL_MARKDOWN_LEN: usize = 1_000_000;
+
+/// What a new surface's sync-service session starts from.
+#[derive(Clone, Copy)]
+enum InitialContent<'a> {
+    /// Markdown, converted to a Loro snapshot by the initializer.
+    Markdown(&'a str),
+    /// An opaque Loro snapshot, stored as-is.
+    Snapshot(&'a [u8]),
+}
 
 /// Whether the public API may create and delete surfaces under `parent`.
 fn caller_owned(parent: &Entity<'_>) -> bool {
     surface_ownership(parent.entity_type) == Some(SurfaceOwnership::Callers)
 }
 
-/// Production implementation of [`CollabSurfaceService`].
-pub struct CollabSurfaceServiceImpl<R, I, D> {
-    repo: Arc<R>,
-    initializer: Arc<I>,
-    documents: Arc<D>,
+/// The form ids of a service that only serves [`OwnedSurfaceService`]. It
+/// implements no [`FormIds`], so such a service has no public API: the public
+/// API takes caller-chosen ids and must keep them off forms' ids.
+#[derive(Debug, Clone, Copy)]
+pub struct OwnedSurfacesOnly;
+
+/// Production implementation of [`CollabSurfaceService`] and
+/// [`OwnedSurfaceService`]. The public API needs `Forms` to implement
+/// [`FormIds`]; see [`CollabSurfaceServiceImpl::with_form_ids`].
+pub struct CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms = OwnedSurfacesOnly> {
+    repo: Arc<Repository>,
+    initializer: Arc<Initializer>,
+    documents: Arc<Documents>,
+    forms: Arc<Forms>,
     jwt_secret: String,
 }
 
-impl<R, I, D> CollabSurfaceServiceImpl<R, I, D> {
-    /// Build the service from its ports and the sync-service JWT secret.
-    pub fn new(repo: Arc<R>, initializer: Arc<I>, documents: Arc<D>, jwt_secret: String) -> Self {
+impl<Repository, Initializer, Documents>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents>
+{
+    /// Build the owned-surface service from its ports and the sync-service
+    /// JWT secret.
+    pub fn new(
+        repo: Arc<Repository>,
+        initializer: Arc<Initializer>,
+        documents: Arc<Documents>,
+        jwt_secret: String,
+    ) -> Self {
         Self {
             repo,
             initializer,
             documents,
+            forms: Arc::new(OwnedSurfacesOnly),
             jwt_secret,
+        }
+    }
+}
+
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
+{
+    /// The same service with the forms domain's ids, which serves the public
+    /// API too.
+    pub fn with_form_ids<FormDomain: FormIds>(
+        self,
+        forms: Arc<FormDomain>,
+    ) -> CollabSurfaceServiceImpl<Repository, Initializer, Documents, FormDomain> {
+        CollabSurfaceServiceImpl {
+            repo: self.repo,
+            initializer: self.initializer,
+            documents: self.documents,
+            forms,
+            jwt_secret: self.jwt_secret,
         }
     }
 }
@@ -95,11 +146,13 @@ fn verify_receipt_matches_parent(
     Ok(())
 }
 
-impl<R, I, D> CollabSurfaceService for CollabSurfaceServiceImpl<R, I, D>
+impl<Repository, Initializer, Documents, Forms> CollabSurfaceService
+    for CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
-    R: CollabSurfaceRepo,
-    I: SurfaceInitializer,
-    D: DocumentIds,
+    Repository: CollabSurfaceRepo,
+    Initializer: SurfaceInitializer,
+    Documents: DocumentIds,
+    Forms: FormIds,
 {
     #[tracing::instrument(err, skip(self, user_id, parent_receipt, initial_markdown))]
     async fn ensure_surface(
@@ -113,7 +166,14 @@ where
         if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
         }
-        self.ensure_bound(parent, id, &initial_markdown).await
+        // A form ensures its surface lazily, under its own id, so the id is
+        // the form's before any surface holds it. Checked before the existing
+        // row too, so nothing bound to a form's id is handed to a caller.
+        if self.forms.is_form_id(id).await? {
+            return Err(CollabSurfaceError::IdReserved);
+        }
+        self.ensure_bound(parent, id, InitialContent::Markdown(&initial_markdown))
+            .await
     }
 
     #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
@@ -131,7 +191,13 @@ where
 
     #[tracing::instrument(err, skip(self))]
     async fn get_parent(&self, id: Uuid) -> Result<Entity<'static>, CollabSurfaceError> {
-        Ok(self.get_live(id).await?.parent)
+        let parent = self.get_live(id).await?.parent;
+        if parent.entity_type == EntityType::Form && !self.parent_form_exists(&parent).await? {
+            // Its form was deleted without the forms domain retiring it.
+            self.retire_surface(id).await?;
+            return Err(CollabSurfaceError::NotFound);
+        }
+        Ok(parent)
     }
 
     #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
@@ -153,7 +219,8 @@ where
         // names a document never connects to it, however it was bound.
         self.refuse_document_id(surface.id).await?;
 
-        let access_level = access_level_for(parent_receipt.entity_permission())?;
+        let access_level =
+            surface_access_level(parent.entity_type, parent_receipt.entity_permission())?;
         encode_surface_token(
             parent_receipt
                 .get_authenticated_user()
@@ -185,7 +252,7 @@ where
         // no per-surface owner. `access_level_for` already maps channel
         // membership to Edit and view-only presences to View.
         let level = access_level_for(parent_receipt.entity_permission())?;
-        if level < models_permissions::share_permission::access_level::AccessLevel::Edit {
+        if level < AccessLevel::Edit {
             return Err(CollabSurfaceError::AccessDenied);
         }
 
@@ -197,11 +264,13 @@ where
     }
 }
 
-impl<R, I, D> OwnedSurfaceService for CollabSurfaceServiceImpl<R, I, D>
+impl<Repository, Initializer, Documents, Forms> OwnedSurfaceService
+    for CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
-    R: CollabSurfaceRepo,
-    I: SurfaceInitializer,
-    D: DocumentIds,
+    Repository: CollabSurfaceRepo,
+    Initializer: SurfaceInitializer,
+    Documents: DocumentIds,
+    Forms: Send + Sync + 'static,
 {
     #[tracing::instrument(err, skip(self, initial_markdown))]
     async fn ensure_owned_surface(
@@ -210,7 +279,19 @@ where
         id: Uuid,
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        self.ensure_bound(parent, id, &initial_markdown).await
+        self.ensure_bound(parent, id, InitialContent::Markdown(&initial_markdown))
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, snapshot), fields(snapshot_len = snapshot.len()))]
+    async fn ensure_owned_surface_from_snapshot(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        snapshot: Vec<u8>,
+    ) -> Result<CollabSurface, CollabSurfaceError> {
+        self.ensure_bound(parent, id, InitialContent::Snapshot(&snapshot))
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -224,6 +305,40 @@ where
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn owned_surface_snapshot(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+    ) -> Result<SurfaceSnapshot, CollabSurfaceError> {
+        let surface = self.ready_owned_surface(&parent, id).await?;
+        let session_id = surface.id.to_string();
+        let token =
+            encode_service_surface_token(session_id.clone(), AccessLevel::View, &self.jwt_secret)?;
+        self.initializer.snapshot(&session_id, &token).await
+    }
+
+    #[tracing::instrument(
+        err,
+        skip(self, expected_revision, update),
+        fields(update_len = update.len())
+    )]
+    async fn update_owned_surface(
+        &self,
+        parent: Entity<'static>,
+        id: Uuid,
+        expected_revision: Vec<u8>,
+        update: Vec<u8>,
+    ) -> Result<SurfaceUpdate, CollabSurfaceError> {
+        let surface = self.ready_owned_surface(&parent, id).await?;
+        let session_id = surface.id.to_string();
+        let token =
+            encode_service_surface_token(session_id.clone(), AccessLevel::Edit, &self.jwt_secret)?;
+        self.initializer
+            .update(&session_id, &token, &expected_revision, &update)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn retire_surface(&self, id: Uuid) -> Result<(), CollabSurfaceError> {
         self.repo
             .soft_delete(id)
@@ -233,11 +348,12 @@ where
     }
 }
 
-impl<R, I, D> CollabSurfaceServiceImpl<R, I, D>
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
 where
-    R: CollabSurfaceRepo,
-    I: SurfaceInitializer,
-    D: DocumentIds,
+    Repository: CollabSurfaceRepo,
+    Initializer: SurfaceInitializer,
+    Documents: DocumentIds,
 {
     /// Load-or-create surface `id` bound to `parent`, returning once it is
     /// `ready`. See [`CollabSurfaceService::ensure_surface`] for the rules.
@@ -245,17 +361,25 @@ where
         &self,
         parent: Entity<'static>,
         id: Uuid,
-        initial_markdown: &str,
+        initial_content: InitialContent<'_>,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         if !is_random_id(id) {
             return Err(CollabSurfaceError::BadRequest(
                 "surface ids must be random UUIDs".to_string(),
             ));
         }
-        if initial_markdown.len() > MAX_INITIAL_MARKDOWN_LEN {
-            return Err(CollabSurfaceError::BadRequest(format!(
-                "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
-            )));
+        match initial_content {
+            InitialContent::Markdown(markdown) if markdown.len() > MAX_INITIAL_MARKDOWN_LEN => {
+                return Err(CollabSurfaceError::BadRequest(format!(
+                    "initial markdown exceeds {MAX_INITIAL_MARKDOWN_LEN} bytes"
+                )));
+            }
+            InitialContent::Snapshot([]) => {
+                return Err(CollabSurfaceError::BadRequest(
+                    "initial snapshot is empty".to_string(),
+                ));
+            }
+            InitialContent::Markdown(_) | InitialContent::Snapshot(_) => {}
         }
 
         // Fast path: the surface already exists. A `pending` row still gets
@@ -266,7 +390,7 @@ where
                 // A document may have taken the id since the row was written.
                 self.refuse_document_id(id).await?;
             }
-            return self.finish_init(existing, initial_markdown).await;
+            return self.finish_init(existing, initial_content).await;
         }
 
         // A new surface creates its own session, so its id must be free in the
@@ -297,10 +421,29 @@ where
                 return Err(CollabSurfaceError::Gone);
             };
             verify_receipt_matches_parent(&existing, &surface.parent)?;
-            return self.finish_init(existing, initial_markdown).await;
+            return self.finish_init(existing, initial_content).await;
         }
 
-        self.finish_init(surface, initial_markdown).await
+        self.finish_init(surface, initial_content).await
+    }
+
+    /// The ready surface `id` under `parent`, for the domain that owns it to
+    /// read or write its state. Nothing here creates or initializes a surface.
+    async fn ready_owned_surface(
+        &self,
+        parent: &Entity<'static>,
+        id: Uuid,
+    ) -> Result<CollabSurface, CollabSurfaceError> {
+        if surface_ownership(parent.entity_type) != Some(SurfaceOwnership::ParentDomain) {
+            return Err(CollabSurfaceError::AccessDenied);
+        }
+        let surface = self.get_live(id).await?;
+        verify_receipt_matches_parent(&surface, parent)?;
+        if surface.state != SurfaceState::Ready {
+            return Err(CollabSurfaceError::NotReady);
+        }
+        self.refuse_document_id(surface.id).await?;
+        Ok(surface)
     }
 
     /// Fetch a live (non-deleted) surface or `NotFound`.
@@ -361,15 +504,23 @@ where
     async fn finish_init(
         &self,
         surface: CollabSurface,
-        initial_markdown: &str,
+        initial_content: InitialContent<'_>,
     ) -> Result<CollabSurface, CollabSurfaceError> {
         if surface.state == SurfaceState::Ready {
             return Ok(surface);
         }
 
-        self.initializer
-            .initialize(&surface.id.to_string(), initial_markdown)
-            .await?;
+        let session_id = surface.id.to_string();
+        match initial_content {
+            InitialContent::Markdown(markdown) => {
+                self.initializer.initialize(&session_id, markdown).await?
+            }
+            InitialContent::Snapshot(snapshot) => {
+                self.initializer
+                    .initialize_from_snapshot(&session_id, snapshot)
+                    .await?
+            }
+        }
 
         self.repo
             .mark_ready(surface.id)
@@ -380,5 +531,20 @@ where
             state: SurfaceState::Ready,
             ..surface
         })
+    }
+}
+
+impl<Repository, Initializer, Documents, Forms>
+    CollabSurfaceServiceImpl<Repository, Initializer, Documents, Forms>
+where
+    Forms: FormIds,
+{
+    /// Whether a form parent still exists, trashed or not. A form never comes
+    /// back once its row is gone.
+    async fn parent_form_exists(&self, parent: &Entity<'_>) -> Result<bool, CollabSurfaceError> {
+        let Ok(form) = parent.entity_id.parse::<Uuid>() else {
+            return Ok(false);
+        };
+        Ok(self.forms.is_form_id(form).await?)
     }
 }

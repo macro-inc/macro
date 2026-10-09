@@ -4,6 +4,7 @@ import {
   type BreakpointThresholds,
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
+import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
@@ -662,18 +663,20 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
 function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
   return (
-    <div
-      {...rest}
-      ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
-      class={cn(
-        '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
-        local.class
-      )}
-      data-view-shell-top-bar=""
-    >
-      <ViewNavigationControls />
-      {local.children}
-    </div>
+    <SplitHeaderContextMenu>
+      <div
+        {...rest}
+        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
+        class={cn(
+          '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
+          local.class
+        )}
+        data-view-shell-top-bar=""
+      >
+        <ViewNavigationControls />
+        {local.children}
+      </div>
+    </SplitHeaderContextMenu>
   );
 }
 

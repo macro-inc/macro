@@ -559,6 +559,17 @@ where
             .map(|timestamp| timestamp.to_rfc3339()))
     }
 
+    /// Most recent explicit return from an email reminder.
+    async fn reminder_returned_at(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<String>> {
+        let metadata = load_email_thread_metadata::<ER>(ctx, self.thread_id).await?;
+        Ok(metadata
+            .reminder_returned_at
+            .map(|timestamp| timestamp.to_rfc3339()))
+    }
+
     /// Complete body-free metadata for local draft edits and discards.
     async fn mail_draft_state(
         &self,

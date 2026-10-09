@@ -42,6 +42,7 @@ import {
   type MessageTimelineData,
   useMessageTimelineQuery,
 } from '../timeline';
+import { timelineMessages } from '../timeline-entries';
 
 const time = '2026-09-09T00:00:00Z';
 function message(
@@ -95,7 +96,13 @@ it('reopens a resolved project discussion through the real mutation and shared t
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
     pageParams: [null],
-    pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+    pages: [
+      {
+        entries: [{ type: 'message', message: root }],
+        next_cursor: null,
+        previous_cursor: null,
+      },
+    ],
   });
   testQueryClient.setQueryData<MessageThread>(threadKey, {
     root,
@@ -113,7 +120,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
       () => null
     );
     const mutation = usePatchThreadMutation();
-    const resolved = () => timeline.data?.pages[0].items[0].state.resolved;
+    const resolved = () =>
+      timeline.data &&
+      timelineMessages(timeline.data.pages[0])[0].state.resolved;
     return (
       <>
         <span>{resolved() ? 'Resolved' : 'Open'}</span>
@@ -151,8 +160,9 @@ it('reopens a resolved project discussion through the real mutation and shared t
     testQueryClient.getQueryData<MessageThread>(threadKey)?.state.resolved
   ).toBe(false);
   expect(
-    testQueryClient.getQueryData<MessageTimelineData>(timelineKey)?.pages[0]
-      .items[0].state.resolved
+    timelineMessages(
+      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+    )[0].state.resolved
   ).toBe(false);
 });
 
@@ -187,7 +197,13 @@ describe.each(['channel', 'document', 'call'] as const)(
         const threadKey = getThreadRepliesQueryKey(parent, 'root');
         testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
           pageParams: [null],
-          pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+          pages: [
+            {
+              entries: [{ type: 'message', message: root }],
+              next_cursor: null,
+              previous_cursor: null,
+            },
+          ],
         });
         testQueryClient.setQueryData(selectedKey, [root]);
         testQueryClient.setQueryData<MessageThread>(threadKey, {
@@ -227,8 +243,10 @@ describe.each(['channel', 'document', 'call'] as const)(
         if (echoTiming === 'after response') echo();
 
         expect(
-          testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!
-            .pages[0].items[0].thread.reply_count
+          timelineMessages(
+            testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!
+              .pages[0]
+          )[0].thread.reply_count
         ).toBe(1);
         expect(
           testQueryClient.getQueryData<MessageListItem[]>(selectedKey)![0]
@@ -269,7 +287,13 @@ describe('root deletion', () => {
       getMessageTimelineQueryKey(parent),
       {
         pageParams: [null],
-        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+        pages: [
+          {
+            entries: [{ type: 'message', message: root }],
+            next_cursor: null,
+            previous_cursor: null,
+          },
+        ],
       }
     );
     if (withThreadCache)
@@ -297,7 +321,7 @@ describe('root deletion', () => {
   const roots = (parent: MessageParent) =>
     testQueryClient
       .getQueryData<MessageTimelineData>(getMessageTimelineQueryKey(parent))!
-      .pages.flatMap((page) => page.items);
+      .pages.flatMap(timelineMessages);
 
   it.each(['document', 'initiative', 'crm_company', 'crm_contact'] as const)(
     "takes the whole %s discussion, including another author's replies",
@@ -404,13 +428,16 @@ describe('root deletion', () => {
             pageParams: [null],
             pages: [
               {
-                items: [
+                entries: [
                   {
-                    ...root,
-                    thread: {
-                      reply_count: 0,
-                      preview: [],
-                      latest_reply_at: null,
+                    type: 'message',
+                    message: {
+                      ...root,
+                      thread: {
+                        reply_count: 0,
+                        preview: [],
+                        latest_reply_at: null,
+                      },
                     },
                   },
                 ],
@@ -453,9 +480,9 @@ describe('thread resolution', () => {
   const timelineKey = getMessageTimelineQueryKey(parent);
   const threadKey = getThreadRepliesQueryKey(parent, 'root');
   const cachedResolved = () => ({
-    timeline:
+    timeline: timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.resolved,
+    )[0].state.resolved,
     thread:
       testQueryClient.getQueryData<MessageThread>(threadKey)!.state.resolved,
   });
@@ -468,7 +495,13 @@ describe('thread resolution', () => {
     };
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+      pages: [
+        {
+          entries: [{ type: 'message', message: root }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      ],
     });
     testQueryClient.setQueryData<MessageThread>(threadKey, {
       state,
@@ -547,7 +580,7 @@ describe('sending', () => {
       const threadKey = getThreadRepliesQueryKey(parent, parent.id);
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
         pageParams: [null],
-        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+        pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
       });
       testQueryClient.setQueryData(threadKey, null);
       mocks.post.mockResolvedValue(message(parent, parent.id));
@@ -559,9 +592,9 @@ describe('sending', () => {
         optimisticId: newMessageId(),
       });
 
-      const roots =
+      const roots = timelineMessages(
         testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-          .items;
+      );
       expect(roots.map((root) => [root.id, root.thread_id])).toEqual([
         ['call-id', undefined],
       ]);
@@ -587,11 +620,14 @@ describe('sending', () => {
       pageParams: [null],
       pages: [
         {
-          items: [
+          entries: [
             {
-              ...root,
-              state,
-              thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              type: 'message',
+              message: {
+                ...root,
+                state,
+                thread: { reply_count: 0, preview: [], latest_reply_at: null },
+              },
             },
           ],
           next_cursor: null,
@@ -614,9 +650,9 @@ describe('sending', () => {
       optimisticId: replyId,
     });
 
-    const roots =
+    const roots = timelineMessages(
       testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items;
+    );
     expect(roots.map((item) => item.id)).toEqual([root.id]);
     expect(roots[0].thread.reply_count).toBe(1);
     const thread = testQueryClient.getQueryData<MessageThread>(threadKey)!;
@@ -639,12 +675,13 @@ describe('sending', () => {
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     const rootIds = () =>
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state.root_id]);
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state.root_id]);
     let respond!: () => void;
     mocks.post.mockImplementation(
       (_parent, input) =>
@@ -680,8 +717,9 @@ describe('sending', () => {
     await pending;
     expect(rootIds()).toEqual([[id, id]]);
     expect(
-      testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
-        .items[0].state.anchor
+      timelineMessages(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey)!.pages[0]
+      )[0].state.anchor
     ).toEqual(anchor ?? null);
   });
 
@@ -690,7 +728,7 @@ describe('sending', () => {
     const timelineKey = getMessageTimelineQueryKey(parent);
     testQueryClient.setQueryData<MessageTimelineData>(timelineKey, {
       pageParams: [null],
-      pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
     mocks.post.mockResolvedValue(message(parent, 'server-id'));
     let mutation!: ReturnType<typeof useSendMessageMutation>;
@@ -715,7 +753,8 @@ describe('sending', () => {
     expect(
       testQueryClient
         .getQueryData<MessageTimelineData>(timelineKey)!
-        .pages[0].items.map((item) => [item.id, item.state])
+        .pages.flatMap(timelineMessages)
+        .map((item) => [item.id, item.state])
     ).toEqual([
       [
         'server-id',

@@ -9,8 +9,10 @@ import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
   driveSplitRoute,
+  driveTabRoute,
   homeSplitRoute,
   notFoundRoute,
+  reviewsSplitRoute,
   settingsRoute,
 } from '@app/routes/routes';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -56,7 +58,13 @@ const routes: SplitRoutes = {
   definitions: [
     {
       ...appRoute,
-      children: [homeSplitRoute, settingsRoute, driveSplitRoute, notFoundRoute],
+      children: [
+        homeSplitRoute,
+        settingsRoute,
+        { ...driveSplitRoute, children: [driveTabRoute] },
+        reviewsSplitRoute,
+        notFoundRoute,
+      ],
     },
   ],
   defaultRoute: () => paneRoute({ id: 'view-home', params: {} }),
@@ -181,6 +189,58 @@ describe('stacked panes', () => {
     expect(shown()).toEqual(['home']);
     expect(manager.splits()[0]!.id).toBe(homePane);
     expect(active()).toBe('home');
+  });
+
+  it('applies the Recent destination when reusing an existing Files pane', () => {
+    const { manager, shown } = setup('/drive');
+    const recent: SplitContent = {
+      ...documents,
+      entryMetadata: {
+        route: paneRoute(
+          { id: 'drive', params: {} },
+          { id: 'drive-tab', params: { tab: 'recent' } }
+        ),
+      },
+    };
+    const expectRecent = () => {
+      expect(manager.activeSplit()?.content().entryMetadata).toMatchObject({
+        route: {
+          matches: [
+            { id: 'app' },
+            { id: 'drive' },
+            { id: 'drive-tab', params: { tab: 'recent' } },
+          ],
+        },
+      });
+      expect(shown()).toEqual(['documents']);
+    };
+
+    manager.replaceAllSplits(recent);
+    expectRecent();
+    manager.replaceAllSplits(documents);
+    manager.openWithSplit(recent, { mergeHistory: true, search: {} });
+    expectRecent();
+  });
+
+  it('applies the All scope when reusing an existing Reviews pane', () => {
+    const { manager, shown } = setup('/reviews');
+    const all: SplitContent = {
+      type: 'component',
+      id: 'reviews',
+      entryMetadata: { search: { reviews: { tab: ['all'] } } },
+    };
+    const expectAll = () => {
+      expect(manager.activeSplit()?.content().entryMetadata).toMatchObject({
+        search: { reviews: { tab: ['all'] } },
+      });
+      expect(shown()).toEqual(['reviews']);
+    };
+
+    manager.replaceAllSplits(all);
+    expectAll();
+    manager.replaceAllSplits({ type: 'component', id: 'reviews' });
+    manager.openWithSplit(all, { mergeHistory: true, search: {} });
+    expectAll();
   });
 
   it('moves the pane holding a claim to the front when a router open lands on it', () => {

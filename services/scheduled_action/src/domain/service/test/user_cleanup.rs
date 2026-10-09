@@ -91,7 +91,7 @@ impl ScheduledActionExecutor for NeverExecutor {
     }
 }
 
-fn action(owner: Owner, events: bool) -> ScheduledAction {
+pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
     let now = Utc::now();
     let config = configuration(events);
     ScheduledAction {

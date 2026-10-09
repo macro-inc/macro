@@ -4,6 +4,8 @@ export const BlockRegistry = [
   'calendar',
   'chat',
   'database',
+  // A questionnaire whose answers are rows of a database table.
+  'form',
   'write',
   'pdf',
   'md',

@@ -1,5 +1,3 @@
-import type { BookingLinkArgs } from '@app/features/scheduling/core/booking-link';
-import { BookingDraftComposer } from '@core/component/AI/component/tool/booking-link/DraftComposer';
 /**
  * The live controls for a question the agent is waiting on, shared by the
  * session's card and the channel's Magic Chip: a form's fields and Submit,
@@ -319,6 +317,14 @@ export function parseDraftedTool(
   request: UserToolRequest,
   toolCall: string
 ): DraftedTool | undefined {
+  // Old sessions may still contain a booking review. Keep its internal IDs out
+  // of the generic form and let the user dismiss it to resume the conversation.
+  if (
+    request.tool === 'CreateBookingLink' ||
+    request.tool === 'EditBookingLink'
+  ) {
+    return { name: request.tool, data: request.draft };
+  }
   const call = deserializeToolCall({
     id: toolCall,
     name: request.tool,
@@ -362,10 +368,20 @@ export function UserToolComposer(props: {
           props.tool.name === 'EditBookingLink'
         }
       >
-        <BookingDraftComposer
-          initialData={props.tool.data as BookingLinkArgs}
-          sink={sink<BookingLinkArgs>()}
-        />
+        <div class="flex flex-col items-start gap-2 text-sm text-ink-muted">
+          <p>
+            Booking links are now confirmed in conversation. Dismiss this older
+            request and ask the agent to summarize the details.
+          </p>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={locked()}
+            onClick={() => void props.review.respond({ action: 'decline' })}
+          >
+            Dismiss request
+          </Button>
+        </div>
       </Match>
       <Match when={props.tool.name === 'CreateCalendarEvent'}>
         <CalendarDraftComposer

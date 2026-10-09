@@ -7,12 +7,13 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { isPlatform } from '@core/util/platform';
 import { cn } from '@ui';
-import { createEffect, For, Show, Suspense } from 'solid-js';
+import { createEffect, For, Match, Suspense, Switch } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
+import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
 import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
@@ -21,6 +22,11 @@ import { SidebarPrefsProvider } from './use-sidebar-prefs';
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
   return <ListNav {...props} activeCall={hasActiveCall()} />;
+}
+
+function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
+  const badge = useNextMeetingBadge();
+  return <ListNav {...props} badge={badge()?.label} />;
 }
 
 /**
@@ -82,18 +88,27 @@ const SidebarRailContent = () => {
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
-                <Show
-                  when={item.id === 'channels'}
+                <Switch
                   fallback={<ListNav item={item} unread={hasUnread(item.id)} />}
                 >
-                  <Suspense
-                    fallback={
-                      <ListNav item={item} unread={hasUnread(item.id)} />
-                    }
-                  >
-                    <ChannelsListNav item={item} unread={hasUnread(item.id)} />
-                  </Suspense>
-                </Show>
+                  <Match when={item.id === 'channels'}>
+                    <Suspense
+                      fallback={
+                        <ListNav item={item} unread={hasUnread(item.id)} />
+                      }
+                    >
+                      <ChannelsListNav
+                        item={item}
+                        unread={hasUnread(item.id)}
+                      />
+                    </Suspense>
+                  </Match>
+                  <Match when={item.id === 'calendar'}>
+                    <Suspense fallback={<ListNav item={item} />}>
+                      <CalendarListNav item={item} />
+                    </Suspense>
+                  </Match>
+                </Switch>
               </li>
             )}
           </For>

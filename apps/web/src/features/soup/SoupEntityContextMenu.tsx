@@ -2,6 +2,7 @@ import type {
   EntityActionListState,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
+import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
@@ -42,6 +43,8 @@ interface SoupEntityContextMenuProps {
    * them. Desktop only: the mobile long-press drawer shows the actions alone.
    */
   extraItems?: JSX.Element;
+  /** A list that completes its own rows, such as Home's work feed. Desktop only. */
+  markDoneDelegate?: () => MarkDoneDelegate | undefined;
 }
 
 export const SoupEntityContextMenu: FlowComponent<
@@ -102,6 +105,7 @@ export const SoupEntityContextMenu: FlowComponent<
                   onSetProject={pickers.openProjectPicker}
                   onEditTags={pickers.openTagPicker()}
                   extraItems={props.extraItems}
+                  markDoneDelegate={props.markDoneDelegate}
                 />
               </ContextMenuContent>
             </Show>

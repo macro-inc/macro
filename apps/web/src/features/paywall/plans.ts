@@ -29,6 +29,17 @@ export function formatPlanPrice(cents: number | undefined): string | undefined {
 /** Tiers that correspond to real Stripe products. Excludes 'free'. */
 export type PaidPlanTier = Exclude<PlanTier, 'free'>;
 
+const UPGRADE_PLANS: Record<PlanTier, readonly PaidPlanTier[]> = {
+  free: ['premium', 'max'],
+  premium: ['max'],
+  max: [],
+};
+
+/** The paywall offers only tiers above the current plan. */
+export function getUpgradePlans(tier: PlanTier): readonly PaidPlanTier[] {
+  return UPGRADE_PLANS[tier];
+}
+
 const FREE_PLAN = {
   tier: 'free',
   name: 'Free',
@@ -81,6 +92,41 @@ export const PLAN_USAGE_LABELS: Record<PlanTier, string> = {
   max: '10× usage',
 };
 
+const PLAN_BENEFITS: Record<PlanTier, (usage: string | undefined) => string[]> =
+  {
+    free: (usage) => [
+      'Access to Haiku',
+      ...(usage ? [usage] : []),
+      'MCP access',
+      '2 connected email accounts',
+      '5 GB storage',
+    ],
+    premium: (usage) => [
+      'All agents',
+      'All models',
+      ...(usage ? [usage] : []),
+      'No email watermark',
+      'Unlimited connected email accounts',
+      '100 GB storage',
+    ],
+    max: () => [
+      'Everything in Pro',
+      '10x more AI usage than Pro',
+      '1 TB storage',
+      'Priority support',
+    ],
+  };
+
+/** Shared Billing/paywall bullets; only Free and Pro usage labels require the flag. */
+export function planBenefits(
+  tier: PlanTier,
+  aiUsageBilling: boolean
+): string[] {
+  return PLAN_BENEFITS[tier](
+    aiUsageBilling ? PLAN_USAGE_LABELS[tier] : undefined
+  );
+}
+
 const PLAN_FEATURE_ROWS: PlanFeature[] = [
   {
     label: 'AI Agent',
@@ -103,7 +149,7 @@ const PLAN_FEATURE_ROWS: PlanFeature[] = [
     label: 'Storage',
     values: {
       free: '5 GB',
-      premium: '1 TB',
+      premium: '100 GB',
       max: '1 TB',
     },
   },

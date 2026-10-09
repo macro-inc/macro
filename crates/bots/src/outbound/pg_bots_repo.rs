@@ -4,6 +4,7 @@
 mod tests;
 
 mod owner_grants;
+mod team_roster;
 
 use crate::domain::{
     models::{

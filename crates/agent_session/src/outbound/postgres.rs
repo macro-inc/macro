@@ -12,10 +12,12 @@ mod test;
 mod pull_request;
 mod queue;
 mod recovery;
+mod session_task;
 mod sharing;
 mod turn_state;
 mod working_branch;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
@@ -226,6 +228,7 @@ struct AgentSessionRow {
     repo_url: Option<String>,
     repo_branch: Option<String>,
     pull_request_url: Option<String>,
+    task_id: Option<String>,
     workspace: String,
     sandbox_size: String,
     instructions: Option<String>,
@@ -267,6 +270,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                 .transpose()
                 .map_err(anyhow::Error::msg)?,
             pull_request_url: row.pull_request_url,
+            task_id: row.task_id,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
             instructions: row.instructions,
@@ -356,7 +360,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -477,12 +481,16 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     }
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
+        Ok(self.find(id).await?.context("agent session not found")?)
+    }
+
+    async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -499,10 +507,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to get agent session")?
-        .context("agent session not found")?;
+        .context("failed to get agent session")?;
 
-        Ok(row.try_into()?)
+        Ok(row.map(AgentSession::try_from).transpose()?)
     }
 
     async fn preview(
@@ -590,7 +597,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -631,7 +638,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -665,7 +672,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -701,7 +708,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             SELECT
                 id, name, is_archived, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, task_id, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
@@ -1044,6 +1051,54 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         .execute(&self.pool)
         .await
         .context("failed to persist user sandbox size")?;
+        Ok(())
+    }
+
+    async fn user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+    ) -> Result<CodingPreferences> {
+        let preferences = sqlx::query!(
+            r#"
+            SELECT create_tasks, open_pull_requests
+            FROM user_agent_coding_preferences
+            WHERE user_id = $1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read user coding preferences")?;
+        Ok(preferences
+            .map(|row| CodingPreferences {
+                create_tasks: row.create_tasks,
+                open_pull_requests: row.open_pull_requests,
+            })
+            .unwrap_or_default())
+    }
+
+    async fn set_user_coding_preferences(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        preferences: CodingPreferences,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_agent_coding_preferences
+                (user_id, create_tasks, open_pull_requests, modified_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET create_tasks = EXCLUDED.create_tasks,
+                open_pull_requests = EXCLUDED.open_pull_requests,
+                modified_at = NOW()
+            "#,
+            user_id.as_ref(),
+            preferences.create_tasks,
+            preferences.open_pull_requests,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to persist user coding preferences")?;
         Ok(())
     }
 

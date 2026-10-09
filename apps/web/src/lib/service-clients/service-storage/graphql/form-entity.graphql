@@ -1,0 +1,27 @@
+# Forms are not Soup entities: ask only for the outcome, not the Soup
+# effects whose hydration would fail.
+fragment FormEntityMutationResultFields on GraphqlEntityMutationResult {
+  __typename
+  ... on GraphqlMutationError {
+    errorCode
+    message
+  }
+}
+
+mutation RenameForm($id: ID!, $displayName: String!) {
+  renameEntities(
+    inputs: [{ entity: { type: FORM, id: $id }, displayName: $displayName }]
+  ) {
+    results {
+      ...FormEntityMutationResultFields
+    }
+  }
+}
+
+mutation TrashForm($id: ID!) {
+  trashEntities(entities: [{ type: FORM, id: $id }]) {
+    results {
+      ...FormEntityMutationResultFields
+    }
+  }
+}

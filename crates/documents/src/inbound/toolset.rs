@@ -203,7 +203,7 @@ impl<
         let sync_service_client = Arc::new(sync_service_client);
         let creator = DocumentCreator::new(
             service.clone(),
-            LexicalSyncMarkdownInitializer::new(
+            LexicalSyncMarkdownInitializer::detached(
                 lexical_client.as_ref().clone(),
                 sync_service_client.as_ref().clone(),
             ),

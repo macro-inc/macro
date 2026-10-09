@@ -1,0 +1,277 @@
+//! The service's composition root: reads config and wires every adapter and
+//! domain service into the HTTP server.
+
+use crate::api::{
+    self,
+    context::{ApiContext, AuthorizationService},
+};
+use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
+use crate::calendar_request_gate::RedisCalendarRequestGate;
+use crate::calendar_tokens::CalendarTokenProviderAdapter;
+use crate::outbound::email_api::{
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+};
+use anyhow::Context;
+use calendar_events::{
+    domain::{
+        invitations::CalendarInvitationResolver, mutations::CalendarMutationServiceImpl,
+        service::CalendarService,
+    },
+    outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
+};
+use document_storage_service_client::DocumentStorageServiceClient;
+use email::{
+    domain::service::EmailServiceImpl,
+    inbound::axum::{
+        axum_impls::GmailTokenState, get_thread_router::EmailThreadRouterState,
+        previews_router::EmailRouterState,
+    },
+    outbound::{EmailPgRepo, GmailTokenProviderImpl},
+};
+use email_api_client::GmailApiClientRepository;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use macro_auth::middleware::decode_jwt::JwtValidationArgs;
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
+use macro_env::Environment;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
+use macro_service_urls::{
+    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
+};
+use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
+use std::{sync::Arc, time::Duration};
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
+use tokio_util::task::TaskTracker;
+
+/// Build the service from the environment and serve until shutdown.
+pub async fn run() -> anyhow::Result<()> {
+    let env = Environment::new_or_prod();
+
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+
+    let s3_client = s3_client::S3::new(macro_aws_config::s3_client().await);
+
+    let secretsmanager_client = secretsmanager_client::SecretsManager::new(
+        aws_sdk_secretsmanager::Client::new(&aws_config),
+    );
+
+    // Parse our configuration from the environment, then resolve any secret-manager backed values.
+    let config = crate::config::Config::from_env()
+        .context("expected to be able to generate config")?
+        .resolve_remote_secrets(env, &secretsmanager_client)
+        .await
+        .context("expected to be able to resolve config secrets")?;
+
+    // limiting to max of 200 connections (12.5% of macrodb total) in prod.
+    let (min_connections, max_connections): (u32, u32) = match config.environment {
+        Environment::Production => (3, 20),
+        Environment::Develop => (1, 10),
+        Environment::Local => (1, 10),
+    };
+
+    let db = PgPoolOptions::new()
+        .min_connections(min_connections)
+        .max_connections(max_connections)
+        .connect(&config.macro_db_url)
+        .await
+        .context("could not connect to db")?;
+
+    let gmail_inbox_sync_queue = macro_queues::GmailInboxSyncQueue::new();
+    let gmail_inbox_sync_retry_queue = macro_queues::GmailInboxSyncRetryQueue::new();
+    let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+    let backfill_queue = macro_queues::EmailBackfillQueue::new();
+    let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+    let sfs_uploader_queue = macro_queues::SfsUploaderQueue::new();
+    let link_manager_queue = macro_queues::LinkManagerQueue::new();
+    let sqs_client = sqs_client::SQS::new(macro_aws_config::sqs_client().await)
+        .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
+        .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
+        .gmail_ops_queue(&gmail_ops_queue)
+        .email_backfill_queue(&backfill_queue)
+        .email_scheduled_queue(&email_scheduled_queue)
+        .sfs_uploader_queue(&sfs_uploader_queue)
+        .email_link_manager_queue(&link_manager_queue);
+
+    let auth_service_client = authentication_service_client::AuthServiceClient::new(
+        config
+            .authentication_service_secret_key
+            .as_ref()
+            .to_string(),
+        AuthServiceUrl::new()?.to_string(),
+    );
+
+    let gmail_client = gmail_client::GmailClient::new(config.gmail_gcp_queue.as_ref().to_string());
+    let gmail_api_repository = GmailApiClientRepository::new(gmail_client.clone());
+
+    let redis_inner_client = redis::Client::open(config.redis_uri.as_ref())
+        .inspect(|client| {
+            client
+                .get_connection()
+                .map(|_| tracing::info!("initialized redis connection"))
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "failed to connect to redis");
+                })
+                .ok();
+        })
+        .context("failed to connect to redis")?;
+
+    let redis_client = crate::util::redis::RedisClient::new(
+        redis_inner_client,
+        config.redis_rate_limit_reqs,
+        config.redis_rate_limit_reqs_backfill,
+        config.redis_rate_limit_window_secs,
+    );
+
+    let sfs_client = StaticFileServiceClient::new(
+        config.internal_api_key.to_string(),
+        StaticFileServiceUrl::new()?.to_string(),
+    );
+
+    let dss_client = DocumentStorageServiceClient::new(
+        config.internal_api_key.to_string(),
+        DocumentStorageServiceUrl::new()?.to_string(),
+    );
+
+    let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
+        PgSystemPropertiesRepository::new(db.clone()),
+    ));
+
+    let jwt_args =
+        JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
+            .await?;
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        MacroAuthJwtValidator::new(jwt_args.clone()),
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: Some("macro|INTERNAL@macro.com".to_string()),
+        },
+        macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
+    )));
+
+    let sqs_client = Arc::new(sqs_client);
+    let gmail_client = Arc::new(gmail_client);
+    // HTTP API only reads CRM rows — populate runs in the pubsub
+    // worker. The no-op resolver makes the unused branch explicit and
+    // keeps reqwest/scraper out of this binary.
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
+    let event_broker_tracker = TaskTracker::new();
+    let macro_event_broker = MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_broker_tracker.clone(),
+    );
+    let email_service = EmailRouterState::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            (*sqs_client).clone(),
+            crm_service,
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(db.clone()),
+            ),
+            config.sent_undo_delay_secs,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        db.clone(),
+    )));
+    let email_thread_state = EmailThreadRouterState {
+        service: email_service.service(),
+        access_service: entity_access_service.clone(),
+        authorization_state: authorization_state.clone(),
+    };
+    let auth_service_client = Arc::new(auth_service_client);
+    let redis_conn = redis_client
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .context("failed to get multiplexed redis connection for gmail token provider")?;
+    let email_api = GmailApi::new(
+        gmail_api_repository,
+        EmailServiceTokenSource::new(
+            db.clone(),
+            redis_conn.clone(),
+            auth_service_client.as_ref().clone(),
+            sqs_client.as_ref().clone(),
+        ),
+        RedisProviderRateLimiter::new(redis_client.clone(), RateBudget::Live),
+    );
+    let redis_client = Arc::new(redis_client);
+    let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
+        redis_conn.clone(),
+        auth_service_client.clone(),
+    ));
+    let calendar_service = Arc::new(CalendarService::new(PgCalendarRepository::new(db.clone())));
+    let connection_gateway_client = connection_gateway_client::client::ConnectionGatewayClient::new(
+        config.internal_api_key.to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    );
+    let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
+        PgCalendarRepository::new(db.clone()),
+        GoogleCalendarClient::with_gate(
+            reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .context("failed to build the google calendar mutation http client")?,
+            RedisCalendarRequestGate::new((*redis_client).clone()),
+        ),
+        CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
+        macro_event_broker.clone(),
+        ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
+    ));
+    let api_result = api::setup_and_serve(ApiContext {
+        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+        // calendar_service's sync kill switch rejects RSVP writes itself.
+        invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(
+            db.clone(),
+        ))),
+        db,
+        internal_api_key: config.internal_api_key.clone(),
+        config: Arc::new(config),
+        auth_service_client,
+        redis_client,
+        sqs_client,
+        sfs_client: Arc::new(sfs_client),
+        gmail_client: gmail_client.clone(),
+        email_api,
+        s3_client: Arc::new(s3_client),
+        dss_client: Arc::new(dss_client),
+        system_properties_service,
+        authorization_state: authorization_state.clone(),
+        jwt_args,
+        email_service,
+        entity_access_service,
+        email_thread_state,
+        gmail_token_state,
+        macro_event_broker: Arc::new(macro_event_broker),
+        calendar_service,
+        calendar_mutation_service,
+    })
+    .await;
+
+    tracing::info!("waiting for event broker publishes to drain");
+    event_broker_tracker.close();
+    match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
+        Ok(()) => tracing::info!("event broker publishes drained"),
+        Err(error) => {
+            tracing::warn!(
+                error=?error,
+                timeout_seconds = EVENT_BROKER_DRAIN_TIMEOUT.as_secs(),
+                "timed out waiting for event broker publishes to drain"
+            );
+        }
+    }
+
+    api_result
+}
+
+const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);

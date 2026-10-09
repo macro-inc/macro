@@ -52,7 +52,7 @@ import {
   SEARCH_MATCH,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
-import { I_VIDEO } from './video';
+import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
 export { isConversionOnlyTransformer };
@@ -69,6 +69,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_PASTE_NODE, // Must be before mentions to avoid matching inner tags in paste content
   I_HTML_RENDER,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,
@@ -110,6 +111,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATABASE_QUERY,
   HR,
   MARK_XML,
+  VIDEO_LINK,
   I_VIDEO,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
@@ -153,6 +155,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_HTML_RENDER,
   E_PASTE_NODE,
   PRESERVE_LINES,
+  VIDEO_LINK, // Must be before LINK_XML to catch video URLs
   LINK_XML, // Prefer internal xml link to handle []() in link text
   MARK_XML,
   SEARCH_MATCH,

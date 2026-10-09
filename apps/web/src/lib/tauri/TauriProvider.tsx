@@ -5,10 +5,12 @@ import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { isPlatform, isTauri } from '@core/util/platform';
 import { PlatformNotificationProvider } from '@notifications';
+import { queryPersistence } from '@queries/client';
 import type { RouteSectionProps } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
+import { Dialog, Surface } from '@ui';
 import {
   type Accessor,
   createContext,
@@ -19,6 +21,11 @@ import {
   onMount,
   useContext,
 } from 'solid-js';
+import {
+  createNativeUpdates,
+  type NativeUpdateStatus,
+  nativeUpdateDescription,
+} from './native-updates';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
@@ -42,6 +49,10 @@ export type BundleUpdateStatus =
 interface TauriContextValue {
   os: OsType;
   bundleUpdateStatus: Accessor<BundleUpdateStatus>;
+  nativeUpdateStatus: Accessor<NativeUpdateStatus>;
+  nativeUpdatePreparing: Accessor<boolean>;
+  restartNativeUpdate: () => Promise<void>;
+  registerNativeUpdatePreparation: (save: () => Promise<void>) => () => void;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
@@ -66,6 +77,7 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
 }
 
 function TauriProvider(props: { children: JSX.Element }) {
+  const nativeUpdates = createNativeUpdates(queryPersistence.flush);
   useAndroidWindowInsets();
   useAndroidBack();
   const [bundleUpdateStatus, setBundleUpdateStatus] =
@@ -99,6 +111,10 @@ function TauriProvider(props: { children: JSX.Element }) {
   const value: TauriContextValue = {
     os: osType(),
     bundleUpdateStatus,
+    nativeUpdateStatus: nativeUpdates.status,
+    nativeUpdatePreparing: nativeUpdates.preparing,
+    restartNativeUpdate: nativeUpdates.restart,
+    registerNativeUpdatePreparation: nativeUpdates.registerPreparation,
   };
 
   onMount(() => {
@@ -149,9 +165,36 @@ function TauriProvider(props: { children: JSX.Element }) {
   return (
     <TauriContext.Provider value={value}>
       <ShareTargetProvider os={value.os}>{props.children}</ShareTargetProvider>
+      <Dialog
+        open={nativeUpdates.preparing()}
+        onOpenChange={() => {}}
+        class="w-[90%] max-w-120"
+        position="center"
+      >
+        <Surface depth={2}>
+          <div class="flex flex-col gap-2 px-4 py-5">
+            <Dialog.Title class="text-lg font-semibold text-ink">
+              Restarting Macro
+            </Dialog.Title>
+            <Dialog.Description class="text-sm text-ink-extra-muted">
+              Saving your changes before installing the app update…
+            </Dialog.Description>
+          </div>
+        </Surface>
+      </Dialog>
       <NativeAppUpdateRequiredDialog
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
+        description={
+          isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
+            ? nativeUpdateDescription(nativeUpdates.status())
+            : undefined
+        }
+        onRestart={
+          nativeUpdates.status().status === 'Ready'
+            ? () => void nativeUpdates.restart()
+            : undefined
+        }
       />
     </TauriContext.Provider>
   );

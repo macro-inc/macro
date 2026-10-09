@@ -20,6 +20,7 @@ teams = { path = "../../crates/teams", default-features = false, features = ["ou
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 attachment = { path = "../../crates/attachment" }

@@ -1,6 +1,7 @@
 import {
   createUrqlMutation,
   createUrqlQuery,
+  type UrqlMutationExecutorArgs,
   type UrqlQueryResult,
 } from '@app/lib/urql-solid';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
@@ -171,7 +172,10 @@ function createFavoriteMutation<
   >(() => ({
     mutation: options.mutation,
     client: getGraphqlSoupClient(),
-    execute: async ({ client, input }) => {
+    execute: async ({
+      client,
+      input,
+    }: UrqlMutationExecutorArgs<Data, Variables, Input>) => {
       const result = await options.execute(client, input);
       // Validate before onSuccess, so malformed responses take the error
       // lifecycle too. Server-side failures are already transport errors,

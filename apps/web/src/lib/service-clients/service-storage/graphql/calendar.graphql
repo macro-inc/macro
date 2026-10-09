@@ -1,0 +1,210 @@
+fragment CalendarAttendeeFields on GraphqlCalendarAttendee {
+	email
+	displayName
+	responseStatus
+	isOrganizer
+	isOptional
+	isSelf
+	comment
+}
+
+fragment CalendarReminderFields on GraphqlCalendarReminders {
+	useDefault
+	overrides {
+		method
+		minutes
+	}
+}
+
+fragment CalendarEventTimeFields on GraphqlEventTime {
+	__typename
+	... on GraphqlTimedEventTime {
+		startsAt
+		endsAt
+		timeZone
+	}
+	... on GraphqlAllDayEventTime {
+		startDate
+		endDate
+	}
+}
+
+fragment CalendarEventFields on GraphqlCalendarEvent {
+	__typename
+	id
+	ownerId
+	linkId
+	icalUid
+	calendarId
+	sources {
+		calendarId
+		title
+		description
+		location
+		eventType
+		visibility
+		transparency
+		isReadOnly
+		reminders {
+			...CalendarReminderFields
+		}
+		creatorEmail
+		creatorName
+	}
+	title
+	description
+	location
+	status
+	visibility
+	transparency
+	eventType
+	time {
+		...CalendarEventTimeFields
+	}
+	recurrenceLines
+	organizerEmail
+	organizerName
+	creatorEmail
+	creatorName
+	conferenceUrl
+	conferenceProvider
+	sequence
+	isReadOnly
+	attendees {
+		...CalendarAttendeeFields
+	}
+	reminders {
+		...CalendarReminderFields
+	}
+	createdAt
+	updatedAt
+}
+
+fragment CalendarOccurrenceItemFields on GraphqlCalendarOccurrence {
+	__typename
+	id
+	eventId
+	linkId
+	occurrenceKey
+	recurrenceId
+	isCancelled
+	time {
+		...CalendarEventTimeFields
+	}
+	overrideTitle
+	overrideDescription
+	overrideLocation
+	overrideStatus
+	overrideAttendees {
+		...CalendarAttendeeFields
+	}
+	event {
+		...CalendarEventFields
+	}
+}
+
+fragment CalendarFields on GraphqlCalendar {
+	__typename
+	id
+	linkId
+	emailAddress
+	name
+	color
+	isPrimary
+	isWritable
+	isSubscription
+	syncError
+	defaultReminders {
+		method
+		minutes
+	}
+}
+
+query CalendarOccurrences($input: CalendarRangeInput!) {
+	user {
+		id
+		calendarOccurrences(input: $input) {
+			nodes {
+				...CalendarOccurrenceItemFields
+			}
+			hasNextPage
+			endCursor
+			syncStatus
+			watermark {
+				linkId
+				seq
+			}
+		}
+	}
+}
+
+query Calendars {
+	user {
+		id
+		calendars {
+			...CalendarFields
+		}
+	}
+}
+
+query CalendarChanges($input: CalendarChangesInput!) {
+	user {
+		id
+		calendarChanges(input: $input) {
+			events {
+				event {
+					...CalendarEventFields
+				}
+				occurrences {
+					...CalendarOccurrenceItemFields
+				}
+			}
+			deletedEventIds
+			calendars {
+				...CalendarFields
+			}
+			deletedCalendarIds
+			newWatermark {
+				linkId
+				seq
+			}
+			hasMore
+			resetRequired
+		}
+	}
+}
+
+fragment CalendarMutationPayloadFields on GraphqlCalendarMutationPayload {
+	__typename
+	event {
+		...CalendarEventFields
+	}
+	occurrences {
+		...CalendarOccurrenceItemFields
+	}
+	deletedEventId
+}
+
+mutation CreateCalendarEvent($input: CreateCalendarEventInput!) {
+	createCalendarEvent(input: $input) {
+		...CalendarMutationPayloadFields
+	}
+}
+
+mutation UpdateCalendarEvent($input: UpdateCalendarEventInput!) {
+	updateCalendarEvent(input: $input) {
+		...CalendarMutationPayloadFields
+	}
+}
+
+mutation DeleteCalendarEvent($input: DeleteCalendarEventInput!) {
+	deleteCalendarEvent(input: $input) {
+		...CalendarMutationPayloadFields
+	}
+}
+
+mutation RespondToCalendarEvent($input: RespondToCalendarEventInput!) {
+	respondToCalendarEvent(input: $input) {
+		...CalendarMutationPayloadFields
+	}
+}

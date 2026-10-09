@@ -21,6 +21,7 @@ import BracketsCurly from '@phosphor/brackets-curly.svg';
 import Building from '@phosphor/building.svg';
 import BuildingOffice from '@phosphor/building-office.svg';
 import Calendar from '@phosphor/calendar.svg';
+import ClipboardText from '@phosphor/clipboard-text.svg';
 import ClockClockwise from '@phosphor/clock-clockwise.svg';
 import Code from '@phosphor/code.svg';
 import Database from '@phosphor/database.svg';
@@ -60,6 +61,7 @@ import BracketsCurlyBold from '@phosphor-icons/core/bold/brackets-curly-bold.svg
 import BuildingBold from '@phosphor-icons/core/bold/building-bold.svg';
 import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.svg';
 import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
+import ClipboardTextBold from '@phosphor-icons/core/bold/clipboard-text-bold.svg';
 import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
 import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
 import DatabaseBold from '@phosphor-icons/core/bold/database-bold.svg';
@@ -140,15 +142,15 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   document: {
     icon: File,
     boldIcon: FileBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-note',
+    background: 'bg-note/20',
     prettyName: 'Document',
   },
   call: {
     icon: PhoneCall,
     boldIcon: PhoneCallBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Call',
   },
   calendar: {
@@ -207,6 +209,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-code/20',
     prettyName: 'Database',
   },
+  form: {
+    icon: ClipboardText,
+    boldIcon: ClipboardTextBold,
+    foreground: 'text-form',
+    background: 'bg-form/20',
+    prettyName: 'Form',
+  },
   html: {
     icon: FileHtml,
     boldIcon: FileHtmlBold,
@@ -217,15 +226,15 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   channel: {
     icon: HashStraight,
     boldIcon: HashStraightBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Channel',
   },
   public: {
     icon: GlobeIcon,
     boldIcon: GlobeIconBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Public Channel',
   },
   organization: {
@@ -238,22 +247,22 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   private: {
     icon: HashStraight,
     boldIcon: HashStraightBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Private Channel',
   },
   direct_message: {
     icon: Users,
     boldIcon: UsersBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Direct Message',
   },
   team: {
     icon: UsersThree,
     boldIcon: UsersThreeBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-communication',
+    background: 'bg-communication/20',
     prettyName: 'Team Channel',
   },
   email: {
@@ -371,8 +380,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   emailRead: {
     icon: EmailRead,
     boldIcon: EmailReadBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-ink-extra-muted',
+    background: 'bg-ink-extra-muted/20',
     prettyName: 'Read Email',
   },
   emailInvite: {
@@ -434,8 +443,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   initiative: {
     icon: Stack,
     boldIcon: StackBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-task',
+    background: 'bg-task/20',
     prettyName: 'Project',
   },
   snippet: {
@@ -682,6 +691,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     .with({ type: 'crm_company' }, () => 'crm_company')
     .with({ type: 'crm_contact' }, () => 'contact')
     .with({ type: 'database' }, () => 'database')
+    .with({ type: 'form' }, () => 'form')
     .exhaustive();
 }
 

@@ -5,7 +5,7 @@ const FEATURES: [(AiFeature, bool); 14] = [
     (AiFeature::Memory, false),
     (AiFeature::Automation, true),
     (AiFeature::DynamicCompletionsApi, true),
-    (AiFeature::ChatRename, true),
+    (AiFeature::ChatRename, false),
     (AiFeature::CallSummary, false),
     (AiFeature::ChannelBot, true),
     (AiFeature::AiProjection, false),
@@ -30,7 +30,7 @@ fn feature_classification_preserves_billing_policy() {
         assert_eq!(is_billable_feature(feature), billable, "{feature:?}");
         assert_eq!(NON_BILLABLE_AI_FEATURES.contains(&feature), !billable);
     }
-    assert_eq!(NON_BILLABLE_AI_FEATURES.len(), 4);
+    assert_eq!(NON_BILLABLE_AI_FEATURES.len(), 5);
 }
 
 #[test]

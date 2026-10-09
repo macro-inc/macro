@@ -1139,7 +1139,7 @@ export const authServiceClient = {
               message:
                 typeof message === 'string'
                   ? message
-                  : 'This domain cannot be used for auto-join',
+                  : "Auto-join isn't available for this domain",
             };
           }
           return {

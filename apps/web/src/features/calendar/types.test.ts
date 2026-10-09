@@ -8,6 +8,7 @@ import {
   mapCalendarEventToFullCalendar,
   mapCalendarOccurrence,
 } from './types';
+import { canEditCalendarEventTime } from './utils/event-interaction';
 
 const PRIMARY: CalendarSource = {
   id: 'primary',
@@ -259,6 +260,29 @@ describe('isCalendarEventVisible', () => {
 });
 
 describe('mapCalendarEventToFullCalendar', () => {
+  it('preserves an imported point while giving the grid a noneditable display footprint', () => {
+    const source = item([copy('primary')]);
+    const instant = '2026-09-10T13:00:00Z';
+    source.occurrence.time = {
+      kind: 'timed',
+      startsAt: instant,
+      endsAt: '2026-09-10T09:00:00-04:00',
+      timeZone: 'America/New_York',
+    };
+    const point = mapCalendarOccurrence(source, { sourceById });
+    const rendered = mapCalendarEventToFullCalendar(point);
+
+    expect(point.start).toBe(instant);
+    expect(point.end).toBe(source.occurrence.time.endsAt);
+    expect(point.isReadOnly).toBe(false);
+    expect(canEditCalendarEventTime(point)).toBe(false);
+    expect(rendered.start).toBe(instant);
+    expect(rendered.end).toBe('2026-09-10T13:00:00.001Z');
+    expect(rendered.allDay).toBe(false);
+    expect(rendered.startEditable).toBe(false);
+    expect(rendered.durationEditable).toBe(false);
+  });
+
   it('keeps the occurrence identity and displayed title on the rendered event', () => {
     const rendered = mapCalendarEventToFullCalendar(
       mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {

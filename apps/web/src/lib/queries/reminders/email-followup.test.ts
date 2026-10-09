@@ -4,6 +4,7 @@ import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailKeys } from '../email/keys';
 import { executeEmailFollowup } from './email-followup';
+import { reminderKeys } from './keys';
 
 const mocks = vi.hoisted(() => ({
   write: vi.fn(),
@@ -65,6 +66,12 @@ describe('email follow-up cache reconciliation', () => {
     });
     expect(mocks.invalidate).toHaveBeenCalledWith({
       queryKey: emailKeys.previews._def,
+    });
+    expect(mocks.invalidate).toHaveBeenCalledWith({
+      queryKey: reminderKeys.emailCollection._def,
+    });
+    expect(mocks.invalidate).toHaveBeenCalledWith({
+      queryKey: reminderKeys.email('thread').queryKey,
     });
     expect(mocks.refreshGraphql).not.toHaveBeenCalled();
   });

@@ -18,6 +18,7 @@ import {
 } from '@service-cognition/import';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import {
+  queryOptions,
   type UseMutationResult,
   useMutation,
   useQuery,
@@ -57,6 +58,22 @@ function anythingInFlight(state: ImportState | undefined): boolean {
   );
 }
 
+function fetchImportStateFromServer() {
+  return throwOnErr(() => importClient.getState());
+}
+
+// Cached on the query past unmount; module scope keeps hook state out of it.
+function importStateQueryOptions(enabled: boolean) {
+  return queryOptions({
+    queryKey: KEYS.state,
+    queryFn: fetchImportStateFromServer,
+    enabled,
+    refetchInterval: (query) =>
+      anythingInFlight(query.state.data) ? 3_000 : 15_000,
+    placeholderData: PENDING_IMPORT_STATE,
+  });
+}
+
 /** The import aggregate: gather runs plus visible ledger rows. */
 export function useImportQuery(options?: { enabled?: () => boolean }) {
   createConnectionWebsocketEffect((message) => {
@@ -64,14 +81,9 @@ export function useImportQuery(options?: { enabled?: () => boolean }) {
     void invalidateImportState();
   });
 
-  return useQuery(() => ({
-    queryKey: KEYS.state,
-    queryFn: async () => throwOnErr(() => importClient.getState()),
-    enabled: options?.enabled ? options.enabled() : true,
-    refetchInterval: (query) =>
-      anythingInFlight(query.state.data) ? 3_000 : 15_000,
-    placeholderData: PENDING_IMPORT_STATE,
-  }));
+  return useQuery(() =>
+    importStateQueryOptions(options?.enabled ? options.enabled() : true)
+  );
 }
 
 function invalidateImportState() {

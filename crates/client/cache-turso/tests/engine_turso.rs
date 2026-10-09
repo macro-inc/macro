@@ -140,6 +140,7 @@ fn query_identity_cold_tier_selection_and_clear_run_over_turso() {
         );
 
         let selection = RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
             "fragment Property on GraphqlProperty { id displayName }",
             "Property",
         )

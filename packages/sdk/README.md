@@ -96,6 +96,36 @@ const owner = await doc.owner();
 const email = await owner.email();
 ```
 
+### Forms
+
+Forms collect answers into a table. Respondents can read questions and submit
+without permission to read the response database.
+
+```ts
+const form = await macro.forms.create({ name: 'Workshop registration' });
+const table = await form.table();
+const name = await table.addColumn({ name: 'Name', type: { type: 'text' } });
+await form.replaceLayout([
+  {
+    kind: 'questions',
+    title: 'About you',
+    questions: [{ column: name, required: true }],
+  },
+]);
+const [question] = await form.questions();
+if (!question) throw new Error('The form has no questions');
+const receipt = await form.submit([
+  { question, value: { type: 'text', value: 'Ada' } },
+]);
+```
+
+Pass `table` to `macro.forms.create` to ask about an existing table's columns.
+`editResponse` replaces the caller's answers while the form is open;
+`myResponse` reads only that caller's receipt. Editors use `responseSummary`,
+and `tally` is available to viewers when the owner enables `tallyVisible`.
+Use `sharePermissions` and `updateSharePermissions` for sharing grants, and
+`update({ audience: 'public' })` to allow anonymous responses.
+
 ### Creating, mutating, and deleting
 
 ```ts

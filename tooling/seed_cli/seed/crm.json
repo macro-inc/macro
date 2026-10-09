@@ -1,0 +1,79 @@
+{
+  "companies": [
+    {
+      "key": "atlas",
+      "name": "Atlas Labs",
+      "stage": "Lead",
+      "revenue": 12000,
+      "notes": "Inbound interest; schedule discovery.",
+      "contacts": ["Maya Chen", "Alex Rivera"]
+    },
+    {
+      "key": "cedar",
+      "name": "Cedar Health",
+      "stage": "Qualified",
+      "revenue": 36000,
+      "notes": "Operations team evaluating a 40-seat rollout.",
+      "contacts": ["Jordan Patel", "Sam Brooks"]
+    },
+    {
+      "key": "northstar",
+      "name": "Northstar Analytics",
+      "stage": "Demo",
+      "revenue": 24000,
+      "notes": "Demo requested with the data and sales teams.",
+      "contacts": ["Morgan Lee", "Taylor Kim"]
+    },
+    {
+      "key": "orbit",
+      "name": "Orbit Design",
+      "stage": "Trial",
+      "revenue": 18000,
+      "notes": "Two-week pilot; review adoption next week.",
+      "contacts": ["Casey Nguyen", "Riley Park"]
+    },
+    {
+      "key": "summit",
+      "name": "Summit Logistics",
+      "stage": "Negotiation",
+      "revenue": 72000,
+      "notes": "Procurement reviewing annual terms.",
+      "contacts": ["Jamie Wilson"]
+    },
+    {
+      "key": "harbor",
+      "name": "Harbor Finance",
+      "stage": "Customer",
+      "revenue": 96000,
+      "notes": "Annual customer; expansion opportunity next quarter.",
+      "contacts": ["Avery Thompson"]
+    },
+    {
+      "key": "juniper",
+      "name": "Juniper Commerce",
+      "stage": "Churned",
+      "revenue": 9000,
+      "notes": "Paused after reorganization; revisit in six months.",
+      "contacts": ["Drew Martinez"]
+    },
+    {
+      "key": "maple",
+      "name": "Maple Robotics",
+      "stage": "Lead",
+      "revenue": 4500,
+      "notes": "Unassigned lead from a founder introduction.",
+      "unassigned": true,
+      "contacts": ["Quinn Davis"]
+    }
+  ],
+  "pipelines": [
+    { "name": "Demo Sales", "recordType": "company", "sharing": "team" },
+    { "name": "Demo Contacts", "recordType": "contact", "sharing": "team" },
+    {
+      "name": "Demo Design Partners",
+      "recordType": "company",
+      "sharing": "private",
+      "companies": ["atlas", "cedar", "orbit"]
+    }
+  ]
+}

@@ -24,6 +24,7 @@ export function getBlockNameFromEntity(
     .with('crm_company', () => 'company' as const)
     .with('crm_contact', () => 'contact' as const)
     .with('database', () => 'database' as const)
+    .with('form', () => 'form' as const)
     .with('initiative', () => 'initiative' as const)
     .otherwise(() => {
       const entity = item.data;

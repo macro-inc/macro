@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO form_sections (id, form_id, position, title, description, kind, gate_rules, gate_message, booking_target)\n        SELECT section.id, $1, section.position, section.title, section.description,\n               section.kind, section.rules::jsonb, section.message, section.booking_target::jsonb\n        FROM UNNEST($2::uuid[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])\n            AS section(id, position, title, description, kind, rules, message, booking_target)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ca697c1a82ac94298fc885391afed4afceeef8ca6cd5e2bfc074daa32d310a1"
+}

@@ -15,8 +15,16 @@ mod test;
 
 /// Message type delivered to gateway subscribers of the database entity.
 pub const TABLE_CHANGED_MESSAGE_TYPE: &str = "database_table_changed";
+/// Message type announcing changed database metadata.
+pub const DATABASE_CHANGED_MESSAGE_TYPE: &str = "database_changed";
 /// Message type carrying one viewer's [`Awareness`] to the others.
 pub const AWARENESS_MESSAGE_TYPE: &str = "database_awareness";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DatabaseChanged {
+    database_id: DatabaseId,
+}
 
 /// The [`TABLE_CHANGED_MESSAGE_TYPE`] payload: one table's new version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
@@ -78,6 +86,20 @@ impl TableEventPublisher for GatewayTableEventPublisher {
     type Error = PublishError;
 
     #[tracing::instrument(skip(self), err)]
+    async fn database_changed(&self, database_id: DatabaseId) -> Result<(), Self::Error> {
+        self.client
+            .send_message(
+                EntityType::Database.with_entity_string(database_id.to_string()),
+                DATABASE_CHANGED_MESSAGE_TYPE.to_string(),
+                serde_json::to_value(DatabaseChanged { database_id })
+                    .map_err(PublishError::Serialize)?,
+            )
+            .await
+            .map(|_| ())
+            .map_err(PublishError::Gateway)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn table_changed(
         &self,
         database_id: DatabaseId,
@@ -133,6 +155,10 @@ pub struct NoOpTableEventPublisher;
 impl TableEventPublisher for NoOpTableEventPublisher {
     type Error = std::convert::Infallible;
 
+    async fn database_changed(&self, _database_id: DatabaseId) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     async fn table_changed(
         &self,
         _database_id: DatabaseId,
@@ -170,6 +196,16 @@ impl From<GatewayTableEventPublisher> for MaybeGatewayTableEventPublisher {
 
 impl TableEventPublisher for MaybeGatewayTableEventPublisher {
     type Error = PublishError;
+
+    async fn database_changed(&self, database_id: DatabaseId) -> Result<(), Self::Error> {
+        match self {
+            Self::Gateway(publisher) => publisher.database_changed(database_id).await,
+            Self::NoOp(publisher) => publisher
+                .database_changed(database_id)
+                .await
+                .map_err(|never| match never {}),
+        }
+    }
 
     async fn table_changed(
         &self,

@@ -10,7 +10,7 @@ import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import type { QueryClient } from '@tanstack/solid-query';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
-import type { DatabaseOpFailure } from '../core/write-failure';
+import type { DatabaseOpFailure } from '../../database/core/write-failure';
 
 /**
  * Change the cached detail in place; nothing happens before it is first read.

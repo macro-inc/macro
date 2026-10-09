@@ -66,6 +66,7 @@ pub struct CalendarBackfillContext {
     failure: Arc<GoogleCalendarBackfillFailureHandler>,
     reauth: Arc<CalendarReauth>,
     calendar_sync_enabled: bool,
+    team_sharing_enabled: bool,
 }
 
 impl CalendarBackfillContext {
@@ -82,6 +83,7 @@ impl CalendarBackfillContext {
         reauth_notifier: LinkManagerReauthNotifier,
         watch: Option<GoogleWatchConfig>,
         calendar_sync_enabled: bool,
+        team_sharing_enabled: bool,
     ) -> Self {
         let repository = PgCalendarRepository::new(db.clone());
         let coordinator = Arc::new(GoogleCalendarBackfillCoordinator::new(
@@ -109,6 +111,7 @@ impl CalendarBackfillContext {
             failure,
             reauth,
             calendar_sync_enabled,
+            team_sharing_enabled,
         }
     }
 }
@@ -319,6 +322,7 @@ async fn run_coordinator(
             &ctx.db,
             link.macro_id.as_ref(),
             link.id,
+            ctx.team_sharing_enabled,
         )
         .await;
     }

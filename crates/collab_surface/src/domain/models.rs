@@ -58,6 +58,41 @@ pub struct CollabSurface {
     pub updated_at: DateTime<Utc>,
 }
 
+/// A ready surface's full Loro state, read through sync-service.
+#[derive(Clone, PartialEq, Eq)]
+pub struct SurfaceSnapshot {
+    /// A full Loro snapshot export, including pending persisted operations.
+    pub snapshot: Vec<u8>,
+    /// The encoded Loro version vector the snapshot is at; pass it back as an
+    /// update's expected revision.
+    pub revision: Vec<u8>,
+}
+
+/// Lengths only: surface content stays out of logs.
+impl std::fmt::Debug for SurfaceSnapshot {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SurfaceSnapshot")
+            .field("snapshot_len", &self.snapshot.len())
+            .field("revision_len", &self.revision.len())
+            .finish()
+    }
+}
+
+/// The outcome of an update to a surface's Loro state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SurfaceUpdate {
+    /// The state now includes the update, at `revision`. A retried update the
+    /// state already holds reports this too, with the current revision.
+    Applied {
+        /// The encoded Loro version vector after the update.
+        revision: Vec<u8>,
+    },
+    /// The state moved past the expected revision; nothing was applied. Read
+    /// a fresh snapshot and rebuild the update.
+    Conflict,
+}
+
 /// Who creates and retires the surfaces under a parent entity type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SurfaceOwnership {
@@ -85,7 +120,7 @@ pub fn surface_ownership(parent: EntityType) -> Option<SurfaceOwnership> {
         | EntityType::Chat
         | EntityType::EmailThread
         | EntityType::Call => Some(SurfaceOwnership::Callers),
-        EntityType::Initiative => Some(SurfaceOwnership::ParentDomain),
+        EntityType::Initiative | EntityType::Form => Some(SurfaceOwnership::ParentDomain),
         _ => None,
     }
 }

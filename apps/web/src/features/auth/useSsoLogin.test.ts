@@ -4,15 +4,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   nativeMobile: false,
+  platform: 'web' as 'web' | 'desktop' | 'ios' | 'android',
   servers: { 'auth-service': '' },
   location: { state: undefined as RedirectLocation | undefined },
   track: vi.fn(),
   createNativeAuthSession: vi.fn(),
+  openDesktopAuthSession: vi.fn(),
   authenticate: vi.fn(),
   sessionLogin: vi.fn(),
   unsetTokenPromise: vi.fn(),
   invalidateAllAfterLogin: vi.fn(),
   initEmailLink: vi.fn(),
+  setPostLoginRedirect: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -25,9 +29,17 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@core/auth/native-auth', () => ({
   createNativeAuthSession: mocks.createNativeAuthSession,
+  openDesktopAuthSession: mocks.openDesktopAuthSession,
+  DESKTOP_AUTH_CALLBACK_URL: 'macro:///login',
+}));
+vi.mock('@core/util/platform', () => ({
+  isPlatform: (target: string) => mocks.platform === target,
+}));
+vi.mock('@core/util/postLoginRedirect', () => ({
+  setPostLoginRedirect: mocks.setPostLoginRedirect,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: vi.fn() },
+  toast: { failure: mocks.toastFailure },
 }));
 vi.mock('@core/email-link', () => ({
   useEmailLinks: () => ({ initEmailLink: mocks.initEmailLink }),
@@ -53,6 +65,8 @@ beforeEach(() => {
     location: { href: loginUrl, origin: new URL(loginUrl).origin },
   });
   mocks.nativeMobile = false;
+  mocks.platform = 'web';
+  mocks.openDesktopAuthSession.mockResolvedValue({ success: true });
   mocks.servers['auth-service'] = proxyAuthHost;
   mocks.location.state = undefined;
   mocks.createNativeAuthSession.mockReturnValue({
@@ -116,6 +130,70 @@ describe('useSsoLogin', () => {
       'sign_up_click',
       { method: 'google' },
       ['posthog']
+    );
+  });
+
+  // The desktop shell must not depend on the native navigation plugin
+  // rewriting this URL: that only happens for navigations it classifies as
+  // external, which the development proxy's same-origin auth host is not.
+  it.each([proxyAuthHost, 'https://gateway.macro.com/auth'])(
+    'sends desktop SSO to the system browser with a deep-link callback through %s',
+    async (host) => {
+      mocks.platform = 'desktop';
+      mocks.servers['auth-service'] = host;
+
+      await useSsoLogin()('google');
+
+      const authUrl = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
+      expect(`${authUrl.origin}${authUrl.pathname}`).toBe(`${host}/login/sso`);
+      expect(authUrl.searchParams.get('original_url')).toBe('macro:///login');
+      expect(authUrl.searchParams.get('is_mobile')).toBe('true');
+      expect(authUrl.searchParams.get('idp_name')).toBe('google');
+      expect(authUrl.searchParams.get('referral_code')).toBe('invite');
+      // The webview must stay on the SPA; navigating it away is what used to
+      // hand the flow to the navigation plugin.
+      expect(window.location.href).toBe(loginUrl);
+      expect(mocks.createNativeAuthSession).not.toHaveBeenCalled();
+      expect(mocks.sessionLogin).not.toHaveBeenCalled();
+      expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
+        'posthog',
+      ]);
+    }
+  );
+
+  it('parks the desktop destination for after sign-in', async () => {
+    mocks.platform = 'desktop';
+    mocks.location.state = {
+      originalLocation: {
+        state: null,
+        key: '',
+        query: {},
+        pathname: '/doc/document-id',
+        search: '?referral_code=original-invite',
+        hash: '#comment',
+      },
+    };
+
+    await useSsoLogin()('google');
+
+    expect(mocks.setPostLoginRedirect).toHaveBeenCalledWith(
+      '/doc/document-id?referral_code=original-invite#comment'
+    );
+    const authUrl = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
+    expect(authUrl.searchParams.get('original_url')).toBe('macro:///login');
+  });
+
+  it('reports a desktop browser that will not open', async () => {
+    mocks.platform = 'desktop';
+    mocks.openDesktopAuthSession.mockResolvedValue({
+      success: false,
+      error: 'Unable to start authentication',
+    });
+
+    await useSsoLogin()('google');
+
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'Sign-in failed. Please try again.'
     );
   });
 

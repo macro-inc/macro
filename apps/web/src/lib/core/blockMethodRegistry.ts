@@ -20,6 +20,7 @@ export interface BlockMethodRegistry {
   calendar: EmptySpec;
   chat: AssertSpec<BlockChatSpec>;
   database: EmptySpec;
+  form: EmptySpec;
   channel: EmptySpec;
   write: EmptySpec;
   pdf: EmptySpec;

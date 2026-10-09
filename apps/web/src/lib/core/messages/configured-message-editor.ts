@@ -36,6 +36,8 @@ export type MessageEditorOptions = {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
+  /** Slash actions a surface adds beyond the shared set, e.g. a channel's `/poll`. */
+  additionalActions?: Action[];
   /** Invoked when the user picks the "Image" slash action. Opens a file picker and hands files back. */
   onAttachFromDisk?: (files: File[]) => void;
   scrollContainer?: Accessor<HTMLElement | undefined>;
@@ -101,6 +103,9 @@ export function createConfiguredMessageEditor(options: MessageEditorOptions) {
     };
     editor.withActions({ additionalActions: [attachFromDiskAction] });
   }
+
+  if (options.additionalActions?.length)
+    editor.withActions({ additionalActions: options.additionalActions });
 
   editor
     .use(

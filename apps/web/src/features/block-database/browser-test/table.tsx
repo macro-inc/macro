@@ -2,12 +2,12 @@ import '@app/index.css';
 import type { SortKey } from '@core/database-sql/generated/types';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { GridCell } from '../component/GridCell';
-import type { DatabaseViewColumn } from '../core/database-view';
-import { moveBeside } from '../core/move-beside';
-import type { DatabaseRow } from '../core/table';
-import { withSort } from '../core/view-query';
-import { DatabaseTableView } from '../views/database-table-view';
+import { GridCell } from '../../database/components/grid-cell';
+import type { DatabaseViewColumn } from '../../database/core/database-view';
+import { moveBeside } from '../../database/core/move-beside';
+import type { DatabaseRow } from '../../database/core/table';
+import { withSort } from '../../database/core/view-query';
+import { DatabaseTableView } from '../../database/views/database-table-view';
 
 // Real grid and editors; records and saved layout are local to this browser fixture.
 function TableFixture() {

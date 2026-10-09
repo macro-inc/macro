@@ -13,15 +13,15 @@ import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
 import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
 import { match } from 'ts-pattern';
-import type {
-  DatabaseMentionPickerProps,
-  DatabaseTextEditorProps,
-} from './component/GridCell';
 import {
   DatabaseMentionLabel,
   DatabaseMentionPlaceholder,
-} from './components/database-mention-label';
-import type { DatabaseEntityType } from './core/column-inference';
+} from '../database/components/database-mention-label';
+import type {
+  DatabaseMentionPickerProps,
+  DatabaseTextEditorProps,
+} from '../database/components/grid-cell';
+import type { DatabaseEntityType } from '../database/core/column-inference';
 import {
   databaseMentionFromItem,
   databaseMentionScope,
@@ -46,6 +46,7 @@ export function DatabaseMentionPicker(props: DatabaseMentionPickerProps) {
     <Show when={props.anchor}>
       {(anchor) => (
         <MentionsMenu
+          animate={false}
           menu={operations}
           anchor={anchor()}
           {...databaseMentionScope(props.specificEntityType)}

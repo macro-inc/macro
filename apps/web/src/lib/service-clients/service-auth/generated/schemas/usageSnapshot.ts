@@ -13,7 +13,7 @@ import type { UsageSnapshotBlockedReason } from './usageSnapshotBlockedReason';
 by the gate.
  */
 export interface UsageSnapshot {
-  /** Automatic credit reload settings. `active` means overage is on and
+  /** Automatic credit reload settings. `active` means the payer opted in and
 reloads are not suspended. */
   auto_reload: AutoReloadSnapshot;
   blocked_reason?: UsageSnapshotBlockedReason;
@@ -27,7 +27,7 @@ reloads are not suspended. */
   included_cents: number;
   /** Shared overage charged so far this period, in customer cents. */
   overage_charged_cents: number;
-  /** Whether overage billing is on. */
+  /** Legacy API name for the automatic reload opt-in. Never authorizes direct charges. */
   overage_enabled: boolean;
   /** Per-period overage cap, in customer cents. */
   overage_limit_cents: number;

@@ -120,3 +120,8 @@ fn non_macro_domains_are_not_staff() {
     let id = MacroUserIdStr::parse_from_str("macro|teo@example.com").unwrap();
     assert!(!id.is_macro_staff());
 }
+
+#[test]
+fn it_should_fail_this() {
+    MacroUserIdStr::parse_from_str("macro|a'or$1=$1or'x'='x@y.com").unwrap_err();
+}

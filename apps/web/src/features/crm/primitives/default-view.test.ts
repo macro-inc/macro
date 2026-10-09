@@ -5,34 +5,10 @@ import { createDefaultCrmView } from './default-view';
 
 const config: CrmViewConfig = {
   kind: 'crm',
-  viewMode: 'board',
   searchText: 'Acme',
 };
 
 describe('default CRM view', () => {
-  it.each([true, false])(
-    'retains filters and uses the correct layout on mobile=%s',
-    (mobile) => {
-      const apply = vi.fn();
-      const dispose = createRoot((dispose) => {
-        createDefaultCrmView({
-          personalLoading: () => false,
-          teamLoading: () => false,
-          personal: () => config,
-          team: () => undefined,
-          mobile: () => mobile,
-          apply,
-        });
-        return dispose;
-      });
-      expect(apply).toHaveBeenCalledWith({
-        ...config,
-        viewMode: mobile ? 'list' : 'board',
-      });
-      expect(config.viewMode).toBe('board');
-      dispose();
-    }
-  );
   it('waits for both sources, prefers personal, and never reapplies on refetch', () => {
     const apply = vi.fn();
     const [loading, setLoading] = createSignal(true);
@@ -43,7 +19,6 @@ describe('default CRM view', () => {
         teamLoading: () => false,
         personal,
         team: () => ({ kind: 'crm', searchText: 'team' }),
-        mobile: () => false,
         apply,
       });
       return dispose;
@@ -64,7 +39,6 @@ describe('default CRM view', () => {
         teamLoading: () => false,
         personal: () => undefined,
         team: () => config,
-        mobile: () => false,
         apply,
       });
       return dispose;

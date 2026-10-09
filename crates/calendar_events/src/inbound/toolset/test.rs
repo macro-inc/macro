@@ -239,8 +239,7 @@ impl CalendarOccurrenceService for MockOccurrences {
         _range: OccurrenceRange,
         cursor: Option<crate::domain::models::CalendarOccurrenceCursor>,
         limit: u16,
-    ) -> Result<Vec<(crate::domain::models::CalendarEvent, CalendarOccurrence)>, rootcause::Report>
-    {
+    ) -> Result<Vec<crate::domain::models::OccurrenceListing>, rootcause::Report> {
         let rows = self.rows.lock().unwrap().clone();
         let start = cursor
             .map(|cursor| {
@@ -249,7 +248,18 @@ impl CalendarOccurrenceService for MockOccurrences {
                     .map_or(rows.len(), |position| position + 1)
             })
             .unwrap_or(0);
-        let mut page: Vec<_> = rows.into_iter().skip(start).collect();
+        let mut page: Vec<_> = rows
+            .into_iter()
+            .skip(start)
+            .map(
+                |(event, occurrence)| crate::domain::models::OccurrenceListing {
+                    event,
+                    occurrence,
+                    link_id: uuid::Uuid::nil(),
+                    exception: Default::default(),
+                },
+            )
+            .collect();
         page.truncate(usize::from(limit));
         Ok(page)
     }
@@ -259,6 +269,13 @@ impl CalendarOccurrenceService for MockOccurrences {
         _requester_id: &str,
     ) -> Result<CalendarSyncStatus, rootcause::Report> {
         Ok(self.status)
+    }
+
+    async fn list_visible_calendars(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Vec<crate::domain::models::VisibleCalendar>, rootcause::Report> {
+        unreachable!("calendar tools list calendars through the mutation service")
     }
 
     async fn mention_previews(

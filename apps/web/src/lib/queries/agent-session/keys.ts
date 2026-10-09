@@ -23,6 +23,10 @@ export const agentSessionPullRequestKeys = createQueryKeys(
   {
     forPullRequest: (url: string) => ({ queryKey: [url] }),
     forSession: (sessionId: string) => ({ queryKey: [sessionId] }),
+    /** Everything a batch of pull requests links to, keyed by their URLs. */
+    linksForPullRequests: (urls: readonly string[]) => ({
+      queryKey: [urls],
+    }),
   }
 );
 

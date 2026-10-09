@@ -42,6 +42,13 @@ function stripOwnerId({
   return rest;
 }
 
+// Cached selectors outlive the hooks that pass them; keep hook scope out.
+function selectNotificationItems(
+  data: InfiniteData<GetAllUserNotificationsResponse, unknown>
+): UnifiedNotification[] {
+  return data.pages.flatMap(({ items }) => items.map(stripOwnerId));
+}
+
 const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NOTIFICATION_STALE_TIME = 5 * 60 * 1000; // 5 minutes
 const NOTIFICATION_GC_TIME = 10 * 60 * 1000; // 10 minutes
@@ -201,12 +208,7 @@ function useRestUserNotificationsQuery(
     const limit = normalizeLimit(queryArgs.limit);
     return {
       ...userNotificationsQueryOptions(limit, queryArgs.done),
-      select: (
-        data: InfiniteData<
-          GetAllUserNotificationsResponse,
-          UserNotificationsPageParam
-        >
-      ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
+      select: selectNotificationItems,
       enabled: options?.().enabled,
       // Always refetch in the case of a stale browser tab
       refetchOnWindowFocus: 'always' as const,
@@ -341,12 +343,7 @@ function _useEntityNotificationsQuery(args: {
 
   return useInfiniteQuery(() => ({
     ...entityNotificationsQueryOptions(args.eventItemId(), limit),
-    select: (
-      data: InfiniteData<
-        GetAllUserNotificationsResponse,
-        EntityNotificationsPageParam
-      >
-    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
+    select: selectNotificationItems,
   }));
 }
 
@@ -395,12 +392,7 @@ function _useEntitiesNotificationsQuery(args: {
 
   return useInfiniteQuery(() => ({
     ...entitiesNotificationsQueryOptions(args.eventItemIds(), limit),
-    select: (
-      data: InfiniteData<
-        GetAllUserNotificationsResponse,
-        EntitiesNotificationsPageParam
-      >
-    ) => data.pages.flatMap(({ items }) => items.map(stripOwnerId)),
+    select: selectNotificationItems,
     enabled: args.eventItemIds().length > 0,
   }));
 }

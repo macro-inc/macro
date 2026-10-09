@@ -63,6 +63,13 @@ function RoutinesContent() {
                   ?.name ?? 'Agent')
               : modelLabel(target.model)
           }
+          targetModel={(target) =>
+            target.kind === 'agent'
+              ? (target.modelOverride ??
+                roster.roster().find((agent) => agent.botId === target.agentId)
+                  ?.defaultModel)
+              : target.model
+          }
           searchRef={(input) => (searchInput = input)}
           onCreate={create}
           onOpen={(id) => open(id)}

@@ -27,6 +27,7 @@ import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
+import { AgentTaskChip } from './AgentTaskChip';
 import {
   harnessTitle,
   sessionHarnessTitle,
@@ -189,6 +190,9 @@ export function AgentSplitHeader(props: {
           into the title menu via `menuTools` below instead. */}
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1.5">
+          <Show when={props.session?.taskId}>
+            {(taskId) => <AgentTaskChip taskId={taskId()} />}
+          </Show>
           <Show when={props.session?.pullRequestUrl}>
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>

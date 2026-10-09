@@ -14,6 +14,10 @@ use email::domain::{
     models::{PreviewView, PreviewViewStandardLabel},
     ports::EmailService,
 };
+use entity_access::domain::{
+    models::{EntityAccessReceipt, MemberTeamRole},
+    ports::EntityAccessService,
+};
 use filter_ast::Expr;
 use futures::{future::BoxFuture, future::try_join_all};
 use item_filters::{
@@ -95,12 +99,54 @@ where
     }
 }
 
+/// Resolves a viewer's current team capability for source-scoped PR hydration.
+pub trait SoupTeamReader: Send + Sync + 'static {
+    /// Recheck membership on each batch, so a long-lived socket cannot retain removed access.
+    fn team_receipt(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> BoxFuture<'_, Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupItemLoaderError>>;
+}
+
+/// Reads current team capabilities through the entity access service.
+struct EntityAccessTeamReader<A>(A);
+impl<A: EntityAccessService> SoupTeamReader for EntityAccessTeamReader<A> {
+    fn team_receipt(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> BoxFuture<'_, Result<Option<EntityAccessReceipt<MemberTeamRole>>, SoupItemLoaderError>>
+    {
+        Box::pin(async move {
+            let team = self
+                .0
+                .get_user_team(&user)
+                .await
+                .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())?;
+            let Some(team) = team else {
+                return Ok(None);
+            };
+            self.0
+                .generate_entity_access_receipt::<MemberTeamRole>(
+                    &user,
+                    None,
+                    &team.team_id.to_string(),
+                    EntityType::Team,
+                )
+                .await
+                .map(Some)
+                .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())
+        })
+    }
+}
+
 /// Batches lightweight entity patches into one filtered Soup request per user.
 pub struct SoupItemLoader<S, I> {
     /// Existing Soup query service.
     soup_service: S,
     /// Reader used only when a batch requests email threads.
     inbox_reader: I,
+    /// Optional reader for current team access during PR and session hydration.
+    team_reader: Option<Arc<dyn SoupTeamReader>>,
 }
 
 impl<S, I> SoupItemLoader<S, I> {
@@ -109,6 +155,7 @@ impl<S, I> SoupItemLoader<S, I> {
         Self {
             soup_service,
             inbox_reader,
+            team_reader: None,
         }
     }
 }
@@ -133,6 +180,16 @@ where
         } else {
             Vec::new()
         };
+        let needs_team = entities.iter().any(|entity| {
+            matches!(
+                entity.entity_type,
+                EntityType::ForeignEntity | EntityType::AgentSession
+            )
+        });
+        let team = match (&self.team_reader, needs_team) {
+            (Some(reader), true) => reader.team_receipt(user_id.clone()).await?,
+            _ => None,
+        };
         let filter = entity_filter_ast(&entities)?;
         let limit = u16::try_from(entities.len())
             .unwrap_or(MAX_BATCH_SIZE as u16)
@@ -150,7 +207,7 @@ where
 
         let items = self
             .soup_service
-            .get_user_soup_with_projection(request, None)
+            .get_user_soup_with_projection(request, team)
             .await
             .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())?
             .into_items();
@@ -310,6 +367,13 @@ impl SoupItemDataLoader {
     }
 }
 
+/// Primary-backed Soup reader for single agent-session lookups. A session is
+/// opened the moment it is created, and its log is read by subscribing first
+/// and querying second; both need every committed row, which a replica
+/// lagging by seconds does not have. Lists keep the replica-backed reader.
+#[derive(Clone)]
+pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
+
 /// Build the realtime Soup DataLoader from the existing Soup and email services.
 pub fn soup_item_loader<S, E>(soup_service: S, email_service: Arc<E>) -> SoupItemDataLoader
 where
@@ -320,6 +384,22 @@ where
         soup_service,
         EmailServiceInboxReader::new(email_service),
     ))
+}
+
+/// Build a loader that rechecks team access for PRs and linked session metadata.
+pub fn soup_item_loader_with_team_access<S, E, A>(
+    soup_service: S,
+    email_service: Arc<E>,
+    access: A,
+) -> SoupItemDataLoader
+where
+    S: SoupService,
+    E: EmailService,
+    A: EntityAccessService,
+{
+    let mut loader = SoupItemLoader::new(soup_service, EmailServiceInboxReader::new(email_service));
+    loader.team_reader = Some(Arc::new(EntityAccessTeamReader(access)));
+    SoupItemDataLoader::new(loader)
 }
 
 /// Build an OR tree from literals, falling back to an impossible literal when empty.
@@ -382,7 +462,9 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Skill
             | EntityType::ScheduledAction
             | EntityType::Reminder
-            | EntityType::Database => {
+            | EntityType::CrmPipeline
+            | EntityType::Database
+            | EntityType::Form => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type

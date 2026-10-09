@@ -1,4 +1,4 @@
-//! Workflow-oriented booking links, with deferred review only on hosts that can finish it.
+//! Booking links saved directly after the user confirms the proposal in conversation.
 use crate::domain::{
     booking_links::{BookingLink, BookingLinks},
     models::Error,
@@ -56,19 +56,31 @@ fn tool_error(error: Error) -> ToolCallError {
         internal_error: anyhow::Error::new(error),
     }
 }
-/// Chat and agent-session tools: mutations await the user's actual review card.
+/// Booking tools execute after conversational confirmation; no host opens a review form.
 pub fn booking_link_toolset<Scheduling: BookingLinks>()
--> AsyncToolCollection<BookingLinkToolContext<Scheduling>> {
-    AsyncToolCollection::new()
-        .add_tool::<ListBookingLinks, BookingLinkToolContext<Scheduling>>()
-        .add_user_tool::<CreateBookingLink, BookingLinkToolContext<Scheduling>>()
-        .add_user_tool::<EditBookingLink, BookingLinkToolContext<Scheduling>>()
-}
-/// Headless hosts execute real tools using their own confirmation policy, never a pending placeholder.
-pub fn mcp_toolset<Scheduling: BookingLinks>()
 -> AsyncToolCollection<BookingLinkToolContext<Scheduling>> {
     AsyncToolCollection::new()
         .add_tool::<ListBookingLinks, BookingLinkToolContext<Scheduling>>()
         .add_tool::<CreateBookingLink, BookingLinkToolContext<Scheduling>>()
         .add_tool::<EditBookingLink, BookingLinkToolContext<Scheduling>>()
 }
+/// Headless hosts use the same conversational-confirmation contract.
+pub fn mcp_toolset<Scheduling: BookingLinks>()
+-> AsyncToolCollection<BookingLinkToolContext<Scheduling>> {
+    booking_link_toolset()
+}
+
+// Matches the confirmed email/calendar tools: require evidence of approval before
+// execution. This rejects missing/blank quotes, but does not verify conversation history.
+fn require_confirmation(confirmation: &str) -> Result<(), ToolCallError> {
+    if confirmation.trim().is_empty() {
+        return Err(ToolCallError {
+            description: "Quote the user's reply approving the booking details in userConfirmation. First explain the proposal in conversation, ask whether to proceed, and wait for their reply.".into(),
+            internal_error: anyhow::anyhow!("Booking link called without confirmation"),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

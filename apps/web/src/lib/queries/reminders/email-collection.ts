@@ -31,6 +31,8 @@ export function useEmailReminderCollection(
       getNextPageParam: (page: EmailReminderPage) =>
         page.nextCursor ?? undefined,
       refetchInterval: 30_000,
+      staleTime: 0,
+      refetchOnWindowFocus: true,
       throwOnError: false,
     };
   });

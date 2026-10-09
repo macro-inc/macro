@@ -76,5 +76,6 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
     .with({ type: 'database' }, () => {
       throw new Error('databases are not openable as attachments');
     })
+    .with({ type: 'form' }, (e) => ({ type: 'form' as const, id: e.id }))
     .exhaustive();
 }

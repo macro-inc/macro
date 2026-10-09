@@ -1,4 +1,3 @@
-import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
@@ -13,19 +12,20 @@ import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
-import { CsvImportDialog } from '../components/csv-import-dialog';
+import { toast } from '../../../lib/core/component/Toast/Toast';
+import { CsvImportDialog } from '../../database/components/csv-import-dialog';
 import {
   type DatabaseCsv,
   type DatabaseCsvFailure,
   databaseCsvMessage,
   MAX_CSV_BYTES,
   parseDatabaseCsv,
-} from '../core/csv';
-import { isDatabaseNameTaken } from '../core/property-creation';
+} from '../../database/core/csv';
+import { isDatabaseNameTaken } from '../../database/core/property-creation';
 import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
-} from '../core/write-failure';
+} from '../../database/core/write-failure';
 import {
   exportDatabaseTableCsv,
   importDatabaseTable,

@@ -10,15 +10,12 @@ import type { UpdateAutoReloadRequestMonthlySpendLimitCents } from './updateAuto
  * Request body for [`update_auto_reload_handler`].
  */
 export interface UpdateAutoReloadRequest {
-  /** Reload credits automatically, billing usage past allowance and
-credits to the payer's card. Turning this off also turns off overage. */
+  /** Purchase prepaid credits automatically using the payer's card. */
   enabled: boolean;
   /** Reload once the balance drops below this, cents. Must be positive. */
   minimumBalanceCents: number;
   /** Most to reload per calendar month, cents. Omit or `null` for no limit.
-Also serves as the per-period overage cap, so it must be at least the
-catalog's `overage_limit_min_cents`; larger values are capped at
-`overage_limit_max_cents`. */
+Must be at least the catalog's `overage_limit_min_cents` (legacy name). */
   monthlySpendLimitCents?: UpdateAutoReloadRequestMonthlySpendLimitCents;
   /** Reload the balance back up to this, cents. At least $0.50 above the
 minimum and no more than the catalog's `auto_reload_target_max_cents`. */

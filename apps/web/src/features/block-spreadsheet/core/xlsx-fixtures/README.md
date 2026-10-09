@@ -16,7 +16,7 @@ Additional generated-in-test workbooks exercise the 1904 date system, stored Exc
 
 ## Real-world corpus
 
-`real-world/` holds published workbooks that Excel, LibreOffice and other producers wrote: financial models (project finance, DCF, LBO, loan schedules, three-statement models), small-business and government statistics workbooks, and files from open-source spreadsheet test suites. `corpus.ts` lists them from `real-world/manifest.json` and fails if a workbook has no recorded provenance. `../xlsx-corpus.test.ts` imports, recalculates and round-trips each one and snapshots the results.
+`real-world/` holds published workbooks that Excel, LibreOffice and other producers wrote: financial models (project finance, DCF, LBO, loan schedules, three-statement models), small-business and government statistics workbooks, and files from open-source spreadsheet test suites. `corpus.ts` lists them from `real-world/manifest.json` and fails if a workbook has no recorded provenance. `../xlsx-corpus-suite.ts` imports, recalculates and round-trips each one and snapshots the results, split across `../xlsx-corpus-1.test.ts` through `../xlsx-corpus-4.test.ts` so the workbooks run in parallel.
 
 Every file is redistributable. `manifest.json` records each file's source page and license:
 

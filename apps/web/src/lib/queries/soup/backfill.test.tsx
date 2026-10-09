@@ -103,7 +103,7 @@ function seedCheckpoint(overrides: Partial<SoupBackfillCheckpoint> = {}) {
     ...overrides,
   };
   localStorage.setItem(
-    'graphql-soup-backfill:v16:user-1:core-entities',
+    'graphql-soup-backfill:v17:user-1:core-entities',
     JSON.stringify(checkpoint)
   );
 }
@@ -790,7 +790,7 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it.each([13, 14, 15])(
+  it.each([13, 14, 15, 16])(
     'does not reuse v%i backfill checkpoints',
     (version) => {
       localStorage.setItem(
@@ -819,7 +819,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v16:user-1:core-entities',
+        'graphql-soup-backfill:v17:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -893,7 +893,7 @@ describe('runSoupBackfills', () => {
       const watermark = '2026-09-01T00:00:00.000Z';
       for (const checkpointId of ['core-entities', 'email-thread-pages']) {
         localStorage.setItem(
-          `graphql-soup-backfill:v16:user-1:${checkpointId}`,
+          `graphql-soup-backfill:v17:user-1:${checkpointId}`,
           JSON.stringify({
             userId: 'user-1',
             storageGeneration: 'storage-1',

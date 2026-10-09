@@ -47,6 +47,7 @@ export type ChannelRailItemProps = {
 
 export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
+  supportsOpenInNewSplit: false,
   senderBucket: undefined,
 };
 

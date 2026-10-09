@@ -11,6 +11,7 @@ export type ItemType =
   | 'channel_thread'
   | 'call'
   | 'database'
+  | 'form'
   | 'agent_session'
   | 'routine'
   | 'calendar_event'
@@ -48,6 +49,7 @@ export function stringToItemType(str: string): ItemType | undefined {
     .with('routine', 'automation', () => 'routine')
     .with(
       'database',
+      'form',
       'agent_session',
       'call',
       'calendar_event',
@@ -74,6 +76,7 @@ export function blockNameToItemType(
       'email',
       'routine',
       'database',
+      'form',
       'initiative',
       (b) => b
     )
