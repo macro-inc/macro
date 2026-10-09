@@ -576,8 +576,8 @@ body.tauri-ios {
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
   --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
   --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
-  /* One glowing lap around the circle, then a long rest before the next. */
-  --animate-update-glow: update-glow 8s linear infinite;
+  /* Two laps around the circle, easing in and out, then a long rest before the next. */
+  --animate-update-glow: update-glow-spin 8s infinite, update-glow-fade 8s linear infinite;
   --animate-accordion-down: accordion-down 150ms ease-out;
   --animate-accordion-up: accordion-up 150ms ease-out;
 
@@ -1308,11 +1308,16 @@ html[data-touch-device='true'] :is(
 }
 
 /* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
-@keyframes update-glow {
-  0%        { transform: rotate(0deg);   opacity: 0; }
-  4%        { opacity: 1; }
-  16%       { opacity: 1; }
-  20%, 100% { transform: rotate(360deg); opacity: 0; }
+/* easeInOutCubic: the laps start slow, speed up, and slow down into the end. */
+@keyframes update-glow-spin {
+  0%        { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
+  35%, 100% { transform: rotate(720deg); }
+}
+
+@keyframes update-glow-fade {
+  0%        { opacity: 0; }
+  3%, 31%   { opacity: 1; }
+  35%, 100% { opacity: 0; }
 }
 
 @keyframes todo-pulse {

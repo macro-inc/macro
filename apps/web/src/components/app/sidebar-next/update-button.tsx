@@ -6,15 +6,15 @@ import type { AppUpdate } from './app-update';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
 
-/** A comet with `strength` (0-100) of the accent: a bright head trailing a tail that fades out. */
-const comet = (strength: number) => ({
-  background: `conic-gradient(from 0deg, transparent 0deg 140deg, color-mix(in oklch, var(--color-accent) ${strength / 5}%, transparent) 250deg, color-mix(in oklch, var(--color-accent) ${strength}%, transparent) 350deg, transparent 360deg)`,
-});
-
-/** Masks a box to a ring `width` px thick along its edge. */
-const ring = (width: number) => ({
-  mask: `radial-gradient(farthest-side, transparent calc(100% - ${width}px), #000 calc(100% - ${width - 0.5}px))`,
-});
+/**
+ * A hairline comet on the circle's edge: a soft head with a short tail that
+ * fades out, masked to a 1.5px ring.
+ */
+const COMET = {
+  background:
+    'conic-gradient(from 0deg, transparent 0deg 230deg, color-mix(in oklch, var(--color-accent) 80%, transparent) 350deg, transparent 360deg)',
+  mask: 'radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px))',
+} as const;
 
 function dismissedUpdate(): string | null {
   try {
@@ -63,16 +63,10 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
         data-sidebar-next-item="app-update"
       >
         <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent-bg text-accent">
-          {/* Halo under the comet, then the comet itself, flush with the circle. */}
-          <span
-            aria-hidden="true"
-            class="absolute -inset-0.5 rounded-full opacity-0 blur-[1.5px] animate-update-glow motion-reduce:hidden"
-            style={{ ...comet(50), ...ring(2.5) }}
-          />
           <span
             aria-hidden="true"
             class="absolute -inset-px rounded-full opacity-0 animate-update-glow motion-reduce:hidden"
-            style={{ ...comet(100), ...ring(1.5) }}
+            style={COMET}
           />
           <DownloadIcon class="size-4" aria-hidden="true" />
         </span>
