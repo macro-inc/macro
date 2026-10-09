@@ -1381,7 +1381,9 @@ impl CacheEngine {
                 .await;
             let result = state.engine_result(result)?;
             let data = match &result {
-                cache_core::engine::watch_query::QueryUpdate::Hit { data, .. } => Some(data.as_ref()),
+                cache_core::engine::watch_query::QueryUpdate::Hit { data, .. } => {
+                    Some(data.as_ref())
+                }
                 _ => None,
             };
             read_response_to_js(&result, data)
