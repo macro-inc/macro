@@ -354,16 +354,16 @@ where
             .unwrap_or(PermissionPolicy::Prompt)
     }
 
-    /// DM contexts keep the adopted persona choice across reconnects. Current
+    /// Conversation sessions keep the adopted persona choice across reconnects. Current
     /// harness operator restrictions can always tighten that choice.
     pub(super) async fn permission_policy_for_session(
         &self,
         session: AgentSessionId,
         bot: BotId,
     ) -> agent_session::domain::error::Result<PermissionPolicy> {
-        if let Some(policy) = &self.direct_messages
-            && policy.is_dm_session(session).await?
-            && let Some(store) = &self.dm_turns
+        if let Some(policy) = &self.conversations
+            && policy.is_conversation_session(session).await?
+            && let Some(store) = &self.conversation_turns
         {
             let Some(settings) = store.settings(session).await? else {
                 return Ok(PermissionPolicy::Prompt);
@@ -389,22 +389,36 @@ where
     /// holds no token (a provider whose sessions carry no egress environment,
     /// or a sandbox from before tokens existed) gets no servers, which is
     /// also everything it could do with them.
+    ///
+    /// The in-process agent is the exception. Its token lives only in the
+    /// process that spawned it, so a resume after a restart finds none, and
+    /// every turn refreshes its tools with the advertised credential: without
+    /// one it could not take a turn at all. It gets a new token instead, and
+    /// the old one stops working with its hash.
     #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
     pub(super) async fn resumed_mcp_servers(
         &self,
         session_id: AgentSessionId,
+        kind: AgentKind,
         owner: &MacroUserIdStr<'static>,
         selection: &AgentMcpServers,
     ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
-        let Some(session_token) = self.containers.session_token(session_id).await? else {
-            tracing::debug!("container holds no egress token; restoring no MCP servers");
-            return Ok(Vec::new());
-        };
-        Ok(self
-            .egress
-            .restore(owner, session_token, selection)
-            .await?
-            .acp_servers())
+        if let Some(session_token) = self.containers.session_token(session_id).await? {
+            return Ok(self
+                .egress
+                .restore(owner, session_token, selection)
+                .await?
+                .acp_servers());
+        }
+        if kind == AgentKind::InMemory {
+            let egress = self.egress.provision(session_id, owner, selection).await?;
+            self.sessions
+                .set_egress_token_hash(session_id, &egress.session_token_hash)
+                .await?;
+            return Ok(egress.sandbox.acp_servers());
+        }
+        tracing::debug!("container holds no egress token; restoring no MCP servers");
+        Ok(Vec::new())
     }
 
     /// Release everything the session holds, then delete it.
@@ -450,7 +464,12 @@ where
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
                 let mcp_servers = self
-                    .resumed_mcp_servers(session_id, owner, &session.mcp_servers)
+                    .resumed_mcp_servers(
+                        session_id,
+                        AgentKind::SandboxedCoder,
+                        owner,
+                        &session.mcp_servers,
+                    )
                     .await?;
                 let permission_policy = self
                     .permission_policy_for_session(session_id, session.bot_id)

@@ -1,4 +1,5 @@
-//! Private, durable conversations between one user and one agent persona.
+//! Private, durable conversations between one user and one agent persona:
+//! the direct kind of [`ChannelAgent`](super::channel_agents::ChannelAgent).
 
 use std::sync::Arc;
 
@@ -73,12 +74,6 @@ pub trait AgentDmRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<EnsuredAgentDm, ChannelMutationErr>> + Send;
-
-    /// Read the binding for a channel. This is a fact lookup, not authorization.
-    fn find(
-        &self,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<Option<AgentDm>, ChannelMutationErr>> + Send;
 }
 
 /// Persona-domain authorization, independent of channel-placement settings.
@@ -169,9 +164,5 @@ impl<R: AgentDmRepo> AgentDmRepo for Arc<R> {
         bot_id: BotId,
     ) -> Result<EnsuredAgentDm, ChannelMutationErr> {
         (**self).ensure(user_id, bot_id).await
-    }
-
-    async fn find(&self, channel_id: Uuid) -> Result<Option<AgentDm>, ChannelMutationErr> {
-        (**self).find(channel_id).await
     }
 }

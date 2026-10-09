@@ -364,7 +364,7 @@ describe('composeAgentContextPrompt', () => {
       promptMarkdown: 'what changed?',
       parent: { type: 'channel', id: 'dm-1' },
       replyTarget: { kind: 'none' },
-      directMessage: true,
+      conversation: 'direct',
     });
 
     expect(text).toContain(

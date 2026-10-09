@@ -17,12 +17,16 @@ note: |-
 files:
   - apps/web/src/features/agent-activity/queries/**
   - apps/web/src/features/agent-dms/queries/**
+  - apps/web/src/features/agent-conversations/queries/**
   - apps/web/src/features/agent-activity/primitives/**
   - apps/web/src/features/agent-dms/primitives/**
+  - apps/web/src/features/agent-conversations/primitives/**
   - apps/web/src/features/agent-activity/components/**
   - apps/web/src/features/agent-dms/components/**
+  - apps/web/src/features/agent-conversations/components/**
   - apps/web/src/features/agent-activity/views/**
   - apps/web/src/features/agent-dms/views/**
+  - apps/web/src/features/agent-conversations/views/**
   - apps/web/src/features/agent-interactions/queries/**
   - apps/web/src/features/agent-interactions/primitives/**
   - apps/web/src/features/agent-interactions/components/**

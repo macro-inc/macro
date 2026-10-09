@@ -2,14 +2,15 @@
 
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{
-    AgentContext, AgentContextAnchor, AgentContextMessage, AgentContextPeople, AgentContextPerson,
-    AgentContextReplyTarget, AgentContextThread,
+    AgentContext, AgentContextAnchor, AgentContextConversation, AgentContextMessage,
+    AgentContextPeople, AgentContextPerson, AgentContextReplyTarget, AgentContextThread,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{
-    CommentAnchor, ContextMessage, ContextThread, ConversationContext, PromptPeople, ReplyTarget,
+    CommentAnchor, ContextMessage, ContextThread, ConversationContext, ConversationKind,
+    PromptPeople, ReplyTarget,
 };
 use crate::domain::ports::AgentPromptComposer;
 
@@ -44,7 +45,10 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
             prompt_message_id: context.prompt_message_id.map(|id| id.to_string()),
             thread: context.thread.as_ref().map(thread),
             channel: context.channel.iter().map(thread).collect(),
-            direct_message: context.direct_message,
+            conversation: context.conversation.map(|kind| match kind {
+                ConversationKind::Direct => AgentContextConversation::Direct,
+                ConversationKind::Shared => AgentContextConversation::Shared,
+            }),
         });
 
         self.lexical

@@ -35,7 +35,7 @@ describe('agent context', () => {
     const response = await request({
       promptMarkdown: 'what changed?',
       parent: { type: 'channel', id: 'dm-1' },
-      directMessage: true,
+      conversation: 'direct',
     });
     expect(response.status).toBe(200);
     const { markdown } = await response.json<{ markdown: string }>();

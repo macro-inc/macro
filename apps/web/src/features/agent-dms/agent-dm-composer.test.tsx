@@ -4,10 +4,15 @@ import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
-vi.mock('./queries/conversation', () => ({
-  useAgentDmConversation: mocks.query,
+vi.mock('@app/features/agent-conversations/queries/conversations', () => ({
+  useAgentConversations: mocks.query,
 }));
-vi.mock('./agent-dm-controls', () => ({ AgentDmControls: () => null }));
+vi.mock(
+  '@app/features/agent-conversations/agent-conversation-controls',
+  () => ({
+    AgentConversationControls: () => null,
+  })
+);
 vi.mock('@ui', () => ({
   Button: (props: { onClick: () => void; children: JSX.Element }) => (
     <button onClick={props.onClick}>{props.children}</button>
@@ -24,7 +29,7 @@ afterEach(() => {
 describe('agent DM composer availability', () => {
   it('keeps normal channel composers independent of the agent metadata service', () => {
     const view = render(() => (
-      <AgentDmComposer channelId="ordinary" isAgentDm={false}>
+      <AgentDmComposer channelId="ordinary" botId={undefined}>
         <textarea aria-label="Message" />
       </AgentDmComposer>
     ));
@@ -47,14 +52,14 @@ describe('agent DM composer availability', () => {
       get data() {
         if (state.status !== 'success')
           throw new Error('Pending data must not be read');
-        return { available: state.available };
+        return [{ botId: 'persona', available: state.available }];
       },
       refetch: vi.fn(),
     });
     const view = render(() => (
       <>
         <p>Earlier conversation</p>
-        <AgentDmComposer channelId="dm" isAgentDm>
+        <AgentDmComposer channelId="dm" botId="persona">
           <textarea aria-label="Message" />
         </AgentDmComposer>
       </>
@@ -73,7 +78,7 @@ describe('agent DM composer availability', () => {
     const refetch = vi.fn();
     mocks.query.mockReturnValue({ isSuccess: false, isError: true, refetch });
     const view = render(() => (
-      <AgentDmComposer channelId="dm" isAgentDm>
+      <AgentDmComposer channelId="dm" botId="persona">
         <textarea />
       </AgentDmComposer>
     ));

@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
-  AgentDmConversationDto,
+  AgentConversationsDto,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -35,12 +35,12 @@ import type {
   PullRequestUrl,
   PullRequestUrls,
   RenameAgentSessionRequest,
-  RetryAgentDmRequest,
+  RetryAgentConversationTurnRequest,
   SandboxSizeBody,
   SessionPullRequestsResponse,
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
-  StartFreshAgentDmRequest,
+  StartFreshAgentConversationRequest,
   StartResponse,
   StatusResponse,
   UnlinkAgentSessionPullRequestParams,
@@ -134,187 +134,202 @@ export const discoverAgentCapabilitiesHandler = async (
 };
 
 /**
- * @summary Ordinary channels and another user's agent DMs are both not found.
+ * @summary The agent conversations in a channel the caller may see. Ordinary channels
+and other people's conversations list none.
  */
-export type getAgentDmResponse200 = {
-  data: AgentDmConversationDto;
+export type listAgentConversationsResponse200 = {
+  data: AgentConversationsDto;
   status: 200;
 };
 
-export type getAgentDmResponse404 = {
-  data: void;
-  status: 404;
-};
-
-export type getAgentDmResponse503 = {
+export type listAgentConversationsResponse503 = {
   data: void;
   status: 503;
 };
 
-export type getAgentDmResponseSuccess = getAgentDmResponse200 & {
-  headers: Headers;
-};
-export type getAgentDmResponseError = (
-  | getAgentDmResponse404
-  | getAgentDmResponse503
-) & {
-  headers: Headers;
+export type listAgentConversationsResponseSuccess =
+  listAgentConversationsResponse200 & {
+    headers: Headers;
+  };
+export type listAgentConversationsResponseError =
+  listAgentConversationsResponse503 & {
+    headers: Headers;
+  };
+
+export type listAgentConversationsResponse =
+  | listAgentConversationsResponseSuccess
+  | listAgentConversationsResponseError;
+
+export const getListAgentConversationsUrl = (channelId: string) => {
+  return `/agent-conversations/${channelId}`;
 };
 
-export type getAgentDmResponse =
-  | getAgentDmResponseSuccess
-  | getAgentDmResponseError;
-
-export const getGetAgentDmUrl = (channelId: string) => {
-  return `/agent-dms/${channelId}`;
-};
-
-export const getAgentDm = async (
+export const listAgentConversations = async (
   channelId: string,
   options?: RequestInit
-): Promise<getAgentDmResponse> => {
-  const res = await fetch(getGetAgentDmUrl(channelId), {
+): Promise<listAgentConversationsResponse> => {
+  const res = await fetch(getListAgentConversationsUrl(channelId), {
     ...options,
     method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: getAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  const data: listAgentConversationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as getAgentDmResponse;
+  } as listAgentConversationsResponse;
 };
 
 /**
  * @summary Start a fresh agent context, retaining the channel transcript.
  */
-export type startFreshAgentDmResponse204 = {
+export type startFreshAgentConversationResponse204 = {
   data: void;
   status: 204;
 };
 
-export type startFreshAgentDmResponse404 = {
+export type startFreshAgentConversationResponse404 = {
   data: void;
   status: 404;
 };
 
-export type startFreshAgentDmResponse409 = {
+export type startFreshAgentConversationResponse409 = {
   data: void;
   status: 409;
 };
 
-export type startFreshAgentDmResponse503 = {
+export type startFreshAgentConversationResponse503 = {
   data: void;
   status: 503;
 };
 
-export type startFreshAgentDmResponseSuccess = startFreshAgentDmResponse204 & {
-  headers: Headers;
-};
-export type startFreshAgentDmResponseError = (
-  | startFreshAgentDmResponse404
-  | startFreshAgentDmResponse409
-  | startFreshAgentDmResponse503
+export type startFreshAgentConversationResponseSuccess =
+  startFreshAgentConversationResponse204 & {
+    headers: Headers;
+  };
+export type startFreshAgentConversationResponseError = (
+  | startFreshAgentConversationResponse404
+  | startFreshAgentConversationResponse409
+  | startFreshAgentConversationResponse503
 ) & {
   headers: Headers;
 };
 
-export type startFreshAgentDmResponse =
-  | startFreshAgentDmResponseSuccess
-  | startFreshAgentDmResponseError;
+export type startFreshAgentConversationResponse =
+  | startFreshAgentConversationResponseSuccess
+  | startFreshAgentConversationResponseError;
 
-export const getStartFreshAgentDmUrl = (channelId: string) => {
-  return `/agent-dms/${channelId}/start-fresh`;
+export const getStartFreshAgentConversationUrl = (
+  channelId: string,
+  botId: string
+) => {
+  return `/agent-conversations/${channelId}/${botId}/start-fresh`;
 };
 
-export const startFreshAgentDm = async (
+export const startFreshAgentConversation = async (
   channelId: string,
-  startFreshAgentDmRequest: StartFreshAgentDmRequest,
+  botId: string,
+  startFreshAgentConversationRequest: StartFreshAgentConversationRequest,
   options?: RequestInit
-): Promise<startFreshAgentDmResponse> => {
-  const res = await fetch(getStartFreshAgentDmUrl(channelId), {
+): Promise<startFreshAgentConversationResponse> => {
+  const res = await fetch(getStartFreshAgentConversationUrl(channelId, botId), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(startFreshAgentDmRequest),
+    body: JSON.stringify(startFreshAgentConversationRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: startFreshAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  const data: startFreshAgentConversationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as startFreshAgentDmResponse;
+  } as startFreshAgentConversationResponse;
 };
 
 /**
- * @summary Explicitly retry a failed DM message in its current context segment.
+ * @summary Explicitly retry a failed message in the conversation's current session.
  */
-export type retryAgentDmResponse204 = {
+export type retryAgentConversationTurnResponse204 = {
   data: void;
   status: 204;
 };
 
-export type retryAgentDmResponse404 = {
+export type retryAgentConversationTurnResponse404 = {
   data: void;
   status: 404;
 };
 
-export type retryAgentDmResponse409 = {
+export type retryAgentConversationTurnResponse409 = {
   data: void;
   status: 409;
 };
 
-export type retryAgentDmResponse503 = {
+export type retryAgentConversationTurnResponse503 = {
   data: void;
   status: 503;
 };
 
-export type retryAgentDmResponseSuccess = retryAgentDmResponse204 & {
-  headers: Headers;
-};
-export type retryAgentDmResponseError = (
-  | retryAgentDmResponse404
-  | retryAgentDmResponse409
-  | retryAgentDmResponse503
+export type retryAgentConversationTurnResponseSuccess =
+  retryAgentConversationTurnResponse204 & {
+    headers: Headers;
+  };
+export type retryAgentConversationTurnResponseError = (
+  | retryAgentConversationTurnResponse404
+  | retryAgentConversationTurnResponse409
+  | retryAgentConversationTurnResponse503
 ) & {
   headers: Headers;
 };
 
-export type retryAgentDmResponse =
-  | retryAgentDmResponseSuccess
-  | retryAgentDmResponseError;
+export type retryAgentConversationTurnResponse =
+  | retryAgentConversationTurnResponseSuccess
+  | retryAgentConversationTurnResponseError;
 
-export const getRetryAgentDmUrl = (channelId: string, source: string) => {
-  return `/agent-dms/${channelId}/turns/${source}/retry`;
+export const getRetryAgentConversationTurnUrl = (
+  channelId: string,
+  botId: string,
+  source: string
+) => {
+  return `/agent-conversations/${channelId}/${botId}/turns/${source}/retry`;
 };
 
-export const retryAgentDm = async (
+export const retryAgentConversationTurn = async (
   channelId: string,
+  botId: string,
   source: string,
-  retryAgentDmRequest: RetryAgentDmRequest,
+  retryAgentConversationTurnRequest: RetryAgentConversationTurnRequest,
   options?: RequestInit
-): Promise<retryAgentDmResponse> => {
-  const res = await fetch(getRetryAgentDmUrl(channelId, source), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(retryAgentDmRequest),
-  });
+): Promise<retryAgentConversationTurnResponse> => {
+  const res = await fetch(
+    getRetryAgentConversationTurnUrl(channelId, botId, source),
+    {
+      ...options,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      body: JSON.stringify(retryAgentConversationTurnRequest),
+    }
+  );
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: retryAgentDmResponse['data'] = body ? JSON.parse(body) : {};
+  const data: retryAgentConversationTurnResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as retryAgentDmResponse;
+  } as retryAgentConversationTurnResponse;
 };
 
 /**

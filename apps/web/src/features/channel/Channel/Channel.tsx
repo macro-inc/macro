@@ -1,9 +1,9 @@
-import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import {
-  AgentDmContextBoundary,
-  AgentDmMessageStatus,
-} from '@app/features/agent-dms/agent-dm-message';
-import { AgentDmProvider } from '@app/features/agent-dms/agent-dm-provider';
+  AgentConversationContextBoundary,
+  AgentConversationMessageStatus,
+} from '@app/features/agent-conversations/agent-conversation-message';
+import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
+import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -701,9 +701,10 @@ export function Channel(props: ChannelProps) {
   });
 
   return (
-    <AgentDmProvider
+    <AgentConversationsProvider
       channelId={props.channelId}
-      isAgentDm={!!channel()?.agent_dm}
+      // Only an agent DM has a conversing agent so far.
+      hasAgents={!!channel()?.agent_dm}
     >
       <EntityLoadGate
         result={messagesLoadResult}
@@ -838,12 +839,12 @@ export function Channel(props: ChannelProps) {
                                             return (
                                               <ChannelThread
                                                 beforeMessage={
-                                                  <AgentDmContextBoundary
+                                                  <AgentConversationContextBoundary
                                                     messageId={item.id}
                                                   />
                                                 }
                                                 afterMessage={
-                                                  <AgentDmMessageStatus
+                                                  <AgentConversationMessageStatus
                                                     messageId={item.id}
                                                   />
                                                 }
@@ -996,7 +997,7 @@ export function Channel(props: ChannelProps) {
                       >
                         <AgentDmComposer
                           channelId={props.channelId}
-                          isAgentDm={!!channel()?.agent_dm}
+                          botId={channel()?.agent_dm?.bot_id}
                         >
                           <Switch>
                             <Match
@@ -1115,6 +1116,6 @@ export function Channel(props: ChannelProps) {
           </StaticMarkdownContext>
         </DebugSuspense>
       </EntityLoadGate>
-    </AgentDmProvider>
+    </AgentConversationsProvider>
   );
 }

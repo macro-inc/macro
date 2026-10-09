@@ -264,7 +264,7 @@ where
 
         let runtime = if announcement.reply_placement
             == crate::domain::model::ReplyPlacement::Timeline
-            && let Some(store) = &self.dm_turns
+            && let Some(store) = &self.conversation_turns
         {
             if let Some(settings) = store.settings(session_id).await? {
                 settings.runtime
@@ -277,7 +277,7 @@ where
                 store
                     .pin_settings(
                         session_id,
-                        crate::domain::dm_turns::DmSessionSettings {
+                        crate::domain::conversation_turns::ConversationSettings {
                             runtime,
                             permissions,
                         },
@@ -308,8 +308,8 @@ where
                 "declining a session its owner is not set up for"
             );
             if announcement.reply_placement == crate::domain::model::ReplyPlacement::Timeline
-                && let Some(store) = &self.dm_turns
-                && let Some(record) = store.get(announcement.message_id).await?
+                && let Some(store) = &self.conversation_turns
+                && let Some(record) = store.get(announcement.message_id, bot_id).await?
             {
                 let flight = InFlightTurn {
                     action_id: record.action_id,
@@ -329,7 +329,7 @@ where
                 store
                     .finish(
                         record.action_id,
-                        crate::domain::dm_turns::DmTurnState::Failed,
+                        crate::domain::conversation_turns::ConversationTurnState::Failed,
                         ReplyOutcome::Failed,
                     )
                     .await?;
@@ -400,7 +400,7 @@ where
         self.publish_opened(&session).await;
 
         // External runtimes bind on first delivery. Their operator owns the
-        // process; opening a DM must never provision a managed sandbox for it.
+        // process; opening a conversation must never provision a managed sandbox for it.
         if runtime.kind.is_managed() {
             let mcp_servers = if runtime.kind == AgentKind::CodexCloud {
                 Vec::new()
@@ -450,11 +450,11 @@ where
         // channel context and announced as the chip the replies render into.
         // One door is what holds the one-turn-in-flight invariant from the
         // session's very first action.
-        let dm_action =
+        let conversation_action =
             if announcement.reply_placement == crate::domain::model::ReplyPlacement::Timeline {
-                match &self.dm_turns {
+                match &self.conversation_turns {
                     Some(store) => store
-                        .get(announcement.message_id)
+                        .get(announcement.message_id, bot_id)
                         .await?
                         .map(|turn| turn.action_id),
                     None => None,
@@ -468,7 +468,8 @@ where
                 id: if announcement.reply_placement
                     == crate::domain::model::ReplyPlacement::Timeline
                 {
-                    dm_action.unwrap_or_else(|| AgentActionId::from_uuid(announcement.message_id))
+                    conversation_action
+                        .unwrap_or_else(|| AgentActionId::from_uuid(announcement.message_id))
                 } else {
                     AgentActionId::mint()
                 },

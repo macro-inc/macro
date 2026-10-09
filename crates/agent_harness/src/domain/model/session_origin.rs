@@ -12,7 +12,7 @@ mod test;
 /// Where a mention happened.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
-    /// Whether the reply belongs in a thread or the private DM timeline.
+    /// Whether the reply belongs in a thread or the channel's timeline.
     #[serde(default, skip_serializing_if = "ReplyPlacement::is_thread")]
     pub reply_placement: ReplyPlacement,
     /// Channel or document the mentioning message was posted in.

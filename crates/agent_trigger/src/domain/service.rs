@@ -1,6 +1,6 @@
 //! Orchestration for evaluating one posted message.
 
-use super::direct_messages::{DirectMessageDecision, DirectMessageRouting};
+use super::conversations::{ConversationDecision, ConversationRouting};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -175,7 +175,7 @@ pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, Hist
     replies: Replies,
     judge: Judge,
     history: History,
-    direct_messages: Option<Arc<dyn DirectMessageRouting>>,
+    conversations: Option<Arc<dyn ConversationRouting>>,
     #[cfg(feature = "admission")]
     admission: Arc<dyn AiAdmissionService>,
 }
@@ -210,15 +210,16 @@ where
             replies,
             judge,
             history,
-            direct_messages: None,
+            conversations: None,
             #[cfg(feature = "admission")]
             admission: Arc::new(DisabledAiAdmissionService),
         }
     }
 
-    /// Route private persona DMs before interpreting mentions or thread replies.
-    pub fn with_direct_messages(mut self, router: Arc<dyn DirectMessageRouting>) -> Self {
-        self.direct_messages = Some(router);
+    /// Route channels where an agent converses before interpreting mentions
+    /// or thread replies.
+    pub fn with_conversations(mut self, router: Arc<dyn ConversationRouting>) -> Self {
+        self.conversations = Some(router);
         self
     }
 
@@ -371,11 +372,11 @@ where
         else {
             return Ok(Vec::new());
         };
-        if let Some(router) = &self.direct_messages {
+        if let Some(router) = &self.conversations {
             match router.evaluate(posted).await? {
-                DirectMessageDecision::NotDirectMessage => {}
-                DirectMessageDecision::Unavailable => return Ok(Vec::new()),
-                DirectMessageDecision::Deliver(decision) => return Ok(vec![*decision]),
+                ConversationDecision::NotConversation => {}
+                ConversationDecision::Unavailable => return Ok(Vec::new()),
+                ConversationDecision::Deliver(decisions) => return Ok(decisions),
             }
         }
         let mut mentioned = bot_mention_ids(&posted.mentions);

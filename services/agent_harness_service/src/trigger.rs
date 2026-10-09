@@ -181,8 +181,8 @@ async fn run(
             ),
         ),
     )
-    .with_direct_messages(std::sync::Arc::new(
-        agent_trigger::domain::direct_messages::DirectMessageRouter::new(
+    .with_conversations(std::sync::Arc::new(
+        agent_trigger::domain::conversations::ConversationRouter::new(
             PgChannelsRepo::new(pool.clone()),
             bots::domain::service::BotServiceImpl::new(
                 PgBotsRepo::new(pool.clone()),

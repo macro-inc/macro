@@ -47,10 +47,6 @@ impl AgentDmRepo for Repo {
             created: self.0.fetch_add(1, Ordering::SeqCst) == 0,
         })
     }
-
-    async fn find(&self, _: Uuid) -> Result<Option<AgentDm>, ChannelMutationErr> {
-        Ok(None)
-    }
 }
 
 #[derive(Clone, Default)]

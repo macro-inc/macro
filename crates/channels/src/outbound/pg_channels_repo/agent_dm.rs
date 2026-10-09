@@ -1,8 +1,8 @@
-//! Atomic agent-DM identity and membership persistence.
+//! Atomic agent-DM identity and membership persistence, as direct
+//! `comms_channel_agents` rows.
 
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
-use uuid::Uuid;
 
 use crate::domain::{
     agent_dm::{AgentDm, AgentDmRepo, EnsuredAgentDm},
@@ -32,7 +32,7 @@ impl PgChannelsRepo {
         .execute(&mut *tx)
         .await?;
         let existing = sqlx::query_scalar!(
-            "SELECT channel_id FROM comms_agent_dms WHERE user_id = $1 AND bot_id = $2",
+            "SELECT channel_id FROM comms_channel_agents WHERE kind = 'direct' AND user_id = $1 AND bot_id = $2",
             user_id.as_ref(),
             bot_id.as_uuid(),
         )
@@ -49,8 +49,8 @@ impl PgChannelsRepo {
             .execute(&mut *tx)
             .await?;
             sqlx::query!(
-                "INSERT INTO comms_agent_dms (channel_id, user_id, bot_id)
-                 VALUES ($1, $2, $3)",
+                "INSERT INTO comms_channel_agents (channel_id, user_id, bot_id, kind)
+                 VALUES ($1, $2, $3, 'direct')",
                 channel_id,
                 user_id.as_ref(),
                 bot_id.as_uuid(),
@@ -88,7 +88,7 @@ impl AgentDmRepo for PgChannelsRepo {
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<AgentDm>, ChannelMutationErr> {
         let rows = sqlx::query!(
-            "SELECT channel_id, bot_id FROM comms_agent_dms WHERE user_id = $1",
+            "SELECT channel_id, bot_id FROM comms_channel_agents WHERE kind = 'direct' AND user_id = $1",
             user_id.as_ref()
         )
         .fetch_all(&self.pool)
@@ -111,23 +111,5 @@ impl AgentDmRepo for PgChannelsRepo {
         self.ensure_agent_dm(user_id, bot_id)
             .await
             .map_err(ChannelMutationErr::Repo)
-    }
-
-    async fn find(&self, channel_id: Uuid) -> Result<Option<AgentDm>, ChannelMutationErr> {
-        let row = sqlx::query!(
-            "SELECT channel_id, user_id, bot_id FROM comms_agent_dms WHERE channel_id = $1",
-            channel_id,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(anyhow::Error::from)?;
-        row.map(|row| {
-            Ok(AgentDm {
-                channel_id: row.channel_id,
-                user_id: MacroUserIdStr::try_from(row.user_id).map_err(anyhow::Error::from)?,
-                bot_id: BotId::new_from_uuid(row.bot_id),
-            })
-        })
-        .transpose()
     }
 }

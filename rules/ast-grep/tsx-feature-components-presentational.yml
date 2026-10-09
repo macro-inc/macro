@@ -15,6 +15,7 @@ note: |-
 files:
   - apps/web/src/features/agent-activity/components/**
   - apps/web/src/features/agent-dms/components/**
+  - apps/web/src/features/agent-conversations/components/**
   - apps/web/src/features/agent-interactions/components/**
   - apps/web/src/features/calendar-team/components/**
   - apps/web/src/features/tasks-view/components/task-board*

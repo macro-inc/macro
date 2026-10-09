@@ -138,8 +138,8 @@ struct AgentHarnessInner<
     forwarder: Box<dyn ErasedForwarder>,
     permission_policies: Box<dyn ErasedPermissionPolicySource>,
     coding_agents: Box<dyn ErasedCodingAgentSource>,
-    direct_messages: Option<Arc<dyn crate::domain::direct_messages::AgentDmExecutionPolicy>>,
-    dm_turns: Option<Arc<dyn crate::domain::dm_turns::DmTurnStore>>,
+    conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
+    conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory working copy; the session store is the durable source.
@@ -327,7 +327,7 @@ where
     /// them into a struct would only move the same list one level down.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        direct_messages: Option<Arc<dyn crate::domain::direct_messages::AgentDmExecutionPolicy>>,
+        conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
         sessions: Sessions,
         containers: Containers,
         announcer: Announcer,
@@ -357,8 +357,8 @@ where
                 forwarder: Box::new(forwarder),
                 permission_policies: Box::new(permission_policies),
                 coding_agents: Box::new(coding_agents),
-                direct_messages,
-                dm_turns: None,
+                conversations,
+                conversation_turns: None,
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
@@ -378,17 +378,20 @@ where
         }
     }
 
-    /// Enable durable DM admission and recovery before sharing this service.
-    pub fn with_dm_turns(mut self, store: Arc<dyn crate::domain::dm_turns::DmTurnStore>) -> Self {
+    /// Enable durable conversation admission and recovery before sharing this service.
+    pub fn with_conversation_turns(
+        mut self,
+        store: Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>,
+    ) -> Self {
         Arc::get_mut(&mut self.inner)
             .expect("configure journal before cloning the harness")
-            .dm_turns = Some(store);
+            .conversation_turns = Some(store);
         self
     }
 
-    /// Save a DM command before acknowledging its broker event. Returns its
+    /// Save a conversation message before acknowledging its broker event. Returns its
     /// original segment and payload when the source message was already seen.
-    pub async fn admit_direct_message(
+    pub async fn admit_conversation_message(
         &self,
         session: AgentSessionId,
         command: OpenSession,
@@ -397,20 +400,20 @@ where
         if origin.reply_placement != crate::domain::model::ReplyPlacement::Timeline {
             return Err(AgentSessionError::Forbidden.into());
         }
-        if let Some(policy) = &self.inner.direct_messages
+        if let Some(policy) = &self.inner.conversations
             && !policy
                 .validate_binding(session, command.bot_id, Some(command.origin.actor()))
                 .await?
         {
             return Err(AgentSessionError::Forbidden.into());
         }
-        let Some(store) = &self.inner.dm_turns else {
+        let Some(store) = &self.inner.conversation_turns else {
             return Ok((session, command));
         };
         let messages::domain::models::MessageParent::Channel(channel) = origin.parent else {
             return Err(AgentSessionError::Forbidden.into());
         };
-        if let Some(record) = store.get(origin.message_id).await? {
+        if let Some(record) = store.get(origin.message_id, command.bot_id).await? {
             if record.channel_id != channel {
                 return Err(AgentSessionError::Forbidden.into());
             }
@@ -420,7 +423,7 @@ where
         // fresh. Serialize first admission with reset and select the current
         // segment again; replays above always retain their original identity.
         for _ in 0..3 {
-            let current = match &self.inner.direct_messages {
+            let current = match &self.inner.conversations {
                 Some(policy) => policy.current_context(session).await?,
                 None => session,
             };
@@ -430,7 +433,7 @@ where
                 )
                 .into());
             };
-            if let Some(policy) = &self.inner.direct_messages
+            if let Some(policy) = &self.inner.conversations
                 && policy.current_context(session).await? != current
             {
                 continue;
@@ -446,8 +449,8 @@ where
 
     /// Reconcile journaled work after process loss. Only undispatched prompts
     /// may run automatically; ambiguous attempts are marked interrupted.
-    pub async fn recover_direct_messages(&self) -> Result<()> {
-        let Some(store) = &self.inner.dm_turns else {
+    pub async fn recover_conversations(&self) -> Result<()> {
+        let Some(store) = &self.inner.conversation_turns else {
             return Ok(());
         };
         for record in store.running(100).await? {
@@ -459,11 +462,11 @@ where
                 store
                     .finish(
                         record.action_id,
-                        crate::domain::dm_turns::DmTurnState::Interrupted,
+                        crate::domain::conversation_turns::ConversationTurnState::Interrupted,
                         ReplyOutcome::Failed,
                     )
                     .await?;
-                tracing::warn!(session_id = %record.session_id, action_id = %record.action_id, "DM turn interrupted; explicit retry required");
+                tracing::warn!(session_id = %record.session_id, action_id = %record.action_id, "conversation turn interrupted; explicit retry required");
             }
         }
         for record in store.pending_replies(100).await? {
@@ -484,7 +487,7 @@ where
             .map(|record| {
                 self.execute(
                     record.session_id,
-                    HarnessCommand::DirectMessage(record.command),
+                    HarnessCommand::ConversationMessage(record.command),
                 )
             })
             .collect();
@@ -492,7 +495,7 @@ where
             if let Err(error) = result {
                 tracing::warn!(
                     ?error,
-                    "durable DM recovery could not dispatch a queued prompt"
+                    "durable conversation recovery could not dispatch a queued prompt"
                 );
             }
         }
