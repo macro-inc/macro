@@ -180,10 +180,14 @@ where
         } else {
             Vec::new()
         };
+        // CRM records are team-scoped: Soup skips them without the viewer's team.
         let needs_team = entities.iter().any(|entity| {
             matches!(
                 entity.entity_type,
-                EntityType::ForeignEntity | EntityType::AgentSession
+                EntityType::ForeignEntity
+                    | EntityType::AgentSession
+                    | EntityType::CrmCompany
+                    | EntityType::CrmContact
             )
         });
         let team = match (&self.team_reader, needs_team) {
