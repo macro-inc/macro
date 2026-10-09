@@ -1,6 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
+import {
+  navigateToSidebarView,
+  sidebarContent,
+} from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import { Dropdown } from '@ui';
@@ -41,6 +44,8 @@ export function MoreMenu(props: MoreMenuProps) {
   const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
+  const preloadItem = (item: SidebarNextNavItem) =>
+    layout.preloadContent(sidebarContent(item.id, item.params));
   const hiddenItems = () => moreMenuItems(props.gates);
 
   return (
@@ -65,6 +70,8 @@ export function MoreMenu(props: MoreMenuProps) {
                 {(item) => (
                   <Dropdown.Item
                     class="gap-2"
+                    onMouseEnter={() => preloadItem(item)}
+                    onFocus={() => preloadItem(item)}
                     onSelect={() =>
                       navigateToItem(item, layout.openWithSplit, analytics)
                     }

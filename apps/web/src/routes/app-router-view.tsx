@@ -21,7 +21,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { lazy, onMount } from 'solid-js';
+import { lazy, onCleanup } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
@@ -102,8 +102,8 @@ const { Router, Route } = SplitRouter;
 
 /**
  * Every view except Home (the default landing) loads as its own chunk. The
- * split router warms a route's chunks while it navigates, and
- * `prefetchRouteViews` fetches them once the first screen has settled.
+ * split router warms a route's chunks while it navigates, and the app's route
+ * (`warmRouteViews`) fetches the likely-next ones once the first screen settles.
  */
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
@@ -290,29 +290,61 @@ const LIKELY_NEXT_VIEWS = [
   CalendarRouteView,
 ];
 
-/** Warms the likely-next view chunks one at a time, without competing with startup work. */
-function prefetchRouteViews(): void {
-  const idle = (run: () => void) =>
-    'requestIdleCallback' in window
-      ? window.requestIdleCallback(run, { timeout: 5000 })
-      : setTimeout(run, 1000);
-  const queue = [...LIKELY_NEXT_VIEWS];
+type PreloadableView = { preload: () => Promise<unknown> };
+type NetworkInformation = { saveData?: boolean };
+
+/**
+ * Warms the likely-next view chunks one at a time while the app is open,
+ * leaving startup and hidden tabs alone and skipping Save-Data connections.
+ */
+function warmRouteViews(views: readonly PreloadableView[]): void {
+  const connection = (
+    navigator as Navigator & { connection?: NetworkInformation }
+  ).connection;
+  if (connection?.saveData) return;
+
+  const queue = [...views];
+  let disposed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
   const next = () => {
-    const view = queue.shift();
+    const view = disposed ? undefined : queue.shift();
     if (!view) return;
-    view
+    void view
       .preload()
       .catch(() => {})
-      .finally(() => idle(next));
+      .finally(schedule);
   };
+  function schedule() {
+    if (disposed || queue.length === 0) return;
+    if (document.visibilityState !== 'visible') {
+      document.addEventListener('visibilitychange', schedule, { once: true });
+      return;
+    }
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(next, { timeout: 5000 });
+    } else {
+      timer = setTimeout(next, 1000);
+    }
+  }
+
   // Leave the first seconds to the landing view's own data and chunks.
-  setTimeout(() => idle(next), 2500);
+  timer = setTimeout(schedule, 2500);
+  onCleanup(() => {
+    disposed = true;
+    clearTimeout(timer);
+    document.removeEventListener('visibilitychange', schedule);
+  });
+}
+
+/** The app's route: its shell, plus warming the views a session opens next. */
+function AppRoute() {
+  warmRouteViews(LIKELY_NEXT_VIEWS);
+  return <AppShell />;
 }
 
 /** The app's router: the first pane's top-level route renders here, and app URLs render the split layout. */
 export function AppRouterView() {
-  onMount(prefetchRouteViews);
-
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
   ));
@@ -393,7 +425,7 @@ export function AppRouterView() {
         />
       </Route>
 
-      <Route definition={appRoute} component={AppShell}>
+      <Route definition={appRoute} component={AppRoute}>
         <Route definition={driveSplitRoute} component={DriveRouteView}>
           <Route definition={driveFolderRoute}>
             <Route

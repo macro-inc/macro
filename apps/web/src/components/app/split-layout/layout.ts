@@ -17,6 +17,11 @@ import type {
 export function useSplitLayout() {
   const splitPanelContext = useContext(SplitPanelContext);
 
+  /** Warms a destination on navigation intent (hover, focus) without opening it. */
+  function preloadContent(content: SplitContent) {
+    globalSplitManager()?.preloadContent(content);
+  }
+
   function openWithSplit(
     content: SplitContent,
     options?: OpenWithSplitOptions
@@ -138,6 +143,7 @@ export function useSplitLayout() {
 
   return {
     openWithSplit,
+    preloadContent,
     getSplitCount,
     replaceOrInsertSplit,
     replaceSplit,
