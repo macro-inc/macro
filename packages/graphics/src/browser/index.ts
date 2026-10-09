@@ -39,6 +39,7 @@ export type GraphicsHover = Readonly<{
 }>;
 export type GraphicsInputOptions = {
   tool?: () => 'pan' | DrawingKind | 'select';
+  /** False permits navigation and selection, but never document changes. */
   editing?: boolean;
   suspended?: () => boolean;
   /** Host-owned controls may keep their pointer events without starting a gesture. */
@@ -189,7 +190,9 @@ export function attachCameraControls(
       options.suspended?.() ||
       options.ignoreTarget?.(event.target) ||
       (event.target instanceof Element &&
-        event.target.closest('[contenteditable="true"]'))
+        event.target
+          .closest('[contenteditable]')
+          ?.getAttribute('contenteditable') === 'true')
     )
       return;
     if (
@@ -210,7 +213,11 @@ export function attachCameraControls(
       (event.button === 1 ||
         (event.button === 0 && (space || options.tool?.() === 'pan')));
     const tool = options.tool?.();
-    const drawing = event.button === 0 && !pan && isShapeKind(tool);
+    const drawing =
+      options.editing !== false &&
+      event.button === 0 &&
+      !pan &&
+      isShapeKind(tool);
     const selecting =
       event.button === 0 && !pan && options.tool?.() === 'select';
     let transforming = false;
@@ -255,7 +262,15 @@ export function attachCameraControls(
         (!deep && frame && selectionContainsPoint(frame, point)
           ? editor.getSession().selectedIds[0]
           : undefined);
-      if (shiftTarget && event.shiftKey && !transformHandle) {
+      if (options.editing === false) {
+        if (id) {
+          if (event.shiftKey) editor.toggleSelection(id);
+          else editor.select(id);
+          event.preventDefault();
+          return;
+        }
+        boxing = editor.beginBoxSelection(point, event.shiftKey);
+      } else if (shiftTarget && event.shiftKey && !transformHandle) {
         // Defer Shift-click toggling until release so Shift-drag can move instead.
         pendingSelection = {
           id: shiftTarget,
