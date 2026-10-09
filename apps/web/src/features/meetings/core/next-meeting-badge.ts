@@ -1,3 +1,4 @@
+import { multiDayTimedDisplayRange } from '../../calendar/utils/calendar-date';
 import type { UpcomingCalendarEvent } from './upcoming-calendar-events';
 
 /** How far ahead of a meeting the badge starts counting down. */
@@ -10,7 +11,7 @@ export type NextMeetingBadge =
 /**
  * The sidebar badge for the current moment: `Now` while a timed event is in
  * progress, else the minutes until the next timed event when it is under an
- * hour away. All-day events are ignored — they never mark a meeting.
+ * hour away. Ignore all-day events and timed spans shown in the all-day row.
  */
 export function nextMeetingBadge(
   events: readonly UpcomingCalendarEvent[],
@@ -25,6 +26,7 @@ export function nextMeetingBadge(
     if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
       continue;
     }
+    if (multiDayTimedDisplayRange(new Date(start), new Date(end))) continue;
     if (start <= nowMs && nowMs < end) return { kind: 'now', label: 'Now' };
     if (start > nowMs) soonest = Math.min(soonest, start);
   }

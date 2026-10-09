@@ -1544,6 +1544,12 @@ providers open their own join links. A failed upcoming-list request has a `Retry
 action and does not prevent creating a call.
 Working locations (such as `Office` or `Home`) stay on the calendar grid but are
 excluded from Upcoming events, including both all-day and hourly locations.
+The Calendar rail badge shows `Now` during a timed event or rounded-up minutes
+until the next event less than an hour away. All-day events and timed spans
+displayed in the all-day row do not drive this badge. Verify a multi-day trip
+alone leaves it empty, and a trip plus a meeting in 12 minutes shows `12m`, then
+`Now` at the meeting's start and clears at its end. The trip remains visible
+in the calendar and Upcoming events.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
