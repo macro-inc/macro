@@ -1,4 +1,5 @@
 import { Gantt } from '@app/components/gantt/gantt';
+import { ganttGroupPlacement } from '@app/components/gantt/gantt-group-placement';
 import {
   resolveEntityActionViewContext,
   toSingleEntityActionListState,
@@ -7,9 +8,13 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { SoupEntityContextMenu } from '@app/features/soup';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { TaskEntityWithProperties } from '@entity';
+import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
+import { getTaskStatusOptionId, type TaskEntityWithProperties } from '@entity';
+import { PropertyValueIcon } from '@property/component/propertyValue';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import type { Accessor, JSX } from 'solid-js';
+import { TASK_SORT_DEFINITIONS } from './constants';
 import { taskGanttDates } from './queries/task-gantt';
 import { createTaskGanttQueries } from './queries/task-gantt-queries';
 import { useTasksView } from './tasks-view-context';
@@ -29,7 +34,12 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
     });
   const onCreate = () =>
     context.createTask ?? (!context.scopeKey ? createTask : undefined);
-  const queries = createTaskGanttQueries(source.items);
+  const queries = createTaskGanttQueries({
+    rows: source.boardRows ?? source.items,
+    grouping: () => state.groupBy,
+    userId: useUserId(),
+    projectsEnabled: context.projectsEnabled,
+  });
   const viewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -74,7 +84,11 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
               : undefined
           }
         >
-          {task().name}
+          <PropertyValueIcon
+            optionId={getTaskStatusOptionId(task()) ?? ''}
+            class="size-3.5 shrink-0"
+          />
+          <span class="min-w-0 truncate">{task().name}</span>
         </Gantt.Bar>
       </SoupEntityContextMenu>
     );
@@ -85,6 +99,46 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
       ref={props.ref}
       source={source}
       groupBy={state.groupBy}
+      groupMoves={{
+        scope: JSON.stringify([
+          context.scopeKey,
+          state.tab,
+          state.groupBy,
+          state.search,
+          state.facets,
+        ]),
+        canDrag: queries.canDrag,
+        canDrop: queries.canMove,
+        getPlacement: (move) =>
+          ganttGroupPlacement({
+            items: source.items(),
+            move,
+            getEntity: (row) =>
+              row.kind === 'entity' ? row.entity : undefined,
+            getGroup: (row) =>
+              row.kind === 'section-header' ? undefined : row.groupId,
+            compare: (left, right) => {
+              for (const selection of state.sort) {
+                const definition = TASK_SORT_DEFINITIONS.find(
+                  (value) => value.id === selection.id
+                );
+                const result =
+                  (definition?.compare(left, right) ?? 0) *
+                  (selection.reversed ? -1 : 1);
+                if (result) return result;
+              }
+              return 0;
+            },
+          }),
+        onMove: async (move) => {
+          await queries.moveGroup(move);
+          try {
+            await source.refresh?.();
+          } catch {
+            toast.failure('Task moved, but the timeline could not refresh');
+          }
+        },
+      }}
       createAssigneeName={(id) => usePropertyUserDisplay(id).name}
       isGroupExpanded={(id) => !state.collapsedGroupIds.includes(id)}
       onToggleGroup={(id) =>

@@ -151,8 +151,23 @@ headers and clear of the item panels. There is no resize snapping indicator or
 settling animation. Release saves the calendar date.
 Escape cancels the preview; failed saves restore the previous date.
 Arrow keys on the resize handle change one day; Shift changes one week.
-Created at stays fixed: whole-bar date dragging and start-date resizing are
-unavailable.
+Created at stays fixed: moving a bar does not shift its dates, and start-date
+resizing is unavailable.
+
+When grouped by Status, Priority, Assignee, or Project, drag a task's list item or
+bar into another visible group to change that property. Projects support Status,
+Priority, and Assignee moves. Move at least 10px to start a drag; ordinary clicks
+still open items. The drag overlay snapshots the visible item or bar; the original
+placement dims, and a dashed ghost reserves the destination's sorted row. Drag
+sources stay mounted during virtual scrolling and immutable row updates.
+If the item already belongs to the destination assignee group, its existing row
+becomes the ghost instead of creating a duplicate. Drop on a group's header
+(including collapsed groups) or its rows. The active sort determines the resulting order; same-group reordering is
+not supported. Assignee moves replace only the source assignee and preserve other
+assignments; dropping in Unassigned clears assignments. Creation-date grouping
+and ungrouped views do not accept group moves. Permission and destination checks
+run again on release. Escape cancels, failed saves show an error, and neither
+Created at nor Due date changes during a group move. Active filters still apply.
 
 Drag horizontally across empty calendar space to open the task composer with
 Due date prefilled and visible. Past dates and permission-disabled creation remain
@@ -737,5 +752,15 @@ catch up after switching tabs, including when the cache-owning tab is hidden.
 
 ## Messages as tasks
 
+In any channel composer, toggle the `Task` switch before sending to create a task from the
+message.
 
-[Showing lines 1-754 of 767 (50.0KB limit). Use offset=755 to continue.]
+### Nested sidebar tags
+
+Tag names containing `/` render with one child level (for example, `Work/Urgent`).
+Deeper paths remain in the child label: `Work/Customers/Acme` appears as
+`Customers/Acme` under `Work`, alongside any actual `Customers` tag.
+Use the caret to expand or collapse a branch. A folder-only parent expands without
+filtering; clicking an actual tag selects only that tag, including when it has
+children. Personal and team paths stay separate. Ancestors of restored selected
+tags start expanded. Filter-menu options continue to show full tag names.

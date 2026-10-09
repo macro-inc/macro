@@ -13,7 +13,7 @@ import { cn, Layer, Surface } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import type { TaskGroupBy } from '../../types';
 
-const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
+export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
     'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:

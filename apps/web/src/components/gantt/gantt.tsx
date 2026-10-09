@@ -1,9 +1,4 @@
 import { Key } from '@solid-primitives/keyed';
-import {
-  createVirtualizer,
-  defaultRangeExtractor,
-  type Range,
-} from '@tanstack/solid-virtual';
 import { Button, cn, Scroll } from '@ui';
 import {
   batch,
@@ -11,13 +6,11 @@ import {
   createMemo,
   createSignal,
   For,
-  type JSX,
   on,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
-  splitProps,
   untrack,
 } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -44,19 +37,25 @@ import {
   normalizeGanttRange,
   toGanttDay,
 } from './gantt-date';
+import { GanttDropPreview } from './gantt-drop-preview';
+import {
+  GanttDragItem,
+  GanttGroupDrag,
+  GanttGroupDrop,
+} from './gantt-group-drag';
 import {
   extendGanttRange,
   type GanttGuide,
   snapGanttGuide,
   zoomedGanttPixels,
 } from './gantt-interaction';
+import { GanttRow, GanttRows } from './gantt-rows';
 import { GanttSettings } from './gantt-settings';
 import {
   GanttControls,
   GanttGroupHeader,
   GanttLabel,
   GanttPagination,
-  GanttSidebarPanelRow,
   GanttSidebarToggle,
 } from './gantt-sidebar';
 import { GanttZoomControls } from './gantt-zoom-controls';
@@ -735,15 +734,6 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
   );
 }
 
-type RowsProps<T> = {
-  items: readonly T[];
-  getKey: (item: T) => string | number;
-  /** Consecutive sidebar rows with the same key form one visual panel. */
-  getPanelKey?: (item: T) => string | number | undefined;
-  virtualize?: boolean;
-  children: (item: T) => JSX.Element;
-};
-
 function GridLines() {
   const gantt = useGantt();
   const ticks = createMemo(() =>
@@ -767,135 +757,6 @@ function GridLines() {
         )}
       </For>
     </GanttCalendarScene>
-  );
-}
-
-function VirtualRows<T>(props: RowsProps<T>) {
-  const gantt = useGantt();
-  const [focusedKey, setFocusedKey] = createSignal<string | number>();
-  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    get count() {
-      return props.items.length;
-    },
-    get getItemKey() {
-      const keys = props.items.map(props.getKey);
-      return (index: number) => keys[index];
-    },
-    getScrollElement: () => gantt.viewport() ?? null,
-    estimateSize: () => gantt.rowHeight(),
-    scrollMargin: HEADER_HEIGHT,
-    overscan: 8,
-    get rangeExtractor() {
-      const key = focusedKey();
-      const pinned =
-        key === undefined
-          ? -1
-          : props.items.findIndex((item) => props.getKey(item) === key);
-      return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
-        return pinned < 0 || indexes.includes(pinned)
-          ? indexes
-          : [...indexes, pinned].sort((a, b) => a - b);
-      };
-    },
-  });
-  createEffect(
-    on(gantt.rowHeight, () => virtualizer.measure(), { defer: true })
-  );
-  return (
-    <div
-      class="relative"
-      style={{
-        height: `${virtualizer.getTotalSize()}px`,
-        width: `${gantt.width()}px`,
-      }}
-      onFocusIn={(event) => {
-        const row = event.target.closest<HTMLElement>('[data-gantt-row-index]');
-        const index = Number(row?.dataset.ganttRowIndex);
-        const item = props.items[index];
-        if (item !== undefined) setFocusedKey(props.getKey(item));
-      }}
-      onFocusOut={(event) => {
-        if (
-          !(event.relatedTarget instanceof Node) ||
-          !event.currentTarget.contains(event.relatedTarget)
-        )
-          setFocusedKey(undefined);
-      }}
-    >
-      <Key each={virtualizer.getVirtualItems()} by="key">
-        {(virtualRow) => (
-          <div
-            data-gantt-row-index={virtualRow().index}
-            class="absolute left-0"
-            style={{ top: `${virtualRow().start - HEADER_HEIGHT}px` }}
-          >
-            <GanttSidebarPanelRow
-              items={props.items}
-              index={virtualRow().index}
-              getPanelKey={props.getPanelKey}
-            >
-              <For
-                each={props.items.slice(
-                  virtualRow().index,
-                  virtualRow().index + 1
-                )}
-              >
-                {(item) => props.children(item)}
-              </For>
-            </GanttSidebarPanelRow>
-          </div>
-        )}
-      </Key>
-    </div>
-  );
-}
-
-/** Only this slot chooses virtualization; consumers keep ownership of their data and rows. */
-export function GanttRows<T>(props: RowsProps<T>) {
-  return (
-    <Show
-      when={props.virtualize}
-      fallback={
-        <div class="relative">
-          {/* Keep occurrence keys, but refresh the renderer when an immutable item is replaced. */}
-          <Key each={props.items} by={props.getKey}>
-            {(item, index) => (
-              <GanttSidebarPanelRow
-                items={props.items}
-                index={index()}
-                getPanelKey={props.getPanelKey}
-              >
-                <For each={[item()]}>
-                  {(current) => props.children(current)}
-                </For>
-              </GanttSidebarPanelRow>
-            )}
-          </Key>
-        </div>
-      }
-    >
-      <VirtualRows {...props} />
-    </Show>
-  );
-}
-
-export function GanttRow(
-  props: Omit<JSX.HTMLAttributes<HTMLDivElement>, 'style'>
-) {
-  const gantt = useGantt();
-  const [local, rest] = splitProps(props, ['children', 'class']);
-  return (
-    <div
-      {...rest}
-      class={cn(
-        'relative border-b border-edge-muted/60 text-sm text-ink',
-        local.class
-      )}
-      style={{ width: `${gantt.width()}px`, height: `${gantt.rowHeight()}px` }}
-    >
-      {local.children}
-    </div>
   );
 }
 
@@ -975,6 +836,10 @@ export const Gantt = {
   Header: GanttHeader,
   Rows: GanttRows,
   Row: GanttRow,
+  GroupDrag: GanttGroupDrag,
+  DragItem: GanttDragItem,
+  GroupDrop: GanttGroupDrop,
+  DropPreview: GanttDropPreview,
   GroupHeader: GanttGroupHeader,
   Label: GanttLabel,
   DateHint: GanttDateHint,

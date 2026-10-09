@@ -1,4 +1,6 @@
 import { Gantt } from '@app/components/gantt/gantt';
+import type { GanttGroupMove } from '@app/components/gantt/gantt-group-drag';
+import { ganttGroupPlacement } from '@app/components/gantt/gantt-group-placement';
 import { useListInteractions } from '@app/components/list';
 import { ListViewport } from '@app/components/list/ListViewport';
 import {
@@ -20,6 +22,7 @@ import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/T
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { compareDateDesc } from '@core/util/date';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -53,6 +56,10 @@ import type {
   ProjectListActivation,
   ProjectListEntity,
 } from '../primitives/project-collection';
+import {
+  projectGroupMoveValue,
+  projectGroupPropertyId,
+} from '../queries/project-group-move';
 import { projectTimelineDates } from '../queries/project-timeline';
 import { ProjectsGantt } from './projects-gantt';
 
@@ -86,6 +93,14 @@ export function ProjectsCollection(props: {
     definitions
       .properties()
       .find((property) => property.propertyDefinitionId === id);
+  const statusOptionId = (entity: ProjectListEntity) => {
+    const status = entity.properties.find(
+      (property) => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+    );
+    return status?.valueType === 'SELECT_STRING'
+      ? status.value?.[0]
+      : undefined;
+  };
   const filters = (): ListFilterGroup<FilterGroup, string>[] => [
     ...(['status', 'priority'] as const).map((id) => ({
       id,
@@ -205,6 +220,56 @@ export function ProjectsCollection(props: {
       toast.failure('Could not update due date');
       throw error;
     }
+  };
+  const groupProperty = () => {
+    const id = projectGroupPropertyId(collection.groupBy());
+    return id ? definition(id) : undefined;
+  };
+  const canDragProject = (id: string) => {
+    const state = collection.state();
+    const project =
+      state.kind === 'ready'
+        ? state.rows.find((row) => row.project.id === id)?.project
+        : undefined;
+    const property = groupProperty();
+    return (
+      !!project &&
+      canEditProject(project) &&
+      !!property &&
+      !property.isMetadata &&
+      !commands.pending() &&
+      property.valueType ===
+        (collection.groupBy() === 'assignee' ? 'ENTITY' : 'SELECT_STRING')
+    );
+  };
+  const resolveGroupMove = (move: GanttGroupMove) => {
+    const current = collection.state();
+    const entity =
+      current.kind === 'ready'
+        ? current.rows.find((row) => row.project.id === move.id)
+        : undefined;
+    const property = groupProperty();
+    if (!entity || !property || !canDragProject(move.id)) return;
+    if (!collection.groups().some((group) => group.id === move.toGroup)) return;
+    if (
+      collection.groupBy() !== 'assignee' &&
+      move.toGroup &&
+      !property.options?.some((option) => option.id === move.toGroup)
+    )
+      return;
+    if (!move.toGroup && property.isRequired) return;
+    const apiValues = projectGroupMoveValue(
+      entity.properties,
+      collection.groupBy(),
+      move
+    );
+    return apiValues ? { property, apiValues } : undefined;
+  };
+  const moveProjectGroup = async (move: GanttGroupMove) => {
+    const update = resolveGroupMove(move);
+    if (!update)
+      throw new Error('Project or destination is no longer editable');
+    await commands.saveProperty(move.id, update.property, update.apiValues);
   };
   const createOnTimeline = (date: Date) => {
     const property = definition(SYSTEM_PROPERTY_IDS.DUE_DATE);
@@ -684,6 +749,38 @@ export function ProjectsCollection(props: {
         >
           <ProjectsGantt
             collection={collection}
+            groupMoves={{
+              scope: JSON.stringify([
+                props.scopeId,
+                collection.groupBy(),
+                collection.search(),
+                collection.status(),
+                collection.priority(),
+                collection.mine(),
+              ]),
+              canDrag: canDragProject,
+              canDrop: (move) => !!resolveGroupMove(move),
+              getPlacement: (move) =>
+                ganttGroupPlacement({
+                  items: collection.items(),
+                  move,
+                  getEntity: (row) =>
+                    row.kind === 'entity' ? row.entity : undefined,
+                  getGroup: (row) =>
+                    row.kind === 'section-header' ? undefined : row.groupId,
+                  compare: (left, right) => {
+                    const key =
+                      collection.sort() === 'created'
+                        ? 'createdAt'
+                        : 'updatedAt';
+                    return compareDateDesc(
+                      left.project[key],
+                      right.project[key]
+                    );
+                  },
+                }),
+              onMove: moveProjectGroup,
+            }}
             onOpen={props.onOpen}
             createAssigneeName={props.createAssigneeName}
             onCreate={
@@ -717,7 +814,13 @@ export function ProjectsCollection(props: {
                       })
                     }
                   >
-                    {entity().project.name}
+                    <PropertyValueIcon
+                      optionId={statusOptionId(entity()) ?? ''}
+                      class="size-3.5 shrink-0"
+                    />
+                    <span class="min-w-0 truncate">
+                      {entity().project.name}
+                    </span>
                   </Gantt.Bar>
                 </Gantt.Row>
               </ProjectMenu>
