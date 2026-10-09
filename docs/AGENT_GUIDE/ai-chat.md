@@ -78,10 +78,12 @@ without first focusing or expanding the message input. Tap an agent to use its
 default model, or its model arrow to choose a model; **Create agent** opens the
 roster. Desktop navigation remains unchanged.
 
-The mobile Home composer is an opaque, rounded input with the short “Message Macro
-AI” placeholder. Its collapsed height matches the New button, with the model
-selector and Send always visible. Tap the input to expand across the row, hiding
-the New button and giving the draft a full-width text area above the controls.
+The mobile Home composer is an opaque, rounded input using the same surface as
+the New button, including its glass treatment in dark mode. Send uses the same
+background even when disabled. The short placeholder reads “Message Macro AI”.
+Its collapsed height matches New, with the model selector and Send always
+visible. Tap the input to expand across the row, hiding New and giving the draft
+a full-width text area above the controls.
 Chat/Code moves below the text alongside attachment, microphone (when enabled),
 and model controls. Repository controls appear in Code mode. Tapping outside
 collapses the composer and restores New.

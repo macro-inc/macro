@@ -291,7 +291,7 @@ export function ChatComposer(props: {
           data-composer-expanded={
             (isTouchDevice() && !collapsed()) || undefined
           }
-          class="relative z-10 min-w-0 rounded-[32px] touch:min-h-[40px] touch:min-w-[40px] touch:bg-composer touch:text-composer-ink touch:shadow-menu touch:ring touch:ring-edge-muted transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
+          class="relative z-10 min-w-0 rounded-[32px] touch:island transition-[height] duration-200 ease-[cubic-bezier(0.77,0,0.175,1)] motion-reduce:transition-none"
           style={{
             height: height() === undefined ? undefined : `${height()}px`,
           }}
@@ -385,6 +385,7 @@ export function ChatComposer(props: {
                       fallback={
                         <SendButton
                           appearance="composer"
+                          class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
                           aria-label="Send"
                           title={props.blockedReason}
                           disabled={
@@ -401,6 +402,7 @@ export function ChatComposer(props: {
                         fallback={
                           <Button
                             variant="strong"
+                            class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
                             size="icon-composer"
                             label="Stop"
                             disabled={disabled()}
@@ -412,6 +414,7 @@ export function ChatComposer(props: {
                       >
                         <SendButton
                           appearance="composer"
+                          class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
                           intent="flush"
                           aria-label="Flush queued messages"
                           tooltip="Flush queued messages"
