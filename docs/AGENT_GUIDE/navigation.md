@@ -436,11 +436,22 @@ On desktop, the rail **Create** button, **C**, and the command menu’s **Create
 entry open the detailed launcher at standard dialog width. Selecting **Create**
 closes the command menu and hands focus to the launcher; individual creation
 commands remain searchable in the command menu. The left list starts with up to three **Recents** from
-actual launcher usage, followed by the remaining choices grouped by category.
-Recent items do not repeat in their categories. With no history, the list starts
+actual launcher usage, followed by all choices grouped by category.
+Categories appear in this order: **Docs** (Document, Snippet), **Organization**
+(Folder), **Design** (Canvas, Design, Photoshop file, Illustrator file), **Data**
+(Database, Spreadsheet, Form), **Comms** (Email, Message, Channel, Call), **Tasks**
+(Task, Project, Reminder), **AI** (Agent, Routine, Skill), and **Other** (Code and
+any uncategorized entries). Only available entries and nonempty categories appear.
+Recent items also remain in their categories. With no history, the list starts
 with categories. Hover or keyboard navigation updates the right detail panel;
 click a row or press Enter to start that creation flow. The detail panel is
 top-aligned, shares the list background, and is separated by a vertical divider.
+The shortcut below the description shows the sequence, such as **C then T** for
+Task, while direct shortcut mode is active.
+Its lower-right **Create [type]** button starts the selected creation flow and
+shows the Enter shortcut. Holding Shift adds an **In new split** indicator and
+changes the button shortcut to Shift+Enter; clicking while holding Shift uses
+the same new-split behavior where supported.
 
 The **Search mode** toggle (or **/**) switches between direct entity shortcuts
 shown beside each choice and the standard create search input. The preference
