@@ -11,10 +11,13 @@ const host = vi.hoisted(() => ({
   revalidate: vi.fn(async () => {}),
   createSource: vi.fn(),
   view: vi.fn(),
+  openSettings: vi.fn(),
+  requestConnect: vi.fn(),
   props: undefined as
     | {
         onCompleted(): Promise<void>;
         channelHref(id: string): string | undefined;
+        onConnect?: () => void;
       }
     | undefined,
 }));
@@ -23,6 +26,15 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableSlackArchiveImport: {},
+}));
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({ openSettings: host.openSettings }),
+}));
+vi.mock('@core/pipedream/flag', () => ({
+  usePipedreamMcpFlag: () => () => true,
+}));
+vi.mock('@core/pipedream/pendingConnect', () => ({
+  requestConnectApp: host.requestConnect,
 }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   holdAutomaticReload: vi.fn(),
@@ -82,6 +94,17 @@ afterEach(() => {
 });
 
 describe('Slack import production boundary', () => {
+  it('hands off to the existing Slack connector flow', async () => {
+    render(() => <SlackImport teamId="team" isAdmin />);
+    await screen.findByText('Mounted import');
+    host.props!.onConnect!();
+    expect(host.requestConnect).toHaveBeenCalledWith(
+      'slack',
+      'import-slack-channels'
+    );
+    expect(host.openSettings).toHaveBeenCalledWith('Connections');
+  });
+
   it.each([
     { isAdmin: false, enabled: true },
     { isAdmin: true, enabled: false },

@@ -6,11 +6,13 @@ import {
 } from '@core/pipedream/pendingConnect';
 import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { Button } from '@ui';
-import { createEffect, on, Show } from 'solid-js';
+import { createEffect, createSignal, on, Show, Suspense } from 'solid-js';
 import { SettingsPage } from '../primitives';
 import { ConnectedView } from './ConnectedView';
 import { DiscoverView } from './DiscoverView';
+import { capabilitiesFor } from './model';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
+import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import { ConnectionsViewProvider, useConnectionsView } from './view-state';
 
@@ -40,91 +42,132 @@ export function ConnectionsPage(props: { onOpenMacroMcp: () => void }) {
 function ConnectionsContent(props: { onOpenMacroMcp: () => void }) {
   const { model, ready, error, partialError, retry } = useConnectionsModel();
   const view = useConnectionsView();
-  // Agent replies can request a connection while this page is already mounted.
+  const [importSlackChannels, setImportSlackChannels] = createSignal(false);
+  // External entry points request a connector or the complete channel import flow.
   createEffect(
     on(pendingConnectApp, (requested) => {
       if (!requested) return;
       clearPendingConnectApp();
-      void connectPipedreamApp({ appSlug: requested })
-        .then((outcome) => {
-          if (outcome === 'unsupported')
-            toast.failure('Connectors are not available on this deployment');
-        })
-        .catch(() => toast.failure(`Failed to connect ${requested}`));
+      if (requested.intent === 'import-slack-channels') {
+        setImportSlackChannels(true);
+        return;
+      }
+      void connectRequestedApp(requested.appSlug);
     })
   );
+  async function connectRequestedApp(appSlug: string) {
+    try {
+      const outcome = await connectPipedreamApp({ appSlug });
+      if (outcome === 'unsupported')
+        toast.failure('Connectors are not available on this deployment');
+    } catch {
+      toast.failure(`Failed to connect ${appSlug}`);
+    }
+  }
+  const slackConnected = () =>
+    capabilitiesFor(model(), 'slack').some(
+      (capability) =>
+        capability.mechanism === 'pipedream' &&
+        capability.status === 'connected'
+    );
   const description =
     "Connect the tools your team already uses so Macro's agent can work in them.";
 
   return (
     <Show
-      when={!error()}
+      when={importSlackChannels()}
       fallback={
-        <SettingsPage
-          title="Agent connections"
-          description={description}
-          onBack={view.provider() ? view.closeProvider : undefined}
-          backLabel="Connections"
-        >
-          <div class="flex items-center gap-3 text-sm text-ink-muted">
-            Couldn't load Connections.
-            <Button variant="outline" size="sm" depth={3} onClick={retry}>
-              Retry
-            </Button>
-          </div>
-        </SettingsPage>
-      }
-    >
-      <Show
-        when={ready() && view.provider()}
-        keyed
-        fallback={
-          <SettingsPage
-            title="Agent connections"
-            description={description}
-            signpost={<MacroMcpSignpost onOpen={props.onOpenMacroMcp} />}
-          >
-            <TabsInset
-              fullWidth
-              list={[
-                { value: 'connected', label: 'Connected' },
-                { value: 'discover', label: 'Discover' },
-              ]}
-              value={view.mode()}
-              onChange={(value) =>
-                value === 'discover' ? view.showDiscover() : view.showOverview()
-              }
-            />
-            <Show when={partialError()}>
-              <div
-                role="status"
-                class="flex items-center gap-3 text-sm text-ink-muted"
-              >
-                Some connections couldn't be loaded.
+        <Show
+          when={!error()}
+          fallback={
+            <SettingsPage
+              title="Agent connections"
+              description={description}
+              onBack={view.provider() ? view.closeProvider : undefined}
+              backLabel="Connections"
+            >
+              <div class="flex items-center gap-3 text-sm text-ink-muted">
+                Couldn't load Connections.
                 <Button variant="outline" size="sm" depth={3} onClick={retry}>
                   Retry
                 </Button>
               </div>
-            </Show>
-            <Show
-              when={ready()}
-              fallback={
-                <p class="text-sm text-ink-muted">Loading Connections…</p>
-              }
-            >
-              <Show
-                when={view.mode() === 'discover'}
-                fallback={<ConnectedView model={model()} />}
+            </SettingsPage>
+          }
+        >
+          <Show
+            when={ready() && view.provider()}
+            keyed
+            fallback={
+              <SettingsPage
+                title="Agent connections"
+                description={description}
+                signpost={<MacroMcpSignpost onOpen={props.onOpenMacroMcp} />}
               >
-                <DiscoverView model={model()} />
-              </Show>
-            </Show>
-          </SettingsPage>
+                <TabsInset
+                  fullWidth
+                  list={[
+                    { value: 'connected', label: 'Connected' },
+                    { value: 'discover', label: 'Discover' },
+                  ]}
+                  value={view.mode()}
+                  onChange={(value) =>
+                    value === 'discover'
+                      ? view.showDiscover()
+                      : view.showOverview()
+                  }
+                />
+                <Show when={partialError()}>
+                  <div
+                    role="status"
+                    class="flex items-center gap-3 text-sm text-ink-muted"
+                  >
+                    Some connections couldn't be loaded.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      depth={3}
+                      onClick={retry}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </Show>
+                <Show
+                  when={ready()}
+                  fallback={
+                    <p class="text-sm text-ink-muted">Loading Connections…</p>
+                  }
+                >
+                  <Show
+                    when={view.mode() === 'discover'}
+                    fallback={<ConnectedView model={model()} />}
+                  >
+                    <DiscoverView model={model()} />
+                  </Show>
+                </Show>
+              </SettingsPage>
+            }
+          >
+            {(provider) => (
+              <PipedreamAiProvider model={model()} provider={provider} />
+            )}
+          </Show>
+        </Show>
+      }
+    >
+      <Show
+        when={ready()}
+        fallback={
+          <p class="text-sm text-ink-muted">Loading Slack connection…</p>
         }
       >
-        {(provider) => (
-          <PipedreamAiProvider model={model()} provider={provider} />
-        )}
+        <Suspense>
+          <SlackChannelImportFlow
+            connected={slackConnected()}
+            onBack={() => setImportSlackChannels(false)}
+          />
+        </Suspense>
       </Show>
     </Show>
   );

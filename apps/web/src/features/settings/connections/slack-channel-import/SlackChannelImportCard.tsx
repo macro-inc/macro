@@ -15,6 +15,7 @@ import {
   createSignal,
   For,
   type JSX,
+  on,
   Show,
 } from 'solid-js';
 import { SettingsCard, SettingsSection } from '../../primitives';
@@ -98,7 +99,9 @@ function ChannelRow(props: ChannelRowProps): JSX.Element {
   );
 }
 
-export function SlackChannelImportCard(): JSX.Element {
+export function SlackChannelImportCard(
+  props: { autoDiscover?: boolean } = {}
+): JSX.Element {
   const userId = useUserId();
   const query = useImportQuery();
   const discover = useDiscoverMutation();
@@ -146,6 +149,21 @@ export function SlackChannelImportCard(): JSX.Element {
       onError: () => toast.failure('Failed to find Slack channels'),
     });
   }
+
+  let discoveryRequested = false;
+  createEffect(
+    on(
+      () =>
+        Boolean(
+          props.autoDiscover && query.isSuccess && !query.isPlaceholderData
+        ),
+      (ready) => {
+        if (!ready || discoveryRequested) return;
+        discoveryRequested = true;
+        if (!discovering()) findChannels();
+      }
+    )
+  );
 
   function startImport(): void {
     const ids = importIds();

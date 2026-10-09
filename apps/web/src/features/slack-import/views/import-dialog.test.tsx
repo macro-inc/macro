@@ -40,7 +40,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup() {
+function setup(customTrigger = false, onConnect?: () => void) {
   const fake = fakeImportSources();
   const [page, setPage] = createSignal<ImportPage>({
     jobs: [],
@@ -68,6 +68,19 @@ function setup() {
       >
         <ImportDialog
           teamId="team"
+          onConnect={onConnect}
+          trigger={
+            customTrigger
+              ? (onOpen) => (
+                  <button
+                    type="button"
+                    onClick={(event) => onOpen(event.currentTarget)}
+                  >
+                    Import from Slack
+                  </button>
+                )
+              : undefined
+          }
           onCompleted={completed}
           channelHref={(id) =>
             id === 'accessible' ? `/app/channel/${id}` : undefined
@@ -114,6 +127,73 @@ function setup() {
 }
 
 describe('Slack import dialog', () => {
+  it('explains both methods and opens the connector without starting an archive import', async () => {
+    const onConnect = vi.fn();
+    const view = setup(false, onConnect);
+    expect(screen.queryByLabelText('Slack export ZIP')).toBeNull();
+    expect(
+      screen.getByText(
+        'Copy public channels and teammates. No Slack admin role needed.'
+      )
+    ).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Import channels without history' })
+    );
+    expect(onConnect).toHaveBeenCalledOnce();
+    expect(view.createArchive).not.toHaveBeenCalled();
+    expect(view.fake.commands.create).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(view.trigger));
+  });
+
+  it('reveals upload details only after choosing history and can return to the methods', async () => {
+    const view = setup(false, vi.fn());
+    const method = screen.getByRole('button', { name: 'Import with history' });
+    await waitFor(() => expect(document.activeElement).toBe(method));
+    fireEvent.click(method);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByLabelText('Slack export ZIP')
+      )
+    );
+    expect(
+      screen.getByText(
+        /A Slack workspace owner or admin must provide the export/
+      )
+    ).toBeTruthy();
+    const help = screen.getByRole('link', { name: 'How to export from Slack' });
+    expect(help.getAttribute('href')).toBe(
+      'https://slack.com/help/articles/201658943-Export-your-workspace-data'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Import channels without history' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Import with history' })
+      )
+    );
+    expect(view.createArchive).not.toHaveBeenCalled();
+  });
+
+  it('opens from a custom sidebar trigger and restores focus when closed', async () => {
+    const view = setup(true);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByLabelText('Slack export ZIP')
+      )
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Close$/ }));
+    await waitFor(() => expect(document.activeElement).toBe(view.trigger));
+    fireEvent.click(view.trigger);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByLabelText('Slack export ZIP')
+      )
+    );
+    expect(view.fake.commands.create).not.toHaveBeenCalled();
+  });
+
   it('discovers locally, filters/groups selections and requires source confirmation before upload', async () => {
     const view = setup();
     const discovery = archiveDiscovery();
@@ -309,6 +389,7 @@ describe('Slack import dialog', () => {
     const dialog = screen.getByRole('dialog');
     const processing = importReceipt({ status: 'processing' });
     view.setPage({ ...view.page(), jobs: [processing] });
+    fireEvent.click(screen.getByText('Previous imports (1)'));
     fireEvent.click(screen.getByRole('button', { name: /job · Processing/ }));
     const result = importReceipt({
       status: 'cancelled',
@@ -338,7 +419,7 @@ describe('Slack import dialog', () => {
     view.fake.setObserved(result);
     view.setPage({ ...view.page(), jobs: [result] });
     await waitFor(() => expect(view.completed).toHaveBeenCalledOnce());
-    const channelLink = screen.getByRole('link');
+    const channelLink = screen.getByRole('link', { name: 'Open channel' });
     channelLink.focus();
     view.fake.setObserved({
       ...result,
@@ -352,10 +433,12 @@ describe('Slack import dialog', () => {
     expect(view.completed).toHaveBeenCalledOnce();
     expect(screen.getByText(/9 imported/)).toBeTruthy();
     expect(screen.getByText('Target unavailable')).toBeTruthy();
-    expect(screen.getAllByRole('link')).toHaveLength(1);
-    expect(screen.getByRole('link').getAttribute('href')).toBe(
-      '/app/channel/accessible'
+    expect(screen.getAllByRole('link', { name: 'Open channel' })).toHaveLength(
+      1
     );
+    expect(
+      screen.getByRole('link', { name: 'Open channel' }).getAttribute('href')
+    ).toBe('/app/channel/accessible');
     expect(screen.getByText(/Cancellation is not rollback/)).toBeTruthy();
   });
 
@@ -389,6 +472,7 @@ describe('Slack import dialog', () => {
   it('finalizes a historical upload with skips without creating an archive worker', async () => {
     const view = setup();
     view.setPage({ ...view.page(), jobs: [importReceipt()] });
+    fireEvent.click(screen.getByText('Previous imports (1)'));
     fireEvent.click(screen.getByRole('button', { name: /job · Uploading/ }));
     fireEvent.click(
       screen.getByRole('button', { name: 'Finalize with skips' })
@@ -411,6 +495,7 @@ describe('Slack import dialog', () => {
       jobs: [importReceipt()],
       nextCursor: 'cursor',
     });
+    fireEvent.click(screen.getByText('Previous imports (1)'));
     fireEvent.click(screen.getByRole('button', { name: /job · Uploading/ }));
     view.fake.commands.cancel.mockRejectedValue(new Error('request failed'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel import' }));

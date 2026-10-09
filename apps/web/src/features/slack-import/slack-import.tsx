@@ -1,6 +1,10 @@
 import { IntegrationRow } from '@app/features/settings/primitives';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
+import { requestConnectApp } from '@core/pipedream/pendingConnect';
+import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import SlackIcon from '@icon/mcp-slack.svg';
 import {
@@ -22,9 +26,13 @@ import {
   protectImportFile,
 } from './queries/archive-source';
 import { createImportSource } from './queries/import-source';
-import { ImportDialog } from './views/import-dialog';
+import { ImportDialog, type ImportDialogTrigger } from './views/import-dialog';
 
-type Props = { teamId: string; isAdmin: boolean };
+type Props = {
+  teamId: string;
+  isAdmin: boolean;
+  trigger?: ImportDialogTrigger;
+};
 
 export function SlackImport(props: Props): JSX.Element {
   const flag = useFeatureFlag(enableSlackArchiveImport);
@@ -42,7 +50,7 @@ export function SlackImport(props: Props): JSX.Element {
               />
             }
           >
-            <SlackImportSettings teamId={teamId} />
+            <SlackImportSettings teamId={teamId} trigger={props.trigger} />
           </Suspense>
         )}
       </Show>
@@ -50,9 +58,18 @@ export function SlackImport(props: Props): JSX.Element {
   );
 }
 
-function SlackImportSettings(props: { teamId: string }): JSX.Element {
+function SlackImportSettings(props: {
+  teamId: string;
+  trigger?: ImportDialogTrigger;
+}): JSX.Element {
   const channels = useListChannelsQuery();
   const client = getGraphqlSoupClient();
+  const pipedreamEnabled = usePipedreamMcpFlag();
+  const { openSettings } = useSettingsState();
+  const connectSlack = () => {
+    requestConnectApp(SLACK_CONNECT_SLUG, 'import-slack-channels');
+    openSettings('Connections');
+  };
   function channelHref(id: string): string | undefined {
     if (
       !channels.isSuccess ||
@@ -88,6 +105,8 @@ function SlackImportSettings(props: { teamId: string }): JSX.Element {
     >
       <ImportDialog
         teamId={props.teamId}
+        trigger={props.trigger}
+        onConnect={pipedreamEnabled() ? connectSlack : undefined}
         onCompleted={onCompleted}
         channelHref={channelHref}
       />
