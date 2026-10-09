@@ -18,7 +18,12 @@ export interface ReloadPage {
 }
 
 /** A newer web build this tab can reload into. */
-export type PendingWebUpdate = { build?: string; reload: () => void };
+export type PendingWebUpdate = {
+  build?: string;
+  reload: () => void;
+  /** How many of this build's lazy chunks failed to load since it was found. */
+  failedLoads?: number;
+};
 
 const [pendingWebUpdate, setPendingWebUpdate] =
   createSignal<PendingWebUpdate>();
@@ -111,6 +116,22 @@ export function reloadForNewerBuild(
   page.onHiddenOrOnline(reloadIfIdle);
   page.promptReload(() => page.reload(), build);
   reloadIfIdle();
+}
+
+/**
+ * A lazy chunk of this build failed to load, which after a deploy means a newer
+ * build replaced it. Offers the reload the same way as a newer build, and opens
+ * the offer again even if it was dismissed, since something the user opened
+ * just failed.
+ */
+export function promptReloadForFailedLoad(): void {
+  reloadForNewerBuild();
+  const current = pendingWebUpdate();
+  setPendingWebUpdate({
+    reload: current?.reload ?? (() => window.location.reload()),
+    build: current?.build,
+    failedLoads: (current?.failedLoads ?? 0) + 1,
+  });
 }
 
 /** Test seam: forget the scheduled reload and every hold. */

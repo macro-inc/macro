@@ -10,7 +10,6 @@ const OPT_OUT_KEY = 'macro:sw';
 /** How long after load an untouched tab may silently reload into a newer build. */
 const SILENT_RELOAD_WINDOW_MS = 10_000;
 
-let newerBuildAvailable = false;
 let interacted = false;
 
 /** The bundle build this page booted, from index.html. */
@@ -52,20 +51,11 @@ function onWorkerMessage(event: MessageEvent<unknown>): void {
   if (data?.type !== 'macro:newer-build') return;
   const running = runningBuild();
   if (!Number.isFinite(running) || Number(data.build) <= running) return;
-  newerBuildAvailable = true;
   if (!interacted && performance.now() < SILENT_RELOAD_WINDOW_MS) {
     window.location.reload();
     return;
   }
   reloadForNewerBuild(undefined, String(data.build));
-}
-
-/**
- * Whether a failed lazy chunk is explained by a newer deployed build, so the
- * tab should reload into it instead of reporting an error.
- */
-export function isNewerBuildAvailable(): boolean {
-  return newerBuildAvailable;
 }
 
 /**

@@ -2,7 +2,6 @@ import { pendingWebUpdate } from '@core/util/reloadForNewerBuild';
 import { useTauri } from '@macro/tauri';
 import { invoke } from '@tauri-apps/api/core';
 import { type Accessor, createMemo } from 'solid-js';
-import { debugAppUpdate } from './app-update-debug';
 
 /** An update this app can apply now, as the rail's update button offers it. */
 export type AppUpdate = {
@@ -23,6 +22,12 @@ export const UPDATE_COPY = {
   web: {
     title: 'New version available',
     description: 'A new version of Macro is ready. Reload the page to use it.',
+    actionLabel: 'Reload',
+  },
+  webFailedLoad: {
+    title: 'New version available',
+    description:
+      "Part of Macro couldn't load because a new version is out. Reload the page to use it.",
     actionLabel: 'Reload',
   },
   bundle: {
@@ -62,10 +67,6 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
   const tauri = useTauri();
 
   return createMemo(() => {
-    // TEMPORARY: simulated updates from the debug panel.
-    const simulated = debugAppUpdate();
-    if (simulated) return simulated;
-
     const native = tauri?.nativeUpdateStatus();
     if (tauri && native?.status === 'Ready') {
       const preparing = tauri.nativeUpdatePreparing();
@@ -88,9 +89,11 @@ export function useAppUpdate(): Accessor<AppUpdate | undefined> {
 
     const web = pendingWebUpdate();
     if (web) {
+      // Each failed load is a new id, so the popover opens again.
+      const failed = web.failedLoads ? `:failed-${web.failedLoads}` : '';
       return {
-        id: `web:${web.build ?? runningBuild()}`,
-        ...UPDATE_COPY.web,
+        id: `web:${web.build ?? runningBuild()}${failed}`,
+        ...(web.failedLoads ? UPDATE_COPY.webFailedLoad : UPDATE_COPY.web),
         busy: false,
         apply: web.reload,
       };

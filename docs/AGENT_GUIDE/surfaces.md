@@ -2288,8 +2288,11 @@ dismissed (click outside or Escape); the button stays until the update is
 applied. Its wording and action depend on the update: **New version available**
 / **Reload** for a newer web build, **Update ready** / **Update** for a
 downloaded bundle in the desktop app, and **Desktop app update ready** /
-**Restart and update** for a native desktop update. Touch layouts have no rail, so a newer web build still shows a
-**Reload** toast there.
+**Restart and update** for a native desktop update. When part of the app fails
+to load because a newer web build replaced it, the same button appears and its
+popover opens again (even if dismissed) with **Reload**; there is no blocking
+alert. Touch layouts have no rail, so a newer web build shows a **Reload** toast
+there instead.
 
 On desktop release builds, **Account → Desktop app update** shows native update
 progress. While preparing to restart, the popover can't be dismissed and its
