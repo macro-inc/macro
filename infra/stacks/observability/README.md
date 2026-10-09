@@ -160,11 +160,13 @@ and AWS account `569036502058`, region `us-east-2`. Deployment requires the
 existing public `macro-internal.com` Route53 zone; this stack creates its own VPC/NAT and
 DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
 
-1. Create a dedicated Google OAuth Web application under the company's Google
-   organization with an **Internal** consent audience. Register exactly
+1. Use a Google OAuth Web client managed by the company. For a new dedicated
+   client, choose an **Internal** consent audience. When reusing the application
+   client, preserve its existing audience and redirect URIs; Grafana independently
+   enforces the `macro.com` Workspace restriction. Add the exact redirect URI
    `https://grafana-dev.macro-internal.com/login/google` for dev or
-   `https://grafana.macro-internal.com/login/google` for prod. Prefer separate clients and
-   secrets per environment. Confirm Workspace MFA enforcement.
+   `https://grafana.macro-internal.com/login/google` for prod. Prefer separate clients
+   and secrets per environment. Confirm Workspace MFA enforcement.
 2. Through the approved secret-management process, create a Secrets Manager JSON
    secret in **us-east-2** containing `google_client_id`, `google_client_secret`,
    `grafana_secret_key`, and `otlp_token`. Generate independent cryptographically
