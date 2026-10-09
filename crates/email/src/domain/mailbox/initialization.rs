@@ -205,7 +205,7 @@ fn decide(
     if existing.owner == request.actor || existing.actor_has_access {
         return Ok(InitializationDecision::Reconnect);
     }
-    if existing.owner.email_str().as_ref() == grant.email {
+    if existing.owner.email_str() == grant.email {
         return Ok(InitializationDecision::Delegate);
     }
     if request.force_share {

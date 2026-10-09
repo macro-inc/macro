@@ -185,7 +185,7 @@ impl MailboxIngest for PgMailboxSync {
             if let Some(existing) = &existing
                 && existing.is_draft
                 && existing.provider_version != version
-                && !shadow.as_ref().is_some_and(|s| s.base_version == version)
+                && shadow.as_ref().is_none_or(|s| s.base_version != version)
             {
                 sqlx::query!(
                     "UPDATE email_messages SET body_macro = NULL WHERE id = $1",

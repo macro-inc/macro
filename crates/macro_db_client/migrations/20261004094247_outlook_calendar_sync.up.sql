@@ -15,9 +15,14 @@ CREATE TABLE calendar_outlook_work (
     lease_until timestamptz,
     last_error text,
     attempts integer NOT NULL DEFAULT 0,
-    UNIQUE NULLS NOT DISTINCT(account_id,calendar_id),
     CHECK(ends_at>starts_at)
 );
+-- PostgreSQL 14 treats NULLs as distinct in unique constraints. Separate indexes
+-- enforce one discovery row per account and one sync row per account/calendar.
+CREATE UNIQUE INDEX calendar_outlook_work_account_unique
+    ON calendar_outlook_work(account_id) WHERE calendar_id IS NULL;
+CREATE UNIQUE INDEX calendar_outlook_work_calendar_unique
+    ON calendar_outlook_work(account_id,calendar_id) WHERE calendar_id IS NOT NULL;
 CREATE INDEX calendar_outlook_work_due ON calendar_outlook_work(next_run_at);
 -- The event row and its publication intent commit together. Revision-CAS
 -- acknowledgments preserve changes arriving during an in-flight publication.

@@ -522,16 +522,15 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
                 )))
             }
             "patch" | "delete" => {
-                if let Some(created) = command["replacementId"].as_str() {
-                    if api
+                if let Some(created) = command["replacementId"].as_str()
+                    && api
                         .replacement_event(&token, target, created)
                         .await?
                         .is_none()
-                    {
-                        return Err(unsupported(
-                            "The replacement event was removed. The original will not be cancelled.",
-                        ));
-                    }
+                {
+                    return Err(unsupported(
+                        "The replacement event was removed. The original will not be cancelled.",
+                    ));
                 }
                 let source = &command["source"];
                 let id = string(source, "id")?;

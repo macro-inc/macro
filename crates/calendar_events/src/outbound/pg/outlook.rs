@@ -244,7 +244,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,sync_generation,grant_generation,starts_at,ends_at)
             SELECT gen_random_uuid(),a.id,l.sync_generation,l.grant_generation,$1,$2 FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id
             WHERE a.provider='outlook' AND a.sync_status<>'disabled' AND l.is_sync_active
-            ON CONFLICT(account_id,calendar_id) DO NOTHING"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
+            ON CONFLICT(account_id) WHERE calendar_id IS NULL DO NOTHING"#,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
         // A replacement grant is the only automatic exit from reauthorization.
         sqlx::query!(r#"UPDATE calendar_accounts a SET sync_status='pending',last_sync_error=NULL
             FROM email_links l WHERE l.id=a.email_link_id AND a.provider='outlook' AND a.sync_status='reauth_required'
@@ -377,7 +377,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             .await
             .map_err(report)?;
             sqlx::query!(r#"INSERT INTO calendar_outlook_work(id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at)
-                VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) DO NOTHING"#,
+                VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(account_id,calendar_id) WHERE calendar_id IS NOT NULL DO NOTHING"#,
                 Uuid::now_v7(),lease.account_id,c.id,lease.binding.sync_generation,lease.binding.grant_generation,range.starts_at,range.ends_at).execute(&mut *tx).await.map_err(report)?;
         }
         let removed=sqlx::query!("UPDATE calendars SET is_deleted=true WHERE account_id=$1 AND NOT(provider_calendar_id=ANY($2::text[])) AND NOT is_deleted RETURNING id",lease.account_id,&observed).fetch_all(&mut *tx).await.map_err(report)?;

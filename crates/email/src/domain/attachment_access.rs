@@ -1,6 +1,7 @@
 //! Authorized attachment reads; the owner mailbox supplies provider credentials.
 use super::{draft_attachments::AttachmentError, mailbox::MailboxKey, ports::EmailUserRepo};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_email::service::{attachment::Attachment, link::Link};
@@ -13,14 +14,7 @@ pub trait AuthorizedAttachmentBytes: Send + Sync + 'static {
         &'a self,
         actor: &'a str,
         id: Uuid,
-    ) -> std::pin::Pin<
-        Box<
-            dyn Future<
-                    Output = Result<(AttachmentReadRecord, Vec<u8>), super::mailbox::MailboxError>,
-                > + Send
-                + 'a,
-        >,
-    >;
+    ) -> BoxFuture<'a, Result<(AttachmentReadRecord, Vec<u8>), super::mailbox::MailboxError>>;
 }
 
 #[derive(Clone)]

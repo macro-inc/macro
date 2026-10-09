@@ -222,7 +222,7 @@ impl<
                     if let Some(upsert) = upsert {
                         self.repository
                             .upsert_event(CalendarEventWrite::OutlookSync {
-                                lease: lease.clone(),
+                                lease: Box::new(lease.clone()),
                                 upsert,
                             })
                             .await

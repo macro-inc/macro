@@ -21,28 +21,28 @@ async fn claim(repo: &PgCalendarRepository) -> Option<OutlookCalendarLease> {
     .await
     .unwrap()
 }
+fn discovered_calendar(provider_calendar_id: &str) -> OutlookCalendar {
+    OutlookCalendar {
+        calendar: ProviderCalendar {
+            provider_calendar_id: provider_calendar_id.into(),
+            name: "Outlook calendar".into(),
+            description: None,
+            time_zone: Some("America/Los_Angeles".into()),
+            color: None,
+            access_role: Some("writer".into()),
+            is_primary: provider_calendar_id == "primary",
+            is_selected: true,
+            default_reminders: vec![],
+        },
+        online_meeting_providers: vec!["teamsForBusiness".into()],
+    }
+}
 async fn calendar(repo: &PgCalendarRepository) -> OutlookCalendarLease {
     let lease = claim(repo).await.unwrap();
     assert!(lease.target.is_none());
-    repo.commit_outlook_calendars(
-        &lease,
-        vec![OutlookCalendar {
-            calendar: ProviderCalendar {
-                provider_calendar_id: "primary".into(),
-                name: "Outlook calendar".into(),
-                description: None,
-                time_zone: Some("America/Los_Angeles".into()),
-                color: None,
-                access_role: Some("writer".into()),
-                is_primary: true,
-                is_selected: true,
-                default_reminders: vec![],
-            },
-            online_meeting_providers: vec!["teamsForBusiness".into()],
-        }],
-    )
-    .await
-    .unwrap();
+    repo.commit_outlook_calendars(&lease, vec![discovered_calendar("primary")])
+        .await
+        .unwrap();
     claim(repo).await.unwrap()
 }
 fn upsert(lease: &OutlookCalendarLease, uid: &str) -> CalendarEventUpsert {
@@ -64,12 +64,116 @@ fn upsert(lease: &OutlookCalendarLease, uid: &str) -> CalendarEventUpsert {
 }
 async fn store(repo: &PgCalendarRepository, lease: &OutlookCalendarLease, uid: &str) -> Uuid {
     repo.upsert_event(CalendarEventWrite::OutlookSync {
-        lease: lease.clone(),
+        lease: Box::new(lease.clone()),
         upsert: upsert(lease, uid),
     })
     .await
     .unwrap()
     .event_id
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn outlook_discovery_keeps_one_work_row_per_account_and_calendar(pool: PgPool) {
+    let (repo, _, _) = mailbox(&pool).await;
+    let discovery = claim(&repo).await.unwrap();
+    assert!(discovery.target.is_none());
+    assert!(claim(&repo).await.is_none());
+    repo.commit_outlook_calendars(
+        &discovery,
+        vec![
+            discovered_calendar("primary"),
+            discovered_calendar("secondary"),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let first = claim(&repo).await.unwrap();
+    let second = claim(&repo).await.unwrap();
+    assert_ne!(
+        first.target.as_ref().unwrap().calendar_id,
+        second.target.as_ref().unwrap().calendar_id
+    );
+    assert!(claim(&repo).await.is_none());
+
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at=now() WHERE id=$1",
+        discovery.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let rediscovery = claim(&repo).await.unwrap();
+    assert_eq!(rediscovery.id, discovery.id);
+    assert!(rediscovery.target.is_none());
+    repo.commit_outlook_calendars(
+        &rediscovery,
+        vec![
+            discovered_calendar("primary"),
+            discovered_calendar("secondary"),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let work = sqlx::query!(
+        "SELECT id,calendar_id,lease_id FROM calendar_outlook_work WHERE account_id=$1",
+        discovery.account_id
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(work.len(), 3);
+    let account_work = work.iter().find(|row| row.calendar_id.is_none()).unwrap();
+    assert_eq!(account_work.id, discovery.id);
+    assert!(account_work.lease_id.is_none());
+    for lease in [first, second] {
+        let row = work.iter().find(|row| row.id == lease.id).unwrap();
+        assert_eq!(row.calendar_id, Some(lease.target.unwrap().calendar_id));
+        assert_eq!(row.lease_id, Some(lease.lease_id));
+    }
+    assert!(claim(&repo).await.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn outlook_work_rejects_duplicate_account_and_calendar_rows(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    let lease = calendar(&repo).await;
+    let work = sqlx::query!(
+        "SELECT id,calendar_id FROM calendar_outlook_work WHERE account_id=$1",
+        lease.account_id
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(work.len(), 2);
+    assert!(work.iter().any(|row| row.calendar_id.is_none()));
+    assert!(work.iter().any(|row| row.calendar_id.is_some()));
+    for row in work {
+        let error = sqlx::query!(
+            r#"INSERT INTO calendar_outlook_work (
+                id,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at
+            )
+            SELECT $1,account_id,calendar_id,sync_generation,grant_generation,starts_at,ends_at
+            FROM calendar_outlook_work WHERE id=$2"#,
+            Uuid::now_v7(),
+            row.id
+        )
+        .execute(&pool)
+        .await
+        .unwrap_err();
+        assert!(error.as_database_error().unwrap().is_unique_violation());
+    }
+
+    // Account-level uniqueness must not prevent discovery for another mailbox.
+    let link = insert_link(&pool, &owner).await;
+    sqlx::query!("UPDATE email_links SET provider='OUTLOOK',sync_generation=1,grant_generation=1,is_sync_active=true WHERE id=$1",link).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO email_link_microsoft_scopes(link_id,grant_generation,granted_scopes) VALUES($1,1,ARRAY['Calendars.ReadWrite'])",link).execute(&pool).await.unwrap();
+    let other = claim(&repo).await.unwrap();
+    assert!(other.target.is_none());
+    assert_eq!(other.binding.link_id, link);
+    assert_ne!(other.account_id, lease.account_id);
+    assert!(claim(&repo).await.is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -179,7 +283,7 @@ async fn reconnect_invalidates_old_echoes_pruning_and_health(pool: PgPool) {
     .unwrap();
     assert!(
         repo.upsert_event(CalendarEventWrite::OutlookSync {
-            lease: old.clone(),
+            lease: Box::new(old.clone()),
             upsert: upsert(&old, "stale")
         })
         .await
@@ -281,7 +385,7 @@ async fn calendar_opt_out_purges_and_fences_without_disconnecting_mail(pool: PgP
     assert!(disconnected.watch_channels.is_empty());
     assert!(
         repo.upsert_event(CalendarEventWrite::OutlookSync {
-            lease: lease.clone(),
+            lease: Box::new(lease.clone()),
             upsert: upsert(&lease, "late")
         })
         .await

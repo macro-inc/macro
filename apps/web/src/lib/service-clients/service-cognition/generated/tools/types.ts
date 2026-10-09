@@ -3397,19 +3397,6 @@ export type ImageReferenceInput =
       type: 'staticFile';
     };
 /**
- * Provider selected from the persisted calendar account and email binding.
- */
-export type CalendarProvider = 'google' | 'outlook';
-/**
- * The conferencing system backing an event's join URL.
- *
- * Calendars can create Google Meet or Microsoft Teams according to their
- * capabilities. Imported third-party conferences are labeled separately.
- * Omitting a conference change preserves the current conference; explicit
- * changes still require provider and calendar capability validation.
- */
-export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
-/**
  * Whether missing busy blocks can safely be interpreted as free time.
  */
 export type AvailabilityCoverage = 'complete' | 'unknown';
@@ -3424,6 +3411,19 @@ export type AvailabilityUnknownReason =
   | 'invalid_time_zone'
   | 'invalid_interval'
   | 'conflicting_copies';
+/**
+ * Provider selected from the persisted calendar account and email binding.
+ */
+export type CalendarProvider = 'google' | 'outlook';
+/**
+ * The conferencing system backing an event's join URL.
+ *
+ * Calendars can create Google Meet or Microsoft Teams according to their
+ * capabilities. Imported third-party conferences are labeled separately.
+ * Omitting a conference change preserves the current conference; explicit
+ * changes still require provider and calendar capability validation.
+ */
+export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 /**
  * Entity types that can be returned by the list entities AI tool.
  */

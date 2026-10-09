@@ -6,6 +6,7 @@ use crate::domain::{
 };
 use email_api_client::domain::models::{EmailApiError, ProviderId, SendRequest};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{address::ContactInfo, message::MessageToSend};
 use sha2::{Digest, Sha256};
@@ -49,9 +50,7 @@ impl<R: DraftContentRepository, B: DraftContentBytes, A: EntityAccessService>
         &'a self,
         actor: &'a str,
         id: Uuid,
-    ) -> std::pin::Pin<
-        Box<dyn Future<Output = Result<(AttachmentReadRecord, Vec<u8>), MailboxError>> + Send + 'a>,
-    > {
+    ) -> BoxFuture<'a, Result<(AttachmentReadRecord, Vec<u8>), MailboxError>> {
         Box::pin(async move {
             let record = self
                 .repository

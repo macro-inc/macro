@@ -81,7 +81,7 @@ pub enum CalendarEventWrite {
     #[cfg(feature = "outlook")]
     OutlookSync {
         /// Current synchronization lease.
-        lease: super::outlook::OutlookCalendarLease,
+        lease: Box<super::outlook::OutlookCalendarLease>,
         /// Normalized provider echo.
         upsert: CalendarEventUpsert,
     },

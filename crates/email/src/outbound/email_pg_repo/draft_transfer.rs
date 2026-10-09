@@ -212,7 +212,7 @@ impl DraftTransferRepository for EmailPgRepo {
                 && source_mailbox == plan.source_mailbox
                 && destination_mailbox == plan.destination_mailbox
             {
-                return Ok(TransferPreparation::Pending(plan));
+                return Ok(TransferPreparation::Pending(Box::new(plan)));
             }
         }
         let (
@@ -224,11 +224,11 @@ impl DraftTransferRepository for EmailPgRepo {
         ) = source_facts(&mut tx, request).await?;
         input.db_id = macro_uuid::generate_uuid_v7();
         input.thread_db_id = macro_uuid::generate_uuid_v7();
-        if let Some(reply) = input.replying_to_id {
-            if let Some(parent) = sqlx::query!("SELECT thread_id,provider_thread_id FROM email_messages WHERE id=$1 AND link_id=$2",reply,request.destination_link_id).fetch_optional(&mut *tx).await.map_err(db)? {
-                input.thread_db_id=parent.thread_id;
-                input.provider_thread_id=parent.provider_thread_id;
-            }
+        if let Some(reply) = input.replying_to_id
+            && let Some(parent) = sqlx::query!("SELECT thread_id,provider_thread_id FROM email_messages WHERE id=$1 AND link_id=$2",reply,request.destination_link_id).fetch_optional(&mut *tx).await.map_err(db)?
+        {
+            input.thread_db_id = parent.thread_id;
+            input.provider_thread_id = parent.provider_thread_id;
         }
         input.provider_id = None;
         input.send_time = None;
@@ -269,7 +269,7 @@ impl DraftTransferRepository for EmailPgRepo {
         let value = serde_json::to_value(&plan).map_err(anyhow::Error::from)?;
         sqlx::query!("INSERT INTO email_draft_transfers(id,actor_id,source_id,destination_id,source_link_id,destination_link_id,source_thread_id,destination_thread_id,plan) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO UPDATE SET destination_id=EXCLUDED.destination_id,destination_thread_id=EXCLUDED.destination_thread_id,plan=EXCLUDED.plan,updated_at=now() WHERE email_draft_transfers.state='preparing'",request.id,actor,request.source_id,plan.input.db_id,request.source_link_id,request.destination_link_id,source_thread_id,plan.input.thread_db_id,value).execute(&mut *tx).await.map_err(db)?;
         tx.commit().await.map_err(db)?;
-        Ok(TransferPreparation::Pending(plan))
+        Ok(TransferPreparation::Pending(Box::new(plan)))
     }
 
     async fn reserve_transfer_object(&self, key: &str) -> Result<(), EmailErr> {
@@ -499,10 +499,10 @@ impl DraftTransferRepository for EmailPgRepo {
         if changed != 1 {
             return Err(MailboxError::Stale);
         }
-        if issue == Some("move_source_sent") {
-            if let Some(provider_id) = plan.source_provider_id.as_deref() {
-                sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,revision,is_import) VALUES($1,$2,$3,1,false) ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()",plan.source_mailbox.link_id,plan.source_mailbox.sync_generation,provider_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;
-            }
+        if issue == Some("move_source_sent")
+            && let Some(provider_id) = plan.source_provider_id.as_deref()
+        {
+            sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,revision,is_import) VALUES($1,$2,$3,1,false) ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()",plan.source_mailbox.link_id,plan.source_mailbox.sync_generation,provider_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;
         }
         if state == "ready" {
             sqlx::query!("INSERT INTO email_draft_object_cleanup(object_key,available_at) SELECT s3_key,now()+interval '1 day' FROM email_attachments_drafts WHERE draft_id=$1 ON CONFLICT DO NOTHING",plan.request.source_id).execute(&mut *tx).await.map_err(|_|MailboxError::Persistence)?;

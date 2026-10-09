@@ -752,13 +752,15 @@ async fn main() -> anyhow::Result<()> {
     // send scheduled emails
     worker_tracker.spawn(async move {
         email_service::pubsub::scheduled::worker::run_worker_with_cancellation(
-            scheduled_worker,
-            db_scheduled,
-            email_api_scheduled,
-            draft_content,
-            s3_client_scheduled,
-            attachment_bucket_scheduled,
-            macro_event_broker_scheduled,
+            email_service::pubsub::scheduled::context::ScheduledContext {
+                sqs_worker: scheduled_worker,
+                db: db_scheduled,
+                email_api: email_api_scheduled,
+                attachment_bytes: draft_content,
+                s3_client: s3_client_scheduled,
+                attachment_bucket: attachment_bucket_scheduled,
+                macro_event_broker: macro_event_broker_scheduled,
+            },
             cancellation_token,
         )
         .await;

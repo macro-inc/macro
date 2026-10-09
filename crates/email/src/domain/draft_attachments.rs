@@ -148,6 +148,18 @@ pub trait DraftAttachmentStorage: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), AttachmentError>> + Send;
 }
 
+/// File metadata and optional idempotency key for a draft attachment upload.
+pub struct DraftAttachmentUpload {
+    /// Original file name used to determine the content type.
+    pub file_name: String,
+    /// Hex-encoded SHA256 checksum of the file.
+    pub sha: String,
+    /// File size in bytes.
+    pub size: i32,
+    /// Stable client upload identifier, when supplied.
+    pub upload_id: Option<Uuid>,
+}
+
 pub struct DraftAttachmentService<R, S, A> {
     pub repository: R,
     pub storage: S,
@@ -179,11 +191,14 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         actor: &MacroUserIdStr<'static>,
         link: Uuid,
         draft: Uuid,
-        file_name: String,
-        sha: String,
-        size: i32,
-        upload_id: Option<Uuid>,
+        upload: DraftAttachmentUpload,
     ) -> Result<(AttachmentDraft, String), AttachmentError> {
+        let DraftAttachmentUpload {
+            file_name,
+            sha,
+            size,
+            upload_id,
+        } = upload;
         validate_upload(&file_name, &sha, size)?;
         let provider = self.inbox(actor, link).await?;
         // Existing Gmail clients predate upload completion. Outlook and every

@@ -38,7 +38,7 @@ async fn fixture(db: &PgPool) -> (EmailPgRepo, DraftTransferRequest) {
 }
 async fn prepare(repo: &EmailPgRepo, request: &DraftTransferRequest) -> DraftTransferPlan {
     match repo.begin_transfer(ACTOR, request).await.unwrap() {
-        TransferPreparation::Pending(plan) => plan,
+        TransferPreparation::Pending(plan) => *plan,
         _ => panic!("expected uncommitted move"),
     }
 }

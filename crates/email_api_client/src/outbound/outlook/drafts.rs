@@ -444,8 +444,8 @@ impl MailboxDraftClient for OutlookApiClientRepository {
             || bytes.len() >= MAX_RANGE_SIZE
             || total > MAX_ATTACHMENT_SIZE as u64
             || end > total
-            || offset % UPLOAD_BLOCK != 0
-            || (end != total && bytes.len() as u64 % UPLOAD_BLOCK != 0)
+            || !offset.is_multiple_of(UPLOAD_BLOCK)
+            || (end != total && !(bytes.len() as u64).is_multiple_of(UPLOAD_BLOCK))
         {
             return Err(EmailApiError::Permanent {
                 message: "invalid attachment upload range".into(),

@@ -64,7 +64,7 @@ pub struct MaterializedTransferFile {
 }
 
 pub enum TransferPreparation {
-    Pending(DraftTransferPlan),
+    Pending(Box<DraftTransferPlan>),
     Completed(DraftTransferReceipt),
 }
 

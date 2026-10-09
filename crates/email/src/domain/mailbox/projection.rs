@@ -422,7 +422,7 @@ fn live_event(
             },
         ));
     }
-    if !is_new && !(was_draft && message.is_sent) {
+    if !(is_new || was_draft && message.is_sent) {
         return None;
     }
     if message.is_sent {

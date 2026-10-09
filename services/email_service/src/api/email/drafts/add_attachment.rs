@@ -5,7 +5,9 @@ use axum::{
     extract::{Path, State},
 };
 use axum_extra::extract::Cached;
-use email::inbound::axum::axum_impls::EmailLinkExtractor;
+use email::{
+    domain::draft_attachments::DraftAttachmentUpload, inbound::axum::axum_impls::EmailLinkExtractor,
+};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use utoipa::IntoParams;
@@ -72,10 +74,12 @@ pub async fn handler(
             actor,
             link.id,
             draft_id,
-            req.file_name,
-            req.sha,
-            req.size,
-            req.upload_id,
+            DraftAttachmentUpload {
+                file_name: req.file_name,
+                sha: req.sha,
+                size: req.size,
+                upload_id: req.upload_id,
+            },
         )
         .await?;
     Ok(Json(AddDraftAttachmentResponse {

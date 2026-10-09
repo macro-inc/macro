@@ -1,12 +1,9 @@
 use super::*;
 use email::domain::attachment_access::{AttachmentReadRecord, AttachmentReadRepository};
 use email::domain::mailbox::MailboxError;
+use futures::future::BoxFuture;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 struct Reader {
     db: PgPool,
@@ -17,9 +14,7 @@ impl AuthorizedAttachmentBytes for Reader {
         &'a self,
         actor: &'a str,
         id: Uuid,
-    ) -> Pin<
-        Box<dyn Future<Output = Result<(AttachmentReadRecord, Vec<u8>), MailboxError>> + Send + 'a>,
-    > {
+    ) -> BoxFuture<'a, Result<(AttachmentReadRecord, Vec<u8>), MailboxError>> {
         Box::pin(async move {
             assert_eq!(actor, "macro|gmail-native@example.com");
             self.read.lock().unwrap().push(id);
