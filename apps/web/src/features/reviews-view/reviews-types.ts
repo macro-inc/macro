@@ -18,7 +18,7 @@ export type ReviewsReviewFilterId =
   | 'not_reviewed_by_me'
   | 'awaiting_my_review';
 export type ReviewsStatusFilterId = 'open' | 'closed' | 'merged';
-export type ReviewsStatusTabId = 'open' | 'closed';
+export type ReviewsStatusTabId = 'open' | 'closed' | 'all';
 export type ReviewsFilterId =
   | 'status'
   | 'repository'

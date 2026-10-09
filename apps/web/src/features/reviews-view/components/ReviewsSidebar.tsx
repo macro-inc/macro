@@ -38,7 +38,9 @@ import {
   REVIEWS_SCOPES,
   type ReviewsLayout,
   type ReviewsScope,
+  type ReviewsStatusTabId,
 } from '../reviews-types';
+import { ReviewsStatusTabs } from './ReviewsStatusTabs';
 
 const SCOPE_ITEMS: Record<
   ReviewsScope,
@@ -208,6 +210,11 @@ export function ReviewsSidebar(props: {
   onSearchChange: (search: string) => void;
   layout: ReviewsLayout;
   onLayoutChange: (layout: ReviewsLayout) => void;
+  /** The status toggle; omitted when the status selection is custom or the board shows. */
+  status?: {
+    value: ReviewsStatusTabId | undefined;
+    onChange: (value: ReviewsStatusTabId) => void;
+  };
   scope: ReviewsScope;
   onScopeChange: (scope: ReviewsScope) => void;
   labels: GithubPullRequestLabel[];
@@ -259,6 +266,14 @@ export function ReviewsSidebar(props: {
               props.onLayoutChange(layout === 'board' ? 'board' : 'list')
             }
           />
+        </Show>
+        <Show when={props.status}>
+          {(status) => (
+            <ReviewsStatusTabs
+              value={status().value}
+              onChange={status().onChange}
+            />
+          )}
         </Show>
       </ViewSidebar.Primary>
       <ViewSidebar.Content>

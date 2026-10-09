@@ -202,7 +202,9 @@ export function ReviewsBoard(props: {
     REVIEWS_BOARD_STAGES.find((stage) => stage.id === id)?.description;
 
   return (
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    // Size from the content slot, which is not a flex container, like the
+    // task board: columns are absolutely placed and need a definite height.
+    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
       <TaskBoard.Root
         animationScope={props.scope}
         columns={columns()}

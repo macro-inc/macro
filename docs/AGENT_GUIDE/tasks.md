@@ -212,12 +212,14 @@ The sidebar starts with a **Search reviews** field (styled like Settings' search
 and, on pointer devices, a **Board**/**List** toggle (`aria-label="Pull request
 layout"`); List is the default and the choice is remembered. When the sidebar is
 collapsed or narrow, the search moves above the list under the scope heading.
-Filter and sort controls appear above the list. Below them, the same
-sliding tabs used by Chat offer Open and Closed. Open is the default; Closed
-includes both closed and merged PRs. The filter dropdown and mobile drawer also
+Filter and sort controls appear above the list. Below the layout toggle, an
+**Open** / **Closed** / **All** toggle with icons (`aria-label="Pull request
+status"`) picks the status; it moves above the list on touch devices or when the
+sidebar is hidden, and the board hides it. Open is the default; Closed includes
+both closed and merged PRs, and All shows every status. The filter dropdown and mobile drawer also
 offer independent Open, Closed, and Merged selections. Custom multi-status
-selections hide the tabs, except the combined Closed preset keeps them visible.
-A partial Closed-only or Merged-only selection leaves both tabs unhighlighted.
+selections hide the toggle, except the combined Closed preset keeps it visible.
+A partial Closed-only or Merged-only selection leaves every option unhighlighted.
 Status combines with other filters, counts toward filter badges, and applies
 before pagination. Clearing filters resets to Open. Other filters cover
 priority, linked work, started from, repository, author, assignee, label, and,

@@ -34,6 +34,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  type JSX,
   Match,
   onMount,
   Show,
@@ -91,6 +92,22 @@ const REVIEW_SCOPE_TABS: PillTabItem<ReviewsScope>[] = REVIEWS_SCOPES.map(
 );
 /** The board's status filter: open pull requests on their way, and merged ones. */
 const BOARD_STATUSES = ['open', 'merged'];
+
+/** The status toggle above the list, for touch layouts and a hidden sidebar. */
+function ReviewsHeaderStatusTabs(props: { children: JSX.Element }) {
+  const shell = useViewShell();
+  return (
+    <Show
+      when={
+        isTouchDevice() ||
+        shell.breakpoints.narrow?.() ||
+        shell.aside.isCollapsed()
+      }
+    >
+      <div class="mt-3 min-w-0 overflow-x-auto">{props.children}</div>
+    </Show>
+  );
+}
 
 /** Shown in the list header when the sidebar, with its own search, is hidden. */
 function ReviewsListScopeHeading(props: {
@@ -183,6 +200,10 @@ function ReviewsRoot() {
       ...current,
       status: reviewsStatusTabSelection(status),
     }));
+  const statusToggle = () =>
+    !boardVisible() && showReviewsStatusTabs(filters().status)
+      ? { value: statusTab(), onChange: selectStatusTab }
+      : undefined;
   const clearSearch = () => setSearch('');
   const searchForTab = (tab: ReviewsScope) => ({
     [reviewsTabSearch.namespace]: reviewsTabSearchCodec.serialize({ tab }),
@@ -296,7 +317,11 @@ function ReviewsRoot() {
       content: () => <GithubLabelPill name={label.name} color={label.color} />,
     })),
     hasGithubIdentity: Boolean(authorId()),
-    selected: activeFilters(),
+    // The board's columns are its status, so Status neither shows nor counts.
+    hideStatus: boardVisible(),
+    selected: boardVisible()
+      ? { ...activeFilters(), status: [] }
+      : activeFilters(),
     onFilterChange: changeFilter,
     onClearFilters: clearFilters,
   });
@@ -337,10 +362,17 @@ function ReviewsRoot() {
             />
           </div>
         </Show>
-        <Show when={!boardVisible() && showReviewsStatusTabs(filters().status)}>
-          <div class="mt-3 min-w-0 overflow-x-auto">
-            <ReviewsStatusTabs value={statusTab()} onChange={selectStatusTab} />
-          </div>
+        {/* The sidebar holds the toggle; without one it sits above the list. */}
+        <Show when={statusToggle()}>
+          {(status) => (
+            <ReviewsHeaderStatusTabs>
+              <ReviewsStatusTabs
+                value={status().value}
+                onChange={status().onChange}
+                class="h-auto max-w-sm"
+              />
+            </ReviewsHeaderStatusTabs>
+          )}
         </Show>
       </ViewShell.Header>
       <ViewShell.Content>
@@ -383,7 +415,7 @@ function ReviewsRoot() {
             <Match when={listSource.isLoading()}>
               <div
                 role="status"
-                class="grid flex-1 place-items-center text-sm text-ink-muted"
+                class="grid size-full place-items-center text-sm text-ink-muted"
               >
                 Loading pull requests…
               </div>
@@ -391,7 +423,7 @@ function ReviewsRoot() {
             <Match when={listSource.error()}>
               <div
                 role="alert"
-                class="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted"
+                class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted"
               >
                 <span>Reviews couldn’t be loaded.</span>
                 <Button
@@ -460,6 +492,7 @@ function ReviewsRoot() {
           >
             <ViewShell.Aside>
               <ReviewsSidebar
+                status={statusToggle()}
                 search={search()}
                 onSearchChange={setSearch}
                 layout={reviewsLayout()}
