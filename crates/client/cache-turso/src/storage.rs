@@ -1492,7 +1492,7 @@ impl Storage for TursoStorage {
                     )?;
                     self.fault_after(TestFaultSite::Put, index)?;
                 }
-                write_search_documents(&connection, &entries)?;
+                write_derived_rows(&connection, &entries)?;
                 write_projection_mutations(&connection, projections)
             })
         })();
