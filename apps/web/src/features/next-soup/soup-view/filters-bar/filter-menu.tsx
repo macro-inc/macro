@@ -1,11 +1,11 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import { Key } from '@solid-primitives/keyed';
 import { cn, Dropdown } from '@ui';
 import {
   type Accessor,
   createEffect,
   createSignal,
-  For,
   type JSX,
   onCleanup,
   Show,
@@ -116,19 +116,22 @@ export function FilterSubmenu<TId extends string>(props: {
           <Show
             when={props.selectionMode === 'single'}
             fallback={
-              <For each={props.options}>
+              // Keyed by option id, not by reference: callers rebuild their
+              // option arrays whenever an upstream query or flag settles, and
+              // disposing a row mid-press would swallow the selection.
+              <Key each={props.options} by="id">
                 {(option) => (
                   <FilterOptionItem
-                    label={option.label}
-                    icon={option.icon}
-                    content={option.content}
-                    disabled={option.disabled}
-                    active={props.isSelected(option.id)}
-                    onSelect={() => props.onSelect(option.id)}
+                    label={option().label}
+                    icon={option().icon}
+                    content={option().content}
+                    disabled={option().disabled}
+                    active={props.isSelected(option().id)}
+                    onSelect={() => props.onSelect(option().id)}
                     closeOnSelect={props.closeOnSelect}
                   />
                 )}
-              </For>
+              </Key>
             }
           >
             <Dropdown.RadioGroup
@@ -140,27 +143,27 @@ export function FilterSubmenu<TId extends string>(props: {
                 if (option) props.onSelect(option.id);
               }}
             >
-              <For each={props.options}>
+              <Key each={props.options} by="id">
                 {(option) => (
                   <Dropdown.RadioItem
-                    value={option.id}
-                    disabled={option.disabled}
+                    value={option().id}
+                    disabled={option().disabled}
                     closeOnSelect={props.closeOnSelect}
                   >
-                    <Show when={option.icon}>
+                    <Show when={option().icon}>
                       <span class="size-4 flex items-center justify-center shrink-0">
-                        {option.icon?.()}
+                        {option().icon?.()}
                       </span>
                     </Show>
                     <span class="flex-1">
-                      {option.content?.() ?? option.label}
+                      {option().content?.() ?? option().label}
                     </span>
                     <Dropdown.ItemIndicator>
                       <CheckIcon class="size-3.5 text-accent" />
                     </Dropdown.ItemIndicator>
                   </Dropdown.RadioItem>
                 )}
-              </For>
+              </Key>
             </Dropdown.RadioGroup>
           </Show>
         </Dropdown.Group>

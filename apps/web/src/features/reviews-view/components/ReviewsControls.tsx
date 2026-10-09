@@ -1,5 +1,6 @@
 import {
   type ListControlOption,
+  ListFilterCountBadge,
   ListFilterDropdown,
   type ListFilterGroup,
   ListSortDropdown,
@@ -16,7 +17,7 @@ import { PR_ORIGIN_LABELS, PR_ORIGIN_TOOLS } from '@block-pr/data/pr-origin';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { Accordion } from '@kobalte/core/accordion';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 import { UNKNOWN_ORIGIN } from '../reviews-filter';
 import type {
   ReviewsFilterId,
@@ -195,11 +196,7 @@ export function ReviewsControls(props: ReviewsControlProps) {
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />
-        <Show when={activeCount() > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
-            {activeCount()}
-          </span>
-        </Show>
+        <ListFilterCountBadge count={activeCount()} />
       </div>
     </div>
   );

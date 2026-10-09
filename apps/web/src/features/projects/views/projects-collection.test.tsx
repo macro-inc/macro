@@ -49,6 +49,7 @@ vi.mock('@app/components/view-shell', () => ({
   ListSortDropdown: () => null,
   ListGroupDropdown: () => null,
   ListFilterDropdown: () => null,
+  ListFilterCountBadge: () => null,
   useViewControlHotkeys: () => {},
 }));
 vi.mock('@app/components/view-shell/SidebarCreateButton', () => ({

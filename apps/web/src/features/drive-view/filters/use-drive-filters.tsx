@@ -66,22 +66,27 @@ export function useDriveFilters() {
     });
   });
 
-  const showCreators = () => {
+  // Memoized so `groups` only rebuilds when an answer flips. Reading the state
+  // signal there would hand the menu a fresh group list on every selection,
+  // tearing down the open submenu and closing the menu after one pick.
+  const showCreators = createMemo(() => {
     const { location, scope } = state.value();
 
     if (location.kind === 'folder') return true;
 
     return location.tab !== 'owned' || scope !== 'default';
-  };
+  });
+
+  const isRecent = createMemo(() => {
+    const location = state.value().location;
+
+    return location.kind === 'tab' && location.tab === 'recent';
+  });
 
   const groups = createMemo(() => {
     const groups: ListFilterGroup<DriveFilterGroupId, string>[] = [];
 
-    const location = state.value().location;
-
-    const isRecent = location.kind === 'tab' && location.tab === 'recent';
-
-    if (!isRecent) {
+    if (!isRecent()) {
       const tags = tagGroup();
 
       if (tags.options.length > 0) groups.push(tags);

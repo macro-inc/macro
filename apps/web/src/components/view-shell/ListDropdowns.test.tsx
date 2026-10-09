@@ -8,7 +8,7 @@ import {
 import { createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { AiFilterOutcome } from './AiFilterInput';
-import { ListFilterDropdown } from './ListDropdowns';
+import { ListFilterCountBadge, ListFilterDropdown } from './ListDropdowns';
 
 // Exercise the actual menus/comboboxes without initializing the app UI barrel.
 vi.mock('@ui', async () => ({
@@ -83,6 +83,14 @@ function setup(single = false, searchable = false) {
 
 function selectOption(element: HTMLElement) {
   fireEvent(element, new MouseEvent('pointerup', { button: 0, bubbles: true }));
+}
+
+function pressOption(element: HTMLElement) {
+  fireEvent(
+    element,
+    new MouseEvent('pointerdown', { button: 0, bubbles: true })
+  );
+  selectOption(element);
 }
 
 async function openSubmenu() {
@@ -254,4 +262,96 @@ it('ignores Enter on an empty description and leaves the option rows reachable',
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(onSubmit).not.toHaveBeenCalled();
   expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBeTruthy();
+});
+
+it('keeps an option selectable when the group list is rebuilt mid-press', async () => {
+  const [selected, setSelected] = createSignal<string[]>([]);
+  const [revision, setRevision] = createSignal(0);
+  const [open, setOpen] = createSignal(true);
+  // Callers derive groups from queries and flags, so an unrelated settle can
+  // hand the menu an equivalent-but-new array at any point in a press.
+  const groups = () => {
+    void revision();
+
+    return [
+      {
+        id: 'people',
+        label: 'Assignee',
+        options: [
+          { id: 'alice', label: 'Alice' },
+          { id: 'bob', label: 'Bob' },
+        ],
+      },
+    ];
+  };
+  render(() => (
+    <ListFilterDropdown
+      label="Filter tasks"
+      open={open()}
+      onOpenChange={setOpen}
+      groups={groups()}
+      isSelected={(_, id) => selected().includes(id)}
+      onSelectionChange={(_, id, checked) =>
+        setSelected((ids) =>
+          checked ? [...ids, id] : ids.filter((value) => value !== id)
+        )
+      }
+    />
+  ));
+  await openSubmenu();
+  const option = await screen.findByRole('menuitemcheckbox', { name: 'Alice' });
+  option.addEventListener('pointerdown', () => setRevision((n) => n + 1));
+
+  pressOption(option);
+  expect(selected()).toEqual(['alice']);
+  expect(open()).toBe(true);
+});
+
+it('ties each group row to its id rather than its position', async () => {
+  // Groups appear and disappear from the middle of the list, so a row reused
+  // positionally would carry one group's open submenu over to another.
+  const [withPriority, setWithPriority] = createSignal(false);
+  const groups = () => [
+    ...(withPriority()
+      ? [
+          {
+            id: 'priority',
+            label: 'Priority',
+            options: [{ id: 'high', label: 'High' }],
+          },
+        ]
+      : []),
+    {
+      id: 'people',
+      label: 'Assignee',
+      options: [{ id: 'alice', label: 'Alice' }],
+    },
+  ];
+  render(() => (
+    <ListFilterDropdown
+      label="Filter tasks"
+      open
+      groups={groups()}
+      isSelected={() => false}
+      onSelectionChange={() => {}}
+    />
+  ));
+  const assigneeRow = await screen.findByRole('menuitem', { name: 'Assignee' });
+
+  setWithPriority(true);
+
+  expect(screen.getByRole('menuitem', { name: 'Priority' })).toBeTruthy();
+  expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBe(assigneeRow);
+});
+
+it('shows the applied filter count only while filters are active', () => {
+  const [count, setCount] = createSignal(0);
+  const { container } = render(() => <ListFilterCountBadge count={count()} />);
+  expect(container.textContent).toBe('');
+
+  setCount(2);
+  expect(container.textContent).toBe('2');
+
+  setCount(0);
+  expect(container.textContent).toBe('');
 });
