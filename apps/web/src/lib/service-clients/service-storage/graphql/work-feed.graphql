@@ -1,0 +1,77 @@
+# One Home work feed entry: the shared item (entity, state, stacked
+# notifications) and its placement in this feed.
+fragment WorkFeedEntryFields on WorkFeedEntry {
+	sortAt
+	touchedAt
+	revision
+	primaryReason
+	primaryStackIndex
+	item {
+		id
+		state
+		attentionAt
+		unseenCount
+		entity {
+			...SoupItemPreviewFields
+		}
+		stacks {
+			kind
+			threadId
+			latestAt
+			unseen
+			count
+			notifications(limit: 100) {
+				...SoupNotificationFields
+			}
+		}
+	}
+}
+
+fragment WorkFeedPatchFields on WorkFeedPatch {
+	__typename
+	... on WorkFeedEntryUpserted {
+		entry {
+			...WorkFeedEntryFields
+		}
+	}
+	... on WorkFeedEntryRemoved {
+		itemId
+	}
+	... on WorkFeedInvalidated {
+		refresh
+	}
+}
+
+query WorkFeed($input: WorkFeedInput) {
+	user {
+		id
+		workFeed(input: $input) {
+			entries {
+				...WorkFeedEntryFields
+			}
+			nextCursor
+		}
+	}
+}
+
+mutation MarkWorkFeedItemsDone($input: MarkWorkFeedItemsDoneInput!) {
+	markWorkFeedItemsDone(input: $input) {
+		itemIds
+		undoToken
+	}
+}
+
+mutation UndoWorkFeedItemsDone($input: UndoWorkFeedItemsDoneInput!) {
+	undoWorkFeedItemsDone(input: $input) {
+		patches {
+			...WorkFeedPatchFields
+		}
+	}
+}
+
+# Membership and placement changes for one feed scope, applied as batches.
+subscription WorkFeedUpdates($scope: WorkFeedScopeInput) {
+	workFeedUpdates(scope: $scope) {
+		...WorkFeedPatchFields
+	}
+}

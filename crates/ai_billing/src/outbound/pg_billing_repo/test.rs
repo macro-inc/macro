@@ -469,6 +469,72 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn frozen_period_starts_lists_the_payers_periods_in_the_window(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let payer = payer();
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap();
+    let now = Utc::now()
+        .duration_trunc(chrono::Duration::microseconds(1))
+        .unwrap();
+    let month = chrono::Duration::days(30);
+    let seats = |user: &MacroUserIdStr<'static>| {
+        vec![SeatAllowance {
+            user: user.clone(),
+            included_cents: 2_000,
+        }]
+    };
+    // Four consecutive periods frozen for the payer, out of order, and one
+    // for someone else in the middle of them.
+    let starts = [now - month * 3, now - month, now - month * 2, now];
+    for start in starts {
+        let period = BillingPeriod {
+            start,
+            end: start + month,
+        };
+        repo.store_open_allowance(
+            &payer,
+            period.open_start(start).unwrap(),
+            &seats(&payer),
+            SeatGeneration::from_raw(0),
+        )
+        .await
+        .unwrap();
+    }
+    let other_period = BillingPeriod {
+        start: now - month * 2,
+        end: now - month,
+    };
+    repo.store_open_allowance(
+        &other,
+        other_period.open_start(other_period.start).unwrap(),
+        &seats(&other),
+        SeatGeneration::from_raw(0),
+    )
+    .await
+    .unwrap();
+
+    // Inclusive of `since`, exclusive of `before`, oldest first.
+    assert_eq!(
+        repo.frozen_period_starts(&payer, now - month * 2, now)
+            .await
+            .unwrap(),
+        vec![now - month * 2, now - month]
+    );
+    assert_eq!(
+        repo.frozen_period_starts(&payer, now - month * 3, now + month)
+            .await
+            .unwrap(),
+        vec![now - month * 3, now - month * 2, now - month, now]
+    );
+    assert!(
+        repo.frozen_period_starts(&payer, now + chrono::Duration::days(1), now + month)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
     let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
     let payer = payer();

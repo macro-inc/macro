@@ -3,7 +3,8 @@ use std::sync::Arc;
 use crate::domain::models::{
     AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
     NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration, SoupPropertiesField,
-    SoupRequest, TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+    SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
+    WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -104,6 +105,15 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: NotifiedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<NotifiedEntity>, Self::Err>> + Send;
+
+    /// Fetch one page of work feed candidates: entities with live attention
+    /// or own work, newest `sort_at` first, already gated on existence,
+    /// deletion and access, and on the request's entity filters where soup
+    /// owns the fold.
+    fn work_feed_soup_page<'a>(
+        &self,
+        req: WorkFeedCandidateRequest<'a>,
+    ) -> impl Future<Output = Result<Vec<WorkFeedCandidate>, Self::Err>> + Send;
 }
 
 /// The possible outputs of soup — one paginated page per query mode.
@@ -308,6 +318,25 @@ pub trait SoupService: Send + Sync + 'static {
         &self,
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
+
+    /// Fetch one hydrated page of the viewer's work feed: entities with live
+    /// attention or own work, newest `sort_at` first, each with its reason
+    /// timestamps and authoritative server facts.
+    ///
+    /// Services without a work feed reject the request. The production
+    /// service overrides this method.
+    fn get_work_feed_page(
+        &self,
+        req: WorkFeedSoupRequest,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<WorkFeedSoupPage, SoupErr>> + Send {
+        let _ = (req, team_receipt);
+        async move {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not serve the work feed"
+            )))
+        }
+    }
 }
 
 impl<S> SoupService for Arc<S>
@@ -408,6 +437,14 @@ where
         user_id: MacroUserIdStr<'a>,
     ) -> Result<Vec<PropertyDefinitionWithOptions>, SoupErr> {
         (**self).caller_tag_sets(user_id).await
+    }
+
+    async fn get_work_feed_page(
+        &self,
+        req: WorkFeedSoupRequest,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<WorkFeedSoupPage, SoupErr> {
+        (**self).get_work_feed_page(req, team_receipt).await
     }
 }
 

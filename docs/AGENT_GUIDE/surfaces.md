@@ -229,6 +229,19 @@ chat remain visible, and that loading older rows still works through pages of
 Noise-only email activity. Each entity appears once, ordered by its latest
 notification or own action. On desktop, the funnel button to the right of **Home**
 opens **Filter Home**.
+
+With the GraphQL Soup flag on, desktop Signal reads
+the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
+instead of merging sources in the browser; Noise, search, and touch devices keep
+the merged feed. Verify these against a backend that serves the work feed: a
+document you edited with no notifications appears read and offers no **Mark Done**.
+**Mark Done** clears a row's notifications (and archives an inbox email): a row
+that is only notifications leaves and stays gone after a reload, while a row you
+also worked on stays, read, at the time of your own work. **Undo** brings a done
+row back in place. A new comment on a months-old document appears at the top. With
+two sessions of the same account, marking a row done in one removes it from the
+other without reloading. A channel thread and its channel remain separate rows, and
+completing the channel leaves the thread.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu

@@ -827,7 +827,7 @@ pub enum JoinTeamError {
 #[derive(Debug, thiserror::Error)]
 pub enum ToggleAutoJoinDomainError {
     /// The team owner's email domain is a generic email provider domain
-    #[error("The domain {0} is a generic email domain and cannot be used for auto-join")]
+    #[error("Auto-join isn't available for {0}")]
     GenericDomainNotAllowed(String),
     /// Underlying team error
     #[error("Underlying team error {0}")]

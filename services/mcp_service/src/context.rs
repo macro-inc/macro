@@ -448,8 +448,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         },
     );
 
-    let recorder =
-        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
+    // Counted usage from tools called over MCP asks the authentication
+    // service (which owns Stripe) to settle the payer, the same way document
+    // cognition does.
+    let recorder = ai_billing::composition::pg_settling_recorder(
+        db.clone(),
+        config.enable_ai_usage_enforcement,
+        config.ai_pricing(),
+        config.settlement_route()?,
+    );
 
     let tool_context = ToolServiceContext {
         connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
