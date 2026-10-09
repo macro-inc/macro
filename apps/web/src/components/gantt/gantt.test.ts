@@ -209,7 +209,7 @@ it.each([1, 100])(
   }
 );
 
-it('shows the year only in January and keeps month labels aligned while zooming across year boundaries', async () => {
+it('keeps the year on pinned months and January while zooming across year boundaries', async () => {
   const start = toGanttDay('2026-12-01')!;
   const viewport = document.createElement('div');
   Object.defineProperty(viewport, 'clientWidth', { value: 1000 });
@@ -232,7 +232,9 @@ it('shows the year only in January and keeps month labels aligned while zooming 
   gantt.updateViewport();
   const december = view.getByText('December');
   const decemberLabel = december.parentElement!;
-  expect(decemberLabel.querySelector('[data-gantt-year]')).toBeNull();
+  expect(decemberLabel.querySelector('[data-gantt-year]')?.textContent).toBe(
+    '2026'
+  );
   expect(decemberLabel.classList.contains('sticky')).toBe(true);
   expect(decemberLabel.classList.contains('items-baseline')).toBe(true);
   const monthCell = decemberLabel.parentElement!;
@@ -270,18 +272,25 @@ it('shows the year only in January and keeps month labels aligned while zooming 
   const february = view.getByText('February');
   expect(Number(february.parentElement!.style.opacity)).toBe(1);
   const februaryLabel = february.parentElement!;
-  expect(februaryLabel.querySelector('[data-gantt-year]')).toBeNull();
+  const februaryYear = februaryLabel.querySelector('[data-gantt-year]')!;
+  expect(februaryYear.textContent).toBe('2027');
+  expect(
+    view.getByText('March').parentElement!.querySelector('[data-gantt-year]')
+  ).toBeNull();
   const dateMark = februaryLabel.querySelector('[data-gantt-date-mark]');
   viewport.scrollLeft += 20;
   gantt.updateViewport();
   expect(view.getByText('February').parentElement).toBe(februaryLabel);
-  expect(view.getByText('February').nextElementSibling).toBe(dateMark);
+  expect(view.getByText('February').nextElementSibling).toBe(februaryYear);
   gantt.setScale('month');
   await Promise.resolve();
   expect(view.getByText('Feb').parentElement).toBe(februaryLabel);
   expect(view.queryByText('February')).toBeNull();
-  expect(view.getByText('Feb').nextElementSibling).toBe(dateMark);
-  expect(view.container.querySelector('[data-gantt-year]')).toBeNull();
+  expect(view.getByText('Feb').nextElementSibling).toBe(februaryYear);
+  expect(februaryLabel.querySelector('[data-gantt-date-mark]')).toBe(dateMark);
+  expect(view.container.querySelector('[data-gantt-year]')?.textContent).toBe(
+    '2027'
+  );
   gantt.setScale('day');
   await Promise.resolve();
   expect(view.getByText('February')).toBeTruthy();

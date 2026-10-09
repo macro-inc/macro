@@ -136,8 +136,9 @@ changes the displayed period (Day, Week, Month), toggles calendar lines, and
 changes their spacing (Daily, Weekly, Monthly) and
 style (Solid, Dashed). Grid settings do not change item dates. Compact bold month
 names share the main date band and switch from abbreviated names at Month zoom
-to full names at Week/Day zoom. The year appears after January only, when a new
-year starts. Short, higher-contrast date marks sit beneath their centered labels
+to full names at Week/Day zoom. The pinned month always includes its year; other
+months show the year after January only, when a new year starts. Short,
+higher-contrast date marks sit beneath their centered labels
 instead of full-height header lines. Month/year labels fade as the next month
 pushes them toward the left edge, before reaching the expand/collapse button.
 Labels remain visible during horizontal scrolling,

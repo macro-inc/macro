@@ -604,25 +604,23 @@ export function GanttHeader(props: ParentProps<{ class?: string }>) {
   // The drawer starts below the header; reserve only its toggle in the timeline band.
   const textInset = () =>
     gantt.labelWidth() > 0 ? gantt.labelWidth() + 8 : 64;
+  const pinnedMonthLeft = () =>
+    left(gantt.visibleRange().start) + textInset() - gantt.labelWidth();
   const monthYear = (tick: GanttTick) => {
     const date = ganttDateFromDay(tick.start);
-    return date.getMonth() === 0 ? date.getFullYear() : undefined;
+    return date.getMonth() === 0 || left(tick.start) + 4 <= pinnedMonthLeft()
+      ? date.getFullYear()
+      : undefined;
   };
   const monthLabelWidth = (tick: GanttTick) =>
     tick.label.length * 7 + (monthYear(tick) === undefined ? 8 : 44);
   const monthLeft = (tick: GanttTick) =>
     Math.min(
-      Math.max(
-        left(tick.start) + 4,
-        left(gantt.visibleRange().start) + textInset() - gantt.labelWidth()
-      ),
+      Math.max(left(tick.start) + 4, pinnedMonthLeft()),
       left(tick.end) - monthLabelWidth(tick)
     );
-  const monthOpacity = (tick: GanttTick) => {
-    const pinned =
-      left(gantt.visibleRange().start) + textInset() - gantt.labelWidth();
-    return Math.max(0, 1 - Math.max(0, pinned - monthLeft(tick)) / 32);
-  };
+  const monthOpacity = (tick: GanttTick) =>
+    Math.max(0, 1 - Math.max(0, pinnedMonthLeft() - monthLeft(tick)) / 32);
   return (
     <div
       class={cn(
