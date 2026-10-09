@@ -42,7 +42,8 @@ where
     Notifier: AgentSessionNotifier,
 {
     /// Hand the session's live agent its server list as it stands now, if
-    /// that differs from what it was handed.
+    /// that differs from the list last requested for it. A list the agent
+    /// could not take is not requested again until it changes.
     ///
     /// Called before a prompt is delivered, so the prompt runs with whatever
     /// the owner connected since the session attached. The list is rebuilt

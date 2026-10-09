@@ -97,8 +97,9 @@ const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(
 
 struct ActiveSession {
     commands: Option<mpsc::Sender<SessionMessage>>,
-    /// The MCP servers the live connection last handed its agent: the
-    /// attachment's, until [`AgentSessionService::replace_mcp_servers`].
+    /// The MCP servers last requested for the live connection: the
+    /// attachment's, until [`AgentSessionService::replace_mcp_servers`]. An
+    /// agent that cannot resume, or refused, still has its previous list.
     mcp_servers: Vec<McpServer>,
     stopped: watch::Receiver<bool>,
     marker: Arc<()>,
@@ -275,8 +276,10 @@ pub trait AgentSessionService: Send + Sync + 'static {
         action_id: AgentActionId,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The MCP servers the session's live connection on this instance last
-    /// handed its agent; `None` when no connection is attached here.
+    /// The MCP servers last requested for the session's live connection on
+    /// this instance; `None` when no connection is attached here. An agent
+    /// that could not take a requested list keeps its previous one until its
+    /// next attach.
     fn attached_mcp_servers(&self, id: AgentSessionId) -> Option<Vec<McpServer>>;
 
     /// Hand the session's agent `servers` from now on. The live connection

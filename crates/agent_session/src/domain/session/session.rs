@@ -236,10 +236,12 @@ impl<Token> SessionMachine<Token> {
 
     /// Re-resume the live session so the agent picks up `mcp_servers`.
     ///
-    /// Only between turns: a resume mid-turn would race the prompt it
-    /// interrupts, so a turn in flight leaves the refresh for its end. Actions
+    /// Only between turns and with no question open: a resume mid-turn would
+    /// race the prompt it interrupts, so a turn in flight leaves the refresh
+    /// for its end, and a held elicitation for its answer. Actions
     /// arriving meanwhile queue behind the resume, so the next prompt runs
-    /// with the new servers. Returns whether a resume went out.
+    /// with the new servers. An agent that cannot resume, or refuses, is not
+    /// asked again until the list changes. Returns whether a resume went out.
     fn begin_mcp_refresh(&mut self, effects: &mut Vec<Effect<Token>>) -> bool {
         if !self.mcp_refresh_required || self.in_flight_turn.is_some() {
             return false;
@@ -372,6 +374,7 @@ impl<Token> SessionMachine<Token> {
             }
         }
 
+        let answers_elicitation = matches!(action, AgentAction::RespondElicitation(_));
         // Through the queue even when live, so an action can never overtake
         // one accepted earlier. (A completed flush leaves the queue empty, so
         // the flush below sends exactly this action.)
@@ -382,6 +385,10 @@ impl<Token> SessionMachine<Token> {
             token,
         });
         self.flush(&session_id, &mut effects);
+        // A refresh held back by the question can go now that it is answered.
+        if answers_elicitation {
+            self.begin_mcp_refresh(&mut effects);
+        }
         effects
     }
 

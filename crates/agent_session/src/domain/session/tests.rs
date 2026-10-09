@@ -1916,6 +1916,41 @@ mod elicitation {
         assert_eq!(machine.pending_elicitation(), None);
         assert_eq!(machine.status(), RuntimeStatus::Dead);
     }
+
+    #[test]
+    fn new_mcp_servers_held_behind_an_elicitation_go_out_once_it_is_answered() {
+        let mut machine = live_resumable_machine();
+        machine.handle(create(RequestId::Number(0), form_for("acp-42")));
+
+        let replaced = machine.handle(Input::ReplaceMcpServers(vec![connected_app("linear")]));
+        assert!(replaced.is_empty(), "the agent is waiting on its question");
+
+        let answered = machine.handle(answer(
+            ElicitationRequestId::Number(0),
+            ElicitationAnswer::Decline,
+            1,
+        ));
+
+        assert_eq!(
+            sent_responses(&answered)
+                .into_iter()
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>(),
+            [RequestId::Number(0)]
+        );
+        assert_eq!(sent_methods(&answered), ["session/resume"]);
+        assert!(matches!(
+            answered[..],
+            [
+                Effect::Send { .. },
+                Effect::Complete {
+                    token: 1,
+                    result: Ok(())
+                },
+                Effect::Send { .. },
+            ]
+        ));
+    }
 }
 
 /// A live session on an agent that offers `session/resume`; its `session/new`
