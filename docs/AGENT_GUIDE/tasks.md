@@ -170,7 +170,8 @@ filter sheets. Desktop uses the centered composer dialog.
    and `Create Task Ctrl ↵`. `Attach image or video` (paperclip) sits just under the
    description, above the property buttons. If the chosen project can't be
    set, the task is still created and a toast says it wasn't added to the project.
-   The `Team` switch in the footer's left corner defaults to on and remembers your
+   The `Share with <team name>` switch in the footer's left corner (hidden when you
+   aren't on a team) defaults to on and remembers your
    choice in local storage across composer openings and page reloads. Hovering it
    explains whether the task will be visible to your whole team or only to you and
    the people you share it with. The choice also applies to Create More, continuing
