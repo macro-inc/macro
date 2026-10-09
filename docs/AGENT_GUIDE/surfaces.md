@@ -1771,6 +1771,15 @@ A channel's `Calls` tab lists that channel's recordings with the same rows, filt
 by the channel id. Its search field matches call names and transcripts in that
 channel.
 
+In the native iOS call drawer, the horizontal participant row excludes the person
+shown in the large video. While holding or scrolling the row (including momentum),
+the displayed primary and row membership stay fixed; speaking indicators still
+update. The latest primary and membership update together after scrolling settles,
+preserving a surviving participant's position where possible. Verify that dragging
+does not pin someone, tapping pins the displayed person, and a participant who
+leaves during a held touch cannot be selected. Exercise speaker changes and
+departures during row gestures on a physical iPhone as well as the simulator.
+
 If a recording fails to play, reload the page to obtain a fresh recording link,
 or use **Open or download recording**. The playback warning does not assume
 that the failure is caused by an unsupported media format.

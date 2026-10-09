@@ -1,0 +1,51 @@
+name: CallOverlayHarness
+options:
+  deploymentTarget:
+    iOS: '16.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    CODE_SIGNING_ALLOWED: NO
+    GENERATE_INFOPLIST_FILE: YES
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift.git
+    exactVersion: 2.13.0
+targets:
+  CallOverlayHarness:
+    type: application
+    platform: iOS
+    sources:
+      - HarnessApp.swift
+      - ../../Sources/CallVideoOverlayController.swift
+      - ../../Sources/ParticipantStripScrollView.swift
+      - ../../Sources/CallAudioRouteController.swift
+    dependencies:
+      - package: LiveKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macro.tests.call-overlay
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  CallOverlayTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - ParticipantStripTests.swift
+    dependencies:
+      - target: CallOverlayHarness
+  CallOverlayUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - OverlayGestureTests.swift
+    dependencies:
+      - target: CallOverlayHarness
+schemes:
+  CallOverlayHarness:
+    build:
+      targets:
+        CallOverlayHarness: all
+    test:
+      targets:
+        - CallOverlayTests
+        - CallOverlayUITests
