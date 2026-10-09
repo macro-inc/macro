@@ -830,6 +830,20 @@ export const ConfigureBotResponse = z.object({
   summary: z.string(),
 });
 
+export const ConnectMcpServer = z.object({
+  url: z.string(),
+  serverName: z.string(),
+});
+
+export const ConnectMcpServerResponse = z.object({
+  url: z.string(),
+  serverName: z.string(),
+  alreadyConnected: z.boolean(),
+  authenticated: z.boolean(),
+  enabled: z.boolean(),
+  summary: z.string(),
+});
+
 export const ContentSearch = z.object({
   query: z.string(),
   matchType: z

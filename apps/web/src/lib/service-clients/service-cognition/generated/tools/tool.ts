@@ -33,6 +33,10 @@ type ToolParserMap = {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
   };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -381,6 +385,10 @@ const toolParserMap = {
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
+  },
+  ConnectMcpServer: {
+    call: schemas.ConnectMcpServer,
+    response: schemas.ConnectMcpServerResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -771,6 +779,10 @@ type ToolDataMap = {
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
+  };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;

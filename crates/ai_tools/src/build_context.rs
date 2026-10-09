@@ -510,6 +510,7 @@ pub async fn build_tool_service_context_from_env(
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
+        mcp_server_tool_context: crate::tool_context::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: crate::tool_context::build_bot_tool_context(

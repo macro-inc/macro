@@ -41,6 +41,7 @@ use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
+use mcp_client::inbound::toolset::mcp_server_toolset;
 use notification::inbound::ai_tool::notification_toolset;
 use projects::inbound::toolset::project_toolset;
 use properties::inbound::toolset::properties_toolset;
@@ -76,12 +77,12 @@ pub use tool_context::{
     ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
     ToolForeignEntityService, ToolFrecencyService, ToolGithubPullRequestService,
     ToolImageGenerationToolContext, ToolImportService, ToolImportToolContext,
-    ToolInitiativeToolContext, ToolMcpSelector, ToolNotificationQueue, ToolNotificationService,
-    ToolNotificationToolContext, ToolPipedreamConnection, ToolProjectService,
-    ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext, ToolServiceContext,
-    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
-    ToolTableEventPublisher, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
-    ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
+    ToolInitiativeToolContext, ToolMcpSelector, ToolMcpServerToolContext, ToolNotificationQueue,
+    ToolNotificationService, ToolNotificationToolContext, ToolPipedreamConnection,
+    ToolProjectService, ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
+    ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
+    ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamService, ToolTeamToolContext,
+    ToolUserEmailService, ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
     build_booking_link_tool_context, build_bot_tool_context, build_calendar_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
@@ -241,6 +242,15 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
         .add_tool::<Subagent, SubagentContext>();
+    // Only the chat and agent-session hosts hold the MCP credentials key.
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession => {
+            toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
+                mcp_client::outbound::pg_server_repo::PgServerRepo,
+            >())
+        }
+        AiHost::ChannelBot | AiHost::Mcp => toolset,
+    };
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()

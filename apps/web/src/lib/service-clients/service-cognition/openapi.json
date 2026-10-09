@@ -1326,7 +1326,7 @@
       },
       "post": {
         "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user.",
+        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
         "operationId": "add_mcp_server",
         "requestBody": {
           "content": {
@@ -1345,6 +1345,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }

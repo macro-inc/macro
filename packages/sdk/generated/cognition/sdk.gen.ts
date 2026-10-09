@@ -320,7 +320,8 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Add a new MCP server for the authenticated user.
+     * Add a new MCP server for the authenticated user. A URL the user already
+     * has is returned as stored, keeping its credentials.
      */
     public addMcpServer<ThrowOnError extends boolean = false>(options: Options<AddMcpServerData, ThrowOnError>): RequestResult<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError>({

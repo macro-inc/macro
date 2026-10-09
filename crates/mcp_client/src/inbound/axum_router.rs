@@ -1,6 +1,7 @@
 use crate::domain::{
     models::{McpServerRecord, OAuthClientMetadata},
     ports::{McpServerStore, OAuthClient},
+    service::{AddServerError, ServerDirectory},
 };
 use axum::{
     Json, Router,
@@ -230,6 +231,9 @@ pub enum McpHandlerErr {
     /// The requested server was not found.
     #[error("server not found")]
     NotFound,
+    /// The request was malformed.
+    #[error("{0}")]
+    InvalidRequest(String),
     /// The OAuth provider rejected the authorization request.
     #[error("authorization rejected by provider: {0}")]
     OAuthRejected(String),
@@ -245,9 +249,9 @@ impl IntoResponse for McpHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
             McpHandlerErr::NotFound => StatusCode::NOT_FOUND,
-            McpHandlerErr::OAuthRejected(_) | McpHandlerErr::MalformedCallback => {
-                StatusCode::BAD_REQUEST
-            }
+            McpHandlerErr::InvalidRequest(_)
+            | McpHandlerErr::OAuthRejected(_)
+            | McpHandlerErr::MalformedCallback => StatusCode::BAD_REQUEST,
             McpHandlerErr::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -305,11 +309,13 @@ where
     request_body = AddServerRequest,
     responses(
         (status = 201, body = ServerResponse),
+        (status = 400, body = ErrorResponse),
         (status = 401, body = String),
         (status = 500, body = ErrorResponse),
     )
 )]
-/// Add a new MCP server for the authenticated user.
+/// Add a new MCP server for the authenticated user. A URL the user already
+/// has is returned as stored, keeping its credentials.
 #[tracing::instrument(skip_all, err)]
 pub async fn add_server<S, O, Auth>(
     State(state): State<McpRouterState<S, O, Auth>>,
@@ -323,23 +329,19 @@ where
     anyhow::Error: From<S::Err>,
 {
     let user = &authorization.authorization.user;
-    let record = McpServerRecord {
-        user_id: user.macro_user_id.clone(),
-        url: body.url,
-        server_name: body.server_name,
-        credentials: None,
-        enabled: true,
-    };
-
-    state
-        .store
-        .save(&record)
+    let added = ServerDirectory::new(state.store.clone())
+        .add(user.macro_user_id.clone(), &body.url, &body.server_name)
         .await
-        .map_err(anyhow::Error::from)?;
+        .map_err(|error| match error {
+            AddServerError::InvalidUrl(_) | AddServerError::EmptyName => {
+                McpHandlerErr::InvalidRequest(error.to_string())
+            }
+            AddServerError::Store(error) => McpHandlerErr::Internal(error),
+        })?;
 
     Ok((
         StatusCode::CREATED,
-        Json(ServerResponse::from_record(&record)),
+        Json(ServerResponse::from_record(added.record())),
     ))
 }
 

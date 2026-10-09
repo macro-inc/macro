@@ -728,6 +728,9 @@ pub async fn run() -> anyhow::Result<()> {
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
+        ),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: ai_tools::build_bot_tool_context(

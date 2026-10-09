@@ -4443,6 +4443,48 @@ export interface ConfigureBotResponse {
   summary: string;
 }
 /**
+ * Add a remote MCP server to the current user's connections by its URL, so their agents and chats can use its tools. Use when the user asks to connect, add, or install an MCP server they give you the URL of, or one whose official remote MCP URL you are sure of; never guess a URL. Most servers need the user to sign in afterwards: when the result says so, tell them to open Settings → Connections and click Connect next to the server. Its tools are available in new conversations once connected. A URL the user already has is left as it is.
+ */
+export interface ConnectMcpServer {
+  /**
+   * The MCP server's streamable HTTP URL, e.g. `https://mcp.linear.app/mcp`.
+   */
+  url: string;
+  /**
+   * Short display name for the server, e.g. `Linear`. Its tools are listed under this name.
+   */
+  serverName: string;
+}
+/**
+ * Response from [`ConnectMcpServer`].
+ */
+export interface ConnectMcpServerResponse {
+  /**
+   * The server's URL.
+   */
+  url: string;
+  /**
+   * The server's display name.
+   */
+  serverName: string;
+  /**
+   * Whether the user already had this server before the call.
+   */
+  alreadyConnected: boolean;
+  /**
+   * Whether the server holds the user's sign-in.
+   */
+  authenticated: boolean;
+  /**
+   * Whether the server's tools are turned on.
+   */
+  enabled: boolean;
+  /**
+   * What happened and what the user still has to do.
+   */
+  summary: string;
+}
+/**
  * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface ContentSearch {

@@ -44,6 +44,7 @@ import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
 } from './CodingAgents';
+import { connectMcpServerHandler } from './ConnectMcpServer';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -183,6 +184,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportNotionPage: importNotionPageHandler,
+  ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,

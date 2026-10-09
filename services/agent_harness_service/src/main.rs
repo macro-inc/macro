@@ -509,7 +509,7 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(McpToolCatalog::new(Arc::clone(&mcp_connector)));
     let sessions = sessions.with_tool_catalog(Arc::clone(&tool_catalog));
 
-    let tool_context = ai_tools::build_tool_service_context_from_env(
+    let mut tool_context = ai_tools::build_tool_service_context_from_env(
         pool.clone(),
         event_broker_tracker.clone(),
         config.enable_ai_usage_enforcement,
@@ -517,6 +517,9 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    tool_context.mcp_server_tool_context = ai_tools::ToolMcpServerToolContext::wired(
+        mcp_client::domain::service::ServerDirectory::new(Arc::clone(&mcp_servers)),
+    );
     // Macro's own tools run in-process here rather than through the egress
     // proxy, so they are held for the owner by the same approvals.
     let inmem_model_engine: Arc<dyn TurnEngine> = Arc::new(

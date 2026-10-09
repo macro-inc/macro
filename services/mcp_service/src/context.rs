@@ -461,6 +461,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         databases_tool_context,
         databases_sql_tool_context,
         import_tool_context: ToolImportToolContext::unwired(),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
         bot_tool_context: ai_tools::build_bot_tool_context(

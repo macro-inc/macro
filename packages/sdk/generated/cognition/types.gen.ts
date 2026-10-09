@@ -2520,6 +2520,7 @@ export type AddMcpServerData = {
 };
 
 export type AddMcpServerErrors = {
+    400: ErrorResponse;
     401: string;
     500: ErrorResponse;
 };

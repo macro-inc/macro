@@ -20,6 +20,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   CommentOnDocument: (whose) => `comment on ${whose} documents`,
   ConfigureAgent: (whose) => `change ${whose} agents`,
   ConfigureBot: (whose) => `change ${whose} bots`,
+  ConnectMcpServer: (whose) => `connect an MCP server to ${whose} account`,
   ContentSearch: (whose) => `search ${whose} workspace`,
   CreateBookingLink: (whose) => `create a booking link for ${whose} calendar`,
   CreateBot: (whose) => `create a bot in ${whose} workspace`,
