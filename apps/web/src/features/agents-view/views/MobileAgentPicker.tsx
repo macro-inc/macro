@@ -23,6 +23,7 @@ import type { AgentPickerProps } from './AgentPicker';
 export function MobileAgentPicker(props: AgentPickerProps) {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal('');
+  const [showAll, setShowAll] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
   const [browsing, setBrowsing] = createSignal<RosterAgent>();
   const macro = () =>
@@ -41,9 +42,13 @@ export function MobileAgentPicker(props: AgentPickerProps) {
       label: modelLabel(option.id, option.name),
       group: option.group ?? undefined,
     }));
-    const { frontier, providers } = buildModelCatalog(options);
+    const { frontier, providers } = buildModelCatalog(options, true);
     const search = query().trim().toLowerCase();
-    return [{ label: 'Suggested', options: frontier }, ...providers]
+    return (
+      showAll() || search || frontier.length === 0
+        ? providers
+        : [{ label: 'Suggested', options: frontier }]
+    )
       .map((section) => ({
         label: section.label,
         options: section.options.filter((option) =>
@@ -59,7 +64,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
       )
     );
   const searchLabel = () =>
-    browsing()
+    browsing() || showAll()
       ? 'Search models'
       : macro()
         ? 'Search agents and models'
@@ -69,6 +74,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
     if (!next) {
       setQuery('');
       setBrowsing(undefined);
+      setShowAll(false);
     }
   };
   const choose = (agent: RosterAgent, model?: string) => {
@@ -78,6 +84,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
   const browse = (agent?: RosterAgent) => {
     setQuery('');
     setBrowsing(agent);
+    setShowAll(false);
     searchInput?.focus();
   };
   return (
@@ -107,19 +114,27 @@ export function MobileAgentPicker(props: AgentPickerProps) {
         <MobileDrawer.Content aria-label="Choose an agent or model">
           <MobileDrawer.Handle />
           <div class="flex items-center gap-2 px-4 pb-3">
-            <Show when={browsing()}>
+            <Show when={browsing() || showAll()}>
               <Button
                 variant="ghost"
                 size="icon-md"
-                label="Back to agents"
-                onClick={() => browse()}
+                label={showAll() ? 'Back to Suggested' : 'Back to agents'}
+                onClick={() => {
+                  if (showAll()) {
+                    setShowAll(false);
+                    setQuery('');
+                    searchInput?.focus();
+                  } else browse();
+                }}
               >
                 <ArrowLeft />
               </Button>
             </Show>
             <h2 class="min-w-0 flex-1 truncate font-medium">
-              {browsing()?.name ??
-                (macro() ? 'Agents and models' : 'Choose an agent')}
+              {showAll()
+                ? 'All models'
+                : (browsing()?.name ??
+                  (macro() ? 'Agents and models' : 'Choose an agent'))}
             </h2>
             <Show when={browsing()}>
               {(agent) => (
@@ -192,13 +207,32 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                   </div>
                 )}
               </For>
+              <Show
+                when={
+                  !showAll() &&
+                  !query() &&
+                  modelSections().some(
+                    (section) => section.label === 'Suggested'
+                  )
+                }
+              >
+                <MobileDrawer.Item
+                  onClick={() => {
+                    setShowAll(true);
+                    searchInput?.focus();
+                  }}
+                >
+                  <span class="flex-1">More models</span>
+                  <CaretRight class="size-4" />
+                </MobileDrawer.Item>
+              </Show>
               <Show when={modelSections().length === 0}>
                 <p role="status" class="px-4 py-3 text-sm text-ink-muted">
                   {query() ? 'No matching models' : catalog.message()}
                 </p>
               </Show>
             </Show>
-            <Show when={!browsing()}>
+            <Show when={!browsing() && !showAll()}>
               <For each={groups()}>
                 {(group) => (
                   <div>

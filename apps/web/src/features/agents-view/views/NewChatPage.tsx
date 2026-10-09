@@ -16,6 +16,7 @@ import type { PromptAttachment } from '@service-agent-harness/generated/schemas'
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { EffortDial } from '../../block-agent/component/EffortDial';
 import {
   type EffortChoice,
   effortConfigOption,
@@ -265,18 +266,31 @@ export function NewChatPage(props: {
   };
 
   const agentSelector = () => (
-    <AgentPicker
-      agents={options()}
-      selected={selected()}
-      modelOverride={composerModelOverride()}
-      loading={props.rosterLoading}
-      effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
-      effortSelection={effortOverride()}
-      onSelect={selectAgent}
-      onSelectEffort={selectAgent}
-      onConnect={connect}
-      onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
-    />
+    <div class="flex min-w-0 items-center gap-0.5">
+      <AgentPicker
+        agents={options()}
+        selected={selected()}
+        modelOverride={composerModelOverride()}
+        loading={props.rosterLoading}
+        effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
+        effortSelection={effortOverride()}
+        onSelect={selectAgent}
+        onSelectEffort={selectAgent}
+        onConnect={connect}
+        onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
+      />
+      <EffortDial
+        config={effort()}
+        value={selectedEffort()?.value}
+        disabled={Boolean(blocked())}
+        onChange={(choice) =>
+          setEffortSelection({
+            ...choice,
+            target: JSON.stringify(capabilityTarget()),
+          })
+        }
+      />
+    </div>
   );
 
   const setMode = (next: AgentsMode) => {

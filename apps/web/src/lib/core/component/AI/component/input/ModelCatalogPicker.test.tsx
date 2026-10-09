@@ -81,9 +81,7 @@ vi.mock('@ui', () => {
   Dropdown.SubTrigger = (props: { children?: JSX.Element }) => (
     <div>{props.children}</div>
   );
-  Dropdown.SubContent = (props: { children?: JSX.Element }) => (
-    <div>{props.children}</div>
-  );
+  Dropdown.SubContent = () => null;
 
   return { cn, Dropdown };
 });
@@ -246,18 +244,27 @@ describe('ModelCatalogMenu search focus', () => {
 });
 
 describe('ModelCatalogPicker frontier and providers', () => {
-  it('shows frontier models first and all provider groups directly below', () => {
+  it('shows suggested choices with a full-catalog submenu', () => {
     mountPicker();
     expect(screen.getByText('Suggested')).toBeTruthy();
-    expect(screen.getByText('Google')).toBeTruthy();
-    const frontier = screen.getByText('Opus 5.5 High');
-    const provider = screen.getByText('Gemini 3.8 Flash High');
-    expect(
-      frontier.compareDocumentPosition(provider) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(screen.getByText('More models')).toBeTruthy();
+    expect(screen.queryByText('Google')).toBeNull();
     expect(screen.queryByText('Recommended')).toBeNull();
+  });
+  it('includes suggested choices in the full provider catalog', () => {
+    render(() => (
+      <ModelCatalogMenu
+        fullCatalog
+        value="auto"
+        options={OPTIONS}
+        onSelect={() => {}}
+      />
+    ));
+    expect(screen.queryByText('Suggested')).toBeNull();
     expect(screen.queryByText('More models')).toBeNull();
+    expect(screen.getByText('Google')).toBeTruthy();
+    for (const option of OPTIONS)
+      expect(screen.getByRole('menuitem', { name: option.label })).toBeTruthy();
   });
 
   it('uses the supplied model row for both frontier and provider choices', () => {
@@ -284,6 +291,9 @@ describe('ModelCatalogPicker frontier and providers', () => {
     expect(
       screen.getByRole('button', { name: 'Agent model' }).textContent
     ).toContain('Opus 5.5 High');
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search models' }), {
+      target: { value: 'Google' },
+    });
     fireEvent.click(
       screen.getByRole('button', { name: 'Custom Gemini 3.8 Flash High' })
     );

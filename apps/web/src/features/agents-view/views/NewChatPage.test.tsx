@@ -344,7 +344,8 @@ describe('agent-led new conversation', () => {
     expect(
       frontier.getAllByRole('button').map((item) => item.textContent?.trim())
     ).toEqual(['Opus 5.5', 'Sonnet 5.5', 'GPT-5.6', 'GPT-6 Astra']);
-    expect(screen.getByRole('group', { name: 'Google' })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Google' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'More models' })).toBeTruthy();
     expect(screen.queryByText('Recommended')).toBeNull();
     fireEvent.input(
       screen.getByRole('textbox', { name: 'Search agents and models' }),
@@ -470,9 +471,7 @@ describe('agent-led new conversation', () => {
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Repository' })).toBeNull();
     openAgents();
-    expect(
-      screen.getByRole('menuitem', { name: /^Chat default$/ })
-    ).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Suggested' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Cursor/ })).toBeNull();
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
@@ -850,8 +849,8 @@ describe('agent-led new conversation', () => {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.queryByRole('group', { name: 'Coding agents' })).toBeNull();
     const search = screen.getByRole('textbox', { name: 'Search models' });
-    expect(screen.queryByRole('menuitem', { name: /More models/ })).toBeNull();
-    expect(screen.getByRole('group', { name: 'Z.ai' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /More models/ })).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Z.ai' })).toBeNull();
     fireEvent.input(search, { target: { value: 'GLM' } });
     expect(screen.getByTitle('GLM 5.3')).toBeTruthy();
     expect(screen.getByTitle('GLM 5.3 Flash')).toBeTruthy();
@@ -940,6 +939,9 @@ describe('agent-led new conversation', () => {
     fireEvent.click(flash);
     fireEvent.input(search, { target: { value: '' } });
 
+    const more = screen.getByRole('menuitem', { name: 'More models' });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowRight' });
     const extra = await screen.findByTitle('GLM 5.3 Flash');
     expect(extra.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(extra);
@@ -996,6 +998,42 @@ describe('agent-led new conversation', () => {
     expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
     expect(screen.getByRole('button', { name: 'Agent' }).title).toBe(before);
   });
+  it.each([false, true])(
+    'cycles effort from the composer dial (touch=%s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const send = page(true, [], false, [], 'code');
+      if (touch) fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+      else openAgents();
+      if (touch) {
+        fireEvent.click(
+          await screen.findByRole('button', { name: 'Models for Cursor' })
+        );
+        fireEvent.click(await screen.findByRole('button', { name: 'GPT-5' }));
+      } else {
+        const cursor = screen.getByRole('menuitem', { name: /Cursor/ });
+        cursor.focus();
+        fireEvent.keyDown(cursor, { key: 'ArrowRight' });
+        fireEvent.keyDown(
+          await screen.findByRole('menuitem', { name: /^GPT-5/ }),
+          { key: 'Enter' }
+        );
+      }
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Reasoning effort: Low' })
+      );
+      expect(
+        screen.getByRole('button', { name: 'Reasoning effort: Ultra' })
+      ).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          modelOverride: 'gpt-5',
+          effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+        })
+      );
+    }
+  );
   it('passes opaque effort and clears it with the model override after sending', async () => {
     const send = page(true, [], false, [], 'code');
     const models = await hoverAgent('Cursor');

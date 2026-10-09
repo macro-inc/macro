@@ -84,7 +84,9 @@ bottom right at the end of the scrolling list. The picker uses one
 continuous surface, with labels and spacing separating groups instead of nested
 shaded cards. Provider sections use compact spacing, with labels close to their
 rows. Model lists start with
-**Suggested**, then group the remaining choices by provider. Search accepts
+**Suggested**, followed by **More models** and your agents. **More models**
+opens the complete provider catalog, including copies of Suggested choices;
+use Back to return. Search accepts
 model names, IDs, and providers. When browsing an agent, **Use default** in the
 header selects its configured model.
 
@@ -299,8 +301,9 @@ the shimmer.
   Macro's models use the same searchable catalog as running sessions:
   **Suggested** lists **Opus 5.5**, **Sonnet 5.5**, **GPT-5.6** (Sol in
   runtime catalogs), and **GPT-6 Astra**, when available, in that order. The
-  remaining models are grouped by provider directly below, including effort
-  and speed variants. Every available model appears once; choosing a model
+  **More models** submenu contains the complete catalog grouped by provider,
+  including the Suggested choices and effort/speed variants. Your agents
+  follow Suggested and More models in the root menu. Choosing a model
   does not reorder the sections. Search matches names, IDs, and provider names. The compact borderless search
   field receives focus when the selector opens or reopens. Its opaque header
   meets the top of the scroll area so rows cannot show through above it.
@@ -403,9 +406,15 @@ the shimmer.
   Within an existing session, the model picker remains available on the right.
   Its trigger, model options, and session metadata use the same readable model names
   as the new-conversation picker. Large catalogs share the Settings picker:
-  provider icons, search, **Suggested** first, and the remaining choices
-  grouped by provider in one scrolling list. The same sections are visible on
-  desktop and phone widths without a nested **More models** menu.
+  provider icons, search, **Suggested** first, and **More models** for the
+  complete provider catalog. Desktop opens a submenu; phone widths show
+  the catalog in place with a Back action. Search includes every model.
+- When the selected model advertises effort choices, a small dial beside the
+  composer model control shows the current level. Click to advance through
+  supported levels (highest wraps to lowest), or use arrow keys, Home, and End.
+  Its tooltip names the current and next level. New conversations apply the
+  choice to the next send; running sessions use their existing configuration
+  action and disable the dial while a change is pending.
 - On desktop, chat agents' empty input types tips about connectors, skills,
   mentions, and agents one character at a time, pauses to read each hint, then
   quickly erases it before typing the next. Entering a draft pauses the animation;

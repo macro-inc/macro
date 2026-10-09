@@ -1,4 +1,6 @@
+import { isMobileWidth } from '@core/mobile/mobileWidth';
 import CaretDown from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import { cn, Dropdown } from '@ui';
@@ -258,12 +260,14 @@ export function ModelCatalogMenu(
      * and hover-opened submenus without their own autofocus handler.
      */
     autoFocusSearch?: boolean;
+    fullCatalog?: boolean;
     onClose?: () => void;
   }
 ) {
   let searchEl: HTMLInputElement | undefined;
   const Row = props.modelRow ?? ModelRow;
   const [query, setQuery] = createSignal('');
+  const [showAll, setShowAll] = createSignal(false);
   onMount(() => {
     if (props.autoFocusSearch) keepSearchFocused(() => searchEl);
   });
@@ -275,7 +279,7 @@ export function ModelCatalogMenu(
       matchesModelQuery(option, currentQuery)
     );
   });
-  const catalog = createMemo(() => buildModelCatalog(props.options));
+  const catalog = createMemo(() => buildModelCatalog(props.options, true));
 
   return (
     <>
@@ -317,7 +321,13 @@ export function ModelCatalogMenu(
         when={normalizedQuery().length > 0}
         fallback={
           <div class="space-y-1">
-            <Show when={catalog().frontier.length > 0}>
+            <Show
+              when={
+                !props.fullCatalog &&
+                !showAll() &&
+                catalog().frontier.length > 0
+              }
+            >
               <ModelList
                 label="Suggested"
                 options={catalog().frontier}
@@ -328,19 +338,87 @@ export function ModelCatalogMenu(
                 onClose={props.onClose}
               />
             </Show>
-            <For each={catalog().providers}>
-              {(provider) => (
-                <ModelList
-                  label={provider.label}
-                  options={provider.options}
-                  value={props.value}
-                  disabled={props.disabled}
-                  onSelect={props.onSelect}
-                  row={Row}
-                  onClose={props.onClose}
-                />
-              )}
-            </For>
+            <Show
+              when={
+                props.fullCatalog ||
+                showAll() ||
+                catalog().frontier.length === 0
+              }
+              fallback={
+                <Show
+                  when={isMobileWidth()}
+                  fallback={
+                    <Dropdown.Sub>
+                      <Dropdown.SubTrigger class="h-8 gap-2">
+                        <span class="flex-1">More models</span>
+                        <CaretRight class="size-3.5" />
+                      </Dropdown.SubTrigger>
+                      <Dropdown.SubContent
+                        aria-label="All models"
+                        class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
+                        onOpenAutoFocus={(event: Event) =>
+                          event.preventDefault()
+                        }
+                        onPointerDown={(event: PointerEvent) =>
+                          event.stopPropagation()
+                        }
+                        onMouseDown={(event: MouseEvent) =>
+                          event.stopPropagation()
+                        }
+                      >
+                        <ModelCatalogMenu
+                          fullCatalog
+                          autoFocusSearch
+                          value={props.value}
+                          options={props.options}
+                          disabled={props.disabled}
+                          onSelect={props.onSelect}
+                          modelRow={Row}
+                          onClose={props.onClose}
+                        />
+                      </Dropdown.SubContent>
+                    </Dropdown.Sub>
+                  }
+                >
+                  <Dropdown.Item
+                    closeOnSelect={false}
+                    onSelect={() => {
+                      setShowAll(true);
+                      searchEl?.focus();
+                    }}
+                  >
+                    <span class="flex-1">More models</span>
+                    <CaretRight class="size-3.5" />
+                  </Dropdown.Item>
+                </Show>
+              }
+            >
+              <Show when={showAll()}>
+                <Dropdown.Item
+                  closeOnSelect={false}
+                  onSelect={() => {
+                    setShowAll(false);
+                    setQuery('');
+                    searchEl?.focus();
+                  }}
+                >
+                  Back to Suggested
+                </Dropdown.Item>
+              </Show>
+              <For each={catalog().providers}>
+                {(provider) => (
+                  <ModelList
+                    label={provider.label}
+                    options={provider.options}
+                    value={props.value}
+                    disabled={props.disabled}
+                    onSelect={props.onSelect}
+                    row={Row}
+                    onClose={props.onClose}
+                  />
+                )}
+              </For>
+            </Show>
           </div>
         }
       >

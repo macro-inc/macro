@@ -119,10 +119,12 @@ export function modelProviderLabel(option: CatalogModelOption): string {
 
 /**
  * Four stable flagship choices. Prefer the base model over effort/speed
- * variants; every other variant remains in its provider's section.
+ * variants; every other variant remains in its provider's section. Include
+ * suggested choices in provider groups when building the complete catalog.
  */
 export function buildModelCatalog(
-  options: readonly CatalogModelOption[]
+  options: readonly CatalogModelOption[],
+  includeSuggested = false
 ): ModelCatalog {
   const frontierPatterns = [
     /^(?:claude[ -])?opus[ -]5[.-]5(?:$|[ -])/i,
@@ -143,7 +145,7 @@ export function buildModelCatalog(
   const frontierIds = new Set(frontier.map((option) => option.id));
   const providers: ModelProviderGroup[] = [];
   for (const option of options) {
-    if (frontierIds.has(option.id)) continue;
+    if (!includeSuggested && frontierIds.has(option.id)) continue;
     const label = modelProviderLabel(option);
     const provider = providers.find((candidate) => candidate.label === label);
     if (provider) provider.options.push(option);

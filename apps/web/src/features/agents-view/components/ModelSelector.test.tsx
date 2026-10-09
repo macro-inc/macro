@@ -100,9 +100,7 @@ describe('shared model selector', () => {
     expect(trigger.textContent).toBe('Sonnet 5.5');
     expect(trigger.title).toBe('Sonnet 5.5');
     fireEvent.keyDown(trigger, { key: 'Enter' });
-    expect(
-      screen.getByRole('menuitem', { name: /^GPT-5.6 mini/ })
-    ).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'More models' })).toBeTruthy();
     expect(screen.queryByText(ids[0])).toBeNull();
     fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5.5/ }), {
       key: 'Enter',
