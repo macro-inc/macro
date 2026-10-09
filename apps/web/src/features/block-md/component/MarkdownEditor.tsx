@@ -146,7 +146,7 @@ export function MarkdownEditor(props: {
     permissions,
     state: documentState,
   } = useMarkdownDocument();
-  const { canEdit, canComment } = permissions;
+  const { canEdit } = permissions;
   const blockId = documentId();
   const documentKind = kind();
   const sourceBlockName = documentKind === 'document' ? 'md' : documentKind;
@@ -226,12 +226,6 @@ export function MarkdownEditor(props: {
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();
-
-  createEffect(() => {
-    // We still want the editor to be locked down (for certain things like click events on check
-    // lists) when the user does not have editor access.
-    editor.setEditable(editorReady() && (canEdit() || canComment()));
-  });
 
   const isContentEditable = createMemo(() => {
     return (
