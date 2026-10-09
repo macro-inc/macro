@@ -138,7 +138,9 @@ export function HomeList(props: HomeListProps) {
     });
   });
 
-  const { buildActionGroups } = createSoupEntityActions();
+  const { buildActionGroups } = createSoupEntityActions({
+    markDoneDelegate: source.markDoneDelegate,
+  });
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
       activeListView: panel.handle.content().id,
@@ -380,6 +382,7 @@ export function HomeList(props: HomeListProps) {
     splitHandle: panel.handle,
     createActionNavigationHandler,
     condition: panel.isPanelActive,
+    markDoneDelegate: source.markDoneDelegate,
   });
 
   function actionGroupsFor(row: HomeActionRow) {
@@ -627,6 +630,7 @@ export function HomeList(props: HomeListProps) {
                               list={actionState}
                               selectedEntities={selectedEntities}
                               viewContext={entityActionViewContext()}
+                              markDoneDelegate={source.markDoneDelegate}
                               onOpenChange={(open) => {
                                 if (!open) return;
                                 focusActionRow({

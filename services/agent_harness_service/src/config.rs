@@ -52,6 +52,10 @@ macro_env_var::maybe_env_vars!(
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
+    /// The authentication service's own internal key, which settlement
+    /// requests for counted usage present. Required while
+    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
+    pub struct AuthenticationServiceSecretKey;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -70,6 +74,13 @@ pub struct Config {
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
+    /// Default-off settlement of usage past allowances. When enabled, counted
+    /// usage recorded here asks the authentication service to settle; that
+    /// service's own policy decides whether it does.
+    #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
+    pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
+    /// Key settlement requests present to the authentication service.
+    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -268,13 +279,39 @@ impl Config {
             .context("ENABLE_NON_USER_OWNERS must be `true` or `false`")
     }
 
+    /// Where this host's settlement requests go: the authentication service
+    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
+    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
+        let client = self
+            .authentication_service_secret_key
+            .value()
+            .filter(|key| !key.trim().is_empty())
+            .map(|key| {
+                anyhow::Ok(std::sync::Arc::new(
+                    authentication_service_client::AuthServiceClient::new(
+                        key.to_owned(),
+                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    ),
+                ))
+            })
+            .transpose()?;
+        Ok(ai_billing::composition::SettlementRoute::from_policy(
+            self.enable_ai_usage_billing,
+            client,
+        )?)
+    }
+
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let billing = ai_billing::config::load_ai_usage_billing()
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
         let mut config = macro_config::ConfigLoader::load::<Config>()
             .context("failed to load agent harness service config")?;
         config.enable_ai_usage_enforcement = enforcement;
+        config.enable_ai_usage_billing = billing;
         Ok(config)
     }
 }

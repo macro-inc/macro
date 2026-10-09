@@ -36,7 +36,12 @@ function equalSnapshot(value: unknown, previous: unknown): boolean {
   );
 }
 
-/** Tracks and reconciles each projected item independently, retaining keyed identity. */
+/**
+ * Tracks and reconciles each projected item independently, retaining keyed identity.
+ *
+ * Soup row projection over records a query has already read; it does not read
+ * data itself. Soup list sources and `createSoupRowStore` use it.
+ */
 export function createKeyedProjection<T, K, U>(
   items: Accessor<readonly T[]>,
   key: (item: T, index: number) => K,

@@ -89,6 +89,23 @@ where
     }))
 }
 
+/// The team receipt an authenticated user qualifies for, minted the way
+/// [`OptionalMacroUserTeamExtractorV2`] mints it for users. For transports
+/// without request parts to extract from, such as GraphQL subscriptions,
+/// whose user was authenticated when the connection was established.
+pub async fn user_team_receipt<T, Svc>(
+    service: &Svc,
+    macro_user_id: MacroUserIdStr<'static>,
+) -> Result<Option<EntityAccessReceipt<T>>, ExtractorError>
+where
+    T: RequiredPermission,
+    Svc: EntityAccessService,
+{
+    Ok(user_team_access_outcome::<T, Svc>(service, macro_user_id)
+        .await?
+        .into_optional_receipt())
+}
+
 async fn bot_team_access_outcome<T, Svc>(
     service: &Svc,
     authentication: &BotAuthentication,

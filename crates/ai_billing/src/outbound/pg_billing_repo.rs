@@ -280,6 +280,30 @@ impl BillingRepo for PgBillingRepo {
         .transpose()
     }
 
+    async fn frozen_period_starts(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+        before: DateTime<Utc>,
+    ) -> Result<Vec<DateTime<Utc>>> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT period_start
+            FROM ai_billing_period_allowance
+            WHERE user_id = $1
+              AND period_start >= $2
+              AND period_start < $3
+            ORDER BY period_start
+            "#,
+            payer.as_ref(),
+            since,
+            before,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(storage)
+    }
+
     async fn store_open_allowance(
         &self,
         payer: &MacroUserIdStr<'_>,

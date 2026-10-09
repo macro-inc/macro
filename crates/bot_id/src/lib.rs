@@ -218,6 +218,19 @@ pub fn system_bot_by_handle(handle: &str) -> Option<&'static SystemBot> {
     SYSTEM_BOTS.iter().find(|bot| bot.handle == handle)
 }
 
+/// The handle users type to reach the bot `id`, whose own handle is `handle`.
+///
+/// Macro's agent-session bot is reached through `@macro`; its own handle,
+/// [`MACRO_NEW_HANDLE`], only tells it apart from the classic bot.
+#[must_use]
+pub fn mention_handle(id: BotId, handle: &str) -> &str {
+    if id == MACRO_NEW_BOT_ID {
+        MACRO_AI_HANDLE
+    } else {
+        handle
+    }
+}
+
 /// Whether `id` is a first-party bot, and so has no `bots` row.
 #[must_use]
 pub fn is_system_bot(id: BotId) -> bool {

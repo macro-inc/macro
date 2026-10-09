@@ -46,7 +46,7 @@ pub use principal::principal_entity_access_receipt;
 pub use project::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2};
 pub use reminder::ReminderAccessExtractor;
 pub use scheduled_action::ScheduledActionAccessExtractor;
-pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2};
+pub use team::{MacroUserTeamExtractorV2, OptionalMacroUserTeamExtractorV2, user_team_receipt};
 pub use thread::ThreadAccessLevelExtractor;
 
 use std::borrow::Cow;

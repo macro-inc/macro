@@ -3,7 +3,8 @@ use crate::{
         models::{
             AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
             SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
-            TouchedEntity, TouchedSoupRequest, grouping::ItemGroupingInfo,
+            TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
+            grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -29,6 +30,7 @@ mod initiative;
 mod notified;
 mod touched;
 mod unexpanded;
+mod work_feed;
 
 /// PostgreSQL implementation of [`SoupRepo`].
 pub struct PgSoupRepo {
@@ -316,6 +318,13 @@ impl SoupRepo for PgSoupRepo {
         req: NotifiedSoupRequest<'a>,
     ) -> Result<Vec<NotifiedEntity>, Self::Err> {
         notified::notified_soup_page(&self.pool.0, req).await
+    }
+
+    async fn work_feed_soup_page<'a>(
+        &self,
+        req: WorkFeedCandidateRequest<'a>,
+    ) -> Result<Vec<WorkFeedCandidate>, Self::Err> {
+        work_feed::work_feed_soup_page(&self.pool.0, req).await
     }
 }
 

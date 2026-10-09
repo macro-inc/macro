@@ -130,6 +130,11 @@ invalidations and gaps in that bounded journal conservatively rebuild the view.
 Views are released on unsubscribe and bounded by an LRU; eviction is safe because
 a subscriber with an unavailable cursor receives a full replacement.
 
+Web code has one default reactive read per data shape: `createSoupLiveQuery` for
+Soup lists, which feature code reaches through `useSoupAstItemsQuery`, and
+`createLiveQuery` for other GraphQL documents. See
+[choosing a reactive read](../../apps/web/docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
+
 For Soup, `createSoupLiveQuery` owns network fetching, server pagination, cache
 baselines, and local fallback selection. Its non-suspending `data()` accessor
 returns reactive GraphQL records; callers do not coordinate cache revisions:
@@ -157,20 +162,10 @@ The legacy REST-shaped Soup facade translates its request and projects these
 records into UI entities through one keyed mapper. Fetched versions remain
 separate from local display versions so pagination coverage cannot drift.
 
-The lower-level Solid `createPredicateQuery` binding owns subscription, coalescing,
-cleanup and engine-generation recovery, preserving keyed row stores and applying
-patches in one batch. Its first source adapter is a reconciled flat Soup filter:
-
-```ts
-const items = createPredicateQuery({
-  host: getGraphqlSoupCacheHost,
-  query: () => ({
-    source: { filters: filters(), sortMethod: 'UPDATED_AT',
-      sortDirection: 'DESC', limit: 50, baseline: serverMembership() },
-    select: selectRecords(SoupItemFieldsFragmentDoc),
-  }),
-});
-```
+Inside `createSoupLiveQuery`, a Soup-internal binding owns subscription,
+coalescing, cleanup and engine-generation recovery, preserving keyed row stores
+and applying patches in one batch. Its only source is a reconciled flat Soup
+filter; it is not a general query API.
 
 Mutations still use ordinary GraphQL execution and the registered local resolver.
 The view requires no per-mutation update callback. This is an incremental row
@@ -190,9 +185,11 @@ const accounts = createLiveQuery(
 );
 ```
 
-This uses the existing urql query contract, with cache-core tracking selected
-fields and returning response-path patches. Existing `createUrqlQuery` and
-`createUrqlInfiniteQuery` consumers benefit from the same path automatically.
+It is a document-first wrapper over `createUrqlQuery`, so it keeps the existing
+urql query contract while cache-core tracks selected fields and returns
+response-path patches. Existing `createUrqlQuery` and `createUrqlInfiniteQuery`
+consumers benefit from the same path automatically and need no migration;
+cursor-paginated documents use `createUrqlInfiniteQuery`.
 Aliases, fragment types, arguments, variable defaults and conditional selections
 are resolved by the core reader. Leaf edits patch through compiled field
 bindings without reading. Structural edits (links, list membership and order,
