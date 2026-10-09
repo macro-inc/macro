@@ -30,8 +30,40 @@ vi.mock('@entity', async () => ({
   ...(await import('@entity/utils/company-properties')),
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
+const flags = vi.hoisted(() => ({ graphqlSoup: false }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: true }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled: flag.key === 'enable-graphql-soup' ? flags.graphqlSoup : true,
+  }),
+}));
+const workFeedSource = vi.hoisted(() => ({
+  enabled: undefined as (() => boolean) | undefined,
+  items: () => [] as unknown[],
+  delegate: { canComplete: () => undefined, prepare: () => undefined },
+}));
+vi.mock('../work-feed/home-work-feed', () => ({
+  useWorkFeedHomeDataSource: (
+    _state: unknown,
+    options: { enabled: () => boolean }
+  ) => {
+    workFeedSource.enabled = options.enabled;
+    return {
+      items: () => workFeedSource.items(),
+      isLoading: () => false,
+      isFetching: () => false,
+      isLoadingMore: () => false,
+      hasMore: () => false,
+      error: () => undefined,
+      warning: () => undefined,
+      loadMore: async () => {},
+      refresh: async () => {},
+      markDoneDelegate: () => workFeedSource.delegate,
+    };
+  },
+}));
+const touch = vi.hoisted(() => ({ device: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => touch.device,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
@@ -147,6 +179,8 @@ describe('Home data source', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.setSystemTime(new Date(2026, 8, 10, 12));
+    flags.graphqlSoup = false;
+    touch.device = false;
   });
   afterEach(() => {
     dispose?.();
@@ -472,5 +506,59 @@ describe('Home data source', () => {
     expect(ids(source)).toEqual(['chat']);
     setState('facets', { type: ['agents'] });
     expect(ids(source)).toEqual(['agent']);
+  });
+});
+
+describe('Home work feed', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.setSystemTime(new Date(2026, 8, 10, 12));
+    flags.graphqlSoup = true;
+    touch.device = false;
+    workFeedSource.items = () => [
+      {
+        kind: 'entity',
+        id: 'work-feed-row',
+        entity: { type: 'document', id: 'from-work-feed' },
+      },
+    ];
+  });
+  afterEach(() => {
+    dispose?.();
+    vi.useRealTimers();
+  });
+
+  it('reads desktop Signal from the work feed and delegates done to it', () => {
+    const notifications = makeQuery([email('from-soup', 9)], false);
+    const activity = makeQuery([], false);
+    const { source } = mount(notifications, activity);
+
+    expect(workFeedSource.enabled?.()).toBe(true);
+    expect(ids(source)).toEqual(['from-work-feed']);
+    expect(source.markDoneDelegate()).toBe(workFeedSource.delegate);
+  });
+
+  it('keeps Noise and search on the Soup sources', () => {
+    const notifications = makeQuery([email('from-soup', 9)], false);
+    const activity = makeQuery([], false);
+    const { source, setState } = mount(notifications, activity);
+
+    setState('tab', 'noise');
+    expect(workFeedSource.enabled?.()).toBe(false);
+    expect(source.markDoneDelegate()).toBeUndefined();
+
+    setState('tab', 'signal');
+    setState('search', 'plan');
+    expect(workFeedSource.enabled?.()).toBe(false);
+  });
+
+  it('keeps touch devices on the notification feed', () => {
+    touch.device = true;
+    const notifications = makeQuery([email('from-soup', 9)], false);
+    const activity = makeQuery([], false);
+    const { source } = mount(notifications, activity);
+
+    expect(workFeedSource.enabled?.()).toBe(false);
+    expect(ids(source)).toEqual(['from-soup']);
   });
 });

@@ -52,6 +52,7 @@ mod form_activity;
 mod initiative;
 mod scheduled_actions;
 mod soup_patches;
+mod work_feed;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
 const INTERNAL_USER_ID: &str = "macro|internal@example.com";

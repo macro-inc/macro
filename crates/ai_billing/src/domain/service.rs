@@ -32,6 +32,18 @@ use teams::domain::open_seat_release::OpenSeatRelease;
 /// payer per process while Stripe rolls a period or a provider recovers.
 const PERIOD_MISS_BACKOFF: chrono::Duration = chrono::Duration::minutes(1);
 
+/// How many closed periods behind the open one a settlement reconciles.
+///
+/// Every period frozen inside this window is settled against its own freeze
+/// before the open period is, so usage left unsettled when a period closed
+/// (a tail that ran past the boundary, a settlement request that was lost)
+/// is booked from credits by whichever settlement comes next rather than
+/// waiting on a customer action. Three periods is a bound on the work a
+/// settlement does, not on how long usage stays owed: the periodic sweep
+/// settles every recently observed payer, so a closed period normally
+/// reconciles within a day of ending.
+pub const RECONCILED_CLOSED_PERIODS: u32 = 3;
+
 /// The billing service over its four ports.
 #[derive(Clone)]
 pub struct BillingServiceImpl<E, U, R, P> {
@@ -405,6 +417,51 @@ where
         ))
     }
 
+    /// The closed periods to settle before `current`, oldest first.
+    ///
+    /// Every period frozen within the last [`RECONCILED_CLOSED_PERIODS`]
+    /// periods is one of them, keyed exactly as its ledger, and ending where
+    /// the next period begins: periods are contiguous, and counted usage only
+    /// lands in a period that was observed, so the usage between two freezes
+    /// belongs to the earlier one. When nothing was frozen since the derived
+    /// previous period began, that derived period is settled instead, as it
+    /// always was, so a closed period that was never observed is still
+    /// flushed from the live entitlement; the last frozen period then ends
+    /// where the derived one begins, so no usage is settled under two keys.
+    async fn closed_periods(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        current: BillingPeriod,
+    ) -> Result<Vec<BillingPeriod>> {
+        let mut since = current;
+        for _ in 0..RECONCILED_CLOSED_PERIODS {
+            since = since.previous();
+        }
+        let starts = self
+            .repo
+            .frozen_period_starts(payer, since.start, current.start)
+            .await?;
+        let previous = current.previous();
+        let previous_was_frozen = starts.iter().any(|start| *start >= previous.start);
+        let last_end = if previous_was_frozen {
+            current.start
+        } else {
+            previous.start
+        };
+        let mut periods: Vec<BillingPeriod> = starts
+            .iter()
+            .enumerate()
+            .map(|(index, &start)| BillingPeriod {
+                start,
+                end: starts.get(index + 1).copied().unwrap_or(last_end),
+            })
+            .collect();
+        if !previous_was_frozen {
+            periods.push(previous);
+        }
+        Ok(periods)
+    }
+
     /// Per-seat allowances to settle `period` with.
     ///
     /// A closed period uses the freeze recorded while it was open. An open
@@ -711,17 +768,17 @@ where
         if !position.entitlement.is_metered() {
             return Ok(());
         }
-        // The previous period first, so a tail that ran past the boundary is
-        // flushed before the current one accrues. Closed-period settlement
-        // uses the freeze recorded while that period was open, not the live
-        // plan or seat list.
-        self.settle_period(
-            &position.entitlement,
-            position.period.previous(),
-            now,
-            ReloadCheck::Skip,
-        )
-        .await?;
+        // Closed periods first, oldest to newest, so a tail that ran past a
+        // boundary is flushed before the current period accrues. Closed-period
+        // settlement uses the freeze recorded while that period was open, not
+        // the live plan or seat list.
+        for period in self
+            .closed_periods(&position.entitlement.payer, position.period)
+            .await?
+        {
+            self.settle_period(&position.entitlement, period, now, ReloadCheck::Skip)
+                .await?;
+        }
         self.settle_period(
             &position.entitlement,
             position.period,
