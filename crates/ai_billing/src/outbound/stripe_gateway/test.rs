@@ -174,7 +174,7 @@ async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
         .mount(&server)
         .await;
 
-    let paid_now = gateway(&server)
+    let outcome = gateway(&server)
         .pay_overage_invoice(
             Uuid::from_u128(1),
             INVOICE_ID,
@@ -182,7 +182,7 @@ async fn pay_overage_invoice_updates_a_stale_open_invoice_before_paying() {
         )
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(outcome, InvoiceOutcome::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     let update_at = request_position(&requests, "POST", &format!("/v1/invoices/{INVOICE_ID}"));
@@ -305,11 +305,11 @@ async fn pay_overage_invoice_skips_the_update_when_the_open_invoice_already_matc
         .mount(&server)
         .await;
 
-    let paid_now = gateway(&server)
+    let outcome = gateway(&server)
         .pay_overage_invoice(Uuid::from_u128(3), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("pay overage invoice");
-    assert!(paid_now);
+    assert_eq!(outcome, InvoiceOutcome::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -632,7 +632,7 @@ async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs()
         .mount(&server)
         .await;
 
-    let paid_now = gateway(&server)
+    let outcome = gateway(&server)
         .pay_overage_invoice(
             Uuid::from_u128(6),
             INVOICE_ID,
@@ -640,7 +640,7 @@ async fn pay_overage_invoice_keeps_a_stamped_scope_when_the_live_scope_differs()
         )
         .await
         .expect("pay stamped invoice");
-    assert!(paid_now);
+    assert_eq!(outcome, InvoiceOutcome::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     let update = post_request(&requests, &format!("/v1/invoices/{INVOICE_ID}"));
@@ -687,7 +687,7 @@ async fn pay_overage_invoice_preserves_a_stamped_personal_method_after_team_conv
         .mount(&server)
         .await;
 
-    let paid_now = gateway(&server)
+    let outcome = gateway(&server)
         .pay_overage_invoice(
             Uuid::from_u128(10),
             INVOICE_ID,
@@ -695,7 +695,7 @@ async fn pay_overage_invoice_preserves_a_stamped_personal_method_after_team_conv
         )
         .await
         .expect("pay converted personal invoice");
-    assert!(paid_now);
+    assert_eq!(outcome, InvoiceOutcome::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -746,11 +746,11 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
         .mount(&server)
         .await;
 
-    let paid_now = gateway(&server)
+    let outcome = gateway(&server)
         .pay_overage_invoice(Uuid::from_u128(8), INVOICE_ID, SubscriptionScope::Personal)
         .await
         .expect("already paid invoice");
-    assert!(paid_now);
+    assert_eq!(outcome, InvoiceOutcome::Paid);
 
     let requests = server.received_requests().await.expect("recorded requests");
     assert!(requests.iter().all(|request| {
@@ -758,6 +758,204 @@ async fn pay_overage_invoice_returns_when_the_invoice_is_already_paid() {
             && request.url.path() != "/v1/subscriptions"
             && request.method.as_str() != "POST"
     }));
+}
+
+#[tokio::test]
+async fn pay_overage_invoice_reports_an_invoice_stripe_already_closed_without_paying() {
+    for (status, expected) in [
+        (stripe::InvoiceStatus::Void, InvoiceOutcome::Voided),
+        (
+            stripe::InvoiceStatus::Uncollectible,
+            InvoiceOutcome::Uncollectible,
+        ),
+    ] {
+        let mut closed = open_invoice(Some(STALE_PAYMENT_METHOD), None);
+        closed.status = Some(status);
+        let closed = stripe_response(&closed);
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&closed))
+            .mount(&server)
+            .await;
+
+        let outcome = gateway(&server)
+            .pay_overage_invoice(Uuid::from_u128(13), INVOICE_ID, SubscriptionScope::Personal)
+            .await
+            .expect("closed invoice");
+        assert_eq!(outcome, expected);
+
+        let requests = server.received_requests().await.expect("recorded requests");
+        assert!(
+            requests
+                .iter()
+                .all(|request| request.method.as_str() != "POST"),
+            "{requests:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn pay_overage_invoice_tells_authentication_from_a_decline() {
+    // Stripe reports both as an error from `/pay` and leaves the invoice
+    // open; the payment intent says which it was.
+    let cases = [
+        (
+            payment_intent(stripe::PaymentIntentStatus::RequiresAction, false),
+            InvoiceOutcome::ActionRequired {
+                hosted_invoice_url: Some(HOSTED_INVOICE_URL.to_string()),
+            },
+        ),
+        (
+            payment_intent(stripe::PaymentIntentStatus::RequiresPaymentMethod, true),
+            InvoiceOutcome::PaymentFailed,
+        ),
+    ];
+    for (intent, expected) in cases {
+        let before = stripe_response(&open_invoice(Some(CURRENT_PAYMENT_METHOD), None));
+        let mut after = open_invoice(Some(CURRENT_PAYMENT_METHOD), None);
+        after.hosted_invoice_url = Some(HOSTED_INVOICE_URL.to_string());
+        after.payment_intent = Some(stripe::Expandable::Object(Box::new(intent)));
+        let after = stripe_response(&after);
+        let server = MockServer::start().await;
+        mount_customer_and_subscriptions(&server, both_subscriptions()).await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+            .and(query_param_is_missing("expand[0]"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&before))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+            .and(query_param("expand[0]", "payment_intent"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&after))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&before))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}/pay")))
+            .respond_with(ResponseTemplate::new(402).set_body_json(json!({
+                "error": {
+                    "type": "invalid_request_error",
+                    "message": "The payment requires authentication.",
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let outcome = gateway(&server)
+            .pay_overage_invoice(Uuid::from_u128(14), INVOICE_ID, SubscriptionScope::Personal)
+            .await
+            .expect("an open invoice after a failed attempt is not an error");
+        assert_eq!(outcome, expected);
+    }
+}
+
+#[tokio::test]
+async fn invoice_outcome_reads_the_invoice_and_its_payment_intent() {
+    let cases = [
+        (
+            stripe::InvoiceStatus::Paid,
+            None,
+            Some(InvoiceOutcome::Paid),
+        ),
+        (
+            stripe::InvoiceStatus::Void,
+            None,
+            Some(InvoiceOutcome::Voided),
+        ),
+        (
+            stripe::InvoiceStatus::Uncollectible,
+            None,
+            Some(InvoiceOutcome::Uncollectible),
+        ),
+        (stripe::InvoiceStatus::Draft, None, None),
+        // Open with no attempt yet, or one still in flight: inconclusive.
+        (stripe::InvoiceStatus::Open, None, None),
+        (
+            stripe::InvoiceStatus::Open,
+            Some(payment_intent(
+                stripe::PaymentIntentStatus::RequiresPaymentMethod,
+                false,
+            )),
+            None,
+        ),
+        (
+            stripe::InvoiceStatus::Open,
+            Some(payment_intent(
+                stripe::PaymentIntentStatus::Processing,
+                false,
+            )),
+            None,
+        ),
+        (
+            stripe::InvoiceStatus::Open,
+            Some(payment_intent(
+                stripe::PaymentIntentStatus::RequiresAction,
+                false,
+            )),
+            Some(InvoiceOutcome::ActionRequired {
+                hosted_invoice_url: Some(HOSTED_INVOICE_URL.to_string()),
+            }),
+        ),
+        (
+            stripe::InvoiceStatus::Open,
+            Some(payment_intent(
+                stripe::PaymentIntentStatus::RequiresPaymentMethod,
+                true,
+            )),
+            Some(InvoiceOutcome::PaymentFailed),
+        ),
+        (
+            stripe::InvoiceStatus::Open,
+            Some(payment_intent(stripe::PaymentIntentStatus::Canceled, false)),
+            Some(InvoiceOutcome::PaymentFailed),
+        ),
+    ];
+    for (status, intent, expected) in cases {
+        let mut invoice = open_invoice(Some(CURRENT_PAYMENT_METHOD), None);
+        invoice.status = Some(status);
+        invoice.hosted_invoice_url = Some(HOSTED_INVOICE_URL.to_string());
+        invoice.payment_intent = intent.map(|intent| stripe::Expandable::Object(Box::new(intent)));
+        let invoice = stripe_response(&invoice);
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+            .and(query_param("expand[0]", "payment_intent"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&invoice))
+            .mount(&server)
+            .await;
+
+        let outcome = gateway(&server)
+            .invoice_outcome(INVOICE_ID)
+            .await
+            .expect("invoice read");
+        assert_eq!(outcome, expected, "{status:?}");
+    }
+}
+
+#[tokio::test]
+async fn invoice_outcome_reports_provider_errors() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/invoices/{INVOICE_ID}")))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    let error = gateway(&server)
+        .invoice_outcome(INVOICE_ID)
+        .await
+        .expect_err("provider failure");
+    assert!(matches!(error, BillingError::Payment(_)));
+    let error = gateway(&server)
+        .invoice_outcome("not-an-invoice")
+        .await
+        .expect_err("malformed id");
+    assert!(matches!(error, BillingError::Payment(_)));
 }
 
 #[tokio::test]
@@ -1072,6 +1270,24 @@ fn paid_invoice(default_payment_method: &str, scope: Option<&str>) -> stripe::In
     let mut invoice = open_invoice(Some(default_payment_method), scope);
     invoice.status = Some(stripe::InvoiceStatus::Paid);
     invoice
+}
+
+const HOSTED_INVOICE_URL: &str = "https://invoice.stripe.test/i/in_overage";
+
+/// An invoice's payment intent in `status`, after a declined attempt when
+/// `declined`.
+fn payment_intent(status: stripe::PaymentIntentStatus, declined: bool) -> stripe::PaymentIntent {
+    stripe::PaymentIntent {
+        id: "pi_overage".parse().expect("payment intent id"),
+        status,
+        last_payment_error: declined.then(|| {
+            Box::new(stripe::ApiErrors {
+                code: Some(stripe::ApiErrorsCode::CardDeclined),
+                ..Default::default()
+            })
+        }),
+        ..Default::default()
+    }
 }
 
 fn draft_invoice() -> stripe::Invoice {

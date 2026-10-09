@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT kind AS \"kind!\", stripe_invoice_id AS \"stripe_invoice_id!\"\n            FROM (\n                SELECT 'overage_charge' AS kind, stripe_invoice_id, updated_at\n                FROM ai_overage_charge\n                WHERE user_id = $1\n                  AND stripe_invoice_id IS NOT NULL\n                  AND status IN ('pending', 'requires_action', 'failed')\n                  AND updated_at < $2\n                UNION ALL\n                SELECT 'credit_reload' AS kind, stripe_invoice_id, updated_at\n                FROM ai_credit_reload\n                WHERE user_id = $1\n                  AND stripe_invoice_id IS NOT NULL\n                  AND status IN ('pending', 'requires_action', 'failed')\n                  AND updated_at < $2\n            ) AS stale\n            ORDER BY updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "stripe_invoice_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "9d0f5328ebe5c4284a3e58fefc804344ebf7a0a9c50576d3aafd6250cae5fc2d"
+}

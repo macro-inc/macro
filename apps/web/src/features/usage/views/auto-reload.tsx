@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js';
 import { AutoReloadDialog } from '../components/auto-reload-dialog';
 import type { UsageContext } from '../context/usage-context';
+import { describePaymentAction } from '../core/usage';
 import { createAutoReloadForm } from '../primitives/auto-reload-form';
 
 export function AutoReloadView(props: {
@@ -15,6 +16,9 @@ export function AutoReloadView(props: {
       return 'Developer preview. These settings only change this preview and will not charge your card.';
     if (props.context.summary()?.billingAccess === 'team-member')
       return 'Only the account that pays for this plan can change automatic reload.';
+    const action = props.context.summary()?.paymentAction;
+    if (action?.kind === 'credit_reload')
+      return `${describePaymentAction(action)} Confirm it from the Usage page, or update your payment method and save to try again.`;
     if (props.context.autoReload.suspended())
       return 'Your last automatic reload could not be charged. Update your payment method, then save to try again.';
   };

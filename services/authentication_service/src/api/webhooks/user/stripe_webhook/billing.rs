@@ -1,17 +1,19 @@
 //! Billing-only Stripe translation. The dispatcher and base subscription handlers
 //! stay in the parent module; activation policy lives in ai_billing's domain.
 
-use ai_billing::BillingService;
 use ai_billing::domain::BillingPeriod;
 use ai_billing::domain::period::{PeriodEvidence, SubscriptionActivity, SubscriptionPeriod};
 use ai_billing::outbound::stripe_gateway::{
-    PAYER_METADATA_KEY, PURPOSE_AI_CREDITS, PURPOSE_METADATA_KEY,
+    PAYER_METADATA_KEY, PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_CREDITS, PURPOSE_AI_OVERAGE,
+    PURPOSE_METADATA_KEY,
 };
+use ai_billing::{BillingService, InvoiceOutcome};
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 use serde_json::Value;
-use stripe_webhook::EventObject;
+use std::collections::HashMap;
+use stripe_webhook::{EventObject, EventType};
 
 use crate::api::context::ApiContext;
 
@@ -254,6 +256,112 @@ async fn sync_periods(
             .sync_period(payer, facts.period.start, facts.period.end, Some(facts))
             .await
             .context("failed to sync verified usage policy period")?;
+    }
+    Ok(())
+}
+
+/// The parts of a webhook invoice that decide whether, and how, it is one of
+/// this service's one-off invoices. (The webhook crate does not re-export its
+/// invoice type, so callers project it at the match site.)
+#[derive(Debug, Clone, Copy)]
+pub(super) struct InvoiceEvent<'a> {
+    pub id: Option<&'a str>,
+    pub metadata: Option<&'a HashMap<String, String>>,
+    pub hosted_invoice_url: Option<&'a str>,
+}
+
+/// What an invoice event says about the invoice, for the one-off invoices
+/// this service opens through `ai_billing`. `None` for event types that carry
+/// no such report.
+pub(super) fn invoice_outcome(
+    event_type: &EventType,
+    invoice: InvoiceEvent<'_>,
+) -> Option<InvoiceOutcome> {
+    match event_type {
+        EventType::InvoicePaymentSucceeded | EventType::InvoicePaid => Some(InvoiceOutcome::Paid),
+        EventType::InvoicePaymentFailed => Some(InvoiceOutcome::PaymentFailed),
+        EventType::InvoicePaymentActionRequired => Some(InvoiceOutcome::ActionRequired {
+            hosted_invoice_url: invoice.hosted_invoice_url.map(str::to_owned),
+        }),
+        EventType::InvoiceVoided => Some(InvoiceOutcome::Voided),
+        EventType::InvoiceMarkedUncollectible => Some(InvoiceOutcome::Uncollectible),
+        _ => None,
+    }
+}
+
+/// Which of this service's one-off invoices `invoice` is, by the purpose
+/// `ai_billing` stamps on everything it creates. `None` for any other invoice
+/// (subscription renewals, manual invoices).
+pub(super) fn one_off_invoice_purpose<'a>(invoice: InvoiceEvent<'a>) -> Option<&'a str> {
+    invoice
+        .metadata
+        .and_then(|metadata| metadata.get(PURPOSE_METADATA_KEY))
+        .map(String::as_str)
+        .filter(|purpose| matches!(*purpose, PURPOSE_AI_OVERAGE | PURPOSE_AI_CREDIT_RELOAD))
+}
+
+/// Report an invoice event about one of this service's one-off invoices (an
+/// AI overage chunk or an automatic credit reload) to billing. Their outcome
+/// drives whether the payer keeps overage or automatic reloads; they never
+/// touch plan roles. Returns `false`, having done nothing, when the invoice
+/// is not one of ours or the event carries no outcome.
+#[tracing::instrument(skip(ctx), err, ret)]
+pub(super) async fn handle_one_off_invoice_event(
+    ctx: &ApiContext,
+    event_type: &EventType,
+    invoice: InvoiceEvent<'_>,
+) -> anyhow::Result<bool> {
+    let (Some(invoice_id), Some(purpose), Some(outcome)) = (
+        invoice.id,
+        one_off_invoice_purpose(invoice),
+        invoice_outcome(event_type, invoice),
+    ) else {
+        return Ok(false);
+    };
+    tracing::info!(purpose, ?outcome, "processing ai one-off invoice event");
+    match purpose {
+        PURPOSE_AI_OVERAGE => ctx
+            .ai_billing_service
+            .mark_overage_invoice(invoice_id, &outcome)
+            .await
+            .context("failed to record ai overage invoice outcome")?,
+        PURPOSE_AI_CREDIT_RELOAD => ctx
+            .ai_billing_service
+            .mark_credit_reload_invoice(invoice_id, &outcome)
+            .await
+            .context("failed to record ai credit reload invoice outcome")?,
+        _ => return Ok(false),
+    }
+    Ok(true)
+}
+
+/// Invoice events that only matter for this service's one-off invoices. A
+/// subscription invoice that needs authentication, is voided, or is written
+/// off is acknowledged here; the subscription's own status events drive plan
+/// access.
+#[tracing::instrument(skip(ctx, event_object), err, ret)]
+pub(super) async fn handle_invoice_lifecycle_event(
+    ctx: &ApiContext,
+    event_object: EventObject,
+    event_type: EventType,
+) -> anyhow::Result<()> {
+    let invoice = match event_object {
+        EventObject::InvoicePaymentActionRequired(invoice)
+        | EventObject::InvoiceVoided(invoice)
+        | EventObject::InvoiceMarkedUncollectible(invoice) => invoice,
+        _ => anyhow::bail!("expected invoice lifecycle event"),
+    };
+    let event = InvoiceEvent {
+        id: invoice.id.as_ref().map(|id| id.as_str()),
+        metadata: invoice.metadata.as_ref(),
+        hosted_invoice_url: invoice.hosted_invoice_url.as_deref(),
+    };
+    if !handle_one_off_invoice_event(ctx, &event_type, event).await? {
+        tracing::info!(
+            event_type = ?event_type,
+            invoice_id = ?event.id,
+            "acknowledging invoice event that is not for an ai one-off invoice"
+        );
     }
     Ok(())
 }

@@ -159,3 +159,99 @@ fn newer_invoice_parent_fields_are_matched_by_item_and_price() {
         PeriodEvidence::Renewal
     );
 }
+
+fn one_off(purpose: Option<&str>) -> HashMap<String, String> {
+    purpose
+        .map(|purpose| HashMap::from([(PURPOSE_METADATA_KEY.to_string(), purpose.to_string())]))
+        .unwrap_or_default()
+}
+
+#[test]
+fn every_invoice_outcome_event_maps_to_a_provider_report() {
+    let metadata = one_off(Some(PURPOSE_AI_OVERAGE));
+    let invoice = InvoiceEvent {
+        id: Some("in_1"),
+        metadata: Some(&metadata),
+        hosted_invoice_url: Some("https://invoice.stripe.test/i/in_1"),
+    };
+    assert_eq!(
+        invoice_outcome(&EventType::InvoicePaid, invoice),
+        Some(InvoiceOutcome::Paid)
+    );
+    assert_eq!(
+        invoice_outcome(&EventType::InvoicePaymentSucceeded, invoice),
+        Some(InvoiceOutcome::Paid)
+    );
+    assert_eq!(
+        invoice_outcome(&EventType::InvoicePaymentFailed, invoice),
+        Some(InvoiceOutcome::PaymentFailed)
+    );
+    assert_eq!(
+        invoice_outcome(&EventType::InvoicePaymentActionRequired, invoice),
+        Some(InvoiceOutcome::ActionRequired {
+            hosted_invoice_url: Some("https://invoice.stripe.test/i/in_1".to_string()),
+        })
+    );
+    assert_eq!(
+        invoice_outcome(&EventType::InvoiceVoided, invoice),
+        Some(InvoiceOutcome::Voided)
+    );
+    assert_eq!(
+        invoice_outcome(&EventType::InvoiceMarkedUncollectible, invoice),
+        Some(InvoiceOutcome::Uncollectible)
+    );
+    // Without a page from Stripe the report still says it is waiting.
+    assert_eq!(
+        invoice_outcome(
+            &EventType::InvoicePaymentActionRequired,
+            InvoiceEvent {
+                hosted_invoice_url: None,
+                ..invoice
+            }
+        ),
+        Some(InvoiceOutcome::ActionRequired {
+            hosted_invoice_url: None
+        })
+    );
+    for other in [
+        EventType::InvoiceFinalized,
+        EventType::InvoiceCreated,
+        EventType::CustomerSubscriptionUpdated,
+    ] {
+        assert_eq!(invoice_outcome(&other, invoice), None, "{other:?}");
+    }
+}
+
+#[test]
+fn only_ai_overage_and_reload_invoices_are_ours() {
+    for (purpose, expected) in [
+        (Some(PURPOSE_AI_OVERAGE), Some(PURPOSE_AI_OVERAGE)),
+        (
+            Some(PURPOSE_AI_CREDIT_RELOAD),
+            Some(PURPOSE_AI_CREDIT_RELOAD),
+        ),
+        // Credit packs are Checkout Sessions, never invoices.
+        (Some(PURPOSE_AI_CREDITS), None),
+        (Some("something_else"), None),
+        (None, None),
+    ] {
+        let metadata = one_off(purpose);
+        assert_eq!(
+            one_off_invoice_purpose(InvoiceEvent {
+                id: Some("in_1"),
+                metadata: Some(&metadata),
+                hosted_invoice_url: None,
+            }),
+            expected,
+            "{purpose:?}"
+        );
+    }
+    assert_eq!(
+        one_off_invoice_purpose(InvoiceEvent {
+            id: Some("in_1"),
+            metadata: None,
+            hosted_invoice_url: None,
+        }),
+        None
+    );
+}

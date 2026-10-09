@@ -103,3 +103,41 @@ describe('automatic reload', () => {
     });
   });
 });
+
+describe('payment awaiting authentication', () => {
+  it('is absent unless the backend reports one', () => {
+    expect(toUsageSummary(snapshot).paymentAction).toBeUndefined();
+  });
+
+  it('carries the kind, amount, and hosted page', () => {
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        tier: 'premium',
+        payment_action: {
+          kind: 'credit_reload',
+          amount_cents: 9_500,
+          hosted_invoice_url: 'https://invoice.stripe.test/i/in_1',
+        },
+      }).paymentAction
+    ).toEqual({
+      kind: 'credit_reload',
+      amountCents: 9_500,
+      url: 'https://invoice.stripe.test/i/in_1',
+    });
+  });
+
+  it('omits the page when Stripe sent none', () => {
+    expect(
+      toUsageSummary({
+        ...snapshot,
+        tier: 'premium',
+        payment_action: {
+          kind: 'overage_charge',
+          amount_cents: 1_575,
+          hosted_invoice_url: null,
+        },
+      }).paymentAction
+    ).toEqual({ kind: 'overage_charge', amountCents: 1_575, url: undefined });
+  });
+});

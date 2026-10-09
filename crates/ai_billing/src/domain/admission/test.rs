@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::{Result as BillingResult, UsageSnapshot};
+use crate::domain::{InvoiceOutcome, Result as BillingResult, UsageSnapshot};
 use ai_usage::domain::ports::SYSTEM_USER_ID;
 use chrono::{DateTime, Utc};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -80,10 +80,10 @@ impl BillingService for FakeBilling {
     ) -> BillingResult<()> {
         panic!("admission must not sync periods")
     }
-    async fn mark_overage_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
+    async fn mark_overage_invoice(&self, _: &str, _: &InvoiceOutcome) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
+    async fn mark_credit_reload_invoice(&self, _: &str, _: &InvoiceOutcome) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
 }

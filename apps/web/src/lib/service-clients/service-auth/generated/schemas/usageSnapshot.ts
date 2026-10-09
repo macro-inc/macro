@@ -7,6 +7,7 @@
 import type { AutoReloadSnapshot } from './autoReloadSnapshot';
 import type { PlanTier } from './planTier';
 import type { UsageSnapshotBlockedReason } from './usageSnapshotBlockedReason';
+import type { UsageSnapshotPaymentAction } from './usageSnapshotPaymentAction';
 
 /**
  * The payer's current-period position, as shown in Billing settings and used
@@ -35,6 +36,7 @@ reloads are not suspended. */
   overage_suspended: boolean;
   /** The payer for this user's AI. */
   payer: string;
+  payment_action?: UsageSnapshotPaymentAction;
   /** Period end (exclusive). */
   period_end: string;
   /** Period start. */

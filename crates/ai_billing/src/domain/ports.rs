@@ -5,9 +5,9 @@ use super::financial::FundingPeriod;
 use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingPeriod, BillingSettings,
-    CreditReloadStatus, Entitlement, OpenPeriodStart, OverageChargeStatus, PeriodAllowance,
-    PeriodLedger, Result, SeatAllowance, SeatGeneration, SeatUsage, SubscriptionScope,
-    UsageSnapshot,
+    CreditReloadStatus, Entitlement, InvoiceOutcome, OpenPeriodStart, OverageChargeStatus,
+    PaymentAction, PaymentActionKind, PeriodAllowance, PeriodLedger, Result, SeatAllowance,
+    SeatGeneration, SeatUsage, SubscriptionScope, UsageSnapshot,
 };
 use super::policy::UsageAllocation;
 use ai_usage::domain::financial::{
@@ -119,6 +119,16 @@ pub struct ResolvedReload {
     pub payer: MacroUserIdStr<'static>,
     /// Amount collected (or not), customer cents.
     pub amount_cents: i64,
+}
+
+/// One of this crate's invoices that Stripe has not conclusively reported on
+/// for a while: a webhook may have been lost or ignored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StaleInvoice {
+    /// Which table the row lives in.
+    pub kind: PaymentActionKind,
+    /// The Stripe invoice to read.
+    pub stripe_invoice_id: String,
 }
 
 /// What a settlement booked.
@@ -287,14 +297,16 @@ pub trait BillingRepo: Send + Sync + 'static {
         status: OverageChargeStatus,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Update a charge by its Stripe invoice (webhook). Returns the payer when
-    /// the invoice was one of ours *and* the status changed. `Paid` is
-    /// terminal: a late or duplicate failure event never un-pays a charge, and
-    /// re-reporting the current status is a no-op.
+    /// Update a charge by its Stripe invoice (webhook, collector, or
+    /// reconciliation). Returns the payer when the invoice was one of ours
+    /// *and* [`OverageChargeStatus::accepts`] let the status move: a late or
+    /// duplicate failure never un-pays a charge or revives a write-off, and
+    /// re-reporting the current status is a no-op. An action-required report
+    /// also stores the hosted invoice page.
     fn resolve_overage_invoice(
         &self,
         stripe_invoice_id: &str,
-        status: OverageChargeStatus,
+        outcome: &InvoiceOutcome,
     ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>>> + Send;
 
     /// The status of the payer's most recently reserved charge, if any. The
@@ -328,9 +340,10 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// `None` unless [`BillingSettings::auto_reload_active`] holds. A reload
     /// reserved earlier whose collection never finished is handed back so the
     /// retry reuses its id, Stripe idempotency keys, and invoice: a pending
-    /// reload with no invoice that went stale, or a failed reload whose
-    /// invoice is still open (returned as pending again). Any other pending
-    /// reload blocks a new one until Stripe resolves it.
+    /// reload with no invoice that went stale, or a failed or action-required
+    /// reload whose invoice is still open (returned as pending again). Any
+    /// other pending reload blocks a new one until Stripe resolves it; voided
+    /// and uncollectible reloads never block or count.
     fn reserve_credit_reload(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -357,16 +370,19 @@ pub trait BillingRepo: Send + Sync + 'static {
         stripe_invoice_id: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    /// Update a reload by its Stripe invoice (webhook). Returns the payer and
-    /// amount when the invoice was one of ours *and* the status changed.
-    /// `Paid` is terminal: a late or duplicate failure event never un-pays a
-    /// reload, and re-reporting the current status is a no-op.
-    /// A transition to `Paid` atomically books the purchased credits, deduplicated
-    /// by invoice, so a failed credit write leaves the status retryable.
+    /// Update a reload by its Stripe invoice (webhook, collector, or
+    /// reconciliation). Returns the payer and amount when the invoice was one
+    /// of ours *and* [`CreditReloadStatus::accepts`] let the status move: a
+    /// late or duplicate failure never un-pays a reload or revives a
+    /// write-off, and re-reporting the current status is a no-op. A
+    /// transition to `Paid` atomically books the purchased credits,
+    /// deduplicated by invoice, so a failed credit write leaves the status
+    /// retryable. An action-required report also stores the hosted invoice
+    /// page.
     fn resolve_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
-        status: CreditReloadStatus,
+        outcome: &InvoiceOutcome,
     ) -> impl Future<Output = Result<Option<ResolvedReload>>> + Send;
 
     /// Pause automatic reloads after a failed collection. Overage itself
@@ -375,6 +391,38 @@ pub trait BillingRepo: Send + Sync + 'static {
         &self,
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Lift a reload suspension (a later reload collected). Overage itself
+    /// stays as it was.
+    fn clear_auto_reload_suspension(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The status of the payer's most recently reserved reload, if any. Like
+    /// [`latest_charge_status`](Self::latest_charge_status), the newest
+    /// outcome decides whether reloads stay suspended.
+    fn latest_reload_status(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<CreditReloadStatus>>> + Send;
+
+    /// The payer's invoiced charges and reloads that Stripe may still collect
+    /// (`pending`, `requires_action`, or `failed` with an invoice) and that
+    /// have not changed since `before`. The webhook normally resolves these
+    /// within seconds; one this old is read back from the provider.
+    fn stale_invoices(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<StaleInvoice>>> + Send;
+
+    /// The payer's newest charge or reload whose payment is waiting on them to
+    /// authenticate it, if any.
+    fn payment_action(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<PaymentAction>>> + Send;
 }
 
 /// A one-off credit purchase to start.
@@ -461,16 +509,30 @@ pub trait PaymentGateway: Send + Sync + 'static {
     /// If no active or trialing subscription matches, an invoice-stored
     /// payment method may still collect the existing debt.
     ///
-    /// `Ok(true)` when it is paid, `Ok(false)` when the card was declined and
-    /// the invoice stays open for the provider's own retries (the webhook
-    /// reports the outcome), `Err` when the provider could not be reached or
-    /// rejected the request.
+    /// Reports what the invoice is after the attempt:
+    /// [`Paid`](InvoiceOutcome::Paid); [`PaymentFailed`](InvoiceOutcome::PaymentFailed)
+    /// when the card was declined and the invoice stays open for the
+    /// provider's own retries (the webhook reports the outcome);
+    /// [`ActionRequired`](InvoiceOutcome::ActionRequired) when the customer
+    /// must authenticate; [`Voided`](InvoiceOutcome::Voided) or
+    /// [`Uncollectible`](InvoiceOutcome::Uncollectible) when the provider
+    /// had already closed it. `Err` when the provider could not be reached
+    /// or rejected the request.
     fn pay_overage_invoice(
         &self,
         charge_id: Uuid,
         invoice_id: &str,
         scope: SubscriptionScope,
-    ) -> impl Future<Output = Result<bool>> + Send;
+    ) -> impl Future<Output = Result<InvoiceOutcome>> + Send;
+
+    /// Read back what became of an invoice this crate opened, for rows whose
+    /// webhook never arrived. `Ok(None)` when nothing conclusive can be said
+    /// yet: the invoice is still a draft, or open with a payment that was
+    /// never attempted or is still processing.
+    fn invoice_outcome(
+        &self,
+        invoice_id: &str,
+    ) -> impl Future<Output = Result<Option<InvoiceOutcome>>> + Send;
 
     /// The current period of the customer's subscription in `scope`. Active or
     /// trialing subscriptions win over past-due or unpaid ones. `Ok(None)` when
@@ -602,21 +664,24 @@ pub trait BillingService: Send + Sync + 'static {
         verified: Option<super::period::SubscriptionPeriod>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the outcome of an overage invoice (webhook). Unknown invoices
-    /// are ignored.
+    /// Record what the provider reports about an overage invoice (webhook).
+    /// Unknown invoices are ignored. The newest charge's outcome decides
+    /// whether overage is suspended: paid lifts it; a decline, a payment
+    /// awaiting the payer's authentication, a void, or a write-off pauses it.
     fn mark_overage_invoice(
         &self,
         stripe_invoice_id: &str,
-        paid: bool,
+        outcome: &InvoiceOutcome,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Record the outcome of a credit reload invoice (webhook). Unknown
-    /// invoices are ignored. A paid invoice books its credits once, even when
-    /// the collector already did, and settles; a failed one pauses automatic
-    /// reloads.
+    /// Record what the provider reports about a credit reload invoice
+    /// (webhook). Unknown invoices are ignored. A paid invoice books its
+    /// credits once, even when the collector already did, and settles; a
+    /// decline, a payment awaiting the payer's authentication, a void, or a
+    /// write-off pauses automatic reloads.
     fn mark_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
-        paid: bool,
+        outcome: &InvoiceOutcome,
     ) -> impl Future<Output = Result<()>> + Send;
 }

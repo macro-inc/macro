@@ -37,6 +37,19 @@ export interface AiAutoReloadSnapshot {
   active: boolean;
 }
 
+/**
+ * A reload or usage charge whose payment is waiting on the payer to
+ * authenticate it (3-D Secure and the like). The feature stays paused until
+ * they do, or re-enable it with a working card.
+ */
+export interface AiPaymentAction {
+  kind: 'overage_charge' | 'credit_reload';
+  /** Amount awaiting authentication, customer cents. */
+  amount_cents: number;
+  /** Stripe-hosted invoice page to complete it on; `null` when Stripe sent none (it also emails the link). */
+  hosted_invoice_url: string | null;
+}
+
 export interface AiUsageSnapshot {
   tier: AiPlanTier;
   unlimited: boolean;
@@ -58,6 +71,8 @@ export interface AiUsageSnapshot {
   uncovered_cents: number;
   remaining_cents: number;
   blocked_reason?: AiDenyReason;
+  /** Present while a payment is waiting on the payer to authenticate it. */
+  payment_action?: AiPaymentAction;
 }
 
 export interface AiPlanCatalogEntry {

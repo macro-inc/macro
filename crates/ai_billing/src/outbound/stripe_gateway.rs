@@ -6,8 +6,8 @@
 mod test;
 
 use crate::domain::{
-    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, OverageChargeRequest,
-    PaymentGateway, Result, SubscriptionScope,
+    BillingError, BillingPeriod, CreditCheckoutRequest, CreditReloadRequest, InvoiceOutcome,
+    OverageChargeRequest, PaymentGateway, Result, SubscriptionScope,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,8 +21,8 @@ use stripe::{
     CreateCheckoutSessionLineItemsPriceDataProductData, CreateCheckoutSessionPaymentIntentData,
     CreateInvoice, CreateInvoiceItem, Currency, Customer, CustomerId, Expandable,
     FinalizeInvoiceParams, Invoice, InvoiceId, InvoiceItem, InvoicePendingInvoiceItemsBehavior,
-    InvoiceStatus, ListSubscriptions, PaymentMethodId, RequestStrategy, Subscription,
-    SubscriptionStatus,
+    InvoiceStatus, ListSubscriptions, PaymentIntentStatus, PaymentMethodId, RequestStrategy,
+    Subscription, SubscriptionStatus,
 };
 
 /// Metadata key stamped on every Stripe object this crate creates.
@@ -194,6 +194,47 @@ impl StripePaymentGateway {
 
 fn payment(e: stripe::StripeError) -> BillingError {
     BillingError::Payment(e.into())
+}
+
+fn parse_invoice(id: &str) -> Result<InvoiceId> {
+    id.parse::<InvoiceId>()
+        .map_err(|e| BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}")))
+}
+
+/// What an invoice read with its payment intent expanded says about itself.
+/// `None` when nothing conclusive can be said: a draft, or an open invoice
+/// whose payment was never attempted (no intent, or one awaiting
+/// confirmation without a prior error) or is still processing.
+fn invoice_outcome(invoice: &Invoice) -> Option<InvoiceOutcome> {
+    match invoice.status? {
+        InvoiceStatus::Paid => Some(InvoiceOutcome::Paid),
+        InvoiceStatus::Void => Some(InvoiceOutcome::Voided),
+        InvoiceStatus::Uncollectible => Some(InvoiceOutcome::Uncollectible),
+        InvoiceStatus::Draft => None,
+        InvoiceStatus::Open => {
+            let Some(Expandable::Object(intent)) = invoice.payment_intent.as_ref() else {
+                return None;
+            };
+            match intent.status {
+                PaymentIntentStatus::RequiresAction => Some(InvoiceOutcome::ActionRequired {
+                    hosted_invoice_url: invoice.hosted_invoice_url.clone(),
+                }),
+                // Back at square one after an attempt: declined.
+                PaymentIntentStatus::RequiresPaymentMethod
+                | PaymentIntentStatus::RequiresConfirmation
+                    if intent.last_payment_error.is_some() =>
+                {
+                    Some(InvoiceOutcome::PaymentFailed)
+                }
+                PaymentIntentStatus::Canceled => Some(InvoiceOutcome::PaymentFailed),
+                PaymentIntentStatus::RequiresPaymentMethod
+                | PaymentIntentStatus::RequiresConfirmation
+                | PaymentIntentStatus::RequiresCapture
+                | PaymentIntentStatus::Processing
+                | PaymentIntentStatus::Succeeded => None,
+            }
+        }
+    }
 }
 
 fn no_matching_subscription() -> BillingError {
@@ -482,10 +523,8 @@ impl PaymentGateway for StripePaymentGateway {
         charge_id: Uuid,
         invoice_id: &str,
         scope: SubscriptionScope,
-    ) -> Result<bool> {
-        let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
-            BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
-        })?;
+    ) -> Result<InvoiceOutcome> {
+        let invoice_id = parse_invoice(invoice_id)?;
         let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
             .await
             .map_err(payment)?;
@@ -498,8 +537,13 @@ impl PaymentGateway for StripePaymentGateway {
         {
             return Err(BillingError::DirectUsageBillingDisabled);
         }
-        if invoice.status == Some(InvoiceStatus::Paid) {
-            return Ok(true);
+        match invoice.status {
+            Some(InvoiceStatus::Paid) => return Ok(InvoiceOutcome::Paid),
+            // Nothing to attempt: Stripe closed it. Report that instead of
+            // failing, so the row is closed the same way the webhook would.
+            Some(InvoiceStatus::Void) => return Ok(InvoiceOutcome::Voided),
+            Some(InvoiceStatus::Uncollectible) => return Ok(InvoiceOutcome::Uncollectible),
+            Some(InvoiceStatus::Open | InvoiceStatus::Draft) | None => {}
         }
         let invoice_scope = stamped_scope(&invoice)?;
         let scope = invoice_scope.unwrap_or(scope);
@@ -541,12 +585,18 @@ impl PaymentGateway for StripePaymentGateway {
             .post_form::<Invoice, _>(&format!("/invoices/{invoice_id}/pay"), &pay)
             .await
         {
-            Ok(invoice) => Ok(invoice.status == Some(InvoiceStatus::Paid)),
+            Ok(invoice) if invoice.status == Some(InvoiceStatus::Paid) => Ok(InvoiceOutcome::Paid),
+            // Accepted but not settled (a bank debit in flight, say): the
+            // webhook reports the outcome.
+            Ok(_) => Ok(InvoiceOutcome::PaymentFailed),
             Err(e) => {
                 // A decline is a failed collection, not a failed request: the
-                // invoice stays open and Stripe retries it. The invoice's own
-                // status also tells a retry that Stripe already collected it.
-                let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+                // invoice stays open and Stripe retries it. So is a payment
+                // that needs the customer to authenticate, which Stripe also
+                // reports as an error. The invoice and its payment intent
+                // tell them apart, and tell a retry that Stripe already
+                // collected or closed it.
+                let invoice = Invoice::retrieve(&self.client, &invoice_id, &["payment_intent"])
                     .await
                     .map_err(|retrieve_err| {
                         tracing::warn!(
@@ -555,21 +605,37 @@ impl PaymentGateway for StripePaymentGateway {
                         );
                         payment(retrieve_err)
                     })?;
-                match invoice.status {
-                    Some(InvoiceStatus::Paid) => Ok(true),
-                    Some(InvoiceStatus::Open) => {
+                match (invoice.status, invoice_outcome(&invoice)) {
+                    (_, Some(outcome @ InvoiceOutcome::ActionRequired { .. })) => {
+                        tracing::info!(
+                            error = ?e,
+                            "overage invoice payment needs the customer to authenticate"
+                        );
+                        Ok(outcome)
+                    }
+                    (Some(InvoiceStatus::Open), _) => {
                         tracing::warn!(
                             error = ?e,
                             "overage invoice payment did not succeed; left open for stripe retries"
                         );
-                        Ok(false)
+                        Ok(InvoiceOutcome::PaymentFailed)
                     }
-                    other => Err(BillingError::Payment(anyhow::anyhow!(
+                    (_, Some(outcome)) => Ok(outcome),
+                    (other, None) => Err(BillingError::Payment(anyhow::anyhow!(
                         "overage invoice is {other:?} after a failed payment attempt: {e}"
                     ))),
                 }
             }
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn invoice_outcome(&self, invoice_id: &str) -> Result<Option<InvoiceOutcome>> {
+        let invoice_id = parse_invoice(invoice_id)?;
+        let invoice = Invoice::retrieve(&self.client, &invoice_id, &["payment_intent"])
+            .await
+            .map_err(payment)?;
+        Ok(invoice_outcome(&invoice))
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -613,7 +679,13 @@ impl PaymentGateway for NoOpPaymentGateway {
         _charge_id: Uuid,
         _invoice_id: &str,
         _scope: SubscriptionScope,
-    ) -> Result<bool> {
+    ) -> Result<InvoiceOutcome> {
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "payments are not configured in this service"
+        )))
+    }
+
+    async fn invoice_outcome(&self, _invoice_id: &str) -> Result<Option<InvoiceOutcome>> {
         Err(BillingError::Payment(anyhow::anyhow!(
             "payments are not configured in this service"
         )))

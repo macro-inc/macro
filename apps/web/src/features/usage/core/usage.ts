@@ -6,7 +6,24 @@ export type UsageSummary = {
   billingAccess: 'free' | 'payer' | 'team-member';
   existingUsageBilling?: { limitCents: number; suspended: boolean };
   autoReload: { settings: AutoReloadSettings; suspended: boolean };
+  /** A charge waiting on the payer to authenticate it; the feature it belongs to is paused until they do. */
+  paymentAction?: PaymentAction;
 };
+
+export type PaymentAction = {
+  kind: 'overage_charge' | 'credit_reload';
+  amountCents: number;
+  /** Stripe-hosted page to complete the payment on; absent when Stripe only emailed the link. */
+  url?: string;
+};
+
+/** What the payer is told about a payment waiting on their authentication. */
+export function describePaymentAction(action: PaymentAction) {
+  const amount = formatCreditBalance(action.amountCents);
+  return action.kind === 'credit_reload'
+    ? `An automatic reload of ${amount} needs you to confirm it with your bank. Automatic reload is paused until you do.`
+    : `A usage charge of ${amount} needs you to confirm it with your bank. Usage billing is paused until you do.`;
+}
 
 export type UsagePreviewPlan = 'free' | 'paid';
 

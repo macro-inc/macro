@@ -2,8 +2,19 @@ import type { AiUsageSnapshot } from '@service-auth/ai-billing-types';
 import {
   DEFAULT_AUTO_RELOAD,
   monthlyUsagePercent,
+  type PaymentAction,
   type UsageSummary,
 } from '../core/usage';
+
+function toPaymentAction(snapshot: AiUsageSnapshot): PaymentAction | undefined {
+  const action = snapshot.payment_action;
+  if (!action) return;
+  return {
+    kind: action.kind,
+    amountCents: action.amount_cents,
+    url: action.hosted_invoice_url ?? undefined,
+  };
+}
 
 function toAutoReload(snapshot: AiUsageSnapshot): UsageSummary['autoReload'] {
   const reload = snapshot.auto_reload;
@@ -38,6 +49,7 @@ export function toUsageSummary(snapshot: AiUsageSnapshot): UsageSummary {
           }
         : undefined,
     autoReload: toAutoReload(snapshot),
+    paymentAction: toPaymentAction(snapshot),
     billingAccess:
       snapshot.tier === 'free'
         ? 'free'

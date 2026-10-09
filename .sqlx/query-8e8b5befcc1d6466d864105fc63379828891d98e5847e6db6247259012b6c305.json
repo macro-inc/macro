@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS \"spent!\"\n            FROM ai_credit_reload\n            WHERE user_id = $1\n              AND (status IN ('pending', 'requires_action', 'paid')\n                   OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))\n              AND created_at >= $2\n              AND created_at < $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "spent!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8e8b5befcc1d6466d864105fc63379828891d98e5847e6db6247259012b6c305"
+}

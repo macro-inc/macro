@@ -1200,6 +1200,30 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
+/**
+ * A payment of the payer's that is waiting on them to authenticate it.
+ */
+export type PaymentAction = {
+    /**
+     * Amount awaiting authentication, in customer cents.
+     */
+    amount_cents: number;
+    /**
+     * The Stripe-hosted invoice page where the payer completes it. `null`
+     * when the provider did not supply one; Stripe also emails the link.
+     */
+    hosted_invoice_url?: string | null;
+    /**
+     * What the invoice is for.
+     */
+    kind: PaymentActionKind;
+};
+
+/**
+ * Which of this crate's one-off invoices a [`PaymentAction`] belongs to.
+ */
+export type PaymentActionKind = 'overage_charge' | 'credit_reload';
+
 export type Permission = {
     /**
      * The description of the permission
@@ -1627,6 +1651,7 @@ export type UsageSnapshot = {
      * The payer for this user's AI.
      */
     payer: string;
+    payment_action?: null | PaymentAction;
     /**
      * Period end (exclusive).
      */

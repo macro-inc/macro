@@ -2371,7 +2371,15 @@ switch reflects the saved state. Paid team members who are not the payer see
 `Only the account that pays for this plan can change automatic reload.` and
 cannot save. After a failed automatic reload the dialog shows `Your last
 automatic reload could not be charged. Update your payment method, then save to
-try again.`; saving retries. Extra usage is funded entirely by prepaid credits.
+try again.`; saving retries. When a reload or usage charge is instead waiting
+on the payer to authenticate it with their bank (3-D Secure), the feature it
+belongs to pauses the same way and the Usage page shows a payer-only card, **A
+payment needs your confirmation**, naming the amount and feature with a
+`Confirm payment` link that opens the Stripe-hosted invoice in a new tab (or
+`Use the link Stripe emailed you.` when no page was supplied). The Auto-Reload
+dialog's notice says the same for a reload. Confirming resumes the feature once
+Stripe reports the payment; saving the dialog with a working card retries the
+same reload invoice instead. Extra usage is funded entirely by prepaid credits.
 If the reload budget runs out or payment fails, uncovered usage cannot trigger a
 direct usage charge; with quota enforcement enabled, exhausted credits and
 allowance block further AI requests. Historical direct-charge invoices are still

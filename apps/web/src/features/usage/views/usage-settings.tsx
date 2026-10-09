@@ -9,7 +9,7 @@ import {
 import { MonthlyLimit } from '../components/monthly-limit';
 import { UsageInfoDialog } from '../components/usage-info-dialog';
 import type { UsageContext } from '../context/usage-context';
-import { formatCreditBalance } from '../core/usage';
+import { describePaymentAction, formatCreditBalance } from '../core/usage';
 import { AutoReloadView } from './auto-reload';
 import { CreditPurchaseView } from './credit-purchase';
 
@@ -94,6 +94,42 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   />
                 </div>
               </SettingsCard>
+              <Show
+                when={
+                  summary().billingAccess === 'payer' &&
+                  !props.context.autoReload.preview() &&
+                  summary().paymentAction
+                }
+              >
+                {(action) => (
+                  <SettingsCard>
+                    <SettingsRow
+                      label="A payment needs your confirmation"
+                      description={describePaymentAction(action())}
+                    >
+                      <Show
+                        when={action().url}
+                        fallback={
+                          <span class="text-xs text-ink-muted">
+                            Use the link Stripe emailed you.
+                          </span>
+                        }
+                      >
+                        {(url) => (
+                          <a
+                            href={url()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex h-7 items-center rounded-md border border-edge-muted px-2 text-sm font-medium text-ink outline-none transition-colors hover:bg-ink/4 focus-visible:bg-ink/6"
+                          >
+                            Confirm payment
+                          </a>
+                        )}
+                      </Show>
+                    </SettingsRow>
+                  </SettingsCard>
+                )}
+              </Show>
               <Show
                 when={
                   summary().billingAccess === 'free' &&

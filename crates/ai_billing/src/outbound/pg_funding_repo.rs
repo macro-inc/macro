@@ -531,11 +531,14 @@ async fn availability(
           FROM ai_funding_reservation WHERE payer_id = $1 AND period_start = $3"#,
         payer, period.seat.as_ref(), period.period.start,
     ).fetch_one(&mut *conn).await?;
+    // Legacy charges Stripe may still collect (`OverageChargeStatus::may_collect`).
     let ledger = sqlx::query!(
         r#"SELECT
           COALESCE((SELECT SUM(delta_cents)::bigint FROM ai_credit_ledger WHERE user_id = $1), 0) AS "balance!",
           COALESCE((SELECT SUM(amount_cents)::bigint FROM ai_overage_charge WHERE user_id = $1 AND period_start = $2
-            AND accounting_policy = 'legacy' AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)), 0) AS "charged!""#,
+            AND accounting_policy = 'legacy'
+            AND (status IN ('pending', 'requires_action', 'paid')
+                 OR (status = 'failed' AND stripe_invoice_id IS NOT NULL))), 0) AS "charged!""#,
         payer, period.period.start,
     ).fetch_one(&mut *conn).await?;
     let credits = credit_commitments(conn, payer).await?;

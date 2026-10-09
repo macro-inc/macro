@@ -8,13 +8,14 @@ use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadThresholds, BillingError,
     BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS, CreditReloadStatus, Entitlement,
-    OVERAGE_CHARGE_THRESHOLD_CENTS, OverageChargeStatus, PayerScope, PeriodAllowance, PeriodLedger,
-    Result, SeatAllowance, SeatUsage, SubscriptionScope, UsageSnapshot,
+    InvoiceOutcome, OVERAGE_CHARGE_THRESHOLD_CENTS, OverageChargeStatus, PayerScope,
+    PaymentActionKind, PeriodAllowance, PeriodLedger, Result, SeatAllowance, SeatUsage,
+    SubscriptionScope, UsageSnapshot,
 };
 use super::period::{PeriodSync, SubscriptionPeriod};
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, CreditReloadRequest, EntitlementSource,
-    PaymentGateway, PendingReload, UsageReader,
+    PaymentGateway, PendingReload, StaleInvoice, UsageReader,
 };
 use super::pricing::AiPricing;
 use ai_usage::AiUsageEnforcement;
@@ -31,6 +32,18 @@ use teams::domain::open_seat_release::OpenSeatRelease;
 /// would read the provider again. One minute bounds that to one read per
 /// payer per process while Stripe rolls a period or a provider recovers.
 const PERIOD_MISS_BACKOFF: chrono::Duration = chrono::Duration::minutes(1);
+
+/// How long an invoiced charge or reload may go without a conclusive provider
+/// report before settlement reads it back from the provider. The webhook
+/// normally resolves a collection attempt within seconds; an hour covers
+/// delivery delays and leaves room for the provider's own first retry.
+const STALE_INVOICE_AGE: chrono::Duration = chrono::Duration::hours(1);
+
+/// How often one process reads a payer's stale invoices back from the
+/// provider. Settlement runs on every AI completion; a conclusive read moves
+/// the row and ends the staleness, so this only bounds reads of invoices the
+/// provider cannot yet say anything about.
+const RECONCILE_BACKOFF: chrono::Duration = chrono::Duration::minutes(10);
 
 /// How many closed periods behind the open one a settlement reconciles.
 ///
@@ -59,6 +72,9 @@ pub struct BillingServiceImpl<E, U, R, P> {
     /// read is not repeated. Shared by clones so every holder of this service
     /// in a process backs off together.
     period_misses: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
+    /// Payers whose stale invoices were recently reconciled, and until when
+    /// that is not repeated. Shared like `period_misses`.
+    reconciled: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
 }
 
 impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
@@ -76,6 +92,7 @@ impl<E, U, R, P> BillingServiceImpl<E, U, R, P> {
             billing: AiUsageBilling::Disabled,
             period_sync: None,
             period_misses: Arc::default(),
+            reconciled: Arc::default(),
         }
     }
 
@@ -327,6 +344,154 @@ where
             .unwrap_or_else(PoisonError::into_inner);
         misses.retain(|_, until| now < *until);
         misses.insert(payer.as_ref().to_string(), now + PERIOD_MISS_BACKOFF);
+    }
+
+    /// Whether this process should reconcile the payer's stale invoices now,
+    /// marking the moment so the next `RECONCILE_BACKOFF` skips it.
+    fn claim_reconcile(&self, payer: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> bool {
+        let mut reconciled = self
+            .reconciled
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        reconciled.retain(|_, until| now < *until);
+        if reconciled.contains_key(payer.as_ref()) {
+            return false;
+        }
+        reconciled.insert(payer.as_ref().to_string(), now + RECONCILE_BACKOFF);
+        true
+    }
+
+    /// Bring invoices whose webhook never arrived up to date with the
+    /// provider, so a lost `paid` books its credits, a lost decline pauses the
+    /// feature, an authentication request gets its page recorded, and a
+    /// voided or written-off invoice stops blocking reloads and covering
+    /// usage. Provider or storage trouble is logged, never fatal: settlement
+    /// must still run on what is known.
+    async fn reconcile_stale_invoices(&self, payer: &MacroUserIdStr<'_>, now: DateTime<Utc>) {
+        if !self.claim_reconcile(payer, now) {
+            return;
+        }
+        let stale = match self
+            .repo
+            .stale_invoices(payer, now - STALE_INVOICE_AGE)
+            .await
+        {
+            Ok(stale) => stale,
+            Err(e) => {
+                tracing::warn!(error = ?e, "reading stale invoices failed");
+                return;
+            }
+        };
+        for StaleInvoice {
+            kind,
+            stripe_invoice_id,
+        } in stale
+        {
+            let outcome = match self.payments.invoice_outcome(&stripe_invoice_id).await {
+                Ok(Some(outcome)) => outcome,
+                Ok(None) => {
+                    tracing::info!(
+                        invoice = %stripe_invoice_id,
+                        "stale invoice is still inconclusive at the provider"
+                    );
+                    continue;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        error = ?e,
+                        invoice = %stripe_invoice_id,
+                        "reading a stale invoice from the provider failed"
+                    );
+                    continue;
+                }
+            };
+            tracing::info!(
+                invoice = %stripe_invoice_id,
+                ?kind,
+                ?outcome,
+                "reconciling a stale invoice"
+            );
+            // A reload paid here books its credits; the settlement this runs
+            // ahead of consumes them, so no nested settlement is needed.
+            let applied = match kind {
+                PaymentActionKind::OverageCharge => {
+                    self.apply_charge_outcome(&stripe_invoice_id, &outcome)
+                        .await
+                }
+                PaymentActionKind::CreditReload => self
+                    .record_reload_outcome(&stripe_invoice_id, &outcome)
+                    .await
+                    .map(drop),
+            };
+            if let Err(e) = applied {
+                tracing::warn!(
+                    error = ?e,
+                    invoice = %stripe_invoice_id,
+                    "applying a reconciled invoice outcome failed"
+                );
+            }
+        }
+    }
+
+    /// Record a provider report about an overage invoice and let the newest
+    /// charge's outcome decide the suspension. Webhooks arrive in any order:
+    /// a late `paid` for an older invoice must not lift the suspension a
+    /// newer failure caused, and a late failure must not re-suspend a payer
+    /// whose newer charge went through.
+    async fn apply_charge_outcome(
+        &self,
+        stripe_invoice_id: &str,
+        outcome: &InvoiceOutcome,
+    ) -> Result<()> {
+        let Some(payer) = self
+            .repo
+            .resolve_overage_invoice(stripe_invoice_id, outcome)
+            .await?
+        else {
+            // Not ours, final, or already in this state.
+            return Ok(());
+        };
+        match self.repo.latest_charge_status(&payer).await? {
+            Some(OverageChargeStatus::Paid) => self.repo.clear_overage_suspension(&payer).await,
+            Some(status) if status.suspends() => self.repo.suspend_overage(&payer).await,
+            Some(_) | None => Ok(()),
+        }
+    }
+
+    /// Record a provider report about a credit reload invoice and let the
+    /// newest reload's outcome decide the suspension, as for charges: a paid
+    /// reload resumes automatic reloads (the payer authenticated it, or
+    /// Stripe's retry got through); a decline, an authentication request, a
+    /// void, or a write-off pauses them until the payer acts. Resolving a
+    /// paid reload atomically books its credits with the status; the payer
+    /// is returned so the caller may settle the usage that was waiting on
+    /// them.
+    async fn record_reload_outcome(
+        &self,
+        stripe_invoice_id: &str,
+        outcome: &InvoiceOutcome,
+    ) -> Result<Option<MacroUserIdStr<'static>>> {
+        let Some(resolved) = self
+            .repo
+            .resolve_credit_reload_invoice(stripe_invoice_id, outcome)
+            .await?
+        else {
+            // Not ours, final, or already in this state.
+            return Ok(None);
+        };
+        match self.repo.latest_reload_status(&resolved.payer).await? {
+            Some(CreditReloadStatus::Paid) => {
+                self.repo
+                    .clear_auto_reload_suspension(&resolved.payer)
+                    .await?;
+            }
+            Some(status) if status.suspends() => {
+                self.repo.suspend_auto_reload(&resolved.payer).await?;
+            }
+            Some(_) | None => {}
+        }
+        let booked = outcome.reload_status() == CreditReloadStatus::Paid;
+        Ok(booked.then_some(resolved.payer))
     }
 
     async fn release_at(
@@ -654,7 +819,7 @@ where
             .pay_overage_invoice(reload.id, &invoice_id, scope)
             .await
         {
-            Ok(true) => {
+            Ok(InvoiceOutcome::Paid) => {
                 self.repo
                     .record_credit_reload(payer, reload.amount_cents, &invoice_id)
                     .await?;
@@ -668,7 +833,7 @@ where
                 );
                 Ok(())
             }
-            Ok(false) => {
+            Ok(InvoiceOutcome::PaymentFailed) => {
                 // Declined: the invoice stays open for Stripe's retries and
                 // the webhook books the credits if one succeeds.
                 tracing::info!(
@@ -677,6 +842,20 @@ where
                     "ai credit reload invoice awaiting payment"
                 );
                 Ok(())
+            }
+            Ok(outcome) => {
+                // Needs the payer's authentication, or Stripe had already
+                // closed it: record it now the same way the webhook would.
+                // Reloads pause; unfunded usage remains uncovered.
+                tracing::info!(
+                    cents = reload.amount_cents,
+                    invoice = %invoice_id,
+                    ?outcome,
+                    "ai credit reload invoice needs the payer or is closed"
+                );
+                self.record_reload_outcome(&invoice_id, &outcome)
+                    .await
+                    .map(drop)
             }
             Err(e) => {
                 tracing::error!(
@@ -754,6 +933,14 @@ where
         if !self.enforcement.is_enabled() {
             snapshot.blocked_reason = None;
         }
+        // Only the summary needs the page to authenticate on; the gate, which
+        // shares `snapshot_at`, does not.
+        if position.entitlement.is_metered() {
+            snapshot.payment_action = self
+                .repo
+                .payment_action(&position.entitlement.payer)
+                .await?;
+        }
         Ok(snapshot)
     }
 
@@ -768,6 +955,10 @@ where
         if !position.entitlement.is_metered() {
             return Ok(());
         }
+        // Recover invoices before settling any period, so closed invoices no
+        // longer block reloads or cover usage and paid reloads fund settlement.
+        self.reconcile_stale_invoices(&position.entitlement.payer, now)
+            .await;
         // Closed periods first, oldest to newest, so a tail that ran past a
         // boundary is flushed before the current period accrues. Closed-period
         // settlement uses the freeze recorded while that period was open, not
@@ -915,52 +1106,28 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn mark_overage_invoice(&self, stripe_invoice_id: &str, paid: bool) -> Result<()> {
-        let status = if paid {
-            OverageChargeStatus::Paid
-        } else {
-            OverageChargeStatus::Failed
-        };
-        let Some(payer) = self
-            .repo
-            .resolve_overage_invoice(stripe_invoice_id, status)
-            .await?
-        else {
-            // Not ours, already paid, or already in this state.
-            return Ok(());
-        };
-        // Webhooks arrive in any order. A late `paid` for an older invoice must
-        // not lift the suspension a newer failure caused, and a late failure
-        // must not re-suspend a payer whose newer charge went through: the
-        // newest charge's outcome decides.
-        match self.repo.latest_charge_status(&payer).await? {
-            Some(OverageChargeStatus::Paid) => self.repo.clear_overage_suspension(&payer).await,
-            Some(OverageChargeStatus::Failed) => self.repo.suspend_overage(&payer).await,
-            Some(OverageChargeStatus::Pending) | None => Ok(()),
-        }
+    async fn mark_overage_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        outcome: &InvoiceOutcome,
+    ) -> Result<()> {
+        self.apply_charge_outcome(stripe_invoice_id, outcome).await
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn mark_credit_reload_invoice(&self, stripe_invoice_id: &str, paid: bool) -> Result<()> {
-        let status = if paid {
-            CreditReloadStatus::Paid
-        } else {
-            CreditReloadStatus::Failed
-        };
-        let Some(resolved) = self
-            .repo
-            .resolve_credit_reload_invoice(stripe_invoice_id, status)
+    async fn mark_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        outcome: &InvoiceOutcome,
+    ) -> Result<()> {
+        let Some(payer) = self
+            .record_reload_outcome(stripe_invoice_id, outcome)
             .await?
         else {
-            // Not ours, already paid, or already in this state.
             return Ok(());
         };
-        if !paid {
-            return self.repo.suspend_auto_reload(&resolved.payer).await;
-        }
-        // Resolving a paid reload atomically books its credits with the status.
         // The reloaded credits cover any usage that was waiting on them.
-        if let Err(e) = self.settle(&resolved.payer).await {
+        if let Err(e) = self.settle(&payer).await {
             tracing::warn!(error = ?e, "settlement after credit reload failed");
         }
         Ok(())

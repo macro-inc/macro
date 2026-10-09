@@ -4,10 +4,6 @@ use std::str::FromStr;
 use crate::api::context::ApiContext;
 use crate::api::user::stripe::PaidPlan;
 
-use ai_billing::BillingService;
-use ai_billing::outbound::stripe_gateway::{
-    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
-};
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
 use axum::{
@@ -36,7 +32,8 @@ mod billing;
 #[cfg(test)]
 mod test;
 use billing::{
-    BillingEvent, TeamPlanSync, handle_checkout_session_completed, period_from_timestamps,
+    BillingEvent, InvoiceEvent, TeamPlanSync, handle_checkout_session_completed,
+    handle_invoice_lifecycle_event, handle_one_off_invoice_event, period_from_timestamps,
     subscription_periods, sync_personal_billing_period, sync_team_billing_period,
 };
 
@@ -187,6 +184,14 @@ pub async fn handler(
         | EventType::InvoicePaid => {
             handle_payment_event(&ctx, event.data.object, event_type, &billing_event).await
         }
+        // A one-off AI invoice whose payment needs the customer to
+        // authenticate, or that Stripe voided or wrote off, would otherwise
+        // sit pending forever (and a pending reload blocks further reloads).
+        EventType::InvoicePaymentActionRequired
+        | EventType::InvoiceVoided
+        | EventType::InvoiceMarkedUncollectible => {
+            handle_invoice_lifecycle_event(&ctx, event.data.object, event_type).await
+        }
         // A credit pack paid with a delayed method (bank debit, etc.) completes
         // its session unpaid and reports the money later; both events book
         // through the same idempotent path.
@@ -233,48 +238,23 @@ async fn handle_payment_event(
         // Our own one-off invoices: AI overage chunks and automatic credit
         // reloads. Their outcome drives whether the payer keeps overage or
         // automatic reloads; they never touch plan roles.
-        let macro_purpose = invoice
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get(PURPOSE_METADATA_KEY))
-            .map(String::as_str);
-        let paid = !outcome.is_revoke();
-        if let Some(invoice_id) = invoice.id.as_ref() {
-            match macro_purpose {
-                Some(PURPOSE_AI_OVERAGE) => {
-                    tracing::info!(
-                        event_type = ?event_type,
-                        invoice_id = %invoice_id,
-                        paid,
-                        "processing ai overage invoice event"
-                    );
-                    ctx.ai_billing_service
-                        .mark_overage_invoice(invoice_id.as_str(), paid)
-                        .await
-                        .context("failed to record ai overage invoice outcome")?;
-                    return Ok(());
-                }
-                Some(PURPOSE_AI_CREDIT_RELOAD) => {
-                    tracing::info!(
-                        event_type = ?event_type,
-                        invoice_id = %invoice_id,
-                        paid,
-                        "processing ai credit reload invoice event"
-                    );
-                    ctx.ai_billing_service
-                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
-                        .await
-                        .context("failed to record ai credit reload invoice outcome")?;
-                    return Ok(());
-                }
-                _ => {}
-            }
+        let handled = handle_one_off_invoice_event(
+            ctx,
+            &event_type,
+            InvoiceEvent {
+                id: invoice.id.as_ref().map(|id| id.as_str()),
+                metadata: invoice.metadata.as_ref(),
+                hosted_invoice_url: invoice.hosted_invoice_url.as_deref(),
+            },
+        )
+        .await?;
+        if !handled {
+            tracing::info!(
+                event_type = ?event_type,
+                invoice_id = ?invoice.id.as_ref().map(|id| id.as_str()),
+                "acknowledging invoice payment event without subscription"
+            );
         }
-        tracing::info!(
-            event_type = ?event_type,
-            invoice_id = ?invoice.id.as_ref().map(|id| id.as_str()),
-            "acknowledging invoice payment event without subscription"
-        );
         return Ok(());
     };
 

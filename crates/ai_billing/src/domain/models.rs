@@ -1,5 +1,8 @@
 //! Plans, billing periods, settings, and the API-facing snapshot.
 
+#[cfg(test)]
+mod test;
+
 use super::pricing::AiPricing;
 pub use ai_usage::NON_BILLABLE_AI_FEATURES;
 use chrono::{DateTime, Datelike, Months, TimeZone, Utc};
@@ -531,6 +534,16 @@ pub struct PeriodAllowance {
 }
 
 /// Lifecycle of an overage charge pushed to Stripe.
+///
+/// Both this and [`CreditReloadStatus`] follow the same rules, which
+/// [`InvoiceOutcome`] maps provider reports onto:
+///
+/// - `Paid` and `Voided` are final.
+/// - `Uncollectible` only moves to one of those: a late failure report cannot
+///   revive a write-off.
+/// - A row Stripe may still collect (`Pending`, `RequiresAction`, `Paid`, or
+///   `Failed` with an invoice) keeps covering usage, counting against limits,
+///   and blocking a duplicate. `Voided` and `Uncollectible` never do.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
 )]
@@ -539,14 +552,57 @@ pub struct PeriodAllowance {
 pub enum OverageChargeStatus {
     /// Reserved in the ledger; Stripe not yet confirmed.
     Pending,
+    /// The invoice is open but its payment needs the payer to authenticate on
+    /// the Stripe-hosted invoice page. Overage is suspended until they do (or
+    /// re-enable it, which retries this invoice with their current card).
+    RequiresAction,
     /// Collected.
     Paid,
     /// Collection failed and overage is suspended. The charge stops covering
     /// usage only when no Stripe invoice was opened for it.
     Failed,
+    /// Stripe voided the invoice. Final: it never collects and no longer
+    /// covers usage.
+    Voided,
+    /// Stripe wrote the invoice off. It no longer collects automatically or
+    /// covers usage; a late payment still reports it paid.
+    Uncollectible,
 }
 
-/// Lifecycle of an automatic credit reload pushed to Stripe.
+impl OverageChargeStatus {
+    /// Whether a provider report of `next` may replace this status.
+    pub fn accepts(self, next: Self) -> bool {
+        if self == next {
+            return false;
+        }
+        match self {
+            Self::Paid | Self::Voided => false,
+            Self::Uncollectible => matches!(next, Self::Paid | Self::Voided),
+            Self::Pending | Self::RequiresAction | Self::Failed => true,
+        }
+    }
+
+    /// Whether Stripe may still collect this charge, so it keeps covering its
+    /// usage. The Postgres adapter mirrors this predicate in SQL.
+    pub fn may_collect(self, has_invoice: bool) -> bool {
+        match self {
+            Self::Pending | Self::RequiresAction | Self::Paid => true,
+            Self::Failed => has_invoice,
+            Self::Voided | Self::Uncollectible => false,
+        }
+    }
+
+    /// Whether this outcome pauses overage until the payer acts.
+    pub fn suspends(self) -> bool {
+        matches!(
+            self,
+            Self::RequiresAction | Self::Failed | Self::Voided | Self::Uncollectible
+        )
+    }
+}
+
+/// Lifecycle of an automatic credit reload pushed to Stripe. Same rules as
+/// [`OverageChargeStatus`].
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
 )]
@@ -555,10 +611,132 @@ pub enum OverageChargeStatus {
 pub enum CreditReloadStatus {
     /// Reserved; Stripe not yet confirmed.
     Pending,
+    /// The invoice is open but its payment needs the payer to authenticate on
+    /// the Stripe-hosted invoice page. Reloads are suspended until they do
+    /// (or save their settings again, which retries this invoice).
+    RequiresAction,
     /// Collected and booked as credits.
     Paid,
     /// Collection failed and automatic reloads are suspended.
     Failed,
+    /// Stripe voided the invoice. Final: it never collects and stops
+    /// blocking or counting.
+    Voided,
+    /// Stripe wrote the invoice off. It stops blocking or counting; a late
+    /// payment still reports it paid.
+    Uncollectible,
+}
+
+impl CreditReloadStatus {
+    /// Whether a provider report of `next` may replace this status.
+    pub fn accepts(self, next: Self) -> bool {
+        if self == next {
+            return false;
+        }
+        match self {
+            Self::Paid | Self::Voided => false,
+            Self::Uncollectible => matches!(next, Self::Paid | Self::Voided),
+            Self::Pending | Self::RequiresAction | Self::Failed => true,
+        }
+    }
+
+    /// Whether Stripe may still collect this reload, so it blocks a new one
+    /// and counts against the monthly limit. The Postgres adapter mirrors
+    /// this predicate in SQL.
+    pub fn may_collect(self, has_invoice: bool) -> bool {
+        match self {
+            Self::Pending | Self::RequiresAction | Self::Paid => true,
+            Self::Failed => has_invoice,
+            Self::Voided | Self::Uncollectible => false,
+        }
+    }
+
+    /// Whether this outcome pauses automatic reloads until the payer acts.
+    pub fn suspends(self) -> bool {
+        matches!(
+            self,
+            Self::RequiresAction | Self::Failed | Self::Voided | Self::Uncollectible
+        )
+    }
+}
+
+/// What the payment provider reports about one of this crate's one-off
+/// invoices (an overage chunk or a credit reload), whether through a webhook,
+/// a collection attempt, or a reconciliation read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InvoiceOutcome {
+    /// Collected.
+    Paid,
+    /// A payment attempt was declined. The invoice stays open for the
+    /// provider's own retries.
+    PaymentFailed,
+    /// The payment needs the customer to authenticate (3-D Secure and the
+    /// like). The provider does not retry on its own; the customer completes
+    /// it on `hosted_invoice_url`.
+    ActionRequired {
+        /// The Stripe-hosted invoice page, when the provider supplied it.
+        hosted_invoice_url: Option<String>,
+    },
+    /// The invoice was voided: final, it never collects.
+    Voided,
+    /// The invoice was written off: no more automatic collection, though a
+    /// late payment still reports [`Paid`](Self::Paid).
+    Uncollectible,
+}
+
+impl InvoiceOutcome {
+    /// The charge status this outcome moves an overage invoice to.
+    pub fn charge_status(&self) -> OverageChargeStatus {
+        match self {
+            Self::Paid => OverageChargeStatus::Paid,
+            Self::PaymentFailed => OverageChargeStatus::Failed,
+            Self::ActionRequired { .. } => OverageChargeStatus::RequiresAction,
+            Self::Voided => OverageChargeStatus::Voided,
+            Self::Uncollectible => OverageChargeStatus::Uncollectible,
+        }
+    }
+
+    /// The reload status this outcome moves a credit reload invoice to.
+    pub fn reload_status(&self) -> CreditReloadStatus {
+        match self {
+            Self::Paid => CreditReloadStatus::Paid,
+            Self::PaymentFailed => CreditReloadStatus::Failed,
+            Self::ActionRequired { .. } => CreditReloadStatus::RequiresAction,
+            Self::Voided => CreditReloadStatus::Voided,
+            Self::Uncollectible => CreditReloadStatus::Uncollectible,
+        }
+    }
+
+    /// The hosted invoice page carried by an action-required report.
+    pub fn hosted_invoice_url(&self) -> Option<&str> {
+        match self {
+            Self::ActionRequired { hosted_invoice_url } => hosted_invoice_url.as_deref(),
+            _ => None,
+        }
+    }
+}
+
+/// Which of this crate's one-off invoices a [`PaymentAction`] belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, strum::Display)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum PaymentActionKind {
+    /// An overage chunk.
+    OverageCharge,
+    /// An automatic credit reload.
+    CreditReload,
+}
+
+/// A payment of the payer's that is waiting on them to authenticate it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
+pub struct PaymentAction {
+    /// What the invoice is for.
+    pub kind: PaymentActionKind,
+    /// Amount awaiting authentication, in customer cents.
+    pub amount_cents: i64,
+    /// The Stripe-hosted invoice page where the payer completes it. `null`
+    /// when the provider did not supply one; Stripe also emails the link.
+    pub hosted_invoice_url: Option<String>,
 }
 
 /// Why a request was refused.
@@ -681,6 +859,11 @@ pub struct UsageSnapshot {
     /// Why requests are refused right now, if they are.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocked_reason: Option<DenyReason>,
+    /// The newest overage or reload payment waiting on the payer to
+    /// authenticate it, if any. Overage or reloads stay suspended until they
+    /// do, or until they re-enable the feature with a working card.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payment_action: Option<PaymentAction>,
 }
 
 /// Errors raised by the billing domain.

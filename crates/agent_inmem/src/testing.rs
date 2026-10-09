@@ -112,11 +112,19 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not sync periods")
     }
 
-    async fn mark_overage_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+    async fn mark_overage_invoice(
+        &self,
+        _: &str,
+        _: &ai_billing::InvoiceOutcome,
+    ) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
 
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        _: &str,
+        _: &ai_billing::InvoiceOutcome,
+    ) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
 }

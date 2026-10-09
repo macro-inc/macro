@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, amount_cents, stripe_invoice_id, status::text AS \"status!\"\n            FROM ai_overage_charge\n            WHERE user_id = $1\n              AND period_start = $2\n              AND accounting_policy = 'legacy'\n              AND (\n                status IN ('failed', 'requires_action')\n                OR (\n                  status = 'pending'\n                  AND stripe_invoice_id IS NULL\n                  AND updated_at < NOW() - INTERVAL '10 minutes'\n                )\n              )\n            ORDER BY created_at\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "amount_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "stripe_invoice_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "status!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "56e1e02b2b2bf9ce1b28dad47f57ba169d962c3fc1e053ab42702199a15709eb"
+}

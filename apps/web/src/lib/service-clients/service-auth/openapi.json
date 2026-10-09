@@ -6355,6 +6355,31 @@
           }
         }
       },
+      "PaymentAction": {
+        "type": "object",
+        "description": "A payment of the payer's that is waiting on them to authenticate it.",
+        "required": ["kind", "amount_cents"],
+        "properties": {
+          "amount_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount awaiting authentication, in customer cents."
+          },
+          "hosted_invoice_url": {
+            "type": ["string", "null"],
+            "description": "The Stripe-hosted invoice page where the payer completes it. `null`\nwhen the provider did not supply one; Stripe also emails the link."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PaymentActionKind",
+            "description": "What the invoice is for."
+          }
+        }
+      },
+      "PaymentActionKind": {
+        "type": "string",
+        "description": "Which of this crate's one-off invoices a [`PaymentAction`] belongs to.",
+        "enum": ["overage_charge", "credit_reload"]
+      },
       "Permission": {
         "type": "object",
         "required": ["id", "description"],
@@ -6928,6 +6953,17 @@
           "payer": {
             "type": "string",
             "description": "The payer for this user's AI."
+          },
+          "payment_action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentAction",
+                "description": "The newest overage or reload payment waiting on the payer to\nauthenticate it, if any. Overage or reloads stay suspended until they\ndo, or until they re-enable the feature with a working card."
+              }
+            ]
           },
           "period_end": {
             "type": "string",

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AllowanceDecision, AutoReloadThresholds, BillingError, Entitlement, PayerScope, PlanTier,
-    UsageSnapshot,
+    AllowanceDecision, AutoReloadThresholds, BillingError, Entitlement, InvoiceOutcome, PayerScope,
+    PlanTier, UsageSnapshot,
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
@@ -129,13 +129,17 @@ impl BillingService for FakeBilling {
     ) -> Result<()> {
         unreachable!()
     }
-    async fn mark_overage_invoice(&self, _stripe_invoice_id: &str, _paid: bool) -> Result<()> {
+    async fn mark_overage_invoice(
+        &self,
+        _stripe_invoice_id: &str,
+        _outcome: &InvoiceOutcome,
+    ) -> Result<()> {
         unreachable!()
     }
     async fn mark_credit_reload_invoice(
         &self,
         _stripe_invoice_id: &str,
-        _paid: bool,
+        _outcome: &InvoiceOutcome,
     ) -> Result<()> {
         unreachable!()
     }

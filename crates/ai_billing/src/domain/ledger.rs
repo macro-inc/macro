@@ -210,6 +210,7 @@ pub fn build_snapshot(
         uncovered_cents,
         remaining_cents,
         blocked_reason: None,
+        payment_action: None,
     };
     snapshot.blocked_reason = match decide(&snapshot) {
         AllowanceDecision::Allow => None,

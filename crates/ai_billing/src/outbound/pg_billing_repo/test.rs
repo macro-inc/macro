@@ -188,7 +188,7 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
     // Paid is terminal: a late failure webhook changes nothing and keeps the
     // usage covered.
     assert!(
-        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+        repo.resolve_overage_invoice("in_1", &InvoiceOutcome::PaymentFailed)
             .await
             .unwrap()
             .is_none()
@@ -196,7 +196,7 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
     let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
     assert_eq!(ledger.overage_charged_cents, 1_300);
     assert!(
-        repo.resolve_overage_invoice("in_unknown", OverageChargeStatus::Paid)
+        repo.resolve_overage_invoice("in_unknown", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_none()
@@ -227,7 +227,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
 
     // Declined: the failure webhook lands first.
     let who = repo
-        .resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+        .resolve_overage_invoice("in_1", &InvoiceOutcome::PaymentFailed)
         .await
         .unwrap();
     assert_eq!(who.unwrap().as_ref(), payer().as_ref());
@@ -237,7 +237,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
     assert_eq!(ledger.overage_charged_cents, 1_300);
     // Re-reporting the same status is a no-op.
     assert!(
-        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+        repo.resolve_overage_invoice("in_1", &InvoiceOutcome::PaymentFailed)
             .await
             .unwrap()
             .is_none()
@@ -245,7 +245,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
 
     // Stripe's retry collected it.
     assert!(
-        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Paid)
+        repo.resolve_overage_invoice("in_1", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_some()
@@ -255,7 +255,7 @@ async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
 
     // A duplicate or late failure after that cannot un-pay it.
     assert!(
-        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+        repo.resolve_overage_invoice("in_1", &InvoiceOutcome::PaymentFailed)
             .await
             .unwrap()
             .is_none()
@@ -1050,28 +1050,28 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
         .unwrap();
 
     assert!(
-        repo.resolve_credit_reload_invoice("in_unknown", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_unknown", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_none()
     );
     // Declined first; re-reporting it is a no-op.
     let failed = repo
-        .resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        .resolve_credit_reload_invoice("in_1", &InvoiceOutcome::PaymentFailed)
         .await
         .unwrap()
         .expect("status changed");
     assert_eq!(failed.payer.as_ref(), payer().as_ref());
     assert_eq!(failed.amount_cents, 10_000);
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::PaymentFailed)
             .await
             .unwrap()
             .is_none()
     );
     // Stripe's retry collected it: reported exactly once.
     let paid = repo
-        .resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
+        .resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Paid)
         .await
         .unwrap()
         .expect("status changed");
@@ -1079,14 +1079,14 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
     assert_eq!(paid.amount_cents, 10_000);
     assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_none()
     );
     // A late or duplicate failure cannot un-pay it.
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::PaymentFailed)
             .await
             .unwrap()
             .is_none()
@@ -1117,7 +1117,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
     .await
     .unwrap();
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", &InvoiceOutcome::Paid)
             .await
             .is_err()
     );
@@ -1136,7 +1136,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
         .await
         .unwrap();
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_some()
@@ -1144,7 +1144,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
     assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     // Re-delivery cannot issue the purchased credits twice.
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_none()
@@ -1174,7 +1174,7 @@ async fn reload_invoice_webhook_deduplicates_credits_booked_by_collector(pool: P
         .unwrap();
 
     assert!(
-        repo.resolve_credit_reload_invoice("in_collector", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_collector", &InvoiceOutcome::Paid)
             .await
             .unwrap()
             .is_some()
@@ -1200,6 +1200,572 @@ async fn suspend_auto_reload_keeps_the_first_timestamp(pool: PgPool) {
     assert_eq!(s.auto_reload_suspended_at, Some(first));
     // Reload suspension leaves overage itself alone.
     assert!(s.overage_suspended_at.is_none());
+
+    // Clearing it leaves overage alone too, and is a no-op without a row.
+    repo.suspend_overage(&payer()).await.unwrap();
+    repo.clear_auto_reload_suspension(&payer()).await.unwrap();
+    let s = repo.settings(&payer()).await.unwrap();
+    assert!(s.auto_reload_suspended_at.is_none());
+    assert!(s.overage_suspended_at.is_some());
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap();
+    repo.clear_auto_reload_suspension(&other).await.unwrap();
+    assert_eq!(
+        repo.settings(&other).await.unwrap(),
+        BillingSettings::default()
+    );
+}
+
+async fn reload_status_of(pool: &PgPool, invoice: &str) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_credit_reload WHERE stripe_invoice_id = $1"#,
+        invoice,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+async fn charge_status_of(pool: &PgPool, invoice: &str) -> String {
+    sqlx::query_scalar!(
+        r#"SELECT status::text AS "status!" FROM ai_overage_charge WHERE stripe_invoice_id = $1"#,
+        invoice,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+const HOSTED_URL: &str = "https://invoice.stripe.test/i/in_1";
+
+fn action_required() -> InvoiceOutcome {
+    InvoiceOutcome::ActionRequired {
+        hosted_invoice_url: Some(HOSTED_URL.to_string()),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reload_invoice_reports_follow_the_transition_rules_and_keep_the_page(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let reserved = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reserved.id, Some("in_1"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+    assert_eq!(repo.payment_action(&payer()).await.unwrap(), None);
+
+    // Authentication needed: the row remembers the hosted page and the
+    // summary can point at it.
+    let resolved = repo
+        .resolve_credit_reload_invoice("in_1", &action_required())
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert_eq!(resolved.amount_cents, 10_000);
+    assert_eq!(reload_status_of(&pool, "in_1").await, "requires_action");
+    assert_eq!(
+        repo.payment_action(&payer()).await.unwrap(),
+        Some(PaymentAction {
+            kind: PaymentActionKind::CreditReload,
+            amount_cents: 10_000,
+            hosted_invoice_url: Some(HOSTED_URL.to_string()),
+        })
+    );
+    assert_eq!(
+        repo.latest_reload_status(&payer()).await.unwrap(),
+        Some(CreditReloadStatus::RequiresAction)
+    );
+    // Re-reporting it is a no-op.
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &action_required())
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Written off: no longer awaiting the payer, but a late decline cannot
+    // revive it...
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Uncollectible)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(repo.payment_action(&payer()).await.unwrap(), None);
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::PaymentFailed)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &action_required())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(reload_status_of(&pool, "in_1").await, "uncollectible");
+    // ...while a late payment still books the credits, once.
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+    assert!(
+        repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Voided)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(reload_status_of(&pool, "in_1").await, "paid");
+
+    // A void is final too.
+    let second = repo
+        .reserve_credit_reload(&payer(), now, 0, now)
+        .await
+        .unwrap();
+    assert!(second.is_none(), "balance is at the target");
+    let payer_id = payer();
+    sqlx::query!(
+        "INSERT INTO ai_credit_reload (id, user_id, amount_cents, stripe_invoice_id, status)
+         VALUES ($1, $2, 500, 'in_2', 'pending')",
+        macro_uuid::generate_uuid_v7(),
+        payer_id.as_ref(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.resolve_credit_reload_invoice("in_2", &InvoiceOutcome::Voided)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    for outcome in [
+        InvoiceOutcome::Paid,
+        InvoiceOutcome::PaymentFailed,
+        InvoiceOutcome::Uncollectible,
+        action_required(),
+    ] {
+        assert!(
+            repo.resolve_credit_reload_invoice("in_2", &outcome)
+                .await
+                .unwrap()
+                .is_none(),
+            "{outcome:?}"
+        );
+    }
+    assert_eq!(reload_status_of(&pool, "in_2").await, "voided");
+    assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
+    assert_eq!(
+        repo.latest_reload_status(&payer()).await.unwrap(),
+        Some(CreditReloadStatus::Voided)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn closed_reloads_neither_block_nor_count_but_action_required_ones_do(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let period_start = now - chrono::Duration::days(10);
+    enable_auto_reload(&repo, &thresholds(Some(12_000))).await;
+
+    let first = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(first.id, Some("in_1"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+    // Awaiting the payer: blocks a new one however old it gets...
+    repo.resolve_credit_reload_invoice("in_1", &action_required())
+        .await
+        .unwrap()
+        .expect("status changed");
+    sqlx::query!(
+        "UPDATE ai_credit_reload SET updated_at = NOW() - INTERVAL '3 days' WHERE id = $1",
+        first.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // ...except that re-enabling reloads retries it on its invoice, as for a
+    // failed one. (The service only reaches here once the payer re-enabled;
+    // the repo itself does not know about the pause.)
+    let retried = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("action-required reload handed back");
+    assert_eq!(retried.id, first.id);
+    assert_eq!(retried.stripe_invoice_id.as_deref(), Some("in_1"));
+    assert_eq!(reload_status_of(&pool, "in_1").await, "pending");
+    assert!(
+        repo.reserve_credit_reload(&payer(), period_start, 0, now)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Voided: it stops blocking and no longer counts against the month, so
+    // the next reload is a full one rather than the 2_000 left under the cap.
+    repo.resolve_credit_reload_invoice("in_1", &InvoiceOutcome::Voided)
+        .await
+        .unwrap()
+        .expect("status changed");
+    let second = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    assert_ne!(second.id, first.id);
+    assert_eq!(second.amount_cents, 10_000);
+    assert_eq!(reload_rows(&pool).await, 2);
+
+    // Written off: the same.
+    repo.finish_credit_reload(second.id, Some("in_2"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+    repo.resolve_credit_reload_invoice("in_2", &InvoiceOutcome::Uncollectible)
+        .await
+        .unwrap()
+        .expect("status changed");
+    let third = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    assert_ne!(third.id, second.id);
+    assert_eq!(third.amount_cents, 10_000);
+    assert_eq!(reload_rows(&pool).await, 3);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn closed_charges_stop_covering_and_action_required_ones_are_retried(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    let first = repo
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    repo.finish_overage_charge(first.id, Some("in_1"), OverageChargeStatus::Pending)
+        .await
+        .unwrap();
+
+    // Awaiting the payer: still covers the usage and shows in the summary.
+    let who = repo
+        .resolve_overage_invoice("in_1", &action_required())
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert_eq!(who.as_ref(), payer().as_ref());
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        1_300
+    );
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::RequiresAction)
+    );
+    assert_eq!(
+        repo.payment_action(&payer()).await.unwrap(),
+        Some(PaymentAction {
+            kind: PaymentActionKind::OverageCharge,
+            amount_cents: 1_300,
+            hosted_invoice_url: Some(HOSTED_URL.to_string()),
+        })
+    );
+    // Once overage is active again it is retried on its invoice, not
+    // reserved a second time.
+    let retried = repo
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("action-required charge handed back");
+    assert_eq!(retried.id, first.id);
+    assert_eq!(retried.stripe_invoice_id.as_deref(), Some("in_1"));
+    assert_eq!(charge_status_of(&pool, "in_1").await, "pending");
+    assert_eq!(charge_rows(&pool).await, 1);
+
+    // Voided: the usage is uncovered again and a fresh charge is reserved
+    // for it; the voided one is never retried.
+    repo.resolve_overage_invoice("in_1", &InvoiceOutcome::Voided)
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        0
+    );
+    assert_eq!(repo.payment_action(&payer()).await.unwrap(), None);
+    let second = repo
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    assert_ne!(second.id, first.id);
+    assert_eq!(second.amount_cents, 1_300);
+    assert!(second.stripe_invoice_id.is_none());
+    assert_eq!(charge_rows(&pool).await, 2);
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        1_300
+    );
+
+    // Written off: the same, and a late failure cannot revive it.
+    repo.finish_overage_charge(second.id, Some("in_2"), OverageChargeStatus::Pending)
+        .await
+        .unwrap();
+    repo.resolve_overage_invoice("in_2", &InvoiceOutcome::Uncollectible)
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert!(
+        repo.resolve_overage_invoice("in_2", &InvoiceOutcome::PaymentFailed)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        0
+    );
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::Uncollectible)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn stale_invoices_are_the_old_collectible_ones_oldest_first(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let period_start = now - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+
+    let charge = repo
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    repo.finish_overage_charge(charge.id, Some("in_charge"), OverageChargeStatus::Pending)
+        .await
+        .unwrap();
+    let reload = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reload.id, Some("in_reload"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+    // One of each terminal and final state, plus a reservation that never
+    // got an invoice: none of these are the provider's to report on.
+    let payer_id = payer();
+    for (invoice, status) in [
+        ("in_paid", "paid"),
+        ("in_void", "voided"),
+        ("in_written_off", "uncollectible"),
+    ] {
+        sqlx::query!(
+            "INSERT INTO ai_credit_reload (id, user_id, amount_cents, stripe_invoice_id, status, updated_at)
+             VALUES ($1, $2, 500, $3, ($4::text)::ai_credit_reload_status, NOW() - INTERVAL '3 days')",
+            macro_uuid::generate_uuid_v7(),
+            payer_id.as_ref(),
+            invoice,
+            status,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "INSERT INTO ai_overage_charge (id, user_id, period_start, amount_cents, status, updated_at)
+         VALUES ($1, $2, $3, 500, 'failed', NOW() - INTERVAL '3 days')",
+        macro_uuid::generate_uuid_v7(),
+        payer_id.as_ref(),
+        period_start,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Fresh rows are the webhook's.
+    let stale = repo
+        .stale_invoices(&payer(), now - chrono::Duration::hours(1))
+        .await
+        .unwrap();
+    assert!(stale.is_empty(), "{stale:?}");
+
+    // Age them: the reload longer than the charge, so it comes first.
+    sqlx::query!(
+        "UPDATE ai_credit_reload SET updated_at = NOW() - INTERVAL '2 hours' WHERE id = $1",
+        reload.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE ai_overage_charge SET updated_at = NOW() - INTERVAL '90 minutes' WHERE id = $1",
+        charge.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let stale = repo
+        .stale_invoices(&payer(), now - chrono::Duration::hours(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        stale,
+        vec![
+            StaleInvoice {
+                kind: PaymentActionKind::CreditReload,
+                stripe_invoice_id: "in_reload".to_string(),
+            },
+            StaleInvoice {
+                kind: PaymentActionKind::OverageCharge,
+                stripe_invoice_id: "in_charge".to_string(),
+            },
+        ]
+    );
+
+    // Awaiting the payer or declined with an open invoice: still the
+    // provider's to report on. Final: not.
+    repo.resolve_overage_invoice("in_charge", &action_required())
+        .await
+        .unwrap()
+        .expect("status changed");
+    repo.resolve_credit_reload_invoice("in_reload", &InvoiceOutcome::PaymentFailed)
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert!(
+        repo.stale_invoices(&payer(), now - chrono::Duration::hours(1))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a report resets the clock"
+    );
+    let stale = repo
+        .stale_invoices(&payer(), now + chrono::Duration::hours(1))
+        .await
+        .unwrap();
+    assert_eq!(stale.len(), 2, "{stale:?}");
+    repo.resolve_overage_invoice("in_charge", &InvoiceOutcome::Paid)
+        .await
+        .unwrap()
+        .expect("status changed");
+    let stale = repo
+        .stale_invoices(&payer(), now + chrono::Duration::hours(1))
+        .await
+        .unwrap();
+    assert_eq!(
+        stale,
+        vec![StaleInvoice {
+            kind: PaymentActionKind::CreditReload,
+            stripe_invoice_id: "in_reload".to_string(),
+        }]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn payment_action_is_the_newest_across_charges_and_reloads(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let period_start = now - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let charge = repo
+        .apply_settlement(&payer(), period_start, 1_300, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    repo.finish_overage_charge(charge.id, Some("in_charge"), OverageChargeStatus::Pending)
+        .await
+        .unwrap();
+    let reload = repo
+        .reserve_credit_reload(&payer(), period_start, 0, now)
+        .await
+        .unwrap()
+        .expect("reload reserved");
+    repo.finish_credit_reload(reload.id, Some("in_reload"), CreditReloadStatus::Pending)
+        .await
+        .unwrap();
+
+    repo.resolve_credit_reload_invoice(
+        "in_reload",
+        &InvoiceOutcome::ActionRequired {
+            hosted_invoice_url: None,
+        },
+    )
+    .await
+    .unwrap()
+    .expect("status changed");
+    // Without a page from the provider, the summary still says it is waiting.
+    assert_eq!(
+        repo.payment_action(&payer()).await.unwrap(),
+        Some(PaymentAction {
+            kind: PaymentActionKind::CreditReload,
+            amount_cents: 10_000,
+            hosted_invoice_url: None,
+        })
+    );
+    sqlx::query!(
+        "UPDATE ai_credit_reload SET updated_at = NOW() - INTERVAL '1 minute' WHERE id = $1",
+        reload.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    repo.resolve_overage_invoice("in_charge", &action_required())
+        .await
+        .unwrap()
+        .expect("status changed");
+    assert_eq!(
+        repo.payment_action(&payer()).await.unwrap(),
+        Some(PaymentAction {
+            kind: PaymentActionKind::OverageCharge,
+            amount_cents: 1_300,
+            hosted_invoice_url: Some(HOSTED_URL.to_string()),
+        })
+    );
+    // Another payer's rows are not reported.
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap();
+    assert_eq!(repo.payment_action(&other).await.unwrap(), None);
+    assert!(
+        repo.stale_invoices(&other, now + chrono::Duration::days(1))
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }
 
 struct RawAllowance {

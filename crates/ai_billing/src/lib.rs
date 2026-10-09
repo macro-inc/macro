@@ -59,6 +59,7 @@ pub use domain::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, AiPricing, AiUsageBilling,
     AllowanceDecision, AutoReloadSnapshot, AutoReloadThresholds, BillingAdmissionService,
     BillingError, BillingPeriod, BillingService, BillingSettings, CREDIT_PACKS_CENTS, DenyReason,
-    DisabledAiAdmissionService, Entitlement, IncludedAllowanceCents, OverageMarkupPercent,
-    PayerScope, PlanAllowances, PlanTier, PricingError, UsageSnapshot, cost_cents,
+    DisabledAiAdmissionService, Entitlement, IncludedAllowanceCents, InvoiceOutcome,
+    OverageMarkupPercent, PayerScope, PaymentAction, PaymentActionKind, PlanAllowances, PlanTier,
+    PricingError, UsageSnapshot, cost_cents,
 };

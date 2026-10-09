@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE ai_billing_account\n            SET auto_reload_suspended_at = NULL, updated_at = NOW()\n            WHERE user_id = $1 AND auto_reload_suspended_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "727d084471da3709c7fb25f12cdb02e071433913d26ac89e8ff2940c81415ab0"
+}

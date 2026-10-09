@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_AUTO_RELOAD,
+  describePaymentAction,
   isUsageAvailable,
   monthlyUsagePercent,
   parseDollarInput,
@@ -106,4 +107,23 @@ describe('Usage rollout', () => {
       expect(isUsageAvailable(production, flag)).toBe(available);
     }
   );
+});
+
+describe('payment awaiting authentication', () => {
+  it('names the feature that is paused and the amount to confirm', () => {
+    expect(
+      describePaymentAction({ kind: 'credit_reload', amountCents: 9_500 })
+    ).toBe(
+      'An automatic reload of $95 needs you to confirm it with your bank. Automatic reload is paused until you do.'
+    );
+    expect(
+      describePaymentAction({
+        kind: 'overage_charge',
+        amountCents: 1_575,
+        url: 'https://invoice.stripe.test/i/in_1',
+      })
+    ).toBe(
+      'A usage charge of $15.75 needs you to confirm it with your bank. Usage billing is paused until you do.'
+    );
+  });
 });
