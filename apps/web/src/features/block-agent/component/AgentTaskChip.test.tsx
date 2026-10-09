@@ -4,10 +4,25 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentTaskChip } from './AgentTaskChip';
 
-const { openWithSplit, preview } = vi.hoisted(() => ({
-  openWithSplit: vi.fn(),
-  preview: { current: undefined as PreviewItem | undefined },
-}));
+const { openWithSplit, preview } = vi.hoisted(() => {
+  // Imports reach the connection gateway, which dials on load.
+  class FakeWebSocket {
+    url: string;
+    readyState = 1;
+    constructor(url: string) {
+      this.url = url;
+    }
+    close() {}
+    addEventListener() {}
+    removeEventListener() {}
+    send() {}
+  }
+  vi.stubGlobal('WebSocket', FakeWebSocket);
+  return {
+    openWithSplit: vi.fn(),
+    preview: { current: undefined as PreviewItem | undefined },
+  };
+});
 
 vi.mock('@queries/preview', () => ({
   useItemPreview: () => [() => preview.current],
