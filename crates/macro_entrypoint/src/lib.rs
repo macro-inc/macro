@@ -3,6 +3,7 @@
 //! This is used to provide consistent behaviour with e.g. tracing configurations
 
 mod datadog_fmt;
+mod grafana;
 mod shutdown;
 
 #[cfg(test)]
@@ -385,7 +386,21 @@ fn init_opentelemetry(
             .with_timeout(std::time::Duration::from_secs(2))
             .build()
         {
-            Ok(exporter) => provider = provider.with_batch_exporter(exporter),
+            Ok(exporter) => {
+                // At most one in-flight and one queued batch: two two-second
+                // exports fit within the SDK's five-second shutdown timeout.
+                let processor = opentelemetry_sdk::trace::BatchSpanProcessor::builder(
+                    grafana::GrafanaSpanExporter(exporter),
+                )
+                .with_batch_config(
+                    opentelemetry_sdk::trace::BatchConfigBuilder::default()
+                        .with_max_queue_size(512)
+                        .with_max_export_batch_size(512)
+                        .build(),
+                )
+                .build();
+                provider = provider.with_span_processor(processor);
+            }
             // Tracing is not installed yet. Optional export must not prevent startup.
             Err(error) => eprintln!("Grafana trace exporter unavailable: {error}"),
         }

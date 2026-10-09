@@ -326,8 +326,8 @@ still receives the authoritative copy.
 
 ## Dev dual export
 
-Every dev ECS service automatically runs the shared telemetry sidecars; there is
-no per-service opt-in flag. Production keeps its existing Datadog configuration
+Every dev ECS service using the shared Datadog sidecars automatically also runs
+Alloy; there is no per-service opt-in flag. Production keeps its existing Datadog configuration
 until its rollout. The earlier `image-proxy-service` canary verified Ohio
 ingestion; it used the superseded collector-in-front-of-Datadog design. The
 current design keeps applications exporting directly to the Datadog agent. The execution role can read the ingestion-only
@@ -352,7 +352,11 @@ restart the application or Datadog. ECS does not automatically restart a stopped
 non-essential container in this configuration; replace the task to recover it.
 
 The Grafana branch batches asynchronously before its memory limiter. Overflow,
-export failure, or task replacement can drop the optional copy. These queues are
+export failure, or task replacement can drop the optional copy. Failed optional
+trace exports are deliberately suppressed so a Grafana outage does not generate
+SDK export-error logs that feed existing Datadog alerts. The optional SDK queue
+is limited to one 512-span batch, so draining it plus an in-flight batch fits the
+five-second shutdown budget. Queue saturation can still emit SDK drop warnings. These queues are
 not durable. Collector processes still share task resources, and FireLens shares
 its input and parsing between the two outputs; this is not complete resource
 isolation. Any future application metric SDK needs its own independent Grafana
@@ -370,7 +374,9 @@ The manually dispatched `export-datadog-observability.yml` reads live dashboard/
 seven-day GitHub artifact for the migration inventory. It never modifies Datadog. The current repository credentials return HTTP 403
 for both reads; `monitors_read` and `dashboards_read` access must be restored
 before claiming live inventory parity. Partial exports retain an explicit status file.
-Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
+The live legacy agent-proxy/document-processing services outside the current
+stack definitions and the CloudWatch-logged preview gateway need a separate
+coverage pass. Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
 are separate sources; ECS/edge OTLP duplication alone does not provide parity.
 
 ## Validation and subsequent passes
