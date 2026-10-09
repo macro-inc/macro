@@ -89,7 +89,13 @@ def systemd_checks():
     # mounts, commands and the Docker name. No real Docker daemon is touched.
     app_settings = unit_settings('/etc/systemd/system/observability.service')
     docker_settings = unit_settings('/etc/systemd/system/docker.service')
-    assert docker_settings['Upholds'] == ['observability.service']
+    collector_settings = unit_settings('/etc/systemd/system/alloy.service')
+    cloudwatch_settings = unit_settings('/etc/systemd/system/amazon-cloudwatch-agent.service')
+    assert cloudwatch_settings['User'] == ['cloudwatch-agent']
+    assert all('docker.service' not in value for key in ['Requires', 'After', 'PartOf']
+               for value in cloudwatch_settings.get(key, []))
+    assert collector_settings['ExecStartPre'] == app_settings['ExecStartPre'][:1]
+    assert docker_settings['Upholds'] == ['observability.service', 'alloy.service']
     assert docker_settings['StartLimitIntervalSec'] == ['0']
     assert any('pre-start' in command for command in docker_settings['ExecStartPre'])
     assert app_settings['ExecStartPre'][0].endswith('/bin/mountpoint -q /srv/observability')
@@ -99,6 +105,7 @@ def systemd_checks():
     prefix = 'observability-test-' + uuid.uuid4().hex
     docker = prefix + '-docker.service'
     app = prefix + '-app.service'
+    collector = prefix + '-collector.service'
     bash = shutil.which('bash')
     sleep = shutil.which('sleep')
     assert bash and sleep, 'bash and sleep are required'
@@ -112,6 +119,7 @@ def systemd_checks():
         outage = root / 'secret-outage'
         storage_outage = root / 'storage-outage'
         events = root / 'events'
+        collector_events = root / 'collector-events'
         outage.touch()
         storage_outage.touch()
 
@@ -121,6 +129,9 @@ def systemd_checks():
         def starts():
             return events.read_text().splitlines().count('start') if events.exists() else 0
 
+        def collector_starts():
+            return len(collector_events.read_text().splitlines()) if collector_events.exists() else 0
+
         def active():
             return state(app, 'ActiveState') == 'active'
 
@@ -128,9 +139,21 @@ def systemd_checks():
             run('systemd-run', '--user', '--no-block', '--unit=' + docker,
                 '--property=Restart=always', '--property=RestartSec=0.2s',
                 '--property=StartLimitIntervalSec=0',
-                '--property=Upholds=' + app,
+                '--property=Upholds=' + app + ' ' + collector,
                 '--property=ExecStartPre=' + command('test ! -e ' + shlex.quote(str(storage_outage))),
                 sleep, '120')
+            collector_properties = []
+            for key in ['Requires', 'After', 'PartOf', 'Restart', 'RestartSec']:
+                for value in collector_settings.get(key, []):
+                    if key in ['Requires', 'After', 'PartOf']:
+                        value = ' '.join(docker if name == 'docker.service' else name
+                                         for name in value.split() if name != 'network.target')
+                    if key == 'RestartSec':
+                        value = '0.1s'
+                    collector_properties.append(f'--property={key}={value}')
+            run('systemd-run', '--user', '--no-block', '--unit=' + collector,
+                *collector_properties, bash, '-c',
+                'echo start >> ' + shlex.quote(str(collector_events)) + '; exec ' + shlex.quote(sleep) + ' 120')
             properties = []
             for key in ['Requires', 'After', 'PartOf', 'StartLimitIntervalSec',
                         'Type', 'RemainAfterExit', 'Restart', 'RestartSec']:
@@ -149,11 +172,12 @@ def systemd_checks():
                 bash, '-c', 'echo start >> ' + shlex.quote(str(events)))
             eventually(lambda: int(state(docker, 'NRestarts')) >= 4,
                        'Docker retries late metadata/storage')
-            assert starts() == 0, 'Started before storage was ready'
+            assert starts() == collector_starts() == 0, 'Started before storage was ready'
             storage_outage.unlink()
             eventually(lambda: int(state(app, 'NRestarts')) >= 6,
                        'secret fetch continues retrying')
-            print('PASS: late storage recovery starts dependent stack automatically')
+            eventually(lambda: collector_starts() == 1, 'collector starts after late storage recovery')
+            print('PASS: late storage recovery starts dependent stack and host collector automatically')
             assert starts() == 0, 'Started before secrets were available'
             outage.unlink()
             eventually(lambda: active() and starts() == 1, 'secret outage recovery')
@@ -161,23 +185,25 @@ def systemd_checks():
 
             run('systemctl', '--user', 'restart', docker)
             eventually(lambda: active() and starts() == 2, 'intentional Docker restart')
-            print('PASS: intentional Docker restart restarts observability')
+            eventually(lambda: collector_starts() == 2, 'collector restarts with Docker')
+            print('PASS: intentional Docker restart restarts observability and host collection')
 
             run('systemctl', '--user', 'kill', '--kill-whom=main',
                 '--signal=SIGKILL', docker)
             eventually(lambda: active() and starts() == 3, 'Docker crash recovery')
             assert int(state(docker, 'NRestarts')) >= 1
             assert events.read_text().splitlines() == ['start', 'stop', 'start', 'stop', 'start']
-            print('PASS: Docker crash restarts observability')
+            eventually(lambda: collector_starts() == 3, 'collector recovers after Docker crash')
+            print('PASS: Docker crash restarts observability and host collection')
         except BaseException:
-            print(run('journalctl', '--user', '-u', docker, '-u', app,
+            print(run('journalctl', '--user', '-u', docker, '-u', app, '-u', collector,
                       '--no-pager', '-n', '60', check=False).stdout)
             raise
         finally:
             # Stop only this invocation's UUID-named units. Inactive transient
             # units may already have been unloaded, so cleanup is best effort.
-            run('systemctl', '--user', 'stop', app, docker, check=False)
-            run('systemctl', '--user', 'reset-failed', app, docker, check=False)
+            run('systemctl', '--user', 'stop', app, collector, docker, check=False)
+            run('systemctl', '--user', 'reset-failed', app, collector, docker, check=False)
 
 
 if __name__ == '__main__':

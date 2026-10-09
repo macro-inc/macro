@@ -50,6 +50,7 @@ in
       image = "grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193";
       user = "10001:10001";
       mem_limit = "4g";
+      ports = [ "127.0.0.1:3100:3100" ];
       command = [
         "-config.file=/etc/loki/config.yaml"
       ];
@@ -72,6 +73,7 @@ in
       ];
     };
     prometheus = common // {
+      ports = [ "127.0.0.1:9090:9090" ];
       image = "prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e";
       user = "65534:65534";
       mem_limit = "3g";

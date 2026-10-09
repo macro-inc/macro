@@ -14,3 +14,4 @@ test "$(findmnt --noheadings --output UUID --target /srv/observability)" = "$uui
 install -d -o 472 -g 472 /srv/observability/grafana
 install -d -o 65534 -g 65534 /srv/observability/prometheus
 install -d -o 10001 -g 10001 /srv/observability/{loki,tempo,alloy}
+install -d -o root -g root -m 0700 /srv/observability/host-alloy

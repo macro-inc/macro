@@ -15,6 +15,8 @@ let
   '';
 in
 {
+  imports = [ ./host-telemetry.nix ];
+
   system.stateVersion = "26.05";
   image.baseName = "macro-observability";
   virtualisation.diskSize = 12 * 1024;
@@ -78,24 +80,10 @@ in
   };
   # A dependency failure does not itself retry the dependent unit. Upholds
   # starts the stack once Docker eventually recovers from a boot-time failure.
-  systemd.services.docker.unitConfig.Upholds = [ "observability.service" ];
-  systemd.services.observability-health = {
-    description = "Publish observability disk usage to CloudWatch";
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-    path = runtimePath;
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.python3}/bin/python3 ${../assets/publish-health.py}";
-    };
-  };
-  systemd.timers.observability-health = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "2min";
-      OnUnitActiveSec = "5min";
-    };
-  };
+  systemd.services.docker.unitConfig.Upholds = [
+    "observability.service"
+    "alloy.service"
+  ];
 
   environment.etc."observability/prepare-volume.sh".source = ../assets/prepare-volume.sh;
   environment.etc."observability/config".source = import ./application-config.nix { inherit pkgs; };

@@ -89,7 +89,6 @@ def render_payload(payload, template_root, output_root):
                        if name.endswith('.json') else substitute(template))
     files['bootstrap.json'] = json.dumps({
         'region': settings['region'], 'secretArn': settings['secretArn'],
-        'host': settings['grafanaHost'],
     })
     files['volume-id'] = settings['volumeId']
     # Validate and render everything before writing any configuration.

@@ -5,12 +5,24 @@ import ipaddress
 import os
 from pathlib import Path
 import runpy
+import signal
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+from collectors import check_collectors
+
+
+def terminate(signum, _frame):
+    # Bun's timeout sends SIGTERM. Unwind both cleanup blocks, including the
+    # privileged collector process, before exiting the smoke test.
+    raise SystemExit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, terminate)
 
 root = Path(sys.argv[1])
 flake = Path(__file__).resolve().parents[1]
@@ -34,6 +46,8 @@ if subnet := os.environ.get('OBSERVABILITY_SMOKE_SUBNET'):
     compose['networks'] = {'default': {'ipam': {'config': [{'subnet': str(network)}]}}}
 services = compose['services']
 assert compose['services']['proxy']['ports'] == ['8080:8080']
+assert services['loki']['ports'] == ['127.0.0.1:3100:3100']
+assert services['prometheus']['ports'] == ['127.0.0.1:9090:9090']
 for name, service in services.items():
     assert service['restart'] == 'on-failure'
     service['restart'] = 'no'
@@ -192,6 +206,9 @@ assert jmespath.search(expression, {}) == 'Denied'
                    for item in listing.get('Contents', []))
     eventually(lambda: stored('observability-logs-test'))
     eventually(lambda: stored('observability-traces-test', trace=True))
+    if os.environ.get('OBSERVABILITY_COLLECTORS') == '1':
+        check_collectors(root, flake, project, prometheus, loki_url,
+                         request, eventually, docker)
     # A short stop deadline also exercises recovery when shutdown is interrupted.
     docker('restart', '--timeout', '5', 'loki', 'tempo', 'prometheus')
     # Docker can assign new ephemeral host ports on restart.

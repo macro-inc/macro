@@ -106,6 +106,9 @@ test.skipIf(process.env.OBSERVABILITY_SYSTEMD !== '1')(
   35_000
 );
 
+const smokeTimeout =
+  process.env.OBSERVABILITY_COLLECTORS === '1' ? 600_000 : 240_000;
+
 // Explicit opt-in: creates an isolated Docker project with fake credentials.
 test.skipIf(process.env.OBSERVABILITY_SMOKE !== '1')(
   'authentication, all three signals, S3 flush and restart recovery',
@@ -121,7 +124,7 @@ test.skipIf(process.env.OBSERVABILITY_SMOKE !== '1')(
         [join(__dirname, 'tests', 'smoke.py'), directory],
         {
           stdio: 'inherit',
-          timeout: 240_000,
+          timeout: smokeTimeout,
         }
       );
       expect(result.status).toBe(0);
@@ -129,5 +132,5 @@ test.skipIf(process.env.OBSERVABILITY_SMOKE !== '1')(
       rmSync(directory, { recursive: true, force: true });
     }
   },
-  250_000
+  smokeTimeout + 10_000
 );

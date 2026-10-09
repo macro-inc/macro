@@ -397,12 +397,26 @@ new aws.cloudwatch.MetricAlarm('observability-ui', {
   dimensions: { LoadBalancer: alb.arnSuffix, TargetGroup: target.arnSuffix },
   treatMissingData: 'breaching',
 });
-new aws.cloudwatch.MetricAlarm('observability-disk', {
+for (const [name, path] of [
+  ['observability-disk', '/srv/observability'],
+  ['observability-root-disk', '/'],
+]) {
+  new aws.cloudwatch.MetricAlarm(name, {
+    ...alarm,
+    namespace: 'Macro/Observability',
+    metricName: 'disk_used_percent',
+    threshold: 80,
+    dimensions: { InstanceId: instance.id, path, fstype: 'ext4' },
+    period: 300,
+    treatMissingData: 'breaching',
+  });
+}
+new aws.cloudwatch.MetricAlarm('observability-memory', {
   ...alarm,
   namespace: 'Macro/Observability',
-  metricName: 'DataDiskUsedPercent',
-  threshold: 80,
-  dimensions: { Host: grafanaHost },
+  metricName: 'mem_used_percent',
+  threshold: 90,
+  dimensions: { InstanceId: instance.id },
   period: 300,
   treatMissingData: 'breaching',
 });

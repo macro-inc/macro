@@ -3,13 +3,16 @@
 This stack starts Grafana alongside Datadog on one private EC2 instance. It
 provisions Grafana, Loki, Tempo, Prometheus and Alloy using Docker Compose on a
 prebuilt NixOS image. Nix declares host packages, Docker, service dependencies,
-health timers and access policy. All service configuration is authored in Nix:
+host collectors and access policy. All service configuration is authored in Nix:
 
 - `nixos/application-config.nix`: Grafana settings, datasources, Alloy pipeline
   and the assembled configuration output.
 - `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings as attribute sets.
 - `nixos/containers.nix`: pinned images, resource limits, mounts and service flags,
   including Prometheus retention.
+- `nixos/host-telemetry.nix`: native Alloy and CloudWatch Agent services.
+- `nixos/host-alloy.nix`: standard host/container metrics and log collection.
+- `nixos/cloudwatch.nix`: independent disk and memory health metrics.
 - `nixos/proxy.nix`: structured nginx virtual hosts and locations for ingestion
   routing and the query-only backend gateway.
 
@@ -66,6 +69,36 @@ or buckets. Subsequent dual export must use independent queues and HTTPS across
 regions, and account for inter-region transfer costs and latency. A production
 region outage should not block Grafana login or secret retrieval in Ohio.
 
+## Host and container collection
+
+A native NixOS Alloy service collects CPU, memory, filesystem and network metrics
+using its node exporter, and container CPU/memory/network/disk metrics using
+cAdvisor. It also reads Docker logs for this Compose project, selected systemd
+service logs and kernel logs. Metrics go to Prometheus; logs go to Loki. Other
+production hosts and application OTEL dual export are subsequent work.
+
+The native collector is separate from the unprivileged OTLP ingestion container.
+cAdvisor and Docker discovery require privileged host access; native Alloy runs
+as root with a loopback-only UI, filesystem hardening and a 1 GiB memory limit.
+Its node exporter reads `/proc/1/root` to measure host filesystems through that
+hardening. Docker metadata labels are limited to Compose project/service;
+container metrics and logs are restricted to this stack. EC2 metadata access is
+blocked for this service. Collector state is retained on EBS under `host-alloy`;
+the metrics WAL retains at most one hour of unsent samples. Log delivery uses
+bounded retries and does not guarantee lossless delivery through a long outage.
+
+CloudWatch Agent runs as a separate unprivileged NixOS service, independent of
+Docker and the data mount. It sends only root/data-disk utilization and memory
+utilization to the `Macro/Observability` namespace using the instance role.
+Alarms identify the current EC2 instance: either ext4 disk above 80% or memory
+above 90% over two five-minute periods notifies the configured SNS topic.
+Missing data breaches the alarm, including when the data volume is not mounted.
+CloudWatch collection runs every minute. No custom disk polling script remains.
+
+Both native agent versions are pinned by `flake.lock`; their NixOS modules own
+startup and restart behavior. Verify dashboards and alarms with real EC2 data
+before enabling broad production ingestion.
+
 ## Team authentication and security
 
 Production URLs are `https://grafana.macro.com` and `https://otlp.macro.com`;
@@ -93,7 +126,8 @@ Only the ALB is internet-facing, on TLS 1.2/1.3 port 443. The host has no public
 SSH key or SSH ingress. Its only ingress is port 8080 from the ALB security group.
 ALB-to-host traffic is HTTP inside the VPC. Administrative access uses AWS SSM and
 the operator's IAM identity. Loki, Tempo, Prometheus and Alloy have no published
-host ports; Grafana queries them over the private Docker network. The default ALB
+externally reachable host ports; Grafana queries them over the private Docker
+network. Loki and Prometheus also bind to host loopback for native Alloy writes. The default ALB
 action is 404. No HTTP listener is opened.
 
 Grafana data sources use a separate internal nginx listener on port 8081 that
@@ -187,8 +221,10 @@ Before enabling application traffic, validate all of these against AWS:
 - Reboot preserves data and starts services; stop/replace the host and verify
   the existing volume is reattached. Restore a snapshot to an isolated host and
   verify SQLite/Prometheus/WAL recovery before relying on the backup.
-- CloudWatch's instance, Grafana target-health and disk alarms reach the selected
-  SNS subscription. Confirm a daily snapshot is created. Inspect disk/queue
+- Host/container metrics and Docker/systemd logs appear in Grafana. CloudWatch's
+  instance, target-health, root/data-disk and memory alarms reach the selected
+  SNS subscription. Verify disk metrics use `InstanceId`, `path` and `fstype`
+  dimensions, memory uses `InstanceId`, and missing data alerts. Confirm a daily snapshot is created. Inspect disk/queue
   growth before increasing ingestion. These alarms do not cover every data-path
   failure; keep Datadog primary and add end-to-end ingestion checks next.
 
@@ -239,7 +275,7 @@ Use SSM Session Manager with the `instanceId` output. On the host:
 
 ```bash
 sudo systemctl status observability
-sudo journalctl -u observability -u observability-health --since '30 minutes ago'
+sudo journalctl -u observability -u alloy -u amazon-cloudwatch-agent --since '30 minutes ago'
 sudo journalctl -u docker --since boot
 sudo docker compose -f /opt/observability/compose.json ps
 sudo docker compose -f /opt/observability/compose.json logs --tail 100
@@ -302,6 +338,8 @@ From `infra/`:
 ```bash
 bun test stacks/observability/render.test.ts
 OBSERVABILITY_SMOKE=1 bun test stacks/observability/render.test.ts
+# Also run native agents: requires passwordless sudo for the isolated Alloy process.
+OBSERVABILITY_SMOKE=1 OBSERVABILITY_COLLECTORS=1 bun test stacks/observability/render.test.ts
 # Optional: requires Nix and a user systemd manager; never restarts real Docker.
 OBSERVABILITY_SYSTEMD=1 bun test stacks/observability/render.test.ts
 bunx biome check stacks/observability
@@ -320,6 +358,14 @@ three-signal readback, S3 writes and backend restart recovery. It then enables
 auth.proxy only in the local fixture to exercise an authenticated Viewer: all
 three data-source health checks and queries succeed, while backend maintenance
 and write endpoints are denied. Production auth.proxy is never enabled.
+
+The collectors opt-in builds the exact Nix agent packages/configuration. It runs
+native Alloy against the fixture's containers and a generated journal file,
+checks host and container metrics plus Docker/journal log readback, and runs
+CloudWatch Agent against fake IMDS and a local CloudWatch API receiver. It verifies the emitted alarm
+metric dimensions and that a missing mount never reports fallback root usage.
+Only this fixture's Alloy process runs with sudo; it does not start host services
+or restart Docker. Agent state and test containers are removed afterward.
 
 IMDS tests reject unexpected schema versions, setting keys, caller-supplied files,
 invalid identifiers, identity lists and regions before writing configuration;
