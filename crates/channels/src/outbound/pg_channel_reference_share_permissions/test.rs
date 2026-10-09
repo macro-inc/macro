@@ -68,9 +68,12 @@ async fn pdf_references_never_grant_more_than_the_sharer_holds(pool: PgPool) {
     );
 
     let unshared_channel_id = Uuid::now_v7();
-    share_referenced_item_with_channel(&pool, unshared_channel_id, &item, None)
-        .await
-        .unwrap();
+    assert_eq!(
+        share_referenced_item_with_channel(&pool, unshared_channel_id, &item, None)
+            .await
+            .unwrap(),
+        ReferenceShareOutcome::NotPermitted
+    );
     assert_eq!(
         document_channel_levels(&pool, PDF_DOCUMENT_ID, unshared_channel_id).await,
         (None, None)

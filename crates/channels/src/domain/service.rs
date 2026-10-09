@@ -6,8 +6,8 @@ use crate::domain::{
         ChannelAttachmentType, ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant,
         ChannelPreview, ChannelPreviewData, ChannelType, CreateEntityMentionOptions, EntityMention,
         GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-        GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest, ReferencedShareItem,
-        RemoveParticipantsRequest, Sender, WithChannelId,
+        GetOrCreatePrivateRequest, ParticipantRole, PatchChannelRequest, ReferenceShareResult,
+        ReferencedShareItem, RemoveParticipantsRequest, Sender, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr, ChannelMutationErr,
@@ -72,9 +72,16 @@ impl ChannelReferenceSharePermissions for NoopChannelReferenceSharePermissions {
         &self,
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
-        _items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
-        Ok(())
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, Self::Err> {
+        Ok(items
+            .into_iter()
+            .map(|item| ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: crate::domain::models::ReferenceShareOutcome::NotPermitted,
+            })
+            .collect())
     }
 }
 
@@ -1098,6 +1105,18 @@ where
         req: GetOrCreatePrivateRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::get_or_create_private(self, actor, req).await
+    }
+
+    async fn share_referenced_items_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        self.reference_share_permissions
+            .update_channel_share_permissions_for_referenced_items(actor, channel_id, items)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))
     }
 
     async fn patch_channel(

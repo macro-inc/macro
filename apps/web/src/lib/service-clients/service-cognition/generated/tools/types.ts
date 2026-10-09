@@ -4336,6 +4336,22 @@ export type GrantAccess = 'view' | 'edit';
  */
 export type ToolSenderPolicy = 'signal' | 'noise' | 'block';
 /**
+ * Entity types a channel grant can cover.
+ *
+ * Values are the stored entity types. `calendar` is accepted for a calendar
+ * chip, whose stored type is `calendar_event`.
+ */
+export type ChannelShareEntityType =
+  | 'calendar_event'
+  | 'document'
+  | 'chat'
+  | 'project'
+  | 'database'
+  | 'form'
+  | 'call'
+  | 'thread'
+  | 'agent_session';
+/**
  * Content of a text editor code execution response - either a result or an error
  */
 export type TextEditorCodeExecutionContent =
@@ -12124,6 +12140,38 @@ export interface SetSenderPolicyResponse {
   inbox: string;
   /**
    * A human-readable summary of the change.
+   */
+  summary: string;
+}
+/**
+ * Share an item with the current members of a channel by writing a channel entity-access grant. Call it only after the user agrees to share that item, or when they already asked you to share it. entityType is the stored type: calendar_event for a calendar chip, document, chat, project, database, form, call, thread, or agent_session. entityId is that item's id. A calendar event can be shared only by someone who holds it on their own calendar, and private or confidential events are refused. Sharing again is safe when a grant already exists.
+ */
+export interface ShareWithChannel {
+  /**
+   * Channel id whose current members should be able to view the item.
+   */
+  channelId: string;
+  /**
+   * Id of the item to share. For a calendar chip this is the event id in documentId.
+   */
+  entityId: string;
+  entityType: ChannelShareEntityType;
+}
+/**
+ * Confirmation that the channel grant is in place.
+ */
+export interface ShareWithChannelResponse {
+  /**
+   * Channel that received the grant.
+   */
+  channelId: string;
+  /**
+   * Shared entity id.
+   */
+  entityId: string;
+  entityType: ChannelShareEntityType;
+  /**
+   * Human-readable result.
    */
   summary: string;
 }

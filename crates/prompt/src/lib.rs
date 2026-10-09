@@ -294,6 +294,13 @@ mod tests {
     }
 
     #[test]
+    fn mentions_prompt_says_a_shared_calendar_event_previews_for_channel_members() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("read-only preview"));
+        assert!(instructions.contains("Private and confidential events are never shared"));
+    }
+
+    #[test]
     fn mentions_prompt_covers_date_and_agent_session_chips() {
         let instructions = mentions::PROMPT.instructions.as_ref();
         assert!(instructions.contains("<m-date-mention>"));

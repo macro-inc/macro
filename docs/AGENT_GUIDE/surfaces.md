@@ -1648,11 +1648,13 @@ that date. Coverage depends on each teammate having connected their own calendar
 Google's out-of-office event type.
 
 A calendar event mentioned in a channel message opens the calendar focused on the viewer's
-own copy of the meeting. When the sender holds the event on their own calendar, the mention
-also shares it read-only with the channel's current members: a member without a copy of their
-own sees the mention's title and time, and its hover card adds a `Shared with you · not on
+own copy of the meeting. When a person holds the event on their own calendar and posts the
+mention, it is shared read-only with the channel's current members: a member without a copy of
+their own sees the mention's title and time, and its hover card adds a `Shared with you · not on
 your calendar` line with no open action. Clicking such a mention shows that hover card
-instead of opening the calendar. Private and confidential events are never shared this way.
+instead of opening the calendar. A classic `@Macro` reply that mentions an event does not share
+it by posting the chip. It asks whether to share with the channel, and a yes in that thread
+writes the same channel grant. Private and confidential events are never shared this way.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
 byline.
