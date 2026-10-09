@@ -192,7 +192,7 @@ fn every_statement_failure_preserves_the_queue_and_live_view_until_retry() {
                     .await
                     .unwrap()
                 {
-                    QueryUpdate::Hit { data, .. } => assert_eq!(data, before),
+                    QueryUpdate::Hit { data, .. } => assert_eq!(*data, before),
                     QueryUpdate::Patch { patches, .. } => assert!(patches.is_empty()),
                     QueryUpdate::Miss { .. } => panic!("failed write lost the watched query"),
                 }

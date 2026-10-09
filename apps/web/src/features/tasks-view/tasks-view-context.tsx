@@ -117,6 +117,11 @@ export type TasksViewContext = {
   closeTask: () => void;
   setTab: (tab: TasksTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
+  /**
+   * Filters by a single tag without changing tabs. Used by the inline
+   * "filter by tag" button on entity rows.
+   */
+  filterByTag: (optionId: string) => void;
   setPrimarySort: (id: TaskSortId) => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -386,6 +391,16 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
+  // Filters by a single tag without changing tabs. Used by the inline
+  // "filter by tag" button on entity rows.
+  const filterByTag = (optionId: string) => {
+    closeTask();
+    setState(
+      'facets',
+      reconcile(normalizeFacetSelection({ tags: [optionId] }))
+    );
+  };
+
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
 
@@ -408,6 +423,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     closeTask,
     setTab,
     setFacets,
+    filterByTag,
     setPrimarySort,
     isSidebarSectionOpen,
     setSidebarSectionOpen,

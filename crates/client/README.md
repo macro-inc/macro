@@ -191,8 +191,12 @@ response-path patches. Existing `createUrqlQuery` and `createUrqlInfiniteQuery`
 consumers benefit from the same path automatically and need no migration;
 cursor-paginated documents use `createUrqlInfiniteQuery`.
 Aliases, fragment types, arguments, variable defaults and conditional selections
-are resolved by the core reader. Structural edits rebuild the projection;
-teardown, account resets and bounded retention discard obsolete bindings. See
+are resolved by the core reader. Leaf edits patch through compiled field
+bindings without reading. Structural edits (links, list membership and order,
+tombstones, type changes) and journal barriers re-read the query, rebuild its
+bindings and diff the result against the retained response; only a new root or a
+replacement of most of the response resends it. Teardown, account resets and
+bounded retention discard obsolete bindings and responses. See
 [the live query API guide](../../apps/web/docs/graphql-normalized-cache-plan.md#8-live-query-api)
 for mutation examples and the distinction between reactive cached fields and
 domain-specific collection membership.

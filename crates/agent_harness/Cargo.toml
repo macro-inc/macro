@@ -22,12 +22,17 @@ agent_trigger = { path = "../agent_trigger" }
 ai_usage = { path = "../ai_usage" }
 cursor_api_key = { path = "../cursor_api_key" }
 cursor_cloud_agents = { path = "../cursor_cloud_agents" }
+# Task documents a session links to, read as the session owner.
+documents = { path = "../documents", default-features = false, features = [
+  "ports",
+] }
 entity_access = { path = "../entity_access" }
 entity_access_db_utils = { path = "../entity_access_db_utils" }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+trigger_context = { path = "../trigger_context" }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
@@ -51,6 +56,7 @@ macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 model_owner = { path = "../model_owner" }

@@ -74,6 +74,7 @@ export function PipelineShare(props: {
 export function PipelineDatabaseEditor(props: {
   pipeline: Pipeline;
   actions?: JSX.Element;
+  onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
 }) {
   return (
     <div
@@ -90,6 +91,7 @@ export function PipelineDatabaseEditor(props: {
             <PipelineRecords
               pipeline={props.pipeline}
               actions={props.actions}
+              onOpenRecord={props.onOpenRecord}
             />
           )}
         </Show>
@@ -101,7 +103,11 @@ export function PipelineDatabaseEditor(props: {
 const viewFailure = (failure: DatabaseOpFailure) =>
   toast.failure(databaseOpMessage(failure, 'this view'));
 
-function PipelineRecords(props: { pipeline: Pipeline; actions?: JSX.Element }) {
+function PipelineRecords(props: {
+  pipeline: Pipeline;
+  actions?: JSX.Element;
+  onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
+}) {
   const deps = { storage: storageServiceClient, client: useQueryClient() };
   const tableQuery = usePipelineTableQuery(deps, props.pipeline);
   const views = createPipelineViews(deps, props.pipeline);
@@ -179,6 +185,12 @@ function PipelineRecords(props: { pipeline: Pipeline; actions?: JSX.Element }) {
           renderMentionValue={(id, entityType) => (
             <DatabaseMentionValue id={id} entityType={entityType} />
           )}
+          onOpenTitleMention={(id, entityType) => {
+            if (entityType === 'COMPANY')
+              props.onOpenRecord?.({ type: 'company', id });
+            else if (entityType === 'CONTACT')
+              props.onOpenRecord?.({ type: 'contact', id });
+          }}
           renderToolbar={(actions) => (
             <PipelineToolbar
               views={views}

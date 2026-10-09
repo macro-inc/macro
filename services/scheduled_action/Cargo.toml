@@ -51,6 +51,7 @@ messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
 models_properties = { path = "../../crates/models_properties" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 system_properties = { path = "../../crates/system_properties" }
+trigger_context = { path = "../../crates/trigger_context" }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

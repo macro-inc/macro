@@ -93,12 +93,7 @@ describe('agent fold preloading', () => {
     await expect(pushed).resolves.toEqual([]);
   });
 
-  // The three ways a worker can fail are distinguishable, and the browser
-  // tells them apart only by the error event's message. Measured in Chrome: a
-  // script that 404s reports no message at all; one that loads and throws
-  // reports what it threw; a failure inside the worker never reaches `error`
-  // and comes back as an ordinary reply.
-  it('reports a script that never loaded as the build being gone', async () => {
+  it('reports an unavailable script with its URL without assuming a stale build', async () => {
     const { AgentFoldWorkerUnavailable, pushSession } = await import(
       './client'
     );
@@ -108,8 +103,7 @@ describe('agent fold preloading', () => {
 
     const error = await pushed.catch((reason: unknown) => reason);
     expect(error).toBeInstanceOf(AgentFoldWorkerUnavailable);
-    expect((error as Error).message).toContain('no longer served');
-    // The chunk names the build, which is the whole diagnosis.
+    expect((error as Error).message).not.toContain('no longer served');
     expect((error as Error).message).toContain('fold.worker');
   });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isCalendarEventOngoing,
+  isMeetingEvent,
   selectUpcomingCalendarEvents,
   type UpcomingCalendarEvent,
 } from './upcoming-calendar-events';
@@ -15,6 +16,57 @@ const call = (hour: number): UpcomingCalendarEvent => ({
   start: `2026-09-23T${hour}:00:00Z`,
   end: `2026-09-23T${hour + 1}:00:00Z`,
   allDay: false,
+  isMeeting: true,
+});
+
+const guest = {
+  email: 'guest@example.com',
+  isSelf: false,
+  isOrganizer: false,
+  isOptional: false,
+  responseStatus: 'accepted' as const,
+};
+const self = { ...guest, email: 'self@example.com', isSelf: true };
+const room = 'https://meet.google.com/one-room';
+
+describe('isMeetingEvent', () => {
+  it('counts busy regular events with a call link or another guest', () => {
+    expect(isMeetingEvent({ attendees: [] }, room)).toBe(true);
+    expect(
+      isMeetingEvent(
+        { eventType: 'default', transparency: 'opaque', attendees: [guest] },
+        undefined
+      )
+    ).toBe(true);
+  });
+
+  it('skips solo blocks without a call link', () => {
+    expect(isMeetingEvent({ attendees: [] }, undefined)).toBe(false);
+    expect(isMeetingEvent({ attendees: [self] }, undefined)).toBe(false);
+  });
+
+  it('skips events that show the viewer as free', () => {
+    expect(
+      isMeetingEvent(
+        { transparency: 'transparent', attendees: [self, guest] },
+        room
+      )
+    ).toBe(false);
+  });
+
+  it('skips status-style event types', () => {
+    for (const eventType of [
+      'out_of_office',
+      'focus_time',
+      'working_location',
+      'birthday',
+      'from_gmail',
+    ] as const) {
+      expect(isMeetingEvent({ eventType, attendees: [guest] }, room)).toBe(
+        false
+      );
+    }
+  });
 });
 
 describe('upcoming calendar calls', () => {

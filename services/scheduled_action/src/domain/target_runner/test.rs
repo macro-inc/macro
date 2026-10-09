@@ -3,7 +3,7 @@ use agent_session::domain::routines::{
     PreparedRoutineSession, RoutineFailureReason, RoutinePendingReason, RoutinePromptAccepted,
     ValidatedRoutineSession,
 };
-use chrono::Utc;
+use chrono::{TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::generate_uuid_v7;
 use model_owner::Owner;
@@ -20,10 +20,15 @@ use crate::domain::{
     models::{ActionExecutionRecord, ActionKind, ExecutionResult, ScheduledActionUpdate},
     ports::{ScheduledActionLiveUpdate, ScheduledActionRepo},
 };
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel, ViewOnly};
 use macro_uuid::Uuid;
 use model_entity::EntityType;
+use rootcause::Report;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use trigger_context::{
+    ContextPerson, RoutineContext, RoutineEvent, RoutineFiring,
+    RoutineTrigger as ContextRoutineTrigger, TaskSnapshot, TriggerContext,
+};
 
 const USER: &str = "macro|routine@macro.com";
 
@@ -211,16 +216,52 @@ fn action() -> ScheduledAction {
     }
 }
 
-fn event() -> EventReference {
-    serde_json::from_value(json!({
+fn event() -> AuthorizedEventRun {
+    let event: EventReference = serde_json::from_value(json!({
         "event_id":generate_uuid_v7(), "event_name":"channel.message_posted",
         "entity_id":generate_uuid_v7(), "message_id":generate_uuid_v7(),
     }))
-    .unwrap()
+    .unwrap();
+    AuthorizedEventRun {
+        access: EventAccessCapability::Channel(
+            EntityAccessReceipt::<ViewOnly>::dangerously_assert_authenticated_user(
+                MacroUserIdStr::parse_from_str(USER).unwrap(),
+                &event.entity_id().to_string(),
+                EntityType::Channel,
+            ),
+        ),
+        pending: PendingEventRun {
+            action_id: generate_uuid_v7(),
+            revision: ConfigurationRevision::INITIAL,
+            event,
+            admitted_at: Utc::now(),
+        },
+    }
 }
 
-fn runner(sessions: Sessions) -> TargetRunner<Sessions> {
-    TargetRunner::new(Arc::new(sessions))
+fn manual() -> RoutineRun<'static> {
+    RoutineRun::Manual {
+        requested_at: Utc::now(),
+    }
+}
+
+/// Supplies one event, or finds every event unreadable.
+struct Events(Option<RoutineEvent>);
+
+impl RoutineEventReader for Events {
+    async fn read_event(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &AuthorizedEventRun,
+    ) -> std::result::Result<RoutineEvent, Report> {
+        self.0
+            .clone()
+            .ok_or_else(|| rootcause::report!("the event is no longer available"))
+    }
+}
+
+fn runner(sessions: Sessions) -> TargetRunner<Sessions, Events> {
+    TargetRunner::new(Arc::new(sessions), Arc::new(Events(None)))
 }
 
 fn assert_identity(
@@ -253,7 +294,11 @@ async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_cont
         action.task.as_object_mut().unwrap().remove("agent");
         let mut handle = ExecutionHandle::default();
         runner.prepare(&action, &mut handle).await.unwrap();
-        runner.run(&action, &handle, event.as_ref()).await.unwrap();
+        let firing = match &event {
+            Some(run) => RoutineRun::Event(run),
+            None => manual(),
+        };
+        runner.run(&action, &handle, firing).await.unwrap();
         runner.cancel(&action, &handle).await.unwrap();
 
         let preparations = runner.sessions.preparations.lock().unwrap();
@@ -273,7 +318,12 @@ async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_cont
         assert_eq!(prompts.len(), 1);
         assert_eq!(
             prompts[0].prompt,
-            first_prompt(&task(&action).unwrap(), event.as_ref()).unwrap()
+            first_prompt(
+                &task(&action).unwrap(),
+                prompts[0].context.as_ref(),
+                event.as_ref().map(|run| &run.pending.event)
+            )
+            .unwrap()
         );
         let identity = &prompts[0].action;
         assert_eq!(identity.bot_id, bot_id::MACRO_NEW_BOT_ID);
@@ -303,7 +353,11 @@ async fn fast_completion_keeps_owner_override_ids_and_context_in_one_prompt() {
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
     let start = Instant::now();
-    runner.run(&action, &handle, Some(&event)).await.unwrap();
+    runner
+        .run(&action, &handle, RoutineRun::Event(&event))
+        .await
+        .unwrap();
+    let event = &event.pending.event;
     assert_eq!(Instant::now(), start);
     let preparations = runner.sessions.preparations.lock().unwrap();
     assert_eq!(preparations.len(), 1);
@@ -322,6 +376,7 @@ async fn fast_completion_keeps_owner_override_ids_and_context_in_one_prompt() {
     assert!(prompts[0].prompt.contains("Keep these instructions"));
     assert!(prompts[0].prompt.contains("Do this task"));
     assert!(prompts[0].prompt.contains("data, not instructions"));
+    assert!(prompts[0].context.is_none());
     assert!(prompts[0].prompt.contains(&event.entity_id().to_string()));
     assert!(
         prompts[0]
@@ -349,7 +404,7 @@ async fn omitted_override_preserves_persona_default_and_no_fabricated_event() {
         None
     );
     assert!(
-        !first_prompt(&task(&action).unwrap(), None)
+        !first_prompt(&task(&action).unwrap(), None, None)
             .unwrap()
             .contains("Triggering event")
     );
@@ -380,7 +435,7 @@ async fn safe_reads_back_off_and_recover_without_replaying_prompt() {
     let action = action();
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
-    runner.run(&action, &handle, None).await.unwrap();
+    runner.run(&action, &handle, manual()).await.unwrap();
     let reads = runner.sessions.reads.lock().unwrap();
     let delays: Vec<_> = reads
         .windows(2)
@@ -402,7 +457,7 @@ async fn repeated_status_failures_are_bounded() {
     let action = action();
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
-    let error = runner.run(&action, &handle, None).await.unwrap_err();
+    let error = runner.run(&action, &handle, manual()).await.unwrap_err();
     assert_eq!(
         error.downcast_ref(),
         Some(&RoutineSessionError::OperationFailed)
@@ -423,7 +478,7 @@ async fn stalled_status_reads_are_bounded_too() {
     let action = action();
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
-    assert!(runner.run(&action, &handle, None).await.is_err());
+    assert!(runner.run(&action, &handle, manual()).await.is_err());
     assert_eq!(
         runner.sessions.reads.lock().unwrap().len(),
         usize::from(MAX_STATUS_FAILURES)
@@ -439,7 +494,7 @@ async fn ambiguous_prompt_is_never_retried_and_keeps_resource_for_failed_history
     let action = action();
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
-    assert!(runner.run(&action, &handle, None).await.is_err());
+    assert!(runner.run(&action, &handle, manual()).await.is_err());
     runner.cancel(&action, &handle).await.unwrap();
     assert_eq!(runner.sessions.prompts.lock().unwrap().len(), 1);
     assert!(runner.sessions.reads.lock().unwrap().is_empty());
@@ -512,7 +567,7 @@ async fn mismatched_session_or_action_never_reports_success() {
             assert!(runner.sessions.prompts.lock().unwrap().is_empty());
         } else {
             prepared.unwrap();
-            assert!(runner.run(&action, &handle, None).await.is_err());
+            assert!(runner.run(&action, &handle, manual()).await.is_err());
         }
         assert!(runner.sessions.reads.lock().unwrap().is_empty());
     }
@@ -544,7 +599,7 @@ async fn all_terminal_failures_and_authorization_errors_fail_without_retry() {
         let action = action();
         let mut handle = ExecutionHandle::default();
         runner.prepare(&action, &mut handle).await.unwrap();
-        assert!(runner.run(&action, &handle, None).await.is_err());
+        assert!(runner.run(&action, &handle, manual()).await.is_err());
         assert_eq!(runner.sessions.reads.lock().unwrap().len(), 1);
     }
 }
@@ -785,4 +840,282 @@ async fn invalid_targets_and_non_user_owners_never_reach_sessions() {
         );
     }
     assert!(runner.sessions.preparations.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedule() {
+    let runner = runner(Sessions {
+        statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+        ..Default::default()
+    });
+    let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
+    let scheduled_for = Utc.with_ymd_and_hms(2026, 10, 8, 13, 0, 0).unwrap();
+    let action = ScheduledAction {
+        id: Some(routine_id),
+        owner: Owner::User(MacroUserIdStr::parse_from_str("macro|dana@example.com").unwrap()),
+        name: "Morning digest".into(),
+        trigger: serde_json::from_value(json!({"type": "multiple", "triggers": [
+            {"type": "cron", "schedule": "0 0 9 * * MON-FRI", "timezone": "America/New_York"},
+            {"type": "cron", "schedule": "0 0 12 * * SAT", "timezone": "UTC"},
+        ]}))
+        .unwrap(),
+        kind: ActionKind::Agent,
+        task: json!({
+            "model": "runtime/model",
+            "prompt": "Summarize my unread email.",
+            "user_prompt": "Post it in #digest.",
+        }),
+        enabled: true,
+        next_run_at: Some(scheduled_for),
+        claimed: None,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: None,
+        created_at: scheduled_for,
+        updated_at: scheduled_for,
+    };
+    let mut handle = ExecutionHandle::default();
+    runner.prepare(&action, &mut handle).await.unwrap();
+    runner
+        .run(&action, &handle, RoutineRun::Scheduled { scheduled_for })
+        .await
+        .unwrap();
+
+    let prompts = runner.sessions.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 1);
+    assert_eq!(
+        prompts[0].prompt,
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nPost it in #digest.")
+    );
+    assert_eq!(
+        prompts[0].context,
+        Some(TriggerContext::Routine(RoutineContext {
+            routine_id,
+            name: "Morning digest".into(),
+            owner: ContextPerson {
+                id: "macro|dana@example.com".into(),
+                name: "dana@example.com".into(),
+                email: Some("dana@example.com".into()),
+            },
+            instructions: "Summarize my unread email.".into(),
+            triggers: vec![
+                ContextRoutineTrigger::Schedule {
+                    cron: "0 0 9 * * MON-FRI".into(),
+                    timezone: "America/New_York".into(),
+                },
+                ContextRoutineTrigger::Schedule {
+                    cron: "0 0 12 * * SAT".into(),
+                    timezone: "UTC".into(),
+                },
+            ],
+            firing: RoutineFiring::Scheduled {
+                scheduled_for,
+                schedule:
+                    "cron `0 0 9 * * MON-FRI` in America/New_York; cron `0 0 12 * * SAT` in UTC"
+                        .into(),
+            },
+        }))
+    );
+}
+
+#[tokio::test]
+async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
+    let task_status_changed = RoutineEvent::TaskStatusChanged {
+        task: TaskSnapshot {
+            id: "01928f3e-6a2b-7c3d-8e4f-000000007a5c".into(),
+            title: "Login page crashes on Safari".into(),
+            markdown: "Steps: open login on Safari 17.".into(),
+            status: Some("In review".into()),
+            priority: Some("High".into()),
+            due: Some(Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap()),
+            assignees: vec![ContextPerson {
+                id: "macro|sam@example.com".into(),
+                name: "sam@example.com".into(),
+                email: Some("sam@example.com".into()),
+            }],
+            project: None,
+        },
+    };
+    let runner = TargetRunner::new(
+        Arc::new(Sessions {
+            statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+            ..Default::default()
+        }),
+        Arc::new(Events(Some(task_status_changed.clone()))),
+    );
+    let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
+    let owner = MacroUserIdStr::parse_from_str("macro|dana@example.com").unwrap();
+    let at = Utc.with_ymd_and_hms(2026, 10, 8, 13, 0, 0).unwrap();
+    let action = ScheduledAction {
+        id: Some(routine_id),
+        owner: Owner::User(owner.clone()),
+        name: "Review handoff".into(),
+        trigger: serde_json::from_value(json!({
+            "type": "events",
+            "filters": [
+                {
+                    "events": ["task.status_changed", "task.created"],
+                    "ids": ["01928f3e-6a2b-7c3d-8e4f-000000007a5c"],
+                    "condition": "Is the task ready for review?",
+                },
+                {
+                    "events": ["task.property_changed"],
+                    "condition": "Did someone ask for a second reviewer?",
+                },
+                {"events": ["document.created"]},
+            ],
+        }))
+        .unwrap(),
+        kind: ActionKind::Agent,
+        task: json!({
+            "model": "runtime/model",
+            "prompt": "Ask a reviewer to pick it up.",
+            "user_prompt": "Tag the right reviewer.",
+        }),
+        enabled: true,
+        next_run_at: None,
+        claimed: None,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: Some(at),
+        created_at: at,
+        updated_at: at,
+    };
+    let event: EventReference = serde_json::from_value(json!({
+        "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
+        "event_name": "task.status_changed",
+        "entity_id": "01928f3e-6a2b-7c3d-8e4f-000000007a5c",
+        "message_id": null,
+    }))
+    .unwrap();
+    let run = AuthorizedEventRun {
+        access: EventAccessCapability::Document(
+            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+                owner,
+                "01928f3e-6a2b-7c3d-8e4f-000000007a5c",
+                EntityType::Document,
+            ),
+        ),
+        pending: PendingEventRun {
+            action_id: routine_id,
+            revision: ConfigurationRevision::INITIAL,
+            event,
+            admitted_at: at,
+        },
+    };
+    let mut handle = ExecutionHandle::default();
+    runner.prepare(&action, &mut handle).await.unwrap();
+    runner
+        .run(&action, &handle, RoutineRun::Event(&run))
+        .await
+        .unwrap();
+
+    let prompts = runner.sessions.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 1);
+    assert_eq!(
+        prompts[0].prompt,
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nTag the right reviewer.")
+    );
+    assert_eq!(
+        prompts[0].context,
+        Some(TriggerContext::Routine(RoutineContext {
+            routine_id,
+            name: "Review handoff".into(),
+            owner: ContextPerson {
+                id: "macro|dana@example.com".into(),
+                name: "dana@example.com".into(),
+                email: Some("dana@example.com".into()),
+            },
+            instructions: "Ask a reviewer to pick it up.".into(),
+            triggers: vec![
+                ContextRoutineTrigger::Events {
+                    events: vec!["document.created".into()],
+                    entity_ids: Vec::new(),
+                    condition: None,
+                },
+                ContextRoutineTrigger::Events {
+                    events: vec!["task.created".into(), "task.status_changed".into()],
+                    entity_ids: vec![
+                        Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-000000007a5c").unwrap()
+                    ],
+                    condition: Some("Is the task ready for review?".into()),
+                },
+                ContextRoutineTrigger::Events {
+                    events: vec!["task.property_changed".into()],
+                    entity_ids: Vec::new(),
+                    condition: Some("Did someone ask for a second reviewer?".into()),
+                },
+            ],
+            firing: RoutineFiring::Event {
+                event: Box::new(task_status_changed),
+                conditions: vec![
+                    "Did someone ask for a second reviewer?".into(),
+                    "Is the task ready for review?".into(),
+                ],
+            },
+        }))
+    );
+}
+
+#[tokio::test]
+async fn a_manual_run_tells_the_agent_its_owner_started_it() {
+    let runner = runner(Sessions {
+        statuses: Mutex::new([Ok(RoutineActionStatus::Succeeded)].into()),
+        ..Default::default()
+    });
+    let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
+    let requested_at = Utc.with_ymd_and_hms(2026, 10, 8, 15, 30, 0).unwrap();
+    let action = ScheduledAction {
+        id: Some(routine_id),
+        owner: Owner::User(MacroUserIdStr::parse_from_str("macro|dana@example.com").unwrap()),
+        name: "Inbox triage".into(),
+        trigger: serde_json::from_value(json!({
+            "type": "events",
+            "filters": [{"events": ["email.message_received"]}],
+        }))
+        .unwrap(),
+        kind: ActionKind::Agent,
+        task: json!({
+            "model": "runtime/model",
+            "prompt": "Label my new email.",
+            "user_prompt": "Use the Finance label for invoices.",
+        }),
+        enabled: true,
+        next_run_at: None,
+        claimed: None,
+        configuration_revision: ConfigurationRevision::INITIAL,
+        event_activated_at: Some(requested_at),
+        created_at: requested_at,
+        updated_at: requested_at,
+    };
+    let mut handle = ExecutionHandle::default();
+    runner.prepare(&action, &mut handle).await.unwrap();
+    runner
+        .run(&action, &handle, RoutineRun::Manual { requested_at })
+        .await
+        .unwrap();
+
+    let prompts = runner.sessions.prompts.lock().unwrap();
+    assert_eq!(prompts.len(), 1);
+    assert_eq!(
+        prompts[0].prompt,
+        format!("{SCHEDULED_GUIDANCE}\n\nUser task:\nUse the Finance label for invoices.")
+    );
+    assert_eq!(
+        prompts[0].context,
+        Some(TriggerContext::Routine(RoutineContext {
+            routine_id,
+            name: "Inbox triage".into(),
+            owner: ContextPerson {
+                id: "macro|dana@example.com".into(),
+                name: "dana@example.com".into(),
+                email: Some("dana@example.com".into()),
+            },
+            instructions: "Label my new email.".into(),
+            triggers: vec![ContextRoutineTrigger::Events {
+                events: vec!["email.message_received".into()],
+                entity_ids: Vec::new(),
+                condition: None,
+            }],
+            firing: RoutineFiring::Manual { requested_at },
+        }))
+    );
 }

@@ -156,6 +156,12 @@ editing: only moved or removed rows should be added or removed. Rename a row and
 then drag it: its drag label/payload must use the new fields without another
 registration/layout measurement.
 
+Desktop multi-select filter menus in Home, Tasks, Drive, Email, Reviews, Search,
+CRM, Calendar, and database option-value filters close after an ordinary click or
+Enter. Hold Shift while clicking or pressing Enter to toggle individual options
+and keep the menu open for further selections. Shift does not select a range.
+Single-select controls and mobile filter drawers retain their existing behavior.
+
 Channels use the same general Soup reconciliation path, not a separate local page
 chain. Channel ID, type, team, organization, importance, and participant-scoped
 filters operate over synchronized channel metadata. The default channel scope
@@ -1162,6 +1168,12 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Hold Shift while selecting or deselecting Type options to keep the submenu open
+and combine several file types without reopening it. Desktop filter submenus allow a
+250 ms grace period when the mouse crosses the parent menu's padding; entering
+the submenu cancels the pending close. Hovering another category immediately
+switches to that category, including when the submenu opens to the left.
+Escape and outside clicks still dismiss immediately.
 `Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
@@ -1665,13 +1677,15 @@ scope; desktop's default scope remains **Involves me**.
 
 Macro-linked GitHub pull requests open inside the Reviews shell, with a Reviews
 breadcrumb, PR title/status, linked GitHub metadata, discussion timeline, and Details/Checks
-side panel below the top bar. An open PR also shows a **Merge** button in the
-top bar beside **Changes**. It opens a confirmation with the repository, PR number,
+side panel below the top bar. An open PR that is not a draft, and whose checks
+have all finished with a success, skipped, or neutral conclusion, also shows a
+**Merge** button in the top bar beside **Changes**. It opens a confirmation with the repository, PR number,
 and title, then merges on GitHub as the signed-in user through their linked account.
 GitHub's permissions and branch protections decide; a refusal appears as a toast
 with GitHub's reason, and a merge refreshes the PR status in place. Without a linked
-GitHub account the toast points to Settings. Merged and closed PRs have no Merge
-button. PRs are not tasks and do not appear in the Tasks list.
+GitHub account the toast points to Settings. Draft PRs, PRs with no checks, and PRs
+whose checks are still running or failing have no Merge button. Merged and closed
+PRs have no Merge button. PRs are not tasks and do not appear in the Tasks list.
 The metadata pills beneath the PR title include linked agent sessions, using the
 agent sparkle icon. A single session shows its name; several sessions show a
 count chip opening a session list. Selecting a session opens it, with Shift-click
@@ -1747,7 +1761,14 @@ separate diff and discussion requests are outside this subscription behavior.
 
 ## Calls — `/app/component/calls`
 
-Tabs `All` / `Missed` / `Unattended`; `New call` offers `Call a channel or contact`
+On desktop a collapsible sidebar holds the search field (`Search calls`, `⌘F`),
+the views `All` / `Missed` / `Unattended`, a `Type` section (`Internal` /
+`External`; External means at least one guest without a Macro account joined),
+a `Channels` section listing channels seen in loaded calls, and `Tags`. Choosing
+a type, channel, or tag shows only that one; choosing it again clears it. These
+refinements carry across the three views. Sort, group, filter, and `New call`
+sit in the list's top bar. Phones keep pill tabs and the header search.
+`New call` offers `Call a channel or contact`
 and, with `enable-quick-calls` enabled, `Manage call links`. Create Quick Calls
 with `New Call` beside Calendar's
 `New event`, or with `Create` → `Call` (`C C`). Scheduled calls are created through
@@ -1910,8 +1931,10 @@ are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
 Companies lists every visible company, grouped by Stage by default, with Owner,
-Revenue and Last Interaction columns. Its toolbar holds sort, group, filter,
-display options, saved views, and **New company** at the right end.
+Revenue and Last Interaction columns. A Stage column is off by default; turn it
+on, or hide Owner or Revenue, under **Display options**. Its toolbar holds
+sort, group, filter, display options, saved views, and **New company** at the
+right end.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
@@ -2014,10 +2037,15 @@ and can change access later through the standard **Share** dialog. Under
 pipeline private. **Copy Link** copies a CRM link that opens this pipeline for
 anyone who has access. On mobile, team access is in the **Team** tab.
 
-The first column is a required company/contact reference. The same company or
-contact can occur in multiple rows in a pipeline and can also belong to other
-pipelines. Each row has its own field values; **Duplicate** copies a row into a new
-entry referencing the same company or contact. The reference column
+The first column is a required company/contact reference. Clicking a filled
+reference, or pressing Enter on it, opens that company or contact; on desktop it
+opens in place with the pipeline name in its breadcrumb (choose it to return),
+and on mobile in its own view. The same applies to the reference shown as a
+board card's or record panel's title. To change which record a row references,
+focus the cell and press F2 or start typing; an empty reference cell opens the
+picker on click. The same company or contact can occur in multiple rows in a
+pipeline and can also belong to other pipelines. Each row has its own field
+values; **Duplicate** copies a row into a new entry referencing the same company or contact. The reference column
 can be renamed but cannot be removed or changed to another type. Stage, Owner,
 and Revenue are independent pipeline fields; editing them does not modify the
 company's CRM fields. Use **Add column** or a column header's menu to customize

@@ -1,6 +1,8 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import { debounce } from '@solid-primitives/scheduled';
 import { cn, Dropdown } from '@ui';
+import type { SelectionDismissal } from '@ui/utils/selectionDismissal';
 import {
   type Accessor,
   createEffect,
@@ -14,6 +16,77 @@ import {
   SearchableMultiSelectInline,
   type SearchableOption,
 } from './searchable-multi-select';
+
+/** Keep a submenu alive while the mouse crosses the parent menu's padding. */
+function createFilterSubmenuHover(
+  options: {
+    open?: Accessor<boolean>;
+    onOpenChange?: (open: boolean) => void;
+  } = {}
+) {
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const open = () => options.open?.() ?? internalOpen();
+  let leavingWithMouse = false;
+  const commitOpen = (value: boolean) => {
+    setInternalOpen(value);
+    options.onOpenChange?.(value);
+  };
+  const closeAfterGap = debounce(() => commitOpen(false), 250);
+  const cancelGrace = () => {
+    leavingWithMouse = false;
+    closeAfterGap.clear();
+  };
+  const setOpen = (value: boolean) => {
+    if (!value && leavingWithMouse) {
+      closeAfterGap();
+      return;
+    }
+    cancelGrace();
+    commitOpen(value);
+  };
+
+  return {
+    open,
+    setOpen,
+    triggerProps: {
+      onPointerEnter: (
+        event: PointerEvent & { currentTarget: HTMLElement }
+      ) => {
+        cancelGrace();
+        if (event.pointerType !== 'mouse') return;
+        // Entering a sibling row is an explicit switch, even when Kobalte's
+        // grace polygon still considers the pointer headed toward the old sub.
+        event.currentTarget.focus({ preventScroll: true });
+        if (!open()) setOpen(true);
+      },
+      onPointerLeave: (event: PointerEvent) => {
+        // Kobalte's remaining pointerleave handler can focus the parent menu
+        // and synchronously close this sub when outside its grace polygon.
+        // Delay only those closes; later keyboard/focus changes stay immediate.
+        leavingWithMouse = event.pointerType === 'mouse';
+        queueMicrotask(() => {
+          leavingWithMouse = false;
+        });
+      },
+      onKeyDown: cancelGrace,
+      onPointerDown: cancelGrace,
+    },
+    contentProps: {
+      onPointerEnter: cancelGrace,
+      onFocusOutside: (event: Event) => {
+        // Padding gets a grace period; switching submenu triggers does not.
+        if (
+          event.target instanceof Element &&
+          event.target.closest('[role="menuitem"][aria-haspopup]')
+        )
+          cancelGrace();
+      },
+      onKeyDown: cancelGrace,
+      onEscapeKeyDown: cancelGrace,
+      onPointerDownOutside: cancelGrace,
+    },
+  };
+}
 
 export const TypeIndicator = (props: { active: boolean }) => (
   <span
@@ -38,7 +111,7 @@ export function FilterOptionItem(props: {
   content?: () => JSX.Element;
   active: boolean;
   disabled?: boolean;
-  closeOnSelect?: boolean;
+  closeOnSelect?: SelectionDismissal;
   onSelect: () => void;
 }) {
   return (
@@ -96,13 +169,14 @@ export function FilterSubmenu<TId extends string>(props: {
   }[];
   isSelected: (id: TId) => boolean;
   onSelect: (id: TId) => void;
-  closeOnSelect?: boolean;
+  closeOnSelect?: SelectionDismissal;
   contentClass?: string;
   selectionMode?: 'single' | 'multiple';
 }) {
+  const submenu = createFilterSubmenuHover();
   return (
-    <Dropdown.Sub>
-      <Dropdown.SubTrigger>
+    <Dropdown.Sub open={submenu.open()} onOpenChange={submenu.setOpen}>
+      <Dropdown.SubTrigger {...submenu.triggerProps}>
         <FilterCategoryLabel
           label={props.label}
           active={
@@ -111,7 +185,7 @@ export function FilterSubmenu<TId extends string>(props: {
           }
         />
       </Dropdown.SubTrigger>
-      <Dropdown.SubContent class={props.contentClass}>
+      <Dropdown.SubContent {...submenu.contentProps} class={props.contentClass}>
         <Dropdown.Group>
           <Show
             when={props.selectionMode === 'single'}
@@ -145,7 +219,11 @@ export function FilterSubmenu<TId extends string>(props: {
                   <Dropdown.RadioItem
                     value={option.id}
                     disabled={option.disabled}
-                    closeOnSelect={props.closeOnSelect}
+                    closeOnSelect={
+                      props.closeOnSelect === 'unless-shift'
+                        ? true
+                        : props.closeOnSelect
+                    }
                   >
                     <Show when={option.icon}>
                       <span class="size-4 flex items-center justify-center shrink-0">
@@ -176,18 +254,19 @@ export const SearchableFilterSubmenu = (props: {
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
+  onSelectionComplete?: () => void;
   placeholder?: string;
   open?: Accessor<boolean>;
   onOpenChange?: (v: boolean) => void;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
 }) => {
-  const [internalOpen, setInternalOpen] = createSignal(false);
-  const isOpen = () => props.open?.() ?? internalOpen();
-  const setIsOpen = (v: boolean) => {
-    if (props.onOpenChange) props.onOpenChange(v);
-    else setInternalOpen(v);
-  };
+  const submenu = createFilterSubmenuHover({
+    open: props.open,
+    onOpenChange: props.onOpenChange,
+  });
+  const isOpen = submenu.open;
+  const setIsOpen = submenu.setOpen;
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
 
   // Focus the search input while the sub is open.
@@ -226,32 +305,23 @@ export const SearchableFilterSubmenu = (props: {
 
   return (
     <Dropdown.Sub open={isOpen()} onOpenChange={setIsOpen}>
-      <Dropdown.SubTrigger
-        onPointerEnter={(e: PointerEvent & { currentTarget: HTMLElement }) => {
-          // Kobalte's "grace polygon" keeps an open sub alive when the
-          // pointer crosses toward its content. For sibling In/From triggers,
-          // that means moving between them leaves the prior sub stuck open
-          // and the prior trigger stuck with data-highlighted. Force focus
-          // + open so Kobalte's parent selection manager updates to this
-          // trigger and the shared signal closes the sibling.
-          if (e.pointerType !== 'mouse') return;
-          e.currentTarget.focus({ preventScroll: true });
-          if (!isOpen()) setIsOpen(true);
-        }}
-      >
+      <Dropdown.SubTrigger {...submenu.triggerProps}>
         <FilterCategoryLabel
           label={props.label}
           active={props.active ?? props.activeIds().length > 0}
         />
       </Dropdown.SubTrigger>
 
-      <Dropdown.SubContent class="w-65 max-w-[90vw]">
+      <Dropdown.SubContent {...submenu.contentProps} class="w-65 max-w-[90vw]">
         <Dropdown.Group class="p-0 gap-0">
           <SearchableMultiSelectInline
             onRequestClose={() => setIsOpen(false)}
             placeholder={props.placeholder}
             activeIds={props.activeIds}
             onChange={props.onChange}
+            onSelectionComplete={
+              props.onSelectionComplete ?? (() => setIsOpen(false))
+            }
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}

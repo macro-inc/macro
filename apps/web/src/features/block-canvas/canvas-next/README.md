@@ -21,7 +21,11 @@ legacy entity references. Pencil samples are retained and use the new brush.
 Unsupported links, connector labels, invalid records, and interleaved group layers
 offer **Open in legacy editor** without writing data.
 There is no version 2-to-legacy downgrade. Document-level read-only mode mounts a
-navigation-only surface without editing, paste/drop, or embedded editing handlers.
+selection/navigation surface without editing, paste/drop, or embedded editing handlers.
+Markdown embeds explicitly pass `isEmbedded` to the editor and use this same
+read-only surface, with Select and Hand tools and no property inspector. Selection
+does not expose transform handles or mutate the scene; embedded views cannot save
+canvas edits even when the viewer has edit permission on the original document.
 Saves are debounced and serialized; failures keep edits dirty. Save state is not
 shown in the canvas UI.
 

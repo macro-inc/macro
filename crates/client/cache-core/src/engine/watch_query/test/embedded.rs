@@ -61,7 +61,7 @@ fn nested_property_edits_patch_each_subscriber_without_reading_other_rows() {
                 .await
                 .unwrap();
             assert!(
-                matches!(&first, QueryUpdate::Hit { data, .. } if *data == property_page(1000))
+                matches!(&first, QueryUpdate::Hit { data, .. } if **data == property_page(1000))
             );
             cursors.push((op, revision(&first)));
         }
@@ -96,7 +96,7 @@ fn nested_property_edits_patch_each_subscriber_without_reading_other_rows() {
 }
 
 #[test]
-fn embedded_nulls_type_changes_and_missing_fields_rebuild_the_selected_shape() {
+fn embedded_nulls_and_type_changes_replace_the_value_and_missing_fields_miss() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         engine
@@ -131,8 +131,12 @@ fn embedded_nulls_type_changes_and_missing_fields_rebuild_the_selected_shape() {
                 .await
                 .unwrap();
             cursor = revision(&update);
-            assert!(
-                matches!(update, QueryUpdate::Hit { data, .. } if data["user"]["soup"]["items"][0]["properties"][0]["value"] == expected)
+            assert_eq!(
+                patches(update),
+                json!([{
+                    "path": ["user", "soup", "items", 0, "properties", 0, "value"],
+                    "value": expected
+                }])
             );
         }
         set_value(
@@ -155,7 +159,7 @@ fn embedded_nulls_type_changes_and_missing_fields_rebuild_the_selected_shape() {
 }
 
 #[test]
-fn nested_lists_preserve_aliases_and_rebuild_after_membership_changes() {
+fn nested_lists_preserve_aliases_and_replace_changed_membership() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         let mut data = property_page(1);
@@ -196,7 +200,84 @@ fn nested_lists_preserve_aliases_and_rebuild_after_membership_changes() {
             .watch_query(1, PROPERTIES, None, &vars(), &[], Some(cursor))
             .await
             .unwrap();
-        assert!(matches!(next, QueryUpdate::Hit { data: actual, .. } if actual == data));
+        assert_eq!(
+            patches(next),
+            json!([{
+                "path": ["user", "soup", "items", 0, "properties", 0, "value", "references"], "value": []
+            }])
+        );
+    });
+}
+
+#[test]
+fn link_edits_patch_one_row_but_large_list_replacements_resend_the_result() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(None, PROPERTIES, None, &vars(), &property_page(1000), None)
+            .await
+            .unwrap();
+        let first = engine
+            .watch_query(1, PROPERTIES, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        let document =
+            |id: usize| EntityKey::entity("GraphqlSoupDocument", &[&format!("doc-{id}")]);
+        let property = |id: usize| {
+            CacheValue::Ref(EntityKey::entity(
+                "GraphqlProperty",
+                &[&format!("property-{id}")],
+            ))
+        };
+        let mut snapshot = property_page(1000);
+        let mut cursor = apply(&mut snapshot, first);
+        let edits = [
+            (
+                "properties",
+                CacheValue::List(vec![property(17), property(18)]),
+                false,
+            ),
+            (identity::DELETED_FIELD, CacheValue::Bool(true), true),
+        ];
+        for (field, value, resend) in edits {
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![(
+                        document(17),
+                        Record {
+                            fields: BTreeMap::from([(field.into(), value)]),
+                        },
+                    )],
+                    vec![],
+                )
+                .await
+                .unwrap();
+            let update = engine
+                .watch_query(1, PROPERTIES, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            match &update {
+                QueryUpdate::Hit { .. } => assert!(resend, "{field} resent the result"),
+                QueryUpdate::Patch { patches, .. } => {
+                    assert!(!resend, "{field} patched a compacted list");
+                    assert_eq!(
+                        serde_json::to_value(patches).unwrap()[0]["path"],
+                        json!(["user", "soup", "items", 17, "properties"])
+                    );
+                }
+                QueryUpdate::Miss { .. } => panic!("complete page cannot miss"),
+            }
+            cursor = apply(&mut snapshot, update);
+            let ReadResult::Hit { data } = engine
+                .read_query(None, PROPERTIES, None, &vars())
+                .await
+                .unwrap()
+            else {
+                panic!("complete page cannot miss");
+            };
+            assert_eq!(snapshot, data);
+        }
     });
 }
 
@@ -308,21 +389,7 @@ proptest! {
                 };
                 set_value(&mut engine, id, value).await;
                 let next = engine.watch_query(1, PROPERTIES, None, &vars(), &[], Some(cursor)).await.unwrap();
-                cursor = revision(&next);
-                match next {
-                    QueryUpdate::Hit { data, .. } => snapshot = data,
-                    QueryUpdate::Patch { patches, .. } => for patch in patches {
-                        let mut slot = &mut snapshot;
-                        for part in patch.path {
-                            slot = match part {
-                                live_query::ResponsePathSegment::Field(name) => slot.get_mut(&name),
-                                live_query::ResponsePathSegment::Index(index) => slot.get_mut(index),
-                            }.expect("patch targets an existing selected field");
-                        }
-                        *slot = patch.value;
-                    },
-                    QueryUpdate::Miss { .. } => panic!("complete property values cannot miss"),
-                }
+                cursor = apply(&mut snapshot, next);
                 let full = engine.read_query(None, PROPERTIES, None, &vars()).await.unwrap();
                 let ReadResult::Hit { data } = full else { panic!("full read missed") };
                 prop_assert_eq!(&snapshot, &data);

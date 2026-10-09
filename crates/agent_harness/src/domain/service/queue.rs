@@ -638,6 +638,7 @@ where
             action: command.action,
             actor: command.actor,
             announce: command.announce,
+            context: command.context,
             announced: None,
             created_at: chrono::Utc::now(),
         };
@@ -770,6 +771,7 @@ where
                         action: AgentAction::Stop,
                         actor,
                         announce: None,
+                        context: None,
                     },
                 )
                 .await
@@ -811,6 +813,7 @@ where
                     action: AgentAction::Stop,
                     actor: actor.cloned(),
                     announce: None,
+                    context: None,
                 },
             )
             .await
@@ -999,6 +1002,7 @@ where
                 &mut composed,
                 entry.actor.as_ref(),
                 entry.announce.as_ref(),
+                entry.context.as_ref(),
                 prompted_message_id.turn == TurnId(0),
             )
             .await
@@ -1064,6 +1068,8 @@ where
             action: composed,
             actor: entry.actor.clone(),
             announce: entry.announce.clone(),
+            // Already composed into the action above.
+            context: None,
         };
         match self.deliver(session_id, command).await {
             Ok(()) => {

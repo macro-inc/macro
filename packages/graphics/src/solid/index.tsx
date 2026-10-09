@@ -491,7 +491,13 @@ export function GraphicsSurface(props: {
               }}
             </For>
           </g>
-          <Show when={!projection.session().transform && singleConnector()}>
+          <Show
+            when={
+              props.input?.editing !== false &&
+              !projection.session().transform &&
+              singleConnector()
+            }
+          >
             {(item) => (
               <For each={['start', 'end'] as const}>
                 {(end) => {
@@ -565,12 +571,12 @@ export function GraphicsSurface(props: {
                 style={{
                   'pointer-events':
                     props.selectionHitArea === 'shapes' ? 'none' : 'all',
-                  cursor: 'move',
+                  cursor: props.input?.editing === false ? 'default' : 'move',
                 }}
               />
             )}
           </Show>
-          <Show when={!singleConnector()}>
+          <Show when={props.input?.editing !== false && !singleConnector()}>
             {/* Screen-space hit strips; corners are painted afterward and win overlaps. */}
             <For each={resizeHandles.filter(isResizeEdge)}>
               {(handle, index) => (
@@ -635,7 +641,7 @@ export function GraphicsSurface(props: {
               )}
             </Show>
           </Show>
-          <Show when={radiusRectangle()}>
+          <Show when={props.input?.editing !== false && radiusRectangle()}>
             {(item) => (
               <RadiusHandles
                 item={item()}

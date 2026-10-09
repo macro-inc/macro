@@ -563,16 +563,16 @@ export function createMutationQueueRunner(
         hasNext: false,
       };
       await recordAttemptResult(attempt, result, false);
-      // Known gap: unlike every other settlement step, this rollback and the
-      // bookkeeping after it do not recheck the token. A storage reset during
-      // the recovery hook lets this stale attempt roll back a replacement
-      // queue head that reuses its transaction id and lease generation.
+      // A storage reset during the recovery hook or rollback retires this
+      // attempt; a replacement head may reuse its transaction id and lease.
+      if (!isCurrent(attempt)) return;
       await host.rollbackOptimisticWrite(
         claimed.transactionId,
         claimOf(attempt),
         failure.message,
         'LOCAL_RECOVERY_FAILED'
       );
+      if (!isCurrent(attempt)) return;
       liveQueuedOps.delete(claimed.transactionId);
       live?.resolveRoute(
         withOptimisticMutationDisposition(result, {

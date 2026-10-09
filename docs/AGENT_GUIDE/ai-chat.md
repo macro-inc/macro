@@ -56,6 +56,12 @@ must not send a prompt. Record navigation and focus time separately from typing
 and Enter-to-first-answer time. Check the first readable agent words in the DOM,
 not a loading indicator or a bare Markdown delimiter.
 
+Verify transcript startup against a production build as well as the dev server.
+The first fold should load a compiled `fold.worker-*.js` script and its WASM
+assets; importing the client alone should not construct a worker. A
+`data:video/mp2t` worker URL indicates raw TypeScript was packaged as an asset.
+An empty worker startup error does not by itself establish that the tab is stale.
+
 Repeat from Home, Agents, and the create menu with an already-ready session.
 The first prompt can be accepted before its destination mounts; navigating into
 the session must keep the same streamed turn without restarting its load. Also
@@ -572,7 +578,9 @@ file or a guessed remote revision.
 Home's composer follows the existing `enable-chat-v3-agents` flag: disabled keeps
 legacy chat; enabled mounts the same new-conversation composer as the Agents page.
 The greeting, agent/model selector, coding repository/branch drawer, and send flow
-are shared. Sending opens the new session inside Agents with the matching URL.
+are shared. Sending stays on Home and opens the new session in Home's detail
+pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
+top of the Home list once the session is created.
 Home suggestions and document/project context populate this same draft as markdown
 mentions. A failed suggestion conversion preserves the text and shows an error.
 Session creation and prompt delivery use the shared pending-session flow.
@@ -1558,6 +1566,22 @@ only that link. If another edit makes the revision stale, the AI reads the lates
 settings and confirms a fresh proposal. Identical retries reuse the saved link.
 Old pending booking review requests can be dismissed so the agent can resume with
 conversational confirmation.
+
+## Image attachments and model selection
+
+Attach images using the plus button, paste, or drop. Image-capable models receive
+uploaded images as normalized inline content, including attachments from earlier
+turns. Test an image-only prompt and a text-plus-image prompt, then follow up
+without reattaching the image.
+
+Text-only model choices show a description and a composer warning. Pasted,
+dropped, and picked images should be refused before upload; document attachments
+and text should still work. If an image is already attached when switching to a
+text-only model, keep the draft and image chip but disable Send until the image
+is removed or a vision model is selected. Switching an existing image conversation
+to a text-only model is rejected by the backend when sending, with guidance to
+choose a vision model or start a conversation without images.
+
 
 ## Accelerated model speed
 

@@ -27,6 +27,7 @@ export function PipelineView(props: {
   onCopyLink(): void;
   /** After the pipeline moves to trash, leave its page. */
   onTrashed(): void;
+  onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
 }) {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
@@ -145,6 +146,7 @@ export function PipelineView(props: {
       </Show>
       <props.Editor
         pipeline={props.pipeline}
+        onOpenRecord={props.onOpenRecord}
         actions={
           <Show when={isTouchDevice()}>
             <Button

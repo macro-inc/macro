@@ -159,7 +159,7 @@ function RoleSelect(props: {
         <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
       </Select.Trigger>
       <Select.Portal>
-        <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-25 p-1">
+        <Select.Content class="menu-surface z-action-menu min-w-25 p-1">
           <Select.Listbox />
         </Select.Content>
       </Select.Portal>
@@ -243,7 +243,7 @@ function PlanSelect(props: {
           <CaretDownIcon class="size-3 text-ink-muted shrink-0" />
         </Select.Trigger>
         <Select.Portal>
-          <Select.Content class="z-action-menu border border-edge bg-surface rounded shadow-lg min-w-40 p-1">
+          <Select.Content class="menu-surface z-action-menu min-w-40 p-1">
             <Select.Listbox />
           </Select.Content>
         </Select.Portal>

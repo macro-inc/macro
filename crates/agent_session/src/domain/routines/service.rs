@@ -217,6 +217,7 @@ where
                     action: AgentAction::prompt(command.prompt),
                     action_id: Some(action.action_id),
                     actor: Some(action.owner),
+                    context: command.context,
                 },
             )
             .await
@@ -257,6 +258,7 @@ where
                     action: AgentAction::Stop,
                     action_id: Some(AgentActionId::mint()),
                     actor: Some(command.owner),
+                    context: None,
                 },
             )
             .await

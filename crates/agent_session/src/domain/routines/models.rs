@@ -61,6 +61,9 @@ pub struct PromptRoutineSession {
     pub action: RoutineSessionAction,
     /// Routine guidance, instructions, and context; not persona system settings.
     pub prompt: String,
+    /// What made the routine fire, rendered ahead of the prompt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<trigger_context::TriggerContext>,
 }
 
 /// Prompt admission is not completion.

@@ -271,9 +271,10 @@ impl<'a> ReadSession<'a> {
         }
         // Keep array positions stable until every suspended branch has finished.
         // Remove later indices and deeper paths first so earlier paths stay valid.
-        // Compaction moves response indices. Recompile on subsequent updates.
-        if !self.deleted_items.is_empty() {
-            self.projection = None;
+        // Compaction moves response indices; bindings move with them.
+        if let Some(projection) = self.projection.as_mut() {
+            projection.compact(&self.deleted_items);
+            projection.finish();
         }
         for path in std::mem::take(&mut self.deleted_items).into_iter().rev() {
             let Some((ResponsePath::Index(index), parent)) = path.split_last() else {
@@ -388,7 +389,7 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                 match &planned_field.source {
                     FieldSource::Stored { key, ty } => {
                         let value = fields.get(key.as_ref());
-                        let selection = projection::ValueProjection::compile(
+                        let selection = projection.compile_value(
                             self.schema,
                             value,
                             field,

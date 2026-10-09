@@ -389,7 +389,7 @@ function TestValue(props: {
                 {(option) => (
                   <Dropdown.CheckboxItem
                     checked={test().options.includes(option.id)}
-                    closeOnSelect={false}
+                    closeOnSelect="unless-shift"
                     onChange={(checked) =>
                       props.onChange({
                         ...test(),

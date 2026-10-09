@@ -14,6 +14,7 @@ import type {
   AgentSessionQueueResponse,
   AgentSessionResponse,
   AnswerToolApprovalResponse,
+  CodingPreferencesBody,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -34,7 +35,7 @@ import type {
   WarmAgentSessionResponse,
 } from './generated/schemas';
 
-export type { SandboxSize, SandboxSizeBody };
+export type { CodingPreferencesBody, SandboxSize, SandboxSizeBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
 
@@ -292,6 +293,26 @@ export const agentHarnessServiceClient = {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ size }),
+      }
+    );
+  },
+
+  getCodingPreferences() {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
+      {
+        method: 'GET',
+      }
+    );
+  },
+
+  setCodingPreferences(preferences: CodingPreferencesBody) {
+    return fetchWithToken<CodingPreferencesBody>(
+      `${agentHarnessHost}/agent-coding-preferences`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
       }
     );
   },

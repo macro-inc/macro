@@ -84,19 +84,31 @@ export class LiveQuery {
                 const target = parent as Record<string | number, unknown>;
                 const field = path[path.length - 1];
                 if (value !== null && typeof value === 'object') {
+                  // The replaced value's previous snapshot lets unchanged rows
+                  // keep their store objects instead of being rebuilt.
+                  let previous: unknown = delta.base;
+                  for (const part of path)
+                    previous = (previous as Record<string | number, unknown>)[
+                      part
+                    ];
                   // Reconcile just the changed subtree to retain keyed rows and
                   // unchanged field observers. A wrapper also allows its root
                   // to be replaced when the value's type or identity changes.
-                  target[field] = reconcile(
+                  const current = unwrap(target[field]);
+                  const next = reconcile(
                     {
                       value: storeValue(
                         value,
                         shapeAtPath(this.shape, path),
-                        unwrap(target[field])
+                        current,
+                        previous
                       ),
                     },
                     { key: RECONCILE_KEY, merge: false }
-                  )({ value: unwrap(target[field]) }).value;
+                  )({ value: current }).value;
+                  // Reassigning an in-place reconciliation would only make
+                  // the draft unwrap the whole subtree again.
+                  if (next !== current) target[field] = next;
                 } else {
                   target[field] = value;
                 }

@@ -343,6 +343,11 @@ export function AgentComposer(props: {
         onSendNext={() => {
           if (!readOnly()) sendNext();
         }}
+        supportsImages={
+          metadata()?.supportedModels.find(
+            (model) => model.id === metadata()?.model
+          )?.supportsImages
+        }
         attachments={attachmentTracker.attachments()}
         onAttachFiles={attachFiles}
         onRemoveAttachment={(attachment) =>

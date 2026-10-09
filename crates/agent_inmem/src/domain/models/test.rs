@@ -59,3 +59,13 @@ fn routed_models_use_known_providers() {
         );
     }
 }
+
+#[test]
+fn every_advertised_model_has_an_explicit_image_capability() {
+    for model in advertised_models() {
+        assert!(
+            super::supports_images(model).is_some(),
+            "missing capability: {model}"
+        );
+    }
+}
