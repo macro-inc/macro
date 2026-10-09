@@ -27,6 +27,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));
 vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => <div /> }));
+// The real import module loads websocket infrastructure during initialization.
+vi.mock('@service-connection/websocket', () => ({
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 vi.mock('@queries/pipedream-connectors', () => ({
   connectPipedreamApp: mocks.connect,
 }));
