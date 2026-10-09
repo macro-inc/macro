@@ -39,6 +39,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  window.history.replaceState(null, '', '/');
   document.head.replaceChildren();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -49,11 +51,43 @@ function hasMetaPixel() {
   return document.head.innerHTML.includes('connect.facebook.net');
 }
 
+function marketingScripts() {
+  return [...document.head.querySelectorAll('script[src]')].map(
+    (script) => new URL((script as HTMLScriptElement).src).hostname
+  );
+}
+
+describe('marketing tag loading', () => {
+  it('waits for startup to settle before downloading tag libraries', async () => {
+    vi.useFakeTimers();
+    await import('./analytics');
+    expect(marketingScripts()).toEqual([]);
+
+    await vi.runAllTimersAsync();
+    expect(marketingScripts()).toEqual([
+      'www.googletagmanager.com',
+      'www.googletagmanager.com',
+      'connect.facebook.net',
+    ]);
+  });
+
+  it.each(['gclid', 'fbclid'])(
+    'loads tag libraries at once on an ad landing (%s)',
+    async (param) => {
+      vi.useFakeTimers();
+      window.history.replaceState(null, '', `/app?${param}=click-id`);
+      await import('./analytics');
+      expect(marketingScripts()).toHaveLength(3);
+    }
+  );
+});
+
 describe('Meta pixel platform support', () => {
   it.each(['ios', 'android', 'desktop'] as const)(
     'does not load or call Meta on %s, while keeping other analytics working',
     async (platform) => {
       mocks.platform = platform;
+      vi.useFakeTimers();
       // Native builds never install fbq. A missed guard would also prevent
       // the subsequent PostHog identify/pageview in the shared try blocks.
       vi.stubGlobal('fbq', undefined);
@@ -61,6 +95,7 @@ describe('Meta pixel platform support', () => {
       const { analytics } = await import('./analytics');
 
       analytics.initializeProviders();
+      await vi.runAllTimersAsync();
       expect(hasMetaPixel()).toBe(false);
       expect(document.head.querySelector('noscript')).toBeNull();
 
@@ -92,7 +127,9 @@ describe('Meta pixel platform support', () => {
     'keeps Meta initialization and tracking on web (touch: %s)',
     async (touch) => {
       mocks.touch = touch;
+      vi.useFakeTimers();
       const { analytics } = await import('./analytics');
+      await vi.runAllTimersAsync();
       expect(hasMetaPixel()).toBe(true);
 
       analytics.trackMeta('Lead', {}, { eventID: 'test-lead' });

@@ -1,13 +1,46 @@
 import { GOOGLE_ADS_ID } from '@app/lib/analytics/googleConversions';
 
+const AD_CLICK_PARAMS = ['gclid', 'gbraid', 'wbraid', 'dclid', 'fbclid'];
+
+function hasAdClickId(): boolean {
+  const search = new URLSearchParams(window.location.search);
+  return AD_CLICK_PARAMS.some((param) => search.has(param));
+}
+
+/**
+ * Marketing tags cost more main-thread time than the app's own entry, so their
+ * libraries wait until startup settles. The inline `gtag`/`fbq` stubs queue
+ * calls until then. Ad landings load at once so the tags read the click ID
+ * from the landing URL.
+ */
+function loadScriptAfterStartup(src: string): void {
+  const append = () => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    document.head.appendChild(script);
+  };
+  if (hasAdClickId()) {
+    append();
+    return;
+  }
+
+  const whenIdle = () => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(append, { timeout: 5000 });
+    } else {
+      setTimeout(append, 2000);
+    }
+  };
+  if (document.readyState === 'complete') whenIdle();
+  else window.addEventListener('load', whenIdle, { once: true });
+}
+
 export const initializeGoogleAnalytics = () => {
   const G_ID = 'G-52HPEL3FTV';
 
   // Google Analytics
-  const gaScript = document.createElement('script');
-  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${G_ID}`;
-  gaScript.async = true;
-  document.head.appendChild(gaScript);
+  loadScriptAfterStartup(`https://www.googletagmanager.com/gtag/js?id=${G_ID}`);
 
   // Registering the AW account on page load is what lets gtag pick up
   // ?gclid=… from the URL into the _gcl_aw cookie, so subsequent
@@ -25,13 +58,13 @@ export const initializeGoogleAnalytics = () => {
   // Google Tag Manager
   const gtmScript = document.createElement('script');
   gtmScript.innerHTML = `
-    (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-    })(window,document,'script','dataLayer','GTM-M58X7PJ8');
+    window.dataLayer = window.dataLayer || [];
+    dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
   `;
   document.head.appendChild(gtmScript);
+  loadScriptAfterStartup(
+    'https://www.googletagmanager.com/gtm.js?id=GTM-M58X7PJ8'
+  );
 };
 
 export const initializeMetaPixel = () => {
@@ -39,19 +72,17 @@ export const initializeMetaPixel = () => {
 
   const fbqInit = document.createElement('script');
   fbqInit.innerHTML = `
-     !function(f,b,e,v,n,t,s)
+     !function(f,n)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
       if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
+      n.queue=[]}(window);
       fbq.disablePushState = true;
       fbq('init', '${PIXEL_ID}');
     `;
 
   document.head.appendChild(fbqInit);
+  loadScriptAfterStartup('https://connect.facebook.net/en_US/fbevents.js');
 
   const pixelImage = document.createElement('img');
 
