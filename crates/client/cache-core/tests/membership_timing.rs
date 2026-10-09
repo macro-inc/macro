@@ -56,7 +56,7 @@ fn row(id: usize) -> Json {
     json!({
         "__typename": "GraphqlSoupDocument", "id": format!("doc-{id}"), "frecencyScore": 0.5,
         "documentName": format!("Document {id}"), "ownerId": "macro|owner@example.com",
-        "fileType": "md", "projectId": if id % 3 == 0 { Json::Null } else { json!("project-1") },
+        "fileType": "md", "projectId": if id.is_multiple_of(3) { Json::Null } else { json!("project-1") },
         "createdAt": "2026-10-01T00:00:00Z", "updatedAt": "2026-10-02T00:00:00Z",
         "viewedAt": "2026-10-03T00:00:00Z", "deletedAt": null,
         "subType": {"__typename": "GraphqlTaskSubType", "isCompleted": false},
@@ -176,7 +176,7 @@ fn splice_and_replacement_costs() {
 fn favorite(id: usize, sort: f64) -> Json {
     json!({
         "__typename": "GraphqlFavorite", "id": format!("document:fav-{id}"),
-        "entityType": if id % 5 == 0 { "CHANNEL" } else { "DOCUMENT" },
+        "entityType": if id.is_multiple_of(5) { "CHANNEL" } else { "DOCUMENT" },
         "entityId": format!("fav-{id}"), "sortOrder": sort,
         "createdAt": "2026-10-01T00:00:00Z", "fileType": "md",
         "documentSubType": null, "channelType": null, "channelId": null

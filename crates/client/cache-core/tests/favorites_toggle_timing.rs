@@ -49,7 +49,7 @@ fn favorite(id: &str, entity_type: &str, sort: f64) -> Json {
 fn favorite_toggle_costs() {
     println!("| mounted lists | favorites | mode | worker: enqueue + all list updates |");
     println!("|---:|---:|---|---:|");
-    for (lists, count) in [(3, 50), (3, 500)] {
+    for (lists, count) in [(3, 50_usize), (3, 500)] {
         for recipes in [true, false] {
             block_on(async {
                 let mut engine = Engine::new(InMemoryStorage::new());
@@ -66,7 +66,7 @@ fn favorite_toggle_costs() {
                 for (filter, variables) in filters.iter().zip(&variables) {
                     let favorites: Vec<_> = (0..count)
                         .map(|index| {
-                            let channel = index % 5 == 0;
+                            let channel = index.is_multiple_of(5);
                             (
                                 channel,
                                 favorite(

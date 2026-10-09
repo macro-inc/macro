@@ -92,6 +92,7 @@ fn watch_patches_reject_unsafe_integers_like_hits() {
     let hit = QueryUpdate::Hit {
         data: std::sync::Arc::new(value.clone()),
         revision: "1".into(),
+        membership_unknown: false,
     };
     let patch = QueryUpdate::Patch {
         patches: vec![QueryPatch::Set(LiveFieldPatch {
@@ -99,6 +100,7 @@ fn watch_patches_reject_unsafe_integers_like_hits() {
             value: value.clone(),
         })],
         revision: "2".into(),
+        membership_unknown: false,
     };
     // Values inserted by a list splice cross the same boundary.
     let splice = QueryUpdate::Patch {
@@ -110,6 +112,7 @@ fn watch_patches_reject_unsafe_integers_like_hits() {
             ],
         })],
         revision: "3".into(),
+        membership_unknown: true,
     };
     for update in [&hit, &patch, &splice] {
         assert_eq!(
