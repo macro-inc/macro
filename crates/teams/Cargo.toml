@@ -85,6 +85,7 @@ roles_and_permissions = { path = "../roles_and_permissions", default-features = 
 rootcause = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 shared_entity_registry = { path = "../entity_registry/shared_entity_registry" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -119,8 +120,8 @@ url = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+wiremock = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 models_pagination = { path = "../models_pagination" }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

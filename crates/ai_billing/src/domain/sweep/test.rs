@@ -74,6 +74,14 @@ struct FakeBilling {
 }
 
 impl BillingService for FakeBilling {
+    async fn change_plan(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+        _change: crate::domain::plan_change::PlanChange,
+    ) -> Result<()> {
+        unreachable!()
+    }
+
     async fn settle(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
         self.settled.lock().unwrap().push(user.to_string());
         if self.fail_for.as_deref() == Some(user.as_ref()) {

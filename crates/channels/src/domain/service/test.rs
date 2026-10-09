@@ -453,9 +453,17 @@ impl ChannelReferenceSharePermissions for FakeReferenceSharing {
         _actor: MacroUserIdStr<'static>,
         _channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
+        let results = items
+            .iter()
+            .map(|item| crate::domain::models::ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: crate::domain::models::ReferenceShareOutcome::Shared,
+            })
+            .collect();
         self.items.lock().unwrap().extend(items);
-        Ok(())
+        Ok(results)
     }
 }
 
@@ -465,6 +473,38 @@ fn mutation_service(
     share: FakeReferenceSharing,
 ) -> ChannelServiceImpl<FakeMutationRepo, FakeEvents, FakeReferenceSharing> {
     ChannelServiceImpl::with_dependencies(repo, events, share)
+}
+
+#[tokio::test]
+async fn share_referenced_items_with_channel_forwards_to_the_share_port() {
+    let share = FakeReferenceSharing::default();
+    let seen = share.items.clone();
+    let service = mutation_service(
+        FakeMutationRepo::new(Uuid::now_v7(), "macro|owner@test.com"),
+        FakeEvents::default(),
+        share,
+    );
+    let channel_id = Uuid::now_v7();
+    let item = ReferencedShareItem::new(
+        Uuid::now_v7().to_string(),
+        crate::domain::models::ReferencedShareItemType::CalendarEvent,
+    );
+    let results = service
+        .share_referenced_items_with_channel(
+            macro_id("macro|owner@test.com"),
+            channel_id,
+            vec![item.clone()],
+        )
+        .await
+        .expect("share port accepts the item");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].entity_id, item.entity_id());
+    assert_eq!(
+        results[0].outcome,
+        crate::domain::models::ReferenceShareOutcome::Shared
+    );
+    assert_eq!(seen.lock().unwrap().as_slice(), &[item]);
 }
 
 fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {

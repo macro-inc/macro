@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AutoReloadSnapshotMonthlyBudget } from './autoReloadSnapshotMonthlyBudget';
 import type { AutoReloadSnapshotMonthlySpendLimitCents } from './autoReloadSnapshotMonthlySpendLimitCents';
 
 /**
@@ -14,6 +15,7 @@ export interface AutoReloadSnapshot {
   active: boolean;
   /** Reload once the effective balance drops below this, in customer cents. */
   minimum_balance_cents: number;
+  monthly_budget?: AutoReloadSnapshotMonthlyBudget;
   /** Most reloaded per UTC calendar month, in customer cents. `null` when
 there is no limit. */
   monthly_spend_limit_cents?: AutoReloadSnapshotMonthlySpendLimitCents;

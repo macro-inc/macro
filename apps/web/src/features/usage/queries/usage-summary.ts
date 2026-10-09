@@ -17,6 +17,16 @@ function toAutoReload(snapshot: AiUsageSnapshot): UsageSummary['autoReload'] {
   return {
     settings: { ...thresholds, enabled: snapshot.overage_enabled },
     suspended: reload?.suspended ?? false,
+    ...(reload?.monthly_budget && reload.monthly_spend_limit_cents !== null
+      ? {
+          budget: {
+            spentCents: reload.monthly_budget.committed_cents,
+            limitCents: reload.monthly_spend_limit_cents,
+            resetsAt: reload.monthly_budget.resets_at,
+            limitReached: reload.monthly_budget.limit_reached,
+          },
+        }
+      : {}),
   };
 }
 
@@ -29,6 +39,10 @@ export function toUsageSummary(snapshot: AiUsageSnapshot): UsageSummary {
     periodEnd: snapshot.period_end,
     unlimited: snapshot.unlimited,
     creditBalanceCents: snapshot.credit_balance_cents,
+    creditScope:
+      (snapshot.credits_shared_with_team ?? snapshot.seats > 1)
+        ? 'team'
+        : 'personal',
     existingUsageBilling:
       snapshot.tier !== 'free' &&
       (snapshot.overage_enabled || snapshot.overage_suspended)

@@ -365,8 +365,11 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl =
-        CustomerRepositoryImpl::new(stripe_client.clone(), stripe_prices.seat_prices());
+    let customer_repo_impl = CustomerRepositoryImpl::new(
+        stripe_client.clone(),
+        stripe_prices.seat_prices(),
+        db.clone(),
+    );
     let favorites_service = favorites::domain::service::FavoritesServiceImpl::new(
         favorites::outbound::pg_favorites_repo::PgFavoritesRepo::new(db.clone()),
     );
@@ -512,7 +515,30 @@ pub async fn run() -> anyhow::Result<()> {
         None
     };
 
+    let plan_customer = CustomerRepositoryImpl::new(
+        stripe_client.clone(),
+        stripe_prices.seat_prices(),
+        db.clone(),
+    );
     let stripe_client = Arc::new(stripe_client);
+    let plan_gateway = crate::outbound::subscription_plan::StripePlanGateway::new(
+        db.clone(),
+        stripe_client.clone(),
+        stripe_prices.seat_prices(),
+        plan_customer,
+    );
+    let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(
+        plan_gateway.clone(),
+    ));
+    let subscription_status = Arc::new(
+        crate::service::subscription_status::SubscriptionStatusService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            plan_gateway,
+        ),
+    );
     let gtm_invite_service = Arc::new(gtm_invite_service);
     let subscription_checkout =
         Arc::new(crate::service::subscription_checkout::CheckoutService::new(
@@ -617,6 +643,8 @@ pub async fn run() -> anyhow::Result<()> {
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,
             subscription_checkout,
+            subscription_plan,
+            subscription_status,
             document_storage_service_client,
             user_deletion,
             email_service_client: Arc::new(email_service_client),

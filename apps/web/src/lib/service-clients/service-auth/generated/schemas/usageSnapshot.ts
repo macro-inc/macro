@@ -23,6 +23,8 @@ reloads are not suspended. */
   credit_balance_cents: number;
   /** Shared payer credits already applied to this period, in customer cents. */
   credits_consumed_cents: number;
+  /** Whether prepaid credits belong to the team, including a team with one seat. */
+  credits_shared_with_team: boolean;
   /** Included AI for this user's seat this period, in cents at provider cost. */
   included_cents: number;
   /** Shared overage charged so far this period, in customer cents. */

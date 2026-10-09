@@ -39,7 +39,8 @@ mod test;
 
 use super::models::{
     AllowanceDecision, AutoReloadSnapshot, AutoReloadThresholds, BillingPeriod, BillingSettings,
-    DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS, PeriodLedger, PlanTier, UsageSnapshot,
+    DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS, PayerScope, PeriodLedger, PlanTier,
+    UsageSnapshot,
 };
 use super::pricing::AiPricing;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -196,6 +197,7 @@ pub fn build_snapshot(
         used_cents: used_cost_cents,
         credits_consumed_cents: ledger.credits_consumed_cents,
         credit_balance_cents,
+        credits_shared_with_team: !matches!(entitlement.scope, PayerScope::Personal),
         overage_enabled: settings.overage_enabled,
         overage_limit_cents: settings.overage_limit_cents,
         overage_charged_cents: ledger.overage_charged_cents,
@@ -204,6 +206,7 @@ pub fn build_snapshot(
             minimum_balance_cents: settings.auto_reload.minimum_cents,
             target_balance_cents: settings.auto_reload.target_cents,
             monthly_spend_limit_cents: settings.auto_reload.monthly_limit_cents,
+            monthly_budget: None,
             suspended: settings.auto_reload_suspended_at.is_some(),
             active: settings.auto_reload_active(),
         },

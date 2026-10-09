@@ -18,6 +18,7 @@ import type {
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
+  SubscriptionStatus,
   TeamMemberPlan,
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
@@ -699,8 +700,8 @@ export const authServiceClient = {
   },
 
   /**
-   * Moves the active subscription to another paid plan. Proration is invoiced
-   * immediately; roles and the AI allowance follow from the Stripe webhook.
+   * Upgrades immediately, schedules downgrades for renewal, or keeps the active
+   * plan by canceling its pending downgrade.
    */
   async changePlan(args: { plan: PaidPlan }) {
     return (
@@ -709,6 +710,13 @@ export const authServiceClient = {
         body: JSON.stringify({ plan: args.plan }),
       })
     ).map((result) => result.plan);
+  },
+
+  async getSubscriptionStatus() {
+    return await fetchWithAuth<SubscriptionStatus>(
+      `${authHost}/user/stripe/plan`,
+      { method: 'GET' }
+    );
   },
 
   // AI billing: allowance, credits, overage.

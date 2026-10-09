@@ -4,6 +4,7 @@ import { createUniqueId, For, Show } from 'solid-js';
 import { formatCreditBalance } from '../core/usage';
 
 export function CreditPurchaseDialog(props: {
+  sharedWithTeam?: boolean;
   selection: number | 'other';
   customAmount: string;
   amountCents: number | undefined;
@@ -41,7 +42,9 @@ export function CreditPurchaseDialog(props: {
               Need more usage?
             </Dialog.Title>
             <Dialog.Description class="mt-1 text-sm text-ink-muted">
-              Choose an amount to start. You can always buy more later.
+              {props.sharedWithTeam
+                ? 'These credits are shared by your entire team.'
+                : 'Choose an amount to start. You can always buy more later.'}
             </Dialog.Description>
           </header>
           <fieldset class="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -81,7 +84,9 @@ export function CreditPurchaseDialog(props: {
           </Show>
           <div class="rounded-xl border border-edge-muted p-4 text-sm text-ink">
             <div class="flex justify-between gap-4">
-              <span>Usage credits</span>
+              <span>
+                {props.sharedWithTeam ? 'Team usage credits' : 'Usage credits'}
+              </span>
               <span>{formatCreditBalance(props.amountCents ?? 0)}</span>
             </div>
             <div class="mt-4 flex justify-between gap-4 border-t border-edge-muted pt-4">

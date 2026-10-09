@@ -222,6 +222,7 @@ pub const EAGER_TOOLS: &[&str] = &[
     "SearchTools",
     "SelfKnowledge",
     "SendChannelMessage",
+    "ShareWithChannel",
     "Subagent",
     "TextEditorCodeExecution",
     "WebFetch",

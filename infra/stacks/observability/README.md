@@ -358,6 +358,64 @@ Test the contact point and verify receipt before relying on notifications.
 This release adds `alarmTopicArn` to user-data schema 5. Deploy it together with
 the new reviewed AMI; a schema-4 image cannot boot schema-5 user data.
 
+## Dev dual export
+
+Every dev ECS service using the shared Datadog sidecars automatically also runs
+Alloy; there is no per-service opt-in flag. Task definitions call the shared
+`withTelemetry(serviceName, containers)` helper, which supplies the Datadog agent,
+FireLens router, dev Alloy sidecar, and dev Grafana environment variable together.
+Production keeps its existing Datadog configuration
+until its rollout. The earlier `image-proxy-service` canary verified Ohio
+ingestion; it used the superseded collector-in-front-of-Datadog design. The
+current design keeps applications exporting directly to the Datadog agent. The execution role can read the ingestion-only
+`observability/dev-ingest` secret in Virginia.
+The application task role does not receive access to the Grafana OAuth bundle.
+
+Applications keep their original Datadog trace exporter at loopback 4317. In dev
+ECS tasks, `GRAFANA_OTLP_ENDPOINT` is injected automatically as
+`http://127.0.0.1:14317` (registered in Doppler `observability/dev`). The shared
+Rust entrypoint adds a second batch processor with its own bounded queue, copying
+the same finished spans and trace IDs to Alloy. It does not change Datadog's
+exporter, filtering, sampling or agent configuration. Local and production runs
+do not add this exporter. This requires rebuilding the application images.
+
+Alloy listens on loopback OTLP 14317/14318 and exports only to Ohio. FireLens
+retains its existing Datadog output and parsing and adds a bounded-retry Fluent
+Forward output to Alloy for logs. ECS metadata supplies task and container
+metrics; identity is promoted into metric labels to keep replicas separate.
+The extra container reserves 128 MiB with a 512 MiB hard limit; review Fargate
+sizing during each stack preview. Alloy is non-essential: its failure does not
+restart the application or Datadog. ECS does not automatically restart a stopped
+non-essential container in this configuration; replace the task to recover it.
+
+The Grafana branch batches asynchronously before its memory limiter. Overflow,
+export failure, or task replacement can drop the optional copy. Failed optional
+trace exports are deliberately suppressed so a Grafana outage does not generate
+SDK export-error logs that feed existing Datadog alerts. The optional SDK queue
+is limited to one 512-span batch, so draining it plus an in-flight batch fits the
+five-second shutdown budget. Queue saturation can still emit SDK drop warnings. These queues are
+not durable. Collector processes still share task resources, and FireLens shares
+its input and parsing between the two outputs; this is not complete resource
+isolation. Any future application metric SDK needs its own independent Grafana
+reader/exporter; the Rust entrypoint currently exports traces, not app metrics.
+
+The dev analytics proxy mirrors existing browser and worker OTLP traces/logs in
+`waitUntil`, using a server-side token and a five-second export timeout. Browsers
+send once. Payloads above 8 MiB skip only the mirror. Each Worker isolate admits
+at most two concurrent copies; additional requests skip mirroring to bound
+aggregate buffering. Datadog's response remains
+the client response. `deploy-analytics-proxy-dev.yml` installs the token from
+Secrets Manager and deploys only the dev Worker.
+
+The manually dispatched `export-datadog-observability.yml` reads live dashboard/monitor definitions into a
+seven-day GitHub artifact for the migration inventory. It never modifies Datadog. The current repository credentials return HTTP 403
+for both reads; `monitors_read` and `dashboards_read` access must be restored
+before claiming live inventory parity. Partial exports retain an explicit status file.
+The live legacy agent-proxy/document-processing services outside the current
+stack definitions and the CloudWatch-logged preview gateway need a separate
+coverage pass. Lambda CloudWatch logs, RUM/session replay, synthetics and database query monitoring
+are separate sources; ECS/edge OTLP duplication alone does not provide parity.
+
 ## Validation and subsequent passes
 
 From `infra/`, run `bunx biome check stacks/observability` and `bun run check`.

@@ -53,7 +53,7 @@ impl ChannelReferenceSharePermissions for Log {
         _: MacroUserIdStr<'static>,
         _: Uuid,
         _: Vec<ReferencedShareItem>,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
         *self.shares.lock().unwrap() += 1;
         anyhow::bail!("sharing temporarily unavailable")
     }

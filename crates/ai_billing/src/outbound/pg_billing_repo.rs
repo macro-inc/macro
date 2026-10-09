@@ -54,6 +54,29 @@ fn invalid_payer(e: impl std::fmt::Display) -> BillingError {
     BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}"))
 }
 
+async fn reload_committed_cents(
+    conn: &mut sqlx::PgConnection,
+    payer: &str,
+    month: BillingPeriod,
+) -> Result<i64> {
+    sqlx::query_scalar!(
+        r#"
+            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
+            FROM ai_credit_reload
+            WHERE user_id = $1
+              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
+              AND created_at >= $2
+              AND created_at < $3
+            "#,
+        payer,
+        month.start,
+        month.end,
+    )
+    .fetch_one(conn)
+    .await
+    .map_err(storage)
+}
+
 async fn book_credit_reload(
     conn: &mut sqlx::PgConnection,
     payer: &MacroUserIdStr<'_>,
@@ -93,7 +116,14 @@ impl BillingRepo for PgBillingRepo {
         // must never route V1 analytics into a new owner's legacy settlement.
         let activated = sqlx::query_scalar!(
             "SELECT user_id FROM ai_billing_usage_period WHERE user_id = ANY($1)
-             AND policy = 'public_allowance_v1' AND period_start < $3 AND period_end > $2",
+             AND policy = 'public_allowance_v1' AND period_start < $3 AND period_end > $2
+             AND NOT EXISTS (
+                 SELECT 1 FROM ai_billing_plan_change AS change
+                 WHERE change.user_id = ai_billing_usage_period.user_id
+                   AND change.period_start = ai_billing_usage_period.period_start
+                   AND change.changed_at < $3
+                   AND (change.new_plan = 'max' OR change.previous_plan = 'max' AND change.changed_at > change.period_start)
+             )",
             &users,
             period.start,
             period.end,
@@ -103,6 +133,35 @@ impl BillingRepo for PgBillingRepo {
         .map_err(storage)?;
         seats.retain(|seat| !activated.iter().any(|user| user == seat.user.as_ref()));
         Ok(seats)
+    }
+
+    async fn record_plan_change(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        record: crate::domain::plan_change::RecordedPlanChange,
+    ) -> Result<()> {
+        let previous_plan = plan_name(record.change.from);
+        let new_plan = plan_name(record.change.to);
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_plan_change
+                (user_id, period_start, changed_at, previous_plan, new_plan,
+                 previous_included_cost_cents, new_included_cost_cents)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (user_id, period_start, changed_at, previous_plan, new_plan) DO NOTHING
+            "#,
+            user.as_ref(),
+            record.change.period.start,
+            record.change.at,
+            previous_plan,
+            new_plan,
+            record.previous_included_cents,
+            record.new_included_cents,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
     }
 
     async fn settings(&self, payer: &MacroUserIdStr<'_>) -> Result<BillingSettings> {
@@ -136,6 +195,15 @@ impl BillingRepo for PgBillingRepo {
                 seat_generation: SeatGeneration::from_raw(r.seat_generation),
             })
             .unwrap_or_default())
+    }
+
+    async fn credit_reload_committed_cents(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        month: BillingPeriod,
+    ) -> Result<i64> {
+        let mut conn = self.pool.acquire().await.map_err(storage)?;
+        reload_committed_cents(&mut conn, payer.as_ref(), month).await
     }
 
     async fn update_overage(
@@ -928,22 +996,7 @@ impl BillingRepo for PgBillingRepo {
         // A failed reload that reached Stripe may still be collected by its
         // retries, so it counts against the limit like a pending one.
         let month = BillingPeriod::calendar_month(now);
-        let spent_this_month_cents = sqlx::query_scalar!(
-            r#"
-            SELECT COALESCE(SUM(amount_cents), 0)::bigint AS "spent!"
-            FROM ai_credit_reload
-            WHERE user_id = $1
-              AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
-              AND created_at >= $2
-              AND created_at < $3
-            "#,
-            payer,
-            month.start,
-            month.end,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(storage)?;
+        let spent_this_month_cents = reload_committed_cents(&mut tx, payer, month).await?;
 
         let amount_cents = plan_reload(
             ReloadState {
@@ -1163,4 +1216,12 @@ fn parse_seat_allowances(
             })
         })
         .collect()
+}
+
+fn plan_name(plan: crate::domain::PlanTier) -> &'static str {
+    match plan {
+        crate::domain::PlanTier::Free => "free",
+        crate::domain::PlanTier::Premium => "premium",
+        crate::domain::PlanTier::Max => "max",
+    }
 }

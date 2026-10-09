@@ -53,6 +53,14 @@ struct FakeBilling {
 }
 
 impl BillingService for FakeBilling {
+    async fn change_plan(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: crate::domain::plan_change::PlanChange,
+    ) -> Result<()> {
+        panic!("this use case must not change plans")
+    }
+
     async fn snapshot(&self, _user: &MacroUserIdStr<'_>) -> Result<UsageSnapshot> {
         self.snapshots.fetch_add(1, Ordering::SeqCst);
         Ok(self.snapshot.clone())

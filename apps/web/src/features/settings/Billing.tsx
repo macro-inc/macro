@@ -10,7 +10,9 @@ import {
   useAiBillingSummaryQuery,
   useChangePlanMutation,
   useCreateCheckoutSessionMutation,
+  useSubscriptionStatusQuery,
 } from '@queries/auth';
+import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { stripeServiceClient } from '@service-stripe/client';
@@ -51,6 +53,10 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const checkout = useCreateCheckoutSessionMutation();
   const effectiveHasPaid = () =>
     hasPaid() || (summary.isSuccess && summary.data.tier !== 'free');
+
+  const subscriptionStatus = useSubscriptionStatusQuery({
+    enabled: effectiveHasPaid,
+  });
 
   const canManageSubscription = createMemo(() => {
     return permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION);
@@ -112,14 +118,17 @@ function LiveBilling(props: { controls?: JSX.Element }) {
 
   const handleChangePlan = async (plan: PaidPlan) => {
     try {
+      const previousTier = state().tier;
       await changePlan.mutateAsync({ plan });
       analytics.track('plan_changed', { plan });
       toast.success(
-        plan === 'max'
-          ? aiUsageBilling().enabled
-            ? 'Upgraded to Max. Your larger AI allowance applies right away.'
-            : 'Upgraded to Max.'
-          : 'Switched to Pro.'
+        plan === previousTier
+          ? `Keeping your ${plan === 'max' ? 'Max' : 'Pro'} plan. Your scheduled downgrade is canceled.`
+          : plan === 'max'
+            ? aiUsageBilling().enabled
+              ? 'Upgraded to Max. Your larger AI allowance applies right away.'
+              : 'Upgraded to Max.'
+            : 'Pro will start at your next renewal. You keep Max until then.'
       );
     } catch (error) {
       console.error(error);
@@ -140,6 +149,19 @@ function LiveBilling(props: { controls?: JSX.Element }) {
     <BillingSettingsView
       state={state()}
       controls={props.controls}
+      renewalDate={
+        queryReadyGate(subscriptionStatus)
+          ? (subscriptionStatus.data.renewalDate ?? undefined)
+          : undefined
+      }
+      scheduledChange={
+        queryReadyGate(subscriptionStatus)
+          ? (subscriptionStatus.data.scheduledChange ?? undefined)
+          : undefined
+      }
+      subscriptionStatusFailed={subscriptionStatus.isError}
+      onRefreshStatus={() => void subscriptionStatus.refetch()}
+      onKeepPlan={(plan) => void handleChangePlan(plan)}
       onManage={() => void handleManage()}
       onSelectPlan={(plan) =>
         void (effectiveHasPaid()

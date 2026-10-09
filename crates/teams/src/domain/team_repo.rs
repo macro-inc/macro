@@ -438,6 +438,7 @@ pub trait TeamService: Clone + Send + Sync + 'static {
     fn restore_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
+        started: Option<super::open_seat_release::SubscriptionStart>,
     ) -> impl Future<Output = Result<(), RestorePermissionsForTeamMembersError>> + Send;
 
     /// Moves a member's seat to `plan`: swaps the seat between the team

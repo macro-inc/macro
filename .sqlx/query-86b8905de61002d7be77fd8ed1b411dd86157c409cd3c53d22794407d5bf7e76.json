@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_usage (id, feature, user_id, model, input_tokens, output_tokens,\n                                    total, created_at, count_usage)\n               VALUES ($1, 'chat', $2, 'test-model', 0, 0, 1.0, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86b8905de61002d7be77fd8ed1b411dd86157c409cd3c53d22794407d5bf7e76"
+}

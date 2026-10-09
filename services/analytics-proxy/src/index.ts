@@ -15,6 +15,9 @@ declare global {
   interface Env {
     /** Datadog API key for the OTLP traces intake. Unset in local dev. */
     DD_API_KEY?: string;
+    /** Server-side copy enabled only in the dev proxy. */
+    GRAFANA_OTLP_ENDPOINT?: string;
+    GRAFANA_OTLP_TOKEN?: string;
   }
 }
 
@@ -70,6 +73,73 @@ async function handleProxy(
   return await fetch(originRequest);
 }
 
+// Each mirror can retain 8 MiB of chunks plus its assembled request body.
+// Reserve before cloning so concurrent requests cannot accumulate extra copies.
+const maximumConcurrentTelemetryCopies = 2;
+let activeTelemetryCopies = 0;
+
+async function copyTelemetry(
+  request: Request,
+  endpoint: string,
+  path: string,
+  token: string
+): Promise<void> {
+  if (activeTelemetryCopies >= maximumConcurrentTelemetryCopies) return;
+  activeTelemetryCopies++;
+  try {
+    const copy = request.clone();
+    const maximumBytes = 8 * 1024 * 1024;
+    const reader = copy.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > maximumBytes) {
+          await reader.cancel();
+          console.warn('Grafana telemetry copy skipped: payload too large', {
+            signal: path,
+          });
+          return;
+        }
+        chunks.push(value);
+      }
+    }
+    const body = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    // Keep browser credentials and the Datadog key out of the second request.
+    const headers = new Headers({ Authorization: `Bearer ${token}` });
+    for (const name of ['content-type', 'content-encoding']) {
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    const response = await fetch(`${endpoint}${path}`, {
+      method: 'POST',
+      headers,
+      body,
+      redirect: 'error',
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      console.warn('Grafana telemetry copy rejected', {
+        signal: path,
+        status: response.status,
+      });
+    }
+    await response.body?.cancel();
+  } catch {
+    console.warn('Grafana telemetry copy failed', { signal: path });
+  } finally {
+    activeTelemetryCopies--;
+  }
+}
+
 const app = new Hono<{ Bindings: Env }>();
 
 // OTLP uses protobuf cross-origin. Cookies are stripped by handleProxy, so
@@ -108,6 +178,19 @@ app.all(`${OTLP_PREFIX}/*`, async (c) => {
   const path = url.pathname.slice(OTLP_PREFIX.length) || '/';
   const intake = otlpIntakeUrl(c.env, path);
   if (!intake) return c.text('Not found', 404);
+
+  const mirrorEndpoint = c.env.GRAFANA_OTLP_ENDPOINT;
+  const mirrorToken = c.env.GRAFANA_OTLP_TOKEN;
+  if (
+    c.req.method === 'POST' &&
+    (path === '/v1/traces' || path === '/v1/logs') &&
+    mirrorEndpoint &&
+    mirrorToken
+  ) {
+    c.executionCtx.waitUntil(
+      copyTelemetry(c.req.raw, mirrorEndpoint, path, mirrorToken)
+    );
+  }
 
   return handleProxy(
     c.req.raw,

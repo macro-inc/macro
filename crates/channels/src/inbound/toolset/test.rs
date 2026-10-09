@@ -6,11 +6,13 @@ use super::{
     parse_participants,
     rename_channel::RenameChannel,
     send_channel_message::SendChannelMessage,
+    share_with_channel::{ChannelShareEntityType, ShareWithChannel},
 };
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, PatchChannelRequest, ReferenceShareOutcome, ReferenceShareResult,
+        ReferencedShareItem, RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
@@ -227,6 +229,8 @@ struct ToolTestChannelService {
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
     metadata_name: Option<String>,
+    shares: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Vec<ReferencedShareItem>)>>>,
+    deny_share: bool,
 }
 
 impl ToolTestChannelService {
@@ -371,6 +375,31 @@ impl ChannelService for ToolTestChannelService {
             .expect("remove lock")
             .push((actor, channel_id, req));
         Ok(())
+    }
+
+    async fn share_referenced_items_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let results = items
+            .iter()
+            .map(|item| ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome: if self.deny_share {
+                    ReferenceShareOutcome::NotPermitted
+                } else {
+                    ReferenceShareOutcome::Shared
+                },
+            })
+            .collect();
+        self.shares
+            .lock()
+            .expect("share lock")
+            .push((actor, channel_id, items));
+        Ok(results)
     }
 }
 
@@ -579,6 +608,117 @@ fn rename_channel_schema_is_valid() {
     assert_eq!(validated.name, "RenameChannel");
     assert!(validated.description.contains("participant"));
     assert!(!validated.description.to_lowercase().contains("admin"));
+}
+
+#[test]
+fn share_with_channel_schema_is_valid() {
+    let result = generate_validated_input_schema::<ShareWithChannel>();
+    assert!(result.is_ok(), "{result:?}");
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "ShareWithChannel");
+    assert!(validated.description.contains("entity-access"));
+    assert!(validated.description.contains("calendar_event"));
+}
+
+#[test]
+fn share_with_channel_accepts_a_calendar_chip_alias() {
+    let channel_id = Uuid::now_v7();
+    let entity_id = Uuid::now_v7();
+    let parsed: ShareWithChannel = serde_json::from_value(serde_json::json!({
+        "channelId": channel_id,
+        "entityId": entity_id,
+        "entityType": "calendar",
+    }))
+    .expect("calendar alias");
+    assert_eq!(parsed.entity_type, ChannelShareEntityType::CalendarEvent);
+    assert_eq!(parsed.entity_id, entity_id.to_string());
+}
+
+#[tokio::test]
+async fn share_with_channel_grants_the_item_for_a_member() {
+    let channel_id = Uuid::now_v7();
+    let entity_id = Uuid::now_v7();
+    let service = ToolTestChannelService::default();
+    let shares = service.shares.clone();
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        service,
+        ToolTestAccessService::default(),
+    );
+
+    let response = ShareWithChannel {
+        channel_id,
+        entity_id: format!("  {entity_id}  "),
+        entity_type: ChannelShareEntityType::CalendarEvent,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect("member can share");
+
+    assert_eq!(response.channel_id, channel_id);
+    assert_eq!(response.entity_id, entity_id.to_string());
+    assert_eq!(
+        response.summary,
+        "Shared with the current members of the channel."
+    );
+    let (actor, shared_channel, items) = shares.lock().expect("share lock").pop().expect("shared");
+    assert_eq!(actor, user_id());
+    assert_eq!(shared_channel, channel_id);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].entity_id(), entity_id.to_string());
+    assert_eq!(
+        items[0].entity_type(),
+        crate::domain::models::ReferencedShareItemType::CalendarEvent
+    );
+}
+
+#[tokio::test]
+async fn share_with_channel_rejects_non_members() {
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService::default(),
+        ToolTestAccessService {
+            receipt_error: Some(ReceiptFail::Unauthorized),
+            ..ToolTestAccessService::default()
+        },
+    );
+
+    let error = ShareWithChannel {
+        channel_id: Uuid::now_v7(),
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: ChannelShareEntityType::Document,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("non-member");
+
+    assert_eq!(
+        error.description,
+        "user is not a member of the requested channel"
+    );
+}
+
+#[tokio::test]
+async fn share_with_channel_reports_when_the_user_cannot_share() {
+    let context = ChannelToolContext::new(
+        Arc::new(RecordingMessages::default()),
+        ToolTestChannelService {
+            deny_share: true,
+            ..ToolTestChannelService::default()
+        },
+        ToolTestAccessService::default(),
+    );
+
+    let error = ShareWithChannel {
+        channel_id: Uuid::now_v7(),
+        entity_id: Uuid::now_v7().to_string(),
+        entity_type: ChannelShareEntityType::CalendarEvent,
+    }
+    .call(ServiceContext(context), RequestContext::new(user_id()))
+    .await
+    .expect_err("not permitted");
+
+    assert!(error.description.contains("own calendar"));
 }
 
 #[test]
