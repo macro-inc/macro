@@ -1,9 +1,14 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
+import { MobileWebSignup } from '@app/features/auth/auth';
+import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
+import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import {
   HomeCalendarRouteView,
   HomeDetailRouteView,
 } from '@app/features/home/home-view';
 import { HomeRouteView } from '@app/features/home/route-views';
+import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   createMemoryPaneStore,
   SplitRouter,
@@ -26,49 +31,46 @@ import { BasePathComponent } from './BasePath';
 import {
   ActivityRouteView,
   AgentsRouteView,
-  BookingReceiptRoutePage,
   CalendarRouteView,
   CallDetailRouteView,
   CallsRouteView,
   ChannelDetailRouteView,
-  ChannelInviteAcceptance,
   ChannelsRouteView,
   CompaniesRouteView,
   DriveCallRouteView,
   DriveDetailView,
   DriveRouteView,
-  EmailCallback,
   EmailDetailRouteView,
-  EmailLinkCallback,
   FoldersRouteView,
   FormRespondRoutePage,
   HomeEntityDetailRouteView,
-  InviteLinksPortal,
-  InviteWelcome,
-  LoginPage,
-  LoginPopupSuccess,
   MailRouteView,
   MeetingRouter,
-  MobileWebSignup,
   NotFound,
-  OnboardingPage,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
-  PublicBookingRoutePage,
   RecentRouteView,
   ReviewsPrDetailRouteView,
   ReviewsRouteView,
   RoutineCreateRouteView,
   SearchRouteView,
   SettingsRouteView,
-  SignupPage,
-  TaskSlugPage,
   TasksDetailRouteView,
   TasksRouteView,
-  TeamInviteAcceptance,
-  WelcomePage,
 } from './lazy-route-views';
+import {
+  BookingReceiptRoutePage,
+  EmailCallback,
+  EmailLinkCallback,
+  LoginPage,
+  LoginPopupSuccess,
+  OnboardingPage,
+  PublicBookingRoutePage,
+  SignupPage,
+  TaskSlugPage,
+  WelcomePage,
+} from './pages';
 import {
   activityRoute,
   agentChatsRoute,
@@ -144,6 +146,9 @@ import {
 } from './shells';
 
 const { Router, Route } = SplitRouter;
+
+// Views under appRoute load lazily (lazy-route-views.ts); auth and booking
+// pages render outside it and load with the app.
 
 /** Debug views stay behind the registry's lazy import. */
 function debugView(componentId: string) {
