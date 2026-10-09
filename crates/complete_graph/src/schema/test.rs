@@ -950,7 +950,7 @@ fn full_message(thread_id: Uuid) -> Message {
         is_draft: true,
         has_attachments: true,
         scheduled_send_time: Some(Default::default()),
-        scheduled_send_status: None,
+        scheduled_send_status: Some(email::domain::models::ScheduledSendStatus::Failed),
         from: None,
         to: Vec::new(),
         cc: Vec::new(),
@@ -2436,6 +2436,26 @@ async fn activity_overview_uses_the_authenticated_subject_and_requested_zone() {
 }
 
 #[tokio::test]
+async fn email_message_delivery_status_alone_requests_the_full_edge_payload() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(43);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread(thread_id)]);
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 0, limit: 1) {{ scheduledSendStatus }} }} }} }}"#
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["emailThread"]["messages"][0]["scheduledSendStatus"],
+        "FAILED"
+    );
+}
+
+#[tokio::test]
 async fn email_message_full_fields_request_the_full_edge_payload() {
     let harness = harness();
     let thread_id = Uuid::from_u128(43);
@@ -2445,7 +2465,7 @@ async fn email_message_full_fields_request_the_full_edge_payload() {
 
     let response = harness
         .execute(&format!(
-            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime bodyParsed attachments {{ id providerId sfsId }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime scheduledSendStatus bodyParsed attachments {{ id providerId sfsId }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
         ))
         .await;
 
@@ -2455,6 +2475,7 @@ async fn email_message_full_fields_request_the_full_edge_payload() {
     assert_eq!(message["providerId"], "provider-message");
     assert_eq!(message["replyingToId"], Uuid::from_u128(101).to_string());
     assert!(message["scheduledSendTime"].as_str().is_some());
+    assert_eq!(message["scheduledSendStatus"], "FAILED");
     assert_eq!(message["bodyParsed"], "Direct thread body");
     assert_eq!(
         message["attachments"][0]["sfsId"],

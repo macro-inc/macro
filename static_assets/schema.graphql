@@ -5894,6 +5894,28 @@ The way a routine starts.
 union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
+The persisted state of a scheduled delivery.
+"""
+enum GraphqlScheduledSendStatus {
+	"""
+	Waiting for its send time or safely retrying preparation.
+	"""
+	PENDING
+	"""
+	Provider submission has started.
+	"""
+	SENDING
+	"""
+	Delivery was definitely rejected; the draft can be restored.
+	"""
+	FAILED
+	"""
+	Delivery may have succeeded; reconciliation is required.
+	"""
+	UNCONFIRMED
+}
+
+"""
 A select-option property value.
 """
 type GraphqlSelectOptionPropertyValue {
@@ -7418,6 +7440,10 @@ type GraphqlSoupEmailMessage {
 	When this draft is scheduled to be sent, in RFC 3339 format.
 	"""
 	scheduledSendTime: String
+	"""
+	Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+	"""
+	scheduledSendStatus: GraphqlScheduledSendStatus
 	"""
 	The sender of the message.
 	"""

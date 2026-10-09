@@ -849,6 +849,16 @@ visible failure notice. Cancel a draft-only thread and check it returns to Draft
 without requiring another save.
 Restore both a standalone draft and a reply, then edit and save without reloading;
 confirm the original content is visible and no send watermark returns. While a
+standalone send is queued, verify sender, recipients, subject, body, attachments,
+signature, formatting, schedule picker, delete, and Send remain disabled. Only
+Cancel may change the queued send. Open the formatting ribbon before queueing
+and verify it disappears while locked. Repeat after reload and restore in the
+same mounted composer; no schedule proposal should survive the queued state.
+Drop an inline image while queued and confirm no upload or insertion occurs.
+Queue the same draft from another composer while its link editor is open;
+the link editor must close. Repeat while image conversion or file upload is
+pending and verify completion does not insert content into the locked body.
+While a
 reply is queued, click Forward on another message and confirm the queued content
 and recipients stay unchanged. Race Send from two tabs and confirm only one
 active intent exists; cancellation must not leave a second send queued.
@@ -994,6 +1004,9 @@ Preparation that has not reached provider submission remains cancellable, includ
 after its due time or a retry delay. Verify both standalone and reply composers,
 including a status refresh whose scheduled time is unchanged and a failure arriving
 while a replacement time is selected.
+Block the REST lifecycle read while GraphQL loads a failed scheduled draft. It
+must still show failure recovery and keep the time picker disabled; GraphQL
+provides both the scheduled time and delivery status.
 
 When verifying, use an intercepted or isolated delivery fixture: choose a time,
 confirm that the editable **Scheduled send** preview makes zero delivery calls, then use

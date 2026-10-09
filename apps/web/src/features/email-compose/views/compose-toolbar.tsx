@@ -78,7 +78,7 @@ export function EmailComposeToolbar(props: {
         />
       }
     >
-      <Show when={showFormatRibbon()}>
+      <Show when={showFormatRibbon() && !ctx.disabled()}>
         <div class="flex flex-row w-full gap-2 items-center p-2 -ml-3">
           <FormatButtons
             selectionState={() => defaultSelectionData}

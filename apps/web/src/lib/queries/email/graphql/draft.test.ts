@@ -65,6 +65,7 @@ describe('optimistic draft saves', () => {
       calendarInvitations: [{ id: 'saved-invitation' }],
       createdAt: '2026-01-01T00:00:00Z',
       scheduledSendTime: '2027-01-01T12:00:00Z',
+      scheduledSendStatus: 'FAILED' as const,
       hasAttachments: true,
       attachmentsDraft: [
         {
@@ -100,6 +101,7 @@ describe('optimistic draft saves', () => {
           hasAttachments: true,
           createdAt: existing.createdAt,
           scheduledSendTime: existing.scheduledSendTime,
+          scheduledSendStatus: existing.scheduledSendStatus,
           calendarInvitations: existing.calendarInvitations,
         },
       },

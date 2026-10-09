@@ -204,9 +204,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
       code: 'INTERNAL',
     });
   const currentDraftId = session.draftId;
+  const [sentDraftId, setSentDraftId] = createSignal<string>();
   const currentThreadId = session.threadId;
   const sendLocked = () =>
-    props.delivery.sendLocked?.(currentDraftId()) ?? false;
+    props.delivery.sendLocked?.(currentDraftId() ?? sentDraftId()) ?? false;
   observeDraftIdentity(
     props.drafts,
     session,
@@ -439,7 +440,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   observeDraftRestoration({
     storage: props.drafts,
     accepts: (change) =>
-      [change.draftId, change.originalDraftId].includes(currentDraftId() ?? ''),
+      [change.draftId, change.originalDraftId].includes(
+        currentDraftId() ?? sentDraftId() ?? ''
+      ),
     ready: () => !sendLocked(),
     version: () => `${identityVersion}:${editVersion}:${session.epoch()}`,
     cancelPendingSave: () => {
@@ -468,6 +471,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
             : plainTextToHtml(draft.body_text ?? '')
         );
       setDraftDirty(false);
+      setSentDraftId(undefined);
       setCompleted(false);
     },
     reportError: props.notices.reportError,
@@ -525,6 +529,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     },
   });
   const cancelSchedule = async () => {
+    if (sendLocked() || restoring()) return false;
     if (!(await schedule.cancel())) return false;
     session.dispatch({ type: 'schedule-cancelled' });
     // An in-place schedule marked the composer complete; a host that keeps it
@@ -874,6 +879,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
           inboxId: activeInboxId(),
         });
 
+        setSentDraftId(currentDraftId());
         setCompleted(true);
         session.dispatch({ type: 'reset' });
         afterSend(result, currentLink.id);
@@ -890,6 +896,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
+    sendLocked() ||
+    restoring() ||
     attachmentPersistence.removing() ||
     submitting() ||
     discarding() ||
@@ -903,6 +911,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
   // --- Reset / delete ---
 
   const resetState = () => {
+    setSentDraftId(undefined);
     clearEmailBody(editor());
     setContent('');
     session.dispatch({ type: 'reset' });
@@ -1084,6 +1093,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
 
   const selectInbox = async (inboxId: string) => {
     if (
+      sendLocked() ||
+      restoring() ||
       submitting() ||
       discarding() ||
       movingInbox() ||
@@ -1293,7 +1304,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
     deleteDraftAndReset,
     signature,
     includeSignature,
-    setIncludeSignature,
+    setIncludeSignature: (include: boolean) => {
+      if (persistencePaused() || scheduling()) return;
+      setIncludeSignature(include);
+    },
   };
 }
 

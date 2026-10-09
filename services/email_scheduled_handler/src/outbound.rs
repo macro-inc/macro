@@ -55,7 +55,7 @@ fn stream_pending_scheduled_messages(
             AND (CASE WHEN esm.processing THEN
                 COALESCE(esm.delivery_lease_expires_at, esm.updated_at + make_interval(secs => $1)) <= NOW()
                 ELSE esm.delivery_lease_expires_at IS NULL OR esm.delivery_lease_expires_at <= NOW() END)
-            AND (em.is_draft OR EXISTS (
+            AND (em.is_draft OR esm.delivery_claim_id IS NOT NULL OR EXISTS (
                 SELECT 1 FROM email_send_attempts a
                 WHERE a.link_id = esm.link_id AND a.message_id = esm.message_id AND NOT a.cancelled
             ))

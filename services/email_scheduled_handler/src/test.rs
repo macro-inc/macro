@@ -102,6 +102,61 @@ async fn fetch_pending_recovers_only_admitted_graphql_immediate_sends(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
+async fn scanner_recovers_managed_rest_sends_without_resurrecting_legacy_sends(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000f504")?;
+    sqlx::query!(
+        "UPDATE email_messages SET is_sent = false WHERE id = $1",
+        message_id
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        !fetch_pending_scheduled_messages(&pool)
+            .await?
+            .iter()
+            .any(|row| row.message_id == message_id)
+    );
+
+    // REST admission creates no GraphQL attempt. The managed claim is its fence.
+    for (status, submitted) in [("ready", false), ("ready", true), ("unconfirmed", true)] {
+        sqlx::query!(
+            "UPDATE email_scheduled_messages SET delivery_claim_id=$2,
+             delivery_status=$3, processing=$4,
+             delivery_started_at=CASE WHEN $4 THEN NOW() ELSE NULL END,
+             delivery_lease_expires_at=NOW()+INTERVAL '5 minutes' WHERE message_id=$1",
+            message_id,
+            Uuid::new_v4(),
+            status,
+            submitted,
+        )
+        .execute(&pool)
+        .await?;
+        assert!(
+            !fetch_pending_scheduled_messages(&pool)
+                .await?
+                .iter()
+                .any(|row| row.message_id == message_id)
+        );
+        sqlx::query!(
+            "UPDATE email_scheduled_messages SET delivery_lease_expires_at=NOW()-INTERVAL '1 second' WHERE message_id=$1",
+            message_id,
+        ).execute(&pool).await?;
+        assert!(
+            fetch_pending_scheduled_messages(&pool)
+                .await?
+                .iter()
+                .any(|row| row.message_id == message_id)
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
+)]
 async fn fetch_pending_returns_correct_link_ids(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;
 

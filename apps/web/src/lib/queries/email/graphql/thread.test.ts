@@ -187,6 +187,7 @@ function threadMessages(offset: number, count: number) {
     isDraft: false,
     hasAttachments: false,
     scheduledSendTime: null,
+    scheduledSendStatus: null,
     from: null,
     to: [],
     cc: [],

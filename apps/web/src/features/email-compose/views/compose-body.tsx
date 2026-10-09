@@ -100,9 +100,10 @@ export function ComposeBody(props: {
             editor()?.focus();
           }}
           use:fileFolderDrop={{
-            onDragStart: (valid) => setIsDragging(valid),
+            onDragStart: (valid) => setIsDragging(valid && !ctx.disabled()),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, dirs, event) => {
+              if (ctx.disabled()) return;
               const ed = editor();
               const media =
                 ed && event
@@ -174,6 +175,7 @@ export function ComposeBody(props: {
               }}
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {
+                if (ctx.disabled()) return;
                 const ed = editor();
                 if (!ed) return;
                 ctx.bodyActions.insertFiles(ed, {
@@ -224,7 +226,7 @@ function AttachmentItem(props: {
               fileName: attachment().file.name,
               mimeType: attachment().file.type,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />
@@ -237,7 +239,7 @@ function AttachmentItem(props: {
               fileName: attachment().fileName,
               mimeType: attachment().contentType,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />
@@ -250,7 +252,7 @@ function AttachmentItem(props: {
               fileName: attachment().fileName,
               mimeType: attachment().mimeType,
             }}
-            removable
+            removable={!ctx.disabled()}
             onRemove={handleRemove}
             onClick={props.onOpen}
           />

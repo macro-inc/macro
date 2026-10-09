@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type { EmailDraftRestoration } from '../context/compose-capabilities';
+import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { LocalDraft } from '../core/local-draft';
 import type { ReplyType } from '../core/reply-type';
 import { createComposeContext } from '../tests/capabilities';
@@ -299,6 +300,105 @@ it('does not apply a restored draft after its composer unmounts', async () => {
     'Keep current editor'
   );
   expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+});
+
+it.each([false, true])(
+  'restores a completed mounted standalone composer after cancellation with delayed unlock: %s',
+  async (delayedUnlock) => {
+    const { context, restore } = restorationContext();
+    const [locked, setLocked] = createSignal(false);
+    context.delivery.sendLocked = (id) => id === 'draft' && locked();
+    context.delivery.sendMessage = vi.fn(async () => {
+      setLocked(true);
+      return { draftId: 'draft', threadId: 'thread', inboxId: 'inbox' };
+    });
+    context.drafts.readDraft = vi.fn(async () => ({
+      draft: message('draft', {
+        is_draft: true,
+        subject: 'Recovered subject',
+        body_text: 'Recovered body',
+        body_html_sanitized: null,
+      }),
+      persistence: 'queued' as const,
+    }));
+    const root = mountEmailComposer(context, undefined, {
+      draft: message('draft', { is_draft: true }),
+    });
+    try {
+      root.edit('Original send');
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      expect(root.state.draftId()).toBeUndefined();
+      expect(root.state.context.disabled()).toBe(true);
+      if (!delayedUnlock) setLocked(false);
+      restore();
+      if (delayedUnlock) {
+        await vi.advanceTimersByTimeAsync(600);
+        expect(context.drafts.readDraft).not.toHaveBeenCalled();
+        setLocked(false);
+      }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(root.state.draftId()).toBe('draft');
+      expect(root.editor.read(() => $getRoot().getTextContent())).toBe(
+        'Recovered body'
+      );
+      expect(root.state.context.subject()).toBe('Recovered subject');
+      expect(root.state.context.disabled()).toBe(false);
+      root.edit('Edited recovered body');
+      await vi.advanceTimersByTimeAsync(600);
+      const saved = vi.mocked(context.drafts.saveDraft).mock.calls.at(-1)?.[0];
+      expect(decodeBase64Utf8(saved?.draft.body_html ?? '')).toContain(
+        'Edited recovered body'
+      );
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it('blocks queued standalone envelope, attachment, signature, schedule, delete, and send changes', async () => {
+  const context = createComposeContext();
+  const [locked, setLocked] = createSignal(true);
+  context.delivery.sendLocked = locked;
+  const root = mountEmailComposer(context, undefined, {
+    draft: message('draft', { is_draft: true, subject: 'Original' }),
+  });
+  try {
+    const composer = root.state.context;
+    const recipients = composer.recipients();
+    expect(composer.disabled()).toBe(true);
+    expect(composer.primaryActionDisabled()).toBe(true);
+    expect(composer.schedule.pickerDisabled()).toBe(true);
+    expect(composer.schedule.onSelect(new Date(Date.now() + 60_000))).toBe(
+      false
+    );
+    expect(await composer.schedule.onCancel()).toBe(false);
+    composer.setSubject('Changed');
+    composer.setRecipients('to', []);
+    composer.onSelectInbox('other');
+    composer.onAddAttachments([
+      { type: 'local', file: new File(['audit'], 'audit.txt') },
+    ]);
+    root.state.setIncludeSignature(false);
+    composer.onDelete();
+    composer.onSend();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(composer.subject()).toBe('Original');
+    expect(composer.recipients()).toEqual(recipients);
+    expect(composer.selectedInboxId()).toBe('inbox');
+    expect(composer.attachments()).toEqual([]);
+    expect(root.state.includeSignature()).toBe(true);
+    expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    expect(context.drafts.deleteDraft).not.toHaveBeenCalled();
+    expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(context.delivery.unschedule).not.toHaveBeenCalled();
+    setLocked(false);
+    expect(composer.schedule.selectedTime()).toBeUndefined();
+    expect(composer.schedule.actionLabel()).toBe('Send email');
+  } finally {
+    root.dispose();
+  }
 });
 
 it.each([false, true])(

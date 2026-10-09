@@ -812,6 +812,7 @@ export function createReplyComposer(
     },
   });
   const cancelSchedule = async () => {
+    if (sendLocked() || restoring()) return false;
     if (!(await schedule.cancel())) return false;
     session.dispatch({ type: 'schedule-cancelled' });
     return true;
@@ -1371,6 +1372,7 @@ export function createReplyComposer(
 
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
+    restoring() ||
     attachmentPersistence.removing() ||
     pendingDeletion() ||
     movingInbox() ||
@@ -1575,7 +1577,10 @@ export function createReplyComposer(
     activeInboxEmail,
     replyType: form.replyType,
     signatureHtml: replySignatureHtml,
-    setIncludeSignature,
+    setIncludeSignature: (include: boolean) => {
+      if (editingDisabled()) return;
+      setIncludeSignature(include);
+    },
     setScrollContainer,
     composerExpanded,
     setComposerExpanded,
