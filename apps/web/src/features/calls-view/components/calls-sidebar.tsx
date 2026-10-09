@@ -17,7 +17,14 @@ import {
   selectSidebarTag,
 } from '@property/tags/SidebarTagsSection';
 import { Layer } from '@ui';
-import { type Component, createMemo, For, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  createEffect,
+  createMemo,
+  For,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   CALL_AUDIENCES,
@@ -40,6 +47,8 @@ const AUDIENCE_ICONS: Record<CallAudienceId, IconComponent> = {
   'call-internal': BuildingsIcon,
   'call-external': GlobeIcon,
 };
+
+const MIN_FILTERED_CALLS = 30;
 
 type SectionId = 'type' | 'channels' | 'tags';
 
@@ -109,6 +118,22 @@ export function CallsSidebar() {
       and: selectCallAudience(andIds, id),
       or: orIds,
     }));
+
+  // Audience filters only narrow loaded pages, and a sparse page leaves no
+  // list to scroll, so keep paging until enough matches show or pages run out.
+  createEffect(() => {
+    const audienceActive = CALL_AUDIENCES.some((a) =>
+      soup.predicates.isActive(a.id)
+    );
+    if (
+      audienceActive &&
+      view.items().length < MIN_FILTERED_CALLS &&
+      view.source.hasNextPage() &&
+      !view.source.isFetching()
+    ) {
+      void view.source.fetchNextPage();
+    }
+  });
 
   const channels = createMemo<CallChannelOption[]>(
     (known) => collectCallChannels(known, view.source.data()),

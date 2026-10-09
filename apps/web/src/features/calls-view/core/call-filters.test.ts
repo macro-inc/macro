@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   externalCallFilter,
   internalCallFilter,
-} from '../../next-soup/filters/predicates';
+} from '../../next-soup/filters/call-audience';
 import { collectCallChannels, selectCallAudience } from './call-filters';
 
 const call = (overrides: Partial<CallEntity> = {}): CallEntity => ({

@@ -55,6 +55,8 @@ const PRESERVE_FILTERS_ON_TAB_CHANGE: ListView[] = [
   'calls',
 ];
 
+const VIEW_SCOPED_REFINEMENTS: ListView[] = ['calls'];
+
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
   PRESERVE_FILTERS_ON_TAB_CHANGE.includes(view);
 
@@ -177,12 +179,15 @@ export const useApplyPreset = () => {
       };
     }
 
+    // Calls sidebar refinements belong to the view, not to one tab, so a
+    // tab's persisted state must not replace them.
+    const restoreTab = !VIEW_SCOPED_REFINEMENTS.includes(view);
     batch(() => {
       setActiveTab(tabId);
-      if (!restorePersistedQueryFilters(tabId)) {
+      if (!(restoreTab && restorePersistedQueryFilters(tabId))) {
         queryFilters.replace(nextFilters);
       }
-      if (!restorePersistedPredicates(tabId)) {
+      if (!(restoreTab && restorePersistedPredicates(tabId))) {
         soup.predicates.set(nextClientFilters);
       }
       soup.grouping.setActiveGroupId(preset.groupBy);

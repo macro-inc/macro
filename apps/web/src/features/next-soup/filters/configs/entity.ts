@@ -5,15 +5,17 @@ export {
 } from '../../../crm/collection-filters';
 
 import { getEntityProjectId } from '@entity';
+import {
+  externalCallFilter as externalCallPredicate,
+  internalCallFilter as internalCallPredicate,
+} from '../call-audience';
 import { defineQueryFilters } from '../filter-store/compile';
 import {
   activeAgentFilter as activeAgentPredicate,
   calendarEventFilter as calendarEventPredicate,
   callsFilter as callsPredicate,
   channelsFilter as channelsPredicate,
-  externalCallFilter as externalCallPredicate,
   filesAndFolderFilter as filesAndFolderPredicate,
-  internalCallFilter as internalCallPredicate,
   projectFilter as projectPredicate,
   searchSupportedFilter as searchSupportedPredicate,
   taskFilter as taskPredicate,

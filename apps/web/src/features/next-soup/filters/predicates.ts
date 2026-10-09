@@ -134,16 +134,6 @@ export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
 }
 
-/** A call with at least one guest, i.e. someone joined without a Macro account. */
-export function externalCallFilter(entity: EntityData): boolean {
-  return entity.type === 'call' && (entity.guests?.length ?? 0) > 0;
-}
-
-/** A call attended only by Macro users. */
-export function internalCallFilter(entity: EntityData): boolean {
-  return entity.type === 'call' && (entity.guests?.length ?? 0) === 0;
-}
-
 export function calendarEventFilter(entity: EntityData): boolean {
   return entity.type === 'calendar_event';
 }
