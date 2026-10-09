@@ -22,6 +22,7 @@ import { Button } from '@ui';
 import {
   createSignal,
   ErrorBoundary,
+  type JSX,
   onCleanup,
   type ParentProps,
   Show,
@@ -96,6 +97,8 @@ function ProjectsContent(props: ParentProps) {
 
 export function ProjectsTab(props: {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
+  /** The host's touch tab switcher, rendered inside the projects header. */
+  mobileTabs?: JSX.Element;
 }) {
   return (
     <Projects>
@@ -114,6 +117,7 @@ export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
 
 function ProjectsCollectionHost(props: {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
+  mobileTabs?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -149,6 +153,7 @@ function ProjectsCollectionHost(props: {
     <>
       <ProjectsCollection
         onOpen={open}
+        mobileTabs={props.mobileTabs}
         collection={collection}
         onCreate={() =>
           layout.popoverSplit({ type: 'component', id: 'project-compose' })

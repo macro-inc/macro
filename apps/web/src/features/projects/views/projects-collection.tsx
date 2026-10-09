@@ -17,6 +17,7 @@ import {
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntitySelectionToolbarModal } from '@entity/EntitySelectionToolbarModal';
 import CalendarIcon from '@phosphor/calendar.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -29,6 +30,7 @@ import {
   type Accessor,
   batch,
   createSignal,
+  type JSX,
   Match,
   Show,
   Switch,
@@ -62,6 +64,8 @@ export function ProjectsCollection(props: {
   onCopyId(id: string): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
+  /** The host's touch tab switcher, shown above the header's own controls. */
+  mobileTabs?: JSX.Element;
 }) {
   const context = useProjectsContext();
   const collection = props.collection;
@@ -279,6 +283,7 @@ export function ProjectsCollection(props: {
     <>
       <ViewShell.Header>
         <div class="flex min-w-0 flex-col gap-3">
+          <Show when={isTouchDevice()}>{props.mobileTabs}</Show>
           <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
             <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
               Projects

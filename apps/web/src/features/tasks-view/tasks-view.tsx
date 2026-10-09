@@ -124,10 +124,8 @@ function TasksViewRoot() {
                     fallback={taskList()}
                   >
                     <TasksTopBar />
-                    <div class="hidden @max-[720px]/view-shell:block">
-                      <TasksMobileTabs />
-                    </div>
                     <ProjectsTab
+                      mobileTabs={<TasksMobileTabs />}
                       onOpen={(id, event, newSplit) => {
                         if (
                           newSplit ||
