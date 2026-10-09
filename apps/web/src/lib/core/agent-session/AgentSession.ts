@@ -20,6 +20,7 @@
  */
 
 import {
+  AgentFoldWorkerUnavailable,
   closeSession,
   type FoldInput,
   pushSession,
@@ -727,7 +728,11 @@ export class AgentSession {
       this.trace.folded(foldStartedAt);
       this.setTurn((await readSession(this.id)).metadata.turn);
     } catch (error) {
-      this.trace.failing('fold');
+      this.trace.failing(
+        error instanceof AgentFoldWorkerUnavailable
+          ? 'worker_unavailable'
+          : 'fold'
+      );
       throw error;
     }
     if (this.resyncRequested) void this.resync();

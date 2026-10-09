@@ -66,12 +66,16 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - All API/network calls live in service-clients.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Reactive GraphQL reads use `createLiveQuery` for a document and
+  `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
+  [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
 - When adding or changing a feature flag, follow the `define-feature-flag` skill.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 
 ### Startup bundle
-- Everything statically reachable from `src/index.tsx` downloads and runs before the first screen. Views, block components, and modals load through `lazy()` / `lazyNamed` (`@core/util/lazyNamed`) inside a `<Suspense>`; never statically import one into a shared hub (`Root`, `Layout`, `componentRegistry`, `app-router-view`, block `definition.ts`, Lexical `init.ts`).
-- `index.html` draws a boot shell (rail, view sidebar, Home's composer) before any JS runs, from the saved theme and the `rememberBootShell` layout hint; `Root` hands off once auth is known. Keep its geometry in step with `SidebarRail`, `ViewSidebar`, and `HomeChatStart`.
+- Everything statically reachable from `src/index.tsx` downloads and runs before the first screen. Views, block components, and modals load through `lazy()` / `lazyNamed` (`@core/util/lazyNamed`) inside a `<Suspense>`; never statically import one into a shared hub (`Root`, `Layout`, `AppProviders`, `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block `definition.ts`, Lexical `init.ts`).
+- Each top-level route picks its shell in `app-router-view.tsx` (`routes/shells.tsx`): `authRoute` pages and booking links render without app chrome, and `appRoute` renders `AppShell` — the app's providers (`AppProviders`), chrome (`AppChrome` in `Layout.tsx`), and the split layout. Put state only the app's views use in `AppProviders`, not `Root`; `Root` keeps what every page or a call needs.
+- `index.html` paints a boot shell before any JS runs: the saved theme's background, the rail column, and the desktop app's content card — no app content. The first shell to mount dismisses it (`dismissBootShell`). Keep its rail width and desktop inset in step with `SidebarRail` and `SplitLayout`.
 - Production web builds register `public/sw.js`: it serves the cached `index.html` and content-hashed assets from Cache Storage and moves tabs to newer builds. Set localStorage `macro:sw` to `off` to bypass it while debugging.
 - The build fails if any emitted file exceeds CloudFront's 10 MB compression limit; split it rather than raising the limit.
 

@@ -23,6 +23,7 @@ local_auth = ["macro_authorization/local_auth"]
 [dependencies]
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 ai_usage = { path = "../../crates/ai_usage" }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
 bots = { path = "../../crates/bots", features = ["outbound"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound"] }
@@ -50,6 +51,7 @@ messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
 models_properties = { path = "../../crates/models_properties" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }
 system_properties = { path = "../../crates/system_properties" }
+trigger_context = { path = "../../crates/trigger_context" }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

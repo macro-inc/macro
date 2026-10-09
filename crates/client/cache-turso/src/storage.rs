@@ -1537,8 +1537,9 @@ impl Storage for TursoStorage {
                 )?;
                 mutation_retry::remove(&connection, sql_id)?;
                 write_shadow_reconciliation(&connection, reconciliation, |index| {
-                    self.fault_after(TestFaultSite::Complete, entries.len() + index)
+                    self.fault_after(TestFaultSite::Complete, entries.len() + 1 + index)
                 })?;
+                self.fault_after(TestFaultSite::Complete, entries.len())?;
                 Ok(true)
             })
         })();
@@ -1609,8 +1610,9 @@ impl Storage for TursoStorage {
                 )?;
                 mutation_retry::remove(&connection, sql_id)?;
                 write_shadow_reconciliation(&connection, reconciliation, |index| {
-                    self.fault_after(TestFaultSite::Discard, index)
+                    self.fault_after(TestFaultSite::Discard, index + 1)
                 })?;
+                self.fault_after(TestFaultSite::Discard, 0)?;
                 Ok(true)
             })
         })();
@@ -1618,8 +1620,17 @@ impl Storage for TursoStorage {
     }
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
+        self.reset_with_records(Vec::new(), Vec::new()).await
+    }
+
+    async fn reset_with_records(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let result = {
+        let result = (|| {
+            let entries = prepare_records(entries)?;
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
@@ -1632,9 +1643,25 @@ impl Storage for TursoStorage {
                 driver::execute(&connection, "DELETE FROM records", Vec::new())?;
                 calendar::clear(&connection)?;
                 self.fault_after(TestFaultSite::Clear, 2)?;
-                Ok(())
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter().enumerate() {
+                    require_changed(
+                        driver::execute_prepared(
+                            &mut statement,
+                            vec![
+                                text(&entry.key.typename),
+                                text(&entry.key.id),
+                                Value::from_blob(entry.value.clone()),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_derived_rows(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
             })
-        };
+        })();
         self.latch_result(result)
     }
 }

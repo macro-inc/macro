@@ -4,6 +4,7 @@ use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
     AgentTriggerTopicEvent, NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
+use agent_trigger::domain::task_assignment::assignment_instructions;
 use bot_id::BotId;
 
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -15,6 +16,10 @@ use super::model::{
 
 /// What one trigger event asks this deployment to do.
 #[derive(Debug, Clone)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "a command carries its prompt's context; boxing would only move the size"
+)]
 pub enum RoutedTrigger {
     /// Run a harness command for the managed bot's session.
     Command(AgentSessionId, HarnessCommand),
@@ -67,16 +72,28 @@ pub fn route_agent_trigger(
                     bot_id: assigned.bot_id,
                     runtime,
                     origin: SessionOrigin::TaskAssignment(TaskAssignmentOrigin {
+                        // The task travels in the context; the prompt is only
+                        // what to do with it. Events from producers that
+                        // predate the context carry the whole brief instead.
+                        prompt: match &assigned.context {
+                            Some(_) => assignment_instructions(&assigned.parent),
+                            None => assigned.prompt,
+                        },
                         parent: assigned.parent,
                         discussion_id: assigned.discussion_id,
                         actor: assigned.actor,
-                        prompt: assigned.prompt,
+                        context: assigned.context,
                     }),
                 }),
             ))
         }
         AgentTriggerTopicEvent::New(event) => {
-            let Some(OpeningMention { bot_id, message }) = event.mention() else {
+            let Some(OpeningMention {
+                bot_id,
+                message,
+                context,
+            }) = event.mention()
+            else {
                 return Err(Skipped::Unrecognized);
             };
             let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
@@ -101,6 +118,7 @@ pub fn route_agent_trigger(
                         sender,
                         content: message.content,
                         attachments: links.prompt_attachments(&message.attachments),
+                        context,
                     }),
                 }),
             ))
@@ -111,6 +129,7 @@ pub fn route_agent_trigger(
                 session_id,
                 kind: _,
                 message,
+                context,
             }) = event.session_message()
             else {
                 return Err(Skipped::Unrecognized);
@@ -127,14 +146,17 @@ pub fn route_agent_trigger(
             if kind.is_managed() {
                 return Ok(RoutedTrigger::Command(
                     session_id,
-                    HarnessCommand::Deliver(DeliverAction::prompt(
-                        AgentAction::prompt_with_attachments(
-                            message.content,
-                            links.prompt_attachments(&message.attachments),
-                        ),
-                        message.sender.as_user().cloned(),
-                        Some(origin),
-                    )),
+                    HarnessCommand::Deliver(DeliverAction {
+                        context,
+                        ..DeliverAction::prompt(
+                            AgentAction::prompt_with_attachments(
+                                message.content,
+                                links.prompt_attachments(&message.attachments),
+                            ),
+                            message.sender.as_user().cloned(),
+                            Some(origin),
+                        )
+                    }),
                 ));
             }
             let sender = message

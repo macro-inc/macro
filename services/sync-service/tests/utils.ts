@@ -33,6 +33,7 @@ export async function setupMiniflare(
     persistPath?: string;
     migrate?: boolean;
     dssUrl?: string;
+    lexicalServiceUrl?: string;
     fetchMock?: MiniflareOptions['fetchMock'];
   } = {},
 ) {
@@ -73,6 +74,9 @@ export async function setupMiniflare(
       SPS_URL: "http://localhost:8092",
       local:true,
       ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
+      ...(options.lexicalServiceUrl
+        ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, LEXICAL_SERVICE_AUTH_KEY: "lexical-key" }
+        : {}),
     },
     compatibilityDate: '2025-03-05'
   });

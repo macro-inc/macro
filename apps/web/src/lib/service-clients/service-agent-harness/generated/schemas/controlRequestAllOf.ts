@@ -5,7 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ControlRequestAllOfActionId } from './controlRequestAllOfActionId';
+import type { ControlRequestAllOfContext } from './controlRequestAllOfContext';
 
 export type ControlRequestAllOf = {
   actionId?: ControlRequestAllOfActionId;
+  /** Why the agent is being asked. Only a runtime forwarding a triggered
+prompt may send it; a user's request carrying it is refused. */
+  context?: ControlRequestAllOfContext;
 };

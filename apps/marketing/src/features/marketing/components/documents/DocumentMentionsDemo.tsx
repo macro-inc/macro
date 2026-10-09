@@ -1,372 +1,183 @@
-import HashStraight from '@phosphor/hash-straight.svg';
-import ListChecks from '@phosphor/list-checks.svg';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
-import { homepagePeople } from '../../core/homepage-demo-people';
+import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';
+import { createDemoPointer } from '../agents/createDemoPointer';
 import { DemoCursor } from '../DemoCursor';
 import { ProductDemo } from '../product/ProductPage';
-import { TagDot } from '../workspace/frozen/DemoTags';
 import { PanelSection } from '../workspace/frozen/DetailPanel';
-import { DocMention, type DocMentionItem, people } from './DocMention';
-import { type DocMentionGroup, DocMentionMenu } from './DocMentionMenu';
 import { DocumentFrame } from './DocumentFrame';
 import {
-  createAnchor,
-  createSceneClock,
-  type Point,
-  typed,
-} from './documentScene';
+  type DocumentSource,
+  DocumentSourceLink,
+  DocumentSourceView,
+} from './DocumentProjectDemo';
+import { PROJECT_INTRO, PROJECT_TAGS, PROJECT_TITLE } from './documentProject';
 
-const ITEMS = {
-  invite: {
-    kind: 'task',
-    label: 'Fix the team invite handoff',
-    status: 'In Progress',
-  },
-  deploy: {
-    kind: 'task',
-    label: 'Fix the deploy pipeline',
-    status: 'In Progress',
-  },
-  announcement: {
-    kind: 'task',
-    label: 'Write the launch announcement',
-    status: 'In Review',
-  },
-  checklist: {
-    kind: 'task',
-    label: 'Prepare the launch checklist',
-    status: 'Not Started',
-  },
-  rollout: { kind: 'document', label: 'Team rollout plan' },
-  meadow: { kind: 'company', label: 'The Meadow' },
-  email: { kind: 'email', label: 'Team invites for The Meadow' },
-  launch: { kind: 'channel', label: 'launch' },
-  today: { kind: 'date', label: 'Today' },
-} satisfies Record<string, DocMentionItem>;
-
-/** A bare @ offers every bucket; the editor's menu shows the first few. */
-const EVERYTHING: DocMentionGroup[] = [
-  {
-    label: 'People & Groups',
-    total: 14,
-    rows: [people.julia, people.teo, people.gabriel],
-  },
-  {
-    label: 'Documents, Agents, & Tasks',
-    total: 62,
-    rows: [ITEMS.rollout, ITEMS.invite, ITEMS.announcement],
-  },
-  { label: 'Channels', total: 9, rows: [ITEMS.launch] },
-  { label: 'Companies', total: 23, rows: [ITEMS.meadow] },
-  { label: 'Emails', total: 410, rows: [ITEMS.email] },
-  { label: 'Dates', rows: [ITEMS.today] },
-];
-
-type Segment =
-  | { text: string }
-  | {
-      query: string;
-      item: DocMentionItem;
-      groups: DocMentionGroup[];
-      /** Rows the selection visits before Enter, e.g. arrowing to a channel. */
-      picks: number[];
-      browse?: boolean;
-    };
-
-const LINE: Segment[] = [
-  { text: 'Teo is fixing ' },
-  {
-    query: 'fix',
-    item: ITEMS.invite,
-    browse: true,
-    picks: [0],
-    groups: [
-      {
-        label: 'Documents, Agents, & Tasks',
-        rows: [ITEMS.invite, ITEMS.deploy],
-      },
-    ],
-  },
-  { text: ' for ' },
-  {
-    query: 'mea',
-    item: ITEMS.meadow,
-    picks: [0],
-    groups: [
-      { label: 'Companies', rows: [ITEMS.meadow] },
-      { label: 'Emails', rows: [ITEMS.email] },
-    ],
-  },
-  { text: '. Dana asked about it in ' },
-  {
-    query: 'invites',
-    item: ITEMS.email,
-    picks: [0],
-    groups: [{ label: 'Emails', rows: [ITEMS.email] }],
-  },
-  { text: ', so post in ' },
-  {
-    query: 'launch',
-    item: ITEMS.launch,
-    picks: [0, 1, 2],
-    groups: [
-      {
-        label: 'Documents, Agents, & Tasks',
-        rows: [ITEMS.announcement, ITEMS.checklist],
-      },
-      { label: 'Channels', rows: [ITEMS.launch] },
-    ],
-  },
-  { text: ' when it ships.' },
-];
-
-// Typing speeds: prose, the @query, the pause on a result, an arrow key.
-const CHAR = 22;
-const QUERY_CHAR = 70;
-const HOLD = 480;
-const BROWSE = 750;
-const ARROW = 260;
-
-type Timed =
-  | { text: string; from: number; to: number }
-  | (Extract<Segment, { query: string }> & {
-      open: number;
-      queryFrom: number;
-      queryTo: number;
-      pick: number;
-    });
-
-const timeline = (() => {
-  let at = 0;
-  return LINE.map((segment): Timed => {
-    if ('text' in segment) {
-      const from = at;
-      at += segment.text.length * CHAR;
-      return { text: segment.text, from, to: at };
-    }
-    const open = at + QUERY_CHAR;
-    const queryFrom = open + (segment.browse ? BROWSE : 0);
-    const queryTo = queryFrom + segment.query.length * QUERY_CHAR;
-    at = queryTo + HOLD + (segment.picks.length - 1) * ARROW;
-    return { ...segment, open, queryFrom, queryTo, pick: at };
-  });
-})();
-const last = timeline[timeline.length - 1];
-const END = ('text' in last ? last.to : last.pick) + 500;
-const start = (segment: Timed) =>
-  'text' in segment ? segment.from : segment.open - QUERY_CHAR;
-
-/** Typing @ in a doc opens the mention menu over every kind of workspace item. */
+/** Each source gets its own split; existing panes and edits remain mounted. */
 export function DocumentMentionsDemo() {
   let root!: HTMLDivElement;
-  let overlay: HTMLDivElement | undefined;
-  const clock = createSceneClock({ root: () => root, end: END, lead: 600 });
-  const t = clock.t;
-  const [wide, setWide] = createSignal(false);
-  const active = () =>
-    timeline.reduce(
-      (current, segment, index) => (t() >= start(segment) ? index : current),
-      0
+  let splits!: HTMLDivElement;
+  const [sources, setSources] = createSignal<DocumentSource[]>([]);
+  const [active, setActive] = createSignal<DocumentSource>();
+  const [width, setWidth] = createSignal(0);
+  const [automatic, setAutomatic] = createSignal(true);
+  const [phase, setPhase] = createSignal(0);
+  const triggers = new Map<DocumentSource, HTMLElement>();
+  const narrow = () => width() < 480 || width() / (sources().length + 1) < 240;
+  const add = (source: DocumentSource) => {
+    setSources((items) =>
+      items.includes(source) ? items : [...items, source]
     );
-  const menu = () => {
-    const segment = timeline[active()];
-    if (!clock.live() || 'text' in segment || t() < segment.open) return;
-    if (t() >= segment.pick) return;
-    if (segment.browse && t() < segment.queryFrom)
-      return { groups: EVERYTHING, selected: 0 };
-    const step = Math.floor((t() - segment.queryTo - HOLD / 2) / ARROW) + 1;
-    const visit = Math.max(0, Math.min(segment.picks.length - 1, step));
-    return { groups: segment.groups, selected: segment.picks[visit] };
+    setActive(source);
   };
-  const frame = () => overlay?.parentElement ?? undefined;
-  const caret = createAnchor({
-    frame,
-    track: t,
-    target: () => ({ selector: '[data-caret="jacob"]' }),
+  const playback = createProductWalkthrough({
+    root: () => root,
+    steps: 5,
+    reset: () => {},
+    reduced: () => {
+      setAutomatic(false);
+      setSources(['email', 'task']);
+      setActive('task');
+    },
+    delay: (step) => [0, 1400, 1000, 2400, 1000, 900][step] ?? 1000,
+    advance: (step) => {
+      setPhase(step);
+      if (step === 2) add('email');
+      if (step === 4 && width() >= 1020) add('task');
+      if (step === 5) setAutomatic(false);
+    },
   });
-  const query = createAnchor({
-    frame,
-    track: t,
+  const pause = () => {
+    playback.pause();
+    setAutomatic(false);
+  };
+  const open = (source: DocumentSource) => {
+    pause();
+    if (document.activeElement instanceof HTMLElement)
+      triggers.set(source, document.activeElement);
+    add(source);
+    queueMicrotask(() =>
+      root
+        .querySelector<HTMLButtonElement>(
+          `[aria-label="Close ${source} split"]`
+        )
+        ?.focus({ preventScroll: true })
+    );
+  };
+  const close = (source: DocumentSource) => {
+    pause();
+    const remaining = sources().filter((item) => item !== source);
+    setSources(remaining);
+    setActive(remaining.at(-1));
+    queueMicrotask(() => {
+      const next =
+        narrow() && remaining.length
+          ? root.querySelector<HTMLButtonElement>(
+              `[aria-label="Close ${remaining.at(-1)} split"]`
+            )
+          : triggers.get(source);
+      next?.focus({ preventScroll: true });
+    });
+  };
+  const pointer = createDemoPointer({
+    frame: () => root,
     target: () =>
-      menu()
-        ? {
-            selector: '[data-mention-query]',
-            place: (rect): Point => ({ x: rect.left, y: rect.bottom + 6 }),
-          }
+      automatic() && !(narrow() && sources().length)
+        ? phase() === 1
+          ? '[data-doc-mention="email"]'
+          : phase() === 3 && width() >= 1020
+            ? '[data-doc-mention="task"]'
+            : undefined
         : undefined,
   });
-  const menuLeft = (x: number) => {
-    const width = overlay?.clientWidth ?? 0;
-    return Math.max(8, Math.min(x, width - Math.min(384, width - 16) - 8));
-  };
   onMount(() => {
-    const element = frame();
-    if (!element) return;
-    const resize = new ResizeObserver(() =>
-      setWide(element.clientWidth >= 700)
-    );
-    resize.observe(element);
-    onCleanup(() => resize.disconnect());
+    const measure = () => setWidth(splits.clientWidth);
+    const observer = new ResizeObserver(measure);
+    observer.observe(splits);
+    measure();
+    onCleanup(() => observer.disconnect());
   });
-  // Wide windows keep References open beside the doc. Narrow ones open the
-  // panel over it once the paragraph is written.
-  const panelOpen = () =>
-    wide() || (clock.done() && !clock.reduced()) ? true : undefined;
-  const covered = () => !wide() && panelOpen() === true;
   return (
-    <div
-      ref={root}
-      class="doc-story doc-story-page-fade doc-story-split"
-      data-live={clock.live()}
-    >
+    <div class="doc-story" ref={root}>
       <ProductDemo
-        label="Mention a task, a company, an email, and a channel in a doc"
-        onInteract={clock.takeOver}
-        height={560}
+        label="Open email and tasks beside the Website brief"
+        height={630}
         mobileHeight={620}
+        onInteract={pause}
       >
-        <DocumentFrame
-          title="Q3 launch plan"
-          tags={['Launch', 'Product']}
-          panelOpen={panelOpen()}
-          panel={<ReferencesPanel />}
-          overlay={
-            <div ref={overlay} class="doc-story-overlay" aria-hidden="true">
-              <Show when={menu()}>
-                {(open) => (
-                  <Show when={query()}>
-                    {(point) => (
-                      <DocMentionMenu
-                        groups={open().groups}
-                        selected={open().selected}
-                        style={{
-                          left: `${menuLeft(point().x)}px`,
-                          top: `${point().y}px`,
-                        }}
-                      />
-                    )}
-                  </Show>
-                )}
-              </Show>
-              <Show when={clock.live() && !covered() && caret()}>
-                {(point) => (
-                  <DemoCursor
-                    label="Jacob"
-                    class="doc-story-cursor"
-                    style={{
-                      transform: `translate(${point().x}px, ${point().y}px)`,
-                    }}
-                  />
-                )}
-              </Show>
-            </div>
-          }
+        <div
+          ref={splits}
+          class="doc-multi-split"
+          data-narrow={narrow()}
+          data-open={sources().length > 0}
+          data-pane-count={sources().length + 1}
         >
-          <h2>Before Thursday</h2>
-          <p>
-            <For each={timeline}>
-              {(segment, index) => (
-                <>
-                  {'text' in segment ? (
-                    typed(segment.text, t(), segment.from, segment.to)
-                  ) : (
-                    <Show
-                      when={t() >= segment.pick}
-                      fallback={
-                        <Show when={t() >= start(segment)}>
-                          <span class="doc-mention-query" data-mention-query>
-                            @
-                            {typed(
-                              segment.query,
-                              t(),
-                              segment.queryFrom,
-                              segment.queryTo
-                            )}
-                          </span>
-                        </Show>
-                      }
-                    >
-                      <DocMention item={segment.item} />
-                    </Show>
-                  )}
-                  <Show when={index() === active()}>
-                    <span class="doc-caret" data-caret="jacob" />
-                  </Show>
-                </>
-              )}
-            </For>
-          </p>
-          <p>
-            Launch is Thursday at 9.{' '}
-            <DocMention item={{ kind: 'person', label: 'Julia' }} /> sends the
-            announcement once the invite fix ships.
-          </p>
-          <h2>Launch checklist</h2>
-          <ul class="md-list md-check">
-            <li class="checked md-strike text-ink-extra-muted">
-              Finalize the product story
-            </li>
-            <li>Send the customer email</li>
-            <li>Publish the changelog</li>
-          </ul>
-          <h2>Owners</h2>
-          <p>
-            Julia owns the announcement and the customer email. Teo owns the
-            deploy and release checks.
-          </p>
-        </DocumentFrame>
-      </ProductDemo>
-    </div>
-  );
-}
-
-/** MarkdownSidePanelSections: Tags, Properties, and References (N). */
-function ReferencesPanel() {
-  return (
-    <>
-      <PanelSection title="Tags" open>
-        <div class="doc-panel-tags">
-          <For each={['Launch', 'Product']}>
-            {(tag) => (
-              <span class="sample-file-tag">
-                <TagDot label={tag} />
-                {tag}
-              </span>
+          <div
+            class="doc-multi-original dummy-main"
+            inert={narrow() && !!active()}
+            aria-hidden={narrow() && !!active()}
+          >
+            <DocumentFrame
+              title={PROJECT_TITLE}
+              tags={PROJECT_TAGS}
+              panel={
+                <PanelSection title="References (1)" open>
+                  <p class="doc-ref-head">
+                    Jacob in{' '}
+                    <DocumentSourceLink source="channel" onOpen={open} />
+                  </p>
+                  <p class="doc-ref-body">
+                    put everything in here · Website brief
+                  </p>
+                </PanelSection>
+              }
+            >
+              <h2>Pricing</h2>
+              <p>
+                Use the details from{' '}
+                <DocumentSourceLink source="email" onOpen={open} />.
+              </p>
+              <p>{PROJECT_INTRO}</p>
+              <h2>Implementation</h2>
+              <p>
+                Teo owns <DocumentSourceLink source="task" onOpen={open} />.
+                Check mobile before publishing.
+              </p>
+              <h2>Discussion</h2>
+              <p>
+                Shared in <DocumentSourceLink source="channel" onOpen={open} />.
+                Teo will post the preview there.
+              </p>
+            </DocumentFrame>
+          </div>
+          <For each={sources()}>
+            {(source) => (
+              <div
+                class="doc-multi-pane dummy-main"
+                data-active={active() === source}
+                inert={narrow() && active() !== source}
+                aria-hidden={narrow() && active() !== source}
+              >
+                <DocumentSourceView
+                  source={source}
+                  onClose={() => close(source)}
+                  autoFocus={false}
+                  label={`Linked ${source}`}
+                  closeLabel={`Close ${source} split`}
+                />
+              </div>
             )}
           </For>
         </div>
-      </PanelSection>
-      <PanelSection title="References (2)" open>
-        <div class="doc-ref-row">
-          <div class="doc-ref-head">
-            <img src={homepagePeople.julia.photo} alt="" />
-            <b>Julia</b>
-            <span class="doc-ref-in">in</span>
-            <span class="doc-ref-source">
-              <HashStraight />
-              <span>launch</span>
-            </span>
-            <span class="doc-ref-time">· 2 hours ago</span>
-          </div>
-          <div class="doc-ref-body">
-            Plan for Thursday is in{' '}
-            <DocMention item={{ kind: 'document', label: 'Q3 launch plan' }} />.
-            Comments welcome before noon.
-          </div>
-        </div>
-        <div class="doc-ref-row">
-          <div class="doc-ref-head">
-            <img src={homepagePeople.teo.photo} alt="" />
-            <b>Teo</b>
-            <span class="doc-ref-in">in</span>
-            <span class="doc-ref-source">
-              <ListChecks class="text-task" />
-              <span>Fix the team invite handoff</span>
-            </span>
-            <span class="doc-ref-time">· 3 hours ago</span>
-          </div>
-        </div>
-      </PanelSection>
-    </>
+      </ProductDemo>
+      <Show when={pointer()}>
+        {(p) => (
+          <DemoCursor
+            label="Jacob"
+            class="doc-organize-pointer"
+            style={{ transform: `translate(${p().x}px, ${p().y}px)` }}
+          />
+        )}
+      </Show>
+    </div>
   );
 }

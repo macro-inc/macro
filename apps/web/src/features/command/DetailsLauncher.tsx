@@ -14,6 +14,7 @@ export default function DetailsLauncher(props: LauncherInnerProps) {
           onSelect={state.select}
           onChoose={state.choose}
           showHotkeys={!state.searchMode()}
+          shiftHeld={state.shiftHeld()}
           scrollSelectedIntoView={state.scrollSelectedIntoView()}
         />
       )}

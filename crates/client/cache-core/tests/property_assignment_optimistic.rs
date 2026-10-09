@@ -1,7 +1,9 @@
 //! First assignments remain linked across enqueue, replay, settlement and rollback.
 
 use cache_core::engine::{BeginOptimisticWrite, Engine, ReadResult};
-use cache_core::link_patch::{LinkOperation, LinkPathSegment, OptimisticLinkPatch, RecordRoot};
+use cache_core::link_patch::{
+    LinkOperation, LinkPathSegment, OptimisticLinkPatch, QueryRevalidation, RecordRoot,
+};
 use cache_core::queue::{MutationClaimRequest, MutationClaimToken};
 use cache_core::record_selection::RecordSelection;
 use cache_core::store::{InMemoryStorage, Storage};
@@ -304,6 +306,68 @@ fn failure_removes_the_temporary_link() {
 }
 
 #[test]
+fn persisted_recovery_query_runs_only_when_the_assignment_link_cannot_be_repaired() {
+    block_on(async {
+        for (include_patch, evict_parent) in [(true, false), (false, false), (true, true)] {
+            let mut engine = seeded().await;
+            let recovery = QueryRevalidation {
+                query: QUERY.into(),
+                operation_name: Some("Properties".into()),
+                variables_json: serde_json::to_string(&variables()).unwrap(),
+                only_on_link_failure: true,
+            };
+            let patches = if include_patch { vec![patch()] } else { vec![] };
+            let txn = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: UUID,
+                        query: MUTATION,
+                        operation_name: Some("Set"),
+                        variables: &variables(),
+                        data: &response("temporary-1", "urgent"),
+                        link_patches: &patches,
+                        revalidations: std::slice::from_ref(&recovery),
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            let mut storage = engine.into_storage();
+            if evict_parent {
+                storage
+                    .delete_batch(&[EntityKey("GraphqlSoupDocument:task-1".into())])
+                    .await
+                    .unwrap();
+            }
+            // Recovery intent survives closing the original tab before commit.
+            let mut engine = Engine::new(storage);
+            let claim = claim(&mut engine, 2).await;
+            let result = engine
+                .commit_optimistic_write(
+                    txn,
+                    claim,
+                    MUTATION,
+                    Some("Set"),
+                    &variables(),
+                    &response("server-1", "urgent"),
+                )
+                .await
+                .unwrap();
+            if include_patch && !evict_parent {
+                assert!(result.revalidations.is_empty());
+                assert_eq!(properties(&read(&mut engine).await)[0]["id"], "server-1");
+            } else {
+                assert_eq!(result.revalidations, vec![recovery]);
+            }
+        }
+    });
+}
+
+#[test]
 fn later_edit_rebases_over_new_server_id_without_duplicate_properties() {
     block_on(async {
         let mut engine = seeded().await;
@@ -340,5 +404,80 @@ fn later_edit_rebases_over_new_server_id_without_duplicate_properties() {
         assert_eq!(properties(&data).as_array().unwrap().len(), 1);
         assert_eq!(properties(&data)[0]["id"], "server-1");
         assert_eq!(properties(&data)[0]["value"]["optionIds"], json!(["low"]));
+    });
+}
+
+#[test]
+fn skipped_uncached_query_links_keep_the_recovery_query_after_commit() {
+    block_on(async {
+        for cache_user in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            if cache_user {
+                engine
+                    .write_query(
+                        None,
+                        "query { user { id } }",
+                        None,
+                        &serde_json::Map::new(),
+                        &json!({"user":{"id":"user-1"}}),
+                        None,
+                    )
+                    .await
+                    .unwrap();
+            }
+            let recovery = QueryRevalidation {
+                query: "query { user { emailThread { messages { id } } } }".into(),
+                operation_name: None,
+                variables_json: "{}".into(),
+                only_on_link_failure: true,
+            };
+            let recipe = OptimisticLinkPatch {
+                query: recovery.query.clone(),
+                record_root: None,
+                operation_name: None,
+                variables_json: "{}".into(),
+                path: ["user", "emailThread", "messages"]
+                    .into_iter()
+                    .map(|field| LinkPathSegment::Field {
+                        field: field.into(),
+                    })
+                    .collect(),
+                operation: LinkOperation::Remove {
+                    entity_key: EntityKey("GraphqlSoupEmailMessage:draft".into()),
+                },
+            };
+            let txn = engine
+                .begin_optimistic_write(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: UUID,
+                        query: MUTATION,
+                        operation_name: Some("Set"),
+                        variables: &variables(),
+                        data: &response("temporary-1", "urgent"),
+                        link_patches: &[recipe],
+                        revalidations: std::slice::from_ref(&recovery),
+                        created_at_ms: 1,
+                    },
+                )
+                .await
+                .unwrap()
+                .0;
+            let token = claim(&mut engine, 2).await;
+            let committed = engine
+                .commit_optimistic_write(
+                    txn,
+                    token,
+                    MUTATION,
+                    Some("Set"),
+                    &variables(),
+                    &response("server-1", "urgent"),
+                )
+                .await
+                .unwrap();
+            assert!(committed.revalidations.contains(&recovery));
+        }
     });
 }

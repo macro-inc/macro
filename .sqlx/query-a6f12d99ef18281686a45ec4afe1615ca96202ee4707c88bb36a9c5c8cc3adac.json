@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session AS session SET task_id = $3\n            FROM (\n                SELECT id, task_id FROM agent_session WHERE id = $1 AND owner_id = $2 FOR UPDATE\n            ) AS previous\n            WHERE session.id = previous.id\n            RETURNING\n                session.pull_request_url,\n                previous.task_id IS DISTINCT FROM $3 AS \"changed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pull_request_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "changed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null
+    ]
+  },
+  "hash": "a6f12d99ef18281686a45ec4afe1615ca96202ee4707c88bb36a9c5c8cc3adac"
+}

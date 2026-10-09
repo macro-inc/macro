@@ -58,7 +58,7 @@ export function OptionListEditor(props: {
                 </Show>
               </Popover.Trigger>
               <Popover.Portal>
-                <Popover.Content class="z-action-menu rounded-lg border border-edge bg-menu p-2 shadow-menu outline-none">
+                <Popover.Content class="menu-surface z-action-menu p-2 outline-none">
                   <ColorSwatches
                     size="sm"
                     value={option().color ?? undefined}

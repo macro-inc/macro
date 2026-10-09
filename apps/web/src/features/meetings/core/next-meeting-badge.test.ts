@@ -17,6 +17,7 @@ const event = (
   allDay: false,
   eventId: `${start}-${end}`,
   occurrenceKey: '',
+  isMeeting: true,
   ...overrides,
 });
 
@@ -123,6 +124,33 @@ describe('nextMeetingBadge', () => {
         NOW
       )
     ).toBeUndefined();
+  });
+
+  it('ignores events that are not meetings', () => {
+    expect(
+      nextMeetingBadge(
+        [
+          event('2026-10-07T14:00:00Z', '2026-10-07T18:00:00Z', {
+            isMeeting: false,
+          }),
+          event('2026-10-07T15:10:00Z', '2026-10-07T15:30:00Z', {
+            isMeeting: false,
+          }),
+        ],
+        NOW
+      )
+    ).toBeUndefined();
+    expect(
+      nextMeetingBadge(
+        [
+          event('2026-10-07T14:00:00Z', '2026-10-07T18:00:00Z', {
+            isMeeting: false,
+          }),
+          event('2026-10-07T15:25:00Z', '2026-10-07T15:30:00Z'),
+        ],
+        NOW
+      )
+    ).toMatchObject({ kind: 'soon', label: '25m' });
   });
 
   it('ignores events with unparseable or inverted times', () => {

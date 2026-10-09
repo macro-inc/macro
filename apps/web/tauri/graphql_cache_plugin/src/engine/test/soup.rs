@@ -134,6 +134,53 @@ fn write_data(
 }
 
 #[test]
+fn native_live_query_returns_field_deltas_from_the_shared_engine() {
+    let handle = spawn_handle();
+    let project_key = format!("GraphqlSoupProject:{}", id(100));
+    let project_data = |favorite| {
+        json!({"user": {"id": VIEWER, "soup": {
+            "items": [{"__typename": "GraphqlSoupProject", "id": id(100), "cacheProjection": null,
+                "ownerId": VIEWER, "parentId": null, "createdAt": TIMESTAMP, "updatedAt": TIMESTAMP,
+                "notifications": [], "properties": [], "isFavorited": favorite}],
+        }}})
+    };
+    write_data(
+        &handle,
+        include_str!("project.graphql"),
+        project_data(false),
+        Some(VIEWER),
+    );
+    let mut filters = filters();
+    filters["emailFilter"] = json!({"tree": {"literal": {"threadId": id(0)}}});
+    filters["projectFilter"] = json!({"literal": {"projectIdSelf": id(100)}});
+    let live_request = |since: Option<&str>| {
+        serde_json::from_value(json!({
+        "filters": filters, "sortMethod": "UPDATED_AT", "sortDirection": "DESC", "limit": 20,
+        "baseline": [{"key":project_key, "sortTimestamp":TIMESTAMP}],
+        "liveQuery": { "id":"native-live", "document":"fragment Item on GraphqlSoupProject { id favorite: isFavorited }", "fragmentName":"Item", "since":since },
+    })).unwrap()
+    };
+    let first = evaluate(&handle, live_request(None));
+    assert_eq!(first["kind"], "live-query");
+    assert_eq!(first["upserts"].as_array().unwrap().len(), 1);
+    write_data(
+        &handle,
+        include_str!("project.graphql"),
+        project_data(true),
+        Some(VIEWER),
+    );
+    let next = evaluate(&handle, live_request(first["revision"].as_str()));
+    assert_eq!(next["reset"], false);
+    assert!(next.get("keys").is_none());
+    assert!(next["upserts"].as_array().unwrap().is_empty());
+    assert_eq!(next["patches"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        next["patches"][0]["fields"],
+        json!([{ "path":["favorite"], "value":true }])
+    );
+}
+
+#[test]
 fn native_backfill_evaluates_unseen_mail_filters_without_query_baselines() {
     let handle = spawn_handle();
     assert_eq!(

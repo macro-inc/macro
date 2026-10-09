@@ -1,5 +1,12 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createEffect, For, type JSX, onCleanup, onMount } from 'solid-js';
+import {
+  createEffect,
+  For,
+  type JSX,
+  lazy,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { createMemoryHistory, type MemoryHistory } from '../history/memory';
@@ -449,6 +456,38 @@ describe('<SplitRouter.Router>', () => {
     expect(history.read().path).toBe('/login');
   });
 
+  it('shows a route’s loading view while its lazy component loads', async () => {
+    let resolveInbox!: () => void;
+    const InboxView = lazy(
+      () =>
+        new Promise<{ default: () => JSX.Element }>((resolve) => {
+          resolveInbox = () => resolve({ default: () => <p>inbox</p> });
+        })
+    );
+    render(() => (
+      <Router
+        history={createMemoryHistory('/inbox')}
+        paneStore={createMemoryPaneStore()}
+        policy={createTestPolicy().policy}
+        defaultRoute={defaultRoute}
+      >
+        <Route definition={app} component={AppLayout}>
+          <Route definition={home} component={() => <p>home</p>} />
+          <Route
+            definition={inbox}
+            component={InboxView}
+            loading={() => <p>inbox skeleton</p>}
+          />
+        </Route>
+      </Router>
+    ));
+
+    expect(screen.getByText('inbox skeleton')).toBeTruthy();
+    resolveInbox();
+    expect(await screen.findByText('inbox')).toBeTruthy();
+    expect(screen.queryByText('inbox skeleton')).toBeNull();
+  });
+
   it('reads routes from arrays and drops false children', () => {
     const extra = [inbox].map((definition) => (
       <Route definition={definition} component={() => <p>inbox</p>} />
@@ -511,7 +550,7 @@ describe('<SplitRouter.Router>', () => {
           <Route definition={withComponent} />
         </Router>
       ))
-    ).toThrow(/must not set children or component/);
+    ).toThrow(/must not set children, component, or loading/);
     expect(() =>
       render(() => (
         <Router {...options}>

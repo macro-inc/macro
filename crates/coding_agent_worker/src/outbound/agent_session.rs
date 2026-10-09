@@ -10,6 +10,7 @@ use agent_session::inbound::axum_router::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::StatusCode;
+use trigger_context::TriggerContext;
 
 use crate::config::{HarnessCredentials, MacroApi};
 
@@ -100,6 +101,7 @@ impl HarnessApi {
         session: AgentSessionId,
         actor: &MacroUserIdStr<'static>,
         action: AgentAction,
+        context: Option<TriggerContext>,
     ) -> Result<(), ApiError> {
         let response = self
             .http
@@ -108,6 +110,7 @@ impl HarnessApi {
             .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
             .json(&ControlRequest {
                 action_id: None,
+                context,
                 action,
             })
             .send()
@@ -116,14 +119,16 @@ impl HarnessApi {
         Ok(())
     }
 
-    /// Deliver a prompt to a session, acting for the user who sent it.
+    /// Deliver a prompt to a session, acting for the user who sent it, with
+    /// why the agent was called as the trigger read it.
     pub async fn prompt(
         &self,
         session: AgentSessionId,
         sender: &MacroUserIdStr<'static>,
         text: &str,
+        context: Option<TriggerContext>,
     ) -> Result<(), ApiError> {
-        self.control(session, sender, AgentAction::prompt(text))
+        self.control(session, sender, AgentAction::prompt(text), context)
             .await
     }
 }

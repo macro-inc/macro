@@ -329,7 +329,7 @@ export function CompanyDisplayMenu() {
   return (
     <Dropdown>
       <Tooltip label="Display options">
-        <Dropdown.Trigger depth={2} class="bg-surface" label="Display options">
+        <Dropdown.Trigger variant="ghost" label="Display options">
           <SlidersIcon />
         </Dropdown.Trigger>
       </Tooltip>

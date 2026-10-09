@@ -194,7 +194,10 @@ async fn toggle_auto_join_domain_generic_domain_response_is_bad_request() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(body_text.contains("gmail.com"));
+    assert_eq!(
+        body_text,
+        r#"{"message":"Auto-join isn't available for gmail.com"}"#
+    );
 }
 
 #[tokio::test]

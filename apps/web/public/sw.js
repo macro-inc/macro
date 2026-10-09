@@ -4,8 +4,8 @@
  *
  * - Navigations get the cached app shell (index.html) immediately and
  *   revalidate it in the background, so a new tab skips the HTML round trip.
- *   A shell is cached only after its entry JS and CSS are, so a cached shell
- *   can always boot.
+ *   A shell is cached only after its entry JS, CSS, and preloaded WASM are, so
+ *   a cached shell can always boot.
  * - Content-hashed assets are immutable: served cache-first from Cache
  *   Storage, tagged with the build that fetched them, and pruned to the
  *   current and previous builds.
@@ -127,12 +127,15 @@ async function refreshShell(request) {
     }
   }
   if (currentBuild !== build) {
-    await pruneAssets(new Set([build, currentBuild ?? build]));
+    await pruneAssets(new Set([build, currentBuild ?? build]), new Set(assets));
   }
   return response;
 }
 
-/** The entry module, its preloads, and stylesheets referenced by a shell. */
+/**
+ * The entry module, its preloads, and stylesheets referenced by a shell. A
+ * `rel="preload"` asset (Loro's WASM) is needed to boot, so it counts too.
+ */
 function entryAssets(html) {
   const paths = new Set();
   for (const match of html.matchAll(
@@ -141,7 +144,7 @@ function entryAssets(html) {
     const tag = match[0];
     const isEntry =
       tag.startsWith('<script') ||
-      /\brel="(?:stylesheet|modulepreload)"/.test(tag);
+      /\brel="(?:stylesheet|modulepreload|preload)"/.test(tag);
     const path = new URL(match[1], self.location.origin).pathname;
     if (isEntry && HASHED_ASSET.test(path)) paths.add(path);
   }
@@ -180,10 +183,15 @@ function tagged(response, build) {
   });
 }
 
-/** Drops cached assets fetched by builds other than `keep`. */
-async function pruneAssets(keep) {
+/**
+ * Drops cached assets fetched by builds other than `keep`, except the current
+ * shell's own: an asset whose hash survived several builds (Loro's WASM) is
+ * still tagged with the build that first fetched it.
+ */
+async function pruneAssets(keep, shellAssets) {
   const cache = await caches.open(ASSET_CACHE);
   for (const request of await cache.keys()) {
+    if (shellAssets.has(new URL(request.url).pathname)) continue;
     const response = await cache.match(request);
     if (!keep.has(response?.headers.get(BUILD_HEADER) ?? '')) {
       await cache.delete(request);

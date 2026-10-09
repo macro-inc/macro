@@ -85,6 +85,32 @@ fn read_response_conversion_preserves_unsafe_integer_errors() {
 }
 
 #[wasm_bindgen_test]
+fn watch_patches_reject_unsafe_integers_like_hits() {
+    use cache_core::engine::live_query::{LiveFieldPatch, ResponsePathSegment};
+    use cache_core::engine::watch_query::QueryUpdate;
+    let value = serde_json::json!({"nested": [{"value": 9_007_199_254_740_992_u64}]});
+    let hit = QueryUpdate::Hit {
+        data: std::sync::Arc::new(value.clone()),
+        revision: "1".into(),
+    };
+    let patch = QueryUpdate::Patch {
+        patches: vec![LiveFieldPatch {
+            path: vec![ResponsePathSegment::Field("payload".into())],
+            value,
+        }],
+        revision: "2".into(),
+    };
+    for update in [&hit, &patch] {
+        assert_eq!(
+            read_response_to_js(update, query_update_values(update))
+                .unwrap_err()
+                .as_string(),
+            to_js(update).unwrap_err().as_string()
+        );
+    }
+}
+
+#[wasm_bindgen_test]
 fn build_info_reports_compiled_versions_without_opening_storage() {
     let info: serde_json::Value =
         serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();
@@ -287,6 +313,7 @@ async fn resolved(promise: js_sys::Promise) -> JsValue {
 
 fn empty_js_write_result() -> JsWriteResult {
     JsWriteResult {
+        field_changes: None,
         identity_errors: Vec::new(),
         mutation_uuid: None,
         revision: "0".to_string(),

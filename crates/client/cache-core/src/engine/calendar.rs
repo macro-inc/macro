@@ -99,6 +99,16 @@ impl<S: CalendarRangeStorage> Engine<S> {
         let affected_ops = self.deps.ops_for_keys(changed.iter());
         let revision = self.advance_revision()?;
         Ok(WriteResult {
+            // Deletions carry no values, so invalidation is exact even beneath
+            // optimistic layers.
+            field_changes: Some(
+                changed
+                    .iter()
+                    .map(|key| crate::field_changes::RecordFieldChange::Invalidate {
+                        key: key.clone(),
+                    })
+                    .collect(),
+            ),
             identity_errors: Vec::new(),
             revision,
             revision_advanced: true,

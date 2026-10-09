@@ -29,6 +29,17 @@ vi.mock('@core/heic/service', () => ({
   },
 }));
 
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
+
 beforeEach(() => convertFile.mockReset());
 
 it('refuses inline media in an already locked composer', async () => {

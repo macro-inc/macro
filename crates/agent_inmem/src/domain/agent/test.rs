@@ -2022,3 +2022,128 @@ async fn downgrade_and_permission_failure_cannot_run_a_paid_model() {
         .await;
     }
 }
+
+#[tokio::test]
+async fn text_only_model_rejects_new_and_historical_images_without_running_the_engine() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("red".into())]));
+    with_admission(
+        Arc::clone(&engine),
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, state| {
+            let image_prompt = || {
+                PromptRequest::new(
+                    session.clone(),
+                    vec![ContentBlock::ResourceLink(
+                        ResourceLink::new(
+                            "red.png",
+                            "https://static.example/file/11111111-1111-4111-8111-111111111111",
+                        )
+                        .mime_type("image/png".to_owned()),
+                    )],
+                )
+            };
+            state.set_model("fireworks/glm-5p3".to_owned());
+            let error = connection
+                .send_request(image_prompt())
+                .block_task()
+                .await
+                .expect_err("a text-only model must reject images");
+            assert!(format!("{error:?}").contains("does not support images"));
+            assert!(format!("{error:?}").contains("unsupported_image_input"));
+            assert!(engine.requests().is_empty());
+
+            // A rejected image must not enter history or poison a text-only turn.
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("text-only turns still work");
+            state.set_model("fireworks/kimi-k3".to_owned());
+            connection
+                .send_request(image_prompt())
+                .block_task()
+                .await
+                .expect("vision model accepts the original image");
+            state.set_model("fireworks/glm-5p3".to_owned());
+            let error = connection
+                .send_request(text_prompt(&session, "what color was it?"))
+                .block_task()
+                .await
+                .expect_err("historical images need vision too");
+            assert!(format!("{error:?}").contains("does not support images"));
+            assert_eq!(engine.requests().len(), 2);
+        },
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
+    struct SpeedEngine(ScriptedEngine);
+    impl TurnEngine for SpeedEngine {
+        fn supported_models(&self) -> &[&str] {
+            &["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"]
+        }
+        fn run_turn(
+            &self,
+            request: TurnRequest,
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+            self.0.run_turn(request)
+        }
+    }
+    let engine = Arc::new(SpeedEngine(ScriptedEngine::new(vec![])));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast"
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-opus-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                "speed",
+                "fast",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "fast please"))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "anthropic/claude-sonnet-5-5",
+            ))
+            .block_task()
+            .await
+            .unwrap();
+        connection
+            .send_request(text_prompt(&session, "standard please"))
+            .block_task()
+            .await
+            .unwrap();
+    })
+    .await;
+    let requests = engine.0.requests();
+    assert_eq!(requests[0].speed, agent::ModelSpeed::Fast);
+    assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+}

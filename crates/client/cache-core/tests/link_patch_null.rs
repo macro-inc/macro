@@ -41,7 +41,7 @@ fn strict_patch_skips_a_null_parent_without_inventing_a_thread() {
     let mut effective = records(CacheValue::Null);
     let before = effective.clone();
     let mut updates = BTreeMap::new();
-    apply_link_patches(
+    let applied = apply_link_patches(
         cache_core::meta::bundled_schema_ref(),
         &mut effective,
         &mut updates,
@@ -49,6 +49,7 @@ fn strict_patch_skips_a_null_parent_without_inventing_a_thread() {
         false,
     )
     .unwrap();
+    assert!(!applied);
     assert_eq!(effective, before);
     assert!(updates.is_empty());
 }
@@ -68,7 +69,7 @@ fn strict_query_patch_skips_an_uncached_normalized_relation() {
         }
         let before = effective.clone();
         let mut updates = BTreeMap::new();
-        apply_link_patches(
+        let applied = apply_link_patches(
             cache_core::meta::bundled_schema_ref(),
             &mut effective,
             &mut updates,
@@ -76,6 +77,7 @@ fn strict_query_patch_skips_an_uncached_normalized_relation() {
             false,
         )
         .unwrap();
+        assert!(!applied);
         assert_eq!(effective, before);
         assert!(updates.is_empty());
     }

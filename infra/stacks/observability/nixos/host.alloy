@@ -1,0 +1,68 @@
+prometheus.exporter.unix "host" {
+  disable_collectors = ["textfile"]
+  enable_collectors = ["systemd"]
+  systemd {
+    unit_include = "(grafana|loki|tempo|prometheus|nginx|alloy|alloy-ingest|observability-.*|amazon-cloudwatch-agent)\\.service"
+    task_metrics = true
+    enable_restarts = true
+    start_time = true
+  }
+}
+
+prometheus.scrape "host" {
+  targets = prometheus.exporter.unix.host.targets
+  job_name = "observability/host"
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.exporter.self "host_alloy" {}
+prometheus.scrape "host_alloy" {
+  targets = prometheus.exporter.self.host_alloy.targets
+  job_name = "observability/host-alloy"
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.remote_write "local" {
+  endpoint { url = "http://127.0.0.1:9090/api/v1/write" }
+  wal {
+    min_keepalive_time = "5m"
+    max_keepalive_time = "1h"
+  }
+}
+
+loki.relabel "journal" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    regex = "(grafana|loki|tempo|prometheus|nginx|alloy|alloy-ingest|observability-.*|amazon-cloudwatch-agent|systemd-.*)\\.service"
+    action = "keep"
+  }
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label = "unit"
+  }
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label = "level"
+  }
+}
+
+loki.source.journal "host" {
+  max_age = "1h"
+  labels = {job = "observability/journal", instance = constants.hostname}
+  relabel_rules = loki.relabel.journal.rules
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.source.journal "kernel" {
+  matches = "_TRANSPORT=kernel"
+  max_age = "1h"
+  labels = {job = "observability/kernel", instance = constants.hostname}
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint { url = "http://127.0.0.1:3100/loki/api/v1/push" }
+}

@@ -88,7 +88,6 @@
   .review-channel-invite { display: none; }
   .review-message-body { font-size: 14px; }
   .review-toast { right: 12px; bottom: 12px; width: calc(100% - 24px); }
-  .product-page #coding-agents.feature-page-section { padding-top: 56px; }
   .product-page #coding-agents .homepage-feature-title { gap: 16px; }
   .product-page #coding-agents .homepage-feature-heading h2 { font-size: clamp(28px, 3.2vw, 40px); white-space: normal; }
   /* The homepage lays this demo out at an 18px gutter; give it the same room. */
@@ -98,3 +97,56 @@
   .review-flow-pointer { display: none; }
   .review-home-row[data-arriving='true'], .review-flow-card { animation: none; }
 }
+
+/* GitHub scenes keep the same native pane hierarchy at every frame width. */
+.github-surface, .github-task-scene { display: flex; flex: 1; min-width: 0; min-height: 0; container: github-scene / inline-size; }
+.github-conversation, .github-detail, .github-task-document, .github-task-pr { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.github-detail, .github-task-pr { border-left: 1px solid var(--color-edge); }
+.github-surface[data-detail]:not([data-detail='']) .github-conversation { flex: 0 0 40%; }
+.github-detail-back { flex: none; padding: 5px 8px; border-bottom: 1px solid var(--color-edge-muted); }
+.github-detail-back svg { width: 14px; height: 14px; }
+.github-conversation .sample-chat-log { padding-block: 20px; }
+.github-conversation .sample-chat-log > .sample-channel-thread:last-child { margin-bottom: 0; }
+.github-chip-pr { padding: 2px 6px; color: var(--color-success); }
+.github-session { padding: 24px; }
+.review-pr-layout { display: flex; flex: 1; min-width: 0; min-height: 0; position: relative; container: pr-layout / inline-size; }
+.review-pr-document { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.review-pr-layout[data-changes='true'] .review-pr-document { flex-basis: 44%; }
+.review-pr-layout[data-spotlit='true'] .review-pr-document { display: none; }
+.github-changes { display: flex; flex: 1 1 56%; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--color-edge); background: var(--color-panel); }
+.github-branch { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px/1.5 var(--font-mono); }
+.github-diff-tools { display: flex; align-items: center; gap: 8px; padding: 8px; font-size: 12px; color: var(--color-ink-muted); }
+.github-file-tree { display: flex; flex-direction: column; padding: 0 12px 8px; font: 12px/1.5 var(--font-mono); }
+.github-file-tree button { padding: 6px; text-align: left; border-radius: 4px; }
+.github-file-tree button:hover, .github-file-tree button[aria-current] { background: var(--color-hover); }
+.github-diff-scroll { min-height: 0; overflow: auto; flex: 1; padding-bottom: 20px; }
+.github-file-heading { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border-block: 1px solid var(--color-edge-muted); font: 11px/1.5 var(--font-mono); text-align: left; }
+.github-file-heading span:nth-child(2) { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.github-diff-render { color-scheme: dark; min-width: 0; }
+.github-merge-dialog { width: min(420px, calc(100vw - 32px)); padding: 24px; border: 1px solid var(--color-edge); border-radius: 16px; background: var(--color-panel); color: var(--color-ink); font-family: 'Inter Variable', Inter, sans-serif; }
+.github-merge-dialog h2 { font-size: 18px; font-weight: 600; }
+.github-merge-dialog p { margin-top: 12px; font-size: 14px; color: var(--color-ink-muted); }
+@container pr-layout (max-width: 600px) {
+  .review-pr-layout[data-changes='true'] > .review-pr-document { display: none; }
+  .github-changes { border-left: 0; }
+  .github-changes-label { display: none; }
+  .review-pr { padding: 28px 20px; }
+}
+@container github-scene (max-width: 700px) {
+  .github-surface[data-detail]:not([data-detail='']) > .github-conversation { display: none; }
+  .github-task-scene[data-pr-open='true'] > .github-task-document { display: none; }
+  .github-detail, .github-task-pr { border-left: 0; }
+}
+@media (max-width: 699px) {
+  .github-session { padding: 18px; }
+}
+.github-conversation { container: github-chat / inline-size; }
+.github-task-document { container: sample-main / inline-size; }
+@container github-chat (max-width: 640px) {
+  .github-conversation .sample-tabs-inset { display: none; }
+  .github-conversation .sample-chat-log { padding-inline: 8px; }
+}
+.github-task-scene { contain: layout; }
+.github-conversation .review-message-body .agent-answer { display: inline; }
+.github-diff-title { display: none; font: 500 13px/1.5 'Inter Variable', Inter, sans-serif; }
+@container pr-layout (max-width: 600px) { .github-diff-title { display: block; } }

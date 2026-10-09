@@ -11,6 +11,7 @@ fn prompt_entry(text: &str) -> QueuedEntry {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        context: None,
     }
 }
 
@@ -132,6 +133,7 @@ fn only_prompts_are_editable() {
         announce: None,
         announced: None,
         created_at: Utc::now(),
+        context: None,
     };
     queues.enqueue(session, compact.clone()).unwrap();
 

@@ -63,7 +63,7 @@
 .sample-company-list:hover {background:var(--color-hover)}
 .sample-discussion>summary {font-size:12px;color:var(--color-ink-muted);margin:12px 0}
 .sample-message-row {position:relative;display:grid;grid-template-columns:32px minmax(0,1fr);gap:8px;padding:8px;border-radius:6px;margin-bottom:12px}
-.sample-message-row:hover {background:color-mix(in srgb,var(--color-hover) 45%,transparent)}
+.sample-message-row:hover {background:var(--color-hover)}
 .sample-message-row[data-reply=true] {margin-left:40px;border-left:1px solid var(--color-edge);border-radius:0 0 0 16px;padding-left:16px}
 /* channel/Message/ActionMenu: a Toolbar straddling the row's top edge, shown on hover or focus. */
 .sample-message-actions {position:absolute;right:16px;top:0;transform:translateY(-50%);z-index:2;display:none;align-items:center;gap:4px;padding:6px;border-radius:12px;border:1px solid color-mix(in oklch,var(--color-content-0) 8%,transparent);background:var(--color-surface-2);box-shadow:0 4px 14px #0004}
@@ -71,7 +71,7 @@
 .sample-message-actions button:hover {background:var(--color-hover);color:var(--color-ink)}
 .sample-message-actions-divider {width:1px;height:16px;margin:0 2px;background:var(--color-edge-muted)}
 .sample-message-row:hover .sample-message-actions,.sample-message-row:focus-within .sample-message-actions,.sample-message-row[data-hovered=true] .sample-message-actions {display:flex}
-.sample-message-row[data-hovered=true] {background:color-mix(in srgb,var(--color-hover) 45%,transparent)}
+.sample-message-row[data-hovered=true] {background:var(--color-hover)}
 .sample-agent-badge {display:inline-flex;align-items:center;border-radius:999px;background:var(--color-hover);padding:2px 6px;font-size:11px;font-weight:500;line-height:1;color:var(--color-ink-muted)}
 .sample-agent-avatar {display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:var(--color-panel);border:1px solid var(--color-edge-muted);color:var(--color-ink)}
 .sample-agent-avatar[data-agent=claude] {color:#d97757}
@@ -116,7 +116,6 @@
 
 .sample-inline-input[aria-label="Company name"] {font-size:20px;line-height:28px;font-weight:600}
 .sample-inline-input[aria-label="Company description"] {font-size:14px;line-height:20px;color:var(--color-ink-muted)}
-.sample-message-row p {font-size:16px;line-height:24px}
 
 /* Measured against the signed-in app: task-list/ListPropertyValue and TaskGridLayout. */
 .dummy-task-row .sample-list-property {display:inline-flex;width:100%;max-width:100%;min-width:0;height:auto;min-height:0;align-items:center;justify-content:flex-start;gap:4px;overflow:hidden;border:0;border-radius:999px;padding:6px 8px;background:transparent;color:var(--color-ink);font-size:12px;line-height:15px;font-weight:400}
@@ -131,7 +130,7 @@
 .sample-chat-log {padding:0 12px 24px;overscroll-behavior-y:contain}
 .sample-chat-log .sample-message-row {padding:10px 8px 0;margin-bottom:0;gap:8px}
 .sample-chat-log .sample-message-row p {font-size:15px;line-height:24px;margin-top:2px;margin-bottom:2px}
-.sample-channel-thread {position:relative;margin-bottom:24px;isolation:isolate}
+.sample-channel-thread {position:relative;margin-bottom:12px;isolation:isolate}
 .sample-channel-thread[data-thread-open=true]:before {content:'';position:absolute;top:46px;bottom:32px;left:24px;width:1px;background:var(--color-edge);z-index:-1}
 .sample-thread-replies {margin-left:40px;position:relative}
 .sample-chat-log .sample-thread-replies .sample-message-row {margin-left:0;border:0;border-radius:6px;padding-left:8px;margin-top:8px}
@@ -141,7 +140,7 @@
 .sample-thread-avatars {display:flex}
 .sample-thread-avatars img {width:18px;height:18px;border-radius:50%;border:1.5px solid var(--color-surface-0);object-fit:cover}
 .sample-thread-avatars img + img {margin-left:-6px}
-.sample-thread-reply-button {display:flex;align-items:center;justify-content:center;margin:16px 0 0 8px;width:32px;height:32px;border:1px solid var(--color-edge);border-radius:50%;color:var(--color-ink-muted)}
+.sample-thread-reply-button {position:relative;display:flex;align-items:center;justify-content:center;margin:16px 0 0 8px;width:32px;height:32px;border:1px solid var(--color-edge);border-radius:50%;color:var(--color-ink-muted)}
 .sample-thread-editor {padding:12px 8px 0}
 .sample-email-thread .mail-thread-body {max-width:968px;padding:48px 24px}
 .sample-email-thread h3 {font-size:24px;line-height:32px;margin-bottom:20px}
@@ -154,7 +153,7 @@
 .sample-reply-fields>div,.sample-reply-fields>label {display:flex;align-items:center;gap:8px;min-height:40px}
 .sample-reply-fields>div>span:first-child,.sample-reply-fields>label>span {width:56px;color:var(--color-ink-extra-muted);flex-shrink:0}
 .sample-reply-fields input {min-width:0;flex:1;background:transparent;border:0;outline:none;color:var(--color-ink)}
-@media(max-width:650px){.sample-email-thread .mail-thread-body{padding:24px 12px}.sample-thread-replies{margin-left:28px}.sample-thread-replies .sample-message-row:before{left:-4px;width:4px}.sample-chat-log .sample-message-row p{font-size:14px}}
+@media(max-width:650px){.sample-email-thread .mail-thread-body{padding:24px 12px}.sample-thread-replies{margin-left:28px}.sample-thread-replies .sample-message-row:before{left:-4px;width:4px}}
 
 /* Launcher.tsx / CommandMenuPrimitives: the portal inherits website tokens. */
 .sample-create-palette {background:var(--color-surface-2);color:var(--color-ink);border-radius:24px;overflow:hidden;outline:none}
@@ -175,7 +174,9 @@ html:has(.dummy-route[data-embedded=true]), html:has(.dummy-route[data-embedded=
 .sample-event-rsvp {display:flex;align-items:center;gap:6px;margin:0 -16px;padding:10px 16px;background:var(--color-hover);font-size:12px;color:var(--color-ink-muted)}
 .sample-event-rsvp button {padding:3px 12px;border-radius:6px;background:var(--color-active)}
 .sample-event-rsvp button[aria-pressed=true] {color:var(--color-ink);background:var(--color-hover)}
-.sample-agent-session {height:auto!important;min-height:44px;padding-top:8px!important;padding-bottom:8px!important}
+/* AgentSessionRow: ordinary rows use ViewSidebar's 32px; code metadata gets 48px. */
+.sample-agent-session { height:32px; min-height:32px; padding-block:0; color:var(--color-ink); }
+.sample-agent-session[data-has-code=true] { height:auto; min-height:48px; align-items:flex-start; padding-block:6px; }
 .sample-agent-catalog {max-width:660px;margin:48px auto;padding:16px 24px}
 .sample-file-tag {display:flex;align-items:center;gap:5px;border:1px solid var(--color-edge-muted);border-radius:999px;padding:3px 8px;font-size:11px;color:var(--color-ink-muted)}
 
@@ -195,3 +196,46 @@ html:has(.dummy-route[data-embedded=true]), html:has(.dummy-route[data-embedded=
 .sample-task-mention {max-width:100%}
 .sample-task-mention-properties {display:inline-flex;align-items:center;gap:4px;margin-left:2px}
 .sample-task-mention-properties img, .sample-task-mention-properties svg:last-child:not([class*=size-3]) {width:13px;height:13px}
+
+/* ViewShell collapses its 256px aside below 720px of available view width.
+   Measure the embedded workspace, not the surrounding browser viewport. */
+.dummy-workspace[data-agents-view=true] .dummy-layout { container: agent-workspace / inline-size; position:relative; }
+.dummy-workspace[data-agents-view=true] [data-view-sidebar-content] { gap:8px; padding-top:8px; }
+@container agent-workspace (max-width: 776px) {
+  .dummy-sidebar { position:absolute; z-index:8; top:42px; bottom:0; left:56px; width:256px; display:none; box-shadow:10px 0 30px #0006; }
+  .dummy-workspace[data-sidebar-open=true] .dummy-sidebar { display:block; }
+  .dummy-mobile-nav { height:42px; display:flex; align-items:center; justify-content:space-between; padding:0 10px; flex:none; border-bottom:1px solid var(--color-edge-muted); }
+}
+@media (max-width:650px) {
+  @container agent-workspace (max-width:776px) {
+    .dummy-sidebar { left:44px; }
+  }
+}
+
+/* ThreadTerminalRail: continue the parent spine into the reply action's elbow. */
+.sample-thread-reply-button::before { content:''; position:absolute; pointer-events:none; left:-25px; top:-17px; width:22px; height:32px; border-left:1px solid var(--color-edge); border-bottom:1px solid var(--color-edge); border-bottom-left-radius:14px; }
+@media(max-width:650px) { .sample-thread-reply-button::before { left:-13px; width:10px; } }
+
+.sample-message-row[data-actions-dismissed=true] .sample-message-actions { display: none; }
+.sample-reaction[aria-pressed=true] { border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+
+/* References are part of the sentence, matching the editor's inline mentions. */
+.workspace-demo .sample-inline-reference, .workspace-demo .sample-task-mention-inline { display: inline; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: inherit; }
+.workspace-demo .sample-task-mention-inline > svg { display: inline; width: 1em; height: 1em; margin-inline: 4px; vertical-align: -0.125em; }
+.workspace-demo .sample-task-mention-inline > .truncate { white-space: normal; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 20%, transparent); text-underline-offset: 2px; }
+.workspace-demo .sample-task-mention-inline .sample-task-mention-properties { display: inline-flex; margin-inline: 4px; vertical-align: middle; }
+.workspace-demo .sample-inline-reference:focus-visible, .workspace-demo .sample-task-mention-inline:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+
+/* ExpandedChannelsRail: 32px section header, 4px gap before its rows. */
+.chat-sidebar-group { display:flex; flex-direction:column; gap:4px; min-width:0; flex-shrink:0; }
+.chat-sidebar-group-heading { display:flex; align-items:center; gap:4px; height:32px; padding:4px 8px; border-radius:8px; color:var(--color-ink-muted); font-size:12px; line-height:20px; font-weight:500; text-align:left; }
+.chat-sidebar-group-heading:hover { color:var(--color-ink); }
+.chat-sidebar-group-heading svg { opacity:0; }
+.chat-sidebar-group-heading:hover svg, .chat-sidebar-group-heading[aria-expanded=false] svg { opacity:1; }
+.chat-sidebar-thread { display:flex; flex-direction:column; gap:4px; padding:12px 8px; text-align:left; border-bottom:1px solid var(--color-edge-muted); }
+.chat-sidebar-thread:hover { background:var(--color-hover); }
+
+.chat-sidebar-conversations { display:flex; flex-direction:column; flex:1; min-height:0; gap:var(--sidebar-section-gap); }
+.chat-sidebar-conversations .chat-sidebar-group[data-open=true] { flex:1; min-height:0; }
+.chat-sidebar-conversations .chat-sidebar-group nav { min-height:0; flex-shrink:1; overflow:auto; }
+.chat-sidebar-group-heading { flex-shrink:0; }

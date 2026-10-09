@@ -77,8 +77,14 @@ export type EmailListProps = {
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, source, list, registerListActivationHandler, openThread } =
-    useEmailView();
+  const {
+    state,
+    source,
+    list,
+    registerListActivationHandler,
+    openThread,
+    filterByTag,
+  } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
   function openEntity(
@@ -581,6 +587,7 @@ export function EmailList(props: EmailListProps) {
                                   <div role="gridcell">
                                     <ListEntity
                                       entity={entityRow().entity}
+                                      onFilterByTag={filterByTag}
                                       scheduleStatus={
                                         <Show
                                           when={source.reminderForThread?.(

@@ -57,6 +57,13 @@ export type LoadFailure =
   | 'log_fetch'
   /** The fold worker failed on the snapshot. */
   | 'fold'
+  /**
+   * The fold worker's script never loaded, so no snapshot could be folded at
+   * all. Almost always this tab's build being replaced while it was open, so
+   * it is counted apart from `fold`: nothing is wrong with the fold, and the
+   * fix is a deploy-retention one.
+   */
+  | 'worker_unavailable'
   /** Nothing above; a bug in the classification. */
   | 'unknown';
 

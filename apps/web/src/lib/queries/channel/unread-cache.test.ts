@@ -13,6 +13,7 @@ import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries
 import { cacheNewChannelUnread } from './unread-cache';
 
 const notification: SoupNotificationFieldsFragment = {
+  __typename: 'GraphqlNotification',
   id: 'notification',
   entityType: 'CHANNEL',
   entityId: 'channel',

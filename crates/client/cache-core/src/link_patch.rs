@@ -74,6 +74,7 @@ pub enum LinkOperation {
     },
     /// Replaces links with the same scalar identity using the matching record
     /// in this mutation's normalized response. The response may assign a new ID.
+    /// Keeps the first matching member's position; prepends a new member.
     UpsertByField {
         /// Optimistic identity; its type constrains the response record lookup.
         #[serde(rename = "entityKey")]
@@ -158,6 +159,9 @@ pub struct QueryRevalidation {
     pub operation_name: Option<String>,
     /// Canonical JSON object containing query variables.
     pub variables_json: String,
+    /// Refresh only if relation recipes were omitted or could not all apply.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub only_on_link_failure: bool,
 }
 
 /// One mutation-scoped update rooted at a generated query or an explicit record.
@@ -189,6 +193,7 @@ impl OptimisticLinkPatch {
             query: self.query.clone(),
             operation_name: self.operation_name.clone(),
             variables_json: self.variables_json.clone(),
+            only_on_link_failure: false,
         })
     }
 
@@ -439,19 +444,20 @@ fn is_json_scalar(value: &Json) -> bool {
 /// Explicit record-rooted recipes still require their target to exist.
 /// When `skip_not_applicable` is true, stale/missing recipes are ignored. This
 /// mode is used during hydration and successful settlement, where stale query
-/// fields must never be recreated.
+/// fields must never be recreated. Returns whether every recipe was applied.
 pub fn apply_link_patches(
     schema: &crate::meta::Schema,
     effective: &mut HashMap<EntityKey<'static>, Record>,
     updates: &mut RecordUpdates,
     patches: &[OptimisticLinkPatch],
     skip_not_applicable: bool,
-) -> Result<(), LinkPatchError> {
+) -> Result<bool, LinkPatchError> {
     let patches = deduplicate_patches(schema, patches)?;
 
     // Work on clones so strict validation is all-or-nothing.
     let mut staged_effective = effective.clone();
     let mut staged_updates = updates.clone();
+    let mut all_applied = true;
     for patch in &patches {
         if let Err(error) = apply_one(
             schema,
@@ -460,7 +466,15 @@ pub fn apply_link_patches(
             updates,
             patch,
         ) {
-            if skip_not_applicable || matches!(error, LinkPatchError::NullParent) {
+            if skip_not_applicable
+                || matches!(error, LinkPatchError::NullParent)
+                || (patch.record_root.is_none()
+                    && matches!(
+                        error,
+                        LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. }
+                    ))
+            {
+                all_applied = false;
                 continue;
             }
             return Err(error);
@@ -468,7 +482,7 @@ pub fn apply_link_patches(
     }
     *effective = staged_effective;
     *updates = staged_updates;
-    Ok(())
+    Ok(all_applied)
 }
 
 fn apply_one(
@@ -478,16 +492,7 @@ fn apply_one(
     response_updates: &RecordUpdates,
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
-    let resolved = match resolve_target(schema, effective, patch) {
-        Err(LinkPatchError::MissingParent(_) | LinkPatchError::MissingField { .. })
-            if patch.record_root.is_none() =>
-        {
-            // Query caches need not have loaded this relation. Keep the entity
-            // mutation durable and let its revalidation populate the query.
-            return Ok(());
-        }
-        resolved => resolved?,
-    };
+    let resolved = resolve_target(schema, effective, patch)?;
     let upsert = upsert::resolve(&patch.operation, &resolved, response_updates)?;
     if let Some(inserted) = upsert
         .as_ref()

@@ -1,17 +1,17 @@
-/* Snapshot of the website palette; intentionally independent of the app. */
+/* Frozen app dark-theme tokens; no runtime dependency on the app. */
 :root {
-  --color-surface-0: oklch(0.17 0.002 250deg);
-  --color-surface-1: color-mix(in oklch, var(--color-surface-0) 97%, var(--color-content-0));
-  --color-surface-2: color-mix(in oklch, var(--color-surface-0) 95%, var(--color-content-0));
-  --color-surface-3: color-mix(in oklch, var(--color-surface-0) 93%, var(--color-content-0));
-  --color-surface-4: color-mix(in oklch, var(--color-surface-0) 91%, var(--color-content-0));
+  --color-surface-0: oklch(0.17 0 0);
+  --color-surface-1: oklch(0.1949 0 0);
+  --color-surface-2: oklch(0.2115 0 0);
+  --color-surface-3: oklch(0.2281 0 0);
+  --color-surface-4: oklch(0.2447 0 0);
   --color-content-0: oklch(1 0 21deg);
   --color-content-1: oklch(0.83 0 21deg);
   --color-content-2: oklch(0.75 0 21deg);
   --color-content-3: oklch(0.63 0 21deg);
   --color-content-4: oklch(0.55 0 21deg);
   --color-edge: var(--color-surface-4);
-  --color-edge-muted: var(--color-surface-2);
+  --color-edge-muted: var(--color-surface-3);
   --color-accent: oklch(0.7 0.12 250deg);
   --color-red: oklch(0.75 0.2 25.331deg);
   --color-orange: oklch(0.75 0.2 47.604deg);

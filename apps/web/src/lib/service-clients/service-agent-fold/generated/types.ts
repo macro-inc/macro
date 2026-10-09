@@ -456,7 +456,9 @@ export type FailureNoticeKind =
    *  The person's own account with the provider has no budget left for
    *  this work; the fix is on the provider's billing page.
    */
-  'provider_usage_limit';
+  | 'provider_usage_limit'
+  /**  The selected model cannot read image attachments in this conversation. */
+  | 'unsupported_image_input';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {
@@ -714,6 +716,8 @@ export type ModelOption = {
   name: string;
   /**  Descriptive copy - pricing, context size, and the like. */
   description: string | null;
+  /**  Image input support, absent when the runtime does not advertise it. */
+  supportsImages?: boolean | null;
   /**
    *  The heading the runtime listed this model under, when it grouped its
    *  options (ACP's `SessionConfigSelectGroup.name`). `None` for a runtime

@@ -46,10 +46,6 @@ export function EmailThreadHostView(props: EmailThreadHostViewProps) {
       type: 'component',
       id: 'task-compose',
       params: {
-        initialTitle:
-          props.title.length > 70
-            ? `${props.title.slice(0, 70)}...`
-            : props.title,
         initialContent: buildMentionMarkdownString({
           type: 'document',
           documentId: props.threadId(),

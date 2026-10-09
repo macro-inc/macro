@@ -1,6 +1,7 @@
 import { createSoupEntityRow } from '@app/features/soup/collection/rows';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
@@ -11,9 +12,9 @@ const fixture = vi.hoisted(() => ({
   permissions: [] as Record<string, unknown>[],
   ids: undefined as (() => readonly string[]) | undefined,
   save: vi.fn(async (_input: unknown) => {}),
-  ensureProject: vi.fn(async (_options: unknown) => ({
-    project: { id: 'launch', access: 'edit' },
-  })),
+  getProject: vi.fn(async (_id: string) =>
+    ok({ id: 'launch', userAccessLevel: 'edit' })
+  ),
 }));
 
 vi.mock('@queries/storage/document-metadata', () => ({
@@ -28,14 +29,14 @@ vi.mock('@queries/properties/definitions', () => ({
 vi.mock('@queries/properties/entity', () => ({
   useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: fixture.save }),
 }));
-vi.mock('@tanstack/solid-query', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
-  useQueries: () => [],
-  useQueryClient: () => ({ ensureQueryData: fixture.ensureProject }),
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: () => ({}),
 }));
-vi.mock('@service-storage/initiative', () => ({ initiativeClient: {} }));
+vi.mock('@service-storage/initiative', () => ({
+  initiativeClient: { get: fixture.getProject },
+}));
 vi.mock('@app/features/projects/queries/project-identity', () => ({
-  projectDetailQueryOptions: () => ({}),
+  createProjectDetailQuery: () => ({ isSuccess: false, data: undefined }),
 }));
 
 const disposers: (() => void)[] = [];
@@ -68,10 +69,10 @@ beforeEach(() => {
   };
   fixture.save.mockReset();
   fixture.save.mockResolvedValue(undefined);
-  fixture.ensureProject.mockReset();
-  fixture.ensureProject.mockResolvedValue({
-    project: { id: 'launch', access: 'edit' },
-  });
+  fixture.getProject.mockReset();
+  fixture.getProject.mockResolvedValue(
+    ok({ id: 'launch', userAccessLevel: 'edit' })
+  );
 });
 
 afterEach(() => {
@@ -149,9 +150,9 @@ it('checks project edit access before writing and releases the task lock on reje
     isSuccess: true,
     data: [boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, null).definition],
   };
-  fixture.ensureProject.mockResolvedValueOnce({
-    project: { id: 'launch', access: 'view' },
-  });
+  fixture.getProject.mockResolvedValueOnce(
+    ok({ id: 'launch', userAccessLevel: 'view' })
+  );
   const source = setup();
 
   await expect(
@@ -165,7 +166,7 @@ it('checks project edit access before writing and releases the task lock on reje
     )
   ).rejects.toThrow('not editable');
 
-  expect(fixture.ensureProject).toHaveBeenCalledOnce();
+  expect(fixture.getProject).toHaveBeenCalledWith('launch');
   expect(fixture.save).not.toHaveBeenCalled();
   expect(source.actions.canEditTask('one')).toBe(true);
 });

@@ -317,6 +317,52 @@ describe('createTauriCacheHost', () => {
     }
   );
 
+  it('falls back to full reads when native predates incremental watches', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch')
+        throw 'Command graphql_cache_watch not found';
+      if (command === 'graphql_cache_read')
+        return { kind: 'hit', data: { x: 1 } };
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'old-native' });
+    try {
+      const args = { opKey: 1, query: '{ x }' };
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      await expect(host.watchQuery?.(args)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_watch'
+        )
+      ).toHaveLength(1);
+      await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+        kind: 'hit',
+        data: { x: 1 },
+      });
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('surfaces watch failures other than a missing native command', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_watch') throw new Error('storage failed');
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'new-native' });
+    try {
+      await expect(
+        host.watchQuery?.({ opKey: 1, query: '{ x }' })
+      ).rejects.toThrow('storage failed');
+    } finally {
+      host.dispose();
+    }
+  });
+
   it('does not treat an unsupported predicate as a missing native command', async () => {
     const page = emptyMailPage;
     const filter = vi

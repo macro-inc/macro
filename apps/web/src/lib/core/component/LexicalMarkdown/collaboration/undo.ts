@@ -4,6 +4,7 @@
  */
 
 import { mergeRegister } from '@lexical/utils';
+import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { EditorState, LexicalEditor } from 'lexical';
 import {
   $isRangeSelection,
@@ -17,7 +18,6 @@ import {
   REDO_COMMAND,
   UNDO_COMMAND,
 } from 'lexical';
-import { type LoroDoc, UndoManager } from 'loro-crdt';
 
 type MergeAction = 0 | 1 | 2;
 const HISTORY_MERGE = 0;
@@ -202,18 +202,18 @@ function isTextNodeUnchanged(
  * Uses lexical's history merge semantics, but with Loro's undo manager
  *
  * @param editor - Lexical editor instance
- * @param loroDoc - Loro's CRDT document
+ * @param loroManager - Manager of Loro's CRDT document
  * @param delay - Delay between merges
  * @param maxUndoSteps - Maximum number of undo steps
  * @returns - Cleanup function
  */
 export function registerLoroHistory(
   editor: LexicalEditor,
-  loroDoc: LoroDoc,
+  loroManager: LoroManager,
   delay: number,
   maxUndoSteps: number = 100
 ): () => void {
-  const undoManager = new UndoManager(loroDoc, {
+  const undoManager = loroManager.createUndoManager({
     mergeInterval: delay,
     maxUndoSteps,
     excludeOriginPrefixes: ['history-'],

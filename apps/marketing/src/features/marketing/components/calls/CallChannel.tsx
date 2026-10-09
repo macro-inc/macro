@@ -58,6 +58,7 @@ export function ChannelTopBar(props: {
   /** Hidden while you are in this channel's call. */
   callButton?: 'call' | 'join';
   onCall?: () => void;
+  onAsk?: () => void;
 }) {
   const tabs = () =>
     TABS.filter((tab) => tab.value !== 'call' || props.live).map((tab) => ({
@@ -91,6 +92,8 @@ export function ChannelTopBar(props: {
         <Button
           variant="plain"
           size="md"
+          aria-label="Invite people"
+          disabled
           tooltip="Invite people"
           class="call-bar-action call-bar-invite"
         >
@@ -122,6 +125,9 @@ export function ChannelTopBar(props: {
         <Button
           variant="plain"
           size="md"
+          aria-label="Ask Macro"
+          onClick={props.onAsk}
+          disabled={!props.onAsk}
           tooltip="Ask Macro"
           class="call-bar-action"
         >
@@ -243,6 +249,8 @@ export type CallListRow = {
   id: string;
   title: string;
   summary: string;
+  /** Channel search includes the call transcript in the application. */
+  transcript?: string;
   status: 'attended' | 'missed';
   duration: string;
   people: CallPerson[];
@@ -272,7 +280,9 @@ export function ChannelCallsList(props: {
     return query.length < 3
       ? props.rows
       : props.rows.filter((row) =>
-          `${row.title} ${row.summary}`.toLowerCase().includes(query)
+          `${row.title} ${row.summary} ${row.transcript ?? ''}`
+            .toLowerCase()
+            .includes(query)
         );
   };
   return (

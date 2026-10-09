@@ -59,7 +59,7 @@ export function EmailReminderForm(
             aria-activedescendant={
               props.times.length ? `${id}-${list.selectedIndex()}` : undefined
             }
-            placeholder="Choose a time, or type tomorrow 9am…"
+            placeholder={`Remind me: ${props.subject}`}
             value={props.query}
             disabled={props.pending}
             onInput={(event) => {
@@ -82,38 +82,17 @@ export function EmailReminderForm(
             }}
           />
         </CommandMenuShell.Header>
-        <CommandMenuShell.Toolbar class="flex-col items-start gap-2 px-4 py-3">
-          <Dialog.Title class="text-sm font-medium text-ink">
-            Remind me
-          </Dialog.Title>
-          <Dialog.Description class="max-w-full truncate text-xs text-ink-muted">
-            {props.subject}
-          </Dialog.Description>
-          <Show when={props.initialTime}>
-            {(time) => (
+        <Dialog.Title class="sr-only">Remind me</Dialog.Title>
+        <Dialog.Description class="sr-only">{props.subject}</Dialog.Description>
+        <Show when={props.initialTime}>
+          {(time) => (
+            <CommandMenuShell.Toolbar class="px-5 py-2">
               <p class="text-xs text-ink-muted">
                 Scheduled for {formatReminderInstant(new Date(time()))}
               </p>
-            )}
-          </Show>
-          <SegmentedControl<EmailReminderCondition>
-            aria-label="Reminder condition"
-            value={props.condition}
-            onChange={props.onConditionChange}
-            options={[
-              {
-                value: 'if_no_reply',
-                label: 'If no reply',
-                disabled: props.pending,
-              },
-              {
-                value: 'regardless',
-                label: 'Regardless',
-                disabled: props.pending,
-              },
-            ]}
-          />
-        </CommandMenuShell.Toolbar>
+            </CommandMenuShell.Toolbar>
+          )}
+        </Show>
         <CommandMenuShell.Body class="flex flex-col">
           <CommandMenuList
             id={`${id}-options`}
@@ -146,31 +125,53 @@ export function EmailReminderForm(
             </p>
           </Show>
         </CommandMenuShell.Body>
-        <CommandMenuShell.Footer>
-          <span role="status">
-            {props.pending ? 'Saving…' : '↑ ↓ to choose · Enter to snooze'}
-          </span>
-          <Show when={props.onRetry}>
-            <Button variant="ghost" onClick={() => props.onRetry?.()}>
-              Retry
-            </Button>
-          </Show>
-          <Show when={props.onRemove}>
+        {/* p-2 insets the h-8 pill so its 16px radius stays concentric
+            with the dialog's 24px corner. */}
+        <CommandMenuShell.Footer class="grid grid-cols-[1fr_auto_1fr] gap-2 p-2">
+          <div class="flex items-center gap-1 justify-self-start">
             <Button
               variant="ghost"
-              disabled={props.pending || props.ready === false}
-              onClick={() => props.onRemove?.()}
+              disabled={props.pending}
+              onClick={() => props.onOpenChange(false)}
             >
-              Remove reminder
+              Cancel
             </Button>
-          </Show>
-          <Button
-            variant="ghost"
-            disabled={props.pending}
-            onClick={() => props.onOpenChange(false)}
-          >
-            Cancel
-          </Button>
+            <Show when={props.onRetry}>
+              <Button variant="ghost" onClick={() => props.onRetry?.()}>
+                Retry
+              </Button>
+            </Show>
+            <Show when={props.onRemove}>
+              <Button
+                variant="ghost"
+                disabled={props.pending || props.ready === false}
+                onClick={() => props.onRemove?.()}
+              >
+                Remove reminder
+              </Button>
+            </Show>
+          </div>
+          <span role="status" class="min-w-0 truncate text-center">
+            {props.pending ? 'Saving…' : '↑ ↓ to choose · Enter to snooze'}
+          </span>
+          <SegmentedControl<EmailReminderCondition>
+            aria-label="Reminder condition"
+            class="justify-self-end"
+            value={props.condition}
+            onChange={props.onConditionChange}
+            options={[
+              {
+                value: 'if_no_reply',
+                label: 'If no reply',
+                disabled: props.pending,
+              },
+              {
+                value: 'regardless',
+                label: 'Regardless',
+                disabled: props.pending,
+              },
+            ]}
+          />
         </CommandMenuShell.Footer>
       </CommandMenuShell>
     </Dialog>

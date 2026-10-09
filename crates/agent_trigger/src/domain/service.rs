@@ -344,6 +344,21 @@ where
         }
     }
 
+    /// The poster's current capability on the message's conversation, for
+    /// reading it as context. `None` when the poster is no user or may no
+    /// longer write there.
+    pub async fn invocation(
+        &self,
+        posted: &MessagePostedMetadata,
+    ) -> Result<Option<AuthorizedInvocation>> {
+        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+            return Ok(None);
+        };
+        self.history
+            .authorize_invocation(&user, &posted.parent, posted.root_id())
+            .await
+    }
+
     /// Evaluates a posted message for every mentioned bot.
     #[tracing::instrument(err, skip(self, posted), fields(
         parent = ?posted.parent,

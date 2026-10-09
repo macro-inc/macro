@@ -1,4 +1,5 @@
 import type { GraphicsEditor } from '@macro-inc/graphics';
+import { debounce } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createResource,
@@ -35,6 +36,8 @@ export default function CanvasNextDocument(
   const ancestors = useContext(CanvasAncestry);
   const documentId = props.documentId;
   const initial = props.initial;
+  const canEdit = () => props.canEdit && !props.isNested;
+  const activePointers = new Set<number>();
   const [persistence, setPersistence] =
     createSignal<ReturnType<typeof createDocumentPersistence>>();
   const [editor, setEditor] = createSignal<GraphicsEditor>();
@@ -70,36 +73,61 @@ export default function CanvasNextDocument(
     };
   };
   const content = (
-    <div class="relative flex size-full min-h-0 flex-col">
+    <div
+      class="relative flex size-full min-h-0 flex-col"
+      on:pointerdown={(event) => activePointers.add(event.pointerId)}
+    >
       <Show when={!savedLocation.loading}>
         <CanvasAncestry.Provider value={[...ancestors, documentId]}>
           <CanvasNextEditor
             initial={initial}
             canEdit={props.canEdit}
+            isEmbedded={props.isNested}
             fitOnLoad={!location()}
             onReady={(current, finishText) => {
               setEditor(current);
               const saving = createDocumentPersistence(
                 current,
                 initial,
-                canvasDocumentSource(documentId, () => props.canEdit)
+                canvasDocumentSource(documentId, canEdit)
               );
               setPersistence(saving);
               props.registerMethods?.({
                 exportCanvas: async () => {
-                  if (props.canEdit) finishText();
+                  if (canEdit()) finishText();
                   return { ...initial, document: current.document };
                 },
                 goToLocationFromParams: (params) =>
                   applyLocation(parseLocation(params)),
               });
               let viewTimer: ReturnType<typeof setTimeout> | undefined;
-              const unsubscribe = current.subscribeCamera((camera) => {
+              let notifiedCamera = current.getCamera();
+              // Updating the host's saved view can replace its decorator DOM.
+              // Wait until navigation settles, and never interrupt a pointer gesture.
+              const notifyLocation = debounce(() => {
+                if (activePointers.size) return;
+                const camera = current.getCamera();
+                if (
+                  camera.x === notifiedCamera.x &&
+                  camera.y === notifiedCamera.y &&
+                  camera.scale === notifiedCamera.scale
+                )
+                  return;
+                notifiedCamera = camera;
                 props.onLocationChange?.({
                   x: camera.x,
                   y: camera.y,
                   scale: camera.scale * 100,
                 });
+              }, 100);
+              const pointerEnd = (event: PointerEvent) => {
+                if (!activePointers.delete(event.pointerId)) return;
+                notifyLocation();
+              };
+              window.addEventListener('pointerup', pointerEnd, true);
+              window.addEventListener('pointercancel', pointerEnd, true);
+              const unsubscribe = current.subscribeCamera((camera) => {
+                notifyLocation();
                 if (props.isNested) return;
                 clearTimeout(viewTimer);
                 viewTimer = setTimeout(() => {
@@ -107,7 +135,7 @@ export default function CanvasNextDocument(
                 }, 500);
               });
               const flush = () => {
-                if (props.canEdit) finishText();
+                if (canEdit()) finishText();
                 void saving.flush();
               };
               const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -123,6 +151,9 @@ export default function CanvasNextDocument(
                 flush();
                 saving.dispose();
                 unsubscribe();
+                notifyLocation.clear();
+                window.removeEventListener('pointerup', pointerEnd, true);
+                window.removeEventListener('pointercancel', pointerEnd, true);
                 clearTimeout(viewTimer);
                 window.removeEventListener('pagehide', flush);
                 window.removeEventListener('beforeunload', beforeUnload);

@@ -78,6 +78,18 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Property edits should update the visible task before the save finishes. To verify,
+delay the GraphQL mutation and change Status, an existing Priority, and an unset
+Priority in the list and task detail. In a view grouped by that property, the task
+should move groups and update both counts immediately. Reject a save to check that
+the value, group membership, and counts all roll back without refreshing the page.
+
+For tags, include a task with no prior tag assignment. Delay
+`UpdateEntityPropertyOptions` and the following `EntityProperties` query: the tag
+should appear immediately and stay visible through both responses in the list,
+task header, side panel, and a reopened picker. A rejected save should remove only
+the optimistic tag. Repeat with an existing assignment and with removal.
+
 ## Board layout
 
 Open the icon-only **Task layout** dropdown in the toolbar and choose **Board**
@@ -320,16 +332,16 @@ filter sheets. Desktop uses the centered composer dialog.
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
    chip (defaults to you), `Due Date`, `Project` (when Projects is enabled; the standard
-   property dropdown, listing projects), `Change or select tags`, `Attach image or video`,
-   a `Create More` switch, and `Create Task Ctrl ↵`. If the chosen project can't be
+   property dropdown, listing projects), `Change or select tags`, a `Create More` switch,
+   and `Create Task Ctrl ↵`. `Attach image or video` (paperclip) sits just under the
+   description, above the property buttons. If the chosen project can't be
    set, the task is still created and a toast says it wasn't added to the project.
-   The `Shared with Team` row defaults to on and remembers your choice in local
-   storage across composer openings and page reloads. Its hint explains whether
-   the task will be visible to your whole team or only to you and the people you
-   share it with. The choice also applies to Create More, continuing in a split,
-   and tasks created from a project.
-   This row sits below the creation buttons, separated by an edge-to-edge divider.
-   A second divider separates it from Similar Tasks when matches are shown.
+   The `Share with <team name>` switch in the footer's left corner (hidden when you
+   aren't on a team) defaults to on and remembers your
+   choice in local storage across composer openings and page reloads. Hovering it
+   explains whether the task will be visible to your whole team or only to you and
+   the people you share it with. The choice also applies to Create More, continuing
+   in a split, and tasks created from a project.
 3. `type_text` the title, then press **Ctrl+Enter** to create (the `Create Task` button
    enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
@@ -401,7 +413,9 @@ Closing the popover without submitting keeps the underlying view open.
 
 Opening a project keeps the Tasks workspace and its navigation. The top bar
 shows the Projects return breadcrumb and the project name, with the same Share
-and side-panel controls as task detail. Choose Overview or Tasks using the inset
+and side-panel controls as task detail. `Project actions` (the dots button
+after the name) opens the row context menu's entries for this project,
+including `Delete` for its owner. Choose Overview or Tasks using the inset
 tabs in that top bar. In Tasks, an outlined circular search button expands into
 a focused `Search in <project name>` field. Close or Escape clears the query and
 restores focus to the button. The task toolbar stays the same height and scrolls

@@ -15,7 +15,7 @@ import {
   homePreviewLegacyTarget,
 } from './home-route';
 import type { HomePreviewRouteParams } from './home-route-schema';
-import { HomeView } from './home-view';
+import { HomePendingView, HomeView } from './home-view';
 
 type HomeDetailParams = Partial<HomePreviewRouteParams> & {
   channelId?: string;
@@ -63,4 +63,4 @@ export const HomeRouteView = withAuth(() => {
       <HomeView />
     </AppView>
   );
-});
+}, HomePendingView);

@@ -78,3 +78,45 @@ fn upsert_rejects_missing_target_type_records_without_changing_links() {
     );
     assert_eq!(links, original);
 }
+
+#[test]
+fn upsert_preserves_member_position_for_existing_and_recreated_assignments() {
+    let before = EntityKey("GraphqlProperty:status".into());
+    let previous = EntityKey("GraphqlProperty:old-tags".into());
+    let canonical = EntityKey("GraphqlProperty:new-tags".into());
+    let after = EntityKey("GraphqlProperty:priority".into());
+    let effective = HashMap::from([
+        (before.clone(), property("status")),
+        (previous.clone(), property("tags")),
+        (canonical.clone(), property("tags")),
+        (after.clone(), property("priority")),
+    ]);
+
+    for inserted in [&previous, &canonical] {
+        let mut links = vec![
+            CacheValue::Ref(before.clone()),
+            CacheValue::Ref(previous.clone()),
+            CacheValue::Ref(after.clone()),
+        ];
+        // Both ordinary edits and response-derived ID replacements are stable
+        // across optimistic installation, settlement, and replay.
+        for _ in 0..2 {
+            apply(
+                &mut links,
+                &effective,
+                "propertyDefinitionId",
+                &json!("tags"),
+                inserted,
+            )
+            .unwrap();
+            assert_eq!(
+                links,
+                vec![
+                    CacheValue::Ref(before.clone()),
+                    CacheValue::Ref(inserted.clone()),
+                    CacheValue::Ref(after.clone()),
+                ]
+            );
+        }
+    }
+}

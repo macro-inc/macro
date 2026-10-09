@@ -6,6 +6,12 @@ import {
   uploadInputAttachments,
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
+import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import {
+  acceleratedSpeed,
+  speedForModel,
+} from '@core/component/AI/constant/speed';
+import { fastModeEnabled } from '@core/component/AI/signal/speed';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { uploadFile } from '@core/util/upload';
@@ -47,6 +53,9 @@ export type StartConversation = {
   /** The catalog was still loading, so an in-memory agent runs its persona default. */
   modelFallback?: boolean;
   effortOverride?: { configId: string; value: string };
+  speedOverride?: { configId: string; value: string };
+  onDelivered?: () => void;
+  onFailure?: () => void;
 };
 
 /** One agent choice determines the session kind, default model, and repository context. */
@@ -227,10 +236,26 @@ export function NewChatPage(props: {
     const model = composerModelOverride();
     const inMemory =
       persona.harness === 'macro-inmem' || persona.harness === 'in-memory';
+    const submittedTracker = attachmentTracker();
+    const submittedUserId = userId();
     props.onStart({
       prompt,
+      onFailure: () => {
+        if (userId() === submittedUserId && !draft()) setDraft(prompt);
+      },
       ...(attachments.length > 0
-        ? { attachments: promptActionOf(prompt, attachments).attachments }
+        ? {
+            attachments: promptActionOf(prompt, attachments).attachments,
+            onDelivered: () => {
+              const tracker =
+                userId() === submittedUserId
+                  ? attachmentTracker()
+                  : submittedTracker;
+              for (const attachment of attachments) {
+                tracker.removeAttachment(attachment.id);
+              }
+            },
+          }
         : {}),
       botId: persona.botId,
       repoUrl: repo,
@@ -240,8 +265,15 @@ export function NewChatPage(props: {
         ? { modelFallback: true }
         : {}),
       effortOverride: effortOverride(),
+      ...(model && inMemory && acceleratedSpeed(model)
+        ? {
+            speedOverride: {
+              configId: 'speed',
+              value: speedForModel(model, fastModeEnabled()),
+            },
+          }
+        : {}),
     });
-    attachmentTracker().clearAttachments();
     // Macro's preferred model stays; coding-agent submenu picks are one-shot.
     setModelOverride(undefined);
     setEffortSelection(undefined);
@@ -292,7 +324,18 @@ export function NewChatPage(props: {
       draft={draft()}
       onDraftChange={setDraft}
       blockedReason={blocked()}
-      selector={agentSelector()}
+      selector={
+        <div class="flex min-w-0 items-center gap-1">
+          {agentSelector()}
+          <Show
+            when={['macro-inmem', 'in-memory'].includes(
+              selected()?.harness ?? ''
+            )}
+          >
+            <SpeedToggle model={composerModelOverride() ?? ''} />
+          </Show>
+        </div>
+      }
       drawer={
         <RepositoryPicker
           onOpenChange={setRepositoryPickerOpen}
@@ -316,6 +359,11 @@ export function NewChatPage(props: {
       drawerOpen={coding()}
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      supportsImages={
+        selectedCatalog
+          .models()
+          .find((model) => model.id === composerModelOverride())?.supportsImages
+      }
       attachments={attachmentTracker().attachments()}
       onAttachFiles={attachFiles}
       onRemoveAttachment={(attachment) =>

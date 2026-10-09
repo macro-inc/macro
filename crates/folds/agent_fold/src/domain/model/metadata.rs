@@ -140,6 +140,9 @@ pub struct ModelOption {
     pub name: String,
     /// Descriptive copy - pricing, context size, and the like.
     pub description: Option<String>,
+    /// Image input support, absent when the runtime does not advertise it.
+    #[specta(optional)]
+    pub supports_images: Option<bool>,
     /// The heading the runtime listed this model under, when it grouped its
     /// options (ACP's `SessionConfigSelectGroup.name`). `None` for a runtime
     /// that offered a flat list; the flattened order still follows the

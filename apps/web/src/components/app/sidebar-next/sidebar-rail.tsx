@@ -2,12 +2,11 @@ import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-ac
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
-import { rememberBootShell } from '@components/app/boot-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { isPlatform } from '@core/util/platform';
 import { cn } from '@ui';
-import { createEffect, For, Match, Suspense, Switch } from 'solid-js';
+import { For, Match, Suspense, Switch } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav, type ListNavProps } from './list-nav';
@@ -50,11 +49,6 @@ const SidebarRailContent = () => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hasUnread = useSidebarUnread();
-
-  // The next load's boot shell draws this rail before any JS runs.
-  createEffect(() =>
-    rememberBootShell({ rail: visibleNavItems(gates()).map((item) => item.id) })
-  );
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;

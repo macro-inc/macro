@@ -135,6 +135,7 @@ impl WorkExecutor for Dispatcher {
                 thread_id,
                 message_id,
                 content,
+                context,
             } => {
                 let session = AgentSessionId::new_from_uuid(uuid::Uuid::new_v5(
                     &bot.as_uuid(),
@@ -201,7 +202,7 @@ impl WorkExecutor for Dispatcher {
                             .ensure_connected()
                             .await
                             .map_err(DispatchError::Dial)?;
-                        self.api.prompt(session, &sender, &content).await?;
+                        self.api.prompt(session, &sender, &content, context).await?;
                         return Ok(());
                     }
                     Err(ApiError::ThreadSessionExists { session: None }) => {
@@ -224,7 +225,7 @@ impl WorkExecutor for Dispatcher {
                 // answer. SSE has no redelivery; a later `agent_trigger.existing`
                 // or a 409 on a repeat create (session already exists) is how
                 // a follow-up lands on the same session.
-                self.api.prompt(session, &sender, &content).await?;
+                self.api.prompt(session, &sender, &content, context).await?;
                 Ok(())
             }
             TriggerWork::OpenRequested {
@@ -264,13 +265,14 @@ impl WorkExecutor for Dispatcher {
                 session,
                 sender,
                 content,
+                context,
             } => {
                 self.prompted(session, &sender);
                 self.runtime
                     .ensure_connected()
                     .await
                     .map_err(DispatchError::Dial)?;
-                self.api.prompt(session, &sender, &content).await?;
+                self.api.prompt(session, &sender, &content, context).await?;
                 Ok(())
             }
         }

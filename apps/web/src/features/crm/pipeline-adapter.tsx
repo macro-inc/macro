@@ -11,7 +11,14 @@ import type { CardPosition } from '@service-storage/generated/schemas/cardPositi
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { useQueryClient } from '@tanstack/solid-query';
 import { Button } from '@ui';
-import { createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   DatabaseMentionPicker,
@@ -64,7 +71,11 @@ export function PipelineShare(props: {
 }
 
 /** The CRM adapter supplies authorized data to the reusable records UI. */
-export function PipelineDatabaseEditor(props: { pipeline: Pipeline }) {
+export function PipelineDatabaseEditor(props: {
+  pipeline: Pipeline;
+  actions?: JSX.Element;
+  onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
+}) {
   return (
     <div
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
@@ -76,7 +87,13 @@ export function PipelineDatabaseEditor(props: { pipeline: Pipeline }) {
         }
       >
         <Show when={props.pipeline.id} keyed>
-          {(_id) => <PipelineRecords pipeline={props.pipeline} />}
+          {(_id) => (
+            <PipelineRecords
+              pipeline={props.pipeline}
+              actions={props.actions}
+              onOpenRecord={props.onOpenRecord}
+            />
+          )}
         </Show>
       </Suspense>
     </div>
@@ -86,7 +103,11 @@ export function PipelineDatabaseEditor(props: { pipeline: Pipeline }) {
 const viewFailure = (failure: DatabaseOpFailure) =>
   toast.failure(databaseOpMessage(failure, 'this view'));
 
-function PipelineRecords(props: { pipeline: Pipeline }) {
+function PipelineRecords(props: {
+  pipeline: Pipeline;
+  actions?: JSX.Element;
+  onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
+}) {
   const deps = { storage: storageServiceClient, client: useQueryClient() };
   const tableQuery = usePipelineTableQuery(deps, props.pipeline);
   const views = createPipelineViews(deps, props.pipeline);
@@ -148,7 +169,7 @@ function PipelineRecords(props: { pipeline: Pipeline }) {
       >
         <PipelineRefresh />
         <DatabaseRecords
-          contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted"
+          contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted touch:m-0 touch:rounded-none touch:border-0"
           view={view()}
           stored={!!selectedView()}
           onViewChange={changeView}
@@ -164,6 +185,12 @@ function PipelineRecords(props: { pipeline: Pipeline }) {
           renderMentionValue={(id, entityType) => (
             <DatabaseMentionValue id={id} entityType={entityType} />
           )}
+          onOpenTitleMention={(id, entityType) => {
+            if (entityType === 'COMPANY')
+              props.onOpenRecord?.({ type: 'company', id });
+            else if (entityType === 'CONTACT')
+              props.onOpenRecord?.({ type: 'contact', id });
+          }}
           renderToolbar={(actions) => (
             <PipelineToolbar
               views={views}
@@ -175,6 +202,7 @@ function PipelineRecords(props: { pipeline: Pipeline }) {
               onSelectView={setSelectedViewId}
               onChangeView={changeView}
               actions={actions}
+              pipelineActions={props.actions}
             />
           )}
         />
@@ -194,6 +222,7 @@ function PipelineToolbar(props: {
   onSelectView: (id: string | undefined) => void;
   onChangeView: (change: ViewChange) => void;
   actions: DatabaseRecordsActions;
+  pipelineActions?: JSX.Element;
 }) {
   const database = useDatabase();
   const columns = () => database.data.rows.columns();
@@ -247,16 +276,19 @@ function PipelineToolbar(props: {
         return props.views.remove(target);
       }}
       actions={
-        <Show when={props.canEdit}>
-          <Button
-            variant="outline"
-            disabled={props.actions.pending()}
-            onClick={() => void props.actions.createRecord()}
-          >
-            <PlusIcon class="size-4" />
-            {props.recordType === 'company' ? 'Add company' : 'Add contact'}
-          </Button>
-        </Show>
+        <>
+          <Show when={props.canEdit}>
+            <Button
+              variant="outline"
+              disabled={props.actions.pending()}
+              onClick={() => void props.actions.createRecord()}
+            >
+              <PlusIcon class="size-4" />
+              {props.recordType === 'company' ? 'Add company' : 'Add contact'}
+            </Button>
+          </Show>
+          {props.pipelineActions}
+        </>
       }
     />
   );

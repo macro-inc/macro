@@ -107,9 +107,13 @@ async fn authorize<I: InflightAuthStore + 'static>(
             "redirect_uri was not registered for this client",
         )
             .into_response(),
-        Err(StartAuthorizationError::UnknownClient) => {
-            (axum::http::StatusCode::BAD_REQUEST, "unknown client_id").into_response()
-        }
+        Err(StartAuthorizationError::UnknownClient) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "Your Macro connection needs to be reconnected. In the app you are connecting from, \
+             remove the Macro MCP connection, add it again, and sign in to Macro. \
+             Signing in again without removing the connection may reuse the old registration.",
+        )
+            .into_response(),
         Err(StartAuthorizationError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to read client registrations");
             (

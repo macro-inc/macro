@@ -38,6 +38,11 @@ export function createSceneClock(options: {
     live,
     reduced,
     done: () => t() >= options.end,
+    /** Stop in place before a visitor edits the current content. */
+    pause: () => {
+      playback.pause();
+      setLive(false);
+    },
     /** The visitor's first interaction settles the scene, then stops it. */
     takeOver: () => {
       if (!live()) return;

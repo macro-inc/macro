@@ -47,6 +47,7 @@ use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::domain::coding_preferences::CodingPreferences;
 use crate::domain::error::AgentSessionError;
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ExternalSession, Message, SandboxSize,
@@ -292,6 +293,25 @@ where
         .with_state(state)
 }
 
+/// Build the caller's coding preferences router. Mount at `/agent-coding-preferences`.
+pub fn agent_coding_preferences_router<T, Access, Auth, S>(
+    state: AgentSessionRouterState<T, Access, Auth>,
+) -> Router<S>
+where
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    S: Clone + Send + Sync + 'static,
+{
+    Router::new()
+        .route(
+            "/agent-coding-preferences",
+            get(get_agent_coding_preferences_handler::<T, Access, Auth>)
+                .put(put_agent_coding_preferences_handler::<T, Access, Auth>),
+        )
+        .with_state(state)
+}
+
 /// Transport error for agent session handlers.
 #[derive(Debug)]
 pub enum AgentSessionApiError {
@@ -488,6 +508,11 @@ pub struct ControlRequest {
     /// fields, which are tagged under `type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action_id: Option<AgentActionId>,
+    /// Why the agent is being asked. Only a runtime forwarding a triggered
+    /// prompt may send it; a user's request carrying it is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub context: Option<trigger_context::TriggerContext>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -595,6 +620,8 @@ pub struct AgentSessionResponse {
     pub repo_url: Option<String>,
     /// The session's linked pull request.
     pub pull_request_url: Option<String>,
+    /// The Macro task the session was linked to.
+    pub task_id: Option<String>,
     /// The directory the session's harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier of the managed sandbox.
@@ -671,6 +698,7 @@ impl AgentSessionResponse {
             harness: session.harness,
             repo_url: session.repo_url,
             pull_request_url: session.pull_request_url,
+            task_id: session.task_id,
             workspace: session.workspace,
             sandbox_size: session.sandbox_size,
             instructions: session.instructions,
@@ -1042,6 +1070,7 @@ pub async fn control_agent_session_handler<
             ControlEvent::authorized(
                 req.action,
                 req.action_id,
+                req.context,
                 principal,
                 access.entity_access_receipt,
             )?,
@@ -1384,6 +1413,100 @@ pub async fn put_agent_sandbox_size_handler<
     state
         .service
         .set_user_sandbox_size(&caller.authorization.user.macro_user_id, req.size)
+        .await?;
+    Ok(Json(req))
+}
+
+/// Request or response body for the caller's coding preferences.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CodingPreferencesBody {
+    /// Whether new coding sessions research prior work and link a Macro task.
+    pub create_tasks: bool,
+    /// Whether new coding sessions deliver their work as a pull request.
+    pub open_pull_requests: bool,
+}
+
+impl From<CodingPreferences> for CodingPreferencesBody {
+    fn from(preferences: CodingPreferences) -> Self {
+        Self {
+            create_tasks: preferences.create_tasks,
+            open_pull_requests: preferences.open_pull_requests,
+        }
+    }
+}
+
+impl From<CodingPreferencesBody> for CodingPreferences {
+    fn from(body: CodingPreferencesBody) -> Self {
+        Self {
+            create_tasks: body.create_tasks,
+            open_pull_requests: body.open_pull_requests,
+        }
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-coding-preferences",
+    tag = "agent-sessions",
+    operation_id = "get_agent_coding_preferences",
+    responses(
+        (status = 200, body = CodingPreferencesBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Read what the caller's new coding sessions are told to do beyond their assignment.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn get_agent_coding_preferences_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
+    let preferences = state
+        .service
+        .user_coding_preferences(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(preferences.into()))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-coding-preferences",
+    tag = "agent-sessions",
+    operation_id = "put_agent_coding_preferences",
+    request_body = CodingPreferencesBody,
+    responses(
+        (status = 200, body = CodingPreferencesBody),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Replace the caller's coding preferences.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        actor = %caller.acting_entity(),
+        create_tasks = req.create_tasks,
+        open_pull_requests = req.open_pull_requests,
+    ),
+    err(Debug)
+)]
+pub async fn put_agent_coding_preferences_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    Json(req): Json<CodingPreferencesBody>,
+) -> Result<Json<CodingPreferencesBody>, AgentSessionApiError> {
+    state
+        .service
+        .set_user_coding_preferences(&caller.authorization.user.macro_user_id, req.into())
         .await?;
     Ok(Json(req))
 }

@@ -10,6 +10,7 @@ pub mod document;
 pub mod durable_intent;
 pub mod engine;
 pub mod entity_resolver;
+pub mod field_changes;
 pub mod identity;
 pub mod link_patch;
 pub mod meta;
