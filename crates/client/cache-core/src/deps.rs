@@ -49,15 +49,6 @@ impl DepIndex {
         self.viewer_fields.insert(op, deps.viewer_fields);
     }
 
-    /// Records registered for `op` by its latest read or response. A broad
-    /// registration has none, so callers must not read it as "depends on nothing".
-    pub(crate) fn op_records(&self, op: OpId) -> Option<&BTreeSet<EntityKey<'static>>> {
-        if self.broad_ops.contains(&op) {
-            return None;
-        }
-        self.by_op.get(&op)
-    }
-
     /// Registers an operation conservatively against every visible change.
     pub fn set_op_broad(&mut self, op: OpId) {
         self.remove_op(op);

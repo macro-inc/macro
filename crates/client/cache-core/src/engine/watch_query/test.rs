@@ -56,12 +56,21 @@ fn patches(update: QueryUpdate) -> Json {
 }
 
 /// Applies an update under the JS document applier's rules: every patch
-/// targets an existing non-root path, changes it, and overlaps no other patch.
+/// targets an existing non-root path and changes it. Identical duplicates are
+/// applied once; any other pair of patches must not overlap.
 fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
     let cursor = revision(&update);
     match update {
         QueryUpdate::Hit { data, .. } => *snapshot = data,
-        QueryUpdate::Patch { patches, .. } => {
+        QueryUpdate::Patch { mut patches, .. } => {
+            let encoded = |patch: &live_query::LiveFieldPatch| serde_json::to_value(patch).unwrap();
+            let mut seen = Vec::new();
+            patches.retain(|patch| {
+                let patch = encoded(patch);
+                let distinct = !seen.contains(&patch);
+                seen.push(patch);
+                distinct
+            });
             let paths: Vec<Json> = patches
                 .iter()
                 .map(|patch| serde_json::to_value(&patch.path).unwrap())
@@ -94,7 +103,7 @@ fn apply(snapshot: &mut Json, update: QueryUpdate) -> CacheRevision {
 }
 
 #[test]
-fn patches_one_field_in_a_thousand_rows_for_every_subscriber() {
+fn targets_one_field_in_a_thousand_rows_for_every_subscriber() {
     block_on(async {
         let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
         seed(&mut engine, 1000).await;
@@ -108,6 +117,7 @@ fn patches_one_field_in_a_thousand_rows_for_every_subscriber() {
             .unwrap();
         assert!(matches!(&first, QueryUpdate::Hit { data: result, .. } if *result == data(1000)));
         change(&mut engine, "17", "isRead", CacheValue::Bool(true)).await;
+        let before = engine.storage().record_get_count();
         for (op, previous) in [(1, first), (2, second)] {
             let update = engine
                 .watch_query(op, PAGE, None, &vars(), &[], Some(revision(&previous)))
@@ -118,11 +128,15 @@ fn patches_one_field_in_a_thousand_rows_for_every_subscriber() {
                 json!([{"path": ["user", "soup", "items", 17, "isRead"], "value": true}])
             );
         }
+        assert!(
+            engine.storage().record_get_count() - before <= 2,
+            "must not hydrate the other 999 records"
+        );
     });
 }
 
 #[test]
-fn unrelated_changes_publish_an_empty_patch_without_rereading() {
+fn unrelated_changes_and_leaf_edits_never_reread_but_structural_edits_do() {
     block_on(async {
         // A one-record hot tier makes any re-read visible as storage reads.
         let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
@@ -131,29 +145,91 @@ fn unrelated_changes_publish_an_empty_patch_without_rereading() {
             .watch_query(1, PAGE, None, &vars(), &[], None)
             .await
             .unwrap();
-        change(&mut engine, "unrelated", "isRead", CacheValue::Bool(true)).await;
-        let before = engine.storage().record_get_count();
-        let next = engine
+        let mut cursor = revision(&first);
+        let edits = [
+            (
+                "unrelated",
+                "isRead",
+                CacheValue::Bool(true),
+                json!([]),
+                false,
+            ),
+            (
+                "1",
+                "isRead",
+                CacheValue::Bool(true),
+                json!([{"path": ["user", "soup", "items", 1, "isRead"], "value": true}]),
+                false,
+            ),
+            (
+                "1",
+                "__typename",
+                CacheValue::String("GraphqlSoupDocument".into()),
+                // A changed item identity replaces its list.
+                json!([{"path": ["user", "soup", "items"], "value": [
+                    {"__typename": "GraphqlSoupEmailThread", "id": "0", "isRead": false},
+                    {"__typename": "GraphqlSoupDocument", "id": "1"},
+                ]}]),
+                true,
+            ),
+        ];
+        for (id, field, value, expected, rereads) in edits {
+            change(&mut engine, id, field, value).await;
+            let before = engine.storage().record_get_count();
+            let next = engine
+                .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            assert_eq!(
+                engine.storage().record_get_count() - before > 1,
+                rereads,
+                "{field} on {id}"
+            );
+            cursor = revision(&next);
+            assert_eq!(patches(next), expected, "{field} on {id}");
+        }
+    });
+}
+
+#[test]
+fn journal_barriers_and_gaps_diff_against_the_subscriber_base() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(&mut engine, 2).await;
+        let first = engine
+            .watch_query(1, PAGE, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        change(&mut engine, "1", "isRead", CacheValue::Bool(true)).await;
+        let key = EntityKey::entity("GraphqlSoupEmailThread", &["1"]);
+        engine.invalidate_keys([&key]).unwrap();
+        let barrier = engine
             .watch_query(1, PAGE, None, &vars(), &[], Some(revision(&first)))
             .await
             .unwrap();
-        assert_eq!(engine.storage().record_get_count(), before);
-        let cursor = revision(&next);
-        assert_eq!(cursor, engine.current_revision());
-        assert_eq!(patches(next), json!([]));
-        change(&mut engine, "1", "isRead", CacheValue::Bool(true)).await;
-        let before = engine.storage().record_get_count();
-        let next = engine
+        let cursor = revision(&barrier);
+        assert_eq!(
+            patches(barrier),
+            json!([{"path": ["user", "soup", "items", 1, "isRead"], "value": true}])
+        );
+        // Overflow the bounded journal with unrelated revisions.
+        for index in 0..200 {
+            change(
+                &mut engine,
+                "unrelated",
+                "isRead",
+                CacheValue::Bool(index % 2 == 0),
+            )
+            .await;
+        }
+        change(&mut engine, "0", "isRead", CacheValue::Bool(true)).await;
+        let gap = engine
             .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
             .await
             .unwrap();
-        assert!(
-            engine.storage().record_get_count() > before,
-            "a changed dependency re-reads the query"
-        );
         assert_eq!(
-            patches(next),
-            json!([{"path": ["user", "soup", "items", 1, "isRead"], "value": true}])
+            patches(gap),
+            json!([{"path": ["user", "soup", "items", 0, "isRead"], "value": true}])
         );
     });
 }
@@ -277,6 +353,63 @@ fn reorders_and_tombstones_replace_the_list_instead_of_patching_stale_indices() 
             json!([{"path":["user","soup","items",0,"isRead"],"value":false}]),
             "compacted indices are diffed against the published list"
         );
+    });
+}
+
+#[test]
+fn bindings_follow_list_compaction_without_rereading() {
+    block_on(async {
+        // A one-record hot tier makes any re-read visible as storage reads.
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
+        seed(&mut engine, 3).await;
+        let first = engine
+            .watch_query(1, PAGE, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        let mut cursor = revision(&first);
+        let edits = [
+            ("0", identity::DELETED_FIELD, true, None),
+            (
+                "2",
+                "isRead",
+                true,
+                Some(json!([{"path":["user","soup","items",1,"isRead"],"value":true}])),
+            ),
+            ("0", identity::DELETED_FIELD, false, None),
+            (
+                "2",
+                "isRead",
+                false,
+                Some(json!([{"path":["user","soup","items",2,"isRead"],"value":false}])),
+            ),
+        ];
+        for (id, field, value, leaf) in edits {
+            change(&mut engine, id, field, CacheValue::Bool(value)).await;
+            let before = engine.storage().record_get_count();
+            let update = engine
+                .watch_query(1, PAGE, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            cursor = revision(&update);
+            let reads = engine.storage().record_get_count() - before;
+            match leaf {
+                Some(expected) => {
+                    assert!(reads <= 1, "{field} on {id} used the bindings");
+                    assert_eq!(patches(update), expected);
+                }
+                None => {
+                    assert!(reads > 1, "{field} on {id} re-read");
+                    let full = engine.read_query(None, PAGE, None, &vars()).await.unwrap();
+                    let ReadResult::Hit { data } = full else {
+                        panic!("seeded page must hit");
+                    };
+                    assert_eq!(
+                        patches(update),
+                        json!([{"path":["user","soup","items"],"value":data["user"]["soup"]["items"]}])
+                    );
+                }
+            }
+        }
     });
 }
 

@@ -11,20 +11,24 @@ use serde_json::Value as Json;
 // Rough in-memory cost of one JSON value or object entry, beyond its text.
 const JSON_NODE_BYTES: usize = 32;
 
-/// Patches from `before` to `after`, with the change in retained bytes.
-pub(super) struct ResponseDiff {
-    pub patches: Vec<LiveFieldPatch>,
-    pub byte_delta: isize,
-}
-
 #[derive(Clone, Copy)]
 enum Segment<'a> {
     Field(&'a str),
     Index(usize),
 }
 
-/// Returns `None` when the root itself must be replaced.
-pub(super) fn diff_response(before: &Json, after: &Json) -> Option<ResponseDiff> {
+/// Patches from `before` to `after`, with the change in retained bytes.
+pub(super) struct ResponseDiff {
+    pub patches: Vec<LiveFieldPatch>,
+    pub byte_delta: isize,
+    /// Retained bytes of replaced values still allowed before giving up.
+    budget: usize,
+}
+
+/// Returns `None` when the root itself must be replaced, or when replaced
+/// values exceed `budget` retained bytes: subscribers reconcile a complete
+/// result faster than a patch that replaces most of it.
+pub(super) fn diff_response(before: &Json, after: &Json, budget: usize) -> Option<ResponseDiff> {
     match (before, after) {
         (Json::Object(previous), Json::Object(next)) if same_keys(previous, next) => {}
         _ => return None,
@@ -32,18 +36,24 @@ pub(super) fn diff_response(before: &Json, after: &Json) -> Option<ResponseDiff>
     let mut diff = ResponseDiff {
         patches: Vec::new(),
         byte_delta: 0,
+        budget,
     };
-    diff.visit(before, after, &mut Vec::new());
+    diff.visit(before, after, &mut Vec::new())?;
     Some(diff)
 }
 
 impl ResponseDiff {
-    fn visit<'a>(&mut self, before: &Json, after: &'a Json, path: &mut Vec<Segment<'a>>) {
+    fn visit<'a>(
+        &mut self,
+        before: &Json,
+        after: &'a Json,
+        path: &mut Vec<Segment<'a>>,
+    ) -> Option<()> {
         match (before, after) {
             (Json::Object(previous), Json::Object(next)) if same_keys(previous, next) => {
                 for ((_, previous), (key, value)) in previous.iter().zip(next) {
                     path.push(Segment::Field(key));
-                    self.visit(previous, value, path);
+                    self.visit(previous, value, path)?;
                     path.pop();
                 }
             }
@@ -53,13 +63,15 @@ impl ResponseDiff {
             {
                 for (index, (previous, value)) in previous.iter().zip(next).enumerate() {
                     path.push(Segment::Index(index));
-                    self.visit(previous, value, path);
+                    self.visit(previous, value, path)?;
                     path.pop();
                 }
             }
             _ if before == after => {}
             _ => {
-                self.byte_delta += json_bytes(after) as isize - json_bytes(before) as isize;
+                let replaced = json_bytes(after);
+                self.budget = self.budget.checked_sub(replaced)?;
+                self.byte_delta += replaced as isize - json_bytes(before) as isize;
                 self.patches.push(LiveFieldPatch {
                     path: path
                         .iter()
@@ -74,6 +86,7 @@ impl ResponseDiff {
                 });
             }
         }
+        Some(())
     }
 }
 
@@ -96,6 +109,32 @@ fn same_item(before: &Json, after: &Json) -> bool {
         }
         _ => before == after,
     }
+}
+
+/// Applies binding patches to the retained base so it stays the subscriber's
+/// result. Returns the change in retained bytes, or `None` (leaving `data`
+/// untouched) when a path is absent.
+pub(super) fn apply_patches(data: &mut Json, patches: &[LiveFieldPatch]) -> Option<isize> {
+    if !patches
+        .iter()
+        .all(|patch| slot(data, &patch.path).is_some())
+    {
+        return None;
+    }
+    let mut delta = 0;
+    for patch in patches {
+        let target = slot(data, &patch.path)?;
+        delta += json_bytes(&patch.value) as isize - json_bytes(target) as isize;
+        *target = patch.value.clone();
+    }
+    Some(delta)
+}
+
+fn slot<'a>(data: &'a mut Json, path: &[ResponsePathSegment]) -> Option<&'a mut Json> {
+    path.iter().try_fold(data, |slot, segment| match segment {
+        ResponsePathSegment::Field(field) => slot.as_object_mut()?.get_mut(field),
+        ResponsePathSegment::Index(index) => slot.as_array_mut()?.get_mut(*index),
+    })
 }
 
 /// Conservative retained size of a response value, for bounded watch retention.

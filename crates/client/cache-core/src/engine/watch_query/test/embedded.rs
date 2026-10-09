@@ -47,9 +47,9 @@ fn options(values: &[&str]) -> CacheValue {
 }
 
 #[test]
-fn nested_property_edits_patch_each_subscriber() {
+fn nested_property_edits_patch_each_subscriber_without_reading_other_rows() {
     block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut engine = Engine::with_capacity(InMemoryStorage::new(), 1);
         engine
             .write_query(None, PROPERTIES, None, &vars(), &property_page(1000), None)
             .await
@@ -72,6 +72,7 @@ fn nested_property_edits_patch_each_subscriber() {
             vec!["initial"],
         ] {
             set_value(&mut engine, 17, options(&values)).await;
+            let before = engine.storage().record_get_count();
             for (op, cursor) in &mut cursors {
                 let update = engine
                     .watch_query(*op, PROPERTIES, None, &vars(), &[], Some(*cursor))
@@ -86,6 +87,10 @@ fn nested_property_edits_patch_each_subscriber() {
                     }])
                 );
             }
+            assert!(
+                engine.storage().record_get_count() - before <= 2,
+                "a nested value must not reload the other 999 rows"
+            );
         }
     });
 }
@@ -201,6 +206,78 @@ fn nested_lists_preserve_aliases_and_replace_changed_membership() {
                 "path": ["user", "soup", "items", 0, "properties", 0, "value", "references"], "value": []
             }])
         );
+    });
+}
+
+#[test]
+fn link_edits_patch_one_row_but_large_list_replacements_resend_the_result() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        engine
+            .write_query(None, PROPERTIES, None, &vars(), &property_page(1000), None)
+            .await
+            .unwrap();
+        let first = engine
+            .watch_query(1, PROPERTIES, None, &vars(), &[], None)
+            .await
+            .unwrap();
+        let document =
+            |id: usize| EntityKey::entity("GraphqlSoupDocument", &[&format!("doc-{id}")]);
+        let property = |id: usize| {
+            CacheValue::Ref(EntityKey::entity(
+                "GraphqlProperty",
+                &[&format!("property-{id}")],
+            ))
+        };
+        let mut snapshot = property_page(1000);
+        let mut cursor = apply(&mut snapshot, first);
+        let edits = [
+            (
+                "properties",
+                CacheValue::List(vec![property(17), property(18)]),
+                false,
+            ),
+            (identity::DELETED_FIELD, CacheValue::Bool(true), true),
+        ];
+        for (field, value, resend) in edits {
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![(
+                        document(17),
+                        Record {
+                            fields: BTreeMap::from([(field.into(), value)]),
+                        },
+                    )],
+                    vec![],
+                )
+                .await
+                .unwrap();
+            let update = engine
+                .watch_query(1, PROPERTIES, None, &vars(), &[], Some(cursor))
+                .await
+                .unwrap();
+            match &update {
+                QueryUpdate::Hit { .. } => assert!(resend, "{field} resent the result"),
+                QueryUpdate::Patch { patches, .. } => {
+                    assert!(!resend, "{field} patched a compacted list");
+                    assert_eq!(
+                        serde_json::to_value(patches).unwrap()[0]["path"],
+                        json!(["user", "soup", "items", 17, "properties"])
+                    );
+                }
+                QueryUpdate::Miss { .. } => panic!("complete page cannot miss"),
+            }
+            cursor = apply(&mut snapshot, update);
+            let ReadResult::Hit { data } = engine
+                .read_query(None, PROPERTIES, None, &vars())
+                .await
+                .unwrap()
+            else {
+                panic!("complete page cannot miss");
+            };
+            assert_eq!(snapshot, data);
+        }
     });
 }
 

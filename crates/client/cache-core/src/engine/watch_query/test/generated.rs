@@ -1,5 +1,7 @@
 //! Generated edit histories. Applying each published update to the previous
-//! result, under the JS applier's rules, must equal a fresh full read.
+//! result, under the JS applier's rules, must equal a fresh full read. Leaf
+//! edits take the binding path; links, tombstones, reorders, type changes and
+//! barriers take the re-read diff.
 
 use super::*;
 use proptest::prelude::*;
@@ -46,6 +48,15 @@ enum Edit {
         slot: Option<usize>,
         deleted: bool,
     },
+    /// Replaces a document's assignment links: adds, removes and reorders.
+    Assign {
+        row: usize,
+        slots: Vec<usize>,
+    },
+    /// A journal barrier, as for records another engine changed.
+    Invalidate {
+        row: usize,
+    },
     Unrelated(String),
 }
 
@@ -57,19 +68,23 @@ fn property_value() -> impl Strategy<Value = PropertyValue> {
     ]
 }
 
+// Leaf edits and tombstones dominate so that compacted bindings get exercised.
 fn edit() -> impl Strategy<Value = Edit> {
     prop_oneof![
-        prop::collection::vec((0..ROWS, 0usize..3, property_value()), 0..=ROWS)
+        1 => prop::collection::vec((0..ROWS, 0usize..3, property_value()), 0..=ROWS)
             .prop_map(Edit::Page),
-        (0..ROWS, "[a-b]{0,2}").prop_map(|(row, value)| Edit::Scalar { row, value }),
-        (0..ROWS, 0usize..3, property_value()).prop_map(|(row, slot, value)| Edit::Property {
+        4 => (0..ROWS, "[a-c]{1,2}").prop_map(|(row, value)| Edit::Scalar { row, value }),
+        3 => (0..ROWS, 0usize..3, property_value()).prop_map(|(row, slot, value)| Edit::Property {
             row,
             slot,
             value
         }),
-        (0..ROWS, prop::option::of(0usize..3), any::<bool>())
+        3 => (0..ROWS, prop::option::weighted(0.3, 0usize..3), any::<bool>())
             .prop_map(|(row, slot, deleted)| Edit::Delete { row, slot, deleted }),
-        "[a-b]{0,2}".prop_map(Edit::Unrelated),
+        2 => (0..ROWS, prop::collection::vec(0usize..3, 0..4))
+            .prop_map(|(row, slots)| Edit::Assign { row, slots }),
+        1 => (0..ROWS).prop_map(|row| Edit::Invalidate { row }),
+        1 => "[a-b]{0,2}".prop_map(Edit::Unrelated),
     ]
 }
 
@@ -173,7 +188,7 @@ async fn run(engine: &mut Engine<InMemoryStorage>, edit: Edit) {
             let (field, value) = if is_document(row) {
                 ("name", CacheValue::String(value))
             } else {
-                ("isRead", CacheValue::Bool(value.is_empty()))
+                ("isRead", CacheValue::Bool(value.len() == 1))
             };
             put(engine, row_key(row), field, value).await;
         }
@@ -195,6 +210,16 @@ async fn run(engine: &mut Engine<InMemoryStorage>, edit: Edit) {
                 CacheValue::Bool(deleted),
             )
             .await;
+        }
+        Edit::Assign { row, slots } => {
+            let links = slots
+                .into_iter()
+                .map(|slot| CacheValue::Ref(property_key(row, slot)))
+                .collect();
+            put(engine, row_key(row), "properties", CacheValue::List(links)).await;
+        }
+        Edit::Invalidate { row } => {
+            engine.invalidate_keys([&row_key(row)]).unwrap();
         }
         Edit::Unrelated(value) => {
             let key = EntityKey::entity("GraphqlSoupDocument", &["unrelated"]);
@@ -229,7 +254,7 @@ impl Subscriber {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(96))]
+    #![proptest_config(ProptestConfig::with_cases(128))]
     #[test]
     fn applied_updates_match_full_reads(
         capacity in prop::sample::select(vec![1usize, DEFAULT_HOT_CAPACITY]),
@@ -237,10 +262,13 @@ proptest! {
     ) {
         block_on(async {
             let mut engine = Engine::with_capacity(InMemoryStorage::new(), capacity);
-            let initial: Vec<_> = (0..ROWS)
-                .map(|row| (row, 1, PropertyValue::Options(vec!["a".into()])))
-                .collect();
-            run(&mut engine, Edit::Page(initial)).await;
+            // Store every assignment, then link only the first so links can be added.
+            for count in [3, 1] {
+                let initial = (0..ROWS)
+                    .map(|row| (row, count, PropertyValue::Options(vec!["a".into()])))
+                    .collect();
+                run(&mut engine, Edit::Page(initial)).await;
+            }
             // The second subscriber skips reads, so its updates span several revisions.
             let mut subscribers = [1, 2].map(|op| Subscriber { op, data: Json::Null, cursor: None });
             for subscriber in &mut subscribers {

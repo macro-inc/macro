@@ -1,21 +1,29 @@
-//! Incremental reads of ordinary GraphQL queries. A watch retains the response
-//! it last published. Later reads skip work when no dependency changed, and
-//! otherwise re-read the whole query and diff it, so no selected field can be
-//! missed. Transports only apply response paths.
+//! Incremental projections of ordinary GraphQL queries. The read compiler owns
+//! aliases, arguments and concrete fragment types; transports only apply paths.
+//!
+//! Field bindings patch leaf edits without reading. When they cannot (a link,
+//! list, tombstone or type change, or a journal barrier), the query is re-read
+//! and diffed against the retained response, which is the subscriber's base.
 
 use super::*;
+use crate::denormalize::QueryProjection;
 use crate::engine::live_query::LiveFieldPatch;
 use serde::Serialize;
 
 mod diff;
 
 const WATCH_CAPACITY: usize = 64;
-const WATCH_BYTES: usize = 16 * 1024 * 1024;
-// Rough in-memory cost of one retained dependency key, beyond its text.
-const RECORD_KEY_BYTES: usize = 64;
+// Diff bases add about a fifth to the bindings' estimate. The budget grows to
+// match, so as many large watches stay resident as with bindings alone.
+const WATCH_BYTES: usize = 20 * 1024 * 1024;
+// Subscribers apply a patch that replaces a large subtree (a compacted list)
+// slower than a complete result, so beyond this share of the response a
+// re-read publishes a replacement instead. Small responses always patch.
+const MAX_REPLACED_SHARE: usize = 8;
+const MIN_REPLACED_BYTES: usize = 16 * 1024;
 
 /// An atomic query read. A patch is applicable only to the exact revision the
-/// subscriber supplied; eviction, spec changes and revision gaps reset it.
+/// subscriber supplied; eviction, spec changes and revision mismatches reset it.
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum QueryUpdate {
@@ -38,45 +46,44 @@ struct QuerySpec {
     entity_resolvers: Vec<EntityResolver>,
 }
 
-impl QuerySpec {
-    fn retained_bytes(&self) -> usize {
-        self.query.len() + serde_json::to_vec(&self.variables).map_or(0, |json| json.len())
-    }
-}
-
 struct QueryWatch {
     spec: QuerySpec,
-    /// The subscriber's current result at `revision`.
-    data: Json,
-    data_bytes: usize,
-    /// Every record the read traversed, including absent ones.
-    records: BTreeSet<EntityKey<'static>>,
+    projection: QueryProjection,
+    base: Base,
     revision: CacheRevision,
+    bytes: usize,
+}
+
+/// The subscriber's result at the watch revision: the base for re-read diffs.
+struct Base {
+    data: Json,
     bytes: usize,
 }
 
 impl QueryWatch {
     fn new(
         spec: QuerySpec,
-        data: Json,
-        data_bytes: usize,
-        records: BTreeSet<EntityKey<'static>>,
+        projection: QueryProjection,
+        base: Base,
         revision: CacheRevision,
     ) -> Self {
-        let bytes = spec.retained_bytes()
-            + data_bytes
-            + records
-                .iter()
-                .map(|key| key.as_ref().len() + RECORD_KEY_BYTES)
-                .sum::<usize>();
+        let bytes = spec.query.len()
+            + serde_json::to_vec(&spec.variables).map_or(0, |json| json.len())
+            + projection.retained_bytes()
+            + base.bytes;
         Self {
             spec,
-            data,
-            data_bytes,
-            records,
+            projection,
+            base,
             revision,
             bytes,
         }
+    }
+
+    /// Frees the stale bindings before a re-read compiles new ones, so both are
+    /// never resident together.
+    fn into_base(self) -> Base {
+        self.base
     }
 }
 
@@ -123,7 +130,7 @@ impl QueryWatches {
 impl<S: Storage> Engine<S> {
     /// Watch any cache-readable query using its ordinary document and variables.
     /// The caller owns `op_id` until `teardown_operation`. Retention is bounded;
-    /// losing a watch only causes a replacement read, never a missed update.
+    /// losing a plan only causes a replacement read, never a missed update.
     pub async fn watch_query(
         &mut self,
         op_id: OpId,
@@ -140,66 +147,96 @@ impl<S: Storage> Engine<S> {
             variables: variables.clone(),
             entity_resolvers: entity_resolvers.to_vec(),
         };
-        // A journal barrier cannot say what changed, so it publishes a replacement.
-        let mut base = None;
-        if let Some(mut view) = self.query_watches.pop(op_id)
-            && view.spec == spec
-            && Some(view.revision) == since
-            && let Some(changes) = self
-                .live_queries
-                .changes_since(view.revision, self.revision)
-        {
-            if changes.records.is_disjoint(&view.records) {
-                view.revision = self.revision;
-                self.query_watches.put(op_id, view);
-                return Ok(QueryUpdate::Patch {
-                    patches: Vec::new(),
-                    revision: self.revision.to_string(),
-                });
-            }
-            base = Some(view);
-        }
-        let result = self
-            .read_query_with_entity_resolvers(
+        let Some(mut view) = self
+            .query_watches
+            .pop(op_id)
+            .filter(|view| view.spec == spec && Some(view.revision) == since)
+        else {
+            return self.read_watched(op_id, spec, None).await;
+        };
+        // A journal barrier cannot say what changed; only a re-read can.
+        let Some(changes) = self
+            .live_queries
+            .changes_since(view.revision, self.revision)
+        else {
+            return self.read_watched(op_id, spec, Some(view.into_base())).await;
+        };
+        let keys = changes
+            .records
+            .into_iter()
+            .filter(|key| view.projection.records.contains_key(key))
+            .collect();
+        let bases = self.load_bases(&keys).await?;
+        let effective = effective_records(&bases, &self.optimistic, &keys);
+        let Some((patches, binding_delta)) = view.projection.update(&effective) else {
+            return self.read_watched(op_id, spec, Some(view.into_base())).await;
+        };
+        let Some(data_delta) = diff::apply_patches(&mut view.base.data, &patches) else {
+            // A binding path missing from the base would desynchronize diffs.
+            return self.read_watched(op_id, spec, None).await;
+        };
+        view.revision = self.revision;
+        // Values (especially opaque scalars) may grow between reads.
+        view.base.bytes = view.base.bytes.saturating_add_signed(data_delta);
+        view.bytes = view.bytes.saturating_add_signed(binding_delta + data_delta);
+        self.query_watches.put(op_id, view);
+        Ok(QueryUpdate::Patch {
+            patches,
+            revision: self.revision.to_string(),
+        })
+    }
+
+    /// Reads the whole query and recompiles its bindings. With the subscriber's
+    /// base it publishes a diff, falling back to a replacement for a new root.
+    async fn read_watched(
+        &mut self,
+        op_id: OpId,
+        spec: QuerySpec,
+        base: Option<Base>,
+    ) -> Result<QueryUpdate, EngineError<S::Error>> {
+        let (result, projection) = self
+            .read_query_tracked(
                 Some(op_id),
-                query,
-                operation_name,
-                variables,
-                entity_resolvers,
+                &spec.query,
+                spec.operation_name.as_deref(),
+                &spec.variables,
+                &spec.entity_resolvers,
+                true,
             )
             .await?;
         let revision = self.revision.to_string();
         let ReadResult::Hit { data } = result else {
             return Ok(QueryUpdate::Miss { revision });
         };
-        // The read just registered exactly the records it traversed. Without
-        // them a retained watch could skip a relevant change, so keep none.
-        let records = match (base.as_mut(), self.deps.op_records(op_id)) {
-            (_, None) => return Ok(QueryUpdate::Hit { data, revision }),
-            (Some(view), Some(records)) if view.records == *records => {
-                std::mem::take(&mut view.records)
-            }
-            (_, Some(records)) => records.clone(),
+        let Some(projection) = projection else {
+            return Ok(QueryUpdate::Hit { data, revision });
         };
-        if let Some(view) = base
-            && let Some(diff) = diff::diff_response(&view.data, &data)
-        {
-            let data_bytes = view.data_bytes.saturating_add_signed(diff.byte_delta);
-            self.query_watches.put(
-                op_id,
-                QueryWatch::new(spec, data, data_bytes, records, self.revision),
-            );
-            return Ok(QueryUpdate::Patch {
-                patches: diff.patches,
-                revision,
-            });
-        }
-        let data_bytes = diff::json_bytes(&data);
+        let diff = base.and_then(|base| {
+            let budget = (base.bytes / MAX_REPLACED_SHARE).max(MIN_REPLACED_BYTES);
+            diff::diff_response(&base.data, &data, budget).map(|diff| (diff, base.bytes))
+        });
+        let (update, bytes) = match diff {
+            Some((diff, bytes)) => (
+                QueryUpdate::Patch {
+                    patches: diff.patches,
+                    revision,
+                },
+                bytes.saturating_add_signed(diff.byte_delta),
+            ),
+            None => (
+                QueryUpdate::Hit {
+                    data: data.clone(),
+                    revision,
+                },
+                diff::json_bytes(&data),
+            ),
+        };
+        let base = Base { data, bytes };
         self.query_watches.put(
             op_id,
-            QueryWatch::new(spec, data.clone(), data_bytes, records, self.revision),
+            QueryWatch::new(spec, projection, base, self.revision),
         );
-        Ok(QueryUpdate::Hit { data, revision })
+        Ok(update)
     }
 }
 

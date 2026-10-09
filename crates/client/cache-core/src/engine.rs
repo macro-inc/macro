@@ -808,6 +808,28 @@ impl<S: Storage> Engine<S> {
         variables: &serde_json::Map<String, Json>,
         entity_resolvers: &[EntityResolver],
     ) -> Result<ReadResult, EngineError<S::Error>> {
+        self.read_query_tracked(
+            op_id,
+            query,
+            operation_name,
+            variables,
+            entity_resolvers,
+            false,
+        )
+        .await
+        .map(|(result, _)| result)
+    }
+
+    async fn read_query_tracked(
+        &mut self,
+        op_id: Option<OpId>,
+        query: &str,
+        operation_name: Option<&str>,
+        variables: &serde_json::Map<String, Json>,
+        entity_resolvers: &[EntityResolver],
+        track_projection: bool,
+    ) -> Result<(ReadResult, Option<crate::denormalize::QueryProjection>), EngineError<S::Error>>
+    {
         let entity_resolvers = EntityResolverLookup::compile(&self.schema, entity_resolvers)?;
         self.hydrate_optimistic().await?;
         let doc = Self::document(&mut self.docs, query)?;
@@ -848,6 +870,9 @@ impl<S: Storage> Engine<S> {
             self.schema.query_root(),
             &op.selection_set,
         );
+        if track_projection {
+            session.projection = Some(Default::default());
+        }
         let outcome = loop {
             let source = EngineSource {
                 hot: &self.hot,
@@ -909,7 +934,7 @@ impl<S: Storage> Engine<S> {
         if let Some(op_id) = op_id {
             self.deps.set_query_deps(op_id, deps);
         }
-        Ok(outcome)
+        Ok((outcome, session.projection))
     }
 
     /// Projects a bounded explicit set of normalized entity keys through a

@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 
 fn patches(before: Json, after: Json) -> Json {
-    let diff = diff_response(&before, &after).expect("root is patchable");
+    let diff = diff_response(&before, &after, usize::MAX).expect("root is patchable");
     serde_json::to_value(diff.patches).unwrap()
 }
 
@@ -83,18 +83,40 @@ fn lists_patch_items_only_when_lengths_and_identities_match() {
 
 #[test]
 fn root_replacements_are_not_patches() {
-    assert!(diff_response(&json!({"a": 1}), &json!({"b": 1})).is_none());
-    assert!(diff_response(&json!({"a": 1}), &json!({"a": 1, "b": 2})).is_none());
-    assert!(diff_response(&json!(null), &json!({"a": 1})).is_none());
+    assert!(diff_response(&json!({"a": 1}), &json!({"b": 1}), usize::MAX).is_none());
+    assert!(diff_response(&json!({"a": 1}), &json!({"a": 1, "b": 2}), usize::MAX).is_none());
+    assert!(diff_response(&json!(null), &json!({"a": 1}), usize::MAX).is_none());
 }
 
 #[test]
-fn byte_delta_tracks_replaced_values() {
-    let before = json!({"a": "short", "b": [1, 2]});
-    let after = json!({"a": "much longer text", "b": [1, 2, 3]});
-    let diff = diff_response(&before, &after).unwrap();
-    assert_eq!(
-        diff.byte_delta,
-        json_bytes(&after) as isize - json_bytes(&before) as isize
-    );
+fn replacements_beyond_the_budget_are_not_patches() {
+    let before = json!({"small": 1, "list": ["a", "b"]});
+    let after = json!({"small": 2, "list": ["a"]});
+    let list = json_bytes(&after["list"]);
+    let small = json_bytes(&after["small"]);
+    assert!(diff_response(&before, &after, small + list).is_some());
+    assert!(diff_response(&before, &after, small + list - 1).is_none());
+}
+
+#[test]
+fn applied_patches_reproduce_the_target_and_track_bytes() {
+    let before = json!({"a": "short", "b": [1, 2], "c": {"d": null}});
+    let after = json!({"a": "much longer text", "b": [1, 2, 3], "c": {"d": {"e": 1}}});
+    let mut data = before.clone();
+    let diff = diff_response(&before, &after, usize::MAX).unwrap();
+    let expected = json_bytes(&after) as isize - json_bytes(&before) as isize;
+    assert_eq!(diff.byte_delta, expected);
+    assert_eq!(apply_patches(&mut data, &diff.patches), Some(expected));
+    assert_eq!(data, after);
+    let missing = LiveFieldPatch {
+        path: vec![
+            ResponsePathSegment::Field("a".into()),
+            ResponsePathSegment::Index(0),
+        ],
+        value: json!(1),
+    };
+    let mut patches = diff_response(&after, &before, usize::MAX).unwrap().patches;
+    patches.push(missing);
+    assert!(apply_patches(&mut data, &patches).is_none());
+    assert_eq!(data, after, "an inapplicable batch changes nothing");
 }
