@@ -22,9 +22,11 @@ export function MobilePageActionRow() {
   return (
     // Screen composers (0) and search scopes (100) take precedence.
     <FloatRegion region="accessory" priority={-1} active={isAvailable}>
-      <div class="flex items-end gap-(--mobile-chrome-gutter) px-(--mobile-chrome-gutter)">
+      <div class="group/mobile-composer flex items-end gap-(--mobile-chrome-gutter) px-(--mobile-chrome-gutter)">
         {composer}
-        <MobilePageCreateButton />
+        <div class="shrink-0 empty:hidden group-has-[[data-composer-expanded=true]]/mobile-composer:hidden">
+          <MobilePageCreateButton />
+        </div>
       </div>
     </FloatRegion>
   );

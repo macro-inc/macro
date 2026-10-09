@@ -1,5 +1,5 @@
 import { ModelCatalogMenu } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -100,31 +100,27 @@ function DesktopAgentPicker(props: AgentPickerProps) {
           props.triggerClass
         )}
       >
-        <Show
-          when={rawModel()}
-          fallback={
-            <Show when={props.selected}>
-              {(agent) => (
-                <AgentIcon agent={agent()} class="size-[15px] shrink-0" />
-              )}
-            </Show>
-          }
-        >
-          <ProviderIcon model={model()} class="size-[15px]" />
-        </Show>
-        <span class="min-w-0 truncate text-left leading-5">
+        <Show when={!rawModel()}>
           <Show
-            when={rawModel()}
+            when={props.selected}
             fallback={
-              <>
-                {props.selected?.name ?? 'Choose agent'}
-                <span> · {label()}</span>
-              </>
+              <span class="min-w-0 truncate text-left leading-5">
+                Choose agent
+              </span>
             }
           >
-            {label()}
+            {(agent) => (
+              <>
+                <AgentIcon agent={agent()} class="size-[15px] shrink-0" />
+                <span class="min-w-0 truncate text-left leading-5">
+                  {agent().name}
+                </span>
+              </>
+            )}
           </Show>
-        </span>
+        </Show>
+        {/* The model shows as its provider's logo; the title spells it out. */}
+        <ModelIcon model={model()} class="size-[15px] shrink-0" />
         <CaretDownIcon class="size-[15px] shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content

@@ -28,11 +28,19 @@ import PlugIcon from '@phosphor/plugs-connected.svg';
 import AgentIcon from '@phosphor/sparkle.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Tabs } from '@ui';
+import { cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import {
+  activeFilterCount,
+  type ConversationFilters,
+  type ConversationGrouping,
+  conversationFacts,
+  conversationMatchesFilters,
+  groupConversations,
+} from '../core/conversation-filters';
 import { compactAge } from '../core/format-age';
-import { type AgentsMode, agentsModeLabel } from '../core/mode';
+import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
   type AgentConversationEntity,
@@ -41,9 +49,13 @@ import {
 import { AGENTS_TOUR } from '../tour';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
 import { AgentSessionListSkeleton } from './AgentSessionListSkeleton';
+import {
+  ConversationListControls,
+  type ConversationListControlsProps,
+} from './ConversationListControls';
 
-/** Rows a mode should fill before paging stops waiting for a scroll. */
-const MODE_PAGE_FILL = 20;
+/** Rows the filtered list should fill before paging stops waiting for a scroll. */
+const FILTERED_PAGE_FILL = 20;
 
 const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   supportsMarkDone: false,
@@ -51,10 +63,13 @@ const AGENTS_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
   senderBucket: undefined,
 };
 
-export type AgentsSidebarProps = {
-  /** Only conversations of this mode are listed. */
-  mode: AgentsMode;
-  onModeChange: (mode: AgentsMode) => void;
+export type AgentsSidebarProps = Omit<
+  ConversationListControlsProps,
+  'filters' | 'grouping'
+> & {
+  /** Only conversations matching these are listed. */
+  filters: ConversationFilters;
+  grouping: ConversationGrouping;
   activePage: AgentsPage | undefined;
   onOpenPage: (page: AgentsPage) => void;
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
@@ -166,12 +181,21 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
-  const inMode = (conversations: AgentConversationEntity[]) =>
-    conversations.filter(
-      (conversation) => props.modeForConversation(conversation) === props.mode
+  const factsOf = (conversation: AgentConversationEntity) =>
+    conversationFacts(
+      conversation,
+      props.modeForConversation(conversation),
+      unreadFilterFn(conversation)
     );
-  const conversations = () => inMode(props.conversations);
-  const archived = () => inMode(props.archived);
+  const matching = (conversations: AgentConversationEntity[]) =>
+    conversations.filter((conversation) =>
+      conversationMatchesFilters(factsOf(conversation), props.filters)
+    );
+  const conversations = () => matching(props.conversations);
+  const archived = () => matching(props.archived);
+  const groups = () =>
+    groupConversations(conversations(), factsOf, props.grouping);
+  const filtering = () => activeFilterCount(props.filters) > 0;
   const actionController = createListController({
     items: () => [...conversations(), ...archived()],
     getKey: (conversation) => conversation.id,
@@ -182,11 +206,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     getEntity: (conversation) => conversation,
   });
   const total = () => conversations().length + archived().length;
-  // Both modes page through one mixed query, so a short filtered list never
-  // scrolls far enough to ask for more; keep paging until it fills.
+  // Filters apply to one mixed query, so a short filtered list never scrolls
+  // far enough to ask for more; keep paging until it fills.
   createEffect(() => {
     if (
-      total() < MODE_PAGE_FILL &&
+      total() < FILTERED_PAGE_FILL &&
       props.hasNextPage &&
       !props.loading &&
       !props.loadingNextPage &&
@@ -255,24 +279,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </ViewSidebar.Header>
         </Show>
 
-        <div
-          ref={tourTarget(AGENTS_TOUR.modeSwitch)}
-          class="px-(--sidebar-gutter) pt-1 touch:pt-0"
-        >
-          <Tabs
-            aria-label="Agents mode"
-            fullWidth
-            list={(['chat', 'code'] as const).map((mode) => ({
-              value: mode,
-              label: agentsModeLabel(mode),
-            }))}
-            value={props.mode}
-            onChange={(value) =>
-              props.onModeChange(value === 'code' ? 'code' : 'chat')
-            }
-          />
-        </div>
-
         <Show when={!isTouchDevice()}>
           <div class="px-(--sidebar-gutter) pt-2">
             <SidebarCreateButton
@@ -329,6 +335,13 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 <span class="min-w-0 truncate">Conversations</span>
                 <CollapsibleSection.Indicator />
               </CollapsibleSection.Trigger>
+              <ConversationListControls
+                filters={props.filters}
+                grouping={props.grouping}
+                onFilterChange={props.onFilterChange}
+                onClearFilters={props.onClearFilters}
+                onGroupingChange={props.onGroupingChange}
+              />
               <CollapsibleSection.Action
                 label="Search conversations"
                 aria-pressed={searchOpen()}
@@ -358,7 +371,23 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 aria-busy={props.loading || props.loadingNextPage}
                 onScroll={loadMoreNearEnd}
               >
-                {rows(conversations)}
+                <Key each={groups()} by="id">
+                  {(group) => (
+                    <>
+                      <Show when={group().label}>
+                        {(label) => (
+                          <h3 class="flex shrink-0 items-center gap-1.5 px-(--sidebar-item-inset) pt-2 pb-1 text-xs font-medium text-ink-muted">
+                            {label()}
+                            <span class="text-ink-extra-muted tabular-nums">
+                              {group().items.length}
+                            </span>
+                          </h3>
+                        )}
+                      </Show>
+                      {rows(() => group().items)}
+                    </>
+                  )}
+                </Key>
                 <Show when={props.loading && total() === 0}>
                   <AgentSessionListSkeleton />
                 </Show>
@@ -372,10 +401,16 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
                     {props.search.trim()
                       ? `No results for "${props.search.trim()}"`
-                      : props.mode === 'code'
-                        ? 'No coding conversations yet.'
+                      : filtering()
+                        ? 'No conversations match these filters.'
                         : 'No conversations yet.'}
                   </p>
+                  <Show when={filtering()}>
+                    <ViewSidebar.Item onClick={props.onClearFilters}>
+                      <ViewSidebar.Icon />
+                      <span class="truncate">Clear filters</span>
+                    </ViewSidebar.Item>
+                  </Show>
                 </Show>
                 <Show when={props.loadingNextPage}>
                   <AgentSessionListSkeleton loadingMore />

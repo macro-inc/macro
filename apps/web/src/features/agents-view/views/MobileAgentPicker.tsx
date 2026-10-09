@@ -2,7 +2,6 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { modelLabel } from '@core/component/AI/constant/model-label';
 import ArrowLeft from '@phosphor/arrow-left.svg';
-import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import Check from '@phosphor/check.svg';
 import Plus from '@phosphor/plus.svg';
@@ -61,15 +60,19 @@ export function MobileAgentPicker(props: AgentPickerProps) {
         size="sm"
         aria-label="Agent"
         title={label()}
-        class="h-[30px] min-w-0 max-w-full gap-1 rounded-full border border-edge-muted bg-ink/5 px-2 text-[12px] font-medium leading-none text-ink-muted"
+        class="size-[34px] shrink-0 rounded-full p-0 text-ink-muted"
+        // Let click open the sheet before any native focus can move the trigger.
+        // Physical iOS devices also send mousedown after a cancelled pointerdown.
+        onPointerDown={(event: PointerEvent) => event.preventDefault()}
+        onMouseDown={(event: MouseEvent) => event.preventDefault()}
       >
-        <Show when={props.selected?.id !== MACRO_PERSONA_ID && props.selected}>
-          {(agent) => (
-            <AgentIcon agent={agent()} class="size-[12px] shrink-0" />
-          )}
+        {/* Icon only on a phone; the title and the sheet name the choice. */}
+        <Show
+          when={props.selected?.id !== MACRO_PERSONA_ID && props.selected}
+          fallback={<ModelIcon model={model()} class="size-[18px]" />}
+        >
+          {(agent) => <AgentIcon agent={agent()} class="size-[18px]" />}
         </Show>
-        <span class="truncate">{label()}</span>
-        <CaretDown class="size-[10px] shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />

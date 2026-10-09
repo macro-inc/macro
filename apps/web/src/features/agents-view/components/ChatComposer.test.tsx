@@ -525,7 +525,7 @@ it('keeps the paperclip visible while the session is unavailable', () => {
 });
 
 it.each([undefined, 'Describe what you want to build'])(
-  'leaves the mobile editor blank instead of showing placeholder %s',
+  'uses a short mobile placeholder instead of the desktop prompt %s',
   (placeholder) => {
     vi.mocked(isTouchDevice).mockReturnValue(true);
     render(() => (
@@ -537,7 +537,7 @@ it.each([undefined, 'Describe what you want to build'])(
         selector={<button>Model</button>}
       />
     ));
-    expect(screen.getByTestId('editor').textContent).toBe('');
+    expect(screen.getByTestId('editor').textContent).toBe('Message Macro AI');
   }
 );
 
@@ -551,6 +551,7 @@ it('expands Home controls on focus without replacing the editor or model picker'
       onSend={() => {}}
       onAttachFiles={() => {}}
       selector={<button>Model</button>}
+      corner={<button>Chat / Code</button>}
       drawer={<button>Repository</button>}
       drawerOpen
     />
@@ -559,24 +560,78 @@ it('expands Home controls on focus without replacing the editor or model picker'
   const model = screen.getByRole('button', { name: 'Model' });
   const attach = screen.getByRole('button', { name: 'Attach files' });
   const repository = container.querySelector('.composer-drawer');
+  const surface = container.querySelector('[data-agent-composer]');
   const compact = () => input.closest('[data-composer-compact]');
 
   expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
   expect(model.parentElement?.classList.contains('hidden')).toBe(false);
   expect(attach.parentElement?.classList.contains('hidden')).toBe(true);
   expect(repository?.getAttribute('aria-hidden')).toBe('true');
+  expect(surface?.hasAttribute('data-composer-expanded')).toBe(false);
 
   fireEvent.focusIn(input);
   expect(compact()?.getAttribute('data-composer-compact')).toBe('false');
   expect(model.parentElement?.classList.contains('hidden')).toBe(false);
   expect(attach.parentElement?.classList.contains('hidden')).toBe(false);
   expect(repository?.getAttribute('aria-hidden')).toBe('false');
+  expect(surface?.getAttribute('data-composer-expanded')).toBe('true');
 
   fireEvent.pointerDown(document.body);
   expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
   expect(repository?.getAttribute('aria-hidden')).toBe('true');
+  expect(surface?.hasAttribute('data-composer-expanded')).toBe(false);
   expect(screen.getByTestId('editor')).toBe(input);
   expect(screen.getByRole('button', { name: 'Model' })).toBe(model);
+});
+
+it('expands a short mobile session draft on focus and keeps the editor mounted', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  render(() => (
+    <ChatSessionInput
+      initialInput="Keep this draft"
+      onSend={() => {}}
+      modelControl={<button>Model</button>}
+    />
+  ));
+  const input = screen.getByTestId('editor');
+  const compact = () =>
+    input
+      .closest('[data-composer-compact]')
+      ?.getAttribute('data-composer-compact');
+
+  expect(compact()).toBe('true');
+  fireEvent.focusIn(input);
+  expect(compact()).toBe('false');
+  fireEvent.focusOut(input, { relatedTarget: document.body });
+  expect(compact()).toBe('true');
+  expect(screen.getByTestId('editor')).toBe(input);
+  expect(editor.clear).not.toHaveBeenCalled();
+});
+
+it('keeps the collapsed model trigger in place until its click opens the selector', () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const open = vi.fn();
+  render(() => (
+    <ChatComposer
+      collapseOnBlur
+      draft=""
+      onDraftChange={() => {}}
+      onSend={() => {}}
+      selector={<button onClick={open}>Model</button>}
+    />
+  ));
+  const trigger = screen.getByRole('button', { name: 'Model' });
+  const compact = screen
+    .getByTestId('editor')
+    .closest('[data-composer-compact]');
+
+  fireEvent.pointerDown(trigger);
+  fireEvent.mouseDown(trigger);
+  trigger.focus();
+  expect(compact?.getAttribute('data-composer-compact')).toBe('true');
+  fireEvent.click(trigger);
+  expect(open).toHaveBeenCalledOnce();
+  expect(preloadAgentFold).not.toHaveBeenCalled();
 });
 
 it.each(['Send', 'Attach files', 'Model'])(
