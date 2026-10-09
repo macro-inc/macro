@@ -41,6 +41,9 @@ pub(crate) struct ChannelMessageSearchConfig;
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: Option<&'static str> = Some("sender_id");
     const TITLE_KEY: &'static str = "name";
+    // Search authors directly: copying them into content hides body highlights
+    // in OpenSearch, including messages with no imported author.
+    const CONTENT_FIELDS: &'static [&'static str] = &["content", "imported_author"];
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::Channels;
 }
 
