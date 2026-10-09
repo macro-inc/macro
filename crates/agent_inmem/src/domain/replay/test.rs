@@ -30,10 +30,6 @@ fn prompt_frame(text: &str) -> Message {
 /// A logged `session/update` notification, the shape the agent streams.
 fn update_frame(update: SessionUpdate) -> Message {
     let notification = SessionNotification::new(acp_session(), update);
-    notification_frame(notification)
-}
-
-fn notification_frame(notification: SessionNotification) -> Message {
     let raw: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
         "jsonrpc": "2.0",
         "method": "session/update",
@@ -41,43 +37,6 @@ fn notification_frame(notification: SessionNotification) -> Message {
     }))
     .expect("a notification frame should deserialize");
     Message::ToServer(ToServerMessage::Acp(AcpMessage(raw)))
-}
-
-#[test]
-fn a_saved_summary_restores_recent_turns_and_the_prompt_that_triggered_compaction() {
-    let mut meta = agent_client_protocol::schema::v1::Meta::new();
-    meta.insert(
-        "macro".to_owned(),
-        serde_json::json!({
-            "contextSummary": {"text": "The report was already emailed.", "retained_entries": 2}
-        }),
-    );
-    let history = replay_history(vec![
-        prompt_frame("Email the report"),
-        update_frame(message_chunk("Sent")),
-        prompt_frame("Use concise replies"),
-        update_frame(message_chunk("Understood")),
-        prompt_frame("What next?"),
-        notification_frame(SessionNotification::new(acp_session(), message_chunk("")).meta(meta)),
-        update_frame(message_chunk("Review the result")),
-    ]);
-    let messages =
-        crate::domain::session::messages_for_turn(&history, &UserPrompt::text("continue"));
-    let texts: Vec<_> = messages
-        .iter()
-        .map(|message| message.content.message_text())
-        .collect();
-    assert_eq!(
-        &texts[1..],
-        [
-            "The report was already emailed.",
-            "Use concise replies",
-            "Understood",
-            "What next?",
-            "Review the result",
-            "continue"
-        ]
-    );
 }
 
 /// A logged `session/prompt` whose text is followed by one file link.
@@ -189,7 +148,7 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
 }
 
 #[test]
-fn a_compact_request_without_a_saved_summary_preserves_history() {
+fn a_compact_prompt_drops_everything_recorded_before_it() {
     let history = replay_history(vec![
         prompt_frame("remember this"),
         update_frame(message_chunk("noted")),
@@ -201,16 +160,9 @@ fn a_compact_request_without_a_saved_summary_preserves_history() {
         update_frame(message_chunk("fresh")),
     ]);
 
-    let [
-        HistoryEntry::User(before),
-        _,
-        HistoryEntry::User(prompt),
-        HistoryEntry::Assistant(parts),
-    ] = history.as_slice()
-    else {
-        panic!("the full conversation should replay, got {history:#?}");
+    let [HistoryEntry::User(prompt), HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("only the post-compact turn should replay, got {history:#?}");
     };
-    assert_eq!(before.text, "remember this");
     assert_eq!(prompt.text, "after");
     assert_eq!(
         parts.as_slice(),

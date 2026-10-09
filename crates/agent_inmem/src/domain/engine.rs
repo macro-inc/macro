@@ -34,8 +34,6 @@ pub struct AgentIdentity {
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
-    /// A summary reads existing context with no tools, user memory, or side effects.
-    pub purpose: TurnPurpose,
     /// The session the turn belongs to.
     pub session_id: agent_session::domain::model::AgentSessionId,
     /// Counts what the turn is waiting on a person for - a question, or a
@@ -76,15 +74,6 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
-}
-
-/// Whether this model call answers the user or compresses existing context.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TurnPurpose {
-    /// A normal agent turn with the persona's tools.
-    Conversation,
-    /// A read-only summary call with all tools disabled.
-    Summary,
 }
 
 /// How many things a turn currently waits on a person for. Shared between

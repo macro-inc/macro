@@ -290,7 +290,6 @@ async fn drive_turn(
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
-        purpose,
         session_id,
         awaiting,
         owner,
@@ -322,11 +321,6 @@ async fn drive_turn(
         }
     };
 
-    // A summary turn condenses the conversation for its continuation: it
-    // reads no memory, offers the model no tools, and is read, not shown, so
-    // no opening line races it.
-    let summarizing = purpose == crate::domain::engine::TurnPurpose::Summary;
-
     // Started before anything else so its line is out before the turn's
     // model has a first token.
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
@@ -339,58 +333,38 @@ async fn drive_turn(
     // reply), `silent` (no line fit this follow-up), `turn_first` (the
     // turn's model spoke first), `no_verdict` (the
     // fast model failed or answered without one) or `timeout`.
-    let opener_span = if summarizing {
-        tracing::Span::none()
-    } else {
-        tracing::info_span!(
-            "agent.opener",
-            agent.opener.model = opener::MODEL,
-            agent.opener.outcome = tracing::field::Empty,
-            agent.opener.verdict_ms = tracing::field::Empty,
-            agent.opener.line_chars = tracing::field::Empty,
-            agent.opener.turn_first_part_ms = tracing::field::Empty,
+    let opener_span = tracing::info_span!(
+        "agent.opener",
+        agent.opener.model = opener::MODEL,
+        agent.opener.outcome = tracing::field::Empty,
+        agent.opener.verdict_ms = tracing::field::Empty,
+        agent.opener.line_chars = tracing::field::Empty,
+        agent.opener.turn_first_part_ms = tracing::field::Empty,
+    );
+    let mut opening_line = opener_span.in_scope(|| {
+        opener::spawn(
+            base_context.recorder.clone(),
+            usage_ctx.clone(),
+            &opener::Speaker {
+                agent: &agent,
+                model: crate::domain::models::display_name(&model),
+            },
+            &native_tools.tool_names,
+            &messages,
         )
-    };
-    // A closed receiver has no verdict, and the turn's own stream follows.
-    let mut opening_line = if summarizing {
-        mpsc::channel(1).1
-    } else {
-        opener_span.in_scope(|| {
-            opener::spawn(
-                base_context.recorder.clone(),
-                usage_ctx.clone(),
-                &opener::Speaker {
-                    agent: &agent,
-                    model: crate::domain::models::display_name(&model),
-                },
-                &native_tools.tool_names,
-                &messages,
-            )
-        })
-    };
+    });
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let (system_prompt, toolset, deferred) = if summarizing {
-        (
-            SystemPrompt::from(crate::domain::agent::compaction::SUMMARY_INSTRUCTIONS),
-            Arc::new(AsyncToolCollection::<InMemToolContext>::new()),
-            Arc::from(Vec::new()),
-        )
-    } else {
-        let user_memory = fetch_user_memory(memory, &owner).await;
-        let prompt = system_prompt(
-            &native_tools.prompt,
-            identity.as_ref(),
-            instructions.as_deref(),
-            user_memory.as_deref(),
-        );
-        (
-            prompt,
-            native_tools.for_turn(user_input.is_some()),
-            Arc::clone(&native_tools.deferred),
-        )
-    };
+    let user_memory = fetch_user_memory(memory, &owner).await;
+    let system_prompt = system_prompt(
+        &native_tools.prompt,
+        identity.as_ref(),
+        instructions.as_deref(),
+        user_memory.as_deref(),
+    );
+
+    let toolset = native_tools.for_turn(user_input.is_some());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
@@ -417,7 +391,7 @@ async fn drive_turn(
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false);
-    if let Some(reviewer) = reviewer.filter(|_| !summarizing) {
+    if let Some(reviewer) = reviewer {
         agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
             Arc::clone(&toolset),
             tool_context.clone(),
@@ -432,13 +406,15 @@ async fn drive_turn(
     // through that proxy and are not asked twice.
     // Keep remote MCP tools alongside the native and AskUser tools. The
     // finisher above reviews only Macro's native user tools.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools.filter(|_| !summarizing) {
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
         Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
         None => toolset,
     };
     // Most of Macro's tools go out by name only; the model loads the rest.
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> =
-        Arc::new(DeferredToolSet::new(toolset, deferred));
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(DeferredToolSet::new(
+        toolset,
+        Arc::clone(&native_tools.deferred),
+    ));
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(GatedToolSet {
         tools: toolset,
         gate,
