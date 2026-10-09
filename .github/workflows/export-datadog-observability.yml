@@ -21,7 +21,8 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
         run: bun infra/stacks/observability/migration/export-datadog.ts /tmp/datadog-inventory
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: datadog-observability-definitions
           path: /tmp/datadog-inventory
