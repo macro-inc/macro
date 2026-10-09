@@ -1,5 +1,6 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as logger from './logger';
 import type { RawUpdate } from './shared';
 import { disposeTelemetryFor } from './telemetry';
 import { MockLiveSyncSource, MockWALStore, makeTestWAL } from './testing';
@@ -35,6 +36,44 @@ async function undeliveredCount(
 // pruneDelivered() is called by the snapshot tick after a durable snapshot save.
 
 describe('WALSyncer', () => {
+  it('handles background storage failures once per outage and retries on the next trigger', async () => {
+    const log = vi.spyOn(logger, 'logSyncService').mockImplementation(() => {});
+    const store = new MockWALStore<RawUpdate>();
+    const push = vi.fn(async () => true);
+    const wal = new WALSyncer(store, push, 'wal-telemetry-test');
+    await wal.ready();
+    await store.append(new Uint8Array([1]));
+    const getAll = vi
+      .spyOn(store, 'getAll')
+      .mockRejectedValue(
+        new DOMException('Storage unavailable', 'UnknownError')
+      );
+
+    void wal.flush();
+    await vi.waitFor(() =>
+      expect(
+        log.mock.calls.filter(([entry]) => entry.level === 'error')
+      ).toHaveLength(1)
+    );
+    await expect(wal.flush()).rejects.toMatchObject({ name: 'UnknownError' });
+    expect(
+      log.mock.calls.filter(([entry]) => entry.level === 'error')
+    ).toHaveLength(1);
+    expect(push).not.toHaveBeenCalled();
+
+    getAll.mockRestore();
+    await wal.flush();
+    expect(push).toHaveBeenCalledExactlyOnceWith([new Uint8Array([1])]);
+
+    vi.spyOn(store, 'getAll').mockRejectedValue(
+      new DOMException('Storage unavailable', 'UnknownError')
+    );
+    await expect(wal.flush()).rejects.toMatchObject({ name: 'UnknownError' });
+    expect(
+      log.mock.calls.filter(([entry]) => entry.level === 'error')
+    ).toHaveLength(2);
+  });
+
   it('persists before delivering, marks delivered on ack', async () => {
     const live = new MockLiveSyncSource();
     const { wal, walStore } = makeWAL(live);

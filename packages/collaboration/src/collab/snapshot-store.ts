@@ -1,6 +1,7 @@
-import { type DBSchema, type IDBPDatabase, openDB as idbOpen } from 'idb';
+import type { DBSchema } from 'idb';
 import { logSyncService } from './logger';
 import { type LoroManager, LoroManagerError } from './manager';
+import { RecoverableDatabase } from './recoverable-database';
 import type { GenericRootSchema, RawUpdate } from './shared';
 import type { WALStore } from './wal';
 
@@ -24,22 +25,23 @@ interface SnapshotSchema<T> extends DBSchema {
 }
 
 export class IDBSnapshotStore<T> implements SnapshotStore<T> {
-  private db: Promise<IDBPDatabase<SnapshotSchema<T>>>;
+  private readonly database: RecoverableDatabase<SnapshotSchema<T>>;
 
   constructor(
     dbName: string,
     private readonly scopeId: string
   ) {
-    this.db = idbOpen<SnapshotSchema<T>>(dbName, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore(STORE, { keyPath: 'scopeId' });
-      },
+    this.database = new RecoverableDatabase(dbName, DB_VERSION, (db) => {
+      db.createObjectStore(STORE, { keyPath: 'scopeId' });
     });
   }
 
   public async save(snapshot: T): Promise<void> {
-    const db = await this.db;
-    await db.put(STORE, { scopeId: this.scopeId, snapshot });
+    const tx = await this.database.transaction(STORE, 'readwrite');
+    await Promise.all([
+      tx.store.put({ scopeId: this.scopeId, snapshot }),
+      tx.done,
+    ]);
     logSyncService({
       documentId: this.scopeId,
       level: 'debug',
@@ -49,8 +51,8 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async load(): Promise<T | null> {
-    const db = await this.db;
-    const row = await db.get(STORE, this.scopeId);
+    const tx = await this.database.transaction(STORE, 'readonly');
+    const row = await tx.store.get(this.scopeId);
     const found = row?.snapshot ?? null;
     logSyncService({
       documentId: this.scopeId,
@@ -64,8 +66,8 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async delete(): Promise<void> {
-    const db = await this.db;
-    await db.delete(STORE, this.scopeId);
+    const tx = await this.database.transaction(STORE, 'readwrite');
+    await Promise.all([tx.store.delete(this.scopeId), tx.done]);
   }
 }
 
