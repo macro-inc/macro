@@ -2,7 +2,6 @@ import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
-import { takeBootResponse } from './boot-requests';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
@@ -57,9 +56,7 @@ function tracedFetch(
       if (isTracedOrigin(url)) {
         span.injectTraceHeaders(init.headers);
       }
-      // src/boot.ts may already have this response in flight.
-      const response = await (takeBootResponse(url.href, init) ??
-        platformFetch(input, init));
+      const response = await platformFetch(input, init);
       span.setAttr('http.response_headers_ms', performance.now() - started);
       span.setAttr('http.timing_scope', 'until_response_headers');
       span.setAttr('http.status_code', response.status);

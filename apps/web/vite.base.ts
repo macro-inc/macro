@@ -135,17 +135,13 @@ function cloudFrontCompressionLimit(): Plugin {
  * XMLHttpRequest and compiles it on the main thread, freezing startup for the
  * whole download. Builds use the `bundler` export that dev already resolves
  * through the `development` condition: vite-plugin-wasm streams and compiles it
- * off the main thread, and the preload fetches it alongside the entry.
+ * off the main thread (htmlPreloads starts its download with the HTML).
  */
 function loroAsyncWasm(): Plugin {
-  let base = '/';
   return {
     name: 'loro-async-wasm',
     apply: 'build',
     enforce: 'pre',
-    configResolved(config) {
-      base = config.base.endsWith('/') ? config.base : `${config.base}/`;
-    },
     resolveId(source, importer, options) {
       if (source !== 'loro-crdt') return null;
       return this.resolve('loro-crdt/bundler', importer, {
@@ -153,66 +149,59 @@ function loroAsyncWasm(): Plugin {
         skipSelf: true,
       });
     },
-    transformIndexHtml: {
-      order: 'post',
-      handler(_html, ctx) {
-        const wasmFile = Object.keys(ctx.bundle ?? {}).find((fileName) =>
-          /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/.test(fileName)
-        );
-        if (!wasmFile) return;
-        return [
-          {
-            tag: 'link',
-            attrs: {
-              rel: 'preload',
-              href: `${base}${wasmFile}`,
-              as: 'fetch',
-              type: 'application/wasm',
-              crossorigin: '',
-            },
-            injectTo: 'head',
-          },
-        ];
-      },
-    },
   };
 }
 
-const BOOT_ENTRY = resolve(__dirname, 'src/boot.ts');
+/** Hashed assets the first screen needs; index.html requests them while it parses. */
+const HTML_PRELOADS = [
+  // The app waits for Loro to initialize before rendering.
+  {
+    file: /(^|\/)loro_wasm_bg-[\w-]+\.wasm$/,
+    as: 'fetch',
+    type: 'application/wasm',
+  },
+  // The UI font; otherwise it starts downloading only once text renders.
+  {
+    file: /(^|\/)inter-latin-wght-normal-[\w-]+\.woff2$/,
+    as: 'font',
+    type: 'font/woff2',
+  },
+] as const;
 
 /**
- * Loads `src/boot.ts` ahead of the app bundle. A second module script in
- * index.html would be merged into the app's entry chunk by the build, so the
- * build gets a separate `boot` entry and the page an async script for it;
- * dev serves the module directly.
+ * Adds `<link rel="preload">` for HTML_PRELOADS, so their downloads start with
+ * the HTML instead of after the entry runs. The service worker caches preloads
+ * with the shell.
  */
-function bootEntry(): Plugin {
+function htmlPreloads(): Plugin {
   let base = '/';
   return {
-    name: 'boot-entry',
-    config(_config, env) {
-      if (env.command !== 'build') return;
-      return { build: { rollupOptions: { input: { boot: BOOT_ENTRY } } } };
-    },
+    name: 'html-preloads',
+    apply: 'build',
     configResolved(config) {
       base = config.base.endsWith('/') ? config.base : `${config.base}/`;
     },
     transformIndexHtml: {
       order: 'post',
       handler(_html, ctx) {
-        const chunk = Object.values(ctx.bundle ?? {}).find(
-          (file) =>
-            file.type === 'chunk' && file.isEntry && file.name === 'boot'
-        );
-        if (ctx.bundle && !chunk) return;
-        const src = chunk ? `${base}${chunk.fileName}` : '/src/boot.ts';
-        return [
-          {
-            tag: 'script',
-            attrs: { type: 'module', async: true, crossorigin: true, src },
-            injectTo: 'head-prepend',
-          },
-        ];
+        const files = Object.keys(ctx.bundle ?? {});
+        return HTML_PRELOADS.flatMap((preload) => {
+          const file = files.find((fileName) => preload.file.test(fileName));
+          if (!file) return [];
+          return [
+            {
+              tag: 'link',
+              attrs: {
+                rel: 'preload',
+                href: `${base}${file}`,
+                as: preload.as,
+                type: preload.type,
+                crossorigin: '',
+              },
+              injectTo: 'head' as const,
+            },
+          ];
+        });
       },
     },
   };
@@ -241,6 +230,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         solid(),
         wasm(),
         loroAsyncWasm(),
+        htmlPreloads(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
@@ -248,7 +238,6 @@ export const createAppViteConfig = (): UserConfigFn => {
         }),
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
-        bootEntry(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
