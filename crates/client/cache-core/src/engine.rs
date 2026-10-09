@@ -824,7 +824,7 @@ impl<S: Storage> Engine<S> {
             operation_name,
             variables,
             entity_resolvers,
-            false,
+            Tracking::default(),
         )
         .await
         .map(|read| read.result)
@@ -837,10 +837,15 @@ impl<S: Storage> Engine<S> {
         operation_name: Option<&str>,
         variables: &serde_json::Map<String, Json>,
         entity_resolvers: &[EntityResolver],
-        track_projection: bool,
+        tracking: Tracking<'_>,
     ) -> Result<TrackedRead, EngineError<S::Error>> {
         let entity_resolvers = EntityResolverLookup::compile(&self.schema, entity_resolvers)?;
         self.hydrate_optimistic().await?;
+        let mut membership_unknown = false;
+        // Lists this read used last time are derived before its first pass.
+        if !tracking.derivations.is_empty() {
+            membership_unknown |= self.derive_lists(tracking.derivations).await?.unknown;
+        }
         let doc = Self::document(&mut self.docs, query)?;
         let op = doc.operation(operation_name)?.prepare(variables)?;
         if op.kind != OperationKind::Query {
@@ -870,15 +875,14 @@ impl<S: Storage> Engine<S> {
         // to promote into the hot tier afterwards).
         let mut fetched_base: HashMap<EntityKey<'static>, Record> = HashMap::new();
         let mut known_absent: BTreeSet<EntityKey<'static>> = BTreeSet::new();
-        // Declared relation lists are derived between passes: a pass that
-        // meets an underived list reads its evidence and asks for it, and the
-        // next pass reads the derived value. Records fetched so far are kept.
+        // Declared relation lists are derived between passes and kept for the
+        // revision: a pass that meets an underived list reads its evidence
+        // and asks for it. Another pass runs only if a derived list differs
+        // from that evidence. Records fetched so far are kept.
         let schema = Arc::clone(&self.schema);
-        let mut derived = membership::DerivedLists::new();
-        let mut attempted = BTreeSet::new();
-        let mut membership_unknown = false;
         let mut round = 0;
-        let (outcome, projection, deps) = loop {
+        let (outcome, projection, deps, derivations) = loop {
+            self.membership.derived_at(self.revision);
             let mut deps = QueryDependencies::default();
             let mut plans = ReadPlans::default();
             let mut session = ReadSession::new(
@@ -887,7 +891,7 @@ impl<S: Storage> Engine<S> {
                 schema.query_root(),
                 &op.selection_set,
             );
-            if track_projection {
+            if tracking.projection {
                 session.projection = Some(Default::default());
             }
             session.derivations = Some(Vec::new());
@@ -896,7 +900,7 @@ impl<S: Storage> Engine<S> {
                     hot: &self.hot,
                     fetched: &fetched_base,
                     composed: &composed,
-                    derived: &derived,
+                    derived: self.membership.derived(),
                 };
                 match session.resume(
                     variables,
@@ -948,23 +952,27 @@ impl<S: Storage> Engine<S> {
                     }
                 }
             };
-            let requests: Vec<_> = session
-                .derivations
-                .take()
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|request| {
-                    !attempted.contains(&(request.owner.clone(), request.field.clone()))
-                })
-                .collect();
-            if requests.is_empty() || round == membership::MAX_DERIVATION_ROUNDS {
-                membership_unknown |= !requests.is_empty();
-                break (outcome, session.projection, deps);
+            let derivations = session.derivations.take().unwrap_or_default();
+            let (served, pending): (Vec<_>, Vec<_>) = derivations
+                .iter()
+                .cloned()
+                .partition(|request| request.served);
+            membership_unknown |= served
+                .iter()
+                .any(|request| self.membership.unknown(&request.owner, &request.field));
+            if pending.is_empty() {
+                break (outcome, session.projection, deps, derivations);
+            }
+            if round == membership::MAX_DERIVATION_ROUNDS {
+                membership_unknown = true;
+                break (outcome, session.projection, deps, derivations);
             }
             round += 1;
-            membership_unknown |= self
-                .derive_lists(requests, &mut derived, &mut attempted)
-                .await?;
+            let derived = self.derive_lists(&pending).await?;
+            membership_unknown |= derived.unknown;
+            if !derived.changed {
+                break (outcome, session.projection, deps, derivations);
+            }
         };
 
         // Refresh borrowed hot records before cold promotions can evict them.
@@ -981,6 +989,7 @@ impl<S: Storage> Engine<S> {
             result: outcome,
             projection,
             membership_unknown,
+            derivations,
         })
     }
 
@@ -3295,6 +3304,16 @@ impl<S: PredicateIndexStorage> Engine<S> {
     }
 }
 
+/// What a tracked read records beyond its result.
+#[derive(Default)]
+struct Tracking<'a> {
+    /// Compile response-path bindings.
+    projection: bool,
+    /// Declared lists to derive before the first pass, such as those the
+    /// same watch read last time.
+    derivations: &'a [crate::denormalize::DerivationRequest],
+}
+
 /// One cache read with its optional projection.
 struct TrackedRead {
     result: ReadResult,
@@ -3302,6 +3321,8 @@ struct TrackedRead {
     /// A derived list kept its server evidence because membership could not
     /// be decided locally; the caller should refetch it.
     membership_unknown: bool,
+    /// Declared lists the read used.
+    derivations: Vec<crate::denormalize::DerivationRequest>,
 }
 
 /// Read view over the durable tiers plus the optimistic composition. Uses
@@ -3330,11 +3351,8 @@ impl RecordSource for EngineSource<'_> {
         &self,
         owner: &EntityKey<'static>,
         field: &str,
-    ) -> Option<&crate::value::CacheValue> {
-        if self.derived.is_empty() {
-            return None;
-        }
-        self.derived.get(&(owner.clone(), field.to_owned()))
+    ) -> crate::denormalize::DerivedField<'_> {
+        membership::derived_field(self.derived, owner, field)
     }
 }
 

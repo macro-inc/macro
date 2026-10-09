@@ -30,20 +30,32 @@ pub(crate) use projection::QueryProjection;
 pub trait RecordSource {
     fn get(&self, key: &EntityKey<'static>) -> Option<&Record>;
 
-    /// The derived value of a declared relation list, once the engine has
-    /// computed it. Without one, the read uses the stored evidence.
-    fn derived_list(&self, _owner: &EntityKey<'static>, _field: &str) -> Option<&CacheValue> {
-        None
+    /// How to read a declared relation list. Sources that do not derive
+    /// membership read the stored evidence.
+    fn derived_list(&self, _owner: &EntityKey<'static>, _field: &str) -> DerivedField<'_> {
+        DerivedField::Evidence
     }
 }
 
-/// A declared relation list the read met before its value was derived.
+/// The value a read uses for a declared relation list.
+pub enum DerivedField<'a> {
+    /// Not derived yet: read the evidence and ask the engine to derive it.
+    Pending,
+    /// The derived list equals the stored evidence.
+    Evidence,
+    /// The derived list.
+    List(&'a CacheValue),
+}
+
+/// A declared relation list the read met.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct DerivationRequest {
     pub owner: EntityKey<'static>,
     pub field: String,
     pub relation: crate::membership::RelationId,
     pub arguments: std::sync::Arc<serde_json::Map<String, Json>>,
+    /// The source already had the derived list.
+    pub served: bool,
 }
 
 impl RecordSource for std::collections::BTreeMap<EntityKey<'static>, Record> {
@@ -510,24 +522,24 @@ impl<'document, S: RecordSource, D: DependencyTracker> Walk<'_, 'document, S, D>
                     self.mark_miss(owner, key.to_string());
                     return Ok(None);
                 };
-                let value = match self.source.derived_list(owner, key) {
-                    Some(value) => value,
-                    None => {
-                        if let Some(requests) = self.derivations.as_mut()
-                            && !requests
-                                .iter()
-                                .any(|request| request.owner == *owner && request.field == *key)
-                        {
-                            requests.push(DerivationRequest {
-                                owner: owner.clone(),
-                                field: key.to_string(),
-                                relation: *relation,
-                                arguments: std::sync::Arc::clone(arguments),
-                            });
-                        }
-                        evidence
-                    }
+                let (value, served) = match self.source.derived_list(owner, key) {
+                    DerivedField::List(value) => (value, true),
+                    DerivedField::Evidence => (evidence, true),
+                    DerivedField::Pending => (evidence, false),
                 };
+                if let Some(requests) = self.derivations.as_mut()
+                    && !requests
+                        .iter()
+                        .any(|request| request.owner == *owner && request.field == *key)
+                {
+                    requests.push(DerivationRequest {
+                        owner: owner.clone(),
+                        field: key.to_string(),
+                        relation: *relation,
+                        arguments: std::sync::Arc::clone(arguments),
+                        served,
+                    });
+                }
                 self.read_value(owner, field.node, ty, value).map(Some)
             }
         }

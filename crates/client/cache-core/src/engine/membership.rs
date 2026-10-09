@@ -3,26 +3,25 @@
 //! derivation between read passes.
 
 use super::*;
-use crate::denormalize::DerivationRequest;
+use crate::denormalize::{DerivationRequest, DerivedField};
 use crate::membership::{
-    CHANGED_AT_FIELD, CLOCK_FIELD, CLOCK_KEY, Child, Derivation, evidence_key, stamp_child,
-    stamp_of,
+    CHANGED_AT_FIELD, CLOCK_FIELD, CLOCK_KEY, Child, evidence_key, stamp_child, stamp_of,
 };
 use crate::value::{CacheNumber, CacheValue};
 
 /// Derive-then-reread rounds before a read keeps any remaining evidence.
 pub(super) const MAX_DERIVATION_ROUNDS: usize = 4;
 
-/// Lists derived for one read, keyed by owner record and evidence field.
-pub(super) type DerivedLists = HashMap<(EntityKey<'static>, String), CacheValue>;
+/// Lists derived at one revision, by owner record and evidence field.
+pub(super) type DerivedLists = HashMap<EntityKey<'static>, HashMap<String, DerivedEntry>>;
 
 #[derive(Default)]
 pub(super) struct MembershipState {
     /// Stamped children of each child type, loaded on first derivation.
     index: HashMap<String, ChildIndex>,
-    /// Lists derived at `memo_revision`; any revision change discards them.
-    memo: HashMap<(EntityKey<'static>, String), Option<Derivation>>,
-    memo_revision: Option<CacheRevision>,
+    /// Lists derived at `derived_revision`; reads at that revision reuse them.
+    derived: DerivedLists,
+    derived_revision: Option<CacheRevision>,
     /// Highest sequence this engine allocated or read.
     clock: u64,
 }
@@ -57,8 +56,31 @@ impl MembershipState {
     /// Another engine or a reset changed storage: reload indexes lazily.
     pub(super) fn clear(&mut self) {
         self.index.clear();
-        self.memo.clear();
-        self.memo_revision = None;
+        self.derived.clear();
+        self.derived_revision = None;
+    }
+
+    /// Derived lists valid at `revision`; other revisions' are discarded.
+    pub(super) fn derived_at(&mut self, revision: CacheRevision) -> &DerivedLists {
+        if self.derived_revision != Some(revision) {
+            self.derived.clear();
+            self.derived_revision = Some(revision);
+        }
+        &self.derived
+    }
+
+    /// Lists derived so far at the current revision.
+    pub(super) fn derived(&self) -> &DerivedLists {
+        &self.derived
+    }
+
+    /// Whether a derived list kept its evidence because membership was unknown.
+    pub(super) fn unknown(&self, owner: &EntityKey<'static>, field: &str) -> bool {
+        self.entry(owner, field).is_some_and(|entry| entry.unknown)
+    }
+
+    fn entry(&self, owner: &EntityKey<'static>, field: &str) -> Option<&DerivedEntry> {
+        self.derived.get(owner)?.get(field)
     }
 
     /// A record changed outside this engine: its type's stamps are reread.
@@ -89,6 +111,21 @@ impl MembershipState {
                 index.note(key, None);
             }
         }
+    }
+}
+
+/// How a read source answers a declared list from the derived lists.
+pub(super) fn derived_field<'a>(
+    derived: &'a DerivedLists,
+    owner: &EntityKey<'static>,
+    field: &str,
+) -> DerivedField<'a> {
+    match derived.get(owner).and_then(|fields| fields.get(field)) {
+        None => DerivedField::Pending,
+        Some(DerivedEntry { list: None, .. }) => DerivedField::Evidence,
+        Some(DerivedEntry {
+            list: Some(list), ..
+        }) => DerivedField::List(list),
     }
 }
 
@@ -177,79 +214,58 @@ impl<S: Storage> Engine<S> {
         Ok(())
     }
 
-    /// Derives the requested lists into `derived`. Returns whether any list
-    /// kept its evidence because membership could not be decided.
+    /// Derives requested lists into the per-revision lists the next pass
+    /// reads. A list equal to its evidence is recorded as such, so the pass
+    /// that requested it is already correct.
     pub(super) async fn derive_lists(
         &mut self,
-        requests: Vec<DerivationRequest>,
-        derived: &mut DerivedLists,
-        attempted: &mut BTreeSet<(EntityKey<'static>, String)>,
-    ) -> Result<bool, EngineError<S::Error>> {
-        if self.membership.memo_revision != Some(self.revision) {
-            self.membership.memo.clear();
-            self.membership.memo_revision = Some(self.revision);
-        }
-        let mut unknown = false;
+        requests: &[DerivationRequest],
+    ) -> Result<Derived, EngineError<S::Error>> {
+        self.membership.derived_at(self.revision);
+        let mut outcome = Derived::default();
         for request in requests {
-            let slot = (request.owner.clone(), request.field.clone());
-            if !attempted.insert(slot.clone()) {
+            if let Some(entry) = self.membership.entry(&request.owner, &request.field) {
+                outcome.unknown |= entry.unknown;
                 continue;
             }
-            let derivation = match self.membership.memo.get(&slot) {
-                Some(memo) => memo.clone(),
-                None => {
-                    let derivation = self.derive_list(&request).await?;
-                    self.membership
-                        .memo
-                        .insert(slot.clone(), derivation.clone());
-                    derivation
-                }
-            };
-            if let Some(derivation) = derivation {
-                unknown |= derivation.unknown;
-                derived.insert(slot, derivation.value);
-            }
+            let entry = self.derive_list(request).await?;
+            outcome.unknown |= entry.unknown;
+            outcome.changed |= entry.list.is_some();
+            self.membership
+                .derived
+                .entry(request.owner.clone())
+                .or_default()
+                .insert(request.field.clone(), entry);
         }
-        Ok(unknown)
+        Ok(outcome)
     }
 
     /// Derives one list from its effective evidence and the effective state of
-    /// children changed after that evidence.
+    /// children changed after that evidence. Hot records are borrowed.
     async fn derive_list(
         &mut self,
         request: &DerivationRequest,
-    ) -> Result<Option<Derivation>, EngineError<S::Error>> {
+    ) -> Result<DerivedEntry, EngineError<S::Error>> {
         let schema = Arc::clone(&self.schema);
         let relation = schema.membership().get(request.relation);
         let optimistic = merged_optimistic(&self.optimistic);
-        let mut view = EffectiveView::default();
+        let mut loaded = Loaded::default();
         let stamps = evidence_key(&request.owner);
         self.load_effective(
-            &mut view,
+            &mut loaded,
             &optimistic,
             [request.owner.clone(), stamps.clone()],
         )
         .await?;
-        let Some(owner) = view.get(&request.owner) else {
-            return Ok(None);
-        };
-        let Some(CacheValue::List(evidence)) = owner.fields.get(&request.field) else {
-            return Ok(None);
-        };
-        let evidence = evidence.clone();
-        let fallback = |unknown| Derivation {
-            value: CacheValue::List(evidence.clone()),
-            unknown,
-        };
-        // Evidence written before stamping existed cannot be compared.
-        let Some(seen_at) = view
-            .get(&stamps)
-            .and_then(|record| stamp_of(record, &request.field))
+        let seen_at = loaded
+            .get(&self.hot, &stamps)
+            .and_then(|record| stamp_of(record, &request.field));
+        // Evidence written before stamping existed cannot be compared, and
+        // undeclared arguments cannot be evaluated: keep the evidence.
+        let (Some(seen_at), Some(filter)) =
+            (seen_at, relation.filter(&request.owner, &request.arguments))
         else {
-            return Ok(Some(fallback(true)));
-        };
-        let Some(filter) = relation.filter(&request.owner, &request.arguments) else {
-            return Ok(Some(fallback(true)));
+            return Ok(DerivedEntry::evidence(true));
         };
         self.ensure_child_index(&relation.child_type).await?;
         let mut changed: BTreeSet<EntityKey<'static>> = self.membership.index[&relation.child_type]
@@ -264,75 +280,182 @@ impl<S: Storage> Engine<S> {
                 .cloned(),
         );
         if changed.is_empty() {
-            return Ok(Some(fallback(false)));
+            return Ok(DerivedEntry::evidence(false));
         }
-        let evidence_keys = evidence.iter().filter_map(|item| match item {
-            CacheValue::Ref(key) => Some(key.clone()),
-            _ => None,
-        });
+        let evidence_keys: Vec<_> = match loaded
+            .get(&self.hot, &request.owner)
+            .and_then(|owner| owner.fields.get(&request.field))
+        {
+            Some(CacheValue::List(items)) => items
+                .iter()
+                .filter_map(|item| match item {
+                    CacheValue::Ref(key) => Some(key.clone()),
+                    _ => None,
+                })
+                .collect(),
+            _ => return Ok(DerivedEntry::evidence(false)),
+        };
         self.load_effective(
-            &mut view,
+            &mut loaded,
             &optimistic,
             changed.iter().cloned().chain(evidence_keys),
         )
         .await?;
-        let children = |key: &EntityKey<'static>| view.child(key);
-        Ok(Some(crate::membership::derive(
-            relation, &filter, &evidence, &changed, &children,
-        )))
+        let view = View {
+            hot: &self.hot,
+            loaded: &loaded,
+        };
+        let Some(CacheValue::List(evidence)) = view
+            .get(&request.owner)
+            .and_then(|owner| owner.fields.get(&request.field))
+        else {
+            return Ok(DerivedEntry::evidence(false));
+        };
+        let derivation = crate::membership::derive(relation, &filter, evidence, &changed, &|key| {
+            view.child(key)
+        });
+        let same = matches!(&derivation.value, CacheValue::List(items) if items == evidence);
+        Ok(DerivedEntry {
+            list: (!same).then_some(derivation.value),
+            unknown: derivation.unknown,
+        })
     }
 
-    /// Loads effective records (base plus layers) for `keys` and their
-    /// committed alias targets into `view`.
+    /// Makes effective records (base plus layers) of `keys` and their
+    /// committed alias targets readable through `loaded` and the hot tier.
     async fn load_effective(
         &mut self,
-        view: &mut EffectiveView,
+        loaded: &mut Loaded,
         optimistic: &BTreeMap<EntityKey<'static>, Record>,
         keys: impl IntoIterator<Item = EntityKey<'static>>,
     ) -> Result<(), EngineError<S::Error>> {
-        let mut pending: BTreeSet<_> = keys
-            .into_iter()
-            .filter(|key| !view.records.contains_key(key))
-            .collect();
+        let mut pending: BTreeSet<_> = keys.into_iter().collect();
         for _ in 0..=identity::MAX_ALIAS_CHAIN_DEPTH {
+            let cold: Vec<_> = pending
+                .iter()
+                .filter(|key| {
+                    !self.hot.contains(*key)
+                        && !loaded.fetched.contains_key(*key)
+                        && !loaded.absent.contains(*key)
+                })
+                .cloned()
+                .collect();
+            if !cold.is_empty() {
+                let records = self
+                    .storage
+                    .get_batch(&cold)
+                    .await
+                    .map_err(EngineError::Storage)?;
+                for (key, record) in cold.into_iter().zip(records) {
+                    match record {
+                        Some(record) => {
+                            loaded.fetched.insert(key, record);
+                        }
+                        None => {
+                            loaded.absent.insert(key);
+                        }
+                    }
+                }
+            }
+            for key in &pending {
+                if let Some(update) = optimistic.get(key)
+                    && !loaded.composed.contains_key(key)
+                {
+                    let mut record = self
+                        .hot
+                        .peek(key)
+                        .or_else(|| loaded.fetched.get(key))
+                        .cloned()
+                        .unwrap_or_default();
+                    record.merge(update.clone());
+                    loaded.composed.insert(key.clone(), record);
+                }
+            }
+            pending = pending
+                .iter()
+                .filter_map(|key| loaded.get(&self.hot, key).and_then(identity::alias_target))
+                .filter(|target| !loaded.contains(&self.hot, target))
+                .cloned()
+                .collect();
             if pending.is_empty() {
                 break;
             }
-            let bases = self.load_bases(&pending).await?;
-            let mut next = BTreeSet::new();
-            for key in std::mem::take(&mut pending) {
-                let mut record = bases.get(&key).cloned();
-                if let Some(update) = optimistic.get(&key) {
-                    record
-                        .get_or_insert_with(Record::default)
-                        .merge(update.clone());
-                }
-                if let Some(target) = record.as_ref().and_then(identity::alias_target)
-                    && !view.records.contains_key(target)
-                {
-                    next.insert(target.clone());
-                }
-                view.records.insert(key, record);
-            }
-            pending = next;
         }
         Ok(())
     }
 }
 
-/// Effective records loaded for one derivation.
-#[derive(Default)]
-struct EffectiveView {
-    records: HashMap<EntityKey<'static>, Option<Record>>,
+/// What deriving one list found, kept for the rest of its revision.
+#[derive(Debug, Clone)]
+pub(super) struct DerivedEntry {
+    /// The derived list; `None` when it equals the stored evidence.
+    list: Option<CacheValue>,
+    /// Membership could not be decided; the evidence is used.
+    pub unknown: bool,
 }
 
-impl EffectiveView {
-    fn get(&self, key: &EntityKey<'static>) -> Option<&Record> {
-        self.records.get(key)?.as_ref()
+impl DerivedEntry {
+    fn evidence(unknown: bool) -> Self {
+        Self {
+            list: None,
+            unknown,
+        }
+    }
+}
+
+/// Outcome of deriving a pass's requests.
+#[derive(Default)]
+pub(super) struct Derived {
+    /// Some list kept its evidence because membership was unknown.
+    pub unknown: bool,
+    /// Some list differs from the evidence the requesting pass read.
+    pub changed: bool,
+}
+
+/// Records loaded for one derivation beyond the hot tier.
+#[derive(Default)]
+struct Loaded {
+    /// Cold durable records.
+    fetched: HashMap<EntityKey<'static>, Record>,
+    /// Base plus pending layers, for layer-touched keys.
+    composed: HashMap<EntityKey<'static>, Record>,
+    absent: BTreeSet<EntityKey<'static>>,
+}
+
+impl Loaded {
+    fn get<'a>(
+        &'a self,
+        hot: &'a LruCache<EntityKey<'static>, Record>,
+        key: &EntityKey<'static>,
+    ) -> Option<&'a Record> {
+        self.composed
+            .get(key)
+            .or_else(|| self.fetched.get(key))
+            .or_else(|| hot.peek(key))
+    }
+
+    fn contains(
+        &self,
+        hot: &LruCache<EntityKey<'static>, Record>,
+        key: &EntityKey<'static>,
+    ) -> bool {
+        self.absent.contains(key) || self.get(hot, key).is_some()
+    }
+}
+
+/// Effective records of one derivation, borrowing the hot tier.
+struct View<'a> {
+    hot: &'a LruCache<EntityKey<'static>, Record>,
+    loaded: &'a Loaded,
+}
+
+impl<'a> View<'a> {
+    fn get(&self, key: &EntityKey<'static>) -> Option<&'a Record> {
+        self.loaded.get(self.hot, key)
     }
 
     /// Follows committed aliases; deleted and absent records have no record.
-    fn child(&self, key: &EntityKey<'static>) -> Child<'_> {
+    fn child(&self, key: &EntityKey<'static>) -> Child<'a> {
         let mut resolved = key.clone();
         for _ in 0..identity::MAX_ALIAS_CHAIN_DEPTH {
             match self.get(&resolved).and_then(identity::alias_target) {

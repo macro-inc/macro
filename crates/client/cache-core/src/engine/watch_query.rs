@@ -165,6 +165,8 @@ struct Base {
     /// Shared with the last `Hit`; hosts drop theirs once it is encoded.
     data: Arc<Json>,
     bytes: usize,
+    /// Declared lists the result used; a re-read derives them up front.
+    derivations: Vec<crate::denormalize::DerivationRequest>,
 }
 
 impl QueryWatch {
@@ -343,10 +345,14 @@ impl<S: Storage> Engine<S> {
         spec: QuerySpec,
         base: Option<Base>,
     ) -> Result<QueryUpdate, EngineError<S::Error>> {
+        let previous = base
+            .as_ref()
+            .map_or(&[][..], |base| base.derivations.as_slice());
         let TrackedRead {
             result,
             projection,
             membership_unknown,
+            derivations,
         } = self
             .read_query_tracked(
                 Some(op_id),
@@ -354,7 +360,10 @@ impl<S: Storage> Engine<S> {
                 spec.operation_name.as_deref(),
                 &spec.variables,
                 &spec.entity_resolvers,
-                true,
+                Tracking {
+                    projection: true,
+                    derivations: previous,
+                },
             )
             .await?;
         let revision = self.revision.to_string();
@@ -392,7 +401,11 @@ impl<S: Storage> Engine<S> {
                 diff::json_bytes(&data),
             ),
         };
-        let base = Base { data, bytes };
+        let base = Base {
+            data,
+            bytes,
+            derivations,
+        };
         self.query_watches.put(
             op_id,
             QueryWatch::new(spec, projection, base, self.revision, membership_unknown),

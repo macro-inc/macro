@@ -492,7 +492,7 @@ pub(crate) fn derive<'r>(
             (child.resolved, child.record)
         })
         .collect();
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::HashSet::with_capacity(evidence.len());
     let mut members = Vec::with_capacity(evidence.len());
     for item in evidence {
         let CacheValue::Ref(key) = item else {
@@ -530,29 +530,35 @@ pub(crate) fn derive<'r>(
             keyed.push((order, key));
         }
         keyed.sort_by(|a, b| compare_keys((&a.0, &a.1), (&b.0, &b.1)));
-        let mut orders = Vec::with_capacity(members.len());
-        for key in &members {
-            let Some(order) = children(key)
-                .record
-                .and_then(|record| relation.order_key(record))
-            else {
-                return unknown();
-            };
-            orders.push(order);
-        }
         // Evidence is in server order; each change goes before the first
-        // member that sorts after it.
+        // member that sorts after it. Binary search reads only the order
+        // keys of the members it probes.
+        let unordered = std::cell::Cell::new(false);
         let mut merged = Vec::with_capacity(members.len() + keyed.len());
-        let mut next = keyed.into_iter().peekable();
-        for (key, order) in members.into_iter().zip(orders) {
-            while let Some(insert) = next.next_if(|(insert, insert_key)| {
-                compare_keys((insert, insert_key), (&order, &key)).is_lt()
-            }) {
-                merged.push(insert.1);
-            }
+        let mut start = 0;
+        for (order, key) in keyed {
+            let offset = members[start..].partition_point(|member| {
+                match children(member)
+                    .record
+                    .and_then(|record| relation.order_key(record))
+                {
+                    Some(member_order) => {
+                        compare_keys((&member_order, member), (&order, &key)).is_lt()
+                    }
+                    None => {
+                        unordered.set(true);
+                        false
+                    }
+                }
+            });
+            merged.extend_from_slice(&members[start..start + offset]);
             merged.push(key);
+            start += offset;
         }
-        merged.extend(next.map(|(_, key)| key));
+        if unordered.get() {
+            return unknown();
+        }
+        merged.extend_from_slice(&members[start..]);
         members = merged;
     }
     Derivation {
