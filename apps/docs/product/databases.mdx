@@ -1,0 +1,95 @@
+---
+title: "Databases"
+icon: "database"
+description: "Structured tables, boards, and live answers you can ask about in plain words."
+---
+
+{/* TODO screenshot: a database open on its Board view, with the table tabs and AI button visible */}
+
+A Macro database holds structured records: a database contains one or more tables, each table holds records, and each column is a property of those records. Edit it like a spreadsheet, arrange it as a board, and ask it questions in plain words, from the database itself or from any doc, channel, or agent.
+
+> To create a new database use shortcut <kbd>c</kbd> \+ <kbd>l</kbd>, or choose **Create → Database**
+
+A new database starts with one table and a **Name** column, with its title selected so you can name it right away. Press <kbd>Enter</kbd> and start typing in the first cell.
+
+Your first time in, Macro adds a small **Getting started** database with an **Ideas** board to play with. Delete it whenever you like; it won't come back.
+
+### Tables and columns
+
+Click a cell, or move to it with the arrow keys, and start typing. <kbd>Enter</kbd> saves, <kbd>tab</kbd> moves to the next cell, and an empty row always waits at the bottom: type into it to add a record. Everything saves automatically.
+
+Columns can be:
+
+{/* TODO: render as the icon list used on the Tasks and CRM pages */}
+
+- **Text** — supports markdown and inline @mentions
+- **Number**
+- **Select** and **Multi-select** — colored options you create as you type
+- **Date** — type `tomorrow`, `3d`, or `feb 17`, or pick from a calendar
+- **Checkbox**
+- **URL**
+- **People**, **Documents**, and **Tasks** — references to things in your workspace, picked with the @mention menu
+- **Relations** — links to records in another table of the same database
+
+Click **Add column** after the last header to add one, or right-click a header and choose **Insert left** or **Insert right**. You don't have to pick a type up front: a new column becomes a Number column when you type a number into it, or a People, Documents, or Tasks column when you @mention something. Change it later from the header's **Change type** menu. Macro only offers types your existing values can become, and when some values wouldn't fit, it converts into a new column instead of losing data.
+
+Drag headers to reorder columns and drag their right edge to resize. Add more tables with **New table** beside the table tabs.
+
+{/* TODO: select options editor (rename, recolor, delete), record dialog (click a row number), multi-cell select + delete */}
+
+### Views
+
+Every table starts with **All records**. Use the **+** beside the view tabs to add a saved **Table** or **Board** view, shared with everyone who can open the database.
+
+- **Filter** — conditions and nested And/Or groups that fit each column's type
+- **Sort** — by one or more columns
+- **Board** — one lane per option of a Select column. Drag cards between lanes to change their value, drag lanes to reorder them, and press **+ New** in a lane to add cards quickly. The board menu (**⋯**) picks the card title, the fields each card shows, and which lanes to hide.
+
+{/* TODO screenshot: board view with filter open */}
+
+### Search
+
+<kbd>cmd</kbd>\+<kbd>f</kbd> searches every table in the database, not just the one on screen. Choose a result to jump straight to its row.
+
+### Ask AI
+
+Click **AI** in the toolbar to open a chat about the database. Ask a question ("which deals closed this month?") or ask for a change ("add a Priority column and fill it in"). Agents can read records, add and edit them, change the schema, and create saved views for you.
+
+Any agent chat can work with databases, not just one opened from a database. Mention a database with @ to point the agent at it, or ask it to build a new one from scratch.
+
+{/* TODO screenshot: AI chat answering with an inline chart */}
+
+### Live answers in docs and channels
+
+Type `/database` in a doc, a channel message, or a task description and choose **Database** to ask a question about your data. Pick a database as the source, or leave it on **Automatic** and Macro finds the right one.
+
+The answer is inserted as a live block: a single value, a table of records, or a **bar**, **line**, **area**, **scatter**, or **pie** chart. Switch formats from the answer's display menu. Answers stay current as the data changes, and each reader only sees the data they have access to. Asking a question never changes your data.
+
+To refine an answer in a doc, open **Details**, edit the question or source, and click **Regenerate**.
+
+{/* TODO screenshot: a live chart answer inside a doc */}
+
+### Import and export
+
+From the **⋯** menu in the toolbar:
+
+- **Import CSV** creates a new table from a CSV file (up to 8 MB, 100 columns, and 10,000 rows). Imported columns start as Text; change their types afterwards.
+- **Download → Current table as CSV** exports every record in the table, regardless of filters.
+
+### Undo and history
+
+<kbd>cmd</kbd>\+<kbd>z</kbd> undoes your last change to the database, and <kbd>cmd</kbd>\+<kbd>shift</kbd>\+<kbd>z</kbd> redoes it. Undo only reverts your own edits, so a teammate's later change is kept. Deleting a table can't be undone.
+
+Open the side panel (<kbd>]</kbd>) to see the database's owner and its **Activity**: who created, edited, shared, or renamed it, including changes an agent made on someone's behalf.
+
+### Collaboration and sharing
+
+Databases are live: teammates' edits appear within a moment, and you can see which cells others have selected. Click **Share** to share a database with people or channels as viewers or editors. Viewers can browse, search, filter, and sort for themselves but can't change data or saved views. Databases don't support public links.
+
+See [Permissions](/permissions) for how access works.
+
+### MCP
+
+Macro's MCP server exposes the same database tools agents use in Macro, so AI clients like Claude Code, Codex, and Cursor can list, describe, query, and edit your databases. Connect it from **Settings → MCP server**. See [ListDatabases](/AI/mcp/tools/list-databases), [DescribeDatabase](/AI/mcp/tools/describe-database), [QueryDatabase](/AI/mcp/tools/query-database), [SaveDatabaseQuery](/AI/mcp/tools/save-database-query), [SaveDatabaseView](/AI/mcp/tools/save-database-view), and [DeleteDatabaseView](/AI/mcp/tools/delete-database-view).
+
+{/* TODO once released: Forms (questionnaires that write rows into a table, behind enable-forms), formula columns, CRM pipelines built on databases */}
