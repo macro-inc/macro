@@ -24,10 +24,10 @@ use crate::domain::{
 #[schemars(
     title = "CreateCalendarEvent",
     description = "\
-Prepare an event on the user's calendar, inviting any listed attendees through Google \
-Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and \
+Prepare an event on the user's calendar, inviting any listed attendees through its connected \
+provider. In Macro chat this tool opens an inline composer so the user can review, edit, and \
 confirm the event; use the tool to present the proposal instead of asking for a redundant \
-confirmation in prose. When the pending call is executed, the event is written to Google \
+confirmation in prose. When the pending call is executed, the event is written to the calendar provider \
 immediately and attendees receive invitations. Other clients should confirm attendee events \
 before executing the call. Do NOT use it for a prompt that came from a channel or document \
 thread — the context block names a conversation parent when it did, and there is no surface \
@@ -41,8 +41,8 @@ updates or deletion. Fails if the user has no writable calendar connected.\n\
 \n\
 Set `eventType` to \"out_of_office\" to mark the user as out of office (e.g. \"mark me out \
 of office Thursday\"). Out-of-office events must land on the user's primary calendar (omit \
-`calendarId`), must be timed rather than all-day, and take no attendees or Google Meet \
-(leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings \
+`calendarId`), must be timed rather than all-day, and take no attendees or video conference \
+(leave `addConference` false); use `outOfOffice` to control whether conflicting meetings \
 are auto-declined. The type cannot be changed afterward."
 )]
 pub struct CreateCalendarEvent {
@@ -70,7 +70,7 @@ pub struct CreateCalendarEvent {
 
     /// Attendees to invite.
     #[schemars(
-        description = "Attendees to invite by email. They are notified by Google Calendar as \
+        description = "Attendees to invite by email. They are notified by the calendar provider as \
                        soon as the event is created. Omit for a solo event."
     )]
     #[serde(default)]
@@ -99,12 +99,12 @@ pub struct CreateCalendarEvent {
     #[serde(default)]
     pub reminders: Option<EventRemindersInput>,
 
-    /// Whether to attach a Google Meet conference.
+    /// Whether to attach the calendar provider's meeting conference.
     #[schemars(
-        description = "Attach a freshly generated Google Meet video conference to the event."
+        description = "Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first."
     )]
-    #[serde(default)]
-    pub add_google_meet: bool,
+    #[serde(default, alias = "addGoogleMeet")]
+    pub add_conference: bool,
 
     /// Kind of event to create.
     #[schemars(
@@ -120,7 +120,7 @@ pub struct CreateCalendarEvent {
         description = "Out-of-office decline behavior, used only when eventType is \
                        \"out_of_office\". Omit to just block the time; set \
                        `autoDeclineMode` to \"decline_all\" or \"decline_new_only\" to have \
-                       Google decline conflicting meetings, optionally with a `declineMessage`."
+                       the calendar integration decline conflicting meetings, optionally with a `declineMessage`."
     )]
     #[serde(default)]
     pub out_of_office: Option<OutOfOfficeInput>,
@@ -148,7 +148,7 @@ where
         tracing::info!(
             calendar_id=?self.calendar_id,
             attendee_count = self.attendees.len(),
-            add_google_meet = self.add_google_meet,
+            add_conference = self.add_conference,
             "Create calendar event"
         );
 
@@ -183,7 +183,9 @@ where
             visibility: None,
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
-            conference: self.add_google_meet.then_some(ConferenceChange::GoogleMeet),
+            conference: self
+                .add_conference
+                .then_some(ConferenceChange::ProviderDefault),
             out_of_office,
         };
 

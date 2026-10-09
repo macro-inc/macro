@@ -211,7 +211,9 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService> Calendars
             visibility: None,
             transparency: None,
             reminders: None,
-            conference: event.google_meet.then_some(ConferenceChange::GoogleMeet),
+            conference: event
+                .google_meet
+                .then_some(ConferenceChange::ProviderDefault),
             out_of_office: None,
         };
         let result = self

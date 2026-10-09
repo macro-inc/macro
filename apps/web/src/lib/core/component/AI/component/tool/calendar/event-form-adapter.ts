@@ -52,9 +52,13 @@ function cloneReminders(
   };
 }
 
+type CompatibleCalendarEvent = CreateCalendarEvent & {
+  addGoogleMeet?: boolean;
+};
+
 /** Convert deferred calendar-tool arguments into values understood by EventForm. */
 export function createCalendarEventToEditorInitialValues(
-  event: CreateCalendarEvent
+  event: CompatibleCalendarEvent
 ): EventEditorInitialValues {
   const isOutOfOffice = event.eventType === 'out_of_office';
   const common = {
@@ -66,9 +70,10 @@ export function createCalendarEventToEditorInitialValues(
       .join(', '),
     location: event.location ?? '',
     description: event.description ?? '',
-    conference: event.addGoogleMeet
-      ? ('google_meet' as const)
-      : ('none' as const),
+    conference:
+      (event.addConference ?? event.addGoogleMeet)
+        ? ('google_meet' as const)
+        : ('none' as const),
     reminders: cloneReminders(event.reminders),
     eventType: isOutOfOffice ? ('out_of_office' as const) : undefined,
     outOfOffice: isOutOfOffice
@@ -144,13 +149,14 @@ function attendees(
 /** Merge editable EventForm values back into the deferred tool arguments. */
 export function editorSubmitValuesToCreateCalendarEvent(
   values: EventEditorSubmitValues,
-  original: CreateCalendarEvent
+  original: CompatibleCalendarEvent
 ): CreateCalendarEvent {
   // A create's submit values carry `outOfOffice` exactly while the editor kind
   // is out of office, so its presence decides the tool's event type.
   const outOfOffice = values.outOfOffice;
+  const { addGoogleMeet, ...normalized } = original;
   return {
-    ...original,
+    ...normalized,
     title: values.title,
     time: toolTime(values.time, original.time),
     description: values.description || undefined,
@@ -158,11 +164,12 @@ export function editorSubmitValuesToCreateCalendarEvent(
     attendees: attendees(values.guestEmails, original.attendees),
     recurrenceLines: values.recurrenceLines ?? original.recurrenceLines ?? [],
     calendarId: values.calendarId,
-    addGoogleMeet: outOfOffice
+    addConference: outOfOffice
       ? false
       : values.conference === undefined
-        ? original.addGoogleMeet
-        : values.conference === 'google_meet',
+        ? (original.addConference ?? addGoogleMeet)
+        : values.conference === 'google_meet' ||
+          values.conference === 'microsoft_teams',
     reminders: cloneReminders(values.reminders ?? original.reminders),
     eventType: outOfOffice
       ? 'out_of_office'

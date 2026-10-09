@@ -9,6 +9,7 @@ fn attachment(mime_type: Option<&str>, filename: Option<&str>) -> Attachment {
         db_id: Uuid::new_v4(),
         provider_id: None,
         data_url: None,
+        reference_url: None,
         filename: filename.map(str::to_string),
         mime_type: mime_type.map(str::to_string),
         size_bytes: None,

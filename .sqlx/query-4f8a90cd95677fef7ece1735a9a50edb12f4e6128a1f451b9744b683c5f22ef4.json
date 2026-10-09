@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_outlook_work(id,account_id,sync_generation,grant_generation,starts_at,ends_at)\n            SELECT gen_random_uuid(),a.id,l.sync_generation,l.grant_generation,$1,$2 FROM calendar_accounts a JOIN email_links l ON l.id=a.email_link_id\n            WHERE a.provider='outlook' AND a.sync_status<>'disabled' AND l.is_sync_active\n            ON CONFLICT(account_id,calendar_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f8a90cd95677fef7ece1735a9a50edb12f4e6128a1f451b9744b683c5f22ef4"
+}

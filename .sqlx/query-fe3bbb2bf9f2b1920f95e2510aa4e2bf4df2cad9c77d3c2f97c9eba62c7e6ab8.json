@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_commands SET attempts = 0 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe3bbb2bf9f2b1920f95e2510aa4e2bf4df2cad9c77d3c2f97c9eba62c7e6ab8"
+}

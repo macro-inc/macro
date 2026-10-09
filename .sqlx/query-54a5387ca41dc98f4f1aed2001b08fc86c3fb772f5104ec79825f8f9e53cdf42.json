@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.\"threadId\" AS thread_id, a.root_id, a.text, r.top, t.anchor\n           FROM \"PdfHighlightAnchor\" a JOIN comms_message_threads t ON t.root_id = a.root_id\n           JOIN \"PdfHighlightRect\" r ON r.\"pdfHighlightAnchorId\" = a.uuid",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "root_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "top",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "anchor",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "54a5387ca41dc98f4f1aed2001b08fc86c3fb772f5104ec79825f8f9e53cdf42"
+}

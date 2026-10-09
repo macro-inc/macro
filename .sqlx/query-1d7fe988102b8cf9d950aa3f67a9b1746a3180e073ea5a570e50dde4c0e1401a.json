@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_ai_projection\n        SET last_requested_at = NOW() - INTERVAL '10 days'\n        WHERE ai_projection_id = $1 AND target_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d7fe988102b8cf9d950aa3f67a9b1746a3180e073ea5a570e50dde4c0e1401a"
+}

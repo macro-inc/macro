@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments_drafts(id,draft_id,file_name,content_type,sha,size,s3_key) VALUES($1,$2,'notes.txt','text/plain','sha',9,'shared-object')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8309d21af6638a44bd424dfeb8304172a3f0924dfc0a287c094e3b2311e45e42"
+}

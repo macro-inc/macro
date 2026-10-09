@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id)\n                VALUES ($1,$2,$3,'mail_folder',$4)\n                ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "256b62ade2a41de0cf53ab70a48327bd1726d695a3a2725e6f500da6fb49dc33"
+}

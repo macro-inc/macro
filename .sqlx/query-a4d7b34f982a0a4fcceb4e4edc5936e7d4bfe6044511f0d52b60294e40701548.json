@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_settings_work SET completed_revision=revision,lease_id=NULL,lease_until=NULL,failure=NULL WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4d7b34f982a0a4fcceb4e4edc5936e7d4bfe6044511f0d52b60294e40701548"
+}

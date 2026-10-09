@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_transfers(id,actor_id,source_id,destination_id,source_link_id,destination_link_id,source_thread_id,destination_thread_id,plan,state) VALUES($1,$2,$3,$4,$5,$5,$6,$7,'{}','cleanup')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "be23b24b0c8cf2219b872043b27420aa7ad3a3e8ab9a9d1e0e93065bd9dc0250"
+}

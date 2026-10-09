@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision)\n            WHERE message_id = $1 AND lease_id = $2 AND lease_until > now() AND state = 'running'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecf3a30d7bfcfbda69fcf33c68fb8a009d907ae570d8b388b2880fbd564913f1"
+}

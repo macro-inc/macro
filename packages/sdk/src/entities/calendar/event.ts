@@ -13,10 +13,11 @@ import type {
   OutOfOfficeProperties,
   UpdateCalendarEventRequest,
 } from '../../../generated/calendar/types.gen';
-import { MacroError } from '../../utils';
+import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { Calendar } from './calendar';
+import { CalendarReplacement } from './replacement';
 
 /** Fields to change on an event; omitted fields are left untouched. */
 export interface UpdateEventOptions {
@@ -38,8 +39,8 @@ export interface UpdateEventOptions {
   transparency?: EventTransparency;
   /** Replacement reminder configuration. */
   reminders?: EventReminders;
-  /** `google_meet` attaches a fresh Meet, `none` detaches; omit to leave the
-   * conference untouched. */
+  /** Provider conference change; omit to retain it. Outlook removal requires a
+   * separately confirmed replacement via prepareReplacement(). */
   conference?: ConferenceChange;
   /** Replacement out-of-office properties, applied only to an event that is
    * already out-of-office. */
@@ -173,6 +174,42 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
         },
       }),
     );
+  }
+
+  /** Preview an organizer replacement without cancelling or sending invitations.
+   * Review replacement.status() before explicitly calling replacement.confirm(). */
+  async prepareReplacement(options: {
+    removeConference: boolean;
+    recurrenceId?: string;
+    calendar?: Calendar;
+  }): Promise<CalendarReplacement> {
+    const preview = unwrap(
+      await this.client.calendar.prepareCalendarReplacement({
+        path: { event_id: this.id },
+        body: {
+          removeConference: options.removeConference,
+          recurrenceId: options.recurrenceId,
+          calendarId: options.calendar?.id,
+        },
+      }),
+    );
+    return new CalendarReplacement(this.client, preview.operationId);
+  }
+
+  /** Open this calendar copy in its provider for actions unavailable through its API. */
+  async providerUrl(
+    options: { recurrenceId?: string; calendar?: Calendar } = {},
+  ): Promise<string | undefined> {
+    const result = unwrap(
+      await this.client.calendar.calendarEventProviderUrl({
+        path: { event_id: this.id },
+        query: {
+          recurrenceId: options.recurrenceId,
+          calendarId: options.calendar?.id,
+        },
+      }),
+    );
+    return result.url ?? undefined;
   }
 
   /** Record the requester's RSVP and return a handle to the synced record. */

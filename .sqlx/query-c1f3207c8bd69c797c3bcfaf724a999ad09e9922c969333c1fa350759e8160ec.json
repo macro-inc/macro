@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_scheduled_messages (message_id,link_id,send_time) VALUES ($1,$2,now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1f3207c8bd69c797c3bcfaf724a999ad09e9922c969333c1fa350759e8160ec"
+}

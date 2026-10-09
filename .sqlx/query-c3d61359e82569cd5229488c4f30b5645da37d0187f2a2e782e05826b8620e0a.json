@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.is_read,p.command_id FROM email_messages m JOIN email_pending_mailbox_state p ON p.message_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "command_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c3d61359e82569cd5229488c4f30b5645da37d0187f2a2e782e05826b8620e0a"
+}

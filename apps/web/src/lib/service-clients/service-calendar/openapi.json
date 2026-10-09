@@ -352,6 +352,115 @@
         }
       }
     },
+    "/events/{event_id}/provider-url": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Resolve an authorized event's provider link for Outlook-only actions.",
+        "operationId": "calendar_event_provider_url",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "calendarId",
+            "in": "query",
+            "description": "Exact calendar copy; defaults to the canonical copy.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "recurrenceId",
+            "in": "query",
+            "description": "Original-start key of one occurrence; omitted for the entire series.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEventProviderUrl"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/replacement": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Read and persist an organizer-only preview, without sending invitations.",
+        "operationId": "prepare_calendar_replacement",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareCalendarReplacementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/events/{event_id}/rsvp": {
       "put": {
         "tags": ["calendar_events"],
@@ -448,6 +557,117 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/replacements/{operation_id}": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Read saved progress without performing a provider mutation.",
+        "operationId": "calendar_replacement_status",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["calendar_events"],
+        "summary": "Discard a preview only if no confirmation has been recorded.",
+        "operationId": "discard_calendar_replacement",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/replacements/{operation_id}/confirm": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Explicitly confirm the saved preview, or resume the same confirmed operation.",
+        "operationId": "confirm_calendar_replacement",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarReplacementView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
                 }
               }
             }
@@ -619,6 +839,50 @@
           }
         }
       },
+      "CalendarCapabilities": {
+        "type": "object",
+        "description": "Actual provider capabilities used by calendar editors.",
+        "required": [
+          "removeConference",
+          "autoDecline",
+          "emailReminders",
+          "customRecurrence",
+          "resetRsvp"
+        ],
+        "properties": {
+          "autoDecline": {
+            "type": "boolean",
+            "description": "Whether event-level automatic invitation declines are supported."
+          },
+          "conferenceProvider": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConferenceProvider",
+                "description": "Meeting system available for new conferences, when any."
+              }
+            ]
+          },
+          "customRecurrence": {
+            "type": "boolean",
+            "description": "Whether arbitrary RFC 5545 recurrence properties can be written."
+          },
+          "emailReminders": {
+            "type": "boolean",
+            "description": "Whether email reminders are delivered by the provider or Macro."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "Whether an existing conference can be detached."
+          },
+          "resetRsvp": {
+            "type": "boolean",
+            "description": "Whether an attendee can reset their RSVP to unanswered."
+          }
+        }
+      },
       "CalendarDeletionScopeParam": {
         "type": "string",
         "description": "How much of a recurring series a deletion removes.",
@@ -772,6 +1036,16 @@
           }
         }
       },
+      "CalendarEventProviderUrl": {
+        "type": "object",
+        "description": "Provider-validated external event link.",
+        "properties": {
+          "url": {
+            "type": ["string", "null"],
+            "description": "None when the event no longer exists at its provider."
+          }
+        }
+      },
       "CalendarEventSourceContent": {
         "type": "object",
         "description": "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed.",
@@ -863,6 +1137,87 @@
           "persist_failed"
         ]
       },
+      "CalendarProvider": {
+        "type": "string",
+        "description": "Provider selected from the persisted calendar account and email binding.",
+        "enum": ["google", "outlook"]
+      },
+      "CalendarReplacementView": {
+        "type": "object",
+        "description": "Safe preview and recovery response; never exposes the opaque provider snapshot.",
+        "required": [
+          "operationId",
+          "status",
+          "title",
+          "time",
+          "attendeeCount",
+          "isSeries",
+          "removeConference",
+          "completedSteps",
+          "totalSteps"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Guest count for cancellation and reinvitation confirmation.",
+            "minimum": 0
+          },
+          "completedSteps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of completed provider steps."
+          },
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEvent",
+                "description": "Returned after the complete operation has been persisted."
+              }
+            ]
+          },
+          "isSeries": {
+            "type": "boolean",
+            "description": "Entire recurring series, including exceptions, is replaced."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Use this identity when confirming or checking progress."
+          },
+          "providerUrl": {
+            "type": ["string", "null"],
+            "description": "Original event for manual review."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "The provider conference is removed."
+          },
+          "replacementUrl": {
+            "type": ["string", "null"],
+            "description": "New provider event, when creation was confirmed."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReplacementStatus",
+            "description": "Current durable state."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Frozen time."
+          },
+          "title": {
+            "type": "string",
+            "description": "Frozen title."
+          },
+          "totalSteps": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of provider steps in this operation."
+          }
+        }
+      },
       "CalendarRsvpScopeParam": {
         "type": "string",
         "description": "How much of a recurring series an RSVP applies to.\n\nUnlike deletion there is no this-and-following variant: the provider\ncannot express a forward-scoped response, so offering one would be a\npromise sync could not keep.",
@@ -876,12 +1231,12 @@
       "ConferenceChange": {
         "type": "string",
         "description": "A requested change to an event's conferencing. Omitting the field leaves\nthe existing conference untouched; only these values change it.",
-        "enum": ["google_meet", "none"]
+        "enum": ["provider_default", "microsoft_teams", "google_meet", "none"]
       },
       "ConferenceProvider": {
         "type": "string",
-        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
-        "enum": ["google_meet", "other"]
+        "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
+        "enum": ["microsoft_teams", "google_meet", "other"]
       },
       "CreateCalendarEventRequest": {
         "type": "object",
@@ -1140,6 +1495,26 @@
           }
         }
       },
+      "PrepareCalendarReplacementRequest": {
+        "type": "object",
+        "description": "A read-only preview request. Confirmation uses the returned operation identity.",
+        "required": ["removeConference"],
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Exact calendar copy; defaults to canonical."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key; omitted to replace the entire series."
+          },
+          "removeConference": {
+            "type": "boolean",
+            "description": "Omit the provider conference in the replacement."
+          }
+        }
+      },
       "RefreshCalendarEvent": {
         "oneOf": [
           {
@@ -1171,6 +1546,11 @@
           }
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
+      },
+      "ReplacementStatus": {
+        "type": "string",
+        "description": "User-visible workflow state.",
+        "enum": ["needs_confirmation", "in_progress", "complete"]
       },
       "RsvpCalendarEventRequest": {
         "type": "object",
@@ -1345,6 +1725,8 @@
         "type": "object",
         "description": "A calendar visible to a requester, listed for pickers and filters.",
         "required": [
+          "provider",
+          "capabilities",
           "id",
           "emailLinkId",
           "emailAddress",
@@ -1355,6 +1737,10 @@
           "defaultReminders"
         ],
         "properties": {
+          "capabilities": {
+            "$ref": "#/components/schemas/CalendarCapabilities",
+            "description": "Provider features available on this actual calendar."
+          },
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
@@ -1395,6 +1781,10 @@
           "name": {
             "type": "string",
             "description": "Provider display name."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/CalendarProvider",
+            "description": "Calendar provider, for display and reconnect routing."
           },
           "syncError": {
             "type": ["string", "null"],

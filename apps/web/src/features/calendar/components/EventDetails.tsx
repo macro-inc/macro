@@ -513,7 +513,9 @@ export function EventDetails(props: {
       ? 'Join Macro call'
       : props.event.conferenceProvider === 'google_meet'
         ? 'Join Google Meet'
-        : 'Join meeting';
+        : props.event.conferenceProvider === 'microsoft_teams'
+          ? 'Join Microsoft Teams'
+          : 'Join meeting';
   const attribution = createMemo(() => eventAttribution(props.event));
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_draft_transfers WHERE (destination_id=$1 AND state NOT IN ('ready','retained','preparing')) OR (source_id=$1 AND state<>'preparing')) AS \"blocked!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blocked!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0c6bf64767d3d74c7fd9849fd93b0aadd9f5785eac953038e30668aa79759d85"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_provider_subscriptions(link_id,generation,provider_id,client_state_hash,expires_at) VALUES($1,1,'watch',decode('1234','hex'),now()+interval '3 days')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a97e99c59804d65aa7f21d9b35a6cf6e76f070213d0fb396182978733a0f2b4"
+}

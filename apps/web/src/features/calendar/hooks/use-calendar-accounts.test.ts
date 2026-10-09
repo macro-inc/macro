@@ -5,6 +5,7 @@ import { toCalendarAccounts } from './use-calendar-accounts';
 const link = (id: string, overrides: Partial<EmailLink> = {}): EmailLink =>
   ({
     id,
+    provider: 'GMAIL',
     macro_id: 'macro|self',
     email_address: `${id}@example.com`,
     needs_calendar_permission: false,
@@ -27,6 +28,7 @@ describe('toCalendarAccounts', () => {
   it('offers turn-off for an inbox that already has calendar', () => {
     expect(toCalendarAccounts([link('a')], 'macro|self')).toEqual([
       {
+        provider: 'GMAIL',
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'turnOff',
@@ -39,6 +41,7 @@ describe('toCalendarAccounts', () => {
     const links = [link('a', { needs_calendar_permission: true })];
     expect(toCalendarAccounts(links, 'macro|self')).toEqual([
       {
+        provider: 'GMAIL',
         linkId: 'a',
         emailAddress: 'a@example.com',
         action: 'enable',
@@ -93,6 +96,7 @@ describe('toCalendarAccounts', () => {
     const links = [link('own'), link('shared', { macro_id: 'macro|other' })];
     expect(toCalendarAccounts(links, 'macro|self')).toEqual([
       {
+        provider: 'GMAIL',
         linkId: 'own',
         emailAddress: 'own@example.com',
         action: 'turnOff',

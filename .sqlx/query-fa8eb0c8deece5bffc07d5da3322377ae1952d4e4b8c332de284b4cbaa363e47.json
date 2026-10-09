@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.provider_version,d.base_version FROM email_messages m JOIN email_mailbox_drafts d ON d.message_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "base_version",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "fa8eb0c8deece5bffc07d5da3322377ae1952d4e4b8c332de284b4cbaa363e47"
+}

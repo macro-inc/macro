@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 default = []
+outlook = ["dep:tokio"]
 # The AI toolset adapter exposing calendar CRUD to agents.
 ai_tools = ["dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:schemars"]
 # The reminder dispatch queue worker. Transport-agnostic: it drives the

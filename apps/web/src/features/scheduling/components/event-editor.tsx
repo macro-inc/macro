@@ -148,7 +148,7 @@ export function EventEditor(props: {
                 <CheckField
                   checked={draft().googleMeet}
                   onChange={(v) => update('googleMeet', v)}
-                  label="Create a Google Meet link"
+                  label="Create a video meeting link"
                 />
                 <Field
                   label={

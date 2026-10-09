@@ -14,6 +14,10 @@ use crate::domain::ports::{CalendarMutationService, CalendarOccurrenceService};
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCalendar {
+    /// Provider hosting this calendar.
+    pub provider: crate::domain::models::CalendarProvider,
+    /// Supported conference, recurrence, reminder, and RSVP operations.
+    pub capabilities: crate::domain::models::CalendarCapabilities,
     /// Calendar id; pass as `calendarId` to CreateCalendarEvent to target
     /// this calendar. Not a mentionable entity: never put it in a mention
     /// tag — only individual calendar events can be mentioned.
@@ -45,12 +49,14 @@ pub struct ListCalendarsToolResponse {
     title = "ListCalendars",
     description = "\
 List the calendars the user can see across their connected inboxes, with each calendar's \
-`calendarId`, display name, owning inbox address, and whether it is primary and writable.\n\
+`calendarId`, display name, owning inbox address, provider, capabilities, and whether it is primary and writable.\n\
 \n\
 Use this before CreateCalendarEvent when the user wants an event on a specific non-default \
 calendar (e.g. \"add it to my work calendar\") so you can pass the exact `calendarId`. Most \
 users have a single primary calendar, in which case CreateCalendarEvent targets it by default \
-and you do not need this tool. An empty result means no calendar is connected."
+and you do not need this tool unless choosing conference or other provider-dependent behavior. \
+Check `capabilities` before requesting a conference, removing one, or using custom recurrence. \
+An empty result means no calendar is connected."
 )]
 pub struct ListCalendars {}
 
@@ -84,6 +90,8 @@ where
         let calendars: Vec<ToolCalendar> = calendars
             .into_iter()
             .map(|calendar| ToolCalendar {
+                provider: calendar.provider,
+                capabilities: calendar.capabilities,
                 calendar_id: calendar.id,
                 name: calendar.name,
                 email_address: calendar.email_address,

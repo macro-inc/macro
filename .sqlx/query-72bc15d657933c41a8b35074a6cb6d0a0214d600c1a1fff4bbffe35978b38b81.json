@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_attachment_removals(id,message_id,provider_id) VALUES($1,$2,'removed')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "72bc15d657933c41a8b35074a6cb6d0a0214d600c1a1fff4bbffe35978b38b81"
+}

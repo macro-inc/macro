@@ -9,6 +9,11 @@ use utoipa::OpenApi;
 #[openapi(
     paths(
         crate::health::health_handler,
+        calendar_events::inbound::replacement_router::prepare_calendar_replacement,
+        calendar_events::inbound::replacement_router::confirm_calendar_replacement,
+        calendar_events::inbound::replacement_router::calendar_replacement_status,
+        calendar_events::inbound::replacement_router::discard_calendar_replacement,
+        calendar_events::inbound::replacement_router::calendar_event_provider_url,
         calendar_events::inbound::team_router::get_team_sharing,
         calendar_events::inbound::team_router::set_team_sharing,
         calendar_events::inbound::team_router::get_availability_calendars,

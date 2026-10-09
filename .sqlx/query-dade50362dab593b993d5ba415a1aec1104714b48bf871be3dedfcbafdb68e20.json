@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_commands SET attempts=0,lease_id=NULL,lease_until=NULL,available_at=now()+interval '5 seconds' WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND status='running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dade50362dab593b993d5ba415a1aec1104714b48bf871be3dedfcbafdb68e20"
+}

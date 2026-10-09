@@ -25,6 +25,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { Button, Layer } from '@ui';
 import {
+  createEffect,
   createMemo,
   createSignal,
   ErrorBoundary,
@@ -140,6 +141,8 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   const calendarOptions = createMemo(() =>
     writableCalendars().map((calendar) => ({
       id: calendar.id,
+      provider: calendar.provider,
+      capabilities: calendar.capabilities,
       label: calendarDisplayLabel(calendar, calendarsSpanInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
@@ -147,16 +150,20 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     }))
   );
 
+  // Undefined while the primary inbox still needs access: the choice is the
+  // user's until then.
+  const defaultCalendarId = () =>
+    primaryNeedsAccess()
+      ? undefined
+      : writableCalendars().find(
+          (calendar) =>
+            calendar.emailLinkId === primaryInbox()?.id && calendar.isPrimary
+        )?.id;
+
   const controller = createCalendarEventFormController({
     initialValue: createCalendarEventToEditorInitialValues(props.initialData),
     calendarOptions,
-    defaultCalendarId: () =>
-      primaryNeedsAccess()
-        ? undefined
-        : writableCalendars().find(
-            (calendar) =>
-              calendar.emailLinkId === primaryInbox()?.id && calendar.isPrimary
-          )?.id,
+    defaultCalendarId,
     guestOptions,
     recurrenceTimeZone:
       props.initialData.time.kind === 'timed'
@@ -167,6 +174,21 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
       const args = currentArgs();
       if (args) props.sink.onEdit?.(args);
     },
+  });
+  let calendarInitialized = false;
+  createEffect(() => {
+    const calendars = calendarOptions();
+    if (calendarInitialized || calendars.length === 0) return;
+    calendarInitialized = true;
+    // Resolve the provider-default conference after the calendar catalog loads.
+    // A requested calendar must still exist, and without a request the primary
+    // inbox's calendar is the default; when neither resolves the selection stays
+    // empty so the user chooses explicitly.
+    const requested = props.initialData.calendarId;
+    const selected = requested
+      ? calendars.find((calendar) => calendar.id === requested)
+      : calendars.find((calendar) => calendar.id === defaultCalendarId());
+    if (selected) controller.setField('calendarId', selected.id);
   });
 
   function currentArgs(values = controller.submitValues()) {

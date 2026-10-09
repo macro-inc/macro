@@ -16,11 +16,11 @@ Create a calendar event immediately, with no review card or composer. Only for a
 | `time` | EventTimeInput | Yes | The mutually exclusive time shape supplied to calendar tools. |
 | `description` | string | No | Optional event body/description. |
 | `location` | string | No | Optional physical or virtual location label. |
-| `attendees` | AttendeeInput[] | No | Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event. |
+| `attendees` | AttendeeInput[] | No | Attendees to invite by email. They are notified by the calendar provider as soon as the event is created. Omit for a solo event. |
 | `recurrenceLines` | string[] | No | Raw RFC 5545 recurrence lines (RRULE, RDATE, EXDATE), e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"]. Omit for a one-off event. |
 | `calendarId` | string | No | Calendar to create the event on, from ListCalendars. Omit to use the user's primary calendar. |
 | `reminders` | EventRemindersInput | No | Reminder configuration for the event. Omit to use the selected calendar's defaults. |
-| `addGoogleMeet` | boolean | No | Attach a freshly generated Google Meet video conference to the event. |
+| `addConference` | boolean | No | Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first. |
 | `eventType` | `"default"` \| `"out_of_office"` | No | The kind of event a create tool call makes. |
-| `outOfOffice` | OutOfOfficeInput | No | Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`. |
+| `outOfOffice` | OutOfOfficeInput | No | Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`. |
 | `userConfirmation` | string | Yes | The user's own message approving this specific event, quoted verbatim - for example their "yes, go ahead" in reply to the event you wrote out for them. It is a reply to your draft, never the earlier request that asked you to schedule something: if the user has not yet seen this event, there is nothing to quote here and the tool must not be called. Required: do not paraphrase it, and never supply it yourself. |

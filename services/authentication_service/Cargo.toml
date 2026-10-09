@@ -70,7 +70,7 @@ contacts = { path = "../../crates/contacts", default-features = false, features 
 cookie = { workspace = true }
 decode_jwt = { path = "../../crates/decode_jwt" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
-email = { path = "../../crates/email", features = ["http_client"] }
+email = { path = "../../crates/email", features = ["http_client", "outbound"] }
 doppleganger = { workspace = true }
 email_db_client = { path = "../../crates/email_db_client" }
 email_validator = { path = "../../crates/email_validator" }
@@ -187,6 +187,7 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 
 [package.metadata.cargo-machete]
 ignored = ["async-stripe"]

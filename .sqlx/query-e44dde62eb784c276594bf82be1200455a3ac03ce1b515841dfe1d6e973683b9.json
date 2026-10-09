@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS(SELECT 1 FROM email_attachments a WHERE a.message_id = $1\n                AND a.upload_claimed_at IS NOT NULL\n                AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)\n                AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)) AS \"pending!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pending!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e44dde62eb784c276594bf82be1200455a3ac03ce1b515841dfe1d6e973683b9"
+}

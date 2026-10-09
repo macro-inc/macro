@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET lease_until = now() - interval '1 second',checkpoint = $2 WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4014e7d20d4ed54456253da9c3fff413d8a0213be0395a1ecbc6dd7d5b96bc9b"
+}

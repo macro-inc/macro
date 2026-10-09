@@ -2,15 +2,9 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
-use models_email::email::service::pubsub::LinkManagerMessage;
-use std::time::Duration;
 use thiserror::Error;
-
-/// How long a per-link probe window stands before another probe may run for it.
-const HEALTH_PROBE_THROTTLE: Duration = Duration::from_secs(15 * 60);
 
 #[derive(Debug, Error)]
 pub enum HealthCheckError {
@@ -38,7 +32,7 @@ impl IntoResponse for HealthCheckError {
 /// the daily refresh sweep; the side effects (clearing or setting the reauth flag, and
 /// the one-time reauth fan-out) are handled by the email service token source.
 ///
-/// Probes run in the background and the response returns immediately to stay off the
+/// Probes are durably queued and the response returns immediately to stay off the
 /// load path; each persisted flag is picked up by the next links read. Probes are
 /// throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
 /// collapse to one refresh per window.
@@ -58,62 +52,10 @@ pub async fn health_check_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, HealthCheckError> {
-    let links = email_db_client::links::get::fetch_inboxes_for_macro_id(
-        &ctx.db,
-        &authorization.authorization.user.user_context.user_id,
-    )
-    .await
-    .map_err(HealthCheckError::DatabaseError)?;
-
-    for link in links {
-        if !link.is_sync_active {
-            continue;
-        }
-
-        let ctx = ctx.clone();
-        tokio::spawn(async move {
-            if !ctx
-                .redis_client
-                .try_begin_health_probe(link.id, HEALTH_PROBE_THROTTLE)
-                .await
-            {
-                return;
-            }
-
-            let probe = ctx
-                .email_api
-                .get_access_token(link.id, TokenFreshness::Fresh)
-                .await;
-
-            let Err(error) = probe else { return };
-
-            if !matches!(error, EmailApiError::AuthRequired) {
-                tracing::debug!(error=?error, link_id=%link.id, "Health probe token fetch failed");
-                return;
-            }
-
-            // A revoked grant marks the link and fans out as a side effect of the probe.
-            // If that mark did not persist, the signal would be lost on this fire-and-forget
-            // path, so hand off to the link-manager queue, which retries until it sticks.
-            let persisted = email_db_client::links::get::fetch_link_by_id(&ctx.db, link.id)
-                .await
-                .ok()
-                .flatten()
-                .is_some_and(|l| l.needs_reauth);
-
-            if !persisted {
-                ctx.sqs_client
-                    .enqueue_link_manager_notification(LinkManagerMessage::HealthCheck {
-                        link_id: link.id,
-                    })
-                    .await
-                    .inspect_err(|enqueue_err| {
-                        tracing::error!(error=?enqueue_err, link_id=%link.id, "Failed to enqueue health-check retry after unpersisted reauth");
-                    })
-                    .ok();
-            }
-        });
-    }
+    ctx.inbox_health
+        .request(&authorization.authorization.user.macro_user_id)
+        .await
+        .map_err(|error| HealthCheckError::DatabaseError(anyhow::Error::new(error)))?;
 
     Ok(StatusCode::ACCEPTED.into_response())
 }

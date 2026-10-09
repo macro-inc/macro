@@ -427,8 +427,28 @@ and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Tabs: `Signal` / `Noise` / `Favorites` / `Sent` / `Scheduled` / `Calendar` / `Drafts` / `Shared` /
 `Archived` / `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
-shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
-connected account. Search is `Ctrl+F` within the surface.
+shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
+use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface.
+
+Outlook connections support personal Outlook.com and individual Microsoft 365
+inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
+same thread, search, Signal/Noise, draft, and schedule surfaces apply to both
+providers. Shared/delegated Microsoft mailboxes are outside this account scope;
+sharing an inbox or thread inside Macro remains available.
+
+For Outlook writes, distinguish acceptance from provider confirmation. Thread
+organization notices and inbox settings show pending or failed changes. A saved
+draft can show a conflict or an uncertain delivery: use its recovery actions and
+check the provider copy before choosing an explicit resend. Switching the sender
+inbox copies the draft and attachments into the destination; wait for completion
+before sending. If the copy is interrupted, use retry or keep the original.
+
+Imported Outlook attachments keep their provider identity, including inline
+images. Cloud-reference attachment chips open the original Outlook message.
+Forwarding a message with cloud references shows a notice to share those links
+from Outlook; they are not downloadable files. Verify a native draft attachment
+replacement, removal of the final attachment, and moving a populated folder into
+and out of Deleted Items when exercising sync.
 
 `Favorites`, directly below Noise, lists starred Macro emails across Signal,
 Noise, and archived mail. It respects the selected inboxes and filters; search
@@ -1206,6 +1226,15 @@ returning from an opened file.
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+Microsoft calendars use the same editor and calendar views after calendar consent.
+Conference choices follow the selected calendar's capabilities: Microsoft Teams
+where supported and Google Meet for Google calendars. Selecting a calendar that
+cannot create a requested conference shows an error until the request is resolved;
+editing an existing meeting preserves its conference. Email reminders are sent to
+the connected calendar mailbox. Outlook out-of-office automatic replies show an
+uncertainty notice if a provider response cannot be confirmed; a reconnect must
+not resend an already attempted automatic reply.
+
 Event composer dropdown triggers and date/time inputs use the theme control
 surface, so they blend with the dialog instead of using the darker page fill.
 Their menus stay inside the composer's portal scope. Verify that calendar,
@@ -1582,6 +1611,19 @@ Editing or rescheduling an owned event retains and updates its selected Macro ca
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.
 Removing the link or deleting the calendar event does not revoke the reusable call.
+
+For a writable Outlook event you organize, the editor's `Replace event…` action
+can reset guest RSVPs or remove its online meeting. Save or discard ordinary edits
+first. Choose the entire series or only this occurrence, review the saved event,
+and check the cancellation/reinvitation acknowledgement before `Replace event`.
+The old invitation is cancelled after the replacement is prepared; guests receive
+a new invitation and must respond again. `Check progress` and `Continue replacement`
+resume that saved operation after an interrupted response. Recovery continues when
+the dialog closes. A conflict offers links to review both copies in Outlook; do
+not create another copy while the existing operation is unresolved. Events with
+native details that cannot be safely copied are rejected before any invitations.
+For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
+opens the actual occurrence so you can clear your own response there.
 
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of

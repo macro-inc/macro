@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT macro_id,is_sync_active,needs_reauth,grant_id,grant_generation,sync_generation,fusionauth_user_id FROM email_links WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_sync_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4712349510c39d5325202115b604c9d3048d407a0776a03c9e18ddd4bd08d3c1"
+}

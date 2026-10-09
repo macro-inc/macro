@@ -1,14 +1,16 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useAddInboxFlow } from '@core/email-link';
+import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 
 const SETUP_MESSAGES = {
   connect: {
     title: 'Connect your calendar',
-    description: 'Connect a Google account to show your calendar events.',
+    description:
+      'Connect a Google or Microsoft account to show your calendar events.',
     action: 'Connect calendar',
   },
   permission: {
@@ -23,7 +25,7 @@ const SETUP_MESSAGES = {
   },
   reauth: {
     title: 'Reconnect calendar',
-    description: 'Reconnect your Google account to resume calendar sync.',
+    description: 'Reconnect your account to resume calendar sync.',
     action: 'Reconnect',
   },
 } as const;
@@ -32,6 +34,12 @@ const SETUP_MESSAGES = {
 export function SetupStatus() {
   const calendarPager = useCalendarPager();
   const linksQuery = useEmailLinksQuery();
+  const calendarsQuery = useVisibleCalendarsQuery();
+  const warnings = createMemo(() =>
+    calendarsQuery.isSuccess
+      ? calendarsQuery.data.filter((calendar) => calendar.syncError)
+      : []
+  );
   const startAddInbox = useAddInboxFlow();
 
   const hasEvents = () =>
@@ -91,6 +99,8 @@ export function SetupStatus() {
         ? links.find((link) => link.needs_reauth)
         : links.find((link) => link.needs_calendar_permission);
     void startAddInbox({
+      provider: link?.provider,
+      reconnectLinkId: link?.id,
       emailAddress: link?.email_address,
       scopes:
         state === 'permission' || state === 'disabled'
@@ -100,33 +110,49 @@ export function SetupStatus() {
   };
 
   return (
-    <Show when={setupState() !== undefined}>
-      <Show
-        when={!hasEvents()}
-        fallback={
-          <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
-            <span>{setupMessage().title}</span>
-            <Button variant="accent" size="sm" onClick={startSetup}>
-              {setupMessage().action}
-            </Button>
-          </div>
-        }
-      >
+    <>
+      <Show when={setupState() === undefined && warnings().length > 0}>
         <div
-          class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
-          aria-live="polite"
+          role="status"
+          class="absolute bottom-2 left-2 right-2 z-20 flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
         >
-          <div class="flex max-w-sm flex-col items-center gap-3">
-            <div class="text-sm font-semibold text-ink">
-              {setupMessage().title}
-            </div>
-            <p class="text-xs text-ink-muted">{setupMessage().description}</p>
-            <Button variant="accent" size="sm" onClick={startSetup}>
-              {setupMessage().action}
-            </Button>
-          </div>
+          <For each={warnings()}>
+            {(calendar) => (
+              <p>
+                {calendar.emailAddress} — {calendar.name}: {calendar.syncError}
+              </p>
+            )}
+          </For>
         </div>
       </Show>
-    </Show>
+      <Show when={setupState() !== undefined}>
+        <Show
+          when={!hasEvents()}
+          fallback={
+            <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
+              <span>{setupMessage().title}</span>
+              <Button variant="accent" size="sm" onClick={startSetup}>
+                {setupMessage().action}
+              </Button>
+            </div>
+          }
+        >
+          <div
+            class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
+            aria-live="polite"
+          >
+            <div class="flex max-w-sm flex-col items-center gap-3">
+              <div class="text-sm font-semibold text-ink">
+                {setupMessage().title}
+              </div>
+              <p class="text-xs text-ink-muted">{setupMessage().description}</p>
+              <Button variant="accent" size="sm" onClick={startSetup}>
+                {setupMessage().action}
+              </Button>
+            </div>
+          </div>
+        </Show>
+      </Show>
+    </>
   );
 }

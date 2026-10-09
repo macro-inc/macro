@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH candidate AS (SELECT o.id FROM email_mailbox_lifecycle_outbox o WHERE o.available_at <= now()\n            AND (o.lease_until IS NULL OR o.lease_until < now())\n            AND NOT EXISTS (SELECT 1 FROM email_mailbox_lifecycle_outbox prerequisite WHERE prerequisite.link_id=o.link_id\n                AND ((o.payload->>'kind'='revoke_microsoft_grant' AND prerequisite.payload->>'kind'='cleanup_microsoft_watches')\n                    OR (o.payload->>'kind'='delete_mailbox' AND prerequisite.payload->>'kind' IN ('cleanup_microsoft_watches','revoke_microsoft_grant'))))\n            ORDER BY (o.payload->>'kind' = 'gmail_history'),o.available_at,o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED)\n            UPDATE email_mailbox_lifecycle_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1\n            FROM candidate c WHERE o.id = c.id RETURNING o.id,o.link_id,o.payload",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "91e6c916303ecf9964057ee4e1049e17d6e75ab6e3b987b0da910d30138422fa"
+}

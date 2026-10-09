@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE email_mailbox_drafts SET state = 'sent',error_code = NULL,\n                        lease_id = NULL,lease_until = NULL,delete_requested = false,updated_at = now()\n                    WHERE message_id = $1 AND state <> 'sent' RETURNING checkpoint\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checkpoint",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ce0a451712645ae00b233fd55c83ace1432d82386941c90b6827eaf8e3793c45"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,$3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a50b9bbd3eadad07aa81c59d60d6ad0090633790d5be1939273c12edf1269367"
+}

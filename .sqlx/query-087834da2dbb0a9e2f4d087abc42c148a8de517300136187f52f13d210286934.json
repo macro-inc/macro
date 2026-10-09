@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM email_sync_streams WHERE link_id = $1 AND kind = 'mail_folder' AND scope_id = 'inbox-id'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "087834da2dbb0a9e2f4d087abc42c148a8de517300136187f52f13d210286934"
+}

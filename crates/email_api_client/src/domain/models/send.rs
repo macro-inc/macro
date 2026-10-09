@@ -9,7 +9,7 @@ use super::EmailApiError;
 mod test;
 
 /// Provider-neutral content and threading metadata for a message send.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SendRequest {
     /// Message content prepared by the email service.
     pub message: MessageToSend,
@@ -47,11 +47,23 @@ impl SendRequest {
             for attachment in attachments {
                 // Borrow the attachment buffers: cloning them would double
                 // peak memory for large-attachment sends.
-                builder = builder.attachment(
-                    attachment.content_type.as_str(),
-                    attachment.file_name.as_str(),
-                    &attachment.data[..],
-                );
+                builder = if attachment.is_inline {
+                    builder.inline(
+                        attachment.content_type.as_str(),
+                        attachment.content_id.as_deref().ok_or_else(|| {
+                            EmailApiError::Permanent {
+                                message: "Inline attachment requires a Content-ID".into(),
+                            }
+                        })?,
+                        &attachment.data[..],
+                    )
+                } else {
+                    builder.attachment(
+                        attachment.content_type.as_str(),
+                        attachment.file_name.as_str(),
+                        &attachment.data[..],
+                    )
+                };
             }
         }
 

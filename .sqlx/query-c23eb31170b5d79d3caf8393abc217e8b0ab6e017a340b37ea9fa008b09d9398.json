@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, draft_id, file_name, content_type, sha, size, s3_key, upload_pending, content_id, is_inline\n        FROM email_attachments_drafts\n        WHERE draft_id = ANY($1)\n        ORDER BY draft_id, file_name ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "draft_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "content_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "size",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "s3_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "upload_pending",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "content_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_inline",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "c23eb31170b5d79d3caf8393abc217e8b0ab6e017a340b37ea9fa008b09d9398"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_read,mailbox_state FROM email_messages WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "mailbox_state",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "e47ea54d39fc8f5b50bd35ccf1fc7f9d58ea916d09085ce868b91d90facb3639"
+}

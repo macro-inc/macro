@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE microsoft_oauth_grant_versions SET created_at=now()-interval '2 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6f06591c7010f704424d40d1749bebe37e23727b6ac57039e02289a0d4d64273"
+}

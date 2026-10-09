@@ -3,6 +3,9 @@ use axum::Router;
 use calendar_events::inbound::mutation_router::{
     CalendarMutationRouterState, calendar_mutation_router,
 };
+use calendar_events::inbound::replacement_router::{
+    CalendarReplacementRouterState, calendar_replacement_router,
+};
 use context::ApiContext;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -81,6 +84,12 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                     ),
                 ),
             )
+            .merge(calendar_replacement_router(
+                CalendarReplacementRouterState::new(
+                    state.calendar_mutation_service.clone(),
+                    state.authorization_state.clone(),
+                ),
+            ))
             .merge(calendar_mutation_router(CalendarMutationRouterState::new(
                 state.calendar_mutation_service.clone(),
                 state.authorization_state.clone(),

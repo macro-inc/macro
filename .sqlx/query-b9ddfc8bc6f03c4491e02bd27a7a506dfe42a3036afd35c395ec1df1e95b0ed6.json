@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT payload FROM email_projection_outbox WHERE link_id = $1 AND payload->>'was_draft' = 'true'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "payload",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b9ddfc8bc6f03c4491e02bd27a7a506dfe42a3036afd35c395ec1df1e95b0ed6"
+}

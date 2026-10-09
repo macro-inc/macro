@@ -6,6 +6,7 @@
 mod account_link_state;
 mod api;
 mod config;
+pub mod domain;
 mod generate_password;
 mod microsoft_token_cipher;
 pub mod outbound;

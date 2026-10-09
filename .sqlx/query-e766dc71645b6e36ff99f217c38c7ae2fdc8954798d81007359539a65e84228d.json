@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access\n            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)\n        VALUES ($1, 'document', $2, 'team', 'view', $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e766dc71645b6e36ff99f217c38c7ae2fdc8954798d81007359539a65e84228d"
+}

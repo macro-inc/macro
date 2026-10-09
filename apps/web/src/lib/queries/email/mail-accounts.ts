@@ -34,6 +34,7 @@ export function useMailAccountsQuery() {
         links: data.user.emailLinks.map((link) => ({
           id: link.id,
           email_address: link.emailAddress,
+          provider: link.provider,
           photo_url: link.photoUrl,
           macro_id: link.macroId,
           is_primary: link.isPrimary,

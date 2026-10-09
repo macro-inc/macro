@@ -33,7 +33,7 @@ export function CalendarPermissionPrompt() {
   useKeyedPersistentToasts({
     items: () =>
       calendarUiEnabled() && promptAllowed()
-        ? (linksQuery.data?.links ?? []).filter(
+        ? (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
             (link) =>
               link.needs_calendar_permission &&
               !link.needs_reauth &&
@@ -49,7 +49,7 @@ export function CalendarPermissionPrompt() {
     toast: (link, dismiss) => ({
       title: 'Enable calendar',
       content(): string {
-        return `Macro can now sync your Google Calendar. Grant calendar access for ${link.email_address} to turn it on.`;
+        return `Macro can now sync your calendar. Grant calendar access for ${link.email_address} to turn it on.`;
       },
       actions: [
         {
@@ -60,6 +60,8 @@ export function CalendarPermissionPrompt() {
             dismiss();
             void startAddInbox({
               scopes: 'calendar',
+              provider: link.provider,
+              reconnectLinkId: link.id,
               emailAddress: link.email_address,
             });
           },

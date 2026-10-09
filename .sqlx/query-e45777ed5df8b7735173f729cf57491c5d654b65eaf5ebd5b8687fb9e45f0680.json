@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,base_version,provider_id,delete_requested)\n            SELECT m.id,m.link_id,$3,$4,\n                jsonb_build_object('db_id',m.id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),'to','[]'::jsonb,'cc','[]'::jsonb,'bcc','[]'::jsonb),\n                m.provider_version,m.provider_id,true\n            FROM email_messages m WHERE m.id = $1 AND m.link_id = $2 AND m.is_draft AND NOT m.is_sent\n                AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = m.id)\n            ON CONFLICT (message_id) DO UPDATE SET delete_requested = true,actor_id = EXCLUDED.actor_id,\n                state = 'pending',\n                checkpoint = CASE WHEN email_mailbox_drafts.checkpoint->>'stage'='creating' THEN email_mailbox_drafts.checkpoint ELSE NULL END,\n                error_code = NULL,lease_id=NULL,lease_until=NULL,\n                available_at = now(),updated_at = now()\n            RETURNING message_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e45777ed5df8b7735173f729cf57491c5d654b65eaf5ebd5b8687fb9e45f0680"
+}

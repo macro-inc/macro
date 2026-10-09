@@ -756,6 +756,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 fragment MailAccountFields on GraphqlEmailLink {
   id
   macroId
+  provider
   emailAddress
   photoUrl
   isPrimary

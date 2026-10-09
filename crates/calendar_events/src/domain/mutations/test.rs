@@ -3,10 +3,10 @@ use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
     CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
-    ConferenceChange, DisconnectedGoogleCalendar, EventStart, EventStatus, EventTransparency,
-    EventType, EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget,
-    GoogleEventSource, GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
-    ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    ConferenceChange, DisconnectedCalendar, EventStart, EventStatus, EventTransparency, EventType,
+    EventVisibility, GoogleCalendarSyncSnapshot, GoogleWatchChannel, OutOfOfficeAutoDeclineMode,
+    OutOfOfficeProperties, ProviderCalendar, ProviderCalendarTarget, ProviderEventSource,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -14,9 +14,10 @@ use std::sync::{Arc, Mutex};
 
 fn token_identity() -> CalendarLinkTokenIdentity {
     CalendarLinkTokenIdentity {
+        binding: None,
         fusionauth_user_id: "fusion-user".to_string(),
         email_address: "self@example.com".to_string(),
-        provider: "GMAIL".to_string(),
+        provider: super::super::models::CalendarProvider::Google,
     }
 }
 
@@ -104,7 +105,9 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
             observed_access_role: Some("owner".to_owned()),
             email_link_id: Uuid::now_v7(),
             account_id: Uuid::now_v7(),
@@ -142,6 +145,7 @@ fn draft() -> CalendarEventDraft {
 
 #[derive(Clone)]
 struct FakeRepo {
+    replacements: Arc<Mutex<Vec<crate::domain::replacement::CalendarReplacement>>>,
     mutation_target: Option<CalendarEventMutationTarget>,
     /// Series attendees a mutation carries forward RSVP/optional state from.
     stored_attendees: Vec<CalendarAttendee>,
@@ -155,9 +159,9 @@ struct FakeRepo {
     write_change: CalendarEventChange,
     upserts: Arc<Mutex<Vec<CalendarEventUpsert>>>,
     removed_sources: Arc<Mutex<Vec<(Uuid, Uuid, String)>>>,
-    /// Per-event fates `remove_google_source` reports back.
+    /// Per-event fates `remove_provider_source` reports back.
     retired_events: Vec<RetiredCalendarEvent>,
-    disconnected: Option<DisconnectedGoogleCalendar>,
+    disconnected: Option<DisconnectedCalendar>,
     disconnect_requests: Arc<Mutex<Vec<(String, Uuid)>>>,
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
@@ -167,6 +171,7 @@ struct FakeRepo {
 impl Default for FakeRepo {
     fn default() -> Self {
         Self {
+            replacements: Default::default(),
             mutation_target: None,
             stored_attendees: Vec::new(),
             occurrence_override_attendees: None,
@@ -195,11 +200,11 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
-    async fn disconnect_google_calendar(
+    async fn disconnect_provider_calendar(
         &self,
         requester_id: &str,
         email_link_id: Uuid,
-    ) -> Result<Option<DisconnectedGoogleCalendar>, rootcause::Report> {
+    ) -> Result<Option<DisconnectedCalendar>, rootcause::Report> {
         self.disconnect_requests
             .lock()
             .unwrap()
@@ -402,7 +407,7 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
-    async fn remove_google_source(
+    async fn remove_provider_source(
         &self,
         account_id: Uuid,
         calendar_id: Uuid,
@@ -423,7 +428,7 @@ enum FakeProviderBehavior {
     Gone,
     OccurrenceGone,
     NotAttendee,
-    Fail(GoogleProviderErrorKind),
+    Fail(CalendarProviderErrorKind),
 }
 
 #[derive(Clone)]
@@ -465,23 +470,23 @@ impl FakeProvider {
         upsert
     }
 
-    fn fail(&self) -> Option<GoogleProviderError> {
+    fn fail(&self) -> Option<CalendarProviderError> {
         match &self.behavior {
             FakeProviderBehavior::Fail(kind) => {
-                Some(GoogleProviderError::new(*kind, "provider says no"))
+                Some(CalendarProviderError::new(*kind, "provider says no"))
             }
             _ => None,
         }
     }
 }
 
-impl GoogleCalendarMutationProvider for FakeProvider {
+impl CalendarMutationProvider for FakeProvider {
     async fn create_event(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         draft: &CalendarEventDraft,
-    ) -> Result<CalendarEventUpsert, GoogleProviderError> {
+    ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         self.calls.lock().unwrap().push("create".to_string());
         self.created_drafts.lock().unwrap().push(draft.clone());
         if let Some(error) = self.fail() {
@@ -493,10 +498,10 @@ impl GoogleCalendarMutationProvider for FakeProvider {
     async fn update_event(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         provider_event_id: &str,
         patch: &CalendarEventPatch,
-    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
         self.calls
             .lock()
             .unwrap()
@@ -514,11 +519,11 @@ impl GoogleCalendarMutationProvider for FakeProvider {
     async fn update_event_instance(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         master_provider_event_id: &str,
         original_start: &str,
         patch: &CalendarEventPatch,
-    ) -> Result<GoogleInstanceUpdateOutcome, GoogleProviderError> {
+    ) -> Result<ProviderInstanceUpdateOutcome, CalendarProviderError> {
         self.calls.lock().unwrap().push(format!(
             "instance-update:{master_provider_event_id}:{original_start}"
         ));
@@ -527,20 +532,20 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(match self.behavior {
-            FakeProviderBehavior::Gone => GoogleInstanceUpdateOutcome::SeriesGone,
+            FakeProviderBehavior::Gone => ProviderInstanceUpdateOutcome::SeriesGone,
             FakeProviderBehavior::OccurrenceGone => {
-                GoogleInstanceUpdateOutcome::OccurrenceGone(Box::new(self.echo(&target.owner_id)))
+                ProviderInstanceUpdateOutcome::OccurrenceGone(Box::new(self.echo(&target.owner_id)))
             }
-            _ => GoogleInstanceUpdateOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            _ => ProviderInstanceUpdateOutcome::Applied(Box::new(self.echo(&target.owner_id))),
         })
     }
 
     async fn delete_event(
         &self,
         _access_token: &str,
-        _target: &GoogleCalendarTarget,
+        _target: &ProviderCalendarTarget,
         provider_event_id: &str,
-    ) -> Result<(), GoogleProviderError> {
+    ) -> Result<(), CalendarProviderError> {
         self.calls
             .lock()
             .unwrap()
@@ -557,7 +562,7 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         _email_link_id: Uuid,
         channel_id: &str,
         resource_id: &str,
-    ) -> Result<(), GoogleProviderError> {
+    ) -> Result<(), CalendarProviderError> {
         self.calls
             .lock()
             .unwrap()
@@ -571,10 +576,10 @@ impl GoogleCalendarMutationProvider for FakeProvider {
     async fn delete_event_instance(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         master_provider_event_id: &str,
         original_start: &str,
-    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+    ) -> Result<ProviderSeriesMutationOutcome, CalendarProviderError> {
         self.calls.lock().unwrap().push(format!(
             "instance:{master_provider_event_id}:{original_start}"
         ));
@@ -582,18 +587,18 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(match self.behavior {
-            FakeProviderBehavior::Gone => GoogleSeriesMutationOutcome::Gone,
-            _ => GoogleSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            FakeProviderBehavior::Gone => ProviderSeriesMutationOutcome::Gone,
+            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
         })
     }
 
     async fn truncate_recurring_event(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         master_provider_event_id: &str,
         original_start: &str,
-    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+    ) -> Result<ProviderSeriesMutationOutcome, CalendarProviderError> {
         self.calls.lock().unwrap().push(format!(
             "truncate:{master_provider_event_id}:{original_start}"
         ));
@@ -601,20 +606,20 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(match self.behavior {
-            FakeProviderBehavior::Gone => GoogleSeriesMutationOutcome::SeriesDeleted,
-            _ => GoogleSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            FakeProviderBehavior::Gone => ProviderSeriesMutationOutcome::SeriesDeleted,
+            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
         })
     }
 
     async fn rsvp_event(
         &self,
         _access_token: &str,
-        target: &GoogleCalendarTarget,
+        target: &ProviderCalendarTarget,
         master_provider_event_id: &str,
         actor: &ActorInboxes,
         _response: AttendeeResponseStatus,
         scope: &CalendarRsvpScope,
-    ) -> Result<GoogleRsvpOutcome, GoogleProviderError> {
+    ) -> Result<ProviderRsvpOutcome, CalendarProviderError> {
         let scope = match scope {
             CalendarRsvpScope::All => "all".to_string(),
             CalendarRsvpScope::ThisEvent { recurrence_id } => format!("this:{recurrence_id}"),
@@ -631,9 +636,9 @@ impl GoogleCalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(match self.behavior {
-            FakeProviderBehavior::Gone => GoogleRsvpOutcome::Gone,
-            FakeProviderBehavior::NotAttendee => GoogleRsvpOutcome::NotAttendee,
-            _ => GoogleRsvpOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            FakeProviderBehavior::Gone => ProviderRsvpOutcome::Gone,
+            FakeProviderBehavior::NotAttendee => ProviderRsvpOutcome::NotAttendee,
+            _ => ProviderRsvpOutcome::Applied(Box::new(self.echo(&target.owner_id))),
         })
     }
 }
@@ -1738,6 +1743,8 @@ fn echo_override(
 ) -> CalendarEventOverride {
     let original_start = Utc.with_ymd_and_hms(2026, 8, 18, 20, 0, 0).unwrap();
     CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -1755,6 +1762,26 @@ fn echo_override(
         status: Some(EventStatus::Tentative),
         attendees,
     }
+}
+
+#[test]
+fn occurrence_override_preserves_reminders_and_privacy_together() {
+    let mut event = echo_upsert("macro|user").event;
+    let mut occurrence = echo_override("2026-08-18T20:00:00+00:00", None);
+    let reminders = EventReminders {
+        use_default: false,
+        overrides: Vec::new(),
+    };
+    occurrence.reminders = Some(reminders.clone());
+    occurrence.visibility = Some(EventVisibility::Private);
+    occurrence.transparency = Some(EventTransparency::Transparent);
+
+    occurrence.apply_to(&mut event);
+
+    assert_eq!(event.reminders, reminders);
+    assert_eq!(event.visibility, EventVisibility::Private);
+    assert_eq!(event.transparency, EventTransparency::Transparent);
+    assert_eq!(event.time, occurrence.time);
 }
 
 /// The provider echo of an occurrence-scoped edit is the series, whose
@@ -2133,9 +2160,10 @@ async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_pro
     let emails = provider.rsvp_self_emails.clone();
     let mut target = mutation_target(false);
     target.token_identity = CalendarLinkTokenIdentity {
+        binding: None,
         fusionauth_user_id: "fusion-jacob".to_string(),
         email_address: "jacob@example.com".to_string(),
-        provider: "GMAIL".to_string(),
+        provider: super::super::models::CalendarProvider::Google,
     };
     target.actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]);
     service(
@@ -2255,7 +2283,7 @@ async fn token_and_provider_failures_map_to_typed_errors() {
             ..FakeRepo::default()
         },
         FakeProvider::new(FakeProviderBehavior::Fail(
-            GoogleProviderErrorKind::Transient,
+            CalendarProviderErrorKind::Transient,
         )),
         FakeTokens::ok(),
     );
@@ -2277,7 +2305,7 @@ async fn token_and_provider_failures_map_to_typed_errors() {
             ..FakeRepo::default()
         },
         FakeProvider::new(FakeProviderBehavior::Fail(
-            GoogleProviderErrorKind::Permanent,
+            CalendarProviderErrorKind::Permanent,
         )),
         FakeTokens::ok(),
     );
@@ -2428,8 +2456,8 @@ async fn conference_changes_reach_the_provider_for_any_conference() {
     }
 }
 
-fn disconnected(channels: &[(&str, &str)]) -> DisconnectedGoogleCalendar {
-    DisconnectedGoogleCalendar {
+fn disconnected(channels: &[(&str, &str)]) -> DisconnectedCalendar {
+    DisconnectedCalendar {
         token_identity: token_identity(),
         watch_channels: channels
             .iter()
@@ -2507,7 +2535,7 @@ async fn disconnecting_calendar_survives_a_provider_that_cannot_close_channels()
         ..FakeRepo::default()
     };
     let provider = FakeProvider::new(FakeProviderBehavior::Fail(
-        GoogleProviderErrorKind::Transient,
+        CalendarProviderErrorKind::Transient,
     ));
     assert!(
         service(repo.clone(), provider, FakeTokens::ok())
@@ -2654,3 +2682,67 @@ async fn rsvp_rejects_a_selected_address_the_requester_does_not_own() {
     assert!(matches!(error, CalendarMutationError::NotAttendee));
     assert!(calls.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn outlook_write_pause_rejects_provider_operations_before_fetching_tokens() {
+    let mut creation = creation_target(false);
+    creation.token_identity.provider = super::super::models::CalendarProvider::Outlook;
+    let mut mutation = mutation_target(false);
+    mutation.token_identity.provider = super::super::models::CalendarProvider::Outlook;
+    let event_id = mutation.event_id;
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(
+        FakeRepo {
+            creation_target: Some(creation),
+            mutation_target: Some(mutation),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .with_outlook_writes_enabled(false);
+    assert!(matches!(
+        svc.create_event("macro|self@example.com", None, None, draft())
+            .await,
+        Err(CalendarMutationError::Retryable(_))
+    ));
+    assert!(matches!(
+        svc.delete_event(
+            "macro|self@example.com",
+            event_id,
+            None,
+            CalendarDeletionScope::All
+        )
+        .await,
+        Err(CalendarMutationError::Retryable(_))
+    ));
+    assert!(matches!(
+        svc.respond_to_event(
+            "macro|self@example.com",
+            event_id,
+            None,
+            AttendeeResponseStatus::Accepted,
+            CalendarRsvpScope::All,
+            None
+        )
+        .await,
+        Err(CalendarMutationError::Retryable(_))
+    ));
+    assert!(calls.lock().unwrap().is_empty());
+    let google = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    )
+    .with_outlook_writes_enabled(false);
+    google
+        .create_event("macro|self@example.com", None, None, draft())
+        .await
+        .unwrap();
+}
+
+mod replacement;

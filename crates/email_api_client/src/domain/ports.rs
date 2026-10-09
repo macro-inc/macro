@@ -1,5 +1,8 @@
 //! Capability-oriented ports for provider email APIs.
 
+mod mailbox;
+pub use mailbox::*;
+
 use std::future::Future;
 
 use models_email::email::service::label::Label;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH facts AS (\n            SELECT m.*, f.in_inbox,f.in_trash,f.in_junk,f.in_sent,\n                m.is_draft AND m.provider_id IS NULL AS local_draft,\n                EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient\n            FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id\n            WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present\n        ), aggregate AS (\n            SELECT COALESCE(bool_or((in_inbox AND NOT in_sent) OR local_draft),false) AS inbox_visible,\n                COALESCE(bool_or(in_inbox AND NOT in_trash AND NOT in_junk),false) AS has_inbox,\n                COALESCE(bool_and(is_read),true) AS is_read,\n                greatest(max(internal_date_ts) FILTER (WHERE in_inbox AND (NOT (is_draft OR is_sent) OR sender_is_recipient)),max(updated_at) FILTER (WHERE local_draft)) AS inbound_ts,\n                max(internal_date_ts) FILTER (WHERE is_sent AND NOT in_trash) AS outbound_ts,\n                greatest(max(internal_date_ts) FILTER (WHERE NOT in_trash AND NOT in_junk),max(updated_at) FILTER (WHERE local_draft)) AS all_ts\n            FROM facts\n        ), effective AS (\n            SELECT a.*, a.inbox_visible OR (t.reminder_returned_at IS NOT NULL AND a.has_inbox) AS visible\n            FROM aggregate a JOIN email_threads t ON t.id = $1 AND t.link_id = $2\n        )\n        UPDATE email_threads t SET inbox_visible = a.visible,is_read = a.is_read,\n            latest_inbound_message_ts = a.inbound_ts,latest_outbound_message_ts = a.outbound_ts,\n            latest_non_spam_message_ts = a.all_ts,updated_at = now()\n        FROM effective a WHERE t.id = $1 AND t.link_id = $2\n            AND (t.inbox_visible,t.is_read,t.latest_inbound_message_ts,t.latest_outbound_message_ts,t.latest_non_spam_message_ts)\n                IS DISTINCT FROM (a.visible,a.is_read,a.inbound_ts,a.outbound_ts,a.all_ts)\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8f5853151f129385fa725880a71a1288bc433d6b2c22afdf5560098451a5e03"
+}

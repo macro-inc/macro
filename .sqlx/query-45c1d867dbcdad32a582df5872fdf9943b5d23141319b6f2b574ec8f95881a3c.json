@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO github_links (id, macro_id, fusionauth_user_id, github_username, github_user_id)\n        VALUES ('11111111-2222-3333-4444-555555555555'::uuid, 'macro|user2@user.com', 'cccccccc-cccc-cccc-cccc-cccccccccccc'::uuid, 'TestUser', '54321')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "45c1d867dbcdad32a582df5872fdf9943b5d23141319b6f2b574ec8f95881a3c"
+}

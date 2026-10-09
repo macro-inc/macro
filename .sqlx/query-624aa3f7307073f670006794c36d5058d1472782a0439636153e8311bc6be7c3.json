@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM email_mailbox_lifecycle_outbox WHERE link_id = $1 AND payload->>'kind' = 'gmail_backfill'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "624aa3f7307073f670006794c36d5058d1472782a0439636153e8311bc6be7c3"
+}

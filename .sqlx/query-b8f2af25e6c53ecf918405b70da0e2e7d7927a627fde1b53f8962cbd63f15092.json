@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_projection_outbox WHERE event_id=$1 AND lease_id=$2 AND revision=$3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8f2af25e6c53ecf918405b70da0e2e7d7927a627fde1b53f8962cbd63f15092"
+}

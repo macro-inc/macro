@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_accounts SET sync_status=CASE WHEN last_synced_at IS NULL OR sync_status='reauth_required' THEN 'syncing' ELSE sync_status END WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0a2922c42a621e60b35880d65986e9eb4c2a8275a8280cd808b5bc2dd53cd9e"
+}

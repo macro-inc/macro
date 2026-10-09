@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_provider_subscriptions WHERE id=$1 AND link_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02ae2c89124740cdf55164915f590eb7b0a6718056255cbf5355350de8c631cc"
+}

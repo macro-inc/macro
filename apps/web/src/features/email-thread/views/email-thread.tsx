@@ -100,6 +100,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
               {props.header}
               {props.actions}
+              {viewContext.rendering.renderOrganizationStatus?.()}
               {/* Measure message gutters against the thread, excluding the side panel. */}
               <div
                 class="@container w-full flex-1 flex flex-col items-center overflow-hidden"

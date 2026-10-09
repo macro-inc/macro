@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id,s.kind,s.resource_key,s.desired,s.failure IS NOT NULL AS \"failed!\"\n            FROM email_mailbox_settings_work s JOIN email_links l ON l.id=s.link_id\n            WHERE l.id=$1 AND l.sync_generation=$2 AND l.grant_generation=$3\n                AND l.is_sync_active AND l.disconnect_requested_at IS NULL\n                AND s.kind<>'catalog' AND s.completed_revision<s.revision ORDER BY s.kind,s.resource_key",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "resource_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "desired",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "failed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "a79ae0a7207ffc0a4b62ca1813ac4f290d41a29fe67a22a677c1763a7ad4486b"
+}

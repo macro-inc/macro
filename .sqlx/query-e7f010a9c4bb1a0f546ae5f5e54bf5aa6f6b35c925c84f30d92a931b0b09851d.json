@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_address_book_sources(link_id,folder_id,provider_id,display_name,emails,scan_id) VALUES ($1,$2,$3,$4,$5,$6)\n        ON CONFLICT(link_id,folder_id,provider_id) DO UPDATE SET display_name = EXCLUDED.display_name,emails = EXCLUDED.emails,\n            scan_id = EXCLUDED.scan_id,deleted_at = NULL,revision = email_address_book_sources.revision + 1,\n            photo_due_at = now(),photo_lease_id = NULL,photo_lease_until = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7f010a9c4bb1a0f546ae5f5e54bf5aa6f6b35c925c84f30d92a931b0b09851d"
+}

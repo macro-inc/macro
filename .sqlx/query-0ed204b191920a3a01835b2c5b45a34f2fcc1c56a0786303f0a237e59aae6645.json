@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_transfers SET state=$3,issue=$4,revision=revision+1,lease_id=NULL,lease_until=NULL,available_at=now()+interval '30 seconds',updated_at=now() WHERE id=$1 AND lease_id=$2 AND lease_until>now() AND state='cleanup'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ed204b191920a3a01835b2c5b45a34f2fcc1c56a0786303f0a237e59aae6645"
+}

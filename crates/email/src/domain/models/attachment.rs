@@ -30,6 +30,7 @@ impl Identify for Attachment {
 /// A provider attachment on a message.
 #[derive(Debug, Clone)]
 pub struct MessageAttachment {
+    pub reference_url: Option<String>,
     /// Database ID of the attachment.
     pub db_id: uuid::Uuid,
     /// Provider attachment ID.
@@ -47,7 +48,7 @@ pub struct MessageAttachment {
 }
 
 /// A draft attachment uploaded to S3.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttachmentDraft {
     /// Unique ID of the draft attachment record.
     pub id: uuid::Uuid,
@@ -63,6 +64,15 @@ pub struct AttachmentDraft {
     pub size: i32,
     /// S3 object key.
     pub s3_key: String,
+    /// Bytes have not yet been verified; sending must wait for completion.
+    #[serde(default)]
+    pub upload_pending: bool,
+    /// Original Content-ID retained when transferring a provider attachment.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    /// Whether the attachment is referenced inline by the message body.
+    #[serde(default)]
+    pub is_inline: bool,
 }
 
 /// A forwarded attachment linking a draft to an original message's attachment.

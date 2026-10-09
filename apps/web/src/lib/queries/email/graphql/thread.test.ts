@@ -108,6 +108,7 @@ const cachedPage: EmailThreadPageQuery = {
 function threadMessages(offset: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
     __typename: 'GraphqlSoupEmailMessage' as const,
+    operationStatus: null,
     id: `message-${offset + i}`,
     threadId: 'thread-1',
     linkId: 'link-1',

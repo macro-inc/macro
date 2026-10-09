@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"SharePermission\" (\n            id,\n            \"linkShare\",\n            \"linkShareAccessLevel\"\n        )\n        VALUES (\n            $1,\n            $2::text,\n            CASE WHEN $2::text IS NULL THEN NULL ELSE 'view'::\"AccessLevel\" END\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7aa4aed251a3cf7058acf363efdb047d6d87eeb49af15de8d559d7c8a168ea17"
+}

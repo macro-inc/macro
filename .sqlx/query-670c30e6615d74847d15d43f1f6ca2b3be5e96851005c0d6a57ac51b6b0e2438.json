@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO promoted_shared_mailboxes(macro_id) VALUES ('macro|shared@example.com')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "670c30e6615d74847d15d43f1f6ca2b3be5e96851005c0d6a57ac51b6b0e2438"
+}

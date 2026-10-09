@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH deleted_sources AS (\n                DELETE FROM calendar_event_sources source\n                WHERE source.source_kind IN ('google', 'outlook')\n                  AND source.account_id = $1\n                  AND source.calendar_id = $2\n                  AND (\n                        source.provider_event_id = ANY($3::text[])\n                        OR source.provider_recurring_event_id = ANY($3::text[])\n                  )\n                RETURNING source.event_id\n            )\n            SELECT DISTINCT event_id AS \"event_id!\"\n            FROM deleted_sources\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9e728b268363d424353b3363f427d12df0e8200c3f731276463443f6db02ee2e"
+}

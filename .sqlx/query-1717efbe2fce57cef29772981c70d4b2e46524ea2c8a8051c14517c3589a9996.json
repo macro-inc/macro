@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_projection_outbox (id,link_id,generation,payload,dedupe_key) VALUES ($1,$2,$3,$4,$5)\n            ON CONFLICT (dedupe_key) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1717efbe2fce57cef29772981c70d4b2e46524ea2c8a8051c14517c3589a9996"
+}

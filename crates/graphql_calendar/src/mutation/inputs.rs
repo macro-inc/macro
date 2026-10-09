@@ -126,6 +126,8 @@ impl CalendarRemindersInput {
 /// A change to an event's conference.
 #[derive(Enum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum GraphqlCalendarConferenceChange {
+    /// Generate a new Microsoft Teams conference and attach it.
+    MicrosoftTeams,
     /// Generate a new Google Meet conference and attach it.
     GoogleMeet,
     /// Detach whatever conference is currently attached.
@@ -136,6 +138,7 @@ pub enum GraphqlCalendarConferenceChange {
 impl From<GraphqlCalendarConferenceChange> for ConferenceChange {
     fn from(change: GraphqlCalendarConferenceChange) -> Self {
         match change {
+            GraphqlCalendarConferenceChange::MicrosoftTeams => Self::MicrosoftTeams,
             GraphqlCalendarConferenceChange::GoogleMeet => Self::GoogleMeet,
             GraphqlCalendarConferenceChange::Detach => Self::Removed,
         }

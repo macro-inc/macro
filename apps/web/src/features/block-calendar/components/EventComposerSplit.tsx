@@ -6,6 +6,8 @@ import {
 } from '@app/features/calendar/components/composer/event-form-model';
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { viewerCanEditGuests } from '@app/features/calendar/utils/event-guest-editing';
+import { EventReplacementAction } from '@app/features/calendar/views/event-replacement';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -95,6 +97,39 @@ function EventComposerContent(
         onCancel={close}
         onSubmit={editor.save}
       />
+      <Show
+        when={
+          props.event?.calendar.provider === 'outlook' &&
+          props.event &&
+          !props.event.isCancelled &&
+          viewerCanEditGuests(props.event)
+            ? props.event
+            : undefined
+        }
+      >
+        {(event) => (
+          <EventReplacementAction
+            target={{
+              eventId: event().eventId,
+              calendarId: event().calendarId,
+              recurrenceId: event().recurrenceId,
+            }}
+            hasConference={
+              event().conferenceUrl !== undefined &&
+              event().conferenceProvider !== undefined
+            }
+            recurring={
+              event().recurrenceLines.length > 0 ||
+              event().recurrenceId !== undefined
+            }
+            disabled={controller.isDirty() || editor.pending()}
+            onDone={() => {
+              props.onSaveSuccess?.();
+              close();
+            }}
+          />
+        )}
+      </Show>
     </div>
   );
 }

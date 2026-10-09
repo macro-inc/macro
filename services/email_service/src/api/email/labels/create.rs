@@ -17,7 +17,7 @@ pub struct CreateLabelRequest {
 /// The response returned from the create label endpoint
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct CreateLabelResponse {
-    /// the thread, with messages inside
+    /// Local label. Pending provider creation is reported by settings operations.
     pub label: service::label::Label,
 }
 
@@ -46,46 +46,14 @@ pub async fn handler(
     link: Extension<Link>,
     Json(request_body): Json<CreateLabelRequest>,
 ) -> Result<Response, Response> {
-    let created_label = ctx
-        .email_api
-        .create_label(link.id, &request_body.label_name)
+    let label = ctx
+        .mailbox_settings
+        .create_label(
+            &authorization.authorization.user.macro_user_id,
+            link.id,
+            &request_body.label_name,
+        )
         .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "email provider call to create label failed");
-            let status = crate::api::email::provider_error::provider_error_status(&e);
-            let message = if status == StatusCode::CONFLICT {
-                "label with that name already exists"
-            } else {
-                "create label call failed"
-            };
-            (
-                status,
-                crate::api::email::provider_error::provider_error_headers(&e),
-                Json(ErrorResponse {
-                    message: message.into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-    let inserted_label = email_db_client::labels::insert::insert_label(&ctx.db, created_label)
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to insert label");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to insert label".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(CreateLabelResponse {
-            label: inserted_label,
-        }),
-    )
-        .into_response())
+        .map_err(super::settings_error)?;
+    Ok((StatusCode::CREATED, Json(CreateLabelResponse { label })).into_response())
 }

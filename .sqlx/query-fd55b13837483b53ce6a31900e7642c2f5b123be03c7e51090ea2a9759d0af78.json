@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET macro_id = 'macro|new-owner@example.com' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fd55b13837483b53ce6a31900e7642c2f5b123be03c7e51090ea2a9759d0af78"
+}

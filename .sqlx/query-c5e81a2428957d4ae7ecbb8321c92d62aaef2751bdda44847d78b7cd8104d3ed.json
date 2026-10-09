@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET state = $2,error_code = $3,lease_id = NULL,lease_until = NULL,updated_at = now() WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5e81a2428957d4ae7ecbb8321c92d62aaef2751bdda44847d78b7cd8104d3ed"
+}

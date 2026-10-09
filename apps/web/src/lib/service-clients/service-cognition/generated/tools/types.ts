@@ -3412,6 +3412,19 @@ export type AvailabilityUnknownReason =
   | 'invalid_interval'
   | 'conflicting_copies';
 /**
+ * Provider selected from the persisted calendar account and email binding.
+ */
+export type CalendarProvider = 'google' | 'outlook';
+/**
+ * The conferencing system backing an event's join URL.
+ *
+ * Calendars can create Google Meet or Microsoft Teams according to their
+ * capabilities. Imported third-party conferences are labeled separately.
+ * Omitting a conference change preserves the current conference; explicit
+ * changes still require provider and calendar capability validation.
+ */
+export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
+/**
  * Entity types that can be returned by the list entities AI tool.
  */
 export type ItemType =
@@ -4358,7 +4371,11 @@ export type UpdateScopeInput = 'all' | 'this_event';
 /**
  * A requested change to an event's video conference.
  */
-export type ConferenceChangeInput = 'google_meet' | 'remove';
+export type ConferenceChangeInput =
+  | 'provider_default'
+  | 'microsoft_teams'
+  | 'google_meet'
+  | 'remove';
 /**
  * The requester's own RSVP on an event they were invited to.
  */
@@ -6173,11 +6190,11 @@ export interface BotWebhook {
   webhookUrl: string;
 }
 /**
- * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
+ * Prepare an event on the user's calendar, inviting any listed attendees through its connected provider. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to the calendar provider immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call. Do NOT use it for a prompt that came from a channel or document thread — the context block names a conversation parent when it did, and there is no surface to review a draft in: write the event out in your reply, ask whether to create it, and use CreateConfirmedCalendarEvent once the user approves.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
  *
- * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or Google Meet (leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
+ * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or video conference (leave `addConference` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
  */
 export interface CreateCalendarEvent {
   /**
@@ -6194,7 +6211,7 @@ export interface CreateCalendarEvent {
    */
   location?: string | null;
   /**
-   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   * Attendees to invite by email. They are notified by the calendar provider as soon as the event is created. Omit for a solo event.
    */
   attendees?: AttendeeInput[];
   /**
@@ -6210,12 +6227,12 @@ export interface CreateCalendarEvent {
    */
   reminders?: EventRemindersInput | null;
   /**
-   * Attach a freshly generated Google Meet video conference to the event.
+   * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
    */
-  addGoogleMeet?: boolean;
+  addConference?: boolean;
   eventType?: CalendarEventTypeInput;
   /**
-   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`.
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
    */
   outOfOffice?: OutOfOfficeInput | null;
 }
@@ -6422,7 +6439,7 @@ export interface CreateConfirmedCalendarEvent {
    */
   location?: string | null;
   /**
-   * Attendees to invite by email. They are notified by Google Calendar as soon as the event is created. Omit for a solo event.
+   * Attendees to invite by email. They are notified by the calendar provider as soon as the event is created. Omit for a solo event.
    */
   attendees?: AttendeeInput[];
   /**
@@ -6438,12 +6455,12 @@ export interface CreateConfirmedCalendarEvent {
    */
   reminders?: EventRemindersInput | null;
   /**
-   * Attach a freshly generated Google Meet video conference to the event.
+   * Attach a conference supported by this calendar: Google Meet or Microsoft Teams. Check ListCalendars capabilities first.
    */
-  addGoogleMeet?: boolean;
+  addConference?: boolean;
   eventType?: CalendarEventTypeInput;
   /**
-   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`.
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have the calendar integration decline conflicting meetings, optionally with a `declineMessage`.
    */
   outOfOffice?: OutOfOfficeInput | null;
   /**
@@ -7125,7 +7142,7 @@ export interface DeleteBotResponse {
   summary: string;
 }
 /**
- * Delete an event from the user's calendar. The deletion is written to Google immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
+ * Delete an event from the user's calendar. The deletion is written to the calendar provider immediately and attendees are notified, so confirm with the user before deleting — it cannot be undone. Get the `eventId` from ListCalendarEvents.
  *
  * For recurring events, `scope` controls how much is removed: "all" (default) removes the whole series, "this_event" removes one occurrence, and "this_and_following" ends the series from an occurrence onward. The scoped variants require `recurrenceId` from the targeted occurrence's ListCalendarEvents entry.
  */
@@ -9077,9 +9094,9 @@ export interface CalendarEventCopyItem {
   isReadOnly: boolean;
 }
 /**
- * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, provider, capabilities, and whether it is primary and writable.
  *
- * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool. An empty result means no calendar is connected.
+ * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool unless choosing conference or other provider-dependent behavior. Check `capabilities` before requesting a conference, removing one, or using custom recurrence. An empty result means no calendar is connected.
  */
 export type ListCalendars = {};
 /**
@@ -9099,6 +9116,8 @@ export interface ListCalendarsToolResponse {
  * A calendar surfaced to the AI.
  */
 export interface ToolCalendar {
+  provider: CalendarProvider;
+  capabilities: CalendarCapabilities;
   /**
    * Calendar id; pass as `calendarId` to CreateCalendarEvent to target
    * this calendar. Not a mentionable entity: never put it in a mention
@@ -9122,6 +9141,35 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+}
+/**
+ * Actual provider capabilities used by calendar editors.
+ */
+export interface CalendarCapabilities {
+  /**
+   * Meeting system available for new conferences, when any.
+   */
+  conferenceProvider?: ConferenceProvider | null;
+  /**
+   * Whether an existing conference can be detached.
+   */
+  removeConference: boolean;
+  /**
+   * Whether event-level automatic invitation declines are supported.
+   */
+  autoDecline: boolean;
+  /**
+   * Whether email reminders are delivered by the provider or Macro.
+   */
+  emailReminders: boolean;
+  /**
+   * Whether arbitrary RFC 5545 recurrence properties can be written.
+   */
+  customRecurrence: boolean;
+  /**
+   * Whether an attendee can reset their RSVP to unanswered.
+   */
+  resetRsvp: boolean;
 }
 /**
  * Find the coding agents available to the current user. Call this before delegating coding work. Choose an agent using its name, description, instructions, runtime, and model, preferring the user's requested agent or the persona best suited to the repository and task. Returns only available coding agents. If none are available, explain that the user needs to connect or configure a coding agent.
@@ -12212,7 +12260,7 @@ export interface TextEditorCodeExecutionToolError {
   error_code: CodeExecutionErrorCode;
 }
 /**
- * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to Google immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
+ * Update an existing calendar event. Only the supplied fields change; omitted fields keep their current values. The change is written to the calendar provider immediately and attendees are notified of it, so confirm details with the user first. Get the `eventId` from ListCalendarEvents.
  *
  * `scope` picks how much of a recurring series changes and is always required: "this_event" edits one occurrence (pass the occurrence's `recurrenceId` from ListCalendarEvents) and leaves the rest of the series alone; "all" edits the series itself — with `time` that MOVES EVERY OCCURRENCE, so never use "all" to reschedule a single occurrence. Non-recurring events use "all". There is no this-and-following update: end the series with DeleteCalendarEvent's "this_and_following" and create a new event instead.
  *
@@ -12259,7 +12307,7 @@ export interface UpdateCalendarEvent {
    */
   recurrenceLines?: string[] | null;
   /**
-   * Change the event's video conference: "google_meet" attaches a fresh Google Meet, "remove" detaches the current conference. Omit to leave it untouched.
+   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference.
    */
   conference?: ConferenceChangeInput | null;
   /**

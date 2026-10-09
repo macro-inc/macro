@@ -15,20 +15,29 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[cfg(feature = "mailbox")]
+mod attachment_access;
+mod attachment_cleanup;
 mod client_id_mapping;
 mod contact;
 mod db_types;
 mod draft;
+mod draft_attachments;
+mod draft_resolution;
+#[cfg(feature = "mailbox")]
+mod draft_transfer;
 mod dynamic;
 mod email_filter;
 mod followup;
 mod label;
 mod link;
+mod mailbox_action;
 mod message;
 mod preview;
 mod preview_views;
 mod project;
 mod scheduled;
+pub(super) mod sender_policy;
 mod settings;
 mod thread;
 
@@ -93,6 +102,56 @@ impl EmailUserRepo for EmailPgRepo {
 }
 
 impl EmailRepo for EmailPgRepo {
+    async fn commit_sender_policy(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link: Uuid,
+        sender: &str,
+        blocked: bool,
+        important: Option<bool>,
+    ) -> Result<(), Self::Err> {
+        sender_policy::commit(&self.pool, actor, link, sender, blocked, important).await
+    }
+
+    async fn commit_message_resolution(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        plan: crate::domain::models::mailbox_operation::MessageResolutionPlan,
+    ) -> Result<Uuid, EmailErr> {
+        draft_resolution::commit(&self.pool, actor, plan).await
+    }
+    async fn message_operation_facts(
+        &self,
+        ids: &[Uuid],
+    ) -> Result<
+        HashMap<Uuid, crate::domain::models::mailbox_operation::MessageOperationFacts>,
+        Self::Err,
+    > {
+        draft::operation_facts(&self.pool, ids).await
+    }
+    async fn thread_mailbox_operations(
+        &self,
+        link: Uuid,
+        thread: Uuid,
+    ) -> Result<Vec<crate::domain::models::mailbox_action::MailboxOperation>, Self::Err> {
+        mailbox_action::operations(&self.pool, link, thread).await
+    }
+    async fn mailbox_action_messages(
+        &self,
+        link_id: Uuid,
+        thread_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::mailbox_action::MailboxActionMessage>, Self::Err> {
+        mailbox_action::messages(&self.pool, link_id, thread_id).await
+    }
+    async fn enqueue_mailbox_action(
+        &self,
+        link_id: Uuid,
+        actor: MacroUserIdStr<'_>,
+        action: &crate::domain::models::mailbox_action::MailboxAction,
+        targets: &[crate::domain::models::mailbox_action::MailboxActionTarget],
+    ) -> Result<Uuid, Self::Err> {
+        mailbox_action::enqueue(&self.pool, link_id, actor, action, targets).await
+    }
     type Err = sqlx::Error;
 
     async fn fetch_email_settings(&self, link_id: Uuid) -> Result<LinkEmailSettings, EmailErr> {
@@ -305,8 +364,9 @@ impl EmailRepo for EmailPgRepo {
         message_id: Uuid,
         thread_db_id: Uuid,
         link_ids: &[Uuid],
+        actor: Option<&str>,
     ) -> Result<Option<DraftDeletion>, Self::Err> {
-        message::delete_draft_message(&self.pool, message_id, thread_db_id, link_ids).await
+        message::delete_draft_message(&self.pool, message_id, thread_db_id, link_ids, actor).await
     }
 
     async fn upsert_contacts(

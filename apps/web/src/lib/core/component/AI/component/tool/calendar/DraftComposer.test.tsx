@@ -98,6 +98,14 @@ const calendar = (id: string): VisibleCalendar => ({
   isPrimary: true,
   isWritable: true,
   isSubscription: false,
+  provider: 'google',
+  capabilities: {
+    autoDecline: true,
+    emailReminders: true,
+    customRecurrence: false,
+    removeConference: false,
+    resetRsvp: false,
+  },
   defaultReminders: [],
 });
 

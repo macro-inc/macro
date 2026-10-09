@@ -189,8 +189,8 @@ fn extract_in_reply_to(headers_json: &serde_json::Value) -> Option<String> {
         for header in headers {
             // Get the name field
             if let Some(name) = header.get("name").and_then(|n| n.as_str()) {
-                // Check if the name is "In-Reply-To" (case sensitive)
-                if name == "In-Reply-To" {
+                // RFC header names are case-insensitive across providers.
+                if name.eq_ignore_ascii_case("In-Reply-To") {
                     // Return the value
                     return header
                         .get("value")

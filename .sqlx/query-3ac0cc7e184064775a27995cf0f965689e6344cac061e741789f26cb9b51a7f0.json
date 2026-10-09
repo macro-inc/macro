@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_work w SET sync_generation=l.sync_generation,grant_generation=l.grant_generation,\n            cursor=NULL,page_cursor=NULL,next_page=NULL,terminal_cursor=NULL,pending_ids='{}',visited_pages='{}',scan_id=gen_random_uuid(),full_scan=true,page_loaded=false,starts_at=$1,ends_at=$2,lease_id=NULL,lease_until=NULL,next_run_at=now(),attempts=0\n            FROM calendar_accounts a,email_links l WHERE a.id=w.account_id AND l.id=a.email_link_id AND l.is_sync_active\n            AND a.provider='outlook' AND a.sync_status<>'disabled'\n            AND(w.sync_generation<>l.sync_generation OR w.grant_generation<>l.grant_generation OR w.ends_at<$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3ac0cc7e184064775a27995cf0f965689e6344cac061e741789f26cb9b51a7f0"
+}

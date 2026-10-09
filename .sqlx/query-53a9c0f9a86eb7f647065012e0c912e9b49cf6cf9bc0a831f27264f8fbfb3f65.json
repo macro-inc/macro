@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_event_replacements SET updated_at=now()-interval '1 minute' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53a9c0f9a86eb7f647065012e0c912e9b49cf6cf9bc0a831f27264f8fbfb3f65"
+}

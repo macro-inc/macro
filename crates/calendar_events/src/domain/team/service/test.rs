@@ -161,6 +161,8 @@ fn a_private_exception_cannot_expose_its_replacement_title() {
     let mut row = source();
     row.occurrence.recurrence_id = Some("original".into());
     row.overrides.push(CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: "original".into(),

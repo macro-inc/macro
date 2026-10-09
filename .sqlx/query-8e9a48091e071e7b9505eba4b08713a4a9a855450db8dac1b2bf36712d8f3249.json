@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.provider_id,d.base_version,d.revision,d.desired_content FROM email_messages m JOIN email_mailbox_drafts d ON d.message_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "base_version",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "desired_content",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8e9a48091e071e7b9505eba4b08713a4a9a855450db8dac1b2bf36712d8f3249"
+}

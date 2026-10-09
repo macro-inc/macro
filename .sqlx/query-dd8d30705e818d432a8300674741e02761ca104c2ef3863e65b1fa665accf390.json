@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE trash(provider_id) AS (\n                SELECT provider_id FROM email_mailbox_folders WHERE link_id=$1 AND role='trash' AND deleted_at IS NULL\n                UNION\n                SELECT f.provider_id FROM email_mailbox_folders f JOIN trash t ON f.parent_id=t.provider_id\n                WHERE f.link_id=$1 AND f.deleted_at IS NULL\n            ) SELECT provider_id AS \"provider_id!\" FROM trash\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "dd8d30705e818d432a8300674741e02761ca104c2ef3863e65b1fa665accf390"
+}

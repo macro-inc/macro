@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO migrated_comment_id (comment_id, message_id, document_id)\n         VALUES (10, $1, 'message-doc-a'), (11, $2, 'message-doc-a')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "38c286776a6f6d9cf792a170769cbc1cb2b7540552079d908f912d631adb2c43"
+}

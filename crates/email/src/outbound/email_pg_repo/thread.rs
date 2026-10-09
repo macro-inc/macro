@@ -2,9 +2,7 @@ use crate::domain::models::{
     EmailPreview, EmailThreadDraftState, EmailThreadMailCacheFacts, EmailThreadMailPreviews,
     EmailThreadMailProjection, EmailThreadMetadata, MessageRow, ThreadRow,
 };
-use chrono::Utc;
 use sqlx::{PgPool, types::Json};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use super::db_types::{DbMessageRow, DbThreadRow};
@@ -86,15 +84,14 @@ pub(super) async fn thread_mail_projections_by_ids(
         ), message_facts AS (
             SELECT m.id, m.thread_id, m.is_draft, m.is_read,
                 m.is_draft AND m.provider_id IS NULL AS macro_draft,
-                (('INBOX' = ANY(labels.provider_names) AND NOT 'SENT' = ANY(labels.provider_names))
+                ((facts.in_inbox AND NOT facts.in_sent)
                     OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,
-                NOT 'TRASH' = ANY(labels.names)
+                NOT facts.in_trash
                 AND LOWER(SPLIT_PART(c.email_address, '@', 2)) IS DISTINCT FROM $3
                 AND (
                     rules.address_true OR (rules.domain_true AND NOT rules.address_false)
                     OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true))
-                        AND (m.is_draft OR labels.names && ARRAY['CATEGORY_PERSONAL','SENT','DRAFT']
-                            OR NOT labels.names && ARRAY['CATEGORY_UPDATES','CATEGORY_PROMOTIONS','CATEGORY_SOCIAL','CATEGORY_FORUMS']))
+                        AND facts.provider_is_primary)
                 ) AS is_signal,
                 (EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id
                     AND (a.filename ILIKE '%.ics' OR a.mime_type IN ('text/calendar','application/ics'))
@@ -102,7 +99,7 @@ pub(super) async fn thread_mail_projections_by_ids(
                     SELECT 1 FROM email_message_calendar_invites i WHERE i.message_id = m.id
                 )) AS has_calendar_attachment,
                 GREATEST(
-                    CASE WHEN 'INBOX' = ANY(labels.provider_names) AND (
+                    CASE WHEN facts.in_inbox AND (
                         NOT (m.is_draft OR m.is_sent) OR EXISTS (
                             SELECT 1 FROM email_message_recipients r
                             WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id
@@ -110,23 +107,18 @@ pub(super) async fn thread_mail_projections_by_ids(
                     CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
                 ) AS inbound_ts,
                 GREATEST(
-                    CASE WHEN NOT labels.provider_names && ARRAY['SPAM','TRASH'] THEN m.internal_date_ts END,
+                    CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN m.internal_date_ts END,
                     CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
                 ) AS all_ts,
-                CASE WHEN m.is_sent AND NOT 'TRASH' = ANY(labels.provider_names) THEN m.internal_date_ts END AS sent_ts,
-                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
-                CASE WHEN NOT 'TRASH' = ANY(labels.names) THEN jsonb_build_object(
+                CASE WHEN m.is_sent AND NOT facts.in_trash THEN m.internal_date_ts END AS sent_ts,
+                CASE WHEN NOT facts.in_trash THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
+                CASE WHEN NOT facts.in_trash THEN jsonb_build_object(
                     'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,
                     'sender_email', c.email_address, 'sender_name', c.name, 'sender_photo_url', c.sfs_photo_url
                 ) END AS preview
             FROM email_messages m
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
-            CROSS JOIN LATERAL (
-                SELECT COALESCE(array_agg(l.name::text), ARRAY[]::text[]) AS names,
-                       COALESCE(array_agg(l.provider_label_id::text), ARRAY[]::text[]) AS provider_names
-                FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
-                WHERE ml.message_id = m.id
-            ) labels
+            JOIN email_message_mailbox_facts facts ON facts.id = m.id
             CROSS JOIN LATERAL (
                 SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_true,
                     COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_false,
@@ -134,7 +126,7 @@ pub(super) async fn thread_mail_projections_by_ids(
                     COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_false
                 FROM email_filters f WHERE f.link_id = m.link_id
             ) rules
-            WHERE m.thread_id = ANY($1)
+            WHERE m.thread_id = ANY($1) AND facts.is_present
         ), draft_states AS (
             SELECT thread_id, jsonb_build_object(
                 'baseline', jsonb_build_object(
@@ -182,26 +174,17 @@ pub(super) async fn thread_mail_projections_by_ids(
         LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
-            FROM email_messages m WHERE m.thread_id = t.id AND NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
-                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
-            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) am ON TRUE
         LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
-            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
-                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
-            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) dm ON TRUE
         LEFT JOIN email_contacts dc ON dc.id = dm.from_contact_id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id
-            FROM email_messages m WHERE m.thread_id = t.id AND m.is_sent AND NOT EXISTS (
-                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id
-                WHERE ml.message_id = m.id AND l.link_id = t.link_id AND l.name = 'TRASH'
-            ) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND m.is_sent AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) sm ON TRUE
         LEFT JOIN email_contacts sc ON sc.id = sm.from_contact_id
         WHERE t.id = ANY($1)
@@ -396,409 +379,23 @@ pub(super) async fn insert_thread(
     .await
 }
 
-// --- Thread metadata update ---
-// Ported from email_db_client::threads::update::update_thread_metadata.
-
-mod system_labels {
-    pub const INBOX: &str = "INBOX";
-    pub const SENT: &str = "SENT";
-    pub const SPAM: &str = "SPAM";
-    pub const TRASH: &str = "TRASH";
-}
-
-/// Lightweight message metadata used only for computing thread metadata.
-struct MessageMetadata {
-    is_draft: bool,
-    is_sent: bool,
-    is_read: bool,
-    provider_id: Option<String>,
-    internal_date_ts: Option<chrono::DateTime<Utc>>,
-    updated_at: chrono::DateTime<Utc>,
-    labels: Vec<String>,
-    /// Whether the sender (from_contact_id) is also a recipient of this message.
-    sender_is_recipient: bool,
-}
-
-fn is_macro_draft(msg: &MessageMetadata) -> bool {
-    msg.is_draft && msg.provider_id.is_none()
-}
-
-fn is_inbound(msg: &MessageMetadata) -> bool {
-    if !msg.labels.iter().any(|l| l == system_labels::INBOX) {
-        return false;
-    }
-
-    if !(msg.is_draft || msg.is_sent) {
-        return true;
-    }
-
-    // edge case for messages a user sent to themselves
-    msg.sender_is_recipient
-}
-
-fn is_outbound(msg: &MessageMetadata) -> bool {
-    if msg.labels.iter().any(|l| l == system_labels::TRASH) {
-        return false;
-    }
-
-    msg.is_sent
-}
-
-fn is_spam_or_trash(msg: &MessageMetadata) -> bool {
-    msg.labels
-        .iter()
-        .any(|l| matches!(l.as_str(), system_labels::SPAM | system_labels::TRASH))
-}
-
-/// Fetch lightweight message metadata for all messages in a thread.
-async fn fetch_messages_metadata(
-    tx: &mut sqlx::PgConnection,
-    thread_db_id: Uuid,
-) -> Result<Vec<MessageMetadata>, sqlx::Error> {
-    struct RawMsg {
-        id: Uuid,
-        is_draft: bool,
-        is_sent: bool,
-        is_read: bool,
-        provider_id: Option<String>,
-        internal_date_ts: Option<chrono::DateTime<Utc>>,
-        updated_at: chrono::DateTime<Utc>,
-    }
-
-    let messages = sqlx::query_as!(
-        RawMsg,
-        r#"
-        SELECT
-            id, is_draft, is_sent, is_read, provider_id,
-            internal_date_ts, updated_at
-        FROM email_messages
-        WHERE thread_id = $1
-        ORDER BY internal_date_ts DESC NULLS LAST
-        "#,
-        thread_db_id,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    if messages.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let message_ids: Vec<Uuid> = messages.iter().map(|m| m.id).collect();
-
-    // Fetch labels for all messages
-    struct LabelRow {
-        message_id: Uuid,
-        provider_label_id: String,
-    }
-
-    let label_rows = sqlx::query_as!(
-        LabelRow,
-        r#"
-        SELECT ml.message_id, el.provider_label_id
-        FROM email_message_labels ml
-        JOIN email_labels el ON el.id = ml.label_id
-        WHERE ml.message_id = ANY($1)
-        "#,
-        &message_ids,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let mut labels_map: HashMap<Uuid, Vec<String>> = HashMap::new();
-    for row in label_rows {
-        labels_map
-            .entry(row.message_id)
-            .or_default()
-            .push(row.provider_label_id);
-    }
-
-    // Check which messages have the sender as a recipient (for self-sent edge case)
-    struct SelfSentRow {
-        message_id: Uuid,
-    }
-
-    let self_sent_rows = sqlx::query_as!(
-        SelfSentRow,
-        r#"
-        SELECT DISTINCT emr.message_id
-        FROM email_message_recipients emr
-        JOIN email_messages m ON m.id = emr.message_id
-        WHERE emr.message_id = ANY($1)
-          AND m.from_contact_id IS NOT NULL
-          AND emr.contact_id = m.from_contact_id
-        "#,
-        &message_ids,
-    )
-    .fetch_all(&mut *tx)
-    .await?;
-
-    let self_sent_set: std::collections::HashSet<Uuid> =
-        self_sent_rows.into_iter().map(|r| r.message_id).collect();
-
-    Ok(messages
-        .into_iter()
-        .map(|m| MessageMetadata {
-            labels: labels_map.remove(&m.id).unwrap_or_default(),
-            sender_is_recipient: self_sent_set.contains(&m.id),
-            is_draft: m.is_draft,
-            is_sent: m.is_sent,
-            is_read: m.is_read,
-            provider_id: m.provider_id,
-            internal_date_ts: m.internal_date_ts,
-            updated_at: m.updated_at,
-        })
-        .collect())
-}
-
-/// Recalculate and update thread metadata from all messages in the thread.
-/// This is the exact same logic as `email_db_client::threads::update::update_thread_metadata`.
+/// Both repositories use the same normalized metadata projection.
 pub(super) async fn update_thread_metadata(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    thread_db_id: Uuid,
-    link_id: Uuid,
-) -> Result<(), sqlx::Error> {
-    let messages = fetch_messages_metadata(tx, thread_db_id).await?;
-
-    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
-    let inbox_visible = messages.iter().any(|message| {
-        let has_inbox = message.labels.iter().any(|l| l == system_labels::INBOX);
-        let has_sent = message.labels.iter().any(|l| l == system_labels::SENT);
-
-        (has_inbox && !has_sent) || is_macro_draft(message)
-    });
-
-    // if any message in the thread is unread, the thread is considered unread in the FE
-    let is_read = !messages.iter().any(|message| !message.is_read);
-
-    let latest_draft_ts = messages
-        .iter()
-        .filter(|msg| is_macro_draft(msg))
-        .map(|msg| msg.updated_at)
-        .max();
-
-    let latest_inbound_timestamp_ts = messages
-        .iter()
-        .find(|msg| is_inbound(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or(None);
-
-    let latest_inbound_or_draft_ts = [latest_inbound_timestamp_ts, latest_draft_ts]
-        .into_iter()
-        .flatten()
-        .max();
-
-    let latest_outbound_message_ts = messages
-        .iter()
-        .find(|msg| is_outbound(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or(None);
-
-    // latest non-spam message timestamp is the latest macro draft or provider message
-    let latest_provider_message_ts = messages
-        .iter()
-        .find(|msg| !is_spam_or_trash(msg))
-        .map(|msg| msg.internal_date_ts)
-        .unwrap_or(None);
-
-    let latest_non_spam_message_ts = [latest_provider_message_ts, latest_draft_ts]
-        .into_iter()
-        .flatten()
-        .max();
-
-    update_db_thread_metadata(
-        tx,
-        thread_db_id,
-        link_id,
-        inbox_visible,
-        is_read,
-        latest_inbound_or_draft_ts,
-        latest_outbound_message_ts,
-        latest_non_spam_message_ts,
-    )
-    .await?;
-
-    sync_thread_signal_flag(tx, thread_db_id).await?;
-
-    Ok(())
-}
-
-/// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
-/// thread has a non-TRASH message matching the importance heuristic. Exact
-/// copy of `email_db_client::threads::update::sync_thread_signal_flag`,
-/// mirroring the Importance(true) predicate in the dynamic query builder and
-/// the `message_facts.is_signal` column of `thread_mail_projections_by_ids`.
-/// Macro's own notification emails (`$2` domain) never count as signal.
-pub(super) async fn sync_thread_signal_flag(
-    tx: &mut sqlx::PgConnection,
-    thread_db_id: Uuid,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"
-        UPDATE email_threads t
-        SET is_signal = calc.sig
-        FROM (
-            SELECT EXISTS (
-                SELECT 1
-                FROM email_messages m
-                WHERE m.thread_id = $1
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels ml
-                      JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH'
-                  )
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_contacts sender_c
-                      WHERE sender_c.id = m.from_contact_id
-                        AND LOWER(SPLIT_PART(sender_c.email_address, '@', 2)) = $2
-                  )
-                  AND (
-                      (
-                          EXISTS (
-                              SELECT 1
-                              FROM email_contacts sender_c
-                              JOIN email_filters ef
-                                ON ef.link_id = m.link_id
-                               AND ef.email_address IS NOT NULL
-                               AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                              WHERE sender_c.id = m.from_contact_id
-                                AND ef.is_important = TRUE
-                          )
-                          OR EXISTS (
-                              SELECT 1
-                              FROM email_contacts sender_c
-                              JOIN email_filters ef
-                                ON ef.link_id = m.link_id
-                               AND ef.email_domain IS NOT NULL
-                               AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
-                              WHERE sender_c.id = m.from_contact_id
-                                AND ef.is_important = TRUE
-                                AND NOT EXISTS (
-                                    SELECT 1 FROM email_filters ef_addr
-                                    WHERE ef_addr.link_id = m.link_id
-                                      AND ef_addr.email_address IS NOT NULL
-                                      AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                      AND ef_addr.is_important = FALSE
-                                )
-                          )
-                      )
-                      OR (
-                          NOT (
-                              EXISTS (
-                                  SELECT 1
-                                  FROM email_contacts sender_c
-                                  JOIN email_filters ef
-                                    ON ef.link_id = m.link_id
-                                   AND ef.email_address IS NOT NULL
-                                   AND LOWER(ef.email_address) = LOWER(sender_c.email_address)
-                                  WHERE sender_c.id = m.from_contact_id
-                                    AND ef.is_important = FALSE
-                              )
-                              OR EXISTS (
-                                  SELECT 1
-                                  FROM email_contacts sender_c
-                                  JOIN email_filters ef
-                                    ON ef.link_id = m.link_id
-                                   AND ef.email_domain IS NOT NULL
-                                   AND LOWER(ef.email_domain) = LOWER(SPLIT_PART(sender_c.email_address, '@', 2))
-                                  WHERE sender_c.id = m.from_contact_id
-                                    AND ef.is_important = FALSE
-                                    AND NOT EXISTS (
-                                        SELECT 1 FROM email_filters ef_addr
-                                        WHERE ef_addr.link_id = m.link_id
-                                          AND ef_addr.email_address IS NOT NULL
-                                          AND LOWER(ef_addr.email_address) = LOWER(sender_c.email_address)
-                                          AND ef_addr.is_important = TRUE
-                                    )
-                              )
-                          )
-                          AND (
-                              m.is_draft = TRUE
-                              OR EXISTS (
-                                  SELECT 1 FROM email_message_labels ml
-                                  JOIN email_labels l ON ml.label_id = l.id
-                                  WHERE ml.message_id = m.id
-                                    AND l.name IN ('CATEGORY_PERSONAL', 'SENT', 'DRAFT')
-                              )
-                              OR NOT EXISTS (
-                                  SELECT 1 FROM email_message_labels ml
-                                  JOIN email_labels l ON ml.label_id = l.id
-                                  WHERE ml.message_id = m.id
-                                    AND l.name IN ('CATEGORY_UPDATES', 'CATEGORY_PROMOTIONS', 'CATEGORY_SOCIAL', 'CATEGORY_FORUMS')
-                              )
-                          )
-                      )
-                  )
-            ) AS sig
-        ) calc
-        WHERE t.id = $1
-          AND t.is_signal IS DISTINCT FROM calc.sig
-        "#,
-        thread_db_id,
-        email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN,
-    )
-    .execute(tx)
-    .await?;
-
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn update_db_thread_metadata(
-    tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
     link_id: Uuid,
-    inbox_visible: bool,
-    is_read: bool,
-    latest_inbound_message_ts: Option<chrono::DateTime<Utc>>,
-    latest_outbound_message_ts: Option<chrono::DateTime<Utc>>,
-    latest_non_spam_message_ts: Option<chrono::DateTime<Utc>>,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"
-        WITH effective AS (
-            SELECT id AS thread_id, $1 OR (reminder_returned_at IS NOT NULL AND EXISTS (
-                SELECT 1 FROM email_messages fm
-                JOIN email_message_labels fml ON fml.message_id = fm.id
-                JOIN email_labels fl ON fl.id = fml.label_id
-                WHERE fm.thread_id = email_threads.id AND fl.provider_label_id = 'INBOX'
-                  AND NOT EXISTS (
-                      SELECT 1 FROM email_message_labels blocked
-                      JOIN email_labels bl ON bl.id = blocked.label_id
-                      WHERE blocked.message_id = fm.id AND bl.provider_label_id IN ('TRASH', 'SPAM')
-                  )
-            )) AS inbox_visible
-            FROM email_threads
-            WHERE id = $6 AND link_id = $7
-        )
-        UPDATE email_threads t
-        SET
-            inbox_visible = effective.inbox_visible,
-            is_read = $2,
-            latest_inbound_message_ts = $3,
-            latest_outbound_message_ts = $4,
-            latest_non_spam_message_ts = $5,
-            updated_at = NOW()
-        FROM effective
-        WHERE t.id = effective.thread_id
-            AND (t.inbox_visible, t.is_read, t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.latest_non_spam_message_ts)
-                IS DISTINCT FROM (effective.inbox_visible, $2, $3, $4, $5)
-        "#,
-        inbox_visible,
-        is_read,
-        latest_inbound_message_ts,
-        latest_outbound_message_ts,
-        latest_non_spam_message_ts,
-        thread_id,
-        link_id,
-    )
-    .execute(tx)
-    .await?;
-
-    Ok(())
+    email_db_client::threads::update::recompute_thread_metadata(tx, thread_id, link_id).await
 }
 
-/// Update the denormalized thread-level read status, verified by link_id.
+#[cfg(test)]
+pub(super) async fn sync_thread_signal_flag(
+    tx: &mut sqlx::PgConnection,
+    thread_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    email_db_client::threads::update::recompute_signal(tx, thread_id).await
+}
+
 #[tracing::instrument(err, skip(executor))]
 pub(super) async fn update_thread_read_status(
     executor: impl sqlx::PgExecutor<'_>,

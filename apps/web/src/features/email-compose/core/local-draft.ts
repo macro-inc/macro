@@ -35,6 +35,14 @@ export type LocalDraftAttachment =
       fileName: string;
       mimeType: string;
       fileSize: number;
+    }
+  | {
+      type: 'native';
+      referenceUrl?: string | null;
+      attachmentId: string;
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
     };
 
 export type LocalDraft = {

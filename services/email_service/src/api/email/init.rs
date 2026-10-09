@@ -10,6 +10,7 @@ use axum::{
 };
 use calendar_events::domain::models::{CalendarGrantIntent, GoogleScopeSet};
 use email::domain::events::{EmailMacroEvent, LinkConnectedMetadata};
+use email::domain::mailbox::initialization::{InitializationError, InitializeMailbox};
 use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
@@ -34,6 +35,8 @@ mod test;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum InitError {
+    #[error(transparent)]
+    MailboxInitialization(InitializationError),
     #[error("User is already initialized")]
     AlreadyInitialized,
 
@@ -82,6 +85,14 @@ pub struct InitErrorCodeResponse {
 impl InitError {
     fn status_code(&self) -> StatusCode {
         match self {
+            InitError::MailboxInitialization(error) => match error {
+                InitializationError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
+                InitializationError::InvalidAttempt => StatusCode::BAD_REQUEST,
+                InitializationError::IdentityConflict
+                | InitializationError::Changed
+                | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
+                InitializationError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
+            },
             InitError::AlreadyInitialized
             | InitError::NoGmailGrant
             | InitError::BadRequest(_)
@@ -187,6 +198,7 @@ pub struct InitParams {
             (status = 200, body=InitResponse),
             (status = 400, body=InitErrorCodeResponse),
             (status = 401, body=ErrorResponse),
+            (status = 402, body=ErrorResponse),
             (status = 409, body=SharedInboxConflictResponse),
             (status = 429, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
@@ -198,10 +210,55 @@ pub async fn handler(
     query: Query<InitParams>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
 ) -> Result<Response, InitError> {
+    if let Some(attempt) = query.link_id {
+        let request = InitializeMailbox {
+            attempt,
+            actor: authorization.authorization.user.macro_user_id.clone(),
+            actor_fusion_id: authorization
+                .authorization
+                .user
+                .user_context
+                .fusion_user_id
+                .parse()
+                .map_err(|_| InitError::BadRequest("invalid user identity".into()))?,
+            force_share: query.force_share,
+        };
+        if ctx
+            .mailbox_initializer
+            .recognizes(&request)
+            .await
+            .map_err(InitError::MailboxInitialization)?
+        {
+            let result = ctx.mailbox_initializer.initialize(request).await;
+            return match result {
+                Ok(link_id) => Ok(Json(InitResponse {
+                    link_id,
+                    backfill_job_id: None,
+                })
+                .into_response()),
+                Err(InitializationError::SharingConfirmation {
+                    link_id,
+                    email,
+                    owner_email,
+                }) => Err(InitError::SharedInboxConflict {
+                    email_address: email,
+                    existing_owner_email: owner_email,
+                    existing_link_id: link_id,
+                }),
+                Err(error) => Err(InitError::MailboxInitialization(error)),
+            };
+        }
+    }
     // Init runs on every authentication, so its expected no-op outcomes (400s)
     // must not error-log. The span skips the auto err event and the result is
     // classified here, inside the span, where user fields still attach.
     let link_id = query.link_id;
+    let owner = authorization
+        .authorization
+        .user
+        .user_context
+        .fusion_user_id
+        .clone();
     let db = ctx.db.clone();
     let result = init_user(ctx, query, authorization).await;
     if let Err(e) = &result {
@@ -211,7 +268,7 @@ pub async fn handler(
         } else {
             tracing::debug!(error = %e, "init declined");
         }
-        cleanup_in_progress_link_on_failure(&db, link_id, e).await;
+        cleanup_in_progress_link_on_failure(&db, link_id, &owner, e).await;
     }
     result
 }
@@ -229,12 +286,13 @@ fn should_clean_up_in_progress_link(error: &InitError) -> bool {
 async fn cleanup_in_progress_link_on_failure(
     db: &sqlx::Pool<sqlx::Postgres>,
     link_id: Option<Uuid>,
+    owner: &str,
     error: &InitError,
 ) {
     if let Some(link_id) = link_id
         && should_clean_up_in_progress_link(error)
     {
-        macro_db_client::in_progress_user_link::delete_in_progress_user_link(db, &link_id)
+        macro_db_client::in_progress_user_link::delete_owned_in_progress_user_link(db, link_id, owner)
             .await
             .inspect_err(|del_err| {
                 tracing::warn!(error = ?del_err, ?link_id, "Failed to clean up in_progress_user_link after failed init");
@@ -263,6 +321,11 @@ async fn init_user(
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
                 .context("Failed to fetch in_progress_user_link")?;
+        if in_progress.email_provider != "GMAIL" {
+            return Err(InitError::BadRequest(
+                "invalid mailbox linking attempt".into(),
+            ));
+        }
         let completed_grant = CompletedGoogleGrant::from_in_progress(&in_progress);
         completed_google_grant = Some(completed_grant.clone());
 
@@ -321,6 +384,13 @@ async fn init_user(
                     .begin()
                     .await
                     .context("Failed to begin graph delegation transaction")?;
+                crate::outbound::mailbox_init::lock_gmail_connection(
+                    &mut tx,
+                    &user_context.user_id,
+                    &linked_email,
+                )
+                .await
+                .map_err(InitError::MailboxInitialization)?;
 
                 macro_db_client::macro_user_links::insert_edge(
                     &mut *tx,
@@ -381,6 +451,13 @@ async fn init_user(
                 .begin()
                 .await
                 .context("Failed to begin self-link bootstrap transaction")?;
+            crate::outbound::mailbox_init::lock_gmail_connection(
+                &mut tx,
+                &user_context.user_id,
+                &linked_email,
+            )
+            .await
+            .map_err(InitError::MailboxInitialization)?;
 
             let link =
                 enable_gmail_sync_for(tx.as_mut(), provisional_link, subscription.cursor.as_str())
@@ -474,6 +551,13 @@ async fn init_user(
                     .begin()
                     .await
                     .context("Failed to begin shared-inbox promotion transaction")?;
+                crate::outbound::mailbox_init::lock_gmail_connection(
+                    &mut tx,
+                    &user_context.user_id,
+                    &linked_email,
+                )
+                .await
+                .map_err(InitError::MailboxInitialization)?;
 
                 let promoted = macro_db_client::shared_inbox::promote_link_to_shared(
                     &mut tx,
@@ -568,6 +652,13 @@ async fn init_user(
                 .begin()
                 .await
                 .context("Failed to begin link transaction")?;
+            crate::outbound::mailbox_init::lock_gmail_connection(
+                &mut tx,
+                &user_context.user_id,
+                provisional_link.email_address.0.as_ref(),
+            )
+            .await
+            .map_err(InitError::MailboxInitialization)?;
 
             let link =
                 enable_gmail_sync_for(tx.as_mut(), provisional_link, subscription.cursor.as_str())
@@ -612,6 +703,13 @@ async fn init_user(
             .begin()
             .await
             .context("Failed to begin link transaction")?;
+        crate::outbound::mailbox_init::lock_gmail_connection(
+            &mut tx,
+            &user_context.user_id,
+            provisional_link.email_address.0.as_ref(),
+        )
+        .await
+        .map_err(InitError::MailboxInitialization)?;
 
         let link =
             enable_gmail_sync_for(tx.as_mut(), provisional_link, subscription.cursor.as_str())

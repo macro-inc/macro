@@ -435,7 +435,7 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
                 .to_string()
         }
         CalendarMutationError::OccurrenceNotFound => {
-            "That occurrence does not exist on the recurring event at Google — the calendar \
+            "That occurrence does not exist on the recurring event at the provider — the calendar \
              copy was out of date and has now been refreshed. Nothing was changed. Run \
              ListCalendarEvents again and retry with a current occurrence."
                 .to_string()
@@ -444,8 +444,7 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
             "This event's calendar is read-only for the user, so it cannot be modified.".to_string()
         }
         CalendarMutationError::NoWritableCalendar => {
-            "No connected calendar can accept events. The user has not connected a Google \
-             Calendar with write access, or calendar sync is not enabled for their account."
+            "No connected calendar can accept events. The user has not connected a calendar with write access, or calendar sync is not enabled for their account."
                 .to_string()
         }
         CalendarMutationError::NotAttendee => {
@@ -458,13 +457,13 @@ fn mutation_tool_error(action: &str, error: CalendarMutationError) -> ToolCallEr
                 .to_string()
         }
         CalendarMutationError::ProviderRejected(message) => {
-            format!("Google Calendar rejected the change: {message}")
+            format!("The calendar provider rejected the change: {message}")
         }
         CalendarMutationError::Retryable(_) => {
             "The calendar service is temporarily unavailable. Try again shortly.".to_string()
         }
         CalendarMutationError::PersistFailed(_) => {
-            "The change reached Google Calendar, but Macro's copy lagged behind. It will appear \
+            "The change reached the calendar provider, but Macro's copy lagged behind. It will appear \
              after the next sync."
                 .to_string()
         }

@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT actor_id,fusionauth_user_id,grant_id,grant_generation,granted_scopes FROM email_mailbox_custodians WHERE link_id = $1 ORDER BY verified_at DESC,actor_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "actor_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "grant_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "granted_scopes",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c37eb22e9cd9a800273ae240c87cd2d5a2e56166cf1c5e88b9d32e9df0c11587"
+}

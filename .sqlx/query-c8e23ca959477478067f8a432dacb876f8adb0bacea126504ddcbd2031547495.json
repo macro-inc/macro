@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_object_cleanup(object_key,available_at) SELECT s3_key,now()+interval '1 day' FROM email_attachments_drafts WHERE draft_id=$1 ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8e23ca959477478067f8a432dacb876f8adb0bacea126504ddcbd2031547495"
+}

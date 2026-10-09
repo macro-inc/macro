@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO macro_user_links(primary_macro_id,child_macro_id,link_id) VALUES ($1,'macro|shared@example.com',$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "01f09659a1af6a42762d29b5f168a7389c3d1d87f4aa39e70919e311f18c3b85"
+}

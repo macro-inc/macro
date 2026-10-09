@@ -9,6 +9,8 @@ mod attachments;
 mod blocklist;
 mod contacts;
 mod labels;
+/// Credential and quota orchestration for generation-bound mailbox operations.
+pub mod mailbox;
 mod messages;
 mod send;
 mod subscription;

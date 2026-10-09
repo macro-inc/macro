@@ -27,6 +27,9 @@ pub enum EmailErr {
     /// Delivery has been committed, claimed, or completed and cannot be edited.
     #[error("Message with id {0} is scheduled, processing, or already sent")]
     MessageDeliveryConflict(Uuid),
+    /// The requested draft mutation cannot preserve its content.
+    #[error("{0}")]
+    InvalidDraft(String),
     /// Explicit scheduled delivery requires a time in the future.
     #[error("Scheduled send time must be in the future")]
     InvalidScheduleTime,

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages SET mailbox_state=COALESCE(mailbox_state,'{}')||'{\"provider_missing\":true}'::jsonb WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ae396c8a42a90a1cce07a652b2657fd253447bbcb141662ab7818bd766e1c5a"
+}

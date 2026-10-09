@@ -68,6 +68,7 @@ fn message_with_oversized_fields(link_id: Uuid, thread_db_id: Uuid) -> message::
             db_id: Uuid::now_v7(),
             provider_id: Some("att1".to_string()),
             data_url: None,
+            reference_url: None,
             filename: Some("report.PDF".to_string()),
             mime_type: Some("m".repeat(400)),
             size_bytes: Some(10),

@@ -1,4 +1,8 @@
-import type { ApiSortMethod } from '../../../generated/email/types.gen';
+import type { EmailConnectionProviders } from '../../../generated/auth/types.gen';
+import type {
+  ApiSortMethod,
+  TransferRecoveryResponse,
+} from '../../../generated/email/types.gen';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search';
@@ -42,6 +46,23 @@ export class EmailNamespace {
   /** The caller's connected inboxes (email links). */
   links(): Promise<Link[]> {
     return Link.list(this.client);
+  }
+
+  /** Providers the server currently permits this caller to connect. */
+  async connectionProviders(): Promise<EmailConnectionProviders> {
+    return unwrap(await this.client.auth.emailConnectionProviders());
+  }
+
+  /** Recover a draft move using its original operation UUID; never starts a new move.
+   * An empty committed result fences the old move so it cannot commit later. */
+  async recoverDraftTransfer(
+    operationId: string,
+  ): Promise<TransferRecoveryResponse> {
+    return unwrap(
+      await this.client.email.recoverDraftTransfer({
+        path: { id: operationId },
+      }),
+    );
   }
 
   /** Send a new email message. */

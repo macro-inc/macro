@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_mailbox_settings_work(id,link_id,kind,resource_key) VALUES($1,$2,'catalog','') ON CONFLICT(link_id,kind,resource_key) DO UPDATE SET next_run_at=now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af6496ba52b8cd4e3a36c8402e54b386c2446870ef2a0672d63b36bc08365be9"
+}

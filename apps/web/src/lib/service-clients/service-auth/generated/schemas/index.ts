@@ -48,6 +48,7 @@ export * from './cursorApiKeyStatusUpdatedAt';
 export * from './cursorModelOption';
 export * from './cursorModelsResponse';
 export * from './denyReason';
+export * from './emailConnectionProviders';
 export * from './emptyResponse';
 export * from './enrichedGithubPullRequest';
 export * from './enrichedGithubPullRequestAdditions';

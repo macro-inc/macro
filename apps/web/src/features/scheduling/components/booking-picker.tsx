@@ -114,7 +114,9 @@ export function BookingPicker(props: {
           <h2 class="mt-3 text-2xl font-semibold">{event().title}</h2>
           <p class="mt-5 text-sm">◷ {event().durationMinutes} minutes</p>
           <p class="mt-3 text-sm">
-            {event().googleMeet ? 'Google Meet' : event().location || 'Meeting'}
+            {event().googleMeet
+              ? 'Video meeting'
+              : event().location || 'Meeting'}
           </p>
           <p class="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-ink-muted">
             {event().description}

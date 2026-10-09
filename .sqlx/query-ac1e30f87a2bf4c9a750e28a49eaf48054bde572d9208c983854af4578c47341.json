@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"SharePermission\" sp\n        SET\n            \"linkShare\" = 'TEAM',\n            \"linkShareAccessLevel\" = 'edit'\n        FROM \"ChatPermission\" cp\n        WHERE cp.\"sharePermissionId\" = sp.id AND cp.\"chatId\" = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ac1e30f87a2bf4c9a750e28a49eaf48054bde572d9208c983854af4578c47341"
+}

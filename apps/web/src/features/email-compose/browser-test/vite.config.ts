@@ -22,10 +22,14 @@ export default defineConfig({
   ],
   resolve: {
     dedupe: ['solid-js'],
-    alias: {
-      '@ui': fileURLToPath(new URL('./ui-shim.ts', import.meta.url)),
-      'loro-crdt': 'loro-crdt/base64',
-    },
+    alias: [
+      {
+        find: /^@ui$/,
+        replacement: fileURLToPath(new URL('./ui-shim.ts', import.meta.url)),
+      },
+      { find: '@ui', replacement: `${webDirectory}/src/components/ui` },
+      { find: 'loro-crdt', replacement: 'loro-crdt/base64' },
+    ],
   },
   server: {
     host: '127.0.0.1',

@@ -27,6 +27,7 @@ export function createEmailInboxSource(
       };
     const inboxes = (query.data?.links ?? []).map((inbox) => ({
       id: inbox.id,
+      provider: inbox.provider,
       email_address: inbox.email_address,
       photo_url: inbox.photo_url,
       displayName: displayName(inbox.email_address),

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_link_microsoft_scopes SET grant_generation=2 WHERE link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b90d0a664e93ac0a9e37a9161a65bd75a88bd3ff6a938d7f1ed96a09e9a5c540"
+}

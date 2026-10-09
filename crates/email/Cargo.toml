@@ -7,6 +7,7 @@ version = "0.1.0"
 [features]
 # Calendar invitation extraction and resolution against the viewer's calendar.
 calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:sha2", "dep:url"]
+mailbox = ["ports", "dep:email_api_client", "dep:models_email", "dep:sha2", "dep:calendar_events", "dep:subtle"]
 all = [
   "ai_tools",
   "gmail_token",
@@ -42,6 +43,7 @@ outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
+subtle = { workspace = true, optional = true }
 calendar_events = { path = "../calendar_events", optional = true }
 ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
 chrono-tz = { workspace = true, optional = true }
@@ -66,6 +68,8 @@ crm = { path = "../crm", default-features = false }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 email_utils = { path = "../email_utils" }
+email_db_client = { path = "../email_db_client" }
+email_api_client = { path = "../email_api_client", optional = true, features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 google_token = { path = "../google_token", optional = true }
@@ -82,6 +86,7 @@ model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
+models_email = { path = "../models_email", optional = true }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
@@ -101,7 +106,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

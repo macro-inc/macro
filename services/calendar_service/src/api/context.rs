@@ -37,7 +37,10 @@ pub type SchedulingService = calendar_scheduling::domain::service::Service<
 /// User-initiated calendar mutation service.
 pub type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
-    GoogleCalendarClient<RedisCalendarRequestGate>,
+    calendar_events::domain::providers::CalendarProviders<
+        GoogleCalendarClient<RedisCalendarRequestGate>,
+        email_api_client::OutlookApiClientRepository,
+    >,
     CalendarTokenProviderAdapter,
     CalendarEventBroker,
     ConnectionGatewayCalendarRefresh,

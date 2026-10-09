@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages SET is_draft = false,is_sent = true,\n                mailbox_state = (COALESCE(mailbox_state,'{}'::jsonb) - 'provider_missing') || '{\"is_draft\":false}'::jsonb,\n                sent_at = now(),updated_at = now()\n            WHERE id = $1 RETURNING thread_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "162efb7e66ea54abedc91a557d6860b4d3b78a6e10be0ec56194855b703e2a70"
+}

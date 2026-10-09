@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_draft_object_cleanup(object_key,available_at) VALUES($1,now()+interval '1 day') ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "41442fc8c5d88ebee4d5441ebe3c0bf6138a077dc7085a60120938208c935aca"
+}

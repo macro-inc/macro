@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id,thread_id,provider_id FROM email_messages WHERE id = $1 AND link_id = $2\n                AND (provider_id IS NOT DISTINCT FROM $3 OR ($3 IS NULL AND is_draft))\n                AND NOT COALESCE((mailbox_state->>'provider_missing')::bool,false)\n                AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=email_messages.id AND (d.delete_requested OR d.state='deleted'))\n                AND NOT EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=email_messages.id AND t.state<>'preparing')\n                FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3fc8d90286d26629567effcebd5f0521e8af9e698049355450cd7f6bf15b2c0e"
+}

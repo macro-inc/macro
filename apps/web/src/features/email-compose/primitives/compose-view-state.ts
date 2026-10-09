@@ -27,6 +27,7 @@ export interface ComposeState {
   recipients: () => EmailFormRecipients;
   subject: () => string;
   attachments: () => DraftFormAttachment[];
+  attachmentLimitBytes?: Accessor<number>;
   initialHtml: () => string | undefined;
   initialMarkdown?: () => string | undefined;
 

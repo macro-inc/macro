@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT scan_id,full_scan,page_loaded,page_cursor,next_page,terminal_cursor,pending_ids,visited_pages FROM calendar_outlook_work WHERE id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scan_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "full_scan",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "page_loaded",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "page_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "next_page",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "terminal_cursor",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "pending_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 7,
+        "name": "visited_pages",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "b27e8df3433921bc0b7807868803c102536cb33c9d8f875f512d41187a99e7ce"
+}

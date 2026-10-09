@@ -3,10 +3,10 @@ use std::sync::{Arc, Mutex};
 use calendar_events::domain::{
     changes::{CalendarChangeQueryService, CalendarChangesPage, CalendarWatermark},
     models::{
-        CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem, CalendarOccurrence,
-        CalendarOccurrenceCursor, CalendarSyncStatus, EventReminders, EventStatus, EventTime,
-        EventTransparency, EventType, EventVisibility, OccurrenceException, OccurrenceListing,
-        OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
+        CalendarCapabilities, CalendarEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarProvider, CalendarSyncStatus,
+        EventReminders, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
+        OccurrenceException, OccurrenceListing, OccurrenceRange, TeamOutOfOffice, VisibleCalendar,
     },
     ports::CalendarOccurrenceService,
 };
@@ -103,6 +103,8 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
             is_writable: true,
             is_subscription: false,
             sync_error: None,
+            provider: CalendarProvider::Google,
+            capabilities: CalendarCapabilities::google(),
             default_reminders: Vec::new(),
         }])
     }

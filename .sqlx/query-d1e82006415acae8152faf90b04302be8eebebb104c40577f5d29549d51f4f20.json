@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET provider='OUTLOOK',provider_tenant_id='tenant',provider_mailbox_id='mailbox',sync_generation=1,grant_generation=1,is_sync_active=true WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d1e82006415acae8152faf90b04302be8eebebb104c40577f5d29549d51f4f20"
+}

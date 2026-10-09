@@ -79,6 +79,7 @@ export function mapGraphqlEmailMessage(
       size_bytes: optional(attachment.sizeBytes),
       sfs_id: optional(attachment.sfsId),
       content_id: optional(attachment.contentId),
+      reference_url: optional(attachment.referenceUrl),
     })),
     attachments_draft: message.attachmentsDraft.map((attachment) => ({
       id: attachment.id,
@@ -88,6 +89,9 @@ export function mapGraphqlEmailMessage(
       sha: attachment.sha,
       size: attachment.size,
       s3_key: attachment.s3Key,
+      upload_pending: attachment.uploadPending,
+      content_id: attachment.contentId,
+      is_inline: attachment.isInline,
     })),
     attachments_forwarded: message.attachmentsForwarded.map((attachment) => ({
       attachment_id: attachment.attachmentId,
@@ -112,6 +116,14 @@ export function mapGraphqlEmailMessage(
     has_attachments: message.hasAttachments,
     internal_date_ts: message.internalDateTs,
     is_draft: message.isDraft,
+    operation_status: message.operationStatus
+      ? {
+          state: message.operationStatus.state,
+          revision: message.operationStatus.revision,
+          remote_version: message.operationStatus.remoteVersion,
+          issue: message.operationStatus.issue,
+        }
+      : undefined,
     is_read: message.isRead,
     is_sent: message.isSent,
     is_starred: message.isStarred,

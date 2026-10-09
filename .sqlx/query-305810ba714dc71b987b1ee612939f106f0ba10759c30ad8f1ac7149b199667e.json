@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET lease_id = NULL,lease_until = NULL,next_run_at = now() + make_interval(secs => $4) WHERE id = $1 AND lease_id = $2 AND fence = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "305810ba714dc71b987b1ee612939f106f0ba10759c30ad8f1ac7149b199667e"
+}

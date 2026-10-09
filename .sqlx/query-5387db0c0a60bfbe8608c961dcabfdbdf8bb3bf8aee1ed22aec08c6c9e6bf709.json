@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_gmail_histories(link_id,history_id) VALUES($1,'10')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5387db0c0a60bfbe8608c961dcabfdbdf8bb3bf8aee1ed22aec08c6c9e6bf709"
+}

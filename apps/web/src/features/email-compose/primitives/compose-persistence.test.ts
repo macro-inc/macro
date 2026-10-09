@@ -364,7 +364,13 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   ).toBe('inbox');
   expect(
     vi.mocked(composeContext.drafts.saveDraft).mock.calls[1][0].inboxId
-  ).toBe('other');
+  ).toBe('inbox');
+  expect(composeContext.drafts.transferDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sourceInboxId: 'inbox',
+      destinationInboxId: 'other',
+    })
+  );
   root.dispose();
 });
 

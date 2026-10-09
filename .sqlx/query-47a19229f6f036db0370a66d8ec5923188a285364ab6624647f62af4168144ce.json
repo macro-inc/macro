@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_provider_subscriptions SET provider_id=$3,expires_at=$4 WHERE id=$1 AND link_id=$2 AND (provider_id IS NULL OR provider_id=$3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47a19229f6f036db0370a66d8ec5923188a285364ab6624647f62af4168144ce"
+}

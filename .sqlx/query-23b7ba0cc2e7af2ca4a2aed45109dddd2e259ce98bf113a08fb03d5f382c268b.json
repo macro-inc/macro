@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT c.id FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id\n                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation\n                    AND c.status IN ('pending','running') AND c.available_at <= now()\n                    AND (c.lease_until IS NULL OR c.lease_until < now())\n                    AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')\n                    AND (c.intent->>'kind'<>'category' OR NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work s\n                        WHERE s.link_id=c.link_id AND s.kind='create_label' AND s.resource_key=c.intent->'value'->>'name'\n                        AND s.completed_revision<s.revision))\n                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_drafts draft ON draft.message_id=target.message_id\n                        WHERE target.command_id=c.id AND draft.lease_until>now() AND draft.lease_id IS NOT NULL)\n                    AND NOT EXISTS (SELECT 1 FROM email_mailbox_commands prior\n                        WHERE prior.link_id = c.link_id AND prior.generation = c.generation\n                            AND prior.status IN ('pending','running','confirming')\n                            AND prior.accepted_order < c.accepted_order\n                            AND EXISTS(SELECT 1 FROM email_mailbox_command_targets earlier JOIN email_mailbox_command_targets current\n                                ON current.message_id=earlier.message_id WHERE earlier.command_id=prior.id AND current.command_id=c.id))\n                ORDER BY c.available_at,c.id LIMIT 1 FOR UPDATE OF c SKIP LOCKED\n            )\n            UPDATE email_mailbox_commands c SET lease_id = $1,lease_until = now() + interval '3 minutes',\n                status = 'running',attempts = attempts + 1,updated_at = now()\n            FROM candidate q,email_links l WHERE c.id = q.id AND l.id = c.link_id\n            RETURNING c.id,c.link_id,c.generation,l.grant_generation,c.intent,c.attempts\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "intent",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "23b7ba0cc2e7af2ca4a2aed45109dddd2e259ce98bf113a08fb03d5f382c268b"
+}

@@ -38,14 +38,21 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  MailboxOperation,
+  MailboxSettingsOperation,
+  MessageOperationResponse,
   ParsedMessage,
   PatchSettingsRequest,
   PatchSettingsResponse,
   PreviewsInboxCursorParams,
+  ResolveMessageOperationRequest,
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  TransferDraftRequest,
+  TransferDraftResponse,
+  TransferRecoveryResponse,
   UnblockSenderRequest,
   UnresolvedSignatureImagesError,
   UpdateLabelBatchRequest,
@@ -54,6 +61,7 @@ import type {
   UpdateThreadLabelsResponse,
   UpdateThreadProjectRequest,
   UpdateThreadProjectResponse,
+  UpdateThreadStateRequest,
   UpsertEmailFilterRequest,
   UpsertEmailFilterResponse,
   UpsertScheduledRequest,
@@ -517,8 +525,7 @@ export const listContacts = async (
 };
 
 /**
- * @summary Block a sender by creating a Gmail filter that sends their emails to trash.
-The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+ * @summary Durably block a sender in the selected inbox.
  */
 export type blockSenderResponse200 = {
   data: void;
@@ -660,8 +667,7 @@ export const listBlockedSenders = async (
 };
 
 /**
- * @summary Unblock a sender by removing their block filter from Gmail.
-The actual Gmail API call is performed asynchronously by the gmail_ops worker.
+ * @summary Durably remove Macro-managed sender blocking in the selected inbox.
  */
 export type unblockSenderResponse204 = {
   data: void;
@@ -721,6 +727,61 @@ export const unblockSender = async (
     status: res.status,
     headers: res.headers,
   } as unblockSenderResponse;
+};
+
+export type recoverDraftTransferResponse200 = {
+  data: TransferRecoveryResponse;
+  status: 200;
+};
+
+export type recoverDraftTransferResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type recoverDraftTransferResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type recoverDraftTransferResponseSuccess =
+  recoverDraftTransferResponse200 & {
+    headers: Headers;
+  };
+export type recoverDraftTransferResponseError = (
+  | recoverDraftTransferResponse403
+  | recoverDraftTransferResponse500
+) & {
+  headers: Headers;
+};
+
+export type recoverDraftTransferResponse =
+  | recoverDraftTransferResponseSuccess
+  | recoverDraftTransferResponseError;
+
+export const getRecoverDraftTransferUrl = (id: string) => {
+  return `/email/draft-transfers/${id}/recover`;
+};
+
+export const recoverDraftTransfer = async (
+  id: string,
+  options?: RequestInit
+): Promise<recoverDraftTransferResponse> => {
+  const res = await fetch(getRecoverDraftTransferUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recoverDraftTransferResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recoverDraftTransferResponse;
 };
 
 /**
@@ -1232,6 +1293,86 @@ export const removeDraftAttachment = async (
 };
 
 /**
+ * @summary Confirm an uploaded attachment before it becomes part of a sendable draft.
+ */
+export type completeDraftAttachmentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type completeDraftAttachmentResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type completeDraftAttachmentResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type completeDraftAttachmentResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type completeDraftAttachmentResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type completeDraftAttachmentResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type completeDraftAttachmentResponseSuccess =
+  completeDraftAttachmentResponse204 & {
+    headers: Headers;
+  };
+export type completeDraftAttachmentResponseError = (
+  | completeDraftAttachmentResponse400
+  | completeDraftAttachmentResponse403
+  | completeDraftAttachmentResponse404
+  | completeDraftAttachmentResponse409
+  | completeDraftAttachmentResponse500
+) & {
+  headers: Headers;
+};
+
+export type completeDraftAttachmentResponse =
+  | completeDraftAttachmentResponseSuccess
+  | completeDraftAttachmentResponseError;
+
+export const getCompleteDraftAttachmentUrl = (
+  id: string,
+  attachmentId: string
+) => {
+  return `/email/drafts/${id}/attachments/${attachmentId}/complete`;
+};
+
+export const completeDraftAttachment = async (
+  id: string,
+  attachmentId: string,
+  options?: RequestInit
+): Promise<completeDraftAttachmentResponse> => {
+  const res = await fetch(getCompleteDraftAttachmentUrl(id, attachmentId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeDraftAttachmentResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeDraftAttachmentResponse;
+};
+
+/**
  * @summary Add a forwarded attachment to a draft.
  */
 export type addForwardedAttachmentResponse201 = {
@@ -1352,6 +1493,204 @@ export const removeForwardedAttachment = async (
     status: res.status,
     headers: res.headers,
   } as removeForwardedAttachmentResponse;
+};
+
+/**
+ * @summary The same provider-neutral state returned on fully hydrated email messages.
+ */
+export type messageOperationStatusResponse200 = {
+  data: MessageOperationResponse;
+  status: 200;
+};
+
+export type messageOperationStatusResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type messageOperationStatusResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type messageOperationStatusResponseSuccess =
+  messageOperationStatusResponse200 & {
+    headers: Headers;
+  };
+export type messageOperationStatusResponseError = (
+  | messageOperationStatusResponse403
+  | messageOperationStatusResponse404
+) & {
+  headers: Headers;
+};
+
+export type messageOperationStatusResponse =
+  | messageOperationStatusResponseSuccess
+  | messageOperationStatusResponseError;
+
+export const getMessageOperationStatusUrl = (id: string) => {
+  return `/email/drafts/${id}/operation`;
+};
+
+export const messageOperationStatus = async (
+  id: string,
+  options?: RequestInit
+): Promise<messageOperationStatusResponse> => {
+  const res = await fetch(getMessageOperationStatusUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: messageOperationStatusResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as messageOperationStatusResponse;
+};
+
+/**
+ * @summary Resolve an observed draft conflict or uncertain provider operation.
+ */
+export type resolveMessageOperationResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type resolveMessageOperationResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type resolveMessageOperationResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type resolveMessageOperationResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type resolveMessageOperationResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type resolveMessageOperationResponseSuccess =
+  resolveMessageOperationResponse204 & {
+    headers: Headers;
+  };
+export type resolveMessageOperationResponseError = (
+  | resolveMessageOperationResponse400
+  | resolveMessageOperationResponse403
+  | resolveMessageOperationResponse404
+  | resolveMessageOperationResponse409
+) & {
+  headers: Headers;
+};
+
+export type resolveMessageOperationResponse =
+  | resolveMessageOperationResponseSuccess
+  | resolveMessageOperationResponseError;
+
+export const getResolveMessageOperationUrl = (id: string) => {
+  return `/email/drafts/${id}/resolve`;
+};
+
+export const resolveMessageOperation = async (
+  id: string,
+  resolveMessageOperationRequest: ResolveMessageOperationRequest,
+  options?: RequestInit
+): Promise<resolveMessageOperationResponse> => {
+  const res = await fetch(getResolveMessageOperationUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(resolveMessageOperationRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveMessageOperationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resolveMessageOperationResponse;
+};
+
+export type transferDraftResponse200 = {
+  data: TransferDraftResponse;
+  status: 200;
+};
+
+export type transferDraftResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type transferDraftResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type transferDraftResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type transferDraftResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type transferDraftResponseSuccess = transferDraftResponse200 & {
+  headers: Headers;
+};
+export type transferDraftResponseError = (
+  | transferDraftResponse403
+  | transferDraftResponse404
+  | transferDraftResponse409
+  | transferDraftResponse500
+) & {
+  headers: Headers;
+};
+
+export type transferDraftResponse =
+  | transferDraftResponseSuccess
+  | transferDraftResponseError;
+
+export const getTransferDraftUrl = (id: string) => {
+  return `/email/drafts/${id}/transfer`;
+};
+
+export const transferDraft = async (
+  id: string,
+  transferDraftRequest: TransferDraftRequest,
+  options?: RequestInit
+): Promise<transferDraftResponse> => {
+  const res = await fetch(getTransferDraftUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(transferDraftRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: transferDraftResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as transferDraftResponse;
 };
 
 /**
@@ -1550,6 +1889,11 @@ export type initUserResponse401 = {
   status: 401;
 };
 
+export type initUserResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
 export type initUserResponse409 = {
   data: SharedInboxConflictResponse;
   status: 409;
@@ -1571,6 +1915,7 @@ export type initUserResponseSuccess = initUserResponse200 & {
 export type initUserResponseError = (
   | initUserResponse400
   | initUserResponse401
+  | initUserResponse402
   | initUserResponse409
   | initUserResponse429
   | initUserResponse500
@@ -1880,7 +2225,7 @@ export const listLinks = async (
 };
 
 /**
- * Probes run in the background and the response returns immediately to stay off the
+ * Probes are durably queued and the response returns immediately to stay off the
 load path; each persisted flag is picked up by the next links read. Probes are
 throttled per link in Redis so frequent calls — and many sharers of a shared inbox —
 collapse to one refresh per window.
@@ -2489,6 +2834,46 @@ export const patchSettings = async (
 };
 
 /**
+ * @summary Accepted label and sender-policy changes awaiting provider confirmation.
+ */
+export type mailboxSettingsOperationsResponse200 = {
+  data: MailboxSettingsOperation[];
+  status: 200;
+};
+
+export type mailboxSettingsOperationsResponseSuccess =
+  mailboxSettingsOperationsResponse200 & {
+    headers: Headers;
+  };
+
+export type mailboxSettingsOperationsResponse =
+  mailboxSettingsOperationsResponseSuccess;
+
+export const getMailboxSettingsOperationsUrl = () => {
+  return `/email/settings/operations`;
+};
+
+export const mailboxSettingsOperations = async (
+  options?: RequestInit
+): Promise<mailboxSettingsOperationsResponse> => {
+  const res = await fetch(getMailboxSettingsOperationsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: mailboxSettingsOperationsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as mailboxSettingsOperationsResponse;
+};
+
+/**
  * @summary Disables inbox syncing for user.
  */
 export type disableSyncResponse204 = {
@@ -2849,6 +3234,53 @@ export const getThreadMessagesHandler = async (
 };
 
 /**
+ * @summary Fetch the latest organization action outcomes without provider-specific status strings.
+ */
+export type threadOperationsResponse200 = {
+  data: MailboxOperation[];
+  status: 200;
+};
+
+export type threadOperationsResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type threadOperationsResponseSuccess = threadOperationsResponse200 & {
+  headers: Headers;
+};
+export type threadOperationsResponseError = threadOperationsResponse404 & {
+  headers: Headers;
+};
+
+export type threadOperationsResponse =
+  | threadOperationsResponseSuccess
+  | threadOperationsResponseError;
+
+export const getThreadOperationsUrl = (id: string) => {
+  return `/email/threads/${id}/operations`;
+};
+
+export const threadOperations = async (
+  id: string,
+  options?: RequestInit
+): Promise<threadOperationsResponse> => {
+  const res = await fetch(getThreadOperationsUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: threadOperationsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as threadOperationsResponse;
+};
+
+/**
  * @summary Called by FE when the user has seen a thread.
  */
 export type threadSeenResponse200 = {
@@ -2907,6 +3339,76 @@ export const threadSeen = async (
     status: res.status,
     headers: res.headers,
   } as threadSeenResponse;
+};
+
+/**
+ * @summary Set mailbox state without client-side provider label lookup.
+ */
+export type updateThreadStateResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type updateThreadStateResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type updateThreadStateResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type updateThreadStateResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateThreadStateResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type updateThreadStateResponseSuccess = updateThreadStateResponse204 & {
+  headers: Headers;
+};
+export type updateThreadStateResponseError = (
+  | updateThreadStateResponse400
+  | updateThreadStateResponse401
+  | updateThreadStateResponse404
+  | updateThreadStateResponse409
+) & {
+  headers: Headers;
+};
+
+export type updateThreadStateResponse =
+  | updateThreadStateResponseSuccess
+  | updateThreadStateResponseError;
+
+export const getUpdateThreadStateUrl = (id: string) => {
+  return `/email/threads/${id}/state`;
+};
+
+export const updateThreadState = async (
+  id: string,
+  updateThreadStateRequest: UpdateThreadStateRequest,
+  options?: RequestInit
+): Promise<updateThreadStateResponse> => {
+  const res = await fetch(getUpdateThreadStateUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateThreadStateRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateThreadStateResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateThreadStateResponse;
 };
 
 /**

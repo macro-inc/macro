@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM cursor_journal_input WHERE inserted_at IS NOT NULL AND inserted_at <= now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "62ad04a3fc9320d0f4e5d1bca3a537787f46cc998e1f7a9b4c3f636f7fa09dc8"
+}

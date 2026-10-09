@@ -91,14 +91,14 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
           declineMessage: 'On vacation',
         },
       }),
-      event({ addGoogleMeet: true })
+      event({ addConference: true })
     );
     expect(merged.eventType).toBe('out_of_office');
     expect(merged.outOfOffice).toEqual({
       autoDeclineMode: 'decline_new_only',
       declineMessage: 'On vacation',
     });
-    expect(merged.addGoogleMeet).toBe(false);
+    expect(merged.addConference).toBe(false);
   });
 
   it('drops the decline message when it is blank', () => {
@@ -131,4 +131,17 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
     expect(merged.eventType).toBeUndefined();
     expect(merged.outOfOffice).toBeUndefined();
   });
+});
+
+it('preserves a pending legacy conference request and emits only the generic field', () => {
+  const legacy = { ...event({}), addGoogleMeet: true };
+  expect(createCalendarEventToEditorInitialValues(legacy).conference).toBe(
+    'google_meet'
+  );
+  const updated = editorSubmitValuesToCreateCalendarEvent(
+    submitValues({}),
+    legacy
+  );
+  expect(updated.addConference).toBe(true);
+  expect(updated).not.toHaveProperty('addGoogleMeet');
 });

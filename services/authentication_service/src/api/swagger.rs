@@ -91,6 +91,7 @@ use model::user::{
                 link::gmail::init_gmail_link_handler,
                 link::gmail::check_gmail_link_status_handler,
                 link::outlook::init_outlook_link_handler,
+                link::outlook::email_connection_providers,
 
                 // Cursor API key (settings -> Connections). Fully qualified:
                 // the `cursor_api_key` crate shadows the module of the same

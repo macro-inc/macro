@@ -59,13 +59,57 @@ pub async fn run_worker_with_cancellation(
     macro_event_broker: PubSubEventBroker,
     cancellation_token: CancellationToken,
 ) {
+    let outlook = loop {
+        let result = async {
+            let connection = redis_client
+                .inner
+                .get_multiplexed_async_connection()
+                .await?;
+            Ok::<_, anyhow::Error>(email_api_client::OutlookApiClientRepository::with_gate(
+                Arc::new(crate::outbound::email_api::RedisMicrosoftRequestGate(
+                    connection,
+                )),
+            )?)
+        }
+        .await;
+        match result {
+            Ok(provider) => break provider,
+            Err(error) => tracing::warn!(
+                ?error,
+                "Inbox lifecycle client initialization failed; retrying"
+            ),
+        }
+        if run_until_cancelled(
+            &cancellation_token,
+            tokio::time::sleep(std::time::Duration::from_secs(2)),
+        )
+        .await
+        .is_none()
+        {
+            return;
+        }
+    };
     let ctx = LinkManagerContext {
+        inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
+            outlook,
+            db.clone(),
+            auth_service_client.clone(),
+            sqs_client.clone(),
+            connection_gateway_client.clone(),
+        )),
+        inbox_health: Arc::new(crate::composition::inbox_health(
+            db.clone(),
+            email_api.clone(),
+            auth_service_client.clone(),
+            redis_client.clone(),
+            sqs_client.clone(),
+            macro_event_broker.clone(),
+        )),
         db,
         sqs_worker: worker.clone(),
         email_api,
         auth_service_client,
         redis_client,
-        sqs_client,
         crm_service,
         connection_gateway_client,
         notification_ingress_service,

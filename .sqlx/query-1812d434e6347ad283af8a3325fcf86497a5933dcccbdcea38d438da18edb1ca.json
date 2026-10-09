@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM email_projection_outbox WHERE link_id = $1 AND payload->>'kind' = 'reauthorization_required'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1812d434e6347ad283af8a3325fcf86497a5933dcccbdcea38d438da18edb1ca"
+}

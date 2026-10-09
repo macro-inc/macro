@@ -399,6 +399,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
+ * Actual deployment availability for the provider selector.
+ */
+export type EmailConnectionProviders = {
+    gmail: boolean;
+    outlook: boolean;
+};
+
+/**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
 export type EmptyResponse = {
@@ -2477,6 +2485,19 @@ export type CreateInProgressLinkResponses = {
 
 export type CreateInProgressLinkResponse2 = CreateInProgressLinkResponses[keyof CreateInProgressLinkResponses];
 
+export type EmailConnectionProvidersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/link/email/providers';
+};
+
+export type EmailConnectionProvidersResponses = {
+    200: EmailConnectionProviders;
+};
+
+export type EmailConnectionProvidersResponse = EmailConnectionProvidersResponses[keyof EmailConnectionProvidersResponses];
+
 export type DeleteGithubLinkData = {
     body?: never;
     path?: never;
@@ -2556,6 +2577,10 @@ export type InitGmailLinkData = {
          */
         original_url: string;
         /**
+         * Existing accessible Gmail inbox being reconnected; does not consume an additional inbox slot.
+         */
+        reconnect_link_id?: string;
+        /**
          * **OPTIONAL**. Which capabilities to request consent for: `gmail` (default), `gmail_and_calendar`, or `calendar`. The calendar variants are only honored when the deployment allows calendar scope requests.
          */
         scopes?: string;
@@ -2609,6 +2634,14 @@ export type InitOutlookLinkData = {
          * **OPTIONAL**. The original URL to redirect to.
          */
         original_url?: string;
+        /**
+         * mail (default) or mail_and_calendar. Calendar requests obey the deployment calendar consent switch.
+         */
+        scopes?: string;
+        /**
+         * Existing accessible inbox being reconnected or granted calendar consent.
+         */
+        reconnect_link_id?: string;
     };
     url: '/link/outlook';
 };
@@ -2616,6 +2649,7 @@ export type InitOutlookLinkData = {
 export type InitOutlookLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    402: ErrorResponse;
     404: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;

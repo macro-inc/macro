@@ -424,6 +424,14 @@ impl EmailUserService for CountingEmailService {
 }
 
 impl EmailService for CountingEmailService {
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
     async fn set_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -605,6 +613,7 @@ impl EmailService for CountingEmailService {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &Link,
         _sender_email: &str,
         _policy: SenderPolicy,
@@ -853,6 +862,7 @@ fn full_message(thread_id: Uuid) -> Message {
     let message_id = Uuid::from_u128(100);
     let draft_attachment_id = Uuid::from_u128(102);
     Message {
+        operation_status: None,
         calendar_invitations: Default::default(),
         db_id: message_id,
         provider_id: Some("provider-message".to_owned()),
@@ -883,6 +893,7 @@ fn full_message(thread_id: Uuid) -> Message {
         body_macro: None,
         body_replyless: Some("Direct thread body".to_owned()),
         attachments: vec![MessageAttachment {
+            reference_url: Some("https://outlook.office.com/mail/message".into()),
             db_id: Uuid::from_u128(103),
             provider_id: Some("provider-attachment".to_owned()),
             filename: Some("provider.txt".to_owned()),
@@ -892,6 +903,9 @@ fn full_message(thread_id: Uuid) -> Message {
             content_id: Some("inline-content".to_owned()),
         }],
         attachments_draft: vec![AttachmentDraft {
+            upload_pending: false,
+            content_id: None,
+            is_inline: false,
             id: draft_attachment_id,
             draft_id: message_id,
             file_name: "draft.txt".to_owned(),
@@ -2367,7 +2381,7 @@ async fn email_message_full_fields_request_the_full_edge_payload() {
 
     let response = harness
         .execute(&format!(
-            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime bodyParsed attachments {{ id providerId sfsId }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime bodyParsed attachments {{ id providerId sfsId referenceUrl }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
         ))
         .await;
 
@@ -2381,6 +2395,10 @@ async fn email_message_full_fields_request_the_full_edge_payload() {
     assert_eq!(
         message["attachments"][0]["sfsId"],
         Uuid::from_u128(104).to_string()
+    );
+    assert_eq!(
+        message["attachments"][0]["referenceUrl"],
+        "https://outlook.office.com/mail/message"
     );
     assert_eq!(message["attachmentsDraft"][0]["fileName"], "draft.txt");
     assert_eq!(

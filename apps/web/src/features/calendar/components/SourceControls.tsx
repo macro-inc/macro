@@ -119,12 +119,12 @@ export function SourceControls(props: SourceControlsProps) {
                           <Show when={source.syncError}>
                             {(error) => (
                               <span
-                                title={`Sync failed: ${error()}`}
+                                title={`Calendar needs attention: ${error()}`}
                                 class="flex shrink-0 text-alert-ink"
                               >
                                 <WarningIcon
                                   class="size-3"
-                                  aria-label={`Sync failed: ${error()}`}
+                                  aria-label={`Calendar needs attention: ${error()}`}
                                 />
                               </span>
                             )}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_command_targets SET status='failed' WHERE command_id=$1 AND message_id=$2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dfc1a6b7b68b6d6b5802e962bb06dbec1e208fbef6dcaac1758f1f88d08793ef"
+}

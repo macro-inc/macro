@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT position,initial_complete,lease_id FROM email_sync_streams WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "initial_complete",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "lease_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "c4b2a8e4be16f26c3c79c158210a9bd2e466e97e45c9ec3ae659dbb1f4ad4275"
+}

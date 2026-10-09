@@ -114,7 +114,7 @@ pub struct CalendarWatchRelease {
 /// What a completed calendar disconnect leaves for the caller to finish at the
 /// provider. Local state is already gone by the time this is returned.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DisconnectedGoogleCalendar {
+pub struct DisconnectedCalendar {
     /// Token identity of the disconnected inbox, for closing its channels.
     pub token_identity: CalendarLinkTokenIdentity,
     /// Push channels that were open when the calendar was removed.
@@ -373,22 +373,31 @@ pub struct OutOfOfficeProperties {
     pub decline_message: Option<String>,
 }
 
+/// Explicit, versioned authorization to decline invitations while away.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomaticDeclinePolicy {
+    /// Changes only when the user changes the decline policy.
+    pub id: Uuid,
+    /// Invitations created before this instant are excluded in new-only mode.
+    pub enabled_at: DateTime<Utc>,
+    /// Decline mode and the user's optional reply.
+    pub properties: OutOfOfficeProperties,
+}
+
 /// The conferencing system backing an event's join URL.
 ///
-/// Macro generates only Google Meet conferences, so this distinguishes one it
-/// created from a third party's — Zoom and friends arriving as `addOn`
-/// conference data, or a legacy classic Hangout. Clients use it to label the
-/// conference and to tell whether the Meet toggle reflects a Macro-managed
-/// conference.
-///
-/// It does not gate mutation. An explicit request replaces or detaches any
-/// conference, third-party included, exactly as deleting the event would;
-/// what protects a conference is that omitting the field leaves it untouched,
-/// so an unrelated edit never disturbs it.
+/// Calendars can create Google Meet or Microsoft Teams according to their
+/// capabilities. Imported third-party conferences are labeled separately.
+/// Omitting a conference change preserves the current conference; explicit
+/// changes still require provider and calendar capability validation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
 pub enum ConferenceProvider {
+    /// Microsoft Teams.
+    MicrosoftTeams,
     /// Google Meet.
     GoogleMeet,
     /// A third-party or legacy conference Macro leaves untouched.
@@ -400,6 +409,7 @@ impl ConferenceProvider {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::GoogleMeet => "google_meet",
+            Self::MicrosoftTeams => "microsoft_teams",
             Self::Other => "other",
         }
     }
@@ -411,6 +421,10 @@ impl ConferenceProvider {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ConferenceChange {
+    /// Use the meeting provider supported by the selected calendar.
+    ProviderDefault,
+    /// Generate a Microsoft Teams meeting using the connected calendar.
+    MicrosoftTeams,
     /// Generate a new Google Meet conference and attach it.
     GoogleMeet,
     /// Detach whatever conference is currently attached.
@@ -664,6 +678,12 @@ pub struct CalendarEvent {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventOverride {
+    /// Per-occurrence reminder settings. None inherits the series settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reminders: Option<EventReminders>,
+    /// Explicit per-occurrence away policy, including an explicit disabled mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automatic_decline: Option<AutomaticDeclinePolicy>,
     /// Occurrence scheduling revision, independent of the master.
     pub sequence: Option<u32>,
     /// Provider last-modified time for this exception.
@@ -714,6 +734,12 @@ impl CalendarEventOverride {
     pub fn apply_to(&self, event: &mut CalendarEvent) {
         event.apply_occurrence_content(self.content());
         event.time = self.time.clone();
+        if let Some(reminders) = &self.reminders {
+            event.reminders = reminders.clone();
+            for source in &mut event.sources {
+                source.reminders = reminders.clone();
+            }
+        }
         if let Some(visibility) = self.visibility {
             event.visibility = visibility;
         }
@@ -1087,9 +1113,13 @@ fn month_ceil(instant: DateTime<Utc>) -> DateTime<Utc> {
 #[cfg(test)]
 mod test;
 
-/// Google provider identity for an event source.
+/// Provider identity for an event source.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GoogleEventSource {
+pub struct ProviderEventSource {
+    /// Explicit Macro-owned automatic invitation decline policy.
+    pub automatic_decline: Option<AutomaticDeclinePolicy>,
+    /// Credential binding that authorized this echo (Microsoft only).
+    pub binding: Option<CalendarGrantBinding>,
     /// Connected inbox whose grant exposed this event.
     pub email_link_id: Uuid,
     /// Calendar account.
@@ -1099,11 +1129,11 @@ pub struct GoogleEventSource {
     /// Calendar role observed for this account before the provider request.
     /// Never substitute a newer stored role when persisting its response.
     pub observed_access_role: Option<String>,
-    /// Google event identifier.
+    /// Opaque provider event identifier.
     pub provider_event_id: String,
-    /// Google recurring master identifier for an instance.
+    /// Provider recurring master identifier for an instance.
     pub provider_recurring_event_id: Option<String>,
-    /// Google entity tag.
+    /// Provider entity tag.
     pub provider_etag: Option<String>,
     /// Raw provider payload.
     pub raw_payload: serde_json::Value,
@@ -1113,7 +1143,60 @@ pub struct GoogleEventSource {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CalendarEventSource {
     /// Event fetched from Google Calendar.
-    Google(GoogleEventSource),
+    Google(ProviderEventSource),
+    /// Event fetched from Microsoft Outlook Calendar.
+    Outlook(ProviderEventSource),
+}
+
+impl CalendarEventSource {
+    /// Stable provider discriminator stored on calendar sources.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Google(_) => "google",
+            Self::Outlook(_) => "outlook",
+        }
+    }
+    /// Provider identity and raw source facts, independent of its transport.
+    pub fn details(&self) -> &ProviderEventSource {
+        match self {
+            Self::Google(source) | Self::Outlook(source) => source,
+        }
+    }
+    /// Mutable source facts used when constructing a normalized projection.
+    pub fn details_mut(&mut self) -> &mut ProviderEventSource {
+        match self {
+            Self::Google(source) | Self::Outlook(source) => source,
+        }
+    }
+}
+
+/// Provider selected from the persisted calendar account and email binding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+pub enum CalendarProvider {
+    /// Google Calendar attached to a Gmail grant.
+    Google,
+    /// Microsoft Graph calendar attached to an Outlook grant.
+    Outlook,
+}
+impl CalendarProvider {
+    /// Parse the owning email domain's stored provider discriminator.
+    pub fn from_link(value: &str) -> Option<Self> {
+        match value {
+            "GMAIL" => Some(Self::Google),
+            "OUTLOOK" => Some(Self::Outlook),
+            _ => None,
+        }
+    }
+    /// Discriminator used by the authentication service's provider cache.
+    pub fn link_provider(self) -> &'static str {
+        match self {
+            Self::Google => "GMAIL",
+            Self::Outlook => "OUTLOOK",
+        }
+    }
 }
 
 /// Event plus source and materialized projections to persist atomically.
@@ -1131,7 +1214,11 @@ pub struct CalendarEventUpsert {
 
 /// Stable identity of one provider calendar targeted by a sync or mutation.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GoogleCalendarTarget {
+pub struct ProviderCalendarTarget {
+    /// Exact credential binding required by Microsoft.
+    pub binding: Option<CalendarGrantBinding>,
+    /// Provider selected by the authorized calendar account.
+    pub provider: CalendarProvider,
     /// Macro user who owns the resulting entities.
     pub owner_id: String,
     /// Connected inbox whose grant authorizes the request.
@@ -1140,7 +1227,7 @@ pub struct GoogleCalendarTarget {
     pub account_id: Uuid,
     /// Persisted Macro calendar identifier.
     pub calendar_id: Uuid,
-    /// Provider calendar identifier used in Google API paths.
+    /// Provider calendar identifier used in API paths.
     pub provider_calendar_id: String,
     /// Calendar role captured before this target is sent to the provider.
     pub observed_access_role: Option<String>,
@@ -1232,12 +1319,25 @@ impl CalendarEventPatch {
 /// OAuth identity used to mint an access token for a connected inbox.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CalendarLinkTokenIdentity {
+    /// Exact mailbox/grant generations required by Microsoft credentials.
+    pub binding: Option<CalendarGrantBinding>,
     /// FusionAuth user holding the refresh token.
     pub fusionauth_user_id: String,
     /// Connected inbox address.
     pub email_address: String,
     /// Provider discriminator stored on the link.
-    pub provider: String,
+    pub provider: CalendarProvider,
+}
+
+/// Immutable authorization snapshot for a Microsoft calendar request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CalendarGrantBinding {
+    /// Owning connected inbox.
+    pub link_id: Uuid,
+    /// Current mailbox custody/synchronization generation.
+    pub sync_generation: i64,
+    /// Current credential grant generation.
+    pub grant_generation: i64,
 }
 
 /// Everything a user mutation needs to address an event at its provider.
@@ -1260,7 +1360,7 @@ pub struct CalendarEventMutationTarget {
     pub account_id: Uuid,
     /// Persisted Macro calendar identifier.
     pub calendar_id: Uuid,
-    /// Provider calendar identifier used in Google API paths.
+    /// Provider calendar identifier used in API paths.
     pub provider_calendar_id: String,
     /// This account's role on the addressed calendar before the provider call.
     pub observed_access_role: Option<String>,
@@ -1280,8 +1380,10 @@ impl CalendarEventMutationTarget {
     }
 
     /// Build the provider target for a mutation over the supplied window.
-    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
-        GoogleCalendarTarget {
+    pub fn provider_target(&self, range: OccurrenceRange) -> ProviderCalendarTarget {
+        ProviderCalendarTarget {
+            binding: self.token_identity.binding,
+            provider: self.token_identity.provider,
             owner_id: self.owner_id.clone(),
             email_link_id: self.email_link_id,
             account_id: self.account_id,
@@ -1299,6 +1401,10 @@ impl CalendarEventMutationTarget {
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct VisibleCalendar {
+    /// Calendar provider, for display and reconnect routing.
+    pub provider: CalendarProvider,
+    /// Provider features available on this actual calendar.
+    pub capabilities: CalendarCapabilities,
     /// Persisted Macro calendar identifier.
     pub id: Uuid,
     /// Connected inbox that syncs this calendar.
@@ -1324,6 +1430,65 @@ pub struct VisibleCalendar {
     pub default_reminders: Vec<EventReminderOverride>,
 }
 
+impl VisibleCalendar {
+    /// Persistent sync errors and uncertain automatic replies require attention.
+    pub fn sync_issue(
+        error: Option<String>,
+        failures: i32,
+        unconfirmed_reply: bool,
+    ) -> Option<String> {
+        if unconfirmed_reply {
+            Some("An automatic invitation reply could not be confirmed. Check the invitation in Outlook before replying again.".into())
+        } else {
+            error.filter(|_| failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD)
+        }
+    }
+}
+
+/// Actual provider capabilities used by calendar editors.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+pub struct CalendarCapabilities {
+    /// Meeting system available for new conferences, when any.
+    pub conference_provider: Option<ConferenceProvider>,
+    /// Whether an existing conference can be detached.
+    pub remove_conference: bool,
+    /// Whether event-level automatic invitation declines are supported.
+    pub auto_decline: bool,
+    /// Whether email reminders are delivered by the provider or Macro.
+    pub email_reminders: bool,
+    /// Whether arbitrary RFC 5545 recurrence properties can be written.
+    pub custom_recurrence: bool,
+    /// Whether an attendee can reset their RSVP to unanswered.
+    pub reset_rsvp: bool,
+}
+impl CalendarCapabilities {
+    /// Google Calendar's established editor capabilities.
+    pub fn google() -> Self {
+        Self {
+            conference_provider: Some(ConferenceProvider::GoogleMeet),
+            remove_conference: true,
+            auto_decline: true,
+            email_reminders: true,
+            custom_recurrence: true,
+            reset_rsvp: true,
+        }
+    }
+    /// Outlook capabilities depend on the calendar's conferencing entitlement.
+    pub fn outlook(teams: bool) -> Self {
+        Self {
+            conference_provider: teams.then_some(ConferenceProvider::MicrosoftTeams),
+            remove_conference: false,
+            auto_decline: true,
+            email_reminders: true,
+            custom_recurrence: false,
+            reset_rsvp: false,
+        }
+    }
+}
+
 /// The writable calendar a new user-created event lands in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CalendarCreationTarget {
@@ -1335,7 +1500,7 @@ pub struct CalendarCreationTarget {
     pub account_id: Uuid,
     /// Persisted Macro calendar identifier.
     pub calendar_id: Uuid,
-    /// Provider calendar identifier used in Google API paths.
+    /// Provider calendar identifier used in API paths.
     pub provider_calendar_id: String,
     /// This account's role on the addressed calendar before the provider call.
     pub observed_access_role: Option<String>,
@@ -1352,8 +1517,10 @@ pub struct CalendarCreationTarget {
 
 impl CalendarCreationTarget {
     /// Build the provider target for a creation over the supplied window.
-    pub fn google_target(&self, range: OccurrenceRange) -> GoogleCalendarTarget {
-        GoogleCalendarTarget {
+    pub fn provider_target(&self, range: OccurrenceRange) -> ProviderCalendarTarget {
+        ProviderCalendarTarget {
+            binding: self.token_identity.binding,
+            provider: self.token_identity.provider,
             owner_id: self.owner_id.clone(),
             email_link_id: self.email_link_id,
             account_id: self.account_id,
@@ -1568,12 +1735,36 @@ pub enum RefreshCalendarEvent {
     TeamSharingChanged,
 }
 
+/// Delivery channel of a reminder that Macro owns. Google email reminders
+/// remain provider-owned; Outlook email reminders use Macro's notification service.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReminderDeliveryMethod {
+    /// In-app and push notification.
+    #[default]
+    Popup,
+    /// Email delivered by Macro.
+    Email,
+}
+impl ReminderDeliveryMethod {
+    /// Stable persistence representation.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Popup => "popup",
+            Self::Email => "email",
+        }
+    }
+}
+
 /// Identity of one scheduled reminder firing: an occurrence, an offset, and
 /// the resolved instant. The instant is part of the identity so a moved event
 /// is a different firing that alerts again.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CalendarReminderFiring {
+    /// Delivery channel; old queued messages keep their popup behavior.
+    #[serde(default)]
+    pub method: ReminderDeliveryMethod,
     /// Owning event entity.
     pub event_id: Uuid,
     /// Stable occurrence key within the event.
@@ -1587,6 +1778,8 @@ pub struct CalendarReminderFiring {
 /// A firing joined with everything its notification needs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DueCalendarReminder {
+    /// Verified connected mailbox owning the canonical calendar copy.
+    pub email_address: String,
     /// The scheduled firing.
     pub firing: CalendarReminderFiring,
     /// Macro user the alert belongs to.

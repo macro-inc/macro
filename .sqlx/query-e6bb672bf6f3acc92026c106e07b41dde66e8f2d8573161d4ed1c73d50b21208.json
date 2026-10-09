@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT position,initial_complete,attachments_rechecked FROM email_sync_streams WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "initial_complete",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "attachments_rechecked",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e6bb672bf6f3acc92026c106e07b41dde66e8f2d8573161d4ed1c73d50b21208"
+}

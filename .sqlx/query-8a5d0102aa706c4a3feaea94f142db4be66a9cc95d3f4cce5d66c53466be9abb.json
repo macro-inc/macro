@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harness_tokens SET revoked_at = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8a5d0102aa706c4a3feaea94f142db4be66a9cc95d3f4cce5d66c53466be9abb"
+}

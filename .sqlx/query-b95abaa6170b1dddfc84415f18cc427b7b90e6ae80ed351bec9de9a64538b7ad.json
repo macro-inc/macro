@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM in_progress_user_link WHERE id = $1 AND macro_user_id::text = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b95abaa6170b1dddfc84415f18cc427b7b90e6ae80ed351bec9de9a64538b7ad"
+}

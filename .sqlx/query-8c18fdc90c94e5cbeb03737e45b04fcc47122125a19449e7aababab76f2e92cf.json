@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.body_text,t.inbox_visible,t.is_signal FROM email_messages m JOIN email_threads t ON t.id = m.thread_id WHERE m.link_id = $1 AND m.provider_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "inbox_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_signal",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "8c18fdc90c94e5cbeb03737e45b04fcc47122125a19449e7aababab76f2e92cf"
+}

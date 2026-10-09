@@ -10,7 +10,7 @@ use sqlx::{Pool, Postgres, Row};
 /// all attachments for a thread should be uploaded if any message in the thread meets any of the
 /// following criteria:
 /// 1. the user sent the message
-/// 2. the message has the IMPORTANT label
+/// 2. the provider classifies the message as important
 /// 3. the message came from someone with the same domain as the user
 /// 4. the domain the email was sent from is part of the whitelisted domains
 ///
@@ -34,12 +34,6 @@ pub async fn thread_document_atts_for_backfill(
             FROM email_threads t
             JOIN email_links link ON link.id = t.link_id
             WHERE t.id = $1
-        ),
-        important_label AS MATERIALIZED (
-            SELECT l.id
-            FROM email_labels l
-            JOIN thread_info ti ON l.link_id = ti.link_id
-            WHERE l.name = 'IMPORTANT'
         )
         SELECT
             a.id AS attachment_db_id,
@@ -68,13 +62,12 @@ pub async fn thread_document_atts_for_backfill(
                     WHERE sent_message.thread_id = ti.thread_id
                         AND sent_message.is_sent = true
                 )
-                -- condition 2: the thread contains a message with the link's IMPORTANT label
+                -- condition 2: the thread contains provider-important correspondence
                 OR EXISTS (
                     SELECT 1
-                    FROM important_label il
-                    JOIN email_message_labels ml ON ml.label_id = il.id
-                    JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
-                    WHERE labeled_message.thread_id = ti.thread_id
+                    FROM email_messages labeled_message
+                    JOIN email_message_mailbox_facts mf ON mf.id = labeled_message.id
+                    WHERE labeled_message.thread_id = ti.thread_id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                 )
                 -- conditions 3 and 4 share one sender pass
                 OR EXISTS (
@@ -271,6 +264,7 @@ async fn message_has_unclaimed_document_attachment(
             LEFT JOIN document_email de ON de.email_attachment_id = a.id
             WHERE m.link_id = $2
                 AND m.provider_id = $1
+                AND a.reference_url IS NULL
                 AND de.email_attachment_id IS NULL
                 AND a.upload_claimed_at IS NULL
                 AND a.filename IS NOT NULL
@@ -298,7 +292,7 @@ async fn message_has_unclaimed_document_attachment(
 /// This is called when a new email is inserted for a user. Attachments for the message
 /// should be uploaded if any message in the message's thread meets any of the following criteria:
 /// 1. the user sent the message
-/// 2. the message has the IMPORTANT label
+/// 2. the provider classifies the message as important
 /// 3. the message came from someone with the same domain as the user
 /// 4. the domain the email was sent from is part of the whitelisted domains
 /// 5. the user has previously sent a message to any participant in the thread
@@ -336,12 +330,6 @@ pub async fn new_email_document_atts(
             WHERE target_message.link_id = $2
                 AND target_message.provider_id = $1
         ),
-        important_label AS MATERIALIZED (
-            SELECT l.id
-            FROM email_labels l
-            JOIN thread_info ti ON l.link_id = ti.link_id
-            WHERE l.name = 'IMPORTANT'
-        ),
         claimed AS (
             UPDATE email_attachments
             SET upload_claimed_at = NOW()
@@ -365,13 +353,12 @@ pub async fn new_email_document_atts(
                             WHERE sent_message.thread_id = ti.thread_id
                                 AND sent_message.is_sent = true
                         )
-                        -- condition 2: the thread contains a message with the link's IMPORTANT label
+                        -- condition 2: the thread contains provider-important correspondence
                         OR EXISTS (
                             SELECT 1
-                            FROM important_label il
-                            JOIN email_message_labels ml ON ml.label_id = il.id
-                            JOIN email_messages labeled_message ON labeled_message.id = ml.message_id
-                            WHERE labeled_message.thread_id = ti.thread_id
+                            FROM email_messages labeled_message
+                    JOIN email_message_mailbox_facts mf ON mf.id = labeled_message.id
+                    WHERE labeled_message.thread_id = ti.thread_id AND mf.is_present AND NOT mf.in_trash AND mf.provider_is_important
                         )
                         -- conditions 3 and 4 share one sender pass
                         OR EXISTS (

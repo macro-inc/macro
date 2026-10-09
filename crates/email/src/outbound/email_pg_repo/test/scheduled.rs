@@ -111,6 +111,7 @@ async fn sent_or_claimed_delivery_rejects_update_cancel_and_migration(
             message,
             Uuid::parse_str("11111111-1111-1111-1111-111111111111")?,
             &[link],
+            None
         )
         .await?
         .is_none()
@@ -234,8 +235,10 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
         thread_client_binding: None,
     };
     assert!(matches!(
-        service.save_draft_for_user_impl(actor(), Some(target_link), input).await,
-        Err(EmailErr::MessageDeliveryConflict(id)) if id == message
+        service
+            .save_draft_for_user_impl(actor(), Some(target_link), input)
+            .await,
+        Err(EmailErr::InvalidDraft(_))
     ));
     let subject = sqlx::query_scalar!(
         "SELECT subject FROM email_messages WHERE id = $1",

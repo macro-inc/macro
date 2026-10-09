@@ -337,7 +337,7 @@ fn create_tool_args() -> serde_json::Value {
         },
         "attendees": [],
         "recurrenceLines": [],
-        "addGoogleMeet": false
+        "addConference": false
     })
 }
 
@@ -505,7 +505,7 @@ async fn create_converts_input_into_a_domain_draft() {
                 minutes: 15,
             }],
         }),
-        add_google_meet: true,
+        add_conference: true,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: None,
     };
@@ -523,7 +523,7 @@ async fn create_converts_input_into_a_domain_draft() {
         draft.recurrence_lines,
         vec!["RRULE:FREQ=WEEKLY".to_string()]
     );
-    assert_eq!(draft.conference, Some(ConferenceChange::GoogleMeet));
+    assert_eq!(draft.conference, Some(ConferenceChange::ProviderDefault));
     assert_eq!(
         draft.reminders,
         Some(EventReminders {
@@ -554,7 +554,7 @@ async fn create_maps_out_of_office_input_into_the_draft() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
-        add_google_meet: false,
+        add_conference: false,
         event_type: CalendarEventTypeInput::OutOfOffice,
         out_of_office: Some(OutOfOfficeInput {
             auto_decline_mode: Some(AutoDeclineModeInput::DeclineAll),
@@ -593,7 +593,7 @@ async fn create_rejects_out_of_office_settings_on_a_default_event() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
-        add_google_meet: false,
+        add_conference: false,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: Some(OutOfOfficeInput::default()),
     };
@@ -622,15 +622,13 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         recurrence_lines: Vec::new(),
         calendar_id: None,
         reminders: None,
-        add_google_meet: false,
+        add_conference: false,
         event_type: CalendarEventTypeInput::Default,
         out_of_office: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(
-        error
-            .description
-            .contains("not connected a Google Calendar"),
+        error.description.contains("not connected a calendar"),
         "unexpected description: {}",
         error.description
     );
@@ -1112,6 +1110,8 @@ async fn cancelled_occurrences_do_not_count_toward_truncation() {
 async fn list_calendars_maps_visible_calendars() {
     let mutations = MockMutations {
         calendars: Mutex::new(vec![VisibleCalendar {
+            provider: crate::domain::models::CalendarProvider::Google,
+            capabilities: crate::domain::models::CalendarCapabilities::google(),
             id: Uuid::from_u128(3),
             email_link_id: Uuid::from_u128(4),
             email_address: "gab@example.com".to_string(),
@@ -1125,17 +1125,41 @@ async fn list_calendars_maps_visible_calendars() {
         }]),
         ..Default::default()
     };
+    {
+        let mut calendars = mutations.calendars.lock().unwrap();
+        let mut outlook = calendars[0].clone();
+        outlook.id = Uuid::from_u128(5);
+        outlook.provider = crate::domain::models::CalendarProvider::Outlook;
+        outlook.capabilities = crate::domain::models::CalendarCapabilities::outlook(true);
+        calendars.push(outlook);
+    }
     let (_, context) = context(mutations, empty_occurrences());
 
     let response = ListCalendars {}
         .call(context, request_context())
         .await
         .unwrap();
-    assert_eq!(response.calendars.len(), 1);
+    assert_eq!(response.calendars.len(), 2);
     let calendar = &response.calendars[0];
     assert_eq!(calendar.calendar_id, Uuid::from_u128(3));
     assert_eq!(calendar.email_address, "gab@example.com");
     assert!(calendar.is_primary);
     assert!(calendar.is_writable);
-    assert_eq!(response.summary, "Found 1 calendar.");
+    assert_eq!(
+        calendar.provider,
+        crate::domain::models::CalendarProvider::Google
+    );
+    assert!(calendar.capabilities.remove_conference);
+    let outlook = &response.calendars[1];
+    assert_eq!(
+        outlook.provider,
+        crate::domain::models::CalendarProvider::Outlook
+    );
+    assert_eq!(
+        outlook.capabilities.conference_provider,
+        Some(crate::domain::models::ConferenceProvider::MicrosoftTeams)
+    );
+    assert!(!outlook.capabilities.remove_conference);
+    assert!(!outlook.capabilities.reset_rsvp);
+    assert_eq!(response.summary, "Found 2 calendars.");
 }

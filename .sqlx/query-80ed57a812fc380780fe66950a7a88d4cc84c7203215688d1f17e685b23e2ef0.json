@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            sp.\"linkShare\" as \"link_share?\",\n            sp.\"linkShareAccessLevel\"::text as \"link_share_access_level?\",\n            sp.team_share_access_level as \"team_share_access_level?: AccessLevel\",\n            sp.team_share_team_id as \"team_share_team_id?\"\n        FROM \"SharePermission\" sp\n        JOIN \"DocumentPermission\" dp ON dp.\"sharePermissionId\" = sp.id\n        WHERE dp.\"documentId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_share?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_share_access_level?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "team_share_team_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      null,
+      true,
+      true
+    ]
+  },
+  "hash": "80ed57a812fc380780fe66950a7a88d4cc84c7203215688d1f17e685b23e2ef0"
+}

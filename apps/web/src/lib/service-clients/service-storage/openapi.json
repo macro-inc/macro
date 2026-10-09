@@ -22367,8 +22367,8 @@
       },
       "ConferenceProvider": {
         "type": "string",
-        "description": "The conferencing system backing an event's join URL.\n\nMacro generates only Google Meet conferences, so this distinguishes one it\ncreated from a third party's — Zoom and friends arriving as `addOn`\nconference data, or a legacy classic Hangout. Clients use it to label the\nconference and to tell whether the Meet toggle reflects a Macro-managed\nconference.\n\nIt does not gate mutation. An explicit request replaces or detaches any\nconference, third-party included, exactly as deleting the event would;\nwhat protects a conference is that omitting the field leaves it untouched,\nso an unrelated edit never disturbs it.",
-        "enum": ["google_meet", "other"]
+        "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
+        "enum": ["microsoft_teams", "google_meet", "other"]
       },
       "Conjunction": {
         "type": "string",

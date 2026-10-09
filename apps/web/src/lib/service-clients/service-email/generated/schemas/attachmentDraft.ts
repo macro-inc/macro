@@ -4,8 +4,11 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AttachmentDraftContentId } from './attachmentDraftContentId';
 
 export interface AttachmentDraft {
+  /** Original Content-ID retained when transferring a provider attachment. */
+  content_id?: AttachmentDraftContentId;
   /** MIME type of the attachment (e.g., "application/pdf", "image/png"). */
   content_type: string;
   /** The ID of the draft message this attachment belongs to. */
@@ -14,10 +17,14 @@ export interface AttachmentDraft {
   file_name: string;
   /** Unique identifier for the attachment. */
   id: string;
+  /** Whether the attachment is referenced inline by the message body. */
+  is_inline?: boolean;
   /** S3 object key where the attachment content is stored. */
   s3_key: string;
   /** SHA-256 hash of the file content for integrity verification. */
   sha: string;
   /** File size in bytes. */
   size: number;
+  /** Bytes have not yet been verified; sending must wait for completion. */
+  upload_pending?: boolean;
 }

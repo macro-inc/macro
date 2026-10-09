@@ -1,49 +1,34 @@
-use crate::api::context::ApiContext;
-use crate::util::gmail::send::cleanup_draft_attachments;
-use axum::Extension;
-use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use crate::api::context::{ApiContext, AuthorizationService};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use email::domain::{models::EmailErr, ports::EmailService};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
-use models_email::service::link::Link;
-use strum_macros::AsRefStr;
-use thiserror::Error;
 use uuid::Uuid;
 
-#[derive(Debug, Error, AsRefStr)]
-pub enum DeleteDraftError {
-    #[error("Draft with id {0} not found")]
-    NotFound(Uuid),
-
-    #[error("The provided id {0} belongs to a message, not a draft")]
-    NotADraft(Uuid),
-
-    #[error("Failed to get draft from database")]
-    QueryError(#[from] anyhow::Error),
-
-    #[error("A database transaction error occurred")]
-    TransactionError(#[from] sqlx::Error),
-}
-
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct DeleteDraftError(#[from] EmailErr);
 impl IntoResponse for DeleteDraftError {
     fn into_response(self) -> Response {
-        let status_code = match self {
-            DeleteDraftError::NotFound(_) => StatusCode::NOT_FOUND,
-            DeleteDraftError::NotADraft(_) => StatusCode::BAD_REQUEST,
-            DeleteDraftError::QueryError(_) | DeleteDraftError::TransactionError(_) => {
-                StatusCode::INTERNAL_SERVER_ERROR
+        let status = match &self.0 {
+            EmailErr::Unauthorized => StatusCode::FORBIDDEN,
+            EmailErr::MessageAlreadySent(_) | EmailErr::MessageDeliveryConflict(_) => {
+                StatusCode::CONFLICT
             }
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "DeleteDraftError",
-                variant = self.as_ref(),
-                "Internal server error");
-        }
-
-        (status_code, self.to_string()).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                message: self.to_string().into(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -64,67 +49,15 @@ impl IntoResponse for DeleteDraftError {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx, authorization), err)]
 pub async fn handler(
-    ctx: State<ApiContext>,
-    link: Extension<Link>,
+    State(ctx): State<ApiContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(draft_id): Path<Uuid>,
-) -> Result<Response, DeleteDraftError> {
-    let message_replying_to = email_db_client::messages::get_simple_messages::get_simple_message(
-        &ctx.db,
-        &draft_id,
-        &link.fusionauth_user_id,
-    )
-    .await?
-    .ok_or(DeleteDraftError::NotFound(draft_id))?;
-
-    if !message_replying_to.is_draft {
-        return Err(DeleteDraftError::NotADraft(draft_id));
-    }
-
-    // Fetch draft attachments before deletion so we can clean up S3
-    let draft_attachments =
-        email_db_client::attachments::draft::fetch_draft_attachments_by_draft_id(
-            &ctx.db, link.id, draft_id,
-        )
+) -> Result<StatusCode, DeleteDraftError> {
+    ctx.email_service
+        .service()
+        .delete_draft_for_user(authorization.authorization.user.macro_user_id, draft_id)
         .await?;
-
-    let mut tx = ctx.db.begin().await?;
-
-    let result =
-        email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message_replying_to)
-            .await;
-
-    match result {
-        Ok(_deleted_thread) => {
-            tx.commit().await?;
-
-            // cleanup attachments in the background
-            if !draft_attachments.is_empty() {
-                let db = ctx.db.clone();
-                let s3_client = ctx.s3_client.clone();
-                let bucket = ctx.config.attachment_bucket.to_string();
-                let link_id = link.id;
-                tokio::spawn(async move {
-                    cleanup_draft_attachments(
-                        db,
-                        &s3_client,
-                        bucket,
-                        link_id,
-                        draft_id,
-                        draft_attachments,
-                    )
-                    .await;
-                });
-            }
-
-            Ok(StatusCode::NO_CONTENT.into_response())
-        }
-        Err(e) => {
-            if let Err(rollback_err) = tx.rollback().await {
-                tracing::error!(error=?rollback_err, "Failed to rollback transaction after draft delete failure");
-            }
-            Err(DeleteDraftError::from(e))
-        }
-    }
+    Ok(StatusCode::NO_CONTENT)
 }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET initial_complete = true,attachments_rechecked=true WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "866880767a642dfec0c0a00d6ffb84bf235e1ff6c39b60fcec97fb8801af8a72"
+}

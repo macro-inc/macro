@@ -317,6 +317,8 @@ fn occurrence_response_overrides_master_response() {
     row.event.attendees = vec![attendee("a@example.com", AttendeeResponseStatus::Accepted)];
     row.occurrence.recurrence_id = Some("2026-10-07T09:00:00+00:00".into());
     row.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -348,6 +350,8 @@ fn instance_transparency_controls_busy_time_and_private_series_stays_private() {
     let original = EventStart::Timed(instant("2026-10-07T09:00:00Z"));
     row.occurrence.recurrence_id = Some(original.occurrence_key());
     row.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: original.occurrence_key(),

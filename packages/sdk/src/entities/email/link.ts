@@ -1,10 +1,13 @@
-import type { Link as LinkRecord } from '../../../generated/email/types.gen';
+import type {
+  Link as LinkRecord,
+  MailboxSettingsOperation,
+} from '../../../generated/email/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 
 /**
- * An email link: a connected inbox (e.g. a Gmail account) that threads and
+ * An email link: a connected inbox (e.g. Gmail or Outlook) that threads and
  * messages sync through. A free-to-construct handle, resolved from the
  * caller's connected links.
  */
@@ -30,7 +33,7 @@ export class Link extends MacroEntity<LinkRecord> {
   /** The inbox's email address. */
   readonly emailAddress = this.field('email_address');
 
-  /** The email provider (e.g. `GMAIL`). */
+  /** The email provider (e.g. `GMAIL` or `OUTLOOK`). */
   readonly provider = this.field('provider');
 
   /** Whether this is the user's primary inbox. */
@@ -47,4 +50,13 @@ export class Link extends MacroEntity<LinkRecord> {
 
   /** The inbox's avatar URL, if any. */
   readonly photoUrl = this.field('photo_url');
+
+  /** Read category and sender-policy changes for this inbox. */
+  async settingsOperations(): Promise<MailboxSettingsOperation[]> {
+    return unwrap(
+      await this.client.email.mailboxSettingsOperations({
+        headers: { 'X-Email-Link-Id': this.id },
+      }),
+    );
+  }
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments(id,message_id,provider_attachment_id,filename,mime_type,size_bytes,content_id) VALUES($1,$2,'forward-echo','notes.pdf','application/pdf',50000000,'<forwarded@cid>')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "88b928ff0b4990e161686fb6ab6f7ac2fa7691da139d52dd391eed13de72d480"
+}

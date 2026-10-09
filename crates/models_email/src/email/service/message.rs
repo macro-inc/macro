@@ -174,7 +174,7 @@ fn extract_reply_to(headers_json: Option<&JsonValue>) -> Option<String> {
     let headers = headers_json?.as_array()?;
     for header in headers {
         let name = header.get("name")?.as_str()?;
-        if name == "Reply-To" {
+        if name.eq_ignore_ascii_case("Reply-To") {
             return header
                 .get("value")
                 .and_then(|v| v.as_str())

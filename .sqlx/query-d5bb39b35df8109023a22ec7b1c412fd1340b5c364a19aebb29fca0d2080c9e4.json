@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id,a.provider_attachment_id FROM email_attachments a JOIN email_messages m ON m.id=a.message_id WHERE m.link_id=$1 ORDER BY a.provider_attachment_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_attachment_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "d5bb39b35df8109023a22ec7b1c412fd1340b5c364a19aebb29fca0d2080c9e4"
+}

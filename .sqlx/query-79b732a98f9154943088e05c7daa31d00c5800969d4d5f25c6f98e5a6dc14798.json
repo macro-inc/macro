@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_threads (id,link_id,provider_id) VALUES ($1,$2,$3)\n            ON CONFLICT (link_id,provider_id) WHERE provider_id IS NOT NULL\n                DO UPDATE SET provider_id = EXCLUDED.provider_id RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "79b732a98f9154943088e05c7daa31d00c5800969d4d5f25c6f98e5a6dc14798"
+}

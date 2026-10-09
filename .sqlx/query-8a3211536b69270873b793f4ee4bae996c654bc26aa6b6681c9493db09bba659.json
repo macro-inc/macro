@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)\n        VALUES (\n            gen_random_uuid(), $1, 'TASK', $2,\n            jsonb_build_object(\n                'type', 'EntityReference',\n                'value', jsonb_build_array(jsonb_build_object(\n                    'entity_id', $3::text, 'entity_type', $4::text\n                ))\n            )\n        )\n        ON CONFLICT (entity_id, entity_type, property_definition_id)\n        DO UPDATE SET values = EXCLUDED.values\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a3211536b69270873b793f4ee4bae996c654bc26aa6b6681c9493db09bba659"
+}

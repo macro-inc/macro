@@ -17,10 +17,12 @@ export interface EmailThreadViewContext {
   composeHost?: EmailComposeHost;
   rendering: {
     renderTags?: () => JSX.Element;
+    renderOrganizationStatus?: () => JSX.Element;
     renderInvitation?: (
       message: EmailMessage,
       invitation: CalendarInvitation
     ) => JSX.Element;
+    renderOperation?: (message: EmailMessage) => JSX.Element;
     renderAvatar?: (message: EmailMessage) => JSX.Element;
     openAttachment?: (attachment: EmailAttachment) => void;
   };

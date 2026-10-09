@@ -58,12 +58,15 @@ impl SyncStatus {
 #[serde(rename_all = "UPPERCASE")]
 pub enum UserProvider {
     Gmail,
+    /// Microsoft Outlook and Microsoft 365.
+    Outlook,
 }
 
 impl UserProvider {
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
+            UserProvider::Outlook => "OUTLOOK",
         }
     }
 }
@@ -78,6 +81,7 @@ impl From<crate::email::service::link::UserProvider> for UserProvider {
     fn from(provider: crate::email::service::link::UserProvider) -> Self {
         match provider {
             crate::email::service::link::UserProvider::Gmail => UserProvider::Gmail,
+            crate::email::service::link::UserProvider::Outlook => UserProvider::Outlook,
         }
     }
 }

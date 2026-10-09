@@ -51,7 +51,7 @@ export function PublicBookingView(props: {
                       <p class="mt-2 text-sm text-ink-muted">
                         {event.durationMinutes} minutes ·{' '}
                         {event.googleMeet
-                          ? 'Google Meet'
+                          ? 'Video meeting'
                           : event.location || 'Meeting'}
                       </p>
                       <p class="mt-3 text-sm text-ink-muted">

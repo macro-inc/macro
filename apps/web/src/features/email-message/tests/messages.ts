@@ -20,6 +20,7 @@ export function message(
     attachments_draft: [],
     attachments_forwarded: [],
     labels: [],
+    is_read: true,
     is_draft: false,
     ...overrides,
   };

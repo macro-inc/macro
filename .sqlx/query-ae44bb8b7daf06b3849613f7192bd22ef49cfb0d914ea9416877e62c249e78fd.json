@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET base_version = $2,error_code = NULL WHERE message_id = $1 AND state = 'synced'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae44bb8b7daf06b3849613f7192bd22ef49cfb0d914ea9416877e62c249e78fd"
+}

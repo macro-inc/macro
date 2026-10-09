@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_outlook_declines SET next_check_at=now() WHERE work_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7a19bfbdcc1e9a31de847a2aa7d1ef0be51371421f47d1c0549530b37a52744"
+}

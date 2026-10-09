@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"projectId\")\n        VALUES ($1, 'Nested', $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fc32a7093dc11b0d6fc9cb43d8be29052e79e00877e6fd333bd5b1b8a34c7ee3"
+}

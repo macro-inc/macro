@@ -21,3 +21,8 @@ pub use preview::{
 };
 pub use sort::ApiSortMethod;
 pub use thread::{ApiThread, GetThreadParams, GetThreadResponse};
+
+mod operation;
+pub use operation::{
+    ApiMessageOperation, MessageOperationResponse, ResolveMessageOperationRequest,
+};

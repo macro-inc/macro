@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_labels l WHERE l.link_id=$1 AND l.provider_label_id=$2 AND l.type='User'\n            AND NOT EXISTS(SELECT 1 FROM email_mailbox_settings_work w WHERE w.link_id=l.link_id AND w.kind='delete_label' AND w.resource_key=l.provider_label_id AND w.completed_revision<w.revision)) AS \"available!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "available!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "54326a76566fe99126eb350178e128121e7f5d88cf39b2f16ab0157c310038f3"
+}

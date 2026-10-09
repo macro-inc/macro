@@ -11,6 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 const addDraftAttachmentMock = vi.hoisted(() => vi.fn());
+const completeDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const removeDraftAttachmentMock = vi.hoisted(() => vi.fn());
 const uploadToPresignedUrlMock = vi.hoisted(() => vi.fn());
 const toastFailureMock = vi.hoisted(() => vi.fn());
@@ -20,6 +21,7 @@ const contentHashMock = vi.hoisted(() => vi.fn(async () => 'a'.repeat(64)));
 vi.mock('@service-email/client', () => ({
   emailClient: {
     addDraftAttachment: addDraftAttachmentMock,
+    completeDraftAttachment: completeDraftAttachmentMock,
     removeDraftAttachment: removeDraftAttachmentMock,
   },
 }));
@@ -59,6 +61,7 @@ beforeEach(() => {
     })
   );
   removeDraftAttachmentMock.mockResolvedValue(ok(undefined));
+  completeDraftAttachmentMock.mockResolvedValue(ok(undefined));
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -213,6 +216,7 @@ describe('useUploadDraftAttachmentsMutation', () => {
       {
         draftID: 'draft-1',
         attachment: {
+          upload_id: expect.any(String),
           file_name: 'photo.png',
           size: 1024,
           sha: 'ab'.repeat(32),
@@ -265,7 +269,12 @@ describe('useUploadDraftAttachmentsMutation', () => {
       expect(addDraftAttachmentMock).toHaveBeenCalledWith(
         {
           draftID: 'draft-1',
-          attachment: { file_name: 'photo.png', size: 3, sha: 'a'.repeat(64) },
+          attachment: {
+            upload_id: expect.any(String),
+            file_name: 'photo.png',
+            size: 3,
+            sha: 'a'.repeat(64),
+          },
         },
         undefined
       );

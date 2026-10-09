@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.mailbox_state,t.status FROM email_messages m JOIN email_mailbox_command_targets t ON t.message_id=m.id WHERE m.id=$1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mailbox_state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "1b5b3bf25cff91b9b7a7af6ad3af12ee13effd092ad9012f390504e6fd6f7d4f"
+}

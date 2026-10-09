@@ -13,6 +13,7 @@ import type { MacroClient } from '../../utils/client';
 import type { Link } from '../email/link';
 import { Calendar } from './calendar';
 import { CalendarEvent } from './event';
+import { CalendarReplacement } from './replacement';
 
 /** Fields for a new calendar event. */
 export interface CreateEventOptions {
@@ -36,7 +37,7 @@ export interface CreateEventOptions {
   reminders?: EventReminders;
   /** Conference to attach; omit to create the event without one. */
   conference?: ConferenceChange;
-  /** Out-of-office properties; present to create a Google out-of-office event. */
+  /** Out-of-office properties; present to create an out-of-office event. */
   outOfOffice?: OutOfOfficeProperties;
   /** Exact calendar to create the event on; takes precedence over the inbox
    * default. */
@@ -67,6 +68,11 @@ export class CalendarNamespace {
   /** A handle to a calendar event by id, for driving mutations. */
   event(id: string): CalendarEvent {
     return CalendarEvent.byId(this.client, id);
+  }
+
+  /** Recover a saved replacement, including after its original event was retired. */
+  replacement(operationId: string): CalendarReplacement {
+    return new CalendarReplacement(this.client, operationId);
   }
 
   /** Create a calendar event and return a handle to its synced record. */

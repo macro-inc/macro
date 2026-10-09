@@ -43,7 +43,7 @@ impl CalendarInvitationRepository for PgCalendarRepository {
                 SELECT e.id, e.source_link_id, l.email_address, e.sequence, e.status, e.updated_at
                 FROM calendar_events e JOIN email_links l ON l.id = e.source_link_id
                 WHERE e.ical_uid = requested.uid AND e.owner_id = $1 AND l.macro_id = $1
-                  AND EXISTS (SELECT 1 FROM calendar_event_sources s JOIN calendar_accounts a ON a.id = s.account_id JOIN calendars c ON c.id = s.calendar_id WHERE s.event_id = e.id AND s.source_kind = 'google' AND NOT c.is_deleted AND a.sync_status NOT IN ('disabled', 'reauth_required'))
+                  AND EXISTS (SELECT 1 FROM calendar_event_sources s JOIN calendar_accounts a ON a.id = s.account_id JOIN calendars c ON c.id = s.calendar_id WHERE s.event_id = e.id AND s.source_kind IN ('google', 'outlook') AND NOT c.is_deleted AND a.sync_status NOT IN ('disabled', 'reauth_required'))
                 ORDER BY e.id LIMIT 16
             ) candidate
         "#, viewer, &uids, &requested_keys as &[Option<String>]).fetch_all(&self.pool).await.map_err(report)?;
@@ -68,6 +68,7 @@ impl CalendarInvitationRepository for PgCalendarRepository {
                 override.description AS override_description,
                 override.location AS override_location,
                 override.status AS override_status,
+                override.reminders AS override_reminders,
                 event.owner_id,
                 event.ical_uid,
                 event.title,

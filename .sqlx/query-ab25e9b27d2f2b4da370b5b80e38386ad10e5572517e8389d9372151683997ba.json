@@ -1,0 +1,84 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT g.grant_id AS \"grant_id!\", g.generation, g.revision, g.fusionauth_user_id, g.email_address,\n                g.refresh_token_ciphertext, g.encrypted_data_key, g.nonce, g.encryption_version, g.kms_key_id,g.scopes\n            FROM microsoft_oauth_grant_versions g JOIN email_links l ON l.grant_id = g.grant_id\n                AND l.grant_generation = g.generation AND l.fusionauth_user_id = g.fusionauth_user_id\n                AND lower(l.email_address) = g.email_address\n            WHERE l.id = $1 AND g.generation = $2 AND l.provider = 'OUTLOOK'\n                AND NOT l.is_sync_active AND l.disconnect_requested_at IS NOT NULL\n                AND l.sync_generation = $3 AND g.revoked_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "grant_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "fusionauth_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "email_address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "refresh_token_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 6,
+        "name": "encrypted_data_key",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 7,
+        "name": "nonce",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 8,
+        "name": "encryption_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "scopes",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ab25e9b27d2f2b4da370b5b80e38386ad10e5572517e8389d9372151683997ba"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_link_microsoft_scopes SET calendar_disabled_at=now(),updated_at=now() WHERE link_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "28e80fe7b09df90fbf184ee92c37b4c983a6b801623351b7bfe5f81882fdea5e"
+}

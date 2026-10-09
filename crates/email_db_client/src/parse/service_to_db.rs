@@ -149,6 +149,7 @@ pub fn map_service_attachments_to_db(
             });
 
             attachment::Attachment {
+                reference_url: service_attachment.reference_url.clone(),
                 id: service_attachment.db_id,
                 message_id: message_db_id,
                 provider_attachment_id: service_attachment.provider_id.clone(),

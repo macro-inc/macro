@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"userId\" AS user_id, \"itemType\" AS item_type\n        FROM \"UserHistory\"\n        WHERE \"itemId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_type",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "5bf24f7cb00e635b9c06e7d366ae9dcfa33acf6de70ffd18f0f1d533ceb599f4"
+}

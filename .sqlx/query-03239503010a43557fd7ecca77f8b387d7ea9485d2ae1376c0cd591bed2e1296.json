@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing = false,updated_at = now() WHERE message_id = $1 AND NOT sent",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03239503010a43557fd7ecca77f8b387d7ea9485d2ae1376c0cd591bed2e1296"
+}

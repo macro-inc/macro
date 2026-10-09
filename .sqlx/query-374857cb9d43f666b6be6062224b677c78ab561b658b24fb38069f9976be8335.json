@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_notification (user_id, notification_id, state)\n            VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state ELSE 'unseen'::notification_state END)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "374857cb9d43f666b6be6062224b677c78ab561b658b24fb38069f9976be8335"
+}

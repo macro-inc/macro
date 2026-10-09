@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DROP TRIGGER trg_initialize_comms_message_thread ON comms_messages",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fe76c5e489b1ccab4b37fbe0b479d7c93335334b2e934f7bad97904c9696372e"
+}

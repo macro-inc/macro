@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_event_reminder_firings (\n            event_id, occurrence_key, minutes_before, fire_at, method\n        )\n        SELECT DISTINCT\n            occurrence.event_id,\n            occurrence.occurrence_key,\n            offsets.minutes,\n            COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $2\n            ) - make_interval(mins => offsets.minutes),\n            offsets.method\n        FROM calendar_event_sources source\n        JOIN calendar_events event ON event.id = source.event_id\n        JOIN calendar_event_occurrences occurrence ON occurrence.event_id = event.id\n        LEFT JOIN calendar_event_overrides override ON override.event_id=event.id\n            AND override.recurrence_id=occurrence.recurrence_id\n        CROSS JOIN LATERAL (\n            SELECT (reminder.value ->> 'minutes')::int AS minutes, reminder.value ->> 'method' AS method\n            FROM jsonb_array_elements(\n                CASE\n                    -- Status-style events never resolve the calendar\n                    -- defaults, mirroring EventType::uses_calendar_default_reminders.\n                    WHEN COALESCE((override.reminders->>'useDefault')::bool,event.reminders_use_default)\n                        AND event.event_type IN ('default', 'from_gmail')\n                        THEN $3::jsonb\n                    WHEN COALESCE((override.reminders->>'useDefault')::bool,event.reminders_use_default) THEN '[]'::jsonb\n                    ELSE COALESCE(override.reminders->'overrides',event.reminder_overrides)\n                END\n            ) AS reminder(value)\n            WHERE (reminder.value ->> 'method' = 'popup' OR (reminder.value ->> 'method' = 'email'\n                AND EXISTS(SELECT 1 FROM calendar_accounts account WHERE account.id=source.account_id AND account.provider='outlook')))\n              AND (reminder.value ->> 'minutes')::bigint BETWEEN 0 AND 2147483647\n        ) offsets\n        WHERE source.calendar_id = $1\n          AND (\n              SELECT canonical.calendar_id\n              FROM calendar_event_sources canonical\n              WHERE canonical.id = calendar_event_canonical_source_id(event.id)\n          ) = $1\n          AND event.status <> 'cancelled'\n          AND NOT occurrence.is_cancelled\n          AND COALESCE(\n                occurrence.starts_at,\n                occurrence.start_date::timestamp AT TIME ZONE $2\n              ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'\n        ON CONFLICT (event_id, occurrence_key, minutes_before, method) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab3e4a799a8c392b8ea6165fa735bfb0c964a409ce20057c950e32c268eea670"
+}

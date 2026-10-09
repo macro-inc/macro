@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_event_sources WHERE source_kind='outlook' AND calendar_id=$1 AND provider_event_id=$2 RETURNING event_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "12f618e82d3cb3cf5ce09b4e89cb89c91cf443acdfa83150f1c8ccc540572dc0"
+}

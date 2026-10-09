@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import)\n            SELECT $1,$2,provider_id,$4 FROM unnest($3::text[]) provider_id\n            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET\n                revision = email_message_reconciliation.revision + 1,\n                is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,\n                available_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2846706808b486c427d396509579ee5b70f0dc49f1f2105239a8e62ea4c44b82"
+}

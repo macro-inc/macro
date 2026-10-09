@@ -19,8 +19,17 @@ pub async fn insert_attachments(
     message_id: Uuid,
     attachments: &mut [service::attachment::Attachment],
 ) -> anyhow::Result<()> {
-    if attachments.is_empty() {
+    let stable_ids=sqlx::query_scalar!(r#"SELECT l.provider='OUTLOOK' AS "stable!" FROM email_messages m JOIN email_links l ON l.id=m.link_id WHERE m.id=$1"#,message_id)
+        .fetch_one(&mut *tx).await?;
+    if attachments.is_empty() && !stable_ids {
         return Ok(());
+    }
+    if stable_ids
+        && attachments
+            .iter()
+            .any(|attachment| attachment.provider_id.is_none())
+    {
+        anyhow::bail!("Outlook attachment snapshot is missing a provider identifier");
     }
 
     let db_attachments = map_service_attachments_to_db(attachments, message_id);
@@ -28,42 +37,46 @@ pub async fn insert_attachments(
     let existing_attachments = sqlx::query_as!(
         db::attachment::Attachment,
         r#"
-        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at
+        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at, ea.reference_url
         FROM email_attachments ea LEFT JOIN email_attachments_sfs eas on ea.id = eas.attachment_id
         WHERE message_id = $1
         "#,
         message_id
     ).fetch_all(&mut *tx).await?;
 
-    // Filter to find attachments that exist in the database but don't match any in db_attachments.
-    // we compare using filename, mime_type, size_bytes, and content_id as we don't get a concrete ID from gmail that
-    // we can use to compare against.
+    // Outlook attachment IDs remain stable until replacement. Gmail retains its
+    // metadata fallback because its attachment fetch IDs may rotate.
 
     let orphaned_attachments: Vec<_> = existing_attachments
         .iter()
         .filter(|existing| {
             !db_attachments.iter().any(|attachment| {
-                existing.filename == attachment.filename
-                    && existing.mime_type == attachment.mime_type
-                    && existing.size_bytes == attachment.size_bytes
-                    && existing.content_id == attachment.content_id
+                if stable_ids {
+                    existing.provider_attachment_id == attachment.provider_attachment_id
+                } else {
+                    existing.filename == attachment.filename
+                        && existing.mime_type == attachment.mime_type
+                        && existing.size_bytes == attachment.size_bytes
+                        && existing.content_id == attachment.content_id
+                        && existing.reference_url == attachment.reference_url
+                }
             })
         })
         .cloned()
         .collect();
 
-    // Only insert attachments from current_attachments that don't match any in the database
-    // we compare using filename, mime_type, size_bytes, and content_id as we don't get a concrete ID from gmail that
-    // we can use to compare against.
+    // Refresh Outlook metadata without changing the Macro attachment identity.
     let new_attachments: Vec<_> = db_attachments
         .into_iter()
         .filter(|attachment| {
-            !existing_attachments.iter().any(|existing| {
-                existing.filename == attachment.filename
-                    && existing.mime_type == attachment.mime_type
-                    && existing.size_bytes == attachment.size_bytes
-                    && existing.content_id == attachment.content_id
-            })
+            stable_ids
+                || !existing_attachments.iter().any(|existing| {
+                    existing.filename == attachment.filename
+                        && existing.mime_type == attachment.mime_type
+                        && existing.size_bytes == attachment.size_bytes
+                        && existing.content_id == attachment.content_id
+                        && existing.reference_url == attachment.reference_url
+                })
         })
         .collect();
 
@@ -107,7 +120,9 @@ pub async fn insert_attachments(
     let mut size_bytes_vec: Vec<Option<i64>> = Vec::with_capacity(n);
     let mut content_ids: Vec<Option<String>> = Vec::with_capacity(n);
 
+    let mut reference_urls: Vec<Option<String>> = Vec::with_capacity(n);
     for attachment in new_attachments.into_iter() {
+        reference_urls.push(attachment.reference_url);
         attachment_ids_repeated.push(attachment.id);
         message_ids_repeated.push(attachment.message_id);
         provider_attachment_ids.push(attachment.provider_attachment_id);
@@ -121,19 +136,20 @@ pub async fn insert_attachments(
     sqlx::query(
         r#"
         WITH input_rows (
-            id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id
+            id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id, reference_url
         ) AS (
            SELECT * FROM unnest(
-               $1::uuid[], $2::uuid[], $3::text[], $4::varchar[], $5::varchar[], $6::bigint[], $7::varchar[]
+               $1::uuid[], $2::uuid[], $3::text[], $4::varchar[], $5::varchar[], $6::bigint[], $7::varchar[], $8::text[]
            )
         )
         INSERT INTO email_attachments (
-            id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id
+            id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id, reference_url
         )
-        SELECT id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id
+        SELECT id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id, reference_url
         FROM input_rows
         ON CONFLICT (message_id, provider_attachment_id)
-        DO NOTHING
+        DO UPDATE SET filename=EXCLUDED.filename,mime_type=EXCLUDED.mime_type,
+            size_bytes=EXCLUDED.size_bytes,content_id=EXCLUDED.content_id,reference_url=EXCLUDED.reference_url
         "#,
     )
         .bind(&attachment_ids_repeated)
@@ -143,6 +159,7 @@ pub async fn insert_attachments(
         .bind(&mime_types)
         .bind(&size_bytes_vec)
         .bind(&content_ids)
+        .bind(&reference_urls)
         .execute(&mut *tx)
         .await?;
 
@@ -194,7 +211,7 @@ pub async fn fetch_db_attachments_in_bulk(
     let results = sqlx::query_as!(
         db::attachment::Attachment,
         r#"
-        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at
+        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at, ea.reference_url
         FROM email_attachments ea
         LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id
         WHERE ea.message_id = ANY($1)
@@ -244,7 +261,7 @@ pub async fn fetch_attachment_by_id(
         SELECT 
             a.id, a.message_id, a.provider_attachment_id, 
             a.filename, a.mime_type, a.size_bytes, 
-            a.content_id, eas.sfs_id as "sfs_id?", a.created_at, m.provider_id as "message_provider_id!"
+            a.content_id, eas.sfs_id as "sfs_id?", a.created_at, a.reference_url, m.provider_id as "message_provider_id!"
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         LEFT JOIN email_attachments_sfs eas ON a.id = eas.attachment_id
@@ -269,6 +286,7 @@ pub async fn fetch_attachment_by_id(
                 content_id: record.content_id,
                 sfs_id: record.sfs_id,
                 created_at: record.created_at,
+                reference_url: record.reference_url,
             };
 
             // Map to service attachment and include the message provider ID
@@ -301,7 +319,7 @@ pub async fn get_attachments_by_thread_ids(
             a.size_bytes,
             a.content_id,
             eas.sfs_id as "sfs_id?",
-            a.created_at,
+            a.created_at, a.reference_url,
             m.thread_id
         FROM 
             email_attachments a
@@ -334,6 +352,7 @@ pub async fn get_attachments_by_thread_ids(
             content_id: record.content_id,
             sfs_id: record.sfs_id,
             created_at: record.created_at,
+            reference_url: record.reference_url,
         };
 
         // Map the db attachment to a service attachment

@@ -300,6 +300,69 @@ async fn create_maps_the_input_and_answers_with_the_committed_event() {
 }
 
 #[tokio::test]
+async fn create_and_update_forward_conference_changes_without_losing_calendar_selection() {
+    let calendar = Uuid::from_u128(0xca);
+    let cases = [
+        (
+            "conference: MICROSOFT_TEAMS",
+            Some(ConferenceChange::MicrosoftTeams),
+        ),
+        (
+            "conference: GOOGLE_MEET",
+            Some(ConferenceChange::GoogleMeet),
+        ),
+        ("conference: NONE", Some(ConferenceChange::Removed)),
+        ("conference: null", None),
+        ("", None),
+    ];
+    for (conference, expected) in cases {
+        let mutations = Arc::new(FakeMutations::default());
+        let committed = Arc::new(FakeCommitted {
+            change: Some(committed_change()),
+            ..Default::default()
+        });
+        let response = execute(
+            Arc::clone(&mutations),
+            committed,
+            &format!(r#"mutation {{
+                createCalendarEvent(input: {{
+                    calendarId: "{calendar}", emailLinkId: "{LINK_ID}", title: "Meeting",
+                    time: {{ timed: {{ startsAt: "2026-10-06T15:00:00Z", endsAt: "2026-10-06T15:30:00Z" }} }},
+                    {conference}
+                }}) {{ event {{ id }} }}
+                updateCalendarEvent(input: {{
+                    eventId: "{EVENT_ID}", calendarId: "{calendar}", {conference}
+                }}) {{ event {{ id }} }}
+            }}"#),
+            true,
+        ).await;
+
+        assert!(
+            response.errors.is_empty(),
+            "{conference}: {:?}",
+            response.errors
+        );
+        let calls = mutations.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        let (viewer, Call::Create(link_id, calendar_id, draft)) = &calls[0] else {
+            panic!("expected a create");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*link_id, Some(LINK_ID));
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(draft.conference, expected);
+        let (viewer, Call::Update(event_id, calendar_id, patch, scope)) = &calls[1] else {
+            panic!("expected an update");
+        };
+        assert_eq!(viewer, VIEWER);
+        assert_eq!(*event_id, EVENT_ID);
+        assert_eq!(*calendar_id, Some(calendar));
+        assert_eq!(*scope, CalendarUpdateScope::All);
+        assert_eq!(patch.conference, expected);
+    }
+}
+
+#[tokio::test]
 async fn update_scopes_resolve_like_the_rest_endpoint() {
     let start = Utc.with_ymd_and_hms(2026, 10, 6, 15, 0, 0).unwrap();
     let cases: [(&str, Result<CalendarUpdateScope, &str>); 5] = [

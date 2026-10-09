@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.delete_requested,m.provider_id,f.is_present FROM email_mailbox_drafts d JOIN email_messages m ON m.id = d.message_id JOIN email_message_mailbox_facts f ON f.id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "delete_requested",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_present",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "69ba7631bbc696b9a092e336a65868d522abf39c5e1b6fd172117a88790a1290"
+}

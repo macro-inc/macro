@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.revision,d.delete_requested,m.is_sent,f.in_trash,\n                (l.macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2)) AS \"authorized!\"\n            FROM email_mailbox_drafts d JOIN email_messages m ON m.id = d.message_id\n                JOIN email_message_mailbox_facts f ON f.id = m.id JOIN email_links l ON l.id = d.link_id\n            WHERE d.message_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "delete_requested",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "in_trash",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "46c5393ca5a773cb37ee0dff2b20f72c7f0eca12dd789f03b8c2f6e84c64706a"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_mailbox_watch_work(link_id) VALUES($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "020b421bc53919bbdd63808aa1cc766ae2adbd194f9e863008c1c84e8df94185"
+}

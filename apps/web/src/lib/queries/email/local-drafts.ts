@@ -129,6 +129,7 @@ export function localDraftMessage(local: LocalDraft): EmailMessage {
     thread_db_id: local.serverThreadId ?? local.threadId ?? local.draftId,
     link_id: local.inboxId ?? '',
     is_draft: true,
+    is_read: true,
     created_at: time,
     updated_at: time,
     body_html_sanitized: content.body_html,
@@ -137,7 +138,19 @@ export function localDraftMessage(local: LocalDraft): EmailMessage {
     bcc: content.bcc ?? [],
     from: { email: local.senderEmail ?? '' },
     labels: [],
-    attachments: [],
+    attachments: local.attachments.flatMap((attachment) =>
+      attachment.type === 'native'
+        ? [
+            {
+              db_id: attachment.attachmentId,
+              filename: attachment.fileName,
+              mime_type: attachment.mimeType,
+              size_bytes: attachment.fileSize,
+              reference_url: attachment.referenceUrl,
+            },
+          ]
+        : []
+    ),
     attachments_draft: local.attachments.flatMap((attachment) =>
       attachment.type === 'remote'
         ? [

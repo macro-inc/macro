@@ -109,6 +109,8 @@ pub struct SimpleMessage {
 /// A fully assembled message with all sub-types resolved.
 #[derive(Debug, Clone)]
 pub struct Message {
+    /// Durable provider write state, when synchronization or delivery is tracked.
+    pub operation_status: Option<super::mailbox_operation::MessageOperationStatus>,
     /// Immutable email-owned scheduling details.
     pub calendar_invitations: Vec<super::calendar_invitation::CalendarInvitation>,
     /// Database ID of the message.

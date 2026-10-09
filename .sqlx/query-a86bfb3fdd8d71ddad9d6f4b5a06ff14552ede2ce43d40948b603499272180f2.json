@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages m SET updated_at = now(),has_attachments =\n                EXISTS (SELECT 1 FROM email_attachments_drafts a WHERE a.draft_id = m.id)\n                OR EXISTS (SELECT 1 FROM email_attachments_fwd a WHERE a.message_id = m.id)\n                OR EXISTS (SELECT 1 FROM email_attachments a WHERE a.message_id = m.id AND NOT EXISTS (\n                    SELECT 1 FROM email_draft_attachment_removals r WHERE r.message_id = m.id AND (r.provider_id = a.provider_attachment_id OR trim(both '<>' from r.content_id) = trim(both '<>' from a.content_id))))\n            WHERE m.id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a86bfb3fdd8d71ddad9d6f4b5a06ff14552ede2ce43d40948b603499272180f2"
+}

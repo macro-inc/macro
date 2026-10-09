@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_events (id, owner_id, source_link_id, ical_uid, title, starts_at, ends_at, canonical_source_kind) VALUES ($1, $2, $3, $4, 'calendar access', '2026-01-01', '2026-01-02', 'google') ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3a1113165192ebbcfc408f47ac619aa213e32acb94b1d488e35a090e67c25cfa"
+}

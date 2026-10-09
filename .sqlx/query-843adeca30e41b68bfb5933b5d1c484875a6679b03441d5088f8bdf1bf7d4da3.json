@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE crm_cleanup_candidates SET created_at = now() - INTERVAL '2 days'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "843adeca30e41b68bfb5933b5d1c484875a6679b03441d5088f8bdf1bf7d4da3"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_object_cleanup SET available_at = now() WHERE object_key = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a7e3b3a429cd08a0c835908b0d10995f849bbaff225fc35d91e3f86f12bed79"
+}

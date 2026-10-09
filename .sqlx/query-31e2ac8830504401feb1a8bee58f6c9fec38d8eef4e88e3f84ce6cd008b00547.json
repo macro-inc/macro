@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) AS \"count!\"\n        FROM \"ProjectPermission\" permission\n        JOIN \"UserHistory\" history ON history.\"itemId\" = permission.\"projectId\"\n        JOIN entity_access access ON access.entity_id::text = permission.\"projectId\"\n        WHERE permission.\"projectId\" = $1\n          AND history.\"itemType\" = 'project'\n          AND access.access_level = 'owner'\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "31e2ac8830504401feb1a8bee58f6c9fec38d8eef4e88e3f84ce6cd008b00547"
+}

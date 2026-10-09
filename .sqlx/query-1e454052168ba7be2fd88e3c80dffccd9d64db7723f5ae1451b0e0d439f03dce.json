@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FROM email_mailbox_lifecycle_outbox WHERE link_id = $1 AND payload->>'kind' = 'revoke_microsoft_grant'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1e454052168ba7be2fd88e3c80dffccd9d64db7723f5ae1451b0e0d439f03dce"
+}

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_notification (user_id, notification_id)\n           VALUES ('user', '00000000-0000-0000-0000-000000000001')\n           RETURNING state as \"state!: NotificationState\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: NotificationState",
+        "type_info": {
+          "Custom": {
+            "name": "notification_state",
+            "kind": {
+              "Enum": [
+                "unseen",
+                "seen",
+                "done"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a267d9547401de7b88e22bf9522952d1d2382bd358b59eb7997e6171f799bf0d"
+}

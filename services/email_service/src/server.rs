@@ -215,20 +215,153 @@ pub async fn run() -> anyhow::Result<()> {
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
-    let calendar_mutation_service = Arc::new(CalendarMutationServiceImpl::new(
-        PgCalendarRepository::new(db.clone()),
-        GoogleCalendarClient::with_gate(
-            reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .context("failed to build the google calendar mutation http client")?,
-            RedisCalendarRequestGate::new((*redis_client).clone()),
-        ),
-        CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
-        macro_event_broker.clone(),
-        ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
-    ));
+    let calendar_mutation_service = Arc::new(
+        CalendarMutationServiceImpl::new(
+            PgCalendarRepository::new(db.clone()),
+            calendar_events::domain::providers::CalendarProviders {
+                outlook: email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                    email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                        redis_conn.clone(),
+                    ),
+                ))?
+                .with_rejected_token_refresh(Arc::new(
+                    CalendarTokenProviderAdapter::new(
+                        redis_conn.clone(),
+                        auth_service_client.clone(),
+                    ),
+                )),
+                google: GoogleCalendarClient::with_gate(
+                    reqwest::Client::builder()
+                        .timeout(std::time::Duration::from_secs(30))
+                        .build()
+                        .context("failed to build the google calendar mutation http client")?,
+                    RedisCalendarRequestGate::new((*redis_client).clone()),
+                ),
+            },
+            CalendarTokenProviderAdapter::new(redis_conn.clone(), auth_service_client.clone()),
+            macro_event_broker.clone(),
+            ConnectionGatewayCalendarRefresh::new(connection_gateway_client.clone(), db.clone()),
+        )
+        .with_outlook_writes_enabled(config.outlook_writes_enabled),
+    );
+    let outlook_api: crate::api::context::OutlookApi =
+        email_api_client::domain::service::mailbox::MailboxApiService::new(
+            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+            ))?,
+            crate::api::context::MicrosoftTokens::new(
+                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                crate::outbound::email_api::MicrosoftCredentialsClient(
+                    auth_service_client.as_ref().clone(),
+                ),
+            ),
+            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        );
+    let transfer_bytes = Arc::new(
+        email::domain::mailbox::drafts::content::DraftContentService {
+            repository: EmailPgRepo::new(db.clone()),
+            bytes: crate::outbound::mailbox_drafts::MailboxDraftContent {
+                provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                    gmail: email_api.clone(),
+                    outlook: crate::outbound::email_api::ProviderMailboxGateway(
+                        outlook_api.clone(),
+                    ),
+                },
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        },
+    );
     let api_result = api::setup_and_serve(ApiContext {
+        draft_transfers: Arc::new(email::domain::draft_transfer::DraftTransferService {
+            repository: EmailPgRepo::new(db.clone()),
+            bytes: transfer_bytes,
+            storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+            },
+        }),
+        inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
+            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+                crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
+            ))?,
+            db.clone(),
+            auth_service_client.as_ref().clone(),
+            sqs_client.as_ref().clone(),
+            connection_gateway_client.clone(),
+        )),
+        mailbox_settings: Arc::new(
+            email::domain::mailbox::settings::MailboxSettingsService::new(
+                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+                crate::outbound::mailbox_settings::ProviderMailboxSettings {
+                    gmail: email_api.clone(),
+                    outlook: outlook_api.clone(),
+                },
+            ),
+        ),
+        mailbox_notifications: Arc::new(
+            email::domain::mailbox::watches::MailboxWatchNotifications(
+                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
+            ),
+        ),
+        inbox_catalog: Arc::new(email::domain::mailbox::catalog::InboxCatalogService(
+            crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
+        )),
+        inbox_health: Arc::new(crate::composition::inbox_health(
+            db.clone(),
+            email_api.clone(),
+            auth_service_client.as_ref().clone(),
+            redis_client.as_ref().clone(),
+            sqs_client.as_ref().clone(),
+            macro_event_broker.clone(),
+        )),
+        attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
+            repository: EmailPgRepo::new(db.clone()),
+            provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+                gmail: email_api.clone(),
+                outlook: crate::outbound::email_api::ProviderMailboxGateway(outlook_api),
+            },
+            files: crate::outbound::attachment_access::MailAttachmentFiles {
+                db: db.clone(),
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+                distribution_url: config.email_service_cloudfront_distribution_url.to_string(),
+                public_key_id: config
+                    .email_service_cloudfront_signer_public_key_id
+                    .to_string(),
+                private_key: config
+                    .email_service_cloudfront_signer_private_key
+                    .as_ref()
+                    .to_owned(),
+                url_ttl_seconds: config.email_service_presigned_url_ttl_secs,
+                dss: dss_client.clone(),
+                sfs: sfs_client.clone(),
+                properties: system_properties_service.clone(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        }),
+        draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
+            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                s3: s3_client.clone(),
+                bucket: config.attachment_bucket.to_string(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        }),
+        mailbox_initializer: Arc::new(
+            email::domain::mailbox::initialization::MailboxInitializationService::new(
+                crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),
+                crate::outbound::mailbox_init::MicrosoftGrantSource(
+                    auth_service_client.as_ref().clone(),
+                ),
+            )
+            .with_connections_enabled(config.outlook_connections_enabled),
+        ),
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.
         invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(

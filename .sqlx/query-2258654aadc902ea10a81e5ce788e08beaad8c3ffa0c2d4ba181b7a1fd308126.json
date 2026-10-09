@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON(c.intent->>'kind',c.intent->'value'->>'name') c.id,c.intent,c.status,c.updated_at\n        FROM email_mailbox_commands c WHERE c.link_id=$1 AND EXISTS(SELECT 1 FROM email_mailbox_command_targets t\n            JOIN email_messages m ON m.id=t.message_id WHERE t.command_id=c.id AND m.thread_id=$2 AND m.link_id=$1)\n        ORDER BY c.intent->>'kind',c.intent->'value'->>'name',c.accepted_order DESC LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "intent",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2258654aadc902ea10a81e5ce788e08beaad8c3ffa0c2d4ba181b7a1fd308126"
+}

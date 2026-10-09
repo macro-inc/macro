@@ -234,7 +234,9 @@ function AttachmentItem(props: {
         {(attachment) => (
           <EmailAttachmentPill
             attachment={{
-              fileName: attachment().fileName,
+              fileName: attachment().uploadPending
+                ? `${attachment().fileName} — upload unfinished`
+                : attachment().fileName,
               mimeType: attachment().contentType,
             }}
             removable
@@ -243,7 +245,13 @@ function AttachmentItem(props: {
           />
         )}
       </Match>
-      <Match when={props.attachment.type === 'forwarded' && props.attachment}>
+      <Match
+        when={
+          (props.attachment.type === 'forwarded' ||
+            props.attachment.type === 'native') &&
+          props.attachment
+        }
+      >
         {(attachment) => (
           <EmailAttachmentPill
             attachment={{

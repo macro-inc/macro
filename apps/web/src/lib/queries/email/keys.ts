@@ -3,6 +3,9 @@ import type { PreviewViewStandardLabel } from '@service-email/generated/schemas'
 
 export const emailKeys = createQueryKeys('email', {
   all: null,
+  settingsOperations: (linkId: string) => ({ queryKey: [linkId] }),
+  threadOperations: (threadId: string) => ({ queryKey: [threadId] }),
+  messageOperation: (messageId: string) => ({ queryKey: [messageId] }),
   labels: null,
   links: null,
   linksHealthProbe: null,

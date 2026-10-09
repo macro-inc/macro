@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_settings_work SET revision=revision+1,completed_revision=revision+1 WHERE link_id=$1 AND kind='create_label' AND resource_key=$2 AND completed_revision<revision",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8d61496d22a1178c78b6b3473132501a657a637db1801f4d0cb20487e3f3f1d3"
+}

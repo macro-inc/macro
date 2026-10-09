@@ -21,4 +21,5 @@ pub fn router() -> Router<ApiContext> {
         .route("/gmail", post(gmail::init_gmail_link_handler))
         .route("/gmail/status", get(gmail::check_gmail_link_status_handler))
         .route("/outlook", post(outlook::init_outlook_link_handler))
+        .route("/email/providers", get(outlook::email_connection_providers))
 }

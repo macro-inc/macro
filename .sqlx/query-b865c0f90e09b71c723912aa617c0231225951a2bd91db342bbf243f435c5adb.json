@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_transfers SET state='retained',lease_id=NULL,lease_until=NULL WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b865c0f90e09b71c723912aa617c0231225951a2bd91db342bbf243f435c5adb"
+}

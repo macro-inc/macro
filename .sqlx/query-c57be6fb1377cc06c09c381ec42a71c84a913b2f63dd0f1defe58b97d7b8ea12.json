@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT is_sync_active,disconnect_requested_at FROM email_links WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_sync_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "disconnect_requested_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "c57be6fb1377cc06c09c381ec42a71c84a913b2f63dd0f1defe58b97d7b8ea12"
+}

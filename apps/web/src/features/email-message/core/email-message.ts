@@ -1,4 +1,5 @@
 import type { CalendarInvitation } from './calendar-invitation';
+import type { MessageOperation } from './message-operation';
 /** Feature-owned values. Transport adaptation belongs to queries. */
 export interface EmailContact {
   email: string;
@@ -7,6 +8,7 @@ export interface EmailContact {
 }
 
 export interface EmailAttachment {
+  reference_url?: string | null;
   content_id?: string | null;
   db_id: string;
   filename?: string | null;
@@ -16,6 +18,9 @@ export interface EmailAttachment {
 }
 
 export interface EmailDraftAttachment {
+  upload_pending?: boolean;
+  content_id?: string | null;
+  is_inline?: boolean;
   content_type: string;
   file_name: string;
   id: string;
@@ -36,6 +41,7 @@ export interface EmailLabel {
 }
 
 export interface EmailMessage {
+  operation?: MessageOperation | null;
   calendar_invitations?: CalendarInvitation[];
   attachments: EmailAttachment[];
   attachments_draft: EmailDraftAttachment[];
@@ -51,6 +57,7 @@ export interface EmailMessage {
   from?: null | EmailContact;
   internal_date_ts?: string | null;
   is_draft: boolean;
+  is_read: boolean;
   labels: EmailLabel[];
   link_id: string;
   provider_id?: string | null;

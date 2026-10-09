@@ -41,3 +41,17 @@ export async function updateEmailThreadLabel(
   }
   return result;
 }
+
+/** Refresh missing threads after semantic mailbox writes, just as for label writes. */
+export async function updateEmailThreadState(
+  args: Parameters<typeof emailClient.updateThreadState>[0]
+) {
+  const result = await emailClient.updateThreadState(args);
+  if (
+    result.isErr() &&
+    result.error.some((error) => error.code === 'NOT_FOUND')
+  ) {
+    await refreshEmailThreadCache(args.thread_id);
+  }
+  return result;
+}

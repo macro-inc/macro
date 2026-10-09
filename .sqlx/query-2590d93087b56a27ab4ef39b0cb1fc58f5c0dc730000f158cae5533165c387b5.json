@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET position = $2,initial_complete = initial_complete OR $3,\n        last_completed_at = CASE WHEN $3 THEN now() ELSE last_completed_at END,next_run_at = now() + make_interval(secs => $4),lease_id = NULL,lease_until = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2590d93087b56a27ab4ef39b0cb1fc58f5c0dc730000f158cae5533165c387b5"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_link_microsoft_scopes(link_id,grant_generation,granted_scopes) VALUES($1,1,ARRAY['Calendars.ReadWrite'])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a493a3ed85c8e58cd5f6259578e97a1bb0f0ab44e56e06e4408a45cebe3d4d8"
+}

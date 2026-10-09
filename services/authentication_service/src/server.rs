@@ -108,6 +108,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let account_link_state_key = config.account_link_state_key()?;
     let signup_policy = Arc::new(
         config
             .signup_policy()
@@ -228,6 +229,23 @@ pub async fn run() -> anyhow::Result<()> {
         None => auth_client,
     };
     tracing::trace!("initialized auth client");
+    let microsoft_auth = microsoft_token_cipher.map(|cipher| {
+        use crate::{
+            domain::microsoft::{MicrosoftAuth, MicrosoftAuthService},
+            outbound::microsoft::{MicrosoftOAuthProvider, PgMicrosoftGrants},
+        };
+        Arc::new(
+            MicrosoftAuthService::new(
+                PgMicrosoftGrants::new(db.clone()),
+                MicrosoftOAuthProvider::new(
+                    Arc::new(auth_client.clone()),
+                    account_link_state_key.clone(),
+                ),
+                cipher,
+            )
+            .with_connections_enabled(config.outlook_connections_enabled),
+        ) as Arc<dyn MicrosoftAuth>
+    });
 
     let document_storage_service_client = DocumentStorageServiceClient::new(
         config.service_internal_auth_key.to_string().clone(),
@@ -453,8 +471,6 @@ pub async fn run() -> anyhow::Result<()> {
     let foreign_entity_service =
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone()));
 
-    let account_link_state_key = config.account_link_state_key()?;
-
     let github_link_service_impl = GithubLinkServiceImpl::new(
         PgGithubRepo::new(db.clone()),
         GithubOauthImpl::default(),
@@ -606,12 +622,30 @@ pub async fn run() -> anyhow::Result<()> {
         .map_err(|error| anyhow::anyhow!("{error:?}"))?,
     );
 
+    // Cleanup continues while new connections are disabled or OAuth is unconfigured.
+    let grant_repository = crate::outbound::microsoft::PgMicrosoftGrants::new(db.clone());
+    let grant_cleanup = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(MICROSOFT_GRANT_CLEANUP_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            interval.tick().await;
+            if let Err(error) =
+                crate::domain::microsoft::collect_expired_grants(&grant_repository).await
+            {
+                tracing::error!(?error, "Microsoft grant expiry cleanup failed");
+            }
+        }
+    });
+
     let server_result = api::setup_and_serve(
         ApiContext {
+            inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
+                email::outbound::EmailPgRepo::new(db.clone()),
+            )),
             db,
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
-            microsoft_token_cipher,
+            microsoft_auth,
             cursor_api_key_cipher,
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
@@ -674,6 +708,8 @@ pub async fn run() -> anyhow::Result<()> {
     )
     .await;
 
+    grant_cleanup.abort();
+    let _ = grant_cleanup.await;
     // A sweep interrupted here leaves nothing half done: each settlement
     // step commits on its own and the next sweep, on any replica, resumes.
     if let Some(sweep) = settlement_sweep {
@@ -697,6 +733,7 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 // SAFETY: this is not a secret value
 const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";

@@ -194,6 +194,7 @@ function optimisticDraftEntity(
   const existing = args.existingDraft;
   return {
     __typename: 'GraphqlSoupEmailMessage',
+    operationStatus: existing?.operationStatus ?? null,
     id: String(args.draftId),
     providerId: args.providerId ?? existing?.providerId ?? null,
     threadId: args.threadDbId,

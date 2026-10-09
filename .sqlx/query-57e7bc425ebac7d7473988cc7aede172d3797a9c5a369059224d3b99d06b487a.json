@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET provider_tenant_id='tenant',provider_mailbox_id='mailbox' WHERE id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57e7bc425ebac7d7473988cc7aede172d3797a9c5a369059224d3b99d06b487a"
+}

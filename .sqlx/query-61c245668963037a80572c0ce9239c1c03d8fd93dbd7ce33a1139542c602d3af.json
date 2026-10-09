@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"SharePermission\"\n        SET \"linkShare\" = 'TEAM',\n            \"linkShareAccessLevel\" = 'view'\n        WHERE id = 'sp-public'\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "61c245668963037a80572c0ce9239c1c03d8fd93dbd7ce33a1139542c602d3af"
+}

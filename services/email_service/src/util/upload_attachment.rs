@@ -69,6 +69,16 @@ pub struct UploadAttachmentContext<'a> {
     pub link: &'a link::Link,
 }
 
+/// Provider-independent storage context for already downloaded attachment bytes.
+pub struct AttachmentStorageContext<'a> {
+    pub db: &'a sqlx::PgPool,
+    pub dss_client: &'a DocumentStorageServiceClient,
+    pub sfs_client: &'a StaticFileServiceClient,
+    pub system_properties_service:
+        &'a Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    pub link: &'a link::Link,
+}
+
 /// Upload an email attachment to DSS as a document or SFS as media.
 pub async fn upload_attachment(
     ctx: UploadAttachmentContext<'_>,
@@ -78,6 +88,26 @@ pub async fn upload_attachment(
     let attachment_data =
         fetch_gmail_attachment_data(ctx.email_api, ctx.link, &args.attachment_metadata).await?;
 
+    store_attachment(
+        AttachmentStorageContext {
+            db: ctx.db,
+            dss_client: ctx.dss_client,
+            sfs_client: ctx.sfs_client,
+            system_properties_service: ctx.system_properties_service,
+            link: ctx.link,
+        },
+        args,
+        attachment_data,
+    )
+    .await
+}
+
+/// Share DSS/SFS persistence across providers after scoped download succeeds.
+pub async fn store_attachment(
+    ctx: AttachmentStorageContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> Result<String, UploadAttachmentError> {
     let mime_type = args.attachment_metadata.mime_type.clone();
 
     match args.upload_destination {
@@ -93,7 +123,7 @@ pub async fn upload_attachment(
 /// Uploads an image or video attachment to SFS.
 #[tracing::instrument(skip(ctx, attachment_data), err)]
 async fn upload_media_attachment(
-    ctx: &UploadAttachmentContext<'_>,
+    ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
     mime_type: String,
@@ -128,7 +158,7 @@ async fn upload_media_attachment(
 /// Uploads a document attachment to DSS.
 #[tracing::instrument(skip(ctx, attachment_data), err)]
 async fn upload_document_attachment(
-    ctx: &UploadAttachmentContext<'_>,
+    ctx: &AttachmentStorageContext<'_>,
     args: &AttachmentUploadArgs,
     attachment_data: Vec<u8>,
 ) -> Result<String, UploadAttachmentError> {

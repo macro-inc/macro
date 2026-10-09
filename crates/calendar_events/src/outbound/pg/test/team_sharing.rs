@@ -302,7 +302,7 @@ async fn team_sources_require_current_membership_and_verified_source_entitlement
         2,
     );
     other.event.conference_url = Some("https://reader.example.com".into());
-    let CalendarEventSource::Google(source) = &mut other.source;
+    let source = other.source.details_mut();
     source.observed_access_role = Some("reader".to_owned());
     repo.upsert_event_fixture(other).await.unwrap();
     sqlx::query!(

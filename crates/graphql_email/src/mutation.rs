@@ -20,7 +20,49 @@ use uuid::Uuid;
 mod test;
 
 /// Domain-facing capability required by email thread mutations.
+#[derive(async_graphql::Enum, Clone, Copy, PartialEq, Eq)]
+pub enum EmailMessageResolutionAction {
+    /// Apply local edits over the reviewed provider version.
+    KeepLocal,
+    /// Replace the local editor content with the provider's current draft.
+    UseProvider,
+    /// Reconcile the recorded uncertain operation again.
+    Recheck,
+    /// Deliberately retry delivery after acknowledging possible duplication.
+    RetrySend,
+}
+
+/// Resolve exactly the message revision and provider version the user reviewed.
+#[derive(InputObject)]
+pub struct ResolveEmailMessageOperationInput {
+    /// Stable Macro message ID.
+    pub message_id: ID,
+    /// Opaque revision returned by operationStatus.
+    pub revision: String,
+    /// Opaque provider version returned by operationStatus.
+    pub remote_version: Option<String>,
+    /// Explicit recovery action.
+    pub action: EmailMessageResolutionAction,
+    /// Required only for RetrySend; never inferred from a timeout.
+    #[graphql(default)]
+    pub accept_duplicate_risk: bool,
+}
+
+/// Domain-facing capability required by email thread mutations.
 pub trait EmailMutationService: Send + Sync + 'static {
+    /// Resolve an owned/delegated message's conflict or uncertain delivery.
+    fn resolve_email_message_operation(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> impl Future<Output = Result<Uuid, EmailErr>> + Send;
+    /// Apply provider-neutral state to an inbox owned by or delegated to the actor.
+    fn set_email_thread_state(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
     /// Mark an accessible email thread as seen by the authenticated user.
     fn mark_email_thread_seen(
         &self,
@@ -74,6 +116,22 @@ impl<S> EmailMutationService for S
 where
     S: EmailService,
 {
+    async fn resolve_email_message_operation(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        self.resolve_message_operation(user_id, request).await
+    }
+    async fn set_email_thread_state(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    ) -> Result<(), EmailErr> {
+        self.change_thread_mailbox_state(user_id, thread_id, action)
+            .await
+    }
     async fn mark_email_thread_seen(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -176,6 +234,30 @@ pub struct MarkEmailThreadSeenInput {
 pub struct MarkEmailThreadUnreadInput {
     /// Email thread to mark unread; its inbox determines the UNREAD label.
     pub thread_id: ID,
+}
+
+/// Semantic state fields shared by every mailbox provider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, async_graphql::Enum)]
+pub enum EmailThreadStateField {
+    /// Read/unread state.
+    Read,
+    /// Follow-up star/flag.
+    Starred,
+    /// Recoverable trash membership.
+    Trashed,
+    /// Junk membership.
+    Junk,
+}
+
+/// Set one mailbox fact without looking up provider labels on the client.
+#[derive(InputObject)]
+pub struct SetEmailThreadStateInput {
+    /// Accessible thread to change.
+    pub thread_id: ID,
+    /// Semantic mailbox fact.
+    pub field: EmailThreadStateField,
+    /// Desired state.
+    pub value: bool,
 }
 
 /// Input for archive-based Done and its inverse. No client label lookup is needed.
@@ -352,6 +434,7 @@ where
 /// attachments. The service fails the save response if attachment loading fails.
 fn saved_draft_message(saved: SavedUserDraft) -> Message {
     let SavedUserDraft {
+        operation_status,
         draft,
         link,
         created_at,
@@ -369,6 +452,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         draft.body_text.as_deref(),
     );
     Message {
+        operation_status,
         db_id: draft.db_id,
         provider_id: draft.provider_id,
         thread_db_id: draft.thread_db_id,
@@ -537,6 +621,70 @@ where
             })?;
 
         reload_thread::<O>(ctx, user_id, thread_id).await
+    }
+
+    /// Set provider-neutral mailbox state and return the authoritative thread.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn set_email_thread_state(
+        &self,
+        ctx: &Context<'_>,
+        input: SetEmailThreadStateInput,
+    ) -> async_graphql::Result<O::Thread> {
+        use email::domain::models::mailbox_action::MailboxAction;
+        let user = require_authenticated_user(ctx)?;
+        let thread = parse_id(input.thread_id, "threadId")?;
+        let action = match input.field {
+            EmailThreadStateField::Read => MailboxAction::Read(input.value),
+            EmailThreadStateField::Starred => MailboxAction::Flagged(input.value),
+            EmailThreadStateField::Trashed => MailboxAction::Trashed(input.value),
+            EmailThreadStateField::Junk => MailboxAction::Junk(input.value),
+        };
+        ctx.data::<Arc<S>>()?
+            .set_email_thread_state(user.clone(), thread, action)
+            .await
+            .map_err(|e| mutation_error(&e))?;
+        reload_thread::<O>(ctx, user, thread).await
+    }
+
+    /// Resolve an email write conflict and return the current canonical thread.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn resolve_email_message_operation(
+        &self,
+        ctx: &Context<'_>,
+        input: ResolveEmailMessageOperationInput,
+    ) -> async_graphql::Result<O::Thread> {
+        use email::domain::models::mailbox_operation::{
+            MessageResolutionAction, MessageResolutionRequest,
+        };
+        let user = require_authenticated_user(ctx)?;
+        let message_id = parse_id(input.message_id, "messageId")?;
+        let revision = input
+            .revision
+            .parse::<i64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| async_graphql::Error::new("invalid operation revision"))?;
+        let action = match input.action {
+            EmailMessageResolutionAction::KeepLocal => MessageResolutionAction::KeepLocal,
+            EmailMessageResolutionAction::UseProvider => MessageResolutionAction::UseProvider,
+            EmailMessageResolutionAction::Recheck => MessageResolutionAction::Recheck,
+            EmailMessageResolutionAction::RetrySend => MessageResolutionAction::RetrySend,
+        };
+        let thread = ctx
+            .data::<Arc<S>>()?
+            .resolve_email_message_operation(
+                user.clone(),
+                MessageResolutionRequest {
+                    message_id,
+                    revision,
+                    remote_version: input.remote_version,
+                    action,
+                    accept_duplicate_risk: input.accept_duplicate_risk,
+                },
+            )
+            .await
+            .map_err(|error| mutation_error(&error))?;
+        reload_thread::<O>(ctx, user, thread).await
     }
 
     /// Set archive-based Done and return the primary-backed canonical thread.

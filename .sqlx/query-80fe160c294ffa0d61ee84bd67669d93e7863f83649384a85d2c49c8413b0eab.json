@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sync_streams SET notified_at=clock_timestamp(),next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80fe160c294ffa0d61ee84bd67669d93e7863f83649384a85d2c49c8413b0eab"
+}

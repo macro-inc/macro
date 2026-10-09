@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.body_text,d.desired_content,d.state FROM email_messages m JOIN email_mailbox_drafts d ON d.message_id = m.id WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "desired_content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "d495a3306269630efe4c52974e235cb1172df9b076986fec0005fb9a45059e63"
+}

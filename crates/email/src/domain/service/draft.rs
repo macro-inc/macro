@@ -8,6 +8,7 @@ use crate::domain::{
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use frecency::domain::ports::FrecencyQueryService;
+use macro_user_id::cowlike::CowLike;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
@@ -23,6 +24,65 @@ where
     CS: crm::domain::service::CrmService,
     anyhow::Error: From<T::Err>,
 {
+    pub(crate) async fn message_operation_status_impl(
+        &self,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        message_id: Uuid,
+    ) -> Result<Option<crate::domain::models::mailbox_operation::MessageOperationStatus>, EmailErr>
+    {
+        let ids = self
+            .email_repo
+            .inboxes_for_macro_id(actor)
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|link| link.id)
+            .collect::<Vec<_>>();
+        self.email_repo
+            .get_simple_message(message_id, &ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(message_id))?;
+        Ok(self
+            .email_repo
+            .message_operation_facts(&[message_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .remove(&message_id)
+            .map(Into::into))
+    }
+
+    pub(crate) async fn resolve_message_operation_impl(
+        &self,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        request: crate::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        let ids: Vec<Uuid> = self
+            .email_repo
+            .inboxes_for_macro_id(actor.clone())
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
+        self.email_repo
+            .get_simple_message(request.message_id, &ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(request.message_id))?;
+        let facts = self
+            .email_repo
+            .message_operation_facts(&[request.message_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .remove(&request.message_id)
+            .ok_or(EmailErr::MessageNotFound(request.message_id))?;
+        let plan = crate::domain::models::mailbox_operation::plan_resolution(facts, request)?;
+        self.email_repo
+            .commit_message_resolution(&actor, plan)
+            .await
+    }
+
     #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
     pub(crate) async fn create_draft_impl(
         &self,
@@ -44,6 +104,7 @@ where
         link_id: Option<Uuid>,
         mut input: CreateDraftInput,
     ) -> Result<SavedUserDraft, EmailErr> {
+        input.actor = Some(macro_id.clone().into_owned());
         let accessible_inboxes = self
             .email_repo
             .inboxes_for_macro_id(macro_id.clone())
@@ -64,6 +125,7 @@ where
             mut send_times,
             timestamps,
             mut labels,
+            mut operations,
         ) = tokio::try_join!(
             self.email_repo.attachments_by_message_ids(&message_ids),
             self.email_repo
@@ -75,6 +137,7 @@ where
             self.email_repo
                 .message_timestamps(draft.db_id, draft.link_id),
             self.email_repo.labels_by_message_ids(&message_ids),
+            self.email_repo.message_operation_facts(&message_ids),
         )
         .map_err(anyhow::Error::from)?;
         let timestamps =
@@ -85,6 +148,7 @@ where
         draft.send_time = send_times.remove(&draft.db_id);
 
         Ok(SavedUserDraft {
+            operation_status: operations.remove(&draft.db_id).map(Into::into),
             created_at: timestamps.created_at,
             updated_at: timestamps.updated_at,
             labels: labels.remove(&draft.db_id).unwrap_or_default(),
@@ -176,7 +240,7 @@ where
     ) -> Result<DeletedUserDraft, EmailErr> {
         let accessible_link_ids: Vec<Uuid> = self
             .email_repo
-            .inboxes_for_macro_id(macro_id)
+            .inboxes_for_macro_id(macro_id.clone())
             .await
             .map_err(anyhow::Error::from)?
             .iter()
@@ -228,7 +292,12 @@ where
 
         let deletion = self
             .email_repo
-            .delete_draft_message(msg.db_id, msg.thread_db_id, &accessible_link_ids)
+            .delete_draft_message(
+                msg.db_id,
+                msg.thread_db_id,
+                &accessible_link_ids,
+                Some(macro_id.as_ref()),
+            )
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -244,7 +313,7 @@ where
                 .get_simple_message(msg.db_id, &accessible_link_ids)
                 .await
                 .map_err(anyhow::Error::from)?;
-            if raced.is_some_and(|m| m.is_sent || !m.is_draft) {
+            if raced.as_ref().is_some_and(|m| m.is_sent || !m.is_draft) {
                 return Err(EmailErr::MessageAlreadySent(draft_id));
             }
             if self
@@ -254,6 +323,9 @@ where
                 .map_err(anyhow::Error::from)?
                 .contains_key(&msg.db_id)
             {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
+            if raced.is_some() {
                 return Err(EmailErr::MessageDeliveryConflict(draft_id));
             }
             return Ok(DeletedUserDraft {
@@ -287,7 +359,12 @@ where
         let link_id = link.id;
         let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
 
-        self.validate_existing_message(link_id, &accessible_link_ids, &mut input)
+        // The provider binding comes from a stored draft, never from a client.
+        if link.provider == crate::domain::models::UserProvider::Outlook {
+            input.provider_id = None;
+            input.provider_thread_id = None;
+        }
+        self.validate_existing_message(link_id, accessible_inboxes, &mut input)
             .await?;
 
         self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
@@ -438,16 +515,17 @@ where
     async fn validate_existing_message(
         &self,
         link_id: Uuid,
-        accessible_link_ids: &[Uuid],
+        accessible_inboxes: &[Link],
         input: &mut CreateDraftInput,
     ) -> Result<(), EmailErr> {
+        let accessible_link_ids: Vec<_> = accessible_inboxes.iter().map(|link| link.id).collect();
         let Some(db_id) = input.db_id else {
             return Ok(());
         };
 
         let Some(msg) = self
             .email_repo
-            .get_simple_message(db_id, accessible_link_ids)
+            .get_simple_message(db_id, &accessible_link_ids)
             .await
             .map_err(anyhow::Error::from)?
         else {
@@ -464,40 +542,13 @@ where
         }
 
         if msg.link_id != link_id {
-            // The sender was switched to a different inbox. A draft belongs to a
-            // single inbox, so discard it (and its now-empty thread) and create a
-            // fresh draft in the sending inbox; validate_replying_to re-derives
-            // the thread from the reply target. The draft keeps its server ID
-            // across the move, and the delete's cascade drops any client-handle
-            // binding — the save's binding upsert re-points the handle at the
-            // recreated row in the same transaction, so queued offline saves
-            // keep converging. A guarded miss may instead mean the source is
-            // now scheduled: do not continue and adopt another reply draft in
-            // the target inbox while that committed source is still present.
-            let deleted = self
-                .email_repo
-                .delete_draft_message(msg.db_id, msg.thread_db_id, accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?;
-            if deleted.is_none()
-                && let Some(retained) = self
-                    .email_repo
-                    .get_simple_message(msg.db_id, accessible_link_ids)
-                    .await
-                    .map_err(anyhow::Error::from)?
-            {
-                if retained.is_sent || !retained.is_draft {
-                    return Err(EmailErr::MessageAlreadySent(msg.db_id));
-                }
-                return Err(EmailErr::MessageDeliveryConflict(msg.db_id));
-            }
-            input.provider_id = None;
-            input.thread_db_id = None;
-            input.provider_thread_id = None;
-            return Ok(());
+            return Err(EmailErr::InvalidDraft(
+                "Use the inbox transfer operation to change this draft's sender".into(),
+            ));
         }
 
         input.thread_db_id = Some(msg.thread_db_id);
+        input.provider_id = msg.provider_id;
         input.provider_thread_id = msg.provider_thread_id;
 
         Ok(())
@@ -513,6 +564,20 @@ where
             return Ok(());
         };
 
+        // An explicit, validated identity must never be retargeted to a newer
+        // reply draft by a delayed save from an obsolete composer.
+        if input.db_id.is_some() {
+            let parent = self
+                .email_repo
+                .get_simple_message(replying_to_id, accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?
+                .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
+            if parent.is_draft {
+                return Err(EmailErr::CannotReplyToDraft);
+            }
+            return Ok(());
+        }
         // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
@@ -535,6 +600,7 @@ where
         existing_draft: SimpleMessageInfo,
     ) {
         input.db_id = Some(existing_draft.db_id);
+        input.provider_id = existing_draft.provider_id;
         input.thread_db_id = Some(existing_draft.thread_db_id);
         input.provider_thread_id = existing_draft.provider_thread_id;
         input.headers_json = existing_draft.headers_json;

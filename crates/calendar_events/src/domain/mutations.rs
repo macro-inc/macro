@@ -7,6 +7,7 @@
 //! no-ops on the idempotency short-circuit.
 
 use std::collections::HashMap;
+mod replacement;
 
 use chrono::Utc;
 use uuid::Uuid;
@@ -15,17 +16,17 @@ use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
-        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
-        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
-        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
+        CalendarEventPatch, CalendarEventUpsert, DisconnectedCalendar, EventReminders, EventTime,
+        OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX,
+        REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
         CalendarEventWrite, CalendarEventWriteOutcome, CalendarMutationError,
-        CalendarMutationService, CalendarRefreshNotifier, CalendarRepository, CalendarRsvpScope,
-        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
-        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
-        GoogleRsvpOutcome, GoogleSeriesMutationOutcome, RetiredCalendarEvent,
+        CalendarMutationProvider, CalendarMutationService, CalendarProviderError,
+        CalendarProviderErrorKind, CalendarRefreshNotifier, CalendarRepository, CalendarRsvpScope,
+        CalendarTokenError, CalendarUpdateScope, ProviderInstanceUpdateOutcome,
+        ProviderRsvpOutcome, ProviderSeriesMutationOutcome, RetiredCalendarEvent,
     },
 };
 use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
@@ -39,12 +40,13 @@ pub struct CalendarMutationServiceImpl<R, G, T, B, N> {
     tokens: T,
     macro_event_broker: B,
     refresh: N,
+    outlook_writes_enabled: bool,
 }
 
 impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
-    G: GoogleCalendarMutationProvider,
+    G: CalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
     N: CalendarRefreshNotifier,
@@ -57,7 +59,26 @@ where
             tokens,
             macro_event_broker,
             refresh,
+            outlook_writes_enabled: true,
         }
+    }
+
+    /// Stop provider writes independently of sync and outcome recovery.
+    pub fn with_outlook_writes_enabled(mut self, enabled: bool) -> Self {
+        self.outlook_writes_enabled = enabled;
+        self
+    }
+
+    fn require_provider_writes(
+        &self,
+        provider: super::models::CalendarProvider,
+    ) -> Result<(), CalendarMutationError> {
+        if provider == super::models::CalendarProvider::Outlook && !self.outlook_writes_enabled {
+            return Err(CalendarMutationError::Retryable(
+                "Outlook calendar changes are temporarily paused; try again later".into(),
+            ));
+        }
+        Ok(())
     }
 
     /// Publish one calendar topic event; failures are logged and dropped.
@@ -190,7 +211,7 @@ where
         upsert: CalendarEventUpsert,
         mut event: CalendarEvent,
     ) -> Result<CalendarEvent, CalendarMutationError> {
-        let super::models::CalendarEventSource::Google(source) = &upsert.source;
+        let source = upsert.source.details();
         let email_link_id = source.email_link_id;
         let outcome = self
             .repository
@@ -214,7 +235,7 @@ where
 impl<R, G, T, B, N> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
-    G: GoogleCalendarMutationProvider,
+    G: CalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
     N: CalendarRefreshNotifier,
@@ -241,6 +262,8 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        self.require_provider_writes(target.token_identity.provider)?;
+        validate_conference(target.token_identity.provider, draft.conference)?;
         // An out-of-office event carries no attendees and Google auto-declines
         // on the owner's behalf, so it must not gain an organizer guest.
         if draft.out_of_office.is_some() {
@@ -253,7 +276,7 @@ where
             .provider
             .create_event(
                 &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                &target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now())),
                 &draft,
             )
             .await
@@ -299,6 +322,8 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        self.require_provider_writes(target.token_identity.provider)?;
+        validate_conference(target.token_identity.provider, patch.conference)?;
         if let Some(attendees) = patch.attendees.as_mut() {
             // The series attendees are the baseline; an occurrence-scoped patch
             // overlays that occurrence's overrides on top, so a retained guest's
@@ -320,7 +345,8 @@ where
             preserve_retained_attendee_state(attendees, &stored);
         }
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
+        let google_target =
+            target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         match scope {
             CalendarUpdateScope::All => {
                 let updated = self
@@ -354,11 +380,11 @@ where
                     .await
                     .map_err(provider_error)?;
                 match outcome {
-                    GoogleInstanceUpdateOutcome::Applied(upsert) => {
+                    ProviderInstanceUpdateOutcome::Applied(upsert) => {
                         self.persist_occurrence_echo(target.actor.as_ref(), *upsert, &recurrence_id)
                             .await
                     }
-                    GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
+                    ProviderInstanceUpdateOutcome::OccurrenceGone(upsert) => {
                         // Nothing was written, but the provider's view of the
                         // series is fresher than whatever listed this
                         // occurrence — persist it so the phantom disappears.
@@ -374,7 +400,7 @@ where
                             .ok();
                         Err(CalendarMutationError::OccurrenceNotFound)
                     }
-                    GoogleInstanceUpdateOutcome::SeriesGone => {
+                    ProviderInstanceUpdateOutcome::SeriesGone => {
                         self.retire_gone_source(&target).await;
                         Err(CalendarMutationError::NotFound)
                     }
@@ -397,8 +423,10 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        self.require_provider_writes(target.token_identity.provider)?;
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let google_target = target.google_target(OccurrenceRange::maintenance_horizon(Utc::now()));
+        let google_target =
+            target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now()));
         let outcome = match &scope {
             CalendarDeletionScope::All => {
                 self.provider
@@ -409,7 +437,7 @@ where
                     )
                     .await
                     .map_err(provider_error)?;
-                GoogleSeriesMutationOutcome::SeriesDeleted
+                ProviderSeriesMutationOutcome::SeriesDeleted
             }
             CalendarDeletionScope::ThisEvent { recurrence_id } => self
                 .provider
@@ -433,19 +461,19 @@ where
                 .map_err(provider_error)?,
         };
         match outcome {
-            GoogleSeriesMutationOutcome::Applied(upsert) => self
+            ProviderSeriesMutationOutcome::Applied(upsert) => self
                 .persist_echo(target.actor.as_ref(), *upsert)
                 .await
                 .map(|_| ()),
             // Either the deletion removed the series or it was already
             // gone; retiring the local source converges both.
-            GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
+            ProviderSeriesMutationOutcome::SeriesDeleted | ProviderSeriesMutationOutcome::Gone => {
                 // Retiring a recurring master's source also retires its
                 // expanded instances, so this reports several events; each
                 // announces its own fate.
                 let retired = self
                     .repository
-                    .remove_google_source(
+                    .remove_provider_source(
                         target.account_id,
                         target.calendar_id,
                         target.master_provider_event_id(),
@@ -475,6 +503,7 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        self.require_provider_writes(target.token_identity.provider)?;
         let Some(actor) = target.actor.as_ref() else {
             return Err(CalendarMutationError::NotAttendee);
         };
@@ -491,7 +520,7 @@ where
             .provider
             .rsvp_event(
                 &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                &target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now())),
                 target.master_provider_event_id(),
                 selected_actor.as_ref().unwrap_or(actor),
                 response,
@@ -500,15 +529,23 @@ where
             .await
             .map_err(provider_error)?;
         match outcome {
-            GoogleRsvpOutcome::Applied(upsert) => match &scope {
+            ProviderRsvpOutcome::Applied(upsert) => match &scope {
                 CalendarRsvpScope::All => self.persist_echo(target.actor.as_ref(), *upsert).await,
                 CalendarRsvpScope::ThisEvent { recurrence_id } => {
                     self.persist_occurrence_echo(target.actor.as_ref(), *upsert, recurrence_id)
                         .await
                 }
             },
-            GoogleRsvpOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
-            GoogleRsvpOutcome::Gone => {
+            ProviderRsvpOutcome::RespondedAndRemoved(mut event) => {
+                self.retire_gone_source(&target).await;
+                event.id = target.event_id;
+                if let Some(actor) = &target.actor {
+                    actor.mark_attendees(&mut event.attendees);
+                }
+                Ok(*event)
+            }
+            ProviderRsvpOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
+            ProviderRsvpOutcome::Gone => {
                 self.retire_gone_source(&target).await;
                 Err(CalendarMutationError::NotFound)
             }
@@ -534,7 +571,7 @@ where
     ) -> Result<(), CalendarMutationError> {
         let disconnected = self
             .repository
-            .disconnect_google_calendar(requester_id, email_link_id)
+            .disconnect_provider_calendar(requester_id, email_link_id)
             .await
             .map_err(internal)?
             .ok_or(CalendarMutationError::NotFound)?;
@@ -552,7 +589,7 @@ where
 impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
-    G: GoogleCalendarMutationProvider,
+    G: CalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
     N: CalendarRefreshNotifier,
@@ -564,7 +601,7 @@ where
     async fn release_watch_channels(
         &self,
         email_link_id: Uuid,
-        disconnected: &DisconnectedGoogleCalendar,
+        disconnected: &DisconnectedCalendar,
     ) {
         if disconnected.watch_channels.is_empty() {
             return;
@@ -610,7 +647,7 @@ where
     async fn retire_gone_source(&self, target: &CalendarEventMutationTarget) {
         let retired = self
             .repository
-            .remove_google_source(
+            .remove_provider_source(
                 target.account_id,
                 target.calendar_id,
                 target.master_provider_event_id(),
@@ -776,15 +813,15 @@ fn validate_attendee_emails<'a>(
     Ok(())
 }
 
-fn provider_error(error: GoogleProviderError) -> CalendarMutationError {
+fn provider_error(error: CalendarProviderError) -> CalendarMutationError {
     match error.kind() {
-        GoogleProviderErrorKind::ReauthRequired => {
+        CalendarProviderErrorKind::ReauthRequired => {
             CalendarMutationError::ReauthRequired(error.to_string())
         }
-        GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired => {
+        CalendarProviderErrorKind::Transient | CalendarProviderErrorKind::SyncTokenExpired => {
             CalendarMutationError::Retryable(error.to_string())
         }
-        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::PushUnsupported => {
+        CalendarProviderErrorKind::Permanent | CalendarProviderErrorKind::PushUnsupported => {
             CalendarMutationError::ProviderRejected(error.to_string())
         }
     }
@@ -801,7 +838,7 @@ impl<R, G, T, B, N> super::ports::CalendarCreationRecoveryService
     for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
-    G: GoogleCalendarMutationProvider,
+    G: CalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
     N: CalendarRefreshNotifier,
@@ -823,23 +860,48 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
+        self.require_provider_writes(target.token_identity.provider)?;
         let access_token = self.fetch_token(&target.token_identity).await?;
-        let provider_id = super::models::creation_provider_id(creation_key, &target.owner_id);
-        self.provider
-            .delete_event(
+        let ids = self
+            .provider
+            .delete_created_event(
                 &access_token,
-                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
-                &provider_id,
+                &target.provider_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                creation_key,
             )
             .await
             .map_err(provider_error)?;
-        let retired = self
-            .repository
-            .remove_google_source(target.account_id, target.calendar_id, &provider_id)
-            .await
-            .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
-            .await;
+        for provider_id in ids {
+            let retired = self
+                .repository
+                .remove_provider_source(target.account_id, target.calendar_id, &provider_id)
+                .await
+                .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
+            self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+                .await;
+        }
         Ok(())
     }
+}
+
+fn validate_conference(
+    provider: super::models::CalendarProvider,
+    conference: Option<super::models::ConferenceChange>,
+) -> Result<(), CalendarMutationError> {
+    use super::models::{CalendarProvider, ConferenceChange};
+    if matches!(
+        (provider, conference),
+        (
+            CalendarProvider::Google,
+            Some(ConferenceChange::MicrosoftTeams)
+        ) | (
+            CalendarProvider::Outlook,
+            Some(ConferenceChange::GoogleMeet)
+        )
+    ) {
+        return Err(CalendarMutationError::InvalidInput(
+            "Choose the meeting provider supported by this calendar".into(),
+        ));
+    }
+    Ok(())
 }

@@ -18,6 +18,11 @@ impl QueryRoot {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CapturedMutation {
+    State {
+        user_id: String,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    },
     Seen {
         user_id: String,
         thread_id: Uuid,
@@ -70,6 +75,26 @@ struct CapturingEmailMutationService {
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
 
 impl EmailMutationService for CapturingEmailMutationService {
+    async fn resolve_email_message_operation(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::MessageDeliveryConflict(request.message_id))
+    }
+    async fn set_email_thread_state(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    ) -> Result<(), EmailErr> {
+        self.calls.lock().unwrap().push(CapturedMutation::State {
+            user_id: user_id.to_string(),
+            thread_id,
+            action,
+        });
+        Ok(())
+    }
     async fn set_email_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -162,6 +187,7 @@ impl EmailMutationService for CapturingEmailMutationService {
             ));
         }
         Ok(SavedUserDraft {
+            operation_status: None,
             draft: email::domain::models::CreatedDraft {
                 db_id: input.db_id.unwrap_or_default(),
                 provider_id: input.provider_id,
@@ -539,6 +565,7 @@ async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
     let services = [
         CapturingEmailMutationService {
             attachments: vec![MessageAttachment {
+                reference_url: Some("https://outlook.office.com/mail/message".into()),
                 db_id: attachment_id,
                 provider_id: Some("provider-attachment".to_string()),
                 filename: Some("provider.txt".to_string()),
@@ -551,6 +578,9 @@ async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
         },
         CapturingEmailMutationService {
             attachments_draft: vec![AttachmentDraft {
+                upload_pending: false,
+                content_id: None,
+                is_inline: false,
                 id: attachment_id,
                 draft_id,
                 file_name: "upload.txt".to_string(),
@@ -811,4 +841,29 @@ async fn delete_email_draft_rejects_a_malformed_draft_id() {
     assert_eq!(response.errors.len(), 1);
     assert!(response.errors[0].message.contains("draftId"));
     assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn semantic_mailbox_action_needs_no_provider_label_id() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let response = schema(service.clone()).execute(format!(r#"mutation {{ setEmailThreadState(input: {{ threadId: "{TEST_THREAD_ID}",field: TRASHED,value: true }}) {{ id }} }}"#)).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec![CapturedMutation::State {
+            user_id: "macro|viewer@example.com".into(),
+            thread_id: TEST_THREAD_ID,
+            action: email::domain::models::mailbox_action::MailboxAction::Trashed(true)
+        }]
+    );
+    let anonymous = Schema::build(
+        QueryRoot,
+        GraphqlEmailMutation::<CapturingEmailMutationService, TestEmailThreadOutput>::new(),
+        EmptySubscription,
+    )
+    .data(service.clone())
+    .finish();
+    let response = anonymous.execute(format!(r#"mutation {{ setEmailThreadState(input: {{ threadId: "{TEST_THREAD_ID}",field: STARRED,value: true }}) {{ id }} }}"#)).await;
+    assert!(!response.errors.is_empty());
+    assert_eq!(service.calls.lock().unwrap().len(), 1);
 }

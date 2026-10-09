@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_attachments(id,message_id,provider_attachment_id,content_id,filename,mime_type,size_bytes) VALUES($1,$2,$3,$4,'image.png','image/png',3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c78a49306f445fd4e0172cf64cc5b0b37815565523881dcf44446545beb1b44b"
+}

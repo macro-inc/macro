@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM task_duplicate_match",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6bd933ea72cc8dce3297e5a866c795ae93e856fe32e48506d81570172186a9b9"
+}

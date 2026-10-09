@@ -1,11 +1,13 @@
+#[cfg(feature = "outlook")]
+mod outlook;
 use super::*;
 mod point_events;
 mod snapshot_coverage;
 mod team_sharing;
 mod team_sync_coverage;
 use crate::domain::models::{
-    GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleEventSource, GoogleWatchChannel,
-    OccurrenceException, OccurrenceListing, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+    GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleWatchChannel, OccurrenceException,
+    OccurrenceListing, ProviderEventSource, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
@@ -164,7 +166,9 @@ fn timed_upsert(
             created_at: starts_at,
             updated_at: starts_at + Duration::minutes(i64::from(sequence)),
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
             observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
@@ -594,7 +598,9 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
         "Removed with scope",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -933,7 +939,9 @@ async fn fenced_google_snapshot_removes_deleted_events_and_calendars(pool: PgPoo
         "Deleted Google event",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -1080,7 +1088,9 @@ async fn expired_google_worker_cannot_resurrect_reconciled_provider_data(pool: P
         "Stale worker event",
         1,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -1201,7 +1211,9 @@ async fn google_snapshot_deletion_removes_an_event_without_a_surviving_source(po
         "Google canonical",
         2,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -1282,7 +1294,9 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
         "Google canonical",
         2,
     );
-    google.source = CalendarEventSource::Google(GoogleEventSource {
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -1301,7 +1315,9 @@ async fn incremental_cancellation_tombstones_retire_sources_without_a_snapshot(p
         "Series instance",
         1,
     );
-    instance.source = CalendarEventSource::Google(GoogleEventSource {
+    instance.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -1459,6 +1475,8 @@ async fn listing_keeps_the_series_event_beside_the_exception_and_its_link(pool: 
     let recurrence_id = edited_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -1561,6 +1579,8 @@ async fn occurrence_attendee_override_shadows_the_series_response(pool: PgPool) 
     let recurrence_id = declined_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -1648,6 +1668,8 @@ async fn occurrence_content_override_shadows_the_series_content(pool: PgPool) {
     let recurrence_id = edited_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -1758,6 +1780,8 @@ async fn mention_preview_shows_the_previewed_occurrences_content(pool: PgPool) {
     let recurrence_id = edited_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -1845,6 +1869,8 @@ async fn explicitly_empty_override_attendees_do_not_inherit_the_series_list(pool
     let recurrence_id = emptied_start.to_rfc3339();
     upsert.occurrences[1].recurrence_id = Some(recurrence_id.clone());
     upsert.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -2179,7 +2205,9 @@ async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
             title,
             1,
         );
-        upsert.source = CalendarEventSource::Google(GoogleEventSource {
+        upsert.source = CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
             observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
@@ -2464,7 +2492,9 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         4,
     );
     latest.event.updated_at += Duration::days(2);
-    latest.source = CalendarEventSource::Google(GoogleEventSource {
+    latest.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -2484,7 +2514,9 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         "Sibling",
         1,
     );
-    sibling.source = CalendarEventSource::Google(GoogleEventSource {
+    sibling.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -2505,7 +2537,9 @@ async fn stale_google_source_projection_cannot_resurface_during_reconciliation(p
         4,
     );
     stale.event.updated_at -= Duration::days(2);
-    stale.source = CalendarEventSource::Google(GoogleEventSource {
+    stale.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("owner".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -2888,7 +2922,7 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
     assert_eq!(target.provider_calendar_id, "primary");
     assert_eq!(target.owner_id, owner_id);
     let inbox = format!("calendar-{link_id}@example.com");
-    assert_eq!(target.token_identity.provider, "GMAIL");
+    assert_eq!(target.token_identity.provider, CalendarProvider::Google);
     assert_eq!(target.token_identity.email_address, inbox);
     assert!(
         target
@@ -3265,7 +3299,9 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         "Team copy",
         1,
     );
-    team_copy.source = CalendarEventSource::Google(GoogleEventSource {
+    team_copy.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("writer".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -3280,7 +3316,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         .unwrap()
         .event_id;
 
-    repo.remove_google_source(account_id, primary_id, "provider-shared-remove@example.com")
+    repo.remove_provider_source(account_id, primary_id, "provider-shared-remove@example.com")
         .await
         .unwrap();
     let row = sqlx::query!(
@@ -3301,7 +3337,7 @@ async fn removing_a_google_source_restores_the_surviving_calendar_copy(pool: PgP
         "the surviving calendar's copy is promoted back to canonical"
     );
 
-    repo.remove_google_source(account_id, secondary_id, "team-copy-id")
+    repo.remove_provider_source(account_id, secondary_id, "team-copy-id")
         .await
         .unwrap();
     let remaining = sqlx::query_scalar!(
@@ -3359,7 +3395,9 @@ fn reminder_upsert(
             created_at: starts_at - Duration::days(1),
             updated_at: starts_at - Duration::days(1),
         },
-        source: CalendarEventSource::Google(GoogleEventSource {
+        source: CalendarEventSource::Google(ProviderEventSource {
+            automatic_decline: None,
+            binding: None,
             observed_access_role: Some("owner".to_owned()),
             email_link_id: link_id,
             account_id,
@@ -4118,7 +4156,7 @@ async fn disconnecting_calendar_removes_the_data_and_records_the_opt_out(pool: P
         connected_calendar(&pool, &repo, owner_id, link_id).await;
 
     let disconnected = repo
-        .disconnect_google_calendar(owner_id, link_id)
+        .disconnect_provider_calendar(owner_id, link_id)
         .await
         .unwrap()
         .expect("the owner's inbox is disconnectable");
@@ -4131,7 +4169,10 @@ async fn disconnecting_calendar_removes_the_data_and_records_the_opt_out(pool: P
         }]
     );
     assert_eq!(disconnected.token_identity.fusionauth_user_id, owner_id);
-    assert_eq!(disconnected.token_identity.provider, "GMAIL");
+    assert_eq!(
+        disconnected.token_identity.provider,
+        CalendarProvider::Google
+    );
 
     let remaining = sqlx::query!(
         r#"
@@ -4199,7 +4240,7 @@ async fn a_reissued_grant_keeps_calendar_off_until_it_is_requested_again(pool: P
     let link_id = insert_link(&pool, owner_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     connected_calendar(&pool, &repo, owner_id, link_id).await;
-    repo.disconnect_google_calendar(owner_id, link_id)
+    repo.disconnect_provider_calendar(owner_id, link_id)
         .await
         .unwrap()
         .unwrap();
@@ -4272,7 +4313,7 @@ async fn only_the_owner_can_disconnect_an_inbox_calendar(pool: PgPool) {
     connected_calendar(&pool, &repo, owner_id, link_id).await;
 
     assert!(
-        repo.disconnect_google_calendar("macro|delegate@example.com", link_id)
+        repo.disconnect_provider_calendar("macro|delegate@example.com", link_id)
             .await
             .unwrap()
             .is_none()
@@ -5100,7 +5141,9 @@ fn shared_copy_upsert(
     upsert.event.creator_email = Some("script@example.com".to_string());
     upsert.event.creator_name = Some("Vacation script".to_string());
     upsert.event.updated_at += Duration::hours(1);
-    upsert.source = CalendarEventSource::Google(GoogleEventSource {
+    upsert.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("reader".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -5670,7 +5713,7 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
     .unwrap();
 
     let retired = repo
-        .remove_google_source(account_id, primary_calendar_id, &format!("provider-{uid}"))
+        .remove_provider_source(account_id, primary_calendar_id, &format!("provider-{uid}"))
         .await
         .unwrap();
     assert_eq!(
@@ -5884,7 +5927,7 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
     // Retiring the shared copy now finds no live source and removes the entity
     // rather than resurrecting the deleted calendar's copy.
     let retired = repo
-        .remove_google_source(account_id, shared_calendar_id, &format!("provider-{uid}"))
+        .remove_provider_source(account_id, shared_calendar_id, &format!("provider-{uid}"))
         .await
         .unwrap();
     assert_eq!(
@@ -6736,7 +6779,9 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
         uid,
         starts_at,
     );
-    third.source = CalendarEventSource::Google(GoogleEventSource {
+    third.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
         observed_access_role: Some("reader".to_owned()),
         email_link_id: link_id,
         account_id,
@@ -6765,7 +6810,7 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
     // Retiring the third copy re-derives the entity from the primary. The
     // shared copy that wrote the schedule survives with a fresher stamp, so
     // the move stays while the content is the primary's.
-    repo.remove_google_source(account_id, third_calendar_id, &format!("third-{uid}"))
+    repo.remove_provider_source(account_id, third_calendar_id, &format!("third-{uid}"))
         .await
         .unwrap();
     let (event, occurrence) = listed_event(&repo, member, moved_start).await;
@@ -6777,3 +6822,5 @@ async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_ano
 mod changes;
 mod invitations;
 mod source_access;
+
+mod replacement;

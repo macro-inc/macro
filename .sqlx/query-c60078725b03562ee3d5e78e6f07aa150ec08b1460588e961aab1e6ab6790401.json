@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id = $1 AND processing AND NOT sent) AS \"processing!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "processing!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c60078725b03562ee3d5e78e6f07aa150ec08b1460588e961aab1e6ab6790401"
+}

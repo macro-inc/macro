@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.state,d.error_code,s.sent,s.processing FROM email_mailbox_drafts d JOIN email_scheduled_messages s ON s.message_id = d.message_id WHERE d.message_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "error_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "processing",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "ae59cdc78247957a40427ebb2dc72567e9083443c8c35615605cb5de9357ad6f"
+}

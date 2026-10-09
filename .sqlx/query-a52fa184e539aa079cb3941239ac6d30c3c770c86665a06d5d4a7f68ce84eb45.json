@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_messages SET is_read = COALESCE($2,is_read), is_starred = COALESCE($3,is_starred)\n            WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a52fa184e539aa079cb3941239ac6d30c3c770c86665a06d5d4a7f68ce84eb45"
+}

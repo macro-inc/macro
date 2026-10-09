@@ -1,5 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
+import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
 import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailDraft } from '../core/email-draft';
 import type { EmailRecipient } from '../core/email-recipient';
@@ -7,6 +8,7 @@ import type { LocalDraft } from '../core/local-draft';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 
 export interface EmailInbox {
+  provider?: 'GMAIL' | 'OUTLOOK';
   id: string;
   email_address: string;
   displayName?: string;
@@ -98,7 +100,15 @@ export interface EmailAttachmentChange {
   inboxId?: string;
 }
 
+/** The server fenced every delayed commit; the original draft remains editable. */
+export class DraftTransferAborted extends Error {}
+
 export interface EmailDraftStorage {
+  /** Reload canonical provider content after an explicit conflict resolution. */
+  reloadDraft?(
+    draftId: string,
+    threadId: string
+  ): Promise<EmailMessage | undefined>;
   /** Local acceptance is separate from remote autosave and continues after rejection. */
   saveLocalDraft?(
     input: SaveEmailDraft & {
@@ -131,6 +141,16 @@ export interface EmailDraftStorage {
       code?: DraftPersistFailureCode;
     }) => void
   ): () => void;
+  transferDraft(input: {
+    operationId: string;
+    draftId: string;
+    sourceInboxId: string;
+    destinationInboxId: string;
+  }): Promise<{
+    draftId: string;
+    threadId: string;
+    attachments: EmailMessage['attachments_draft'];
+  }>;
   saveDraft(input: SaveEmailDraft): Promise<DraftSaveResult>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
@@ -143,6 +163,7 @@ export interface EmailDraftStorage {
 }
 
 export interface EmailAttachmentStorage {
+  completeAttachment(input: EmailAttachmentChange): Promise<void>;
   uploadAttachments(input: UploadEmailAttachments): Promise<void>;
   addForwardedAttachments(input: {
     draftId: string;
@@ -288,6 +309,7 @@ export interface EmailEditorFiles {
 
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_event_sources SET normalized_payload=jsonb_set(normalized_payload,'{overrides,0,automaticDecline}',$2) WHERE calendar_id=$1 AND provider_event_id='provider-candidate-0'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8f97df3df0aa973fa4df6cff9b3a0f6dab962aab35c413498ca0a36fb7e14fe7"
+}

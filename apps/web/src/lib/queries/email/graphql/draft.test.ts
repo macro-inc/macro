@@ -68,6 +68,9 @@ describe('optimistic draft saves', () => {
       hasAttachments: true,
       attachmentsDraft: [
         {
+          uploadPending: false,
+          contentId: null,
+          isInline: false,
           __typename: 'GraphqlSoupEmailDraftAttachment' as const,
           id: 'attachment',
           draftId: String(args.draftId),
