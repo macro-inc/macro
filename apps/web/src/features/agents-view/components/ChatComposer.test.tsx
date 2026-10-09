@@ -350,41 +350,45 @@ describe('Chat session input', () => {
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
-  it('expands coding mode with repository settings after the input without remounting the editor', () => {
-    const [mode, setMode] = createSignal('chat');
-    const { container } = render(() => (
-      <ChatComposer
-        draft="Shared draft"
-        onDraftChange={vi.fn()}
-        selector={<button>Agent</button>}
-        drawer={<button>Repository</button>}
-        drawerOpen={mode() === 'code'}
-        onSend={vi.fn()}
-      />
-    ));
-    const input = screen.getByTestId('editor');
-    const drawer = container.querySelector('.composer-drawer');
-    const layout = container.querySelector('[data-composer-compact]');
-    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
-    expect(
-      (drawer?.compareDocumentPosition(input) ?? 0) &
-        Node.DOCUMENT_POSITION_PRECEDING
-    ).toBeTruthy();
-    expect((drawer as HTMLElement).inert).toBe(true);
-    expect(drawer?.getAttribute('aria-hidden')).toBe('true');
-    setMode('code');
-    expect(screen.getByTestId('editor')).toBe(input);
-    expect((drawer as HTMLElement).inert).toBe(false);
-    expect(drawer?.hasAttribute('data-open')).toBe(true);
-    expect(layout?.getAttribute('data-composer-compact')).toBe('false');
-    expect(editor.clear).not.toHaveBeenCalled();
-    setMode('chat');
-    expect(layout?.getAttribute('data-composer-compact')).toBe('true');
-    expect(screen.getByTestId('editor')).toBe(input);
-    expect((drawer as HTMLElement).inert).toBe(true);
-    const settings = screen.getByRole('group', { name: 'Composer settings' });
-    expect(settings.textContent).toBe('Agent');
-  });
+  it.each([false, true])(
+    'expands coding mode with repository settings above the input without remounting the editor (touch: %s)',
+    (touch) => {
+      vi.mocked(isTouchDevice).mockReturnValue(touch);
+      const [mode, setMode] = createSignal('chat');
+      const { container } = render(() => (
+        <ChatComposer
+          draft="Shared draft"
+          onDraftChange={vi.fn()}
+          selector={<button>Agent</button>}
+          drawer={<button>Repository</button>}
+          drawerOpen={mode() === 'code'}
+          onSend={vi.fn()}
+        />
+      ));
+      const input = screen.getByTestId('editor');
+      const drawer = container.querySelector('.composer-drawer');
+      const layout = container.querySelector('[data-composer-compact]');
+      expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+      expect(
+        (drawer?.compareDocumentPosition(input) ?? 0) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect((drawer as HTMLElement).inert).toBe(true);
+      expect(drawer?.getAttribute('aria-hidden')).toBe('true');
+      setMode('code');
+      expect(screen.getByTestId('editor')).toBe(input);
+      expect((drawer as HTMLElement).inert).toBe(false);
+      expect(drawer?.hasAttribute('data-open')).toBe(true);
+      expect(layout?.getAttribute('data-composer-compact')).toBe('false');
+      expect(editor.clear).not.toHaveBeenCalled();
+      setMode('chat');
+      expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+      expect(screen.getByTestId('editor')).toBe(input);
+      expect((drawer as HTMLElement).inert).toBe(true);
+      const settings = screen.getByRole('group', { name: 'Composer settings' });
+      expect(settings.textContent).toBe('Agent');
+    }
+  );
   it('does not grow the surface from zero after mounting offscreen', () => {
     render(() => (
       <ChatComposer

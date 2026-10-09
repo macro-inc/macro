@@ -86,8 +86,8 @@ Its collapsed height matches New, with the model selector and Send always
 visible. Tap the input to expand across the row, hiding New and giving the draft
 a full-width text area above the controls.
 Chat/Code moves below the text alongside attachment, microphone (when enabled),
-and model controls. Repository controls appear in Code mode. Tapping outside
-collapses the composer and restores New.
+and model controls. Repository controls appear above the input in Code mode.
+Tapping outside collapses the composer and restores New.
 The editor and model picker stay mounted so collapsing preserves the draft.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
@@ -333,12 +333,12 @@ the shimmer.
   tab, where either kind can be created.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
-  vertical center. The heading and first input line stay anchored while the composer
-  expands downward. The plus attachment button stays at the far left: before the
+  vertical center. The heading stays anchored while the composer expands downward,
+  with the repository bar above the input. The plus attachment button stays at the far left: before the
   text in the compact row, and on the bottom control row when expanded. The editor sits above the controls, with attachments
   on the left and the agent/model and Send on the right. A full-width repository bar
-  slides and fades in below the rounded input over 200ms, with rounded bottom corners
-  and a subtle border along its sides and bottom, with a darker surface in dark mode.
+  slides and fades in above the rounded input over 200ms, with rounded top corners
+  and a subtle border along its sides and top, with a darker surface in dark mode.
   Selecting Chat retracts the repository bar and keeps the mode switch inside
   the input, without remounting
   the editor or losing the draft. Reduced-motion
