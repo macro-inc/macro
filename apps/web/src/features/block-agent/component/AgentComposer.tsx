@@ -41,7 +41,7 @@ import {
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import { AgentModelMenuItem } from './AgentModelMenuItem';
-import { EffortDial } from './EffortDial';
+import { EffortSlider } from './EffortSlider';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
 import { ToolApprovalRequest } from './ToolApprovalRequest';
@@ -331,56 +331,56 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <div class="flex min-w-0 items-center gap-0.5">
-            <ModelSelector
-              model={metadata()?.model ?? null}
-              changingTo={changingModel(messages(), metadata()?.model ?? null)}
-              options={metadata()?.supportedModels ?? []}
-              effortLabel={effortLabel(effort(), changingEffort())}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined
-              }
-              onSelect={(model) => void chooseModel(model)}
-              modelRow={(row) => (
-                <AgentModelMenuItem
-                  {...row}
-                  harness={session()?.harness}
-                  effort={
-                    row.option.id === metadata()?.model ? effort() : undefined
-                  }
-                  effortValue={
-                    row.option.id === metadata()?.model
-                      ? changingEffort()
-                      : undefined
-                  }
-                  onSelectEffort={(selection) =>
-                    void chooseModel(row.option.id, selection)
-                  }
-                />
-              )}
-            />
-            <EffortDial
-              config={effort()}
-              value={changingEffort()}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined ||
-                changingModel(messages(), metadata()?.model ?? null) !==
-                  undefined
-              }
-              onChange={(choice) => {
-                const model = metadata()?.model;
-                if (model) void chooseModel(model, choice);
-              }}
-            />
-          </div>
+          <ModelSelector
+            menuHeader={
+              <EffortSlider
+                config={effort()}
+                value={changingEffort()}
+                disabled={
+                  loadFailed() ||
+                  readOnly() ||
+                  pending() ||
+                  configuring() ||
+                  changingEffort() !== undefined ||
+                  changingModel(messages(), metadata()?.model ?? null) !==
+                    undefined
+                }
+                onChange={(choice) => {
+                  const model = metadata()?.model;
+                  if (model) void chooseModel(model, choice);
+                }}
+              />
+            }
+            model={metadata()?.model ?? null}
+            changingTo={changingModel(messages(), metadata()?.model ?? null)}
+            options={metadata()?.supportedModels ?? []}
+            effortLabel={effortLabel(effort(), changingEffort())}
+            disabled={
+              loadFailed() ||
+              readOnly() ||
+              pending() ||
+              configuring() ||
+              changingEffort() !== undefined
+            }
+            onSelect={(model) => void chooseModel(model)}
+            modelRow={(row) => (
+              <AgentModelMenuItem
+                {...row}
+                harness={session()?.harness}
+                effort={
+                  row.option.id === metadata()?.model ? effort() : undefined
+                }
+                effortValue={
+                  row.option.id === metadata()?.model
+                    ? changingEffort()
+                    : undefined
+                }
+                onSelectEffort={(selection) =>
+                  void chooseModel(row.option.id, selection)
+                }
+              />
+            )}
+          />
         }
       />
     </>

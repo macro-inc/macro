@@ -409,12 +409,12 @@ the shimmer.
   provider icons, search, **Suggested** first, and **More models** for the
   complete provider catalog. Desktop opens a submenu; phone widths show
   the catalog in place with a Back action. Search includes every model.
-- When the selected model advertises effort choices, a small dial beside the
-  composer model control shows the current level. Click to advance through
-  supported levels (highest wraps to lowest), or use arrow keys, Home, and End.
-  Its tooltip names the current and next level. New conversations apply the
-  choice to the next send; running sessions use their existing configuration
-  action and disable the dial while a change is pending.
+- When the selected model advertises effort choices, a compact **Effort** slider
+  appears at the top of the model selector. Drag to preview a level and release
+  to apply it; arrow keys also adjust it. Unsupported models have no effort bar.
+  Free and Pro users start new conversations at the lowest advertised level,
+  unless they explicitly choose another. Existing sessions keep their current
+  setting and use the usual configuration action when the slider changes.
 - On desktop, chat agents' empty input types tips about connectors, skills,
   mentions, and agents one character at a time, pauses to read each hint, then
   quickly erases it before typing the next. Entering a draft pauses the animation;

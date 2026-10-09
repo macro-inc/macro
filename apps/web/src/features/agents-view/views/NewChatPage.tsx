@@ -12,11 +12,12 @@ import { uploadFile } from '@core/util/upload';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
+import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { EffortDial } from '../../block-agent/component/EffortDial';
+import { EffortSlider } from '../../block-agent/component/EffortSlider';
 import {
   type EffortChoice,
   effortConfigOption,
@@ -77,6 +78,7 @@ export function NewChatPage(props: {
   onOpenRoster: (kind: AgentKind) => void;
 }) {
   const userId = useUserId();
+  const billing = useAiBillingSummaryQuery();
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
@@ -164,7 +166,17 @@ export function NewChatPage(props: {
   // The submenu already validated this choice. Retain it while the selected
   // model's discovery refreshes; startup revalidates against the runtime.
   const effortOverride = () => {
-    const selection = selectedEffort();
+    const config = effort();
+    const minimum =
+      billing.isSuccess &&
+      (billing.data.tier === 'free' || billing.data.tier === 'premium')
+        ? config?.options[0]
+        : undefined;
+    const selection =
+      selectedEffort() ??
+      (minimum && config
+        ? { configId: config.id, value: minimum.value, name: minimum.name }
+        : undefined);
     return selection
       ? { configId: selection.configId, value: selection.value }
       : undefined;
@@ -266,31 +278,33 @@ export function NewChatPage(props: {
   };
 
   const agentSelector = () => (
-    <div class="flex min-w-0 items-center gap-0.5">
-      <AgentPicker
-        agents={options()}
-        selected={selected()}
-        modelOverride={composerModelOverride()}
-        loading={props.rosterLoading}
-        effortLabel={selectedEffort()?.name ?? effortLabel(effort())}
-        effortSelection={effortOverride()}
-        onSelect={selectAgent}
-        onSelectEffort={selectAgent}
-        onConnect={connect}
-        onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
-      />
-      <EffortDial
-        config={effort()}
-        value={selectedEffort()?.value}
-        disabled={Boolean(blocked())}
-        onChange={(choice) =>
-          setEffortSelection({
-            ...choice,
-            target: JSON.stringify(capabilityTarget()),
-          })
-        }
-      />
-    </div>
+    <AgentPicker
+      agents={options()}
+      selected={selected()}
+      modelOverride={composerModelOverride()}
+      loading={props.rosterLoading}
+      effortLabel={
+        selectedEffort()?.name ?? effortLabel(effort(), effortOverride()?.value)
+      }
+      effortSelection={effortOverride()}
+      onSelect={selectAgent}
+      onSelectEffort={selectAgent}
+      onConnect={connect}
+      onCreate={() => props.onOpenRoster(coding() ? 'coder' : 'agent')}
+      menuHeader={
+        <EffortSlider
+          config={effort()}
+          value={effortOverride()?.value}
+          disabled={Boolean(blocked())}
+          onChange={(choice) =>
+            setEffortSelection({
+              ...choice,
+              target: JSON.stringify(capabilityTarget()),
+            })
+          }
+        />
+      }
+    />
   );
 
   const setMode = (next: AgentsMode) => {

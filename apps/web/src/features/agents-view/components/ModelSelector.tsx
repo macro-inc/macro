@@ -23,10 +23,12 @@ export function ModelSelector(props: {
   pending?: boolean;
   onSelect: (id: string) => void;
   children?: JSX.Element;
+  menuHeader?: JSX.Element;
   emptyMessage?: string;
 }) {
   return (
     <ModelCatalogPicker
+      menuHeader={props.menuHeader}
       value={props.model ?? null}
       options={props.options.map((option) => ({
         id: option.id,
@@ -57,6 +59,7 @@ export function SessionModelSelector(props: AgentModelSelectorProps) {
   const shown = () => props.changingTo ?? props.model ?? undefined;
   return (
     <ModelSelector
+      menuHeader={props.menuHeader}
       model={shown()}
       label={[
         modelLabel(

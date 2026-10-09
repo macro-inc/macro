@@ -31,6 +31,7 @@ type ModelCatalogPickerProps = {
   pending?: boolean;
   triggerLabel?: JSX.Element;
   children?: JSX.Element;
+  menuHeader?: JSX.Element;
   emptyMessage?: string;
   triggerClass?: string;
   contentClass?: string;
@@ -136,7 +137,7 @@ function keepSearchFocused(input: () => HTMLInputElement | undefined) {
   const onNavigate = (event: Event) => {
     if (
       event.target instanceof Element &&
-      event.target.closest('[role="menuitem"]')
+      event.target.closest('[role="menuitem"], input[type="range"]')
     ) {
       navigating = true;
     }
@@ -219,6 +220,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         }}
       >
         <ModelCatalogMenu
+          menuHeader={props.menuHeader}
           value={props.value}
           options={props.options}
           disabled={props.disabled || props.pending}
@@ -253,6 +255,7 @@ export function ModelCatalogMenu(
     | 'emptyMessage'
     | 'searchPlaceholder'
     | 'children'
+    | 'menuHeader'
   > & {
     searchRef?: (element: HTMLInputElement) => void;
     /**
@@ -284,6 +287,7 @@ export function ModelCatalogMenu(
   return (
     <>
       <div class="sticky top-0 z-10 bg-menu py-1">
+        {props.menuHeader}
         <div class="flex h-8 items-center gap-2 px-3">
           <MagnifyingGlassIcon
             aria-hidden="true"

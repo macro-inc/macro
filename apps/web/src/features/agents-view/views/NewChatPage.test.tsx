@@ -23,6 +23,8 @@ import { NewChatPage } from './NewChatPage';
 const mocks = vi.hoisted(() => ({
   touch: false,
   freePlan: false,
+  tier: 'max',
+  currentEffort: 'low',
   openSettings: vi.fn(),
   capabilitiesPending: false,
   attachments: [] as InputAttachmentData[],
@@ -82,6 +84,14 @@ vi.mock('../queries/repository-branches', () => ({
 }));
 vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
 
+vi.mock('@queries/auth/ai-billing', () => ({
+  useAiBillingSummaryQuery: () => ({
+    isSuccess: true,
+    get data() {
+      return { tier: mocks.tier };
+    },
+  }),
+}));
 vi.mock('@queries/agents/capabilities', () => ({
   useAgentCapabilitiesQuery: (
     target: () => { model?: string } | undefined
@@ -99,7 +109,7 @@ vi.mock('@queries/agents/capabilities', () => ({
             name: 'Effort',
             category: 'thought_level',
             type: 'select',
-            currentValue: 'low',
+            currentValue: mocks.currentEffort,
             options: [
               { value: 'low', name: 'Low' },
               { value: 'ultra', name: 'Ultra' },
@@ -281,6 +291,8 @@ describe('agent-led new conversation', () => {
   beforeEach(() => {
     mocks.capabilitiesPending = false;
     mocks.freePlan = false;
+    mocks.tier = 'max';
+    mocks.currentEffort = 'low';
     mocks.touch = false;
     mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
@@ -999,9 +1011,10 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'Agent' }).title).toBe(before);
   });
   it.each([false, true])(
-    'cycles effort from the composer dial (touch=%s)',
+    'changes effort from the model menu slider (touch=%s)',
     async (touch) => {
       mocks.touch = touch;
+      mocks.tier = 'premium';
       const send = page(true, [], false, [], 'code');
       if (touch) fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
       else openAgents();
@@ -1019,17 +1032,52 @@ describe('agent-led new conversation', () => {
           { key: 'Enter' }
         );
       }
-      fireEvent.click(
-        await screen.findByRole('button', { name: 'Reasoning effort: Low' })
-      );
-      expect(
-        screen.getByRole('button', { name: 'Reasoning effort: Ultra' })
-      ).toBeTruthy();
+      if (touch) fireEvent.click(screen.getByRole('button', { name: 'Agent' }));
+      else openAgents();
+      const slider = await screen.findByRole('slider', {
+        name: 'Reasoning effort',
+      });
+      fireEvent.input(slider, { target: { value: '1' } });
+      fireEvent.change(slider, { target: { value: '1' } });
+      expect(slider.getAttribute('aria-valuetext')).toBe('Ultra');
+      fireEvent.keyDown(slider, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('slider')).toBeNull());
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenLastCalledWith(
         expect.objectContaining({
           modelOverride: 'gpt-5',
           effortOverride: { configId: 'cursor_effort', value: 'ultra' },
+        })
+      );
+    }
+  );
+  it.each(['free', 'premium', 'max'])(
+    'uses the correct initial effort for %s',
+    async (tier) => {
+      mocks.tier = tier;
+      mocks.currentEffort = 'ultra';
+      const send = page(true, [], false, [], 'code');
+      const models = await hoverAgent('Cursor');
+      fireEvent.keyDown(models.getByRole('menuitem', { name: /^GPT-5/ }), {
+        key: 'Enter',
+      });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+      openAgents();
+      const slider = await screen.findByRole('slider', {
+        name: 'Reasoning effort',
+      });
+      expect(slider.getAttribute('aria-valuetext')).toBe(
+        tier === 'max' ? 'Ultra' : 'Low'
+      );
+      fireEvent.keyDown(slider, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          effortOverride:
+            tier === 'max'
+              ? undefined
+              : { configId: 'cursor_effort', value: 'low' },
         })
       );
     }

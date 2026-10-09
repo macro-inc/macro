@@ -113,6 +113,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
         <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose an agent or model">
           <MobileDrawer.Handle />
+          {props.menuHeader}
           <div class="flex items-center gap-2 px-4 pb-3">
             <Show when={browsing() || showAll()}>
               <Button
