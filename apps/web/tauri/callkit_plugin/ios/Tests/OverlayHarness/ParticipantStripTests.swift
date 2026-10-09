@@ -51,4 +51,32 @@ final class ParticipantStripTests: XCTestCase {
         XCTAssertEqual(row.participant(at: CGPoint(x: 150, y: 20)), "Carol")
         XCTAssertNil(row.participant(at: CGPoint(x: 133, y: 20)))
     }
+
+    func testOnlyFirstTapTouchIsUsedForParticipantCapture() {
+        let row = ParticipantStripScrollView(frame: CGRect(x: 0, y: 0, width: 200, height: 92))
+        row.updateItems(items(["Bob", "Carol"]), contentSize: CGSize(width: 266, height: 92))
+        let touch = LocationCountingTouch()
+        let tap = PendingTouchTapRecognizer()
+
+        XCTAssertTrue(row.gestureRecognizer(tap, shouldReceive: touch))
+        XCTAssertEqual(touch.locationReads, 1)
+        tap.pendingTouchCount = 1
+        XCTAssertTrue(row.gestureRecognizer(tap, shouldReceive: touch))
+        XCTAssertTrue(row.gestureRecognizer(UIPanGestureRecognizer(), shouldReceive: touch))
+        XCTAssertEqual(touch.locationReads, 1)
+    }
+}
+
+private final class PendingTouchTapRecognizer: UITapGestureRecognizer {
+    var pendingTouchCount = 0
+    override var numberOfTouches: Int { pendingTouchCount }
+}
+
+private final class LocationCountingTouch: UITouch {
+    private(set) var locationReads = 0
+
+    override func location(in view: UIView?) -> CGPoint {
+        locationReads += 1
+        return CGPoint(x: 20, y: 20)
+    }
 }

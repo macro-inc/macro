@@ -64,6 +64,8 @@ final class ParticipantStripScrollView: UIScrollView, UIGestureRecognizerDelegat
     }
 
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer is UITapGestureRecognizer,
+              gestureRecognizer.numberOfTouches == 0 else { return true }
         // A touch that stops momentum must not also pin a participant. Capture
         // identity at touch-down, rather than looking up a potentially new row
         // at touch-up.
