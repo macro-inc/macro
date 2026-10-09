@@ -1,3 +1,2 @@
 config:
   aws:region: us-east-1
-  search-processing-service:grafanaTelemetryEnabled: true

@@ -1,12 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-export const grafanaTelemetryEnabled =
-  new pulumi.Config().getBoolean('grafanaTelemetryEnabled') ?? false;
-
-if (grafanaTelemetryEnabled && pulumi.getStack() !== 'dev') {
-  throw new Error('Grafana dual export is currently limited to dev');
-}
+// All dev ECS services run the shared telemetry sidecars. Production follows in a later rollout.
+export const grafanaTelemetryEnabled = pulumi.getStack() === 'dev';
 
 // Only the ingestion token is stored here; never grant tasks the Grafana OAuth bundle.
 export const grafanaIngestSecretArn = grafanaTelemetryEnabled

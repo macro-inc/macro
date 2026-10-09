@@ -5,4 +5,3 @@ config:
   static-file-service:fusionauth_client_id: fusionauth-client-id-key-dev
   static-file-service:fusionauth_issuer: fusionauth-dev.macro.com
   static-file-service:internal_api_key: document-storage-service-auth-key-dev
-  static-file-service:grafanaTelemetryEnabled: true

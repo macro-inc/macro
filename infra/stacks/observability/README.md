@@ -326,10 +326,11 @@ still receives the authoritative copy.
 
 ## Dev dual export
 
-Dev ECS stacks opt in with `<project>:grafanaTelemetryEnabled: true` in
-`Pulumi.dev.yaml`. Production rejects this flag. The `image-proxy-service` canary verified logs, traces and distinct container
-metrics in Ohio; the ECS dev stacks now opt in to the same configuration. The execution
-role can read the ingestion-only `observability/dev-ingest` secret in Virginia.
+Every dev ECS service automatically runs the shared telemetry sidecars; there is
+no per-service opt-in flag. Production keeps its existing Datadog configuration
+until its rollout. The `image-proxy-service` canary verified logs, traces and
+separate container metrics in Ohio. The execution role can read the ingestion-only
+`observability/dev-ingest` secret in Virginia.
 The application task role does not receive access to the Grafana OAuth bundle.
 
 Alloy listens on loopback OTLP 4317/4318 and forwards traces/metrics to the existing

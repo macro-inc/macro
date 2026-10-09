@@ -12,4 +12,3 @@ config:
   agent-schedule-service:xai-api-key: xai-api-key
   agent-schedule-service:open-router-api-key: open-router-api-key-dev-v2
   agent-schedule-service:perplexity-api-key: perplexity-api-key
-  agent-schedule-service:grafanaTelemetryEnabled: true

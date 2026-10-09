@@ -18,4 +18,3 @@ config:
   mcp-server:anthropic_api_key: anthropic-api-key-dev
   mcp-server:openai_api_key: openai-key
   datadog:validate: "false"
-  mcp-server:grafanaTelemetryEnabled: true
