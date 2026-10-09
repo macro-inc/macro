@@ -1,10 +1,13 @@
 import { notificationKeys } from '@queries/notification/keys';
 import { graphqlSoupKeys } from '@queries/soup/graphql/keys';
 import { isCancelledError, QueryClient } from '@tanstack/solid-query';
-import { describe, expect, it, vi } from 'vitest';
+import { createRoot } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { client } = vi.hoisted(() => ({
+const { client, isTauri, navigate } = vi.hoisted(() => ({
   client: { current: undefined as QueryClient | undefined },
+  isTauri: vi.fn(() => false),
+  navigate: vi.fn(),
 }));
 vi.mock('@queries/client', () => ({
   get queryClient() {
@@ -12,12 +15,16 @@ vi.mock('@queries/client', () => ({
   },
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
-  useAnalytics: vi.fn(),
+  useAnalytics: () => ({ track: vi.fn(), reset: vi.fn() }),
 }));
-vi.mock('@core/constant/servers', () => ({ SERVER_HOSTS: {} }));
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: () => false,
+vi.mock('@core/constant/servers', () => ({
+  SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
 }));
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isTauri,
+}));
+vi.mock('@solidjs/router', () => ({ useNavigate: () => navigate }));
 vi.mock('@core/util/cookies', () => ({ syncLoginStorage: vi.fn() }));
 vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
@@ -35,10 +42,15 @@ vi.mock('@service-auth/client', () => ({
   authServiceClient: { logout: vi.fn() },
 }));
 vi.mock('./push-registration-lifecycle', () => ({
-  unregisterPushRegistrationsForLogout: vi.fn(),
+  unregisterPushRegistrationsForLogout: vi.fn(async () => {}),
 }));
 
-import { clearLocalAuthSession } from './logout';
+import { clearLocalAuthSession, useLogout } from './logout';
+
+beforeEach(() => {
+  isTauri.mockReturnValue(false);
+  navigate.mockReset();
+});
 
 describe('logout notification cache isolation', () => {
   it('retires pending Done buckets and rotates the display-intent session', async () => {
@@ -102,6 +114,28 @@ describe('logout notification cache isolation', () => {
     await clearLocalAuthSession();
     for (const key of keys)
       expect(queryClient.getQueryData(key)).toBeUndefined();
+    queryClient.clear();
+  });
+});
+
+describe('logout inside the Tauri shell', () => {
+  it('ends the provider session in the background and lands on /login in place', async () => {
+    const queryClient = new QueryClient();
+    client.current = queryClient;
+    isTauri.mockReturnValue(true);
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createRoot(() => useLogout())();
+
+    // A webview navigation to the provider would be handed to the system
+    // browser by the navigation plugin, leaving the app signed in.
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://auth.example.com/oauth2/logout',
+      expect.objectContaining({ credentials: 'include', mode: 'no-cors' })
+    );
+    expect(navigate).toHaveBeenCalledWith('/login');
+    vi.unstubAllGlobals();
     queryClient.clear();
   });
 });
