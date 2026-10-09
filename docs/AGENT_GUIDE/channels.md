@@ -941,12 +941,12 @@ conversation renders an inline detail whose top bar holds the channel avatar
 and name, the same inset tab strip, live viewer avatars, and the `Call` and
 `Ask Macro` buttons. In Chat an ellipsis follows the name and opens the same
 entity actions as right-clicking the conversation's rail row — `Open in new
-split`, `Rename`, `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
-notifications`, `Remind me`, `Copy Link`, `Copy ID` — so a channel can be
-favorited without finding its row. A channel inlined in another view's detail
-stack has no such menu. Channel-picture actions are in neither: they belong to
-the split's own title `...` menu, so open the channel as a split (shift-click a
-rail row) to reach them.
+split`, `Rename`, `Set channel picture`, `Remove channel picture` (only when the
+channel has one), `Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute
+notifications`, `Copy Link`, `Copy ID` — so a channel can be favorited or given
+a picture without finding its row. A channel inlined in
+another view's detail stack has no such menu. The split's own title `...` menu
+offers the same picture actions.
 
 `Calls` tab: recordings, transcriptions, and summaries for this channel. Click a
 row to open the call. The search field above the list matches call names and
@@ -1030,18 +1030,21 @@ message or acknowledgement and verify that it does not pull you to latest.
 
 ## Channel pictures
 
-Channels and group chats can have a custom picture. Any active participant can
-`Rename` a named channel from the title menu. Direct messages cannot be renamed.
-Only admins and owners also get `Set channel picture` and `Remove channel
-picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
-WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
-the server accepts only supported images uploaded by the person setting the
-picture. An error leaves the previous picture in place. When a picture is set, the menu also offers
-`Remove channel picture` to restore the standard channel icon. The picture
+Channels and group chats can have a custom picture. Anyone who can `Rename` a
+channel can also set its picture: any active participant of a named channel,
+from the channel's rail context menu, the Chat title ellipsis, or the split's
+own title `...` menu. Direct messages can be neither renamed nor given a
+picture. Choose `Set channel picture` to add or replace a picture. Select a PNG,
+JPG, WebP, or GIF up to 16 MB. The upload must finish before the picture is
+saved; the server accepts only supported images uploaded by the person setting
+the picture. An error leaves the previous picture in place. When a picture is
+set, the menu also offers `Remove channel picture` to restore the standard
+channel icon. The picture
 beside the title is display-only and also appears in shared channel rows.
 Picture changes refresh other participants' open sessions, including after
 reconnecting.
-Members see the picture without editing controls. One-to-one direct messages
+A team channel the viewer has not joined shows its picture without editing
+controls. One-to-one direct messages
 continue to show the other person's user picture.
 
 Opening the slash menu with `/` lists Normal Text, headings, and the other

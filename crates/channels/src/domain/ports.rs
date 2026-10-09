@@ -33,9 +33,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use uuid::Uuid;
 
-/// Verified channel administration access required to change a channel picture.
-pub type ChannelPictureAccess =
-    EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>;
+/// Verified channel participation required to change a channel picture.
+///
+/// The picture is part of the channel identity any participant may edit, so it
+/// carries the same requirement as renaming rather than an admin-only one.
+pub type ChannelPictureAccess = EntityAccessReceipt<MemberParticipantRole>;
 
 /// Repository for channel list persistence and query data.
 #[cfg(feature = "list")]
@@ -395,7 +397,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
 
 /// Service for channel reads and mutations.
 pub trait ChannelService: Send + Sync + 'static {
-    /// Set a channel picture using verified channel administration access.
+    /// Set a channel picture using verified channel participation.
     fn set_channel_picture(
         &self,
         access: ChannelPictureAccess,

@@ -3,7 +3,7 @@ import { throwOnErr } from '@core/util/result';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
 import { previewDataLoader } from '../preview/dataloader';
 import { isChannelPreviewItem } from '../preview/types';
@@ -63,6 +63,37 @@ export function useChannelPicture(channelId: Accessor<string>) {
     },
     isLoading: () => query.isPending,
     revision: () => query.dataUpdatedAt,
+  };
+}
+
+/**
+ * Reactive reader for the picture ids already in cache, for menus that are
+ * built synchronously and so cannot own a query per channel they list.
+ *
+ * Reads are tracked, so a menu built before a channel's picture loaded
+ * recomputes once it arrives. `undefined` means unknown rather than absent, so
+ * a caller gating a "remove" item stays silent until then rather than claiming
+ * there is no picture.
+ */
+export function createCachedChannelPicture() {
+  const [revision, setRevision] = createSignal(0);
+  const scope = channelKeys.picture._def;
+  const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+    // Observer churn (every avatar mounting in a long list) cannot change the
+    // cached id, so only data events are worth a recompute.
+    if (!['added', 'updated', 'removed'].includes(event.type)) return;
+    if (scope.some((part, index) => event.query.queryKey[index] !== part)) {
+      return;
+    }
+    setRevision((current) => current + 1);
+  });
+  onCleanup(unsubscribe);
+
+  return (channelId: string) => {
+    revision();
+    return queryClient.getQueryData<string | null>(
+      channelKeys.picture(channelId).queryKey
+    );
   };
 }
 

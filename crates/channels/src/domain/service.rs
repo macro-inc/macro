@@ -11,8 +11,8 @@ use crate::domain::{
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMessagesErr, ChannelMutationErr,
-        ChannelPictureFile, ChannelPictureFiles, ChannelReferenceSharePermissions, ChannelRepo,
-        ChannelService,
+        ChannelPictureAccess, ChannelPictureFile, ChannelPictureFiles,
+        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
 };
 use bot_id::{BotId, cowlike::CowLike};
@@ -800,7 +800,7 @@ where
     #[tracing::instrument(err, skip(self, access))]
     async fn set_channel_picture(
         &self,
-        access: EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>,
+        access: ChannelPictureAccess,
         picture_id: Option<Uuid>,
     ) -> Result<(), ChannelMutationErr> {
         if access.entity().entity_type != EntityType::Channel {

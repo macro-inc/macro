@@ -822,7 +822,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Set a channel or group chat profile picture. Requires channel admin or owner access.
+     * Set a channel or group chat profile picture. Requires channel participation.
      */
     public setChannelPicture<ThrowOnError extends boolean = false>(options: Options<SetChannelPictureData, ThrowOnError>): RequestResult<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetChannelPictureResponses, SetChannelPictureErrors, ThrowOnError>({

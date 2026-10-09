@@ -572,6 +572,21 @@ export const isNonMemberChannelEntity = (entity: EntityData): boolean => {
   return isChannelEntity(entity) && entity.isParticipant === false;
 };
 
+/**
+ * Whether the viewer may edit a channel's identity — its name and its picture.
+ *
+ * Any active participant of a named channel qualifies, which is what the server
+ * enforces for both the rename and the picture endpoints. A direct message
+ * takes its name and picture from the other participant, so neither applies.
+ */
+export const canEditChannelIdentity = (entity: EntityData): boolean => {
+  return (
+    isChannelEntity(entity) &&
+    entity.channelType !== 'direct_message' &&
+    entity.isParticipant !== false
+  );
+};
+
 export const isChannelMessageEntity = (
   entity: EntityData
 ): entity is ChannelMessageEntity => {

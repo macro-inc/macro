@@ -4,6 +4,7 @@ import {
   type EntityActionNavigationHandler,
   type EntityActionViewContext,
   makeBlockSenderAction,
+  makeChannelPictureAction,
   makeCopyAction,
   makeCopyBranchNameAction,
   makeCopyEntityIdAction,
@@ -121,6 +122,8 @@ export function createSoupEntityActions(): {
   const renameAction = makeRenameAction({
     userId: () => userId(),
   });
+
+  const channelPictureAction = makeChannelPictureAction();
 
   const copyAction = makeCopyAction();
   const favoriteAction = makeFavoriteAction();
@@ -293,6 +296,23 @@ export function createSoupEntityActions(): {
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
       });
+    }
+
+    // Sits with Rename because it edits the same channel identity, under the
+    // same participant rule. Single-entity only: one upload, one channel.
+    if (entities.length === 1 && channelPictureAction.canExecute(entities[0])) {
+      middleItems.push({
+        id: 'set-channel-picture',
+        label: 'Set channel picture',
+        onClick: () => channelPictureAction.execute(entities),
+      });
+      if (channelPictureAction.hasPicture(entities[0])) {
+        middleItems.push({
+          id: 'remove-channel-picture',
+          label: 'Remove channel picture',
+          onClick: () => channelPictureAction.remove(entities),
+        });
+      }
     }
 
     if (canExecuteAll(favoriteAction.canExecute)) {
