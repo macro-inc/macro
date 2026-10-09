@@ -3,6 +3,7 @@ import {
   taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Entity, MultiSelectCheckbox } from '@entity';
 import StackIcon from '@phosphor/stack.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
@@ -32,7 +33,7 @@ export function ProjectListHeader() {
   return (
     <div
       role="row"
-      class="task-grid-row grid h-10 shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class="task-grid-row grid h-10 shrink-0 touch:hidden items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
       style={gridStyle}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
@@ -111,10 +112,18 @@ export function ProjectRow(props: {
         )}
       >
         <Entity.Layout
-          class="task-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
-          style={gridStyle}
+          class="task-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm touch:py-2 touch:grid-rows-[auto_auto]"
+          style={
+            isTouchDevice()
+              ? {
+                  'grid-template-columns': 'minmax(0,1fr) auto',
+                  'grid-template-areas':
+                    '"content timestamp" "status priority"',
+                }
+              : gridStyle
+          }
         >
-          <Entity.Slot placement="indicator" class="size-full">
+          <Entity.Slot placement="indicator" class="size-full touch:hidden">
             <MultiSelectCheckbox
               checked={props.checked}
               onChecked={props.onChecked}
@@ -131,7 +140,10 @@ export function ProjectRow(props: {
             {(column) => (
               <Entity.Slot
                 placement={column.id}
-                class="flex min-w-0 items-center text-xs @max-[840px]/u-list:justify-center"
+                class={cn(
+                  'flex min-w-0 items-center text-xs @max-[840px]/u-list:justify-center touch:justify-start',
+                  column.id === 'assignees' && 'touch:hidden'
+                )}
               >
                 <Show when={propertyFor(column.defId)}>
                   {(property) => (
@@ -144,7 +156,10 @@ export function ProjectRow(props: {
               </Entity.Slot>
             )}
           </For>
-          <Entity.Slot placement="initiative" class="min-w-0 text-xs">
+          <Entity.Slot
+            placement="initiative"
+            class="min-w-0 text-xs touch:hidden"
+          >
             <Show when={propertyFor(SYSTEM_PROPERTY_IDS.DUE_DATE)}>
               {(property) => (
                 <ListPropertyValue
@@ -156,7 +171,7 @@ export function ProjectRow(props: {
           </Entity.Slot>
           <Entity.Slot
             placement="createdBy"
-            class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
+            class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden touch:hidden"
           >
             <span aria-label="Completed tasks">
               {props.row.project.taskCount === undefined

@@ -277,7 +277,7 @@ export function ProjectsCollection(props: {
   };
   return (
     <>
-      <ViewShell.Header>
+      <ViewShell.Header class="touch:pt-2">
         <div class="flex min-w-0 flex-col gap-3">
           <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
             <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
@@ -417,7 +417,7 @@ export function ProjectsCollection(props: {
           aria-multiselectable="true"
           aria-activedescendant={list.focus.key()}
           tabIndex={0}
-          class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+          class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none touch:[--list-content-inset-bottom:var(--mobile-content-inset-bottom,0px)]"
         >
           <ProjectListHeader />
           <Show when={backgroundError()}>

@@ -11,6 +11,7 @@ import {
   PrDetailContent,
   usePrDetail,
 } from '@block-pr/views/PrDetail';
+import { MobileDetailFrame } from '@components/app/mobile/MobileDetailFrame';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitPanel } from '@components/app/split-panel';
@@ -94,12 +95,15 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
           status={detail.data()?.pullRequest.status ?? undefined}
         />
         <ChangesSplit>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex">
-              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
-              <PrDetailActions detail={detail.data()} />
-            </ViewShell.TopBar>
+          <MobileDetailFrame
+            header={
+              <ViewShell.TopBar class="touch:flex">
+                <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+                <ViewBreadcrumbs.Outlet aria-label="Pull request location" />
+                <PrDetailActions detail={detail.data()} />
+              </ViewShell.TopBar>
+            }
+          >
             <PrDetailContent
               foreignEntityId={props.foreignEntityId}
               data={detail.data()}
@@ -107,7 +111,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
               discussionSource={detail.discussionSource}
               onRetry={() => void detail.query.refetch()}
             />
-          </div>
+          </MobileDetailFrame>
         </ChangesSplit>
       </PrChangesProvider>
     </SidePanel.Root>

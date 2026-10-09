@@ -7,6 +7,10 @@ import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 400, height: 80 }),
+}));
+
 vi.mock('@app/lib/split-router', () => ({
   createSearchParamsCodec: () => ({}),
   createSearchParams: () => {

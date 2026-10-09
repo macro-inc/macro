@@ -2,6 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { MobileDetailFrame } from '@components/app/mobile/MobileDetailFrame';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanel } from '@components/app/split-panel';
 import {
@@ -114,7 +115,7 @@ export function PrDetailBody(props: PrDetailBodyProps) {
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
       <Scroll class="flex-1 min-h-0">
-        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:px-5 touch:pt-[calc(var(--mobile-detail-inset-top,var(--mobile-content-inset-top,0px))+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
           <Show
             when={props.data}
             fallback={
@@ -160,7 +161,7 @@ export function PrDetailContent(props: PrDetailBodyProps) {
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0">
+            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:px-5 touch:pt-[calc(var(--mobile-detail-inset-top,var(--mobile-content-inset-top,0px))+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
               <PrDetailSkeleton />
             </div>
           </Scroll>
@@ -226,17 +227,20 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
         pullRequestChangeCounts={detail.changeCounts()}
       >
         <ChangesSplit>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-            <ViewShell.TopBar class="touch:flex">
-              <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
-              <Show when={detail.data()?.pullRequest.status}>
-                {(status) => <PrStatusIcon status={status()} />}
-              </Show>
-              <span class="min-w-0 truncate text-sm font-semibold">
-                {name()}
-              </span>
-              <PrDetailActions detail={detail.data()} />
-            </ViewShell.TopBar>
+          <MobileDetailFrame
+            header={
+              <ViewShell.TopBar class="touch:flex">
+                <SplitPanel.CloseButton class="hidden shrink-0 touch:flex" />
+                <Show when={detail.data()?.pullRequest.status}>
+                  {(status) => <PrStatusIcon status={status()} />}
+                </Show>
+                <span class="min-w-0 truncate text-sm font-semibold">
+                  {name()}
+                </span>
+                <PrDetailActions detail={detail.data()} />
+              </ViewShell.TopBar>
+            }
+          >
             <PrDetailContent
               foreignEntityId={props.foreignEntityId}
               data={detail.data()}
@@ -244,7 +248,7 @@ export function StandalonePrDetail(props: { foreignEntityId: string }) {
               discussionSource={detail.discussionSource}
               onRetry={() => void detail.query.refetch()}
             />
-          </div>
+          </MobileDetailFrame>
         </ChangesSplit>
       </PrChangesProvider>
     </SidePanel.Root>

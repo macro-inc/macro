@@ -18,7 +18,7 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3',
+        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3 touch:min-w-0 touch:grid-cols-[minmax(0,1fr)_auto] touch:gap-y-2 touch:py-3',
         props.class
       )}
     >
@@ -50,11 +50,14 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
-      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted"
+      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 touch:min-w-0 hover:bg-list-hover focus-within:bg-list-highlighted"
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
-        <EntitySlot role="cell" class="min-w-0">
+        <EntitySlot
+          role="cell"
+          class="min-w-0 touch:col-start-1 touch:row-start-1"
+        >
           <Tooltip label={props.row.name} class="min-w-0 max-w-full">
             <button
               type="button"
@@ -65,12 +68,18 @@ export function RoutineListRow(props: {
             </button>
           </Tooltip>
         </EntitySlot>
-        <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">
+        <EntitySlot
+          role="cell"
+          class="min-w-0 text-xs text-ink-muted touch:hidden"
+        >
           <Tooltip label={props.row.creator} class="max-w-full">
             <span class="truncate">{props.row.creator}</span>
           </Tooltip>
         </EntitySlot>
-        <EntitySlot role="cell" class="min-w-0 text-xs">
+        <EntitySlot
+          role="cell"
+          class="min-w-0 text-xs touch:col-start-1 touch:row-start-2"
+        >
           <span
             class={cn(
               'inline-flex items-center gap-1.5',
@@ -111,7 +120,7 @@ export function RoutineListRow(props: {
         </EntitySlot>
         <EntitySlot
           role="cell"
-          class="min-w-0 text-xs"
+          class="min-w-0 text-xs touch:col-start-2 touch:row-start-1"
           onClick={(event) => event.stopPropagation()}
         >
           <Layer depth={2}>

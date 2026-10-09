@@ -9,7 +9,12 @@ export function EntityDetailTopBar(
   props: ParentProps<{ navigation?: JSX.Element; titleMenu?: JSX.Element }>
 ) {
   return (
-    <ViewShell.TopBar class={cn('touch:flex', props.navigation && 'gap-3')}>
+    <ViewShell.TopBar
+      class={cn(
+        'touch:flex',
+        props.navigation && 'gap-3 touch:h-auto touch:flex-wrap touch:py-2'
+      )}
+    >
       <ViewBreadcrumbs.Outlet
         aria-label="Task location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
@@ -17,7 +22,9 @@ export function EntityDetailTopBar(
         {props.titleMenu}
       </ViewBreadcrumbs.Outlet>
       <Show when={props.navigation}>
-        <div class="min-w-0 overflow-x-auto">{props.navigation}</div>
+        <div class="min-w-0 overflow-x-auto touch:order-last touch:w-full">
+          {props.navigation}
+        </div>
       </Show>
       <div class="ml-auto flex shrink-0 items-center gap-1">
         <SidePanel.HeaderActionsOutlet />

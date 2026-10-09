@@ -124,7 +124,7 @@ function TasksViewRoot() {
                     fallback={taskList()}
                   >
                     <TasksTopBar />
-                    <div class="hidden @max-[720px]/view-shell:block">
+                    <div class="hidden shrink-0 @max-[720px]/view-shell:flex touch:flex touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-2">
                       <TasksMobileTabs />
                     </div>
                     <ProjectsTab

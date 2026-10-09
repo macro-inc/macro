@@ -25,13 +25,13 @@ export function RoutinesList(props: {
         .includes(search().trim().toLowerCase())
     );
   return (
-    <div class="flex size-full min-h-0 min-w-0 flex-col">
+    <div class="flex size-full min-h-0 min-w-0 flex-col touch:overflow-y-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
       <ViewShell.TopBar>
         <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
           Routines
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Header>
+      <ViewShell.Header class="touch:pt-[calc(var(--mobile-content-inset-top,0px)+0.5rem)]">
         <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink not-touch:hidden">
           Routines
         </h1>
@@ -68,9 +68,12 @@ export function RoutinesList(props: {
         aria-label="Routines"
         aria-busy={props.loading}
         tabIndex={-1}
-        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
+        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none touch:flex-none touch:overflow-visible"
       >
-        <div role="rowgroup" class="sticky top-0 z-1 min-w-[748px] bg-panel">
+        <div
+          role="rowgroup"
+          class="sticky top-0 z-1 min-w-[748px] bg-panel touch:hidden"
+        >
           <RoutineRowLayout
             role="row"
             class="text-xs font-medium text-ink-extra-muted"
@@ -84,7 +87,7 @@ export function RoutinesList(props: {
             </span>
           </RoutineRowLayout>
         </div>
-        <div role="rowgroup" class="min-w-[748px]">
+        <div role="rowgroup" class="min-w-[748px] touch:min-w-0">
           <For each={filtered()}>
             {(row) => (
               <RoutineListRow

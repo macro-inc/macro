@@ -474,6 +474,10 @@ export function ReviewsList(props: ReviewsListProps) {
                   </Button>
                 </div>
               </Show>
+              <div
+                aria-hidden
+                class="h-0 touch:h-(--mobile-content-inset-bottom)"
+              />
             </div>
           </Match>
         </Switch>

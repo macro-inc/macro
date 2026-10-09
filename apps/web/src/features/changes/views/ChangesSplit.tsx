@@ -1,7 +1,6 @@
 /** Shared responsive split that retains host and diff owners through motion. */
 
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -122,11 +121,7 @@ export function ChangesSplit(props: ParentProps) {
             {props.children}
           </div>
           <Show when={presence.present()}>
-            <div
-              ref={presence.ref}
-              class="absolute inset-0 min-w-0 pt-(--mobile-content-inset-top)"
-              style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
-            >
+            <div ref={presence.ref} class="absolute inset-0 min-w-0">
               <FloatRegion region="accessory" priority={1}>
                 <span />
               </FloatRegion>

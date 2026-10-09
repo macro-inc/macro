@@ -2664,6 +2664,20 @@ first message. If startup reports a rejected setting or timeout, the first promp
 has not been sent. See [effort capabilities](../AGENT_EFFORT.md) for the harness
 contracts and test coverage.
 
+### Full-frame mobile detail views
+
+Pull request details, agent-session Changes, native project overviews, and routine
+Overview / Run History use floating glass toolbars. Their content starts below
+the toolbar and scrolls behind it; the last content can scroll clear of the bottom
+dock. On narrow touch screens, project navigation wraps beneath its actions and
+routine rows fit the viewport with the enabled control beside the name.
+
+For mobile verification, scroll a long PR description, the final changed file,
+a project description and task list, and both routine tabs to the end. Open and
+close the Changes file tree and switch routine tabs; controls should stay usable
+and content should not be trapped underneath the dock. These are real dev data:
+avoid merging PRs or running, toggling, or editing routines just to inspect layout.
+
 ### Floating block information panels
 
 Actions live in the top bar immediately before Share, with consistent compact

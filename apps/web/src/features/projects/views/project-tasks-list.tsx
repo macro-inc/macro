@@ -69,8 +69,14 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 function ProjectTasksListBody(props: ProjectTasksListProps) {
   const { state, setState, source } = useTasksView();
   return (
-    <div class="flex size-full min-h-0 flex-col">
-      <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
+    <div
+      class="relative flex size-full min-h-0 flex-col touch:[--list-content-inset-top:calc(var(--mobile-detail-inset-top,0px)+3.5rem)] touch:[--list-content-inset-bottom:var(--mobile-content-inset-bottom,0px)]"
+      classList={{
+        'touch:pt-(--list-content-inset-top) touch:pb-(--mobile-content-inset-bottom)':
+          state.layout === 'board',
+      }}
+    >
+      <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2 touch:absolute touch:inset-x-(--mobile-chrome-gutter) touch:top-(--mobile-detail-inset-top) touch:z-10 touch:rounded-xl touch:glass">
         <ProjectTaskSearch
           projectName={props.projectName}
           value={state.search}
